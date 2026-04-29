@@ -1,7 +1,28 @@
 ---
 /**
- * TerminalReplay — animated terminal that replays `rax demo` output.
- * Each frame appears with realistic timing. Click to restart.
+ * TerminalReplay — animated terminal that mirrors the real `rax demo` TUI.
+ *
+ * Renders the same shape users see when they install and run `rax demo`:
+ *
+ *   - A permanent scroll area for printed lines (banner, task header, tool
+ *     calls, final response, metrics, CTA).
+ *   - A "live region" pinned to the bottom: an optional 4-line streaming
+ *     thinking panel above a single in-place status line with spinner +
+ *     iteration + elapsed + tokens + cost + entropy ticker.
+ *   - Permanent lines print ABOVE the live region — the live region stays
+ *     pinned to the bottom of the terminal as new content scrolls past it,
+ *     exactly as `StatusRenderer.printLine()` does.
+ *
+ * This is the honest preview: extending here instead of authoring static
+ * thought bubbles avoids the bait-and-switch where the marketing video
+ * shows one thing and `rax demo` shows another.
+ *
+ * Frame schema:
+ *   { kind: "print", delay, html }                     // append to scroll area
+ *   { kind: "live",  delay, panel?, status?, clear? } // update live region
+ *
+ * `panel` is an array of up to 4 strings. `status` is the spinner line.
+ * `clear: true` hides the panel (no thinking text to show right now).
  */
 ---
 
@@ -20,6 +41,10 @@
       <span class="prompt-symbol">$</span> <span class="prompt-cmd" id="terminal-cmd"></span><span class="cursor" id="terminal-cursor">▋</span>
     </div>
     <pre class="terminal-output" id="terminal-output"></pre>
+    <div class="live-region" id="live-region">
+      <pre class="live-panel" id="live-panel"></pre>
+      <div class="live-status" id="live-status"></div>
+    </div>
   </div>
 </div>
 
@@ -39,17 +64,9 @@
     user-select: none;
   }
 
-  .terminal-dots {
-    display: flex;
-    gap: 6px;
-  }
+  .terminal-dots { display: flex; gap: 6px; }
 
-  .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-  }
-
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
   .dot-red { background: #ff5f57; }
   .dot-yellow { background: #febc2e; }
   .dot-green { background: #28c840; }
@@ -81,8 +98,8 @@
 
   .terminal-body {
     padding: 16px;
-    min-height: 380px;
-    max-height: 520px;
+    min-height: 420px;
+    max-height: 580px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(139, 92, 246, 0.2) transparent;
@@ -95,25 +112,13 @@
     margin-bottom: 4px;
   }
 
-  .prompt-symbol {
-    color: #8b5cf6;
-    font-weight: 700;
-  }
+  .prompt-symbol { color: #8b5cf6; font-weight: 700; }
+  .prompt-cmd    { color: #06b6d4; }
 
-  .prompt-cmd {
-    color: #06b6d4;
-  }
-
-  .cursor {
-    color: #8b5cf6;
-    animation: blink 1s step-end infinite;
-  }
-
+  .cursor { color: #8b5cf6; animation: blink 1s step-end infinite; }
   .cursor.hidden { display: none; }
 
-  @keyframes blink {
-    50% { opacity: 0; }
-  }
+  @keyframes blink { 50% { opacity: 0; } }
 
   .terminal-output {
     margin: 0;
@@ -128,109 +133,279 @@
     font-family: inherit;
   }
 
-  /* Color classes for the output */
-  .terminal-output :global(.t-violet) { color: #8b5cf6; }
-  .terminal-output :global(.t-cyan) { color: #06b6d4; }
-  .terminal-output :global(.t-green) { color: #22c55e; }
-  .terminal-output :global(.t-yellow) { color: #eab308; }
-  .terminal-output :global(.t-dim) { color: #6b7280; }
-  .terminal-output :global(.t-bold) { font-weight: 700; }
-  .terminal-output :global(.t-white) { color: #e6edf3; }
-
-  /* Spinner animation */
-  .terminal-output :global(.t-spinner) {
-    color: #8b5cf6;
-    display: inline;
+  /* ── Live region ──────────────────────────────────────────────────────── */
+  /* Pinned-to-bottom area mirroring StatusRenderer's panel + status line.   */
+  /* `live-panel` reserves vertical space for up to 4 streaming-think lines. */
+  /* The status line below it carries the spinner + iteration + metrics.    */
+  .live-region {
+    margin-top: 4px;
+    color: #e6edf3;
+    font-size: 0.75rem;
+    line-height: 1.55;
+    font-family: inherit;
   }
 
-  /* Responsive */
+  .live-panel {
+    margin: 0 0 4px 0;
+    padding: 0 0 0 16px;
+    color: #6b7280;
+    font-style: italic;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    min-height: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: none;
+    border-left: 2px solid rgba(139, 92, 246, 0.25);
+    font-family: inherit;
+  }
+
+  .live-panel.visible {
+    /* 4 lines × line-height 1.5 × 0.72rem ≈ 4.32rem; round up to 5rem for the   */
+    /* "[t: collapse]" hint line                                                  */
+    max-height: 5.4rem;
+  }
+
+  .live-status {
+    color: #e6edf3;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    min-height: 1.2em;
+  }
+
+  .live-status:empty { display: none; }
+
+  /* ── Color classes ────────────────────────────────────────────────────── */
+  .terminal-output :global(.t-violet),
+  .live-status :global(.t-violet),
+  .live-panel :global(.t-violet)  { color: #8b5cf6; }
+  .terminal-output :global(.t-cyan),
+  .live-status :global(.t-cyan)   { color: #06b6d4; }
+  .terminal-output :global(.t-green),
+  .live-status :global(.t-green)  { color: #22c55e; }
+  .terminal-output :global(.t-yellow),
+  .live-status :global(.t-yellow) { color: #eab308; }
+  .terminal-output :global(.t-dim),
+  .live-status :global(.t-dim),
+  .live-panel :global(.t-dim)     { color: #6b7280; }
+  .terminal-output :global(.t-bold),
+  .live-status :global(.t-bold)   { font-weight: 700; }
+  .terminal-output :global(.t-white),
+  .live-status :global(.t-white)  { color: #e6edf3; }
+
+  .live-status :global(.spinner) { color: #8b5cf6; display: inline-block; width: 1.2em; }
+  .live-status :global(.metric-sep) { color: #4b5563; margin: 0 0.5em; }
+
   @media (max-width: 768px) {
     .terminal-replay { margin: 1rem 0; }
-    .terminal-body { min-height: 300px; max-height: 420px; padding: 12px; }
-    .terminal-output { font-size: 0.65rem; }
+    .terminal-body { min-height: 340px; max-height: 460px; padding: 12px; }
+    .terminal-output, .live-status { font-size: 0.65rem; }
+    .live-panel { font-size: 0.62rem; }
+    .live-panel.visible { max-height: 4.5rem; }
   }
 </style>
 
 <script>
-  // Terminal replay frames — each frame is [delay_ms, html_content]
-  // The content uses span classes for coloring
-  const FRAMES: [number, string][] = [
-    // Banner
-    [300, `<span class="t-violet">╭──────────────────────────────────────────────────────────╮</span>`],
-    [30, `<span class="t-violet">│</span>`],
-    [30, `<span class="t-violet">│</span>   <span class="t-violet t-bold">Reactive Agents — Live Demo</span>`],
-    [30, `<span class="t-violet">│</span>   <span class="t-dim">The open-source agent framework built for control,</span>`],
-    [30, `<span class="t-violet">│</span>   <span class="t-dim">not magic.</span>`],
-    [30, `<span class="t-violet">│</span>`],
-    [30, `<span class="t-violet">╰──────────────────────────────────────────────────────────╯</span>`],
-    [200, ``],
+  // ─── Frame schema ──────────────────────────────────────────────────────
+  // `print` appends to the scroll area; `live` replaces the live region.
+  // `live` with `clear: true` hides the panel.
+  type PrintFrame = { kind: "print"; delay: number; html: string };
+  type LiveFrame = {
+    kind: "live";
+    delay: number;
+    panel?: string[];   // up to 4 lines; empty array = no thinking text yet
+    status?: string;    // full status-line html
+    clear?: boolean;    // hide the panel without changing status
+  };
+  type Frame = PrintFrame | LiveFrame;
 
-    // Task
-    [100, `<span class="t-violet t-bold">🎯 Task</span>`],
-    [80, `  <span class="t-dim">Prompt:</span> Use the get-hn-posts tool to fetch the top 5 stories on Hacker News right now,`],
-    [50, `          then write them as a numbered list. Finish with a one-paragraph summary.`],
-    [150, `  <span class="t-dim">Provider:</span> <span class="t-cyan">Anthropic · claude-haiku-4-5</span>`],
-    [80, `  <span class="t-dim">Mode:</span> <span class="t-green">live agent run</span>`],
-    [300, ``],
+  // ─── Helpers ──────────────────────────────────────────────────────────
+  const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+  const sep = `<span class="metric-sep">·</span>`;
 
-    // StatusRenderer live output — real tool call against HN
-    [400, `<span class="t-violet">◉</span> <span class="t-bold">demo-agent</span> <span class="t-dim">· ReAct · claude-haiku-4-5</span>`],
-    [100, `<span class="t-dim">│</span>`],
-    [500, `<span class="t-dim">│</span> <span class="t-violet">💭</span> <span class="t-dim">I need to fetch the current Hacker News front page. The</span>`],
-    [80, `<span class="t-dim">│</span>    <span class="t-dim">get-hn-posts tool is the right primitive — calling it now.</span>`],
-    [100, `<span class="t-dim">│</span>`],
-    [400, `<span class="t-dim">│</span> <span class="t-cyan">⚙</span>  <span class="t-bold">tool</span> <span class="t-cyan">get-hn-posts</span><span class="t-dim">({ count: 5 })</span>`],
-    [600, `<span class="t-dim">│</span> <span class="t-green">↪</span>  <span class="t-dim">5 stories returned · 412ms</span>`],
-    [100, `<span class="t-dim">│</span>`],
-    [500, `<span class="t-dim">│</span> <span class="t-violet">💭</span> <span class="t-dim">Got the live data. Formatting the numbered list with</span>`],
-    [80, `<span class="t-dim">│</span>    <span class="t-dim">title + score + url, then synthesizing the trend summary.</span>`],
-    [100, `<span class="t-dim">│</span>`],
-    [400, `<span class="t-dim">└─</span> <span class="t-green">✔ Done</span> <span class="t-dim">· 3 steps · 1 tool · 1284 tokens · 4.1s</span>`],
-    [300, ``],
+  function spin(i: number): string {
+    return `<span class="spinner">${SPINNER[i % SPINNER.length]}</span>`;
+  }
 
-    // Agent response — note that real runs return whatever's currently
-    // trending; this is a representative snapshot.
-    [100, `<span class="t-cyan">╭─ Agent ──────────────────────────────────────────────────╮</span>`],
-    [30, `<span class="t-cyan">│</span> <span class="t-bold">## Hacker News — Top 5 (live)</span>`],
-    [30, `<span class="t-cyan">│</span>`],
-    [30, `<span class="t-cyan">│</span> 1. <span class="t-bold">Show HN: I built a search engine for arXiv papers</span>`],
-    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">412 points</span> <span class="t-dim">· news.ycombinator.com/item?id=39024716</span>`],
-    [30, `<span class="t-cyan">│</span> 2. <span class="t-bold">The hidden cost of context-switching in distributed teams</span>`],
-    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">287 points</span> <span class="t-dim">· blog.example.com/context-switching</span>`],
-    [30, `<span class="t-cyan">│</span> 3. <span class="t-bold">Why Effect-TS finally clicked for our backend</span>`],
-    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">251 points</span> <span class="t-dim">· hashnode.example.dev/effect-ts-clicked</span>`],
-    [30, `<span class="t-cyan">│</span> 4. <span class="t-bold">A practical guide to writing your own database</span>`],
-    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">198 points</span> <span class="t-dim">· example.io/build-a-database</span>`],
-    [30, `<span class="t-cyan">│</span> 5. <span class="t-bold">OpenAI releases new reasoning model: o4-mini</span>`],
-    [30, `<span class="t-cyan">│</span>    <span class="t-yellow">173 points</span> <span class="t-dim">· openai.com/blog/o4-mini</span>`],
-    [30, `<span class="t-cyan">│</span>`],
-    [30, `<span class="t-cyan">│</span> <span class="t-bold">Summary:</span> Today's HN front page is dominated by infrastructure`],
-    [30, `<span class="t-cyan">│</span> and tooling — a self-built arXiv search, a write-your-own-database`],
-    [30, `<span class="t-cyan">│</span> guide, and an Effect-TS adoption story all sit alongside an`],
-    [30, `<span class="t-cyan">│</span> OpenAI reasoning-model release. Trends technical and DIY.`],
-    [30, `<span class="t-cyan">╰──────────────────────────────────────────────────────────╯</span>`],
-    [300, ``],
+  /**
+   * Build a status-line html mirroring StatusRenderer.statusLine() output.
+   * Pass undefined to omit a metric (matches the real TUI's elision).
+   */
+  function status(opts: {
+    spinIdx: number;
+    action: string;
+    iter?: number;
+    elapsed: string;
+    tokens?: number;
+    cost?: number;
+    entropy?: number;
+    entropyTrend?: "↑" | "↓" | "→";
+    panelHint?: "expand" | "collapse";
+  }): string {
+    const parts: string[] = [`${spin(opts.spinIdx)} ${opts.action}`];
+    if (opts.iter !== undefined && opts.iter > 0) parts.push(`iter ${opts.iter}`);
+    parts.push(opts.elapsed);
+    if (opts.tokens !== undefined && opts.tokens > 0) parts.push(`${opts.tokens.toLocaleString()} tok`);
+    if (opts.cost !== undefined && opts.cost > 0) parts.push(`$${opts.cost.toFixed(4)}`);
+    if (opts.entropy !== undefined) {
+      const trend = opts.entropyTrend ? ` ${opts.entropyTrend}` : "";
+      parts.push(`<span class="t-dim">entropy</span> ${opts.entropy.toFixed(2)}${trend}`);
+    }
+    if (opts.panelHint) {
+      const hint = opts.panelHint === "expand" ? "[t: expand]" : "[t: collapse]";
+      parts.push(`<span class="t-dim">${hint}</span>`);
+    }
+    return parts.join(`  ${sep}  `);
+  }
 
-    // Metrics — tools count is now real (1)
-    [100, `<span class="t-green">✔</span> 4.1s · 3 steps · 1284 tokens · 1 tool`],
-    [300, ``],
+  // ─── Frames ───────────────────────────────────────────────────────────
+  const FRAMES: Frame[] = [
+    // ─ Banner ─
+    { kind: "print", delay: 250, html: `<span class="t-violet">╭──────────────────────────────────────────────────────────╮</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-violet">│</span>   <span class="t-violet t-bold">Reactive Agents — Live Demo</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-violet">│</span>   <span class="t-dim">The open-source agent framework built for control,</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-violet">│</span>   <span class="t-dim">not magic.</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-violet">╰──────────────────────────────────────────────────────────╯</span>` },
+    { kind: "print", delay: 200, html: `` },
 
-    // CTA
-    [100, `<span class="t-dim">──────────────────────────────────────────────────</span>`],
-    [100, ``],
-    [100, `<span class="t-violet t-bold">🚀 Liked what you saw?</span>`],
-    [100, ``],
-    [80, `  <span class="t-dim">Install:</span> <span class="t-cyan">bun add reactive-agents</span>`],
-    [80, `  <span class="t-dim">Scaffold:</span> <span class="t-cyan">rax init my-agent</span>`],
+    // ─ Task header ─
+    { kind: "print", delay: 100, html: `<span class="t-violet t-bold">🎯 Task</span>` },
+    { kind: "print", delay: 80,  html: `  <span class="t-dim">Prompt:</span> Use <span class="t-cyan">get-hn-posts</span> to fetch the top 5 stories on Hacker News,` },
+    { kind: "print", delay: 50,  html: `          then write a numbered list and a one-paragraph summary.` },
+    { kind: "print", delay: 100, html: `  <span class="t-dim">Provider:</span> <span class="t-cyan">Anthropic · claude-haiku-4-5</span>` },
+    { kind: "print", delay: 80,  html: `  <span class="t-dim">Mode:</span> <span class="t-green">live agent run</span>` },
+    { kind: "print", delay: 200, html: `` },
+
+    // ─ Live status starts; spinner only, no panel yet ─
+    { kind: "live", delay: 100, status: status({ spinIdx: 0, action: "Starting...", elapsed: "0s" }) },
+    { kind: "live", delay: 120, status: status({ spinIdx: 1, action: "Starting...", elapsed: "0s" }) },
+    { kind: "live", delay: 120, status: status({ spinIdx: 2, action: "Thinking...", iter: 1, elapsed: "1s" }) },
+
+    // ─ Streaming think text appears in the panel ─
+    {
+      kind: "live",
+      delay: 200,
+      panel: ["I need to fetch the current Hacker News front page."],
+      status: status({ spinIdx: 3, action: "Thinking...", iter: 1, elapsed: "1s", tokens: 142, cost: 0.0001, panelHint: "collapse" }),
+    },
+    {
+      kind: "live",
+      delay: 220,
+      panel: [
+        "I need to fetch the current Hacker News front page.",
+        "The get-hn-posts tool is the right primitive — let me",
+      ],
+      status: status({ spinIdx: 4, action: "Thinking...", iter: 1, elapsed: "1s", tokens: 187, cost: 0.0001, panelHint: "collapse" }),
+    },
+    {
+      kind: "live",
+      delay: 220,
+      panel: [
+        "I need to fetch the current Hacker News front page.",
+        "The get-hn-posts tool is the right primitive — let me",
+        "call it with count: 5 to keep the response readable.",
+      ],
+      status: status({ spinIdx: 5, action: "Thinking...", iter: 1, elapsed: "2s", tokens: 234, cost: 0.0002, entropy: 0.58, entropyTrend: "→", panelHint: "collapse" }),
+    },
+    {
+      kind: "live",
+      delay: 220,
+      panel: [
+        "The get-hn-posts tool is the right primitive — let me",
+        "call it with count: 5 to keep the response readable.",
+        "Issuing the tool call now.",
+      ],
+      status: status({ spinIdx: 6, action: "Thinking...", iter: 1, elapsed: "2s", tokens: 287, cost: 0.0002, entropy: 0.51, entropyTrend: "↓", panelHint: "collapse" }),
+    },
+
+    // ─ Tool call: panel collapses, permanent line prints, panel redraws ─
+    { kind: "live", delay: 80, clear: true, status: status({ spinIdx: 7, action: "Calling get-hn-posts...", iter: 1, elapsed: "2s", tokens: 287 }) },
+    { kind: "print", delay: 40, html: `  <span class="t-cyan">→</span> <span class="t-bold">tool</span> <span class="t-cyan">get-hn-posts</span><span class="t-dim">({ count: 5 })</span>` },
+    { kind: "live", delay: 280, status: status({ spinIdx: 8, action: "Calling get-hn-posts...", iter: 1, elapsed: "3s", tokens: 287 }) },
+    { kind: "live", delay: 280, status: status({ spinIdx: 9, action: "Calling get-hn-posts...", iter: 1, elapsed: "3s", tokens: 287 }) },
+    { kind: "print", delay: 80, html: `  <span class="t-green">←</span> <span class="t-dim">5 stories returned · 412ms</span>` },
+
+    // ─ Second think batch with new panel content ─
+    {
+      kind: "live",
+      delay: 200,
+      panel: [
+        "Got the live data. Formatting the numbered list with",
+        "title + score + url.",
+      ],
+      status: status({ spinIdx: 0, action: "Thinking...", iter: 2, elapsed: "3s", tokens: 612, cost: 0.0003, entropy: 0.42, entropyTrend: "↓", panelHint: "collapse" }),
+    },
+    {
+      kind: "live",
+      delay: 220,
+      panel: [
+        "title + score + url.",
+        "Now synthesizing the trend summary — looks like a lot of",
+        "infra and DIY tooling stories on the front page right now.",
+      ],
+      status: status({ spinIdx: 1, action: "Thinking...", iter: 2, elapsed: "4s", tokens: 892, cost: 0.0003, entropy: 0.34, entropyTrend: "↓", panelHint: "collapse" }),
+    },
+    {
+      kind: "live",
+      delay: 220,
+      panel: [
+        "Now synthesizing the trend summary — looks like a lot of",
+        "infra and DIY tooling stories on the front page right now.",
+        "Wrapping up with the recommendation.",
+      ],
+      status: status({ spinIdx: 2, action: "Thinking...", iter: 2, elapsed: "4s", tokens: 1183, cost: 0.0004, entropy: 0.28, entropyTrend: "↓", panelHint: "collapse" }),
+    },
+
+    // ─ Done — clear live region by setting empty status + cleared panel ─
+    { kind: "live", delay: 200, clear: true, status: `` },
+    { kind: "print", delay: 80, html: `<span class="t-dim">└─</span> <span class="t-green">✔ Done</span> <span class="t-dim">· 3 steps · 1 tool · 1284 tokens · 4.1s</span>` },
+    { kind: "print", delay: 200, html: `` },
+
+    // ─ Final response box ─
+    { kind: "print", delay: 100, html: `<span class="t-cyan">╭─ Agent ──────────────────────────────────────────────────╮</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> <span class="t-bold">## Hacker News — Top 5 (live)</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> 1. <span class="t-bold">Show HN: I built a search engine for arXiv papers</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span>    <span class="t-yellow">412 points</span> <span class="t-dim">· news.ycombinator.com/item?id=39024716</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> 2. <span class="t-bold">The hidden cost of context-switching in distributed teams</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span>    <span class="t-yellow">287 points</span> <span class="t-dim">· blog.example.com/context-switching</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> 3. <span class="t-bold">Why Effect-TS finally clicked for our backend</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span>    <span class="t-yellow">251 points</span> <span class="t-dim">· hashnode.example.dev/effect-ts-clicked</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> 4. <span class="t-bold">A practical guide to writing your own database</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span>    <span class="t-yellow">198 points</span> <span class="t-dim">· example.io/build-a-database</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> 5. <span class="t-bold">OpenAI releases new reasoning model: o4-mini</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span>    <span class="t-yellow">173 points</span> <span class="t-dim">· openai.com/blog/o4-mini</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span>` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> <span class="t-bold">Summary:</span> Today's HN is dominated by infra + DIY tooling —` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> a self-built arXiv search, a write-your-own-database guide,` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">│</span> and an Effect-TS adoption story. Trends technical and DIY.` },
+    { kind: "print", delay: 30,  html: `<span class="t-cyan">╰──────────────────────────────────────────────────────────╯</span>` },
+    { kind: "print", delay: 200, html: `` },
+
+    // ─ Metrics + CTA ─
+    { kind: "print", delay: 100, html: `<span class="t-green">✔</span> 4.1s · 3 steps · 1284 tokens · 1 tool` },
+    { kind: "print", delay: 200, html: `` },
+    { kind: "print", delay: 100, html: `<span class="t-dim">──────────────────────────────────────────────────</span>` },
+    { kind: "print", delay: 100, html: `` },
+    { kind: "print", delay: 100, html: `<span class="t-violet t-bold">🚀 Liked what you saw?</span>` },
+    { kind: "print", delay: 100, html: `` },
+    { kind: "print", delay: 80,  html: `  <span class="t-dim">Install:</span> <span class="t-cyan">bun add reactive-agents</span>` },
+    { kind: "print", delay: 80,  html: `  <span class="t-dim">Scaffold:</span> <span class="t-cyan">rax init my-agent</span>` },
   ];
 
   function initTerminalReplay() {
     const output = document.getElementById('terminal-output');
+    const liveRegion = document.getElementById('live-region');
+    const livePanel = document.getElementById('live-panel');
+    const liveStatus = document.getElementById('live-status');
     const cmd = document.getElementById('terminal-cmd');
     const cursor = document.getElementById('terminal-cursor');
     const restart = document.getElementById('terminal-restart');
     const body = document.getElementById('terminal-body');
-    if (!output || !cmd || !cursor || !restart || !body) return;
+    if (!output || !liveRegion || !livePanel || !liveStatus || !cmd || !cursor || !restart || !body) return;
 
     let abortController: AbortController | null = null;
 
@@ -245,13 +420,35 @@
       cursor!.classList.add('hidden');
     }
 
+    function applyLive(frame: Extract<Frame, { kind: "live" }>) {
+      if (frame.clear) {
+        livePanel!.innerHTML = '';
+        livePanel!.classList.remove('visible');
+      } else if (frame.panel) {
+        livePanel!.innerHTML = frame.panel.join('\n');
+        livePanel!.classList.add('visible');
+      }
+      if (frame.status !== undefined) {
+        liveStatus!.innerHTML = frame.status;
+      }
+    }
+
     async function playFrames(signal: AbortSignal) {
       output!.innerHTML = '';
-      for (const [delay, html] of FRAMES) {
+      livePanel!.innerHTML = '';
+      livePanel!.classList.remove('visible');
+      liveStatus!.innerHTML = '';
+
+      for (const frame of FRAMES) {
         if (signal.aborted) return;
-        await sleep(delay, signal);
+        await sleep(frame.delay, signal);
         if (signal.aborted) return;
-        output!.innerHTML += html + '\n';
+
+        if (frame.kind === 'print') {
+          output!.innerHTML += frame.html + '\n';
+        } else {
+          applyLive(frame);
+        }
         body!.scrollTop = body!.scrollHeight;
       }
     }
@@ -270,6 +467,9 @@
       const signal = abortController.signal;
 
       output!.innerHTML = '';
+      livePanel!.innerHTML = '';
+      livePanel!.classList.remove('visible');
+      liveStatus!.innerHTML = '';
       cmd!.textContent = '';
       cursor!.classList.remove('hidden');
 
@@ -283,7 +483,6 @@
 
     restart.addEventListener('click', () => run());
 
-    // Auto-play when visible
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) {
         observer.disconnect();
