@@ -174,6 +174,16 @@ async function main() {
     let session = args.runs ? { ...sessionDef, runs: args.runs } : sessionDef
     if (args.taskIds?.length) session = { ...session, taskIds: args.taskIds, tiers: undefined } as typeof session
     if (args.verbose) session = { ...session, logLevel: "verbose" } as typeof session
+    // Allow swapping the session's model via CLI: `--provider gemini --model gemini-2.5-pro`
+    // Useful for spot-checking a session against a single non-default provider
+    // without authoring a new session config.
+    if (args.provider || args.model) {
+      const provider = args.provider ?? session.models[0]?.provider
+      const model = args.model ?? session.models[0]?.model
+      if (provider && model) {
+        session = { ...session, models: [{ id: model, provider, model, contextTier: session.models[0]?.contextTier ?? "standard" }] } as typeof session
+      }
+    }
     const outputPath = args.output ?? "apps/docs/src/data/benchmark-report.json"
     const baselinePath = args.baselinePath ?? `benchmark-baselines/${args.session}.json`
 
