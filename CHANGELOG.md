@@ -6,11 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
-## [0.10.0] — 2026-04-22
+## [0.10.0] — 2026-04-30
 
 ### Highlights
 
-v0.10.0 ships the **Adaptive Tool Calling System** — a four-layer closed-loop pipeline that makes local models (Ollama, local LLMs) dramatically more reliable by normalizing how they express tool intent before execution. It adds a full **Reactive Intelligence dispatcher** with 6 intervention handlers, a production-grade **Calibration system** with community profiles and a local observations store, and **Benchmark Suite v2** with 5 competitor runners and a CI drift gate. Cortex Studio received its largest-ever update with Beacon, Mission Control, Lab, and living skills. 27 packages total.
+v0.10.0 ships the **Adaptive Tool Calling System** — a four-layer closed-loop pipeline that makes local models (Ollama, local LLMs) dramatically more reliable by normalizing how they express tool intent before execution. It adds a full **Reactive Intelligence dispatcher** with 6 intervention handlers, a production-grade **Calibration system** with community profiles and a local observations store, and **Benchmark Suite v2** with 5 competitor runners and a CI drift gate. Cortex Studio received its largest-ever update with Beacon, Mission Control, Lab, and living skills.
+
+The release closes with the **`refactor/overhaul` audit** — a 19-wave Stage 5 sweep that rationalised termination, cleaned up dead intent, made the framework's ports explicit, and replaced cosmetic claims with honest deferrals where evidence didn't justify the work. 28 packages total.
 
 ### Breaking Changes
 
@@ -120,6 +122,29 @@ None. All existing `ReactiveAgents.create().with*()` builder chains continue to 
 - `ModelCalibrationSchema` extended with 9 new fields; all backward-compatible via `optionalWith` defaults
 - `ToolCallingDriver` is the sole seam between calibration routing and kernel phases — kernel phases (`think.ts`, `act.ts`, `context-builder.ts`) not modified
 - `ExperienceStore.query()` dead loop closed — results now materialized into `ExperienceSummary` and consumed by `toolGuidance` hook
+
+### Overhaul (`refactor/overhaul`, 2026-04-28 → 2026-04-30)
+
+The Stage 5 audit landed across 19 waves on `refactor/overhaul`; details are in `docs/spec/docs/AUDIT-overhaul-2026.md`.
+
+- **Single-owner termination (W4)** — 9 imperative termination paths in `runtime/src/execution-engine.ts` collapsed to a single `kernel/loop/terminate.ts` Arbitrator-owned exit. CI lint at `scripts/check-termination-paths.sh`.
+- **ToT outer-loop early-stop (W5)** — Tree-of-Thought BFS frontier honors `dispatcher-early-stop` patches; T4 regression test added.
+- **Eval Rule-4 frozen judge (W9)** — separate `JudgeLLMService` Tag with code-path isolation and a runtime `judge.model !== sut.model` guard. `runSuite` placeholder replaced by an explicit `SuiteAgentRunner` parameter (W6.5).
+- **AgentMemory port (W11, NS §3.1)** — narrow `AgentMemory` Tag in `@reactive-agents/core`; `MemoryService` adapts via `AgentMemoryFromMemoryService`; `tool-execution.storeSemantic` decoupled. `plan-store` decoupling deferred to v0.11.
+- **`engines: { bun: ">=1.1.0" }` (W12)** — added to 8 published packages + the umbrella; guard test pins the contract.
+- **Cost router calibration coupling + SHA refresh (W10)** — `RoutingContext` extended with `requiresTools` / `calibration` / `toolReliabilityThreshold`; `escalateForToolReliability` consults calibration before routing.
+- **Compression sequencing (W6)** — discovered the three "redundant" compression mechanisms form a sequenced pipeline; the audit's "delete one" prescription was wrong.
+- **`rax demo` authenticity (W15) + TUI fidelity (W15.1) + provider neutrality (W16)** — demo uses canonical `defineTool` with a live HN tool call; `TerminalReplay.astro` rewritten to mirror the real `StatusRenderer` (live-region: panel + status); `rax init` template now driven by a `PROVIDER_PROFILES` map.
+- **AUC re-run (W17)** — dispatch AUC `0.000 → 1.000` on the N=8 corpus post-W3. Entropy AUC remained `0.500` — flat for local models without logprobs. Bigger corpus is a v0.11 follow-up.
+- **Stage 6 W20** — workspace typecheck green across 55 packages; full test suite green across 52 packages after pinning 23 fixture-level regressions to the new Stage-5 semantics: lazy-tool default opt-out (commit `f51d7d87`), opt-in claim-grounding (Stage-5 quality fix), honest failure surfacing (post-W4 Arbitrator), dotted-anchor sites.
+
+### Deferred to v0.11+ (with rationale)
+
+- **#15 / #40-43 — `_unstable_*` markers (Rule 10)** — npm-stats check (W14) shows ~135–400 dl/30d per package; the consumer-signaling work has no consumer population to discipline yet.
+- **#19 / #24 — SHRINK `ExecutionEngine` + `builder.ts`** — 4,476 + 5,877 LOC; multi-session work, not gating.
+- **#27 — TTY-conditional `Logger.none`** — designed-as-intended trade-off; revisit if a structured-logger wrapper ships.
+- **#35 — Async memory DB layer** — `bun:sqlite` is sync-by-API; cosmetic `Effect.promise` wrapping rejected. Worker-thread architecture is the proper fix when it surfaces.
+- **#36 — Identity wiring** — `AuditLogger` needs a durable backing store first; `PermissionManager` seed policy and `CertificateAuth` are gated on the multi-agent orchestration spec.
 
 ---
 
