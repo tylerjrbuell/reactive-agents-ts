@@ -5,6 +5,7 @@
 "@reactive-agents/core": minor
 "@reactive-agents/cortex": minor
 "@reactive-agents/cost": minor
+"@reactive-agents/diagnose": minor
 "@reactive-agents/docs": minor
 "@reactive-agents/eval": minor
 "@reactive-agents/examples": minor
@@ -30,7 +31,7 @@
 "@reactive-agents/trace": minor
 "@reactive-agents/verification": minor
 "@reactive-agents/vue": minor
-"reactive-agents": patch
+"reactive-agents": minor
 ---
 
 v0.10.0: Adaptive Tool Calling System, Reactive Intelligence Dispatcher, Calibration System, Benchmark Suite v2, and major Cortex Studio updates.

@@ -14,13 +14,13 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ---
 
-## Current state (Apr 28, 2026)
+## Current state (Apr 30, 2026)
 
-- **Branch:** `refactor/overhaul` (100+ commits ahead of `main`). All prior `feat/*` branches archived as `archive/*` tags.
-- **Release target:** v0.10.0 clean-break. Stage 4 (doc + memory reset) in progress. Stages 5–6 follow.
-- **Published on npm:** all packages at `0.9.0`. Umbrella `reactive-agents` and `@reactive-agents/diagnose` have **never been published** — top-priority FIX items.
-- **Tests:** ~4,353 pass / 23 skip / 0 fail across 494 files (last clean count). Will re-run during Stage 6.
+- **v0.10.0 release-ready** — `refactor/overhaul` branch fully prepared; changeset + CHANGELOG + release doc written; 4,633 tests pass, 0 fail across 524 files.
+- **Branch:** `refactor/overhaul`. All prior `feat/*` branches archived as `archive/*` tags.
+- **Published on npm:** all packages at `0.9.0`. Version bumps happen via changeset merge (`release-0-10-0.md` covers all 28 packages + umbrella).
 - **Architecture target:** `15-design-north-star.md` v3.0 (10 capabilities + cognitive kernel + 3 ports).
+- **Pending before tag:** merge `refactor/overhaul` → `main`, run `changeset version`, publish.
 
 ---
 

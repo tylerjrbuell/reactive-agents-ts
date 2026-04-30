@@ -65,7 +65,7 @@ export const scenario: ScenarioModule = {
   targetedWeakness: "Verify-capability/Sprint-3.2",
   closingCommit: "Sprint-3.2",
   description:
-    "Pins the Verify capability promotion (Sprint 3.2). Confirms (a) defaultVerifier is exported and callable, (b) contextFromObservation lifts an ObservationResult into a VerificationContext, (c) the structured VerificationResult contains action + verified + checks + summary, (d) failed actions are correctly flagged, (e) empty content is flagged as a check failure, (f) terminal actions add required-tools-satisfied check. Sprint 3.3 + 3.4 will expand to assert downstream consumers actually consult the verification metadata.",
+    "Pins the Verify capability promotion (Sprint 3.2). Confirms (a) defaultVerifier is exported and callable, (b) contextFromObservation lifts an ObservationResult into a VerificationContext, (c) the structured VerificationResult contains action + verified + checks + summary, (d) failed actions are correctly flagged, (e) empty content is flagged as a check failure, (f) terminal actions with requiredTools run agent-took-action (required-tools-satisfied moved to runner.ts §8 for delegation awareness). Sprint 3.3 + 3.4 expand to assert downstream consumers consult the verification metadata.",
   config: {
     name: "cf-23-verifier-runs-after-effector",
     task: "ok",
@@ -100,7 +100,9 @@ export const scenario: ScenarioModule = {
       }),
     );
 
-    // V4: terminal verification adds required-tools-satisfied when requested
+    // V4: terminal with requiredTools — required-tools-satisfied moved to
+    // runner.ts §8 (delegation-aware enforcement). Verifier instead runs
+    // agent-took-action when user declared requiredTools and action succeeded.
     const v4 = defaultVerifier.verify(
       contextFromObservation({
         observation: successObs,
@@ -111,7 +113,7 @@ export const scenario: ScenarioModule = {
         terminal: true,
       }),
     );
-    const reqCheck = v4.checks.find((c) => c.name === "required-tools-satisfied");
+    const ataCheck = v4.checks.find((c) => c.name === "agent-took-action");
 
     return {
       // Service-presence
@@ -136,9 +138,10 @@ export const scenario: ScenarioModule = {
         v3.checks.find((c) => c.name === "non-empty-content")?.passed === false,
 
       // V4 — terminal with required tools
-      "v4.required_check_present": reqCheck !== undefined,
-      "v4.required_check_failed_for_missing": reqCheck?.passed === false,
-      "v4.reason_names_missing_tool": (reqCheck?.reason ?? "").includes("calculator"),
+      // required-tools-satisfied lives in runner.ts §8; verifier runs agent-took-action
+      "v4.required_tools_satisfied_absent": v4.checks.every((c) => c.name !== "required-tools-satisfied"),
+      "v4.agent_took_action_present": ataCheck !== undefined,
+      "v4.agent_took_action_passed": ataCheck?.passed === true,
     };
   },
 };
