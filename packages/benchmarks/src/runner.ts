@@ -864,6 +864,7 @@ export async function runSession(
     sessionVersion: session.version,
     gitSha,
     ablation,
+    taskReports: allVariantReports,
     dimensionSummary,
   }
 

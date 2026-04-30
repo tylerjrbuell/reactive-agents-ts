@@ -142,6 +142,13 @@ export interface SessionReport extends MultiModelReport {
   readonly sessionVersion: string;
   readonly gitSha: string;
   readonly ablation?: ReadonlyArray<AblationResult>;
+  /**
+   * Per-(task × model × variant) reports. Always populated alongside `ablation`.
+   * Distinct from `ablation`, which only emits entries when a session contains
+   * both a `bare-llm` baseline and `ra-full` variant — single-variant sessions
+   * (regression-gate, frontier-spot-checks) need this field for breakdown.
+   */
+  readonly taskReports?: ReadonlyArray<TaskVariantReport>;
   readonly dimensionSummary?: ReadonlyArray<{
     readonly dimension: QualityDimension;
     readonly byVariant: ReadonlyArray<{ readonly variantId: string; readonly meanScore: number }>;
