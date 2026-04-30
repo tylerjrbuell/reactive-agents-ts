@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/svelte",
-  "version": "0.10.0",
+  "version": "0.9.0",
   "description": "Svelte stores for Reactive Agents — agentStream, agentRun",
   "type": "module",
   "exports": {

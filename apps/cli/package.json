@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/cli",
-  "version": "0.10.0",
+  "version": "0.9.0",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -30,18 +30,18 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.10.0",
-    "@reactive-agents/runtime": "0.10.0",
-    "@reactive-agents/eval": "0.10.0",
-    "@reactive-agents/llm-provider": "0.10.0",
-    "@reactive-agents/a2a": "0.10.0",
-    "@reactive-agents/trace": "0.10.0",
+    "@reactive-agents/core": "0.9.0",
+    "@reactive-agents/runtime": "0.9.0",
+    "@reactive-agents/eval": "0.9.0",
+    "@reactive-agents/llm-provider": "0.9.0",
+    "@reactive-agents/a2a": "0.9.0",
+    "@reactive-agents/trace": "0.9.0",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"
-  },
+  },  
   "devDependencies": {
-    "@reactive-agents/benchmarks": "0.10.0",
+    "@reactive-agents/benchmarks": "0.9.0",
     "typescript": "^5.7.0",
     "bun-types": "latest"
   },
