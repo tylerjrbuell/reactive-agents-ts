@@ -1,6 +1,6 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-04-29 (refactor/overhaul — Stage 5 nearly complete, Stage 6 next)
+> **Last updated:** 2026-04-30 (refactor/overhaul — Stage 5 closed, Stage 6 in flight: workspace green)
 > **The open-source agent framework built for control, not magic.**
 
 This roadmap describes what's shipping, what's `_unstable_*`, and what's deferred. The detailed execution plan for the current overhaul lives in `docs/spec/docs/AUDIT-overhaul-2026.md` §15 (Stage 5 Wave sequencing).
@@ -11,6 +11,7 @@ This roadmap describes what's shipping, what's `_unstable_*`, and what's deferre
 
 - **v0.9.0** is published on npm (most workspace packages, including the `reactive-agents` umbrella — the prior "404 today" claim was stale per W14 npm-stats check).
 - **`refactor/overhaul`** branch is the working trunk. Audit complete (28 packages + 13 mechanisms + 44-item FIX backlog). Stage 5 closed waves W2–W19 — most backlog items resolved or deferred with rationale.
+- **Stage 6 (W20)** is in flight: workspace typecheck green across 55 packages, full test suite green across 52 packages (W20 pinned 23 fixture-level regressions to the new Stage-5 semantics — lazy-tool default opt-out, opt-in claim-grounding, honest failure surfacing, dotted-anchor sites). README/CHANGELOG polish + the v0.10.0 tag are the remaining steps.
 - **v0.10.0** is the next release — a clean-break overhaul targeting verified quality gates. Detailed plan in `AUDIT-overhaul-2026.md`. CI release workflow handles publishing.
 
 ---

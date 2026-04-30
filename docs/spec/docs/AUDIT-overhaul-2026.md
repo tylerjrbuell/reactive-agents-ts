@@ -926,9 +926,12 @@ Stage 5 executes the verdicts in waves. Each wave is a discrete commit on `refac
 | **W11 — SHRINK heavyweights** | #19 ExecutionEngine extraction (telemetry/debrief/classifier/skill-loading) target < 1,500 LOC. #24 builder.ts extraction target < 2,500 LOC. Test suite must stay green at every commit. | #19, #24 | 8–15 commits (multi-session) |
 | **W12 — Publish + smoke gate** | #1 publish umbrella reactive-agents. #2 publish @reactive-agents/diagnose. T11/T12/T13 smoke tests. Re-run AUC corpus (#17). | #1, #2, #17, T11, T12, T13 | 4–5 commits + npm publish |
 | **W13 — Stage 6 validation** | bench, typecheck, full test suite, README/CHANGELOG/ROADMAP polish, tag v0.10.0 | — | 3 commits + tag |
+| **W20 — Test contract migration (Stage 6)** | Pin 22 reasoning + 1 runtime regressions to new Stage-5 semantics: lazy-tool default opt-out in 7 suites, `enableClaimGrounding` opt-in across the evidence-grounding suite, partial-result honest-failure assertion, dotted-anchor site shape. Workspace typecheck + full test suite pass. | — | 1 commit |
 
 Estimated: 50–75 commits across 6–10 sessions for Stages 4–6. P0 items (#1, #2, #3, #18, #21) are the gating set for v0.10.0; everything else is "should land for clean release" but the P3 tier can defer to v0.10.1 if scope creeps.
 
+**Stage 6 status (2026-04-30):** typecheck green across 55 packages, full test suite green across 52 packages. README/CHANGELOG polish + tag v0.10.0 are the remaining items.
+
 ---
 
-*Last updated: 2026-04-28 (Stage 3 audit complete; all sections populated; ready for Stage 4 execution).*
+*Last updated: 2026-04-30 (Stage 6 W20 — test contract migration committed; workspace fully green).*
