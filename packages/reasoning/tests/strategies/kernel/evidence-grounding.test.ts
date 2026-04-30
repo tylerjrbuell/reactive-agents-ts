@@ -112,10 +112,15 @@ describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
     expect(r.groundingRate).toBeGreaterThan(0.5);
   });
 
+  // The claim-grounding pass is opt-in as of Stage 5 (the over-eager Title-Case
+  // extractor over-rejected legitimate summaries). Tests below explicitly enable
+  // it via `enableClaimGrounding: true` because they're pinning the validator's
+  // grounding behavior, not its default-off shape.
   it("FAILS when most claims are not in evidence (fabrication)", () => {
     const r = validateGeneralizedGrounding(
       'The top stories are "Acme Widget", "Foo Bar", "Lorem Ipsum", with values 999, 888, 777',
       "Real evidence: Asahi Linux 273; Statecharts 158",
+      { enableClaimGrounding: true },
     );
     expect(r.verified).toBe(false);
     expect(r.ungroundedClaims.length).toBeGreaterThan(2);
@@ -125,6 +130,7 @@ describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
     const r = validateGeneralizedGrounding(
       "Some output with multiple claims",
       "tiny",
+      { enableClaimGrounding: true },
     );
     expect(r.verified).toBe(true);
     expect(r.reason).toContain("no evidence corpus");
@@ -134,6 +140,7 @@ describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
     const r = validateGeneralizedGrounding(
       "ok",
       "Real evidence: Asahi Linux 273; Statecharts 158; many things here",
+      { enableClaimGrounding: true },
     );
     expect(r.verified).toBe(true);
     expect(r.reason).toContain("below threshold");
@@ -143,7 +150,7 @@ describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
     const r = validateGeneralizedGrounding(
       'The customer said "I love this product" and "I hate this product" and 999 dollars and another fabricated TestThing',
       "Customer feedback corpus: response time 12 seconds; complaints about pricing",
-      { maxUngroundedRate: 0.2 }, // strict — quoted fabrication should fail at 0.2
+      { maxUngroundedRate: 0.2, enableClaimGrounding: true }, // strict — quoted fabrication should fail at 0.2
     );
     expect(r.verified).toBe(false);
     expect(r.ungroundedClaims.some((c) => c.includes("love") || c.includes("hate"))).toBe(true);
@@ -153,6 +160,7 @@ describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
     const r = validateGeneralizedGrounding(
       "The leading products are Acme Widget Pro and Foo Bar Ultra and Lorem Ipsum Plus",
       "Actual product list: WidgetMaster 3000, FooBox Standard, BarKit Lite",
+      { enableClaimGrounding: true },
     );
     expect(r.verified).toBe(false);
   });
@@ -175,6 +183,7 @@ describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
     const lenient = validateGeneralizedGrounding(output, evidence, {
       maxUngroundedRate: 0.7,
       minClaimsForCheck: 1,
+      enableClaimGrounding: true,
     });
     expect(lenient.totalClaims).toBeGreaterThanOrEqual(2);
     expect(lenient.verified).toBe(true);
@@ -182,6 +191,7 @@ describe("validateGeneralizedGrounding (Scaffold 2 — task-agnostic)", () => {
     const strict = validateGeneralizedGrounding(output, evidence, {
       maxUngroundedRate: 0,
       minClaimsForCheck: 1,
+      enableClaimGrounding: true,
     });
     // With ANY ungrounded claim (rate > 0), strict mode fails.
     if (strict.ungroundedClaims.length > 0) {

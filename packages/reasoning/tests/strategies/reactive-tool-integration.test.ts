@@ -3,11 +3,21 @@
 // Proves that the ReAct strategy executes real tools (not placeholders)
 // when ToolService is present in the Effect context.
 //
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+
+// Pin pre-lazy-tool-disclosure contract — see f51d7d87.
+const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
+beforeAll(() => {
+  process.env.RA_LAZY_TOOLS = "0";
+});
+afterAll(() => {
+  if (PRIOR_LAZY === undefined) delete process.env.RA_LAZY_TOOLS;
+  else process.env.RA_LAZY_TOOLS = PRIOR_LAZY;
+});
 import {
   ToolService,
   ToolExecutionError,

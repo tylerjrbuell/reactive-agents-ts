@@ -8,7 +8,7 @@
 //   4. User messages contain the task text
 //   5. Tool schemas appear in context when tools are provided
 //
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { CompletionResponse, StreamEvent } from "@reactive-agents/llm-provider";
@@ -18,6 +18,19 @@ import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
+
+// These tests pin the pre-lazy-tool-disclosure prompt contract (tools rendered
+// in system prompt, environment + rules sections always present). The lazy
+// curation default flipped 2026-04-26 (commit f51d7d87) — opt back in to the
+// eager path so the assertions remain meaningful.
+const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
+beforeAll(() => {
+  process.env.RA_LAZY_TOOLS = "0";
+});
+afterAll(() => {
+  if (PRIOR_LAZY === undefined) delete process.env.RA_LAZY_TOOLS;
+  else process.env.RA_LAZY_TOOLS = PRIOR_LAZY;
+});
 
 // ─── Capturing LLM Mock ───
 

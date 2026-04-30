@@ -53,9 +53,11 @@ describe("ReactiveStrategy", () => {
       program.pipe(Effect.provide(layer)),
     );
 
-    // Mock returns empty text each turn → no FINAL ANSWER, no tools → loop detection fires
-    // on consecutive thought steps (no action steps) → graceful degradation → "completed".
-    expect(result.status).toBe("completed");
+    // Mock returns empty text each turn → no FINAL ANSWER, no tools → loop detection
+    // fires on consecutive thought steps. Post-W4 (single-owner Arbitrator), an
+    // unresolved loop with no progress is reported as "failed" rather than papered
+    // over as "completed" — see AUDIT-overhaul-2026.md FIX-18 / W4.
+    expect(result.status).toBe("failed");
     expect(result.steps.length).toBeGreaterThan(0);
   });
 

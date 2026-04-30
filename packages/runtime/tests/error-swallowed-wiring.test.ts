@@ -101,11 +101,12 @@ describe("ErrorSwallowed wiring — site conventions (P0 S0.2)", () => {
     // Examples of valid shapes (from actual migrated code):
     //   "memory/src/services/memory-service.ts:107"
     //   "reasoning/src/kernel/capabilities/act/tool-execution.ts:storeToolObservationSemantic"
+    //   "runtime/src/execution-engine.ts:execution.success"  (metric/gauge name anchor)
     //   "runtime/src/builder.ts:4182"
     // The fixture strings "test-site" and "no-bus" used inside the
     // error-swallowed.test.ts are allowed and excluded here.
     const allowedFixtures = new Set(["test-site", "no-bus"]);
-    const pathShape = /^[a-z0-9_-]+\/[^:]+\.ts:[A-Za-z0-9_-]+$/;
+    const pathShape = /^[a-z0-9_-]+\/[^:]+\.ts:[A-Za-z0-9_.-]+$/;
 
     const invalid = occurrences.filter(
       (o) => !allowedFixtures.has(o.site) && !pathShape.test(o.site),

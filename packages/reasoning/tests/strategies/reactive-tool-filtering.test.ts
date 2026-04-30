@@ -1,8 +1,19 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
+
+// Pin the pre-lazy-tool-disclosure prompt contract (tools rendered eagerly in
+// the system prompt). Default flipped to lazy on 2026-04-26 (commit f51d7d87).
+const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
+beforeAll(() => {
+  process.env.RA_LAZY_TOOLS = "0";
+});
+afterAll(() => {
+  if (PRIOR_LAZY === undefined) delete process.env.RA_LAZY_TOOLS;
+  else process.env.RA_LAZY_TOOLS = PRIOR_LAZY;
+});
 
 const testConfig = {
   ...defaultReasoningConfig,

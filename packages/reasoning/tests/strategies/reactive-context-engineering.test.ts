@@ -7,13 +7,23 @@
 //   - Context compaction after N steps (Sprint 1B)
 //   - Early termination on end_turn with no tool call (Sprint 2D)
 //
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { ToolService, ToolExecutionError, createToolsLayer } from "@reactive-agents/tools";
+
+// Pin pre-lazy-tool-disclosure contract — see f51d7d87.
+const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
+beforeAll(() => {
+  process.env.RA_LAZY_TOOLS = "0";
+});
+afterAll(() => {
+  if (PRIOR_LAZY === undefined) delete process.env.RA_LAZY_TOOLS;
+  else process.env.RA_LAZY_TOOLS = PRIOR_LAZY;
+});
 
 /** Build a proper Stream stub from a response string */
 function makeStreamResponse(content: string): Stream.Stream<StreamEvent, never> {
