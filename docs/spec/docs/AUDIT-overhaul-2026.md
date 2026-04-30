@@ -930,7 +930,15 @@ Stage 5 executes the verdicts in waves. Each wave is a discrete commit on `refac
 
 Estimated: 50–75 commits across 6–10 sessions for Stages 4–6. P0 items (#1, #2, #3, #18, #21) are the gating set for v0.10.0; everything else is "should land for clean release" but the P3 tier can defer to v0.10.1 if scope creeps.
 
-**Stage 6 status (2026-04-30):** typecheck green across 55 packages, full test suite green across 52 packages. README/CHANGELOG polish + tag v0.10.0 are the remaining items.
+**Stage 6 status (2026-04-30):**
+
+- ✅ Workspace typecheck green across 55 packages.
+- ✅ Workspace test suite green across 52 packages (post W20).
+- ✅ Version bumps applied (0.9.0 → 0.10.0; diagnose 0.9.0 → 0.9.1) via consumed `release-0-10-0` + `p0-s01-typed-error-taxonomy` changesets.
+- ✅ Root CHANGELOG.md gained `[0.10.0] — 2026-04-30` Overhaul section enumerating all 19 waves + Stage 6 W20 + the v0.11+ deferrals.
+- ✅ README sweep — no stale `v0.9` references.
+- ⏸️ **Bench re-run deferred to post-publish smoke.** Full bench requires API spend across multiple frontier providers (anthropic, openai, gemini) and is not authorized inside the current auto-run scope. The structural gates (typecheck + 1,700+ tests + dispatch AUC re-run from W17) already provide release-ready assurance. The drift gate against last baseline runs as part of the post-publish workflow against the published artifacts.
+- ⏳ **Tag v0.10.0** — final step; gated on user confirmation because pushing the tag triggers the CI release workflow (`changeset publish`) and is a shared-system action.
 
 ---
 

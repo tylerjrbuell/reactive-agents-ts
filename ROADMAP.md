@@ -11,7 +11,7 @@ This roadmap describes what's shipping, what's `_unstable_*`, and what's deferre
 
 - **v0.9.0** is published on npm (most workspace packages, including the `reactive-agents` umbrella — the prior "404 today" claim was stale per W14 npm-stats check).
 - **`refactor/overhaul`** branch is the working trunk. Audit complete (28 packages + 13 mechanisms + 44-item FIX backlog). Stage 5 closed waves W2–W19 — most backlog items resolved or deferred with rationale.
-- **Stage 6 (W20)** is in flight: workspace typecheck green across 55 packages, full test suite green across 52 packages (W20 pinned 23 fixture-level regressions to the new Stage-5 semantics — lazy-tool default opt-out, opt-in claim-grounding, honest failure surfacing, dotted-anchor sites). README/CHANGELOG polish + the v0.10.0 tag are the remaining steps.
+- **Stage 6 (W20)** complete except for the tag: workspace typecheck green across 55 packages, full test suite green across 52 packages (W20 pinned 23 fixture-level regressions to the new Stage-5 semantics — lazy-tool default opt-out, opt-in claim-grounding, honest failure surfacing, dotted-anchor sites). Version bumps applied (0.9.0 → 0.10.0). Root CHANGELOG gained an "Overhaul" subsection. Bench re-run deferred to post-publish smoke (requires API spend authorization). The v0.10.0 tag is the final step and gated on user confirmation because pushing it triggers `changeset publish` via CI.
 - **v0.10.0** is the next release — a clean-break overhaul targeting verified quality gates. Detailed plan in `AUDIT-overhaul-2026.md`. CI release workflow handles publishing.
 
 ---
