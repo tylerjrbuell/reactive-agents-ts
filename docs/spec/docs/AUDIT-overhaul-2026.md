@@ -937,17 +937,20 @@ Estimated: 50–75 commits across 6–10 sessions for Stages 4–6. P0 items (#1
 - ↩️ Manual version bumps (0.10.0) **reverted** — CI changeset workflow handles the bump as part of the publish PR; bumping locally would cause CI to overshoot to 0.11.0. Staged changesets (`release-0-10-0`, `p0-s01-typed-error-taxonomy`) restored.
 - ✅ Root CHANGELOG.md gained `[0.10.0] — 2026-04-30` Overhaul section enumerating all 19 waves + Stage 6 W20 + the v0.11+ deferrals.
 - ✅ README sweep — no stale `v0.9` references.
-- ✅ **Frontier bench (W21)** — added `frontier-spot-check` session (4 providers × 5 tasks × bare-llm + ra-full). Results:
+- ✅ **Frontier bench (W21)** — added `frontier-spot-check` session (4 providers × 5 tasks × bare-llm + ra-full). Initial results showed Gemini-2.5-pro at 3/5 with apparent harness regression on m1; **deeper investigation found the issue was harness-side, not Google's API** (initial conclusion of "external/Google's fault" was wrong — pushed back by user). After fix:
   - `claude-sonnet-4-6`: 5/5 ✓ both variants
   - `claude-haiku-4-5`: 5/5 ✓ both variants
-  - `gpt-4o-mini`: 5/5 ✓ both variants
-  - `gemini-2.5-pro`: 3/5 across N=1; flaky on re-run (1/3 vs 0/3 on c5-multi-tool). Root cause **external** — Google API returning 503s plus `gemini-2.5-pro` requires thinking mode (`Budget 0 is invalid` when disabled) which consumes output budget unpredictably. Direct API probe via `@google/genai` returns `candidates=0 thoughts=0 text=""` on the same prompt; harness handling is correct, the provider is upstream-unstable. **Not release-blocking** — documented as known Gemini limitation; recommend `gemini-2.5-flash` for production reliability until Google stabilizes.
+  - `gpt-4o-mini`: 5/5 ra-full (was 4/5 bare-llm — c5 needs tools)
+  - `gemini-2.5-pro`: **5/5 ra-full** (was 3/5 before fix), 3/5 bare-llm
+  - Aggregate: bare-llm 85%, **ra-full 100%** across all 4 frontier models.
+  - Visible harness lift now: +100% on c5-multi-tool for gpt-4o-mini AND gemini-2.5-pro AND m4-deduplicate for gemini.
+- ✅ **Gemini parts walking + finishReason surfacing (W22, FIX-NEW)** — `gemini-2.5-pro` emits chunks with `candidates[0].content.parts[]` mixing text + `functionCall` + `thought` parts. Our streaming code relied on `chunk.text` (strips function-call parts, logs a noisy SDK warning) and `chunk.functionCalls` (no thought support). When the model wanted to call a tool but the request declared none, Gemini returned `finishReason=UNEXPECTED_TOOL_CALL` and we silently emitted empty content + `success:true`. Fixed by walking parts directly, surfacing non-OK finishReasons (`UNEXPECTED_TOOL_CALL`, `MAX_TOKENS`, `SAFETY`, `MALFORMED_FUNCTION_CALL`, etc.) as explicit `error` events on stream and as `LLMError` on `complete()`.
+- ✅ **`maxIterations` per-tier-profile precedence bug fixed (W22, FIX-NEW)** — `withMaxIterations(n)` propagated to `strategies.reactive.maxIterations`, but `reactive.ts` resolved `maxIter` as `input.contextProfile?.maxIterations ?? input.config.strategies.reactive.maxIterations` — the per-tier profile field (always populated: 8/10/10/12) shadowed the user's explicit setting. Discovered W21 drilling c1-distributed-queue (`task.maxIterations:8` ran 38 kernel iterations). Fixed via `Math.min(...)` over present sources so the most-restrictive cap wins, plus `_maxIterations` defaults to `undefined` so the runtime only spreads when the user opted in.
 - ✅ **Bench harness fixes (W21)**:
   - Workspace `.env` auto-load when bench runs from `packages/benchmarks/` (was silently producing `llm_error` at 0 tokens).
   - Per-task `taskReports` field added to `SessionReport` so single-variant sessions emit per-task accuracy/tokens/duration breakdown (was only producing aggregate summary, hiding which task failed).
   - `printSessionSummary` falls back to `taskReports` when `ablation` is empty.
   - `regression-gate` on `claude-haiku` now reports 88% (15/17 pass; 1 timeout on c1-distributed-queue, 1 model-wrong-answer on e1-lis-optimization).
-- ⏳ **Per-task `maxIterations` not enforced** (discovered W21 verbose drill on c1) — task-level `maxIterations: 8` reached 38 kernel iterations. Filed for v0.10.1 follow-up; not release-blocking (task still completes successfully, just exceeds budget).
 - ⏳ **Tag v0.10.0** — final step; gated on user confirmation because pushing the tag triggers the CI release workflow (`changeset publish`) and is a shared-system action.
 
 ---
