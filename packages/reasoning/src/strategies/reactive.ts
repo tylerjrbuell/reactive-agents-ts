@@ -124,9 +124,22 @@ export const executeReactive = (
 
     yield* emitLog({ _tag: "phase_started", phase: "reactive:kernel", timestamp: new Date() });
 
-    const maxIter =
-      input.contextProfile?.maxIterations ??
-      input.config.strategies.reactive.maxIterations;
+    // maxIterations honors most-restrictive cap. Three sources flow in:
+    //   1. `input.config.strategies.reactive.maxIterations` — set by the
+    //      builder's `withMaxIterations()` (the user's explicit cap).
+    //   2. `input.contextProfile?.maxIterations` — tier-default hint
+    //      (8 local / 10 mid / 10 large / 12 frontier).
+    //   3. `defaultReasoningConfig.strategies.reactive.maxIterations = 10`
+    //      — the fallback baked into the schema.
+    // Prior to 2026-04-30 the contextProfile took precedence unconditionally,
+    // which meant `withMaxIterations(3)` was silently ignored on a frontier
+    // model that had a tier default of 12. Take the minimum of whatever
+    // sources are present so the user's explicit cap is always honored.
+    const candidates = [
+      input.contextProfile?.maxIterations,
+      input.config.strategies.reactive.maxIterations,
+    ].filter((n): n is number => typeof n === "number" && n > 0);
+    const maxIter = candidates.length > 0 ? Math.min(...candidates) : 10;
 
     // Map memoryContext into priorContext for the kernel
     const priorContext = input.memoryContext?.trim()

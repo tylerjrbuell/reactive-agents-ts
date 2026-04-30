@@ -8,11 +8,15 @@ type AgentCompletedWithError = Extract<AgentEvent, { _tag: "AgentCompleted" }> &
 describe("Error reporting chain", () => {
   it("AgentResult succeeds gracefully when loop fires on pure thought steps", async () => {
     // Empty-response loops produce only thought steps (no action steps).
-    // Loop detection now degrades gracefully → success: true with last thought as output.
+    // Loop detection trips after `maxConsecutiveThoughts` (default 3) and
+    // degrades gracefully → success: true with last thought as output.
+    // Use maxIterations=8 so the loop detector has room to trip before the
+    // iteration cap fires (a max-iterations exit is now an honest failure
+    // post-W4, not a graceful success).
     const agent = await ReactiveAgents.create()
       .withName("error-test-agent")
       .withTestScenario([{ text: "" }])
-      .withReasoning({ strategies: { reactive: { maxIterations: 1, temperature: 0.7 } } })
+      .withReasoning({ strategies: { reactive: { maxIterations: 8, temperature: 0.7 } } })
       .build();
 
     const result = await agent.run("Test task");
@@ -41,7 +45,7 @@ describe("Error reporting chain", () => {
     const agent = await ReactiveAgents.create()
       .withName("event-error-test")
       .withTestScenario([{ text: "" }])
-      .withReasoning({ strategies: { reactive: { maxIterations: 1, temperature: 0.7 } } })
+      .withReasoning({ strategies: { reactive: { maxIterations: 8, temperature: 0.7 } } })
       .build();
 
     // Subscribe before run — events are fire-and-forget during execution

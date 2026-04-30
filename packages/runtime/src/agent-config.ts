@@ -542,7 +542,7 @@ export function builderToConfig(state: {
   _costTrackingOptions?: Record<string, unknown>;
   _enableVerification: boolean;
   _verificationOptions?: Record<string, unknown>;
-  _maxIterations: number;
+  _maxIterations: number | undefined;
   _executionTimeoutMs?: number;
   _retryPolicy?: { maxRetries: number; backoffMs: number };
   _cacheTimeoutMs?: number;

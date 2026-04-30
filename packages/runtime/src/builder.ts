@@ -877,7 +877,15 @@ export class ReactiveAgentBuilder {
     private _memoryTier: '1' | '2' = '1'
     private _enableMemory: boolean = false
     private _hooks: LifecycleHook[] = []
-    private _maxIterations: number = 10
+    /**
+     * Max kernel iterations override. `undefined` means "honor the
+     * tier-resolved contextProfile maxIterations". Setting via
+     * `withMaxIterations()` or `withReasoning({ maxIterations })` makes the
+     * value an explicit cap that wins over the tier default — see
+     * `packages/reasoning/src/strategies/reactive.ts` for the most-restrictive
+     * resolution rule.
+     */
+    private _maxIterations: number | undefined = undefined
     private _enableGuardrails: boolean = false
     private _enableVerification: boolean = false
     private _enableCostTracking: boolean = false

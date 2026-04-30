@@ -136,6 +136,44 @@ type GeminiRawResponse = {
   text: string;
   functionCalls?: GeminiFunctionCall[];
   usageMetadata?: GeminiUsage;
+  candidates?: Array<{
+    finishReason?: string;
+    content?: { parts?: Array<{ text?: string; thought?: boolean; functionCall?: GeminiFunctionCall }> };
+  }>;
+};
+
+const NON_OK_FINISH_REASONS = new Set([
+  "MAX_TOKENS",
+  "SAFETY",
+  "RECITATION",
+  "BLOCKLIST",
+  "PROHIBITED_CONTENT",
+  "SPII",
+  "LANGUAGE",
+  "MALFORMED_FUNCTION_CALL",
+  "UNEXPECTED_TOOL_CALL",
+  "OTHER",
+]);
+
+const explainGeminiFinishReason = (reason: string): string => {
+  switch (reason) {
+    case "UNEXPECTED_TOOL_CALL":
+      return "The model attempted to call a tool but no tools were declared in the request.";
+    case "MALFORMED_FUNCTION_CALL":
+      return "The model produced a malformed tool call.";
+    case "MAX_TOKENS":
+      return "The output token budget was exhausted before any visible text was emitted (likely consumed by thinking-mode reasoning). Increase maxTokens or set thinkingConfig.thinkingBudget.";
+    case "SAFETY":
+    case "BLOCKLIST":
+    case "PROHIBITED_CONTENT":
+    case "SPII":
+    case "RECITATION":
+      return "The response was blocked by Gemini content filters.";
+    case "LANGUAGE":
+      return "Gemini blocked the response due to an unsupported language.";
+    default:
+      return "Unexpected stream termination.";
+  }
 };
 
 // ─── Response Mapper ───
@@ -187,15 +225,20 @@ export const GeminiProviderLive = Layer.effect(
 
     // ─── Lazy-load the SDK via dynamic import (interceptable by mock.module) ───
 
+    type GeminiStreamChunk = {
+      text: string;
+      usageMetadata?: GeminiUsage;
+      candidates?: Array<{
+        finishReason?: string;
+        content?: { parts?: Array<{ text?: string; thought?: boolean; functionCall?: GeminiFunctionCall }> };
+      }>;
+      functionCalls?: GeminiFunctionCall[];
+    };
+
     type GoogleGenAIClient = {
       models: {
         generateContent: (opts: unknown) => Promise<GeminiRawResponse>;
-        generateContentStream: (opts: unknown) => Promise<
-          AsyncIterable<{
-            text: string;
-            usageMetadata?: GeminiUsage;
-          }>
-        >;
+        generateContentStream: (opts: unknown) => Promise<AsyncIterable<GeminiStreamChunk>>;
         embedContent: (opts: unknown) => Promise<{
           embeddings: Array<{ values: number[] }>;
         }>;
@@ -271,6 +314,21 @@ export const GeminiProviderLive = Layer.effect(
             catch: toEffectError,
           });
 
+          // Mirror the streaming path: don't paper over non-OK finishReasons.
+          // Without this guard, Gemini returns success+empty content when the
+          // model wanted a tool but no tools were declared, or when the
+          // safety filter trips, etc.
+          const finishReason = response.candidates?.[0]?.finishReason;
+          const hasContent = (response.text?.length ?? 0) > 0 || (response.functionCalls?.length ?? 0) > 0;
+          if (finishReason && NON_OK_FINISH_REASONS.has(finishReason) && !hasContent) {
+            return yield* Effect.fail(
+              new LLMError({
+                provider: "gemini",
+                message: `Gemini response ended with finishReason=${finishReason} and no content. ${explainGeminiFinishReason(finishReason)}`,
+              }),
+            );
+          }
+
           return mapGeminiResponse(response, model, config.pricingRegistry);
         }).pipe(
           Effect.retry(retryPolicy),
@@ -303,44 +361,108 @@ export const GeminiProviderLive = Layer.effect(
             void (async () => {
               try {
                 const client = await getClient();
+                const cfg = buildGeminiConfig({
+                  maxTokens: request.maxTokens,
+                  temperature: request.temperature,
+                  systemPrompt,
+                  tools: request.tools,
+                });
+                if (process.env.RA_GEMINI_DEBUG === "1") {
+                  process.stderr.write(`[gemini-debug] req model=${model} contents=${JSON.stringify(contents).slice(0,300)} sysLen=${(cfg as any).systemInstruction ? String((cfg as any).systemInstruction).length : 0} maxOut=${(cfg as any).maxOutputTokens} hasTools=${!!(cfg as any).tools?.length}\n`);
+                }
                 const stream = await client.models.generateContentStream({
                   model,
                   contents,
-                  config: buildGeminiConfig({
-                    maxTokens: request.maxTokens,
-                    temperature: request.temperature,
-                    systemPrompt,
-                    tools: request.tools,
-                  }),
+                  config: cfg,
                 });
 
                 let fullContent = "";
                 let inputTokens = 0;
                 let outputTokens = 0;
                 let cachedContentTokens = 0;
+                let lastFinishReason: string | undefined;
                 const accumulatedToolCalls: { id: string; name: string; input: unknown }[] = [];
 
                 for await (const chunk of stream) {
-                  if (chunk.text) {
-                    emit.single({ type: "text_delta", text: chunk.text });
-                    fullContent += chunk.text;
-                  }
-                  // Handle Gemini function calls in stream chunks
-                  const fcs = (chunk as any).functionCalls as GeminiFunctionCall[] | undefined;
-                  if (fcs && fcs.length > 0) {
-                    for (const fc of fcs) {
-                      const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
-                      accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
-                      emit.single({ type: "tool_use_start" as const, id: tcId, name: fc.name });
-                      emit.single({ type: "tool_use_delta", input: JSON.stringify(fc.args) } as StreamEvent);
+                  // Walk parts directly when present — Gemini-2.5-pro emits
+                  // text + functionCall + thought parts mixed, and `chunk.text`
+                  // strips function-call parts (logging a noisy SDK warning),
+                  // while the legacy `chunk.functionCalls` accessor doesn't
+                  // expose thought parts. Fall back to `chunk.text` +
+                  // `chunk.functionCalls` when the SDK doesn't surface
+                  // candidates (older SDK versions, lightweight mocks).
+                  const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+                  const finishReason = chunk.candidates?.[0]?.finishReason;
+                  if (finishReason) lastFinishReason = finishReason;
+
+                  if (process.env.RA_GEMINI_DEBUG === "1") {
+                    const u = chunk.usageMetadata as { candidatesTokenCount?: number; thoughtsTokenCount?: number } | undefined;
+                    process.stderr.write(`[gemini-debug] chunk parts=${parts.length} cand=${u?.candidatesTokenCount ?? "-"} thoughts=${u?.thoughtsTokenCount ?? "-"} finish=${finishReason ?? "-"}\n`);
+                    for (const [pi, p] of parts.entries()) {
+                      const tag = (p as { thought?: boolean }).thought ? "thought" : (p as { functionCall?: unknown }).functionCall ? "functionCall" : "text";
+                      process.stderr.write(`[gemini-debug]   part[${pi}] kind=${tag} text_len=${(p.text ?? "").length} preview="${(p.text ?? "").slice(0,80)}"\n`);
                     }
                   }
+
+                  if (parts.length > 0) {
+                    for (const part of parts) {
+                      // Skip thought parts — they're not visible content.
+                      if ((part as { thought?: boolean }).thought) continue;
+                      // Visible text
+                      if (typeof part.text === "string" && part.text.length > 0) {
+                        emit.single({ type: "text_delta", text: part.text });
+                        fullContent += part.text;
+                      }
+                      // Tool call
+                      const fc = (part as { functionCall?: GeminiFunctionCall }).functionCall;
+                      if (fc && typeof fc.name === "string") {
+                        const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
+                        accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
+                        emit.single({ type: "tool_use_start" as const, id: tcId, name: fc.name });
+                        emit.single({ type: "tool_use_delta", input: JSON.stringify(fc.args) } as StreamEvent);
+                      }
+                    }
+                  } else {
+                    // Fallback for chunks without candidates (older SDK or test mocks).
+                    if (chunk.text && chunk.text.length > 0) {
+                      emit.single({ type: "text_delta", text: chunk.text });
+                      fullContent += chunk.text;
+                    }
+                    const fcs = chunk.functionCalls;
+                    if (fcs && fcs.length > 0) {
+                      for (const fc of fcs) {
+                        const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
+                        accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
+                        emit.single({ type: "tool_use_start" as const, id: tcId, name: fc.name });
+                        emit.single({ type: "tool_use_delta", input: JSON.stringify(fc.args) } as StreamEvent);
+                      }
+                    }
+                  }
+
                   if (chunk.usageMetadata) {
                     inputTokens = chunk.usageMetadata.promptTokenCount ?? 0;
                     outputTokens =
                       chunk.usageMetadata.candidatesTokenCount ?? 0;
                     cachedContentTokens = (chunk.usageMetadata as { cachedContentTokenCount?: number }).cachedContentTokenCount ?? 0;
                   }
+                }
+
+                // Surface non-OK finishReasons explicitly. Without this, Gemini
+                // returns success+empty when the model wanted a tool but no
+                // tools were available (UNEXPECTED_TOOL_CALL), or when the
+                // safety filter trips, or when the budget is exhausted before
+                // any visible text is emitted.
+                if (
+                  lastFinishReason &&
+                  NON_OK_FINISH_REASONS.has(lastFinishReason) &&
+                  accumulatedToolCalls.length === 0 &&
+                  fullContent.length === 0
+                ) {
+                  emit.single({
+                    type: "error",
+                    error: `Gemini stream ended with finishReason=${lastFinishReason} and no content. ${explainGeminiFinishReason(lastFinishReason)}`,
+                  } as StreamEvent);
+                  return;
                 }
 
                 const hasToolCalls = accumulatedToolCalls.length > 0;
