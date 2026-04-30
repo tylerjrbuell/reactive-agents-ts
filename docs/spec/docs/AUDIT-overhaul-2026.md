@@ -934,10 +934,20 @@ Estimated: 50–75 commits across 6–10 sessions for Stages 4–6. P0 items (#1
 
 - ✅ Workspace typecheck green across 55 packages.
 - ✅ Workspace test suite green across 52 packages (post W20).
-- ✅ Version bumps applied (0.9.0 → 0.10.0; diagnose 0.9.0 → 0.9.1) via consumed `release-0-10-0` + `p0-s01-typed-error-taxonomy` changesets.
+- ↩️ Manual version bumps (0.10.0) **reverted** — CI changeset workflow handles the bump as part of the publish PR; bumping locally would cause CI to overshoot to 0.11.0. Staged changesets (`release-0-10-0`, `p0-s01-typed-error-taxonomy`) restored.
 - ✅ Root CHANGELOG.md gained `[0.10.0] — 2026-04-30` Overhaul section enumerating all 19 waves + Stage 6 W20 + the v0.11+ deferrals.
 - ✅ README sweep — no stale `v0.9` references.
-- ⏸️ **Bench re-run deferred to post-publish smoke.** Full bench requires API spend across multiple frontier providers (anthropic, openai, gemini) and is not authorized inside the current auto-run scope. The structural gates (typecheck + 1,700+ tests + dispatch AUC re-run from W17) already provide release-ready assurance. The drift gate against last baseline runs as part of the post-publish workflow against the published artifacts.
+- ✅ **Frontier bench (W21)** — added `frontier-spot-check` session (4 providers × 5 tasks × bare-llm + ra-full). Results:
+  - `claude-sonnet-4-6`: 5/5 ✓ both variants
+  - `claude-haiku-4-5`: 5/5 ✓ both variants
+  - `gpt-4o-mini`: 5/5 ✓ both variants
+  - `gemini-2.5-pro`: 3/5 across N=1; flaky on re-run (1/3 vs 0/3 on c5-multi-tool). Root cause **external** — Google API returning 503s plus `gemini-2.5-pro` requires thinking mode (`Budget 0 is invalid` when disabled) which consumes output budget unpredictably. Direct API probe via `@google/genai` returns `candidates=0 thoughts=0 text=""` on the same prompt; harness handling is correct, the provider is upstream-unstable. **Not release-blocking** — documented as known Gemini limitation; recommend `gemini-2.5-flash` for production reliability until Google stabilizes.
+- ✅ **Bench harness fixes (W21)**:
+  - Workspace `.env` auto-load when bench runs from `packages/benchmarks/` (was silently producing `llm_error` at 0 tokens).
+  - Per-task `taskReports` field added to `SessionReport` so single-variant sessions emit per-task accuracy/tokens/duration breakdown (was only producing aggregate summary, hiding which task failed).
+  - `printSessionSummary` falls back to `taskReports` when `ablation` is empty.
+  - `regression-gate` on `claude-haiku` now reports 88% (15/17 pass; 1 timeout on c1-distributed-queue, 1 model-wrong-answer on e1-lis-optimization).
+- ⏳ **Per-task `maxIterations` not enforced** (discovered W21 verbose drill on c1) — task-level `maxIterations: 8` reached 38 kernel iterations. Filed for v0.10.1 follow-up; not release-blocking (task still completes successfully, just exceeds budget).
 - ⏳ **Tag v0.10.0** — final step; gated on user confirmation because pushing the tag triggers the CI release workflow (`changeset publish`) and is a shared-system action.
 
 ---
