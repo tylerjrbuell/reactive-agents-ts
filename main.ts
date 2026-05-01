@@ -23,8 +23,8 @@ const agent = await ReactiveAgents.create()
     .withName('production-gateway-agent')
     // Pin SQLite/memory namespace across process restarts (withName alone uses name+timestamp).
     .withAgentId('production-gateway-agent')
-    .withProvider('ollama')
-    .withModel({ model: 'cogito:14b', temperature: 0.1 })
+    .withProvider('gemini')
+    // .withModel({ model: 'cogito:14b', temperature: 0.1 })
     .withMCP([
         {
             name: 'signal',
@@ -66,7 +66,12 @@ const agent = await ReactiveAgents.create()
         // },
     ])
     .withTools()
+    .withTerminalTools({
+        cwd: '/home/tylerbuell/Documents/AIProjects/reactive-agents-ts',
+        allowUnsafeCwd: true,
+    })
     .withReasoning({ defaultStrategy: 'adaptive' })
+    .withRequiredTools({ adaptive: true })
     .withMemory({ tier: 'enhanced', dbPath: './memory.sqlite', capacity: 12 })
     .withObservability({ verbosity: 'debug', live: true, logModelIO: false })
     .withGateway({
@@ -133,6 +138,8 @@ const shutdown = async () => {
     console.log('📊 Gateway Statistics:')
     console.log(`   Total Runs: ${summary.totalRuns}`)
     console.log(`   Heartbeats Fired: ${summary.heartbeatsFired}`)
+    console.log(`   Cron Checks: ${summary.cronChecks}`)
+    console.log(`   Chat Turns: ${summary.chatTurns ?? 0}`)
     console.log(`   Final Status: Stopped`)
     console.log('')
 
