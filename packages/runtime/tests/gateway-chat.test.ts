@@ -132,7 +132,7 @@ import { GatewayChatManager } from "../src/gateway-chat.js";
 
 function makeStubDeps(overrides: Partial<{
   findById: (id: string) => Promise<{ messages: { role: "user" | "assistant"; content: string; timestamp: number }[] } | null>;
-  executeEvent: (event: unknown, source: string, instruction: string) => Promise<void>;
+  executeEvent: (event: unknown, source: string, instruction: string) => Promise<string | undefined>;
   logEpisode: (entry: unknown) => Promise<void>;
   saveSession: (input: unknown) => Promise<void>;
   getRecentEpisodes: (agentId: string, limit: number) => Promise<{ eventType?: string; content?: string }[]>;
@@ -144,7 +144,7 @@ function makeStubDeps(overrides: Partial<{
     deps: {
       agentId: "test-agent",
       sessionTtlDays: 30,
-      executeEvent: overrides.executeEvent ?? (async (_e: unknown, s: string, i: string) => { calls.push({ method: "executeEvent", args: [s, i] }); }),
+      executeEvent: overrides.executeEvent ?? (async (_e: unknown, s: string, i: string) => { calls.push({ method: "executeEvent", args: [s, i] }); return undefined; }),
       logEpisode: overrides.logEpisode ?? (async (entry: unknown) => { calls.push({ method: "logEpisode", args: [entry] }); }),
       saveSession: overrides.saveSession ?? (async (input: unknown) => { calls.push({ method: "saveSession", args: [input] }); }),
       findById: overrides.findById ?? (async (_id: string) => null),

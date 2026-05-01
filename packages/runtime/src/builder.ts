@@ -5641,7 +5641,7 @@ export class ReactiveAgent {
                 event: any,
                 source: string,
                 instruction: string
-            ) => {
+            ): Promise<string | undefined> => {
                 if (isExecuting) {
                     glog(
                         'debug',
@@ -5715,6 +5715,7 @@ export class ReactiveAgent {
                         durationMs,
                         timestamp: Date.now(),
                     })
+                    return result.output
                 } catch (err) {
                     const durationMs = Date.now() - runStart
                     glog(

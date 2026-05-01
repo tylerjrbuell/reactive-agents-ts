@@ -81,7 +81,7 @@ export function buildEnrichedInstruction(params: {
 export interface GatewayChatManagerDeps {
   readonly agentId: string;
   readonly sessionTtlDays: number;
-  readonly executeEvent: (event: unknown, source: string, instruction: string) => Promise<void>;
+  readonly executeEvent: (event: unknown, source: string, instruction: string) => Promise<string | undefined>;
   readonly logEpisode: (entry: {
     id: string;
     agentId: string;
@@ -145,9 +145,10 @@ export class GatewayChatManager {
       episodicBlock,
     });
 
-    let runOutput = "(sent via Signal)";
+    let runOutput: string;
     try {
-      await this.deps.executeEvent(gwEvent, "channel", instruction);
+      const output = await this.deps.executeEvent(gwEvent, "channel", instruction);
+      runOutput = output ?? "(sent via Signal)";
     } catch (err) {
       runOutput = `(error: ${err instanceof Error ? err.message : String(err)})`;
     }
