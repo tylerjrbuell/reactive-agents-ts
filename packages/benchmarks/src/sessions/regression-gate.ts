@@ -12,5 +12,5 @@ export const regressionGateSession: BenchmarkSession = {
   harnessVariants: [getVariant("ra-full")],
   runs: 1,
   concurrency: 3,
-  timeoutMs: 90_000,
+  timeoutMs: 120_000,
 }

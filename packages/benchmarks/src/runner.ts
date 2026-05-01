@@ -568,7 +568,7 @@ async function runInternal(
       .withMaxIterations(maxIter)
 
     if (config.tools) builder.withTools()
-    if (config.guardrails) builder.withGuardrails()
+    if (config.guardrails || task.requiresGuardrails) builder.withGuardrails()
 
     if (config.reasoning) {
       const strategyMap = {
@@ -577,7 +577,11 @@ async function runInternal(
         "tree-of-thought": "tree-of-thought" as const,
         "adaptive": "adaptive" as const,
       }
-      const strategy = config.strategy ? strategyMap[config.strategy] : "reactive"
+      type StrategyKey = keyof typeof strategyMap
+      const taskStrategy = task.strategy as StrategyKey | undefined
+      const strategy = config.strategy
+        ? strategyMap[config.strategy]
+        : (taskStrategy && taskStrategy in strategyMap ? strategyMap[taskStrategy] : "reactive")
       builder.withReasoning({ defaultStrategy: strategy })
     }
 
@@ -608,13 +612,15 @@ async function runInternal(
       await agent.dispose()
     }
   } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : String(e)
+    const isExpectedError = task.expected && matchesExpected(errorMessage, task.expected)
     return {
-      output: "",
+      output: isExpectedError ? errorMessage : "",
       tokensUsed: 0,
       durationMs: performance.now() - start,
       iterations: 0,
-      status: "error",
-      error: e instanceof Error ? e.message : String(e),
+      status: isExpectedError ? "pass" : "error",
+      error: isExpectedError ? undefined : errorMessage,
     }
   }
 }

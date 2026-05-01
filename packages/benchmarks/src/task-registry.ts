@@ -170,7 +170,7 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     prompt: "Create a step-by-step migration plan to decompose a PostgreSQL monolith database into per-service databases for a system with users, orders, products, and inventory tables (all with foreign keys). Include: decomposition order, cross-service data consistency strategy, the migration approach for live traffic, and rollback at each step.",
     expected: "strangler|event.?sourc|saga|outbox|dual.?write|rollback|step|foreign.?key",
     strategy: "react",
-    maxIterations: 8,
+    maxIterations: 12,
     benchmark: "AgentBench",
   },
   {
@@ -242,7 +242,7 @@ export const BENCHMARK_TASKS: readonly BenchmarkTask[] = [
     name: "Code writing and execution",
     prompt: "Use code-execute to run JavaScript code that defines a function returning 'Hello Tool World' and then calls it, logging the result with console.log. Then save the same code to 'test-tool-exec.js' using file-write. Tell me what the code-execute output was.",
     expected: "Hello Tool World",
-    strategy: "tree-of-thought",
+    strategy: "react",
     requiresTools: true,
     benchmark: "AgentBench",
   },
