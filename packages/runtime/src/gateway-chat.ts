@@ -65,12 +65,13 @@ export function buildEnrichedInstruction(params: {
   if (params.episodicBlock) parts.push(params.episodicBlock);
   if (params.historyBlock) parts.push(params.historyBlock);
   parts.push(
-    `You are in a live conversation with ${params.sender} on ${params.platform}.\n` +
-    `If this task will take multiple steps or more than a few seconds, ` +
-    `send them a brief acknowledgement first using ${params.mcpServer}/send_message_to_user ` +
-    `so they aren't left waiting. Keep them informed at meaningful milestones.\n` +
-    `Always send your final response via ${params.mcpServer}/send_message_to_user.\n\n` +
-    `User: ${params.message}`,
+    `You are in a live conversation with ${params.sender} on ${params.platform}.\n\n` +
+    `User: ${params.message}\n\n` +
+    `You MUST call ${params.mcpServer}/send_message_to_user to deliver your reply — ` +
+    `this is the only way ${params.sender} receives your response. ` +
+    `If this will take multiple steps or more than a few seconds, call ` +
+    `${params.mcpServer}/send_message_to_user first with a brief acknowledgement, ` +
+    `then again with your final answer.`,
   );
   return parts.join("\n\n");
 }
