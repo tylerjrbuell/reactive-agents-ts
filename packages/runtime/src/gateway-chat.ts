@@ -67,11 +67,11 @@ export function buildEnrichedInstruction(params: {
   parts.push(
     `You are in a live conversation with ${params.sender} on ${params.platform}.\n\n` +
     `User: ${params.message}\n\n` +
-    `You MUST call ${params.mcpServer}/send_message_to_user to deliver your reply — ` +
-    `this is the only way ${params.sender} receives your response. ` +
-    `If this will take multiple steps or more than a few seconds, call ` +
-    `${params.mcpServer}/send_message_to_user first with a brief acknowledgement, ` +
-    `then again with your final answer.`,
+    `You MUST call ${params.mcpServer}/send_message_to_user to deliver your reply:\n` +
+    `  recipient: "${params.sender}"\n` +
+    `  message: <your response text>\n\n` +
+    `This is the only way ${params.sender} receives your response — do not end your turn without calling this tool. ` +
+    `If this will take multiple steps, call it first with a brief acknowledgement, then again with your final answer.`,
   );
   return parts.join("\n\n");
 }

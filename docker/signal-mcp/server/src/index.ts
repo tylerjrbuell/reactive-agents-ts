@@ -24,6 +24,11 @@ const bridge = new SignalCliBridge(userId, configDir);
 bridge.start();
 log("info", `signal-cli bridge started for ${userId}`);
 
+// ── Last sender tracking (for reply_to_last_sender tool) ────────────────────
+// Updated on every inbound message so the agent can reply without having to
+// re-specify the phone number on every tool call.
+let lastSender: string | null = null;
+
 // ── Recently-sent message tracker (prevents feedback loops) ─────────────────
 // When the agent sends a message via send_message_to_user/group, we record it.
 // When a syncMessage echo arrives with the same text, we skip it instead of
@@ -51,6 +56,11 @@ bridge.onMessageCallback = (notification) => {
   const syncMsg = envelope.syncMessage?.sentMessage?.message;
   const message = dataMsg ?? syncMsg;
   const sender = envelope.source ?? envelope.sourceNumber ?? "unknown";
+
+  // Track the last real inbound sender so reply_to_last_sender can omit recipient.
+  if (dataMsg && sender !== "unknown") {
+    lastSender = sender;
+  }
   const msgType = dataMsg ? "dataMessage" : syncMsg ? "syncMessage" : "other";
 
   log("debug", `raw notification`, {
@@ -125,6 +135,44 @@ server.tool(
       log("warn", `send failed`, { recipient, error: errMsg });
       return {
         content: [{ type: "text" as const, text: `Failed to send: ${errMsg}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+// ── Tool: reply_to_last_sender ───────────────────────────────────────────────
+// Preferred tool for gateway chat mode — no recipient parameter needed.
+// The server tracks the last inbound sender automatically.
+server.tool(
+  "reply_to_last_sender",
+  "Send a reply to the person who most recently sent you a message. No recipient needed — the server knows who wrote in.",
+  {
+    message: z.string().describe("Message text to send"),
+  },
+  async ({ message }) => {
+    if (!lastSender) {
+      return {
+        content: [{ type: "text" as const, text: "No sender on record yet — use send_message_to_user with an explicit recipient instead." }],
+        isError: true,
+      };
+    }
+    log("info", `reply_to_last_sender`, { recipient: lastSender, message: message.slice(0, 80) });
+    try {
+      trackSentMessage(message);
+      await bridge.request("send", {
+        recipient: [lastSender],
+        message,
+      });
+      log("info", `reply sent to ${lastSender}`);
+      return {
+        content: [{ type: "text" as const, text: `Reply sent to ${lastSender}` }],
+      };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log("warn", `reply failed`, { recipient: lastSender, error: errMsg });
+      return {
+        content: [{ type: "text" as const, text: `Failed to send reply: ${errMsg}` }],
         isError: true,
       };
     }
