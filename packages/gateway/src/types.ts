@@ -125,6 +125,13 @@ export const GatewayConfigSchema = Schema.Struct({
       { default: () => "skip" as const },
     ),
     replyToUnknown: Schema.optional(Schema.String),
+    /** How incoming channel messages are handled. Default: 'chat'. */
+    mode: Schema.optionalWith(
+      Schema.Literal("chat", "task"),
+      { default: () => "chat" as const },
+    ),
+    /** Days of inactivity before a persisted chat session is pruned. Default: 30. */
+    sessionTtlDays: Schema.optionalWith(Schema.Number, { default: () => 30 }),
   })),
 });
 export type GatewayConfig = typeof GatewayConfigSchema.Type;

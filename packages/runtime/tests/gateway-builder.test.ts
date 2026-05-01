@@ -29,4 +29,29 @@ describe("Builder .withGateway()", () => {
     expect(result.success).toBe(true);
     expect(result.output).toBeTruthy();
   });
+
+  test("gateway channels accepts mode and sessionTtlDays", async () => {
+    const { ReactiveAgents } = await import("../src/builder");
+    const builder = ReactiveAgents.create()
+      .withName("test-gw-chat")
+      .withProvider("test")
+      .withGateway({
+        channels: {
+          accessPolicy: "allowlist",
+          allowedSenders: ["+15551234567"],
+          mode: "chat",
+          sessionTtlDays: 14,
+        },
+      });
+    expect(builder).toBeDefined();
+  });
+
+  test("gateway channels mode defaults work when omitted", async () => {
+    const { ReactiveAgents } = await import("../src/builder");
+    const builder = ReactiveAgents.create()
+      .withName("test-gw-default-mode")
+      .withProvider("test")
+      .withGateway({ channels: { accessPolicy: "open" } });
+    expect(builder).toBeDefined();
+  });
 });

@@ -540,6 +540,10 @@ export interface GatewayOptions {
         readonly unknownSenderAction?: 'skip' | 'escalate'
         /** Optional auto-reply message for unknown senders. */
         readonly replyToUnknown?: string
+        /** How incoming channel messages are handled. Default: 'chat'. */
+        readonly mode?: 'chat' | 'task'
+        /** Days of inactivity before a persisted chat session is pruned. Default: 30. */
+        readonly sessionTtlDays?: number
     }
 }
 
