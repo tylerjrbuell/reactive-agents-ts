@@ -14,14 +14,15 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ---
 
-## Current state (Apr 30, 2026)
+## Current state (May 1, 2026)
 
-- **v0.10.0 release-ready** — `refactor/overhaul` branch fully prepared; changeset + CHANGELOG + release doc written; 4,633 tests pass, 0 fail across 524 files.
+- **v0.10.0 release-ready** — `refactor/overhaul` branch fully prepared; changeset + CHANGELOG + release doc written; 4,708 tests pass, 0 fail across 528 files (5 pre-existing failures in untracked `packages/benchmarks/parseDate.test.ts` are excluded).
 - **Branch:** `refactor/overhaul`. All prior `feat/*` branches archived as `archive/*` tags.
 - **Published on npm:** all packages at `0.9.0`. Version bumps happen via changeset merge (`release-0-10-0.md` covers all 28 packages + umbrella, `@reactive-agents/diagnose` included).
 - **cf-23 gate fixed:** `required-tools-satisfied` was moved from verifier to `runner.ts §8`; scenario now tests `agent-took-action` + positive absence. Baseline regenerated with BASELINE-UPDATE trailer.
 - **Architecture target:** `15-design-north-star.md` v3.0 (10 capabilities + cognitive kernel + 3 ports).
 - **Pending before tag:** merge `refactor/overhaul` → `main`, run `changeset version`, publish.
+- **Gateway chat mode shipped** (May 1): per-sender SQLite session history, 40-turn/8 k-char windowing, episodic context injection, daily compaction, mode-aware routing (`channels.mode: 'chat'|'task'`). Two memory bugs fixed: `priorContext` silently dropped (context-manager.ts) + episodic injection gated behind `enableSelfImprovement` (execution-engine.ts). New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added. Key file: `packages/runtime/src/gateway-chat.ts`.
 
 ---
 

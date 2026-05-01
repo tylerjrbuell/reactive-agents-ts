@@ -13,7 +13,7 @@ Works on local Ollama models (8B+) through frontier APIs — same code, same fea
 | **31 composable packages**  | Enable exactly what you need, no hidden coupling              |
 | **6 LLM providers**         | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test  |
 | **5 reasoning strategies**  | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive |
-| **4,633 tests · 524 files** | Production-grade confidence                                   |
+| **4,708 tests · 528 files** | Production-grade confidence                                   |
 | **Cortex Studio**           | Live agent canvas, entropy charts, debrief UI, agent builder  |
 | **Effect-TS end to end**    | Compile-time type safety, zero `any`, explicit tagged errors  |
 
@@ -70,7 +70,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 -   **Model-adaptive context profiles** -- 4 tiers (local, mid, large, frontier) with tier-aware prompts, compaction, and truncation
 -   **4-layer memory** -- working, episodic, semantic (vector + FTS5), procedural (bun:sqlite); ExperienceStore for cross-agent learning; background consolidation + decay
 -   **Real-time token streaming** + SSE via `agent.runStream()` with AbortSignal cancellation, `IterationProgress` + `StreamCancelled` events, and `StreamCompleted.toolSummary`
--   **Persistent autonomous gateway** -- adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine
+-   **Persistent autonomous gateway** -- adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine; **gateway chat mode** with per-sender SQLite session history, episodic context injection, and history windowing (`channels.mode: 'chat'`)
 -   **Agent debrief + conversational chat** -- `agent.chat()` and `agent.session()` (with optional SQLite persistence via `SessionStoreService`) for adaptive Q&A; post-run `DebriefSynthesizer` produces structured summaries persisted to SQLite
 -   **A2A multi-agent protocol** -- Agent Cards, JSON-RPC 2.0 server/client, SSE streaming, agent-as-tool composition
 -   **Multi-agent orchestration** -- sequential, parallel, pipeline, and map-reduce workflows with dynamic sub-agent spawning
@@ -95,7 +95,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 -   **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 -   **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
 -   **Web framework integration** — `@reactive-agents/react` (`useAgentStream`, `useAgent`), `@reactive-agents/vue` composables, `@reactive-agents/svelte` stores — consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
--   **4,633 tests** across 524 files
+-   **4,708 tests** across 528 files
 
 ## Quick Start
 
@@ -357,7 +357,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   4,633 tests   |      --      |      --       |   --    |
+| Test suite                    |   4,708 tests   |      --      |      --       |   --    |
 
 ## Use Cases
 
@@ -715,7 +715,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (4,633 tests, 524 files)
+bun test                 # Run full test suite (4,708 tests, 528 files)
 bun run build            # Build all packages (31 tasks, ESM + DTS)
 ```
 

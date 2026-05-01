@@ -111,6 +111,7 @@ After 5+ runs, empirical observations override shipped priors for `parallelCallC
 | Memory not persisting         | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring                                    |
 | Plan-execute loops forever    | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard        |
 | Gateway not starting          | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder                   |
+| Chat history not accumulating | `packages/runtime/src/gateway-chat.ts` → `GatewayChatManager.getOrLoadHistory()` + `SessionStoreService` wiring in `builder.ts` |
 | Metrics dashboard missing     | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer            |
 | Custom kernel not registering | `packages/reasoning/src/services/strategy-registry.ts` → `registerKernel()` call                         |
 
@@ -507,7 +508,7 @@ Canonical project skills live in `.agents/skills/`:
 ## Current Framework Snapshot (v0.10.0)
 
 -   Monorepo scale: **28 packages + 5 apps** (cli, cortex, docs, examples, meta-agent)
--   Verified quality: **~4,630 tests across ~524 test files** — run `bun test` for the authoritative count before release
+-   Verified quality: **4,708 tests across 528 test files** — run `bun test` for the authoritative count before release
 -   Public facade: `reactive-agents` built on Effect-TS layered runtime
 -   Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **8 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint)
 
@@ -523,6 +524,7 @@ Canonical project skills live in `.agents/skills/`:
 8. **Terminal execution tool** — safe shell-execute with allowlist (git, ls, cat, grep, find, node, bun, npm, python, curl, echo, mkdir, cp, mv, wc, head, tail, sort, jq); integrated via `.withTerminalTools()` builder method
 9. **Calibration drift detection** — automatic entropy distribution analysis, drift event emission on significant model behavior changes
 10. **Adaptive Tool Calling System** — FC probe → `toolCallDialect` profile → `NativeFCDriver`/`TextParseDriver` routing; `HealingPipeline` (ToolNameHealer, ParamNameHealer, PathResolver, TypeCoercer); `ExperienceSummary` closes ExperienceStore dead loop; StallDetector + HarnessHarmDetector RI handlers; default driver inverted to NativeFCDriver for uncalibrated models
+11. **Gateway chat mode** — per-sender conversation history with SQLite session persistence, history windowing (40 turns / 8 k chars), episodic context injection, and daily compaction; enable with `channels.mode: 'chat'` (default). Two memory bug fixes also landed: `priorContext` now renders in the system prompt; episodic injection no longer gated behind `enableSelfImprovement`. New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added to `DailyLogEntry`. Key file: `packages/runtime/src/gateway-chat.ts`.
 
 ### Documentation Cross-Reference Rules
 
