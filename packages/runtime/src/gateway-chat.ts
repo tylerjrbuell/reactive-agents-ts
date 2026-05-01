@@ -74,3 +74,116 @@ export function buildEnrichedInstruction(params: {
   );
   return parts.join("\n\n");
 }
+
+// ─── GatewayChatManager ───────────────────────────────────────────────────────
+
+/** Dependencies injected by start() — all async, no Effect required at this layer. */
+export interface GatewayChatManagerDeps {
+  readonly agentId: string;
+  readonly sessionTtlDays: number;
+  readonly executeEvent: (event: unknown, source: string, instruction: string) => Promise<void>;
+  readonly logEpisode: (entry: {
+    id: string;
+    agentId: string;
+    date: string;
+    content: string;
+    eventType: string;
+    createdAt: Date;
+    metadata: Record<string, unknown>;
+  }) => Promise<void>;
+  readonly saveSession: (input: {
+    sessionId: string;
+    agentId: string;
+    messages: ChatMessage[];
+  }) => Promise<void>;
+  readonly findById: (sessionId: string) => Promise<{ messages: ChatMessage[] } | null>;
+  readonly getRecentEpisodes: (agentId: string, limit: number) => Promise<readonly { eventType?: string; content?: string }[]>;
+  readonly cleanup: (ttlDays: number) => Promise<number>;
+}
+
+export class GatewayChatManager {
+  private readonly histories = new Map<string, ChatMessage[]>();
+  private lastPruneAt = 0;
+
+  constructor(private readonly deps: GatewayChatManagerDeps) {}
+
+  private sessionKey(senderId: string): string {
+    return `gateway-chat-${this.deps.agentId}-${senderId}`;
+  }
+
+  async getOrLoadHistory(senderId: string): Promise<ChatMessage[]> {
+    if (this.histories.has(senderId)) {
+      return this.histories.get(senderId)!;
+    }
+    const record = await this.deps.findById(this.sessionKey(senderId));
+    const history = (record?.messages ?? []) as ChatMessage[];
+    this.histories.set(senderId, history);
+    return history;
+  }
+
+  async handleMessage(
+    sender: string,
+    message: string,
+    platform: string,
+    mcpServer: string,
+    gwEvent: unknown,
+  ): Promise<void> {
+    const history = await this.getOrLoadHistory(sender);
+
+    const [episodes, windowed] = await Promise.all([
+      this.deps.getRecentEpisodes(this.deps.agentId, 8),
+      Promise.resolve(applyHistoryWindow(history)),
+    ]);
+
+    const filtered = episodes.filter((e) => e.eventType !== "chat-turn");
+    const episodicBlock = formatEpisodicContext(filtered);
+    const historyBlock = formatHistoryBlock(windowed);
+    const instruction = buildEnrichedInstruction({
+      sender,
+      platform,
+      mcpServer,
+      message,
+      historyBlock,
+      episodicBlock,
+    });
+
+    let runOutput = "(sent via Signal)";
+    try {
+      await this.deps.executeEvent(gwEvent, "channel", instruction);
+    } catch (err) {
+      runOutput = `(error: ${err instanceof Error ? err.message : String(err)})`;
+    }
+
+    const now = new Date();
+    history.push({ role: "user", content: message, timestamp: now.getTime() });
+    history.push({ role: "assistant", content: runOutput, timestamp: now.getTime() });
+
+    await Promise.all([
+      this.deps.saveSession({
+        sessionId: this.sessionKey(sender),
+        agentId: this.deps.agentId,
+        messages: history,
+      }),
+      this.deps.logEpisode({
+        id: `chat-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+        agentId: this.deps.agentId,
+        date: now.toISOString().slice(0, 10),
+        content: `${sender} (${platform}): ${message.slice(0, 200)} → ${runOutput.slice(0, 300)}`,
+        eventType: "chat-turn",
+        createdAt: now,
+        metadata: { sender, platform },
+      }),
+    ]);
+  }
+
+  async pruneStaleSessions(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastPruneAt < 86_400_000) return;
+    this.lastPruneAt = now;
+    await this.deps.cleanup(this.deps.sessionTtlDays);
+  }
+
+  async dispose(): Promise<void> {
+    this.histories.clear();
+  }
+}
