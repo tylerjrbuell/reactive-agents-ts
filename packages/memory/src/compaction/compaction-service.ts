@@ -37,6 +37,12 @@ export class CompactionService extends Context.Tag("CompactionService")<
       agentId: string,
       config: CompactionConfig,
     ) => Effect.Effect<number, DatabaseError>;
+
+    /** Prune episodic_log entries older than ttlDays, preserving strategy-outcome and reflexion-critique rows. */
+    readonly pruneEpisodicLog: (
+      agentId: string,
+      ttlDays: number,
+    ) => Effect.Effect<number, DatabaseError>;
   }
 >() {}
 
@@ -79,6 +85,28 @@ export const CompactionServiceLive = Layer.effect(
 
       compactProgressive: (agentId, config) =>
         compactProgressive(agentId, config),
+
+      pruneEpisodicLog: (agentId, ttlDays) =>
+        Effect.gen(function* () {
+          const cutoff = new Date(Date.now() - ttlDays * 86_400_000).toISOString();
+          const before = yield* db.query<{ cnt: number }>(
+            `SELECT COUNT(*) as cnt FROM episodic_log
+             WHERE agent_id = ?
+               AND created_at < ?
+               AND event_type NOT IN ('strategy-outcome', 'reflexion-critique')`,
+            [agentId, cutoff],
+          );
+          const toDelete = before[0]?.cnt ?? 0;
+          if (toDelete === 0) return 0;
+          yield* db.exec(
+            `DELETE FROM episodic_log
+             WHERE agent_id = ?
+               AND created_at < ?
+               AND event_type NOT IN ('strategy-outcome', 'reflexion-critique')`,
+            [agentId, cutoff],
+          );
+          return toDelete;
+        }),
     };
 
     function compactByCount(agentId: string, maxEntries: number) {

@@ -185,4 +185,100 @@ describe("CompactionService", () => {
       }).pipe(Effect.provide(testLayer)),
     );
   });
+
+  describe("pruneEpisodicLog", () => {
+    it("deletes old episodic entries beyond TTL while preserving strategy-outcome rows", async () => {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const db = yield* MemoryDatabase;
+          const compaction = yield* CompactionService;
+
+          const now = Date.now();
+          const oldDate = new Date(now - 40 * 86_400_000).toISOString(); // 40 days ago
+          const recentDate = new Date(now - 1 * 86_400_000).toISOString(); // 1 day ago
+
+          // Insert old generic row (should be deleted)
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, metadata, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ["prune-old-generic", "agent-prune", oldDate.slice(0, 10), "old observation", "observation", "{}", oldDate],
+          );
+
+          // Insert old strategy-outcome row (should be preserved)
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, metadata, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ["prune-old-strategy", "agent-prune", oldDate.slice(0, 10), "old strategy outcome", "strategy-outcome", "{}", oldDate],
+          );
+
+          // Insert recent generic row (should be preserved)
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, metadata, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ["prune-recent", "agent-prune", recentDate.slice(0, 10), "recent observation", "observation", "{}", recentDate],
+          );
+
+          const deleted = yield* compaction.pruneEpisodicLog("agent-prune", 30);
+          expect(deleted).toBe(1); // only old generic deleted
+
+          // Verify 2 rows remain
+          const rows = yield* db.query<{ id: string }>(
+            `SELECT id FROM episodic_log WHERE agent_id = ? ORDER BY id`,
+            ["agent-prune"],
+          );
+          expect(rows.map((r) => r.id).sort()).toEqual([
+            "prune-old-strategy",
+            "prune-recent",
+          ]);
+        }).pipe(Effect.provide(testLayer)),
+      );
+    });
+
+    it("deletes old episodic entries beyond TTL while preserving reflexion-critique rows", async () => {
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const db = yield* MemoryDatabase;
+          const compaction = yield* CompactionService;
+
+          const now = Date.now();
+          const oldDate = new Date(now - 40 * 86_400_000).toISOString(); // 40 days ago
+          const recentDate = new Date(now - 1 * 86_400_000).toISOString(); // 1 day ago
+
+          // Insert old generic row (should be deleted)
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, metadata, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ["prune-old-generic", "agent-reflexion", oldDate.slice(0, 10), "old observation", "observation", "{}", oldDate],
+          );
+
+          // Insert old reflexion-critique row (should be preserved)
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, metadata, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ["prune-old-critique", "agent-reflexion", oldDate.slice(0, 10), "old reflexion critique", "reflexion-critique", "{}", oldDate],
+          );
+
+          // Insert recent generic row (should be preserved)
+          yield* db.exec(
+            `INSERT INTO episodic_log (id, agent_id, date, content, event_type, metadata, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            ["prune-recent", "agent-reflexion", recentDate.slice(0, 10), "recent observation", "observation", "{}", recentDate],
+          );
+
+          const deleted = yield* compaction.pruneEpisodicLog("agent-reflexion", 30);
+          expect(deleted).toBe(1); // only old generic deleted
+
+          // Verify 2 rows remain
+          const rows = yield* db.query<{ id: string }>(
+            `SELECT id FROM episodic_log WHERE agent_id = ? ORDER BY id`,
+            ["agent-reflexion"],
+          );
+          expect(rows.map((r) => r.id).sort()).toEqual([
+            "prune-old-critique",
+            "prune-recent",
+          ]);
+        }).pipe(Effect.provide(testLayer)),
+      );
+    });
+  });
 });

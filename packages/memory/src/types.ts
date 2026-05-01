@@ -146,6 +146,7 @@ export const DailyLogEntrySchema = Schema.Struct({
     "user-feedback",
     "tool-call",
     "observation",
+    "chat-turn",
   ),
   /** USD cost associated with this event (if applicable) */
   cost: Schema.optional(Schema.Number),
