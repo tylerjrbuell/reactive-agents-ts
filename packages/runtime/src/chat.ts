@@ -52,6 +52,8 @@ export interface ChatOptions {
   useTools?: boolean;
   /** Maximum iterations for the tool-capable path. Default: 5 */
   maxIterations?: number;
+  /** Optional context prepended to the system context summary (direct-LLM path only). */
+  extraContext?: string;
 }
 
 /**
@@ -178,12 +180,15 @@ export function directChat(
   message: string,
   history: ChatMessage[],
   contextSummary: string,
+  extraContext?: string,
 ): Effect.Effect<ChatReply, Error, LLMService> {
   return Effect.gen(function* () {
     const llm = yield* LLMService;
 
-    const systemPrompt = contextSummary
-      ? `You are a helpful AI assistant. Here is context from a recent agent run:\n\n${contextSummary}\n\nAnswer conversationally and concisely.`
+    const fullContext = [extraContext, contextSummary].filter(Boolean).join("\n\n---\n\n");
+
+    const systemPrompt = fullContext
+      ? `You are a helpful AI assistant. Here is context from a recent agent run:\n\n${fullContext}\n\nAnswer conversationally and concisely.`
       : "You are a helpful AI assistant. Answer conversationally and concisely.";
 
     const messages = [

@@ -5118,7 +5118,8 @@ export class ReactiveAgent {
                 directChat(
                     message,
                     _history ?? this._chatHistory,
-                    contextSummary
+                    contextSummary,
+                    options?.extraContext
                 )
             )
             // Accumulate into agent-level history when called outside a session
