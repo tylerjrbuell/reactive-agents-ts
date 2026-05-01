@@ -89,6 +89,10 @@ import type { DocumentSpec } from './context-ingestion.js'
 import { Health } from '@reactive-agents/health'
 import { makeHealthService } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import {
+  GatewayChatManager,
+  type GatewayChatManagerDeps,
+} from "./gateway-chat.js";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -5529,8 +5533,10 @@ export class ReactiveAgent {
         let heartbeatsFired = 0
         let totalRuns = 0
         let cronChecks = 0
+        let lastCompactionAt = 0
         let resolveStop: ((summary: GatewaySummary) => void) | null = null
         let unsubChannel: (() => void) | null = null
+        let chatManagerRef: GatewayChatManager | null = null
 
         const stopPromise = new Promise<GatewaySummary>((resolve) => {
             resolveStop = resolve
@@ -5728,6 +5734,102 @@ export class ReactiveAgent {
                 }
             }
 
+            // ─── Gateway chat mode ────────────────────────────────────────
+            const gwOpts = (self as any)._gatewayOptions as
+                | { channels?: { mode?: 'chat' | 'task'; sessionTtlDays?: number } }
+                | undefined
+            const channelMode = gwOpts?.channels?.mode ?? 'chat'
+            const sessionTtlDays: number =
+                gwOpts?.channels?.sessionTtlDays ?? 30
+
+            const chatDeps: GatewayChatManagerDeps = {
+                agentId: self.agentId ?? 'gateway',
+                sessionTtlDays,
+                executeEvent: (event, source, instruction) =>
+                    executeEvent(event as any, source, instruction),
+                logEpisode: async (entry) => {
+                    await self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const memMod = yield* Effect.promise(
+                                () => import('@reactive-agents/memory')
+                            )
+                            const svcOpt = yield* Effect.serviceOption(
+                                memMod.EpisodicMemoryService
+                            )
+                            if (svcOpt._tag !== 'Some') return
+                            yield* svcOpt.value.log(entry as any)
+                        }).pipe(Effect.catchAll(() => Effect.void))
+                    )
+                },
+                saveSession: async (input) => {
+                    await self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const memMod = yield* Effect.promise(
+                                () => import('@reactive-agents/memory')
+                            )
+                            const storeOpt = yield* Effect.serviceOption(
+                                memMod.SessionStoreService
+                            )
+                            if (storeOpt._tag !== 'Some') return
+                            yield* storeOpt.value.save(input as any)
+                        }).pipe(Effect.catchAll(() => Effect.void))
+                    )
+                },
+                findById: async (sessionId) => {
+                    return self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const memMod = yield* Effect.promise(
+                                () => import('@reactive-agents/memory')
+                            )
+                            const storeOpt = yield* Effect.serviceOption(
+                                memMod.SessionStoreService
+                            )
+                            if (storeOpt._tag !== 'Some') return null
+                            const record = yield* storeOpt.value.findById(
+                                sessionId
+                            )
+                            return record
+                                ? { messages: record.messages as any }
+                                : null
+                        }).pipe(Effect.catchAll(() => Effect.succeed(null)))
+                    )
+                },
+                getRecentEpisodes: async (agentId, limit) => {
+                    return self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const memMod = yield* Effect.promise(
+                                () => import('@reactive-agents/memory')
+                            )
+                            const episodicOpt = yield* Effect.serviceOption(
+                                memMod.EpisodicMemoryService
+                            )
+                            if (episodicOpt._tag !== 'Some') return []
+                            return yield* episodicOpt.value.getRecent(
+                                agentId,
+                                limit
+                            )
+                        }).pipe(Effect.catchAll(() => Effect.succeed([])))
+                    )
+                },
+                cleanup: async (ttlDays) => {
+                    return self.runtime.runPromise(
+                        Effect.gen(function* () {
+                            const memMod = yield* Effect.promise(
+                                () => import('@reactive-agents/memory')
+                            )
+                            const storeOpt = yield* Effect.serviceOption(
+                                memMod.SessionStoreService
+                            )
+                            if (storeOpt._tag !== 'Some') return 0
+                            return yield* storeOpt.value.cleanup(ttlDays)
+                        }).pipe(Effect.catchAll(() => Effect.succeed(0)))
+                    )
+                },
+            }
+
+            const chatManager = new GatewayChatManager(chatDeps)
+            chatManagerRef = chatManager
+
             const tick = async () => {
                 if (stopped) return
                 try {
@@ -5797,6 +5899,39 @@ export class ReactiveAgent {
                             })
                         }
                     }
+
+                    // 3. Daily housekeeping: prune stale chat sessions
+                    await chatManager.pruneStaleSessions()
+
+                    // 4. Daily housekeeping: memory compaction + episodic prune
+                    if (Date.now() - lastCompactionAt > 86_400_000) {
+                        lastCompactionAt = Date.now()
+                        await self.runtime.runPromise(
+                            Effect.gen(function* () {
+                                const memMod = yield* Effect.promise(
+                                    () => import('@reactive-agents/memory')
+                                )
+                                const compactionOpt = yield* Effect.serviceOption(
+                                    memMod.CompactionService
+                                )
+                                if (compactionOpt._tag !== 'Some') return
+                                const gAgentId = self.agentId ?? 'gateway'
+                                yield* compactionOpt.value.compactProgressive(
+                                    gAgentId,
+                                    {
+                                        strategy: 'progressive' as const,
+                                        maxEntries: 1000,
+                                        intervalMs: 30 * 86_400_000,
+                                        decayFactor: 0.05,
+                                    }
+                                )
+                                yield* compactionOpt.value.pruneEpisodicLog(
+                                    gAgentId,
+                                    sessionTtlDays
+                                )
+                            }).pipe(Effect.catchAll(() => Effect.void))
+                        )
+                    }
                 } catch (err) {
                     glog(
                         'error',
@@ -5862,16 +5997,31 @@ export class ReactiveAgent {
                                     glog(
                                         'info',
                                         `channel → ${event.platform} message from ${event.sender}`,
-                                        { message: event.message.slice(0, 80) }
+                                        {
+                                            message: event.message.slice(0, 80),
+                                            mode: channelMode,
+                                        }
                                     )
-                                    const instruction = `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". Use the ${event.mcpServer}/send_message_to_user tool to reply.`
-                                    yield* Effect.promise(() =>
-                                        executeEvent(
-                                            gwEvent,
-                                            'channel',
-                                            instruction
+                                    if (channelMode === 'task') {
+                                        const instruction = `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". Use the ${event.mcpServer ?? 'signal'}/send_message_to_user tool to reply.`
+                                        yield* Effect.promise(() =>
+                                            executeEvent(
+                                                gwEvent,
+                                                'channel',
+                                                instruction
+                                            )
                                         )
-                                    )
+                                    } else {
+                                        yield* Effect.promise(() =>
+                                            chatManager.handleMessage(
+                                                event.sender,
+                                                event.message,
+                                                event.platform ?? 'unknown',
+                                                event.mcpServer ?? 'signal',
+                                                gwEvent
+                                            )
+                                        )
+                                    }
                                 } else {
                                     glog(
                                         'debug',
@@ -5910,6 +6060,7 @@ export class ReactiveAgent {
                 stopped = true
                 if (timer) clearInterval(timer)
                 unsubChannel?.()
+                if (chatManagerRef) await chatManagerRef.dispose()
                 const summary: GatewaySummary = {
                     heartbeatsFired,
                     totalRuns,
