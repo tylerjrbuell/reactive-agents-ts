@@ -558,6 +558,7 @@ export interface GatewaySummary {
     readonly heartbeatsFired: number
     readonly totalRuns: number
     readonly cronChecks: number
+    readonly chatTurns?: number
     readonly error?: string
 }
 
@@ -5533,6 +5534,7 @@ export class ReactiveAgent {
         let heartbeatsFired = 0
         let totalRuns = 0
         let cronChecks = 0
+        let chatTurns = 0
         let lastCompactionAt = 0
         let resolveStop: ((summary: GatewaySummary) => void) | null = null
         let unsubChannel: (() => void) | null = null
@@ -5566,6 +5568,7 @@ export class ReactiveAgent {
                     heartbeatsFired,
                     totalRuns,
                     cronChecks,
+                    chatTurns,
                     error: 'Gateway not configured. Call .withGateway() before .start()',
                 }
                 ;(resolveStop as ((s: GatewaySummary) => void) | null)?.(
@@ -6021,6 +6024,7 @@ export class ReactiveAgent {
                                                 gwEvent
                                             )
                                         )
+                                        chatTurns++
                                     }
                                 } else {
                                     glog(
@@ -6065,6 +6069,7 @@ export class ReactiveAgent {
                     heartbeatsFired,
                     totalRuns,
                     cronChecks,
+                    chatTurns,
                 }
                 resolveStop?.(summary)
                 return summary
