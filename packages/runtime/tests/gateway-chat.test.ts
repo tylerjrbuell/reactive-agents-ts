@@ -241,4 +241,46 @@ describe("GatewayChatManager", () => {
     await mgr.pruneStaleSessions();
     expect(cleanupCalls).toContain(30);
   });
+
+  test("handleMessage excludes chat-turn episodes from the enriched instruction", async () => {
+    const { deps, calls } = makeStubDeps({
+      getRecentEpisodes: async () => [
+        { eventType: "chat-turn", content: "this should be hidden" },
+        { eventType: "task-completed", content: "morning brief sent" },
+      ],
+    });
+    const mgr = new GatewayChatManager(deps);
+    await mgr.handleMessage("+155", "hello", "signal", "signal", {});
+    const execCall = calls.find((c) => c.method === "executeEvent");
+    const instruction = execCall!.args[1] as string;
+    expect(instruction).not.toContain("this should be hidden");
+    expect(instruction).toContain("morning brief sent");
+  });
+
+  test("handleMessage catches executeEvent errors and still persists history and logs episode", async () => {
+    const { deps, calls } = makeStubDeps({
+      executeEvent: async () => { throw new Error("Signal unavailable"); },
+    });
+    const mgr = new GatewayChatManager(deps);
+    await mgr.handleMessage("+155", "test error path", "signal", "signal", {});
+
+    const history = await mgr.getOrLoadHistory("+155");
+    expect(history.length).toBe(2);
+    expect(history[1]!.content).toContain("error");
+
+    expect(calls.some((c) => c.method === "saveSession")).toBe(true);
+    expect(calls.some((c) => c.method === "logEpisode")).toBe(true);
+  });
+
+  test("pruneStaleSessions is a no-op when called twice within 24h", async () => {
+    const cleanupCalls: number[] = [];
+    const { deps } = makeStubDeps({
+      cleanup: async (ttl: number) => { cleanupCalls.push(ttl); return 0; },
+    });
+    const mgr = new GatewayChatManager(deps);
+    (mgr as any).lastPruneAt = 0;
+    await mgr.pruneStaleSessions();
+    await mgr.pruneStaleSessions();
+    expect(cleanupCalls.length).toBe(1);
+  });
 });

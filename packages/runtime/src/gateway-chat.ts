@@ -116,7 +116,7 @@ export class GatewayChatManager {
       return this.histories.get(senderId)!;
     }
     const record = await this.deps.findById(this.sessionKey(senderId));
-    const history = (record?.messages ?? []) as ChatMessage[];
+    const history = record?.messages ?? [];
     this.histories.set(senderId, history);
     return history;
   }
@@ -130,9 +130,9 @@ export class GatewayChatManager {
   ): Promise<void> {
     const history = await this.getOrLoadHistory(sender);
 
-    const [episodes, windowed] = await Promise.all([
+    const windowed = applyHistoryWindow(history);
+    const [episodes] = await Promise.all([
       this.deps.getRecentEpisodes(this.deps.agentId, 8),
-      Promise.resolve(applyHistoryWindow(history)),
     ]);
 
     const filtered = episodes.filter((e) => e.eventType !== "chat-turn");
