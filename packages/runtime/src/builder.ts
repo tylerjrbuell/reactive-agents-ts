@@ -5733,6 +5733,7 @@ export class ReactiveAgent {
                         durationMs,
                         timestamp: Date.now(),
                     })
+                    return undefined
                 } finally {
                     isExecuting = false
                 }

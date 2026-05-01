@@ -21,8 +21,10 @@ const RECIPIENT = process.env.SIGNAL_PHONE_NUMBER
 
 const agent = await ReactiveAgents.create()
     .withName('production-gateway-agent')
+    // Pin SQLite/memory namespace across process restarts (withName alone uses name+timestamp).
+    .withAgentId('production-gateway-agent')
     .withProvider('ollama')
-    .withModel({ model: 'cogito:14b', temperature: 0.7, maxTokens: 2048 })
+    .withModel({ model: 'cogito:14b', temperature: 0.1 })
     .withMCP([
         {
             name: 'signal',
@@ -45,52 +47,58 @@ const agent = await ReactiveAgents.create()
                 'signal-mcp:local',
             ],
         },
-        {
-            name: 'github',
-            transport: 'stdio',
-            command: 'docker',
-            args: [
-                'run',
-                '-i',
-                '--rm',
-                '-e',
-                'GITHUB_PERSONAL_ACCESS_TOKEN',
-                'ghcr.io/github/github-mcp-server',
-            ],
-            env: {
-                GITHUB_PERSONAL_ACCESS_TOKEN:
-                    process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
-            },
-        },
+        // {
+        //     name: 'github',
+        //     transport: 'stdio',
+        //     command: 'docker',
+        //     args: [
+        //         'run',
+        //         '-i',
+        //         '--rm',
+        //         '-e',
+        //         'GITHUB_PERSONAL_ACCESS_TOKEN',
+        //         'ghcr.io/github/github-mcp-server',
+        //     ],
+        //     env: {
+        //         GITHUB_PERSONAL_ACCESS_TOKEN:
+        //             process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
+        //     },
+        // },
     ])
     .withTools()
     .withReasoning({ defaultStrategy: 'adaptive' })
+    .withMemory({ tier: 'enhanced', dbPath: './memory.sqlite', capacity: 12 })
     .withObservability({ verbosity: 'debug', live: true, logModelIO: false })
     .withGateway({
+        // Gateway default: unique task agentId per tick. With .withAgentId() + this flag,
+        // heartbeats and Signal channel replies share the same task id so memory aligns.
+        persistMemoryAcrossRuns: true,
         timezone: 'America/New_York',
-        heartbeat: {
-            intervalMs: 30_000, // 30 seconds
-            policy: 'always',
-            instruction: `Send a heartbeat message to ${RECIPIENT} every 30 seconds when the agent is idle. Use signal/send_message_to_user with recipient '${RECIPIENT}' with the following message content should be: "⏰ Heartbeat: Agent is alive and waiting for the next scheduled task." Suppress heartbeats when the agent is actively processing a task or has pending actions.`,
-        },
-        crons: [
-            // ─── TEST CRON: Fires every minute for verification ───
-            {
-                schedule: '* * * * *', // Every minute
-                instruction: `Test cron verification. Send a test message every minute to ${RECIPIENT} saying: "✅ Test cron fired at [current time]". Use signal/send_message_to_user with recipient '${RECIPIENT}'.`,
-                enabled: false, // Set to true to enable testing
-            },
-        ],
+        // heartbeat: {
+        //     intervalMs: 30_000, // 30 seconds
+        //     policy: 'adaptive',
+        //     instruction: `Send a last 10 commit summary to ${RECIPIENT}, for tylerjrbuell/reactive-agents-ts`,
+        // },
+        // crons: [
+        //     // ─── TEST CRON: Fires every minute for verification ───
+        //     {
+        //         schedule: '* * * * *', // Every minute
+        //         instruction: `Test cron verification. Send a test message every minute to ${RECIPIENT} saying: "✅ Test cron fired at [current time]". Use signal/send_message_to_user with recipient '${RECIPIENT}'.`,
+        //         enabled: false, // Set to true to enable testing
+        //     },
+        // ],
 
         policies: {
-            dailyTokenBudget: 100_000,
-            maxActionsPerHour: 50,
+            // dailyTokenBudget: 100_000,
+            // maxActionsPerHour: 50,
         },
 
         channels: {
             accessPolicy: 'allowlist',
             allowedSenders: [RECIPIENT || ''],
             unknownSenderAction: 'skip',
+            mode: 'chat',
+            sessionTtlDays: 30,
         },
     })
     .build()
