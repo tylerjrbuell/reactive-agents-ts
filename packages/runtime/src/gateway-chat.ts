@@ -131,9 +131,7 @@ export class GatewayChatManager {
     const history = await this.getOrLoadHistory(sender);
 
     const windowed = applyHistoryWindow(history);
-    const [episodes] = await Promise.all([
-      this.deps.getRecentEpisodes(this.deps.agentId, 8),
-    ]);
+    const episodes = await this.deps.getRecentEpisodes(this.deps.agentId, 8);
 
     const filtered = episodes.filter((e) => e.eventType !== "chat-turn");
     const episodicBlock = formatEpisodicContext(filtered);
