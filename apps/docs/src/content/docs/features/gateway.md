@@ -335,6 +335,7 @@ const program = Effect.gen(function* () {
 | `heartbeatsFired` / `heartbeatsSkipped` | Heartbeat efficiency ratio |
 | `webhooksReceived` / `webhooksProcessed` / `webhooksMerged` | Webhook throughput |
 | `cronsExecuted` | Cron jobs completed |
+| `chatTurnsHandled` | Incoming channel messages handled in chat mode |
 | `totalTokensUsed` | Cumulative LLM token consumption |
 | `actionsSuppressed` / `actionsEscalated` | Policy enforcement activity |
 
@@ -362,8 +363,11 @@ interface GatewayConfig {
   heartbeat?: HeartbeatConfig;
   crons?: CronEntry[];
   webhooks?: WebhookConfig[];
+  channels?: ChannelsConfig;
   policies?: PolicyConfig;
   port?: number;                    // Default: 3000
+  persistMemoryAcrossRuns?: boolean; // Share agent ID across ticks for memory continuity
+  timezone?: string;                // IANA timezone for cron evaluation (default: "UTC")
 }
 ```
 
@@ -386,6 +390,30 @@ interface GatewayConfig {
 | `priority` | `EventPriority` | `"normal"` | Event priority level |
 | `enabled` | `boolean` | `true` | Toggle without removing |
 
+### `ChannelsConfig`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `accessPolicy` | `"allowlist" \| "blocklist" \| "open"` | `"allowlist"` | Who can send messages |
+| `allowedSenders` | `string[]` | — | Phone numbers / user IDs allowed (allowlist mode) |
+| `blockedSenders` | `string[]` | — | Phone numbers / user IDs blocked (blocklist mode) |
+| `unknownSenderAction` | `"skip" \| "escalate"` | `"skip"` | What to do with unauthorized senders |
+| `replyToUnknown` | `string` | — | Auto-reply text for unknown senders |
+| `mode` | `"chat" \| "task"` | `"chat"` | `"chat"` maintains per-sender conversation history; `"task"` sends one-shot instructions |
+| `sessionTtlDays` | `number` | `30` | Days of inactivity before a chat session is pruned |
+
+### `GatewaySummary`
+
+Returned by `handle.stop()`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `heartbeatsFired` | `number` | Heartbeat ticks that triggered an LLM run |
+| `totalRuns` | `number` | Total agent executions (heartbeats + crons + channels) |
+| `cronChecks` | `number` | Cron schedule evaluations |
+| `chatTurns` | `number \| undefined` | Incoming channel messages handled in chat mode |
+| `error` | `string \| undefined` | Fatal error if the loop exited unexpectedly |
+
 ### `PolicyConfig`
 
 | Field | Type | Default | Description |
@@ -401,6 +429,70 @@ interface GatewayConfig {
 The gateway enables agents to communicate via **Signal** and **Telegram** using existing MCP servers in Docker containers. No custom adapter code needed — the framework's `.withMCP()` connects to the messaging servers, and the gateway heartbeat drives message polling.
 
 See the [Messaging Channels guide](/guides/messaging-channels/) for setup instructions.
+
+### Channel Access Control
+
+```typescript
+channels: {
+  accessPolicy: "allowlist",           // "allowlist" | "blocklist" | "open"
+  allowedSenders: ["+15551234567"],
+  unknownSenderAction: "skip",         // "skip" | "escalate"
+  replyToUnknown: "Sorry, I only respond to authorized contacts.",
+}
+```
+
+### Gateway Chat Mode
+
+By default (`channels.mode: "chat"`), each incoming channel message starts a **stateful per-sender conversation** — not a one-shot task. The agent receives the full conversation history, recent episodic context, and a directive to respond via the channel tool.
+
+```typescript
+channels: {
+  accessPolicy: "allowlist",
+  allowedSenders: ["+15551234567"],
+  mode: "chat",          // default — persistent per-sender history
+  sessionTtlDays: 30,    // prune inactive sessions after 30 days
+}
+```
+
+**What happens each turn:**
+
+1. Session history for the sender is loaded from SQLite (or the in-memory cache for repeat turns)
+2. History is windowed to the most recent **40 turns / 8,000 characters** before injection
+3. Recent gateway activity (heartbeat and cron results) is injected as episodic context — `chat-turn` episodes are filtered out to avoid recursive noise
+4. The enriched instruction is sent to the execution engine: episodic context → conversation history → user message → tool delivery directive
+5. After the agent run, both the user message and the assistant reply are appended to the session and persisted to SQLite
+6. `GatewaySummary.chatTurns` is incremented
+
+**Task mode** skips all of the above and sends a direct one-shot instruction per message:
+
+```typescript
+channels: {
+  mode: "task",   // stateless — no history, no session persistence
+}
+```
+
+Use `task` mode when each message is an independent command and you don't want conversation context to accumulate (e.g. automation triggers, slash-command bots).
+
+**Memory requirements:** Chat mode requires `.withMemory()` to be configured — session persistence is backed by `SessionStoreService`, and episodic context injection uses `EpisodicMemoryService`. Without a memory layer, sessions are in-memory only (lost on restart) and episodic context is empty.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("signal-agent")
+  .withAgentId("signal-agent")      // stable ID for memory continuity across restarts
+  .withProvider("ollama")
+  .withMCP([{ name: "signal", transport: "stdio", command: "docker", args: [...] }])
+  .withMemory({ tier: "enhanced", dbPath: "./memory.sqlite" })
+  .withGateway({
+    persistMemoryAcrossRuns: true,
+    channels: {
+      accessPolicy: "allowlist",
+      allowedSenders: [process.env.RECIPIENT ?? ""],
+      mode: "chat",
+      sessionTtlDays: 30,
+    },
+  })
+  .build();
+```
 
 ## Error Types
 

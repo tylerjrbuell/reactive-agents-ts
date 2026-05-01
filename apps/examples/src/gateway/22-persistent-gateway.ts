@@ -8,11 +8,17 @@
  * - Crons: cron-scheduled instructions (e.g. "Review PRs every Monday 9am")
  * - Policies: daily token budget, max actions per hour
  * - agent.start() / handle.stop(): launch and cleanly shut down the loop
- * - GatewaySummary: heartbeatsFired, totalRuns, cronChecks
+ * - GatewaySummary: heartbeatsFired, totalRuns, cronChecks, chatTurns
+ *
+ * Channels (not tested here — requires a real Signal/Telegram MCP server):
+ *   .withGateway({ channels: { accessPolicy: "allowlist", allowedSenders: ["+1..."],
+ *     mode: "chat", sessionTtlDays: 30 } })
+ * See example 26 for a chat-mode configuration walkthrough.
+ * See apps/docs/src/content/docs/features/gateway.md for full reference.
  *
  * In production, you would call agent.start() and never call stop() —
  * the process stays alive and the agent responds to heartbeats, crons,
- * and (optionally) inbound webhooks. In this example we start it, let
+ * and inbound channel messages. In this example we start it, let
  * a few heartbeats fire, then stop it cleanly.
  *
  * Usage:
@@ -117,6 +123,9 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   console.log(`  Heartbeats fired : ${summary.heartbeatsFired}`);
   console.log(`  Total agent runs : ${summary.totalRuns}`);
   console.log(`  Cron checks      : ${summary.cronChecks}`);
+  if (summary.chatTurns !== undefined) {
+    console.log(`  Chat turns       : ${summary.chatTurns}`);
+  }
   if (summary.error) {
     console.log(`  Error            : ${summary.error}`);
   }
