@@ -1558,24 +1558,38 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       if (skillCatalogXml && skillCatalogXml.trim().length > 0) {
                         memCtx = `${skillCatalogXml.trim()}\n\n${memCtx}`;
                       }
-                      if (config.enableSelfImprovement) {
+                      // Episodic rows from bootstrap must reach the LLM — previously only
+                      // strategy-outcome/reflexion (with enableSelfImprovement) were injected,
+                      // so default logEpisode "task-completed" lines were invisible (e.g. gateway
+                      // follow-ups after a Signal heartbeat).
+                      {
                         const episodes = (c.memoryContext as any)?.recentEpisodes as
                           | readonly { eventType?: string; content?: string; metadata?: Record<string, unknown> }[]
                           | undefined;
                         if (episodes && episodes.length > 0) {
-                          const selfImprovementEntries = episodes.filter(
-                            (e) => e.eventType === "strategy-outcome" || e.eventType === "reflexion-critique",
-                          );
-                          if (selfImprovementEntries.length > 0) {
-                            const formatted = selfImprovementEntries
-                              .map((e) => {
-                                const meta = e.metadata ?? {};
-                                const success = meta.success ? "✓" : "✗";
-                                const strategy = meta.strategy ?? "unknown";
-                                return `[${success} ${strategy}] ${e.content ?? ""}`;
-                              })
-                              .join("\n");
-                            memCtx = `${memCtx}\n\n--- Prior Strategy Outcomes ---\n${formatted}`;
+                          const cap = 15;
+                          const maxLine = 600;
+                          const lines: string[] = [];
+                          for (const e of episodes.slice(0, cap)) {
+                            const meta = e.metadata ?? {};
+                            const et = e.eventType ?? "episodic";
+                            let line: string;
+                            if (
+                              config.enableSelfImprovement &&
+                              (et === "strategy-outcome" || et === "reflexion-critique")
+                            ) {
+                              const success = meta.success ? "✓" : "✗";
+                              const strategy = meta.strategy ?? "unknown";
+                              line = `[${success} ${strategy}] ${e.content ?? ""}`;
+                            } else {
+                              let body = String(e.content ?? "").replace(/\s+/g, " ").trim();
+                              if (body.length > maxLine) body = `${body.slice(0, maxLine)}…`;
+                              line = `[${et}] ${body}`;
+                            }
+                            lines.push(line);
+                          }
+                          if (lines.length > 0) {
+                            memCtx = `${memCtx}\n\n--- Recent episodic memory ---\n${lines.join("\n")}`;
                           }
                         }
                       }

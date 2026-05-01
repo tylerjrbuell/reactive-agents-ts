@@ -181,14 +181,15 @@ function buildShortGuidanceReminder(guidance: GuidanceContext): string | undefin
  *
  * Sections (in order):
  *   1. Agent identity (lean, tier-adaptive) — with adapter.systemPromptPatch applied
- *   2. Environment context (date, time, timezone, platform)
- *   3. Task description
- *   4. Available tools + rules
- *   5. Adapter toolGuidance (inline reminder after schema block)
- *   6. Tool elaboration hints (opt-in via options.toolElaboration)
- *   7. Progress: (tool usage summary — what has been called)
- *   8. Prior work: (distilled observation facts if any)
- *   9. Guidance: (harness signals — required tools, loops, ICS, errors)
+ *   2. priorContext (optional) — cross-run memory from ExecutionEngine / strategies
+ *   3. Environment context (date, time, timezone, platform)
+ *   4. Task description
+ *   5. Available tools + rules
+ *   6. Adapter toolGuidance (inline reminder after schema block)
+ *   7. Tool elaboration hints (opt-in via options.toolElaboration)
+ *   8. Progress: (tool usage summary — what has been called)
+ *   9. Prior work: (distilled observation facts if any)
+ *   10. Guidance: (harness signals — required tools, loops, ICS, errors)
  */
 function buildIterationSystemPrompt(
   state: KernelState,
@@ -224,6 +225,9 @@ function buildIterationSystemPrompt(
         .join("\n");
       minimal.push(`Tools:\n${compact}`);
     }
+    if (input.priorContext?.trim()) {
+      minimal.push(input.priorContext.trim());
+    }
     minimal.push(`Task: ${input.task}`);
     const guidanceLine = buildShortGuidanceReminder(guidance);
     if (guidanceLine) minimal.push(guidanceLine);
@@ -239,6 +243,13 @@ function buildIterationSystemPrompt(
   );
   const patched = adapter?.systemPromptPatch?.(base, profile.tier ?? "mid") ?? base;
   sections.push(patched);
+
+  // Bootstrap / cross-run memory (ExecutionEngine memCtx → ReasoningService.memoryContext
+  // → reactive priorContext). Was previously dropped: KernelInput carried the field but
+  // ContextManager never rendered it, so episodic + semantic text never reached the LLM.
+  if (input.priorContext?.trim()) {
+    sections.push(input.priorContext.trim());
+  }
 
   // 2-4. Static context (environment + tools + task + rules)
   const staticContext = buildStaticContext({

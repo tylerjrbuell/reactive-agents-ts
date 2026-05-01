@@ -46,9 +46,10 @@ describe("executeReActKernel", () => {
   });
 
   it("injects priorContext into the thought prompt", async () => {
-    // The TestLLM matches on "critique says" — proving priorContext was injected
+    // Match text that appears only when priorContext is merged into the system prompt.
+    // (A plain "last turn repeats" scenario would false-pass if matching failed.)
     const layer = TestLLMServiceLayer([
-      { match: "critique says", text: "FINAL ANSWER: Improved response incorporating the critique feedback." },
+      { match: "add more concrete examples", text: "FINAL ANSWER: Improved response incorporating the critique feedback." },
     ]);
     const result = await Effect.runPromise(
       executeReActKernel({
