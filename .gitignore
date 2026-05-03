@@ -23,22 +23,8 @@ apps/cortex/.cortex/
 # Git worktrees
 .worktrees/
 
-# Harness probe artifacts (dev-only run outputs)
-harness-reports/*.jsonl
-harness-reports/*.txt
-harness-reports/*.json
-harness-reports/improvement-report-*.md
-
-# North Star Test Gate baselines (committed — they ARE the contract)
-!harness-reports/integration-control-flow-baseline.json
-!harness-reports/integration-behavior-baseline-*.json
-!harness-reports/benchmarks/baseline-*.json
-
-# Test gate runtime artifacts — re-derived on every run, no value in committing
-harness-reports/integration-control-flow-scenario-health.json
-harness-reports/gate-traces/
-harness-reports/regressions/
-harness-reports/probe-candidates-*.ts
+# Harness reports — local research/improvement artifacts only, never committed
+harness-reports/
 .gate-baseline-reason
 
 # Local scratch
