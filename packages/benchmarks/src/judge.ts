@@ -1,6 +1,61 @@
 import { spawnSync } from "node:child_process"
 import type { BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
-import { ReactiveAgents } from "@reactive-agents/runtime"
+// Local mirror of `@reactive-agents/judge-server`'s wire contract. We re-declare
+// rather than import because the judge-server package's `exports` map only
+// surfaces `.` (no `./src/contract.js`), and Task 8 must not modify files outside
+// `packages/benchmarks/`. The shape mirrors `packages/judge-server/src/contract.ts`
+// — keep in sync if the contract evolves.
+interface JudgeRequest {
+  taskId: string
+  sutResponse: string
+  taskInput: unknown
+  sutModel: string
+  runId: string
+  taskCriteria?: string
+}
+
+interface JudgeLayerResult {
+  layerName: string
+  score: number
+  passed: boolean
+  details?: string
+}
+
+interface JudgeResponse {
+  taskId: string
+  passed: boolean
+  overallScore: number
+  recommendation: "accept" | "review" | "reject"
+  layerResults: ReadonlyArray<JudgeLayerResult>
+  reproducibility: {
+    judgeModelSha: string
+    judgeCodeSha: string
+  }
+}
+
+/**
+ * Default judge-server URL when neither callsite nor env supplies one.
+ * Matches the default port the server binds to in `src/index.ts`.
+ */
+const DEFAULT_JUDGE_URL = "http://127.0.0.1:8910"
+
+/**
+ * Options threaded down to the RPC layer. Currently just `judgeUrl`; future
+ * tasks (Task 9 Rule-4 guard, Task 10 reproducibility metadata) will extend
+ * this struct.
+ */
+export interface JudgeRpcOptions {
+  /**
+   * Base URL of the judge-server (e.g. "http://127.0.0.1:8910").
+   * If omitted, falls back to `process.env.JUDGE_URL`, then to
+   * `DEFAULT_JUDGE_URL`.
+   */
+  judgeUrl?: string
+}
+
+function resolveJudgeUrl(opts?: JudgeRpcOptions): string {
+  return opts?.judgeUrl ?? process.env["JUDGE_URL"] ?? DEFAULT_JUDGE_URL
+}
 
 // ── Pure utility functions (testable without LLM) ────────────────────────────
 
@@ -66,66 +121,57 @@ export async function scoreVerifiable(
   return { dimension: "accuracy", score: 0.0, evidence: `exit ${result.status}: ${err}` }
 }
 
-// ── LLM-as-judge ─────────────────────────────────────────────────────────────
+// ── LLM-as-judge — routed through judge-server RPC (Task 8) ──────────────────
 
-async function callJudge(prompt: string): Promise<string> {
-  const judgeModel = process.env["BENCH_JUDGE_MODEL"] ?? "claude-haiku-4-5"
-  const judgeProvider = (process.env["BENCH_JUDGE_PROVIDER"] ?? "anthropic") as "anthropic" | "openai" | "ollama"
-
-  const agent = await ReactiveAgents.create()
-    .withName("bench-judge")
-    .withProvider(judgeProvider)
-    .withModel(judgeModel)
-    .withMaxIterations(1)
-    .build()
-  try {
-    const result = await agent.run(prompt)
-    return result.output
-  } finally {
-    await agent.dispose()
+/**
+ * POST a JudgeRequest to the judge-server and return the parsed JudgeResponse.
+ * Throws on non-2xx — callers (`scoreWithJudge`) trap and convert to a
+ * score-0 DimensionScore so a single judge outage cannot crash a bench run.
+ */
+async function callJudge(
+  req: JudgeRequest,
+  opts?: JudgeRpcOptions,
+): Promise<JudgeResponse> {
+  const baseUrl = resolveJudgeUrl(opts)
+  const res = await fetch(`${baseUrl}/judge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "(no body)")
+    throw new Error(`Judge RPC failed: ${res.status} ${detail}`)
   }
-}
-
-function buildJudgePrompt(
-  taskPrompt: string,
-  output: string,
-  dimension: QualityDimension,
-  rubric: string,
-): string {
-  return `You are evaluating an AI agent's performance on a benchmark task.
-
-TASK PROMPT:
-${taskPrompt.slice(0, 800)}
-
-AGENT OUTPUT (truncated to 1500 chars):
-${output.slice(0, 1500)}
-
-DIMENSION: ${dimension}
-RUBRIC: ${rubric}
-
-Score the agent's performance on this single dimension from 0.0 to 1.0.
-- 1.0 = excellent, fully meets the rubric
-- 0.5 = partially meets the rubric
-- 0.0 = fails the rubric entirely
-
-Reply with ONLY a JSON object on one line:
-{"score": <0.0-1.0>, "evidence": "<one sentence explaining the score>"}`
+  return (await res.json()) as JudgeResponse
 }
 
 async function scoreWithJudge(
+  taskId: string,
   taskPrompt: string,
   output: string,
   dimension: QualityDimension,
   rubric: string,
+  opts?: JudgeRpcOptions,
 ): Promise<DimensionScore> {
-  const prompt = buildJudgePrompt(taskPrompt, output, dimension, rubric)
+  // Build a JudgeRequest. Bench harness does not yet thread `sutModel` /
+  // `runId` down to per-dimension scoring — Task 10 owns that. For now we
+  // synthesise a runId so the contract validates and the request is still
+  // traceable in judge-server logs.
+  const req: JudgeRequest = {
+    taskId,
+    sutResponse: output.slice(0, 1500),
+    taskInput: { prompt: taskPrompt.slice(0, 800), dimension },
+    sutModel: process.env["BENCH_SUT_MODEL"] ?? "unknown",
+    runId: `bench-${taskId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    taskCriteria: rubric,
+  }
   try {
-    const raw = await callJudge(prompt)
-    const match = raw.match(/\{[^}]+\}/)
-    if (!match) throw new Error("No JSON in judge response")
-    const parsed = JSON.parse(match[0]) as { score: number; evidence?: string }
-    const score = Math.max(0, Math.min(1, Number(parsed.score) || 0))
-    return { dimension, score, evidence: parsed.evidence }
+    const verdict = await callJudge(req, opts)
+    const score = Math.max(0, Math.min(1, Number(verdict.overallScore) || 0))
+    const evidence =
+      verdict.layerResults.find(l => l.details)?.details
+      ?? `recommendation=${verdict.recommendation} passed=${verdict.passed}`
+    return { dimension, score, evidence }
   } catch (e) {
     return { dimension, score: 0, evidence: `Judge error: ${e instanceof Error ? e.message : String(e)}` }
   }
@@ -144,6 +190,7 @@ export async function scoreTask(
   tmpDir: string,
   runTokens: number,
   _runIterations: number,
+  opts?: JudgeRpcOptions,
 ): Promise<ReadonlyArray<DimensionScore>> {
   const scores: DimensionScore[] = []
 
@@ -162,7 +209,7 @@ export async function scoreTask(
         break
       case "llm-judge":
         scores.push(await scoreWithJudge(
-          task.prompt, output, "accuracy", task.successCriteria.rubric,
+          task.id, task.prompt, output, "accuracy", task.successCriteria.rubric, opts,
         ))
         break
       case "schema":
@@ -201,7 +248,7 @@ export async function scoreTask(
       if (rubric.dimension === "accuracy") continue  // already scored above
       if (rubric.dimension === "efficiency") continue  // computed above
       if (rubric.dimension === "reliability") continue  // session-level aggregation
-      scores.push(await scoreWithJudge(task.prompt, output, rubric.dimension, rubric.rubric))
+      scores.push(await scoreWithJudge(task.id, task.prompt, output, rubric.dimension, rubric.rubric, opts))
     }
   }
 

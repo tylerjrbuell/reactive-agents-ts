@@ -17,7 +17,8 @@
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/reasoning": "workspace:*",
     "@reactive-agents/cost": "workspace:*",
-    "@reactive-agents/runtime": "workspace:*"
+    "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/judge-server": "workspace:*"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^1.0",
