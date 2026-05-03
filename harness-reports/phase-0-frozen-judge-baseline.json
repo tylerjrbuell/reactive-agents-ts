@@ -1,0 +1,43 @@
+{
+  "phase": 0,
+  "captured_at": "2026-05-03T20:21:00Z",
+  "judge_llm_service": {
+    "exists": true,
+    "path": "packages/eval/src/services/judge-llm-service.ts",
+    "exported_tag_name": "JudgeLLMService",
+    "exported_live_layer_name": null,
+    "judge_method_signature": "complete(request: CompletionRequest) => Effect.Effect<CompletionResponse, LLMErrors>",
+    "shape_summary": "Effect Context.Tag exposing a single `complete` method with shape `JudgeLLMServiceShape`; no Live Layer is exported from this file (consumers must wire their own)."
+  },
+  "bench_judge": {
+    "path": "packages/benchmarks/src/judge.ts",
+    "constructs_agent_inline": true,
+    "exported_function_names": [
+      "computeReliability",
+      "matchSuccessCriteria",
+      "parsePartialCreditScore",
+      "scoreVerifiable",
+      "scoreTask"
+    ],
+    "loc": 209
+  },
+  "bench_runner": {
+    "path": "packages/benchmarks/src/runner.ts",
+    "session_runner_function_name": "runSession",
+    "session_report_has_reproducibility_field": false,
+    "rule4_guard_present": false
+  },
+  "current_bench_command": "bun run --cwd packages/benchmarks bench --session regression-gate",
+  "prior_bench_evidence": {
+    "path": null,
+    "ran_at": null,
+    "sut_model": null,
+    "aggregate_score": null,
+    "notes": "No prior regression-gate session JSON exists in harness-reports/ as of capture. The two archived bench-*.json files (harness-reports/_archive/bench-HEAD-14135d6d.json dated 2026-04-27T20:29:30Z and bench-MAIN-839f706d.json dated 2026-04-27T21:04:31Z) are `local-models` session runs against qwen3-4b on rw-2 only, not regression-gate. apps/docs/src/data/benchmark-report.json (Apr 22 mtime) uses the legacy v1 schema (no sessionId field). harness-reports/regressions/ holds CF control-flow regression jsonl traces, not bench session reports. harness-reports/benchmarks/baseline-2026-04-25.json exists but predates the current regression-gate session definition and is not a runSession() output."
+  },
+  "discrepancies": {
+    "judge_llm_service_live_layer": "JudgeLLMService Tag is defined and exported, but no `JudgeLLMServiceLive` Layer is exported from packages/eval/src/services/judge-llm-service.ts (only the Tag + Shape interface). A separate Live Layer wiring step is required by Phase 0 task 11.",
+    "bench_runner_does_not_use_judge_llm_service": "packages/benchmarks/src/runner.ts has zero references to JudgeLLMService, frozen-judge, or Rule 4. Scoring is performed by `scoreTask` in judge.ts which calls `callJudge` (judge.ts:71-87) — that helper constructs a fresh ReactiveAgents builder inline using the same @reactive-agents/runtime code path being benchmarked, with model defaulted from BENCH_JUDGE_MODEL env var (claude-haiku-4-5 default). This is the Rule-4 violation Phase 0 will close.",
+    "session_summary": "regressionGateSession (packages/benchmarks/src/sessions/regression-gate.ts) is a single-variant (`ra-full`), single-model (claude-haiku-4-5 via anthropic), single-run config covering moderate/complex/expert tiers; runSession() returns SessionReport with gitSha but no judge-side reproducibility metadata (no judgeSha, no judgeModel pin, no judge image digest)."
+  }
+}
