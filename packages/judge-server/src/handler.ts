@@ -1,19 +1,15 @@
-import { Effect, Context } from "effect";
+import { Effect } from "effect";
+import { JudgeLLMService } from "@reactive-agents/eval";
+import type { LLMMessage } from "@reactive-agents/llm-provider";
 import type { JudgeRequest, JudgeResponse, ReproducibilityMetadata, JudgeLayerResult } from "./contract.js";
 
-// Local Tag declaration matching the @reactive-agents/eval JudgeLLMService identifier.
-// Using GenericTag here keeps the handler decoupled from the eval package's exact module path,
-// which lets tests provide a stub layer with the same identifier "JudgeLLMService".
-const JudgeLLMService = Context.GenericTag<{
-  complete: (req: { prompt: string; sutModel: string }) => Effect.Effect<{ text: string }>;
-}>("JudgeLLMService");
-
 /**
- * Build the prompt string the judge LLM sees.
- * Kept minimal for Task 4; Task 6 will refine when the live layer lands.
+ * Build the messages the judge LLM sees.
+ * Wraps the prompt in a single user-role LLMMessage to satisfy the
+ * `JudgeLLMService.complete(CompletionRequest)` shape from @reactive-agents/eval.
  */
-const buildJudgePrompt = (req: JudgeRequest): string => {
-  return [
+const buildJudgeMessages = (req: JudgeRequest): LLMMessage[] => {
+  const promptText = [
     "You are an evaluation judge. Score the response below.",
     `SUT model: ${req.sutModel}`,
     `Task input: ${JSON.stringify(req.taskInput)}`,
@@ -21,6 +17,7 @@ const buildJudgePrompt = (req: JudgeRequest): string => {
     req.taskCriteria ? `Criteria: ${req.taskCriteria}` : "",
     "Return a JSON object with shape: {passed: boolean, overallScore: number 0-1, recommendation: 'accept'|'review'|'reject', layerResults: Array<{layerName, score, passed, details?}>}",
   ].filter(Boolean).join("\n");
+  return [{ role: "user", content: promptText }];
 };
 
 /**
@@ -77,12 +74,12 @@ export const parseJudgmentText = (text: string): {
 export const handleJudgeRequest = (
   req: JudgeRequest,
   reproducibility: ReproducibilityMetadata,
-): Effect.Effect<JudgeResponse, never, Context.Tag.Identifier<typeof JudgeLLMService>> =>
+): Effect.Effect<JudgeResponse, unknown, JudgeLLMService> =>
   Effect.gen(function* () {
     const judge = yield* JudgeLLMService;
-    const prompt = buildJudgePrompt(req);
-    const llmResult = yield* judge.complete({ prompt, sutModel: req.sutModel });
-    const verdict = parseJudgmentText(llmResult.text);
+    const messages = buildJudgeMessages(req);
+    const llmResult = yield* judge.complete({ messages });
+    const verdict = parseJudgmentText(llmResult.content);
     return {
       taskId: req.taskId,
       passed: verdict.passed,

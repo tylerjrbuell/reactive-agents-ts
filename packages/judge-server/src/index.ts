@@ -1,27 +1,39 @@
-import { Effect, Layer, Schema, Context } from "effect";
+import { Effect, Layer, Schema } from "effect";
+import { JudgeLLMService } from "@reactive-agents/eval";
 import { JudgeRequest, type ReproducibilityMetadata } from "./contract.js";
 import { handleJudgeRequest } from "./handler.js";
-
-const JudgeLLMService = Context.GenericTag<{
-  complete: (req: { prompt: string; sutModel: string }) => Effect.Effect<{ text: string }>;
-}>("JudgeLLMService");
+import { buildJudgeLayer, resolveLiveLayerConfig } from "./live-layer.js";
 
 /**
- * Stub layer used in tests and as a placeholder until Task 6 wires the live layer.
+ * Stub layer used in tests and for HTTP-shape validation without a live provider.
  * Returns a structured "passing" judgment so HTTP tests can exercise the full path
  * without booting the real LLM provider stack.
+ *
+ * The shape now matches eval's `JudgeLLMService` Tag: `complete(CompletionRequest)`
+ * returning `CompletionResponse`. The handler reads `result.content`.
  */
-const StubJudgeLayer = Layer.succeed(JudgeLLMService, {
-  complete: () =>
-    Effect.succeed({
-      text: JSON.stringify({
-        passed: true,
-        overallScore: 0.95,
-        recommendation: "accept",
-        layerResults: [{ layerName: "stub", score: 0.95, passed: true }],
+const StubJudgeLayer: Layer.Layer<JudgeLLMService> = Layer.succeed(
+  JudgeLLMService,
+  JudgeLLMService.of({
+    complete: () =>
+      Effect.succeed({
+        content: JSON.stringify({
+          passed: true,
+          overallScore: 0.95,
+          recommendation: "accept",
+          layerResults: [{ layerName: "stub", score: 0.95, passed: true }],
+        }),
+        stopReason: "end_turn" as const,
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCost: 0,
+        },
+        model: "stub-judge",
       }),
-    }),
-});
+  }),
+);
 
 export interface ServerConfig {
   port: number;
@@ -33,6 +45,12 @@ export interface ServerConfig {
 export interface ServerHandle {
   port: number;
   stop: (force?: boolean) => void;
+  /**
+   * Which JudgeLLMService Layer the server was wired with.
+   * `"live"` selects `buildJudgeLayer(resolveLiveLayerConfig())` from
+   * `live-layer.ts`; `"stub"` selects the in-process `StubJudgeLayer` above.
+   */
+  activeLayer: "stub" | "live";
 }
 
 export const startServer = async (config: ServerConfig): Promise<ServerHandle> => {
@@ -40,8 +58,11 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
     judgeModelSha: config.judgeModelSha,
     judgeCodeSha: config.judgeCodeSha,
   };
-  // Task 5 ships only the stub layer. Task 6 will wire JudgeLLMServiceLive from @reactive-agents/eval.
-  const layer = StubJudgeLayer;
+
+  const layer: Layer.Layer<JudgeLLMService> =
+    config.judgeLayer === "live"
+      ? buildJudgeLayer(resolveLiveLayerConfig())
+      : StubJudgeLayer;
 
   const server = Bun.serve({
     port: config.port,
@@ -72,9 +93,10 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
             { status: 400 },
           );
         }
-        const result = await Effect.runPromise(
-          handleJudgeRequest(decoded.right, reproducibility).pipe(Effect.provide(layer)),
+        const provided = handleJudgeRequest(decoded.right, reproducibility).pipe(
+          Effect.provide(layer),
         );
+        const result = await Effect.runPromise(provided);
         return Response.json(result);
       }
 
@@ -90,6 +112,7 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
   return {
     port: boundPort,
     stop: (force?: boolean) => server.stop(force),
+    activeLayer: config.judgeLayer,
   };
 };
 
@@ -101,6 +124,6 @@ if (import.meta.main) {
   const handle = await startServer({ port, judgeModelSha, judgeCodeSha, judgeLayer });
   // eslint-disable-next-line no-console
   console.log(
-    `judge-server listening on :${handle.port} (model=${judgeModelSha} code=${judgeCodeSha} layer=${judgeLayer})`,
+    `judge-server listening on :${handle.port} (model=${judgeModelSha} code=${judgeCodeSha} layer=${handle.activeLayer})`,
   );
 }

@@ -1,19 +1,31 @@
 // Run: bun test packages/judge-server/tests/handler.test.ts --timeout 15000
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Context } from "effect";
+import { Effect, Layer } from "effect";
+import { JudgeLLMService } from "@reactive-agents/eval";
 import { handleJudgeRequest } from "../src/handler.js";
 import type { JudgeRequest } from "../src/contract.js";
 
-// Stub the JudgeLLMService Tag locally so tests don't depend on @reactive-agents/eval's runtime.
-// Use Context.GenericTag with the same identifier "JudgeLLMService" so the handler resolves it.
-const StubJudgeLLMService = Context.GenericTag<{
-  complete: (req: { prompt: string; sutModel: string }) => Effect.Effect<{ text: string }>;
-}>("JudgeLLMService");
-
-const makeStubLayer = (textResponse: string) =>
-  Layer.succeed(StubJudgeLLMService, {
-    complete: () => Effect.succeed({ text: textResponse }),
-  });
+// Stub the JudgeLLMService Tag from @reactive-agents/eval. The shape now matches
+// CompletionRequest → CompletionResponse (Task 6 alignment), so the stub returns
+// a CompletionResponse with the judgment payload as `content`.
+const makeStubLayer = (textResponse: string): Layer.Layer<JudgeLLMService> =>
+  Layer.succeed(
+    JudgeLLMService,
+    JudgeLLMService.of({
+      complete: () =>
+        Effect.succeed({
+          content: textResponse,
+          stopReason: "end_turn" as const,
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            estimatedCost: 0,
+          },
+          model: "stub-judge",
+        }),
+    }),
+  );
 
 describe("judge handler — handleJudgeRequest", () => {
   it("returns a JudgeResponse with reproducibility metadata for a passing verdict", async () => {
