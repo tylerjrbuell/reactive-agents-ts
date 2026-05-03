@@ -1,0 +1,23 @@
+{
+  "name": "@reactive-agents/judge-server",
+  "version": "0.10.0",
+  "private": true,
+  "type": "module",
+  "engines": { "bun": ">=1.1.0" },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@reactive-agents/eval": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/core": "workspace:*",
+    "effect": "*"
+  },
+  "peerDependencies": {
+    "effect": "*"
+  }
+}
