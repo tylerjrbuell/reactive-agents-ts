@@ -465,12 +465,14 @@ export interface RuntimeOptions {
       heartbeatPolicy?: string;
       mergeWindowMs?: number;
     };
-    channels?: {
+    accessControl?: {
       accessPolicy?: string;
       allowedSenders?: readonly string[];
       blockedSenders?: readonly string[];
       unknownSenderAction?: string;
       replyToUnknown?: string;
+      mode?: string;
+      sessionTtlDays?: number;
     };
     port?: number;
   };

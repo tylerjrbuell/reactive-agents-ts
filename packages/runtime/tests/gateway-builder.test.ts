@@ -30,13 +30,13 @@ describe("Builder .withGateway()", () => {
     expect(result.output).toBeTruthy();
   });
 
-  test("gateway channels accepts mode and sessionTtlDays", async () => {
+  test("gateway accessControl accepts mode and sessionTtlDays", async () => {
     const { ReactiveAgents } = await import("../src/builder");
     const builder = ReactiveAgents.create()
       .withName("test-gw-chat")
       .withProvider("test")
       .withGateway({
-        channels: {
+        accessControl: {
           accessPolicy: "allowlist",
           allowedSenders: ["+15551234567"],
           mode: "chat",
@@ -46,12 +46,12 @@ describe("Builder .withGateway()", () => {
     expect(builder).toBeDefined();
   });
 
-  test("gateway channels mode defaults work when omitted", async () => {
+  test("gateway accessControl mode defaults work when omitted", async () => {
     const { ReactiveAgents } = await import("../src/builder");
     const builder = ReactiveAgents.create()
       .withName("test-gw-default-mode")
       .withProvider("test")
-      .withGateway({ channels: { accessPolicy: "open" } });
+      .withGateway({ accessControl: { accessPolicy: "open" } });
     expect(builder).toBeDefined();
   });
 });

@@ -75,7 +75,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       timezone: "America/New_York",
 
       // ── Channel access control + chat mode ──────────────────────────────────
-      channels: {
+      accessControl: {
         accessPolicy: "allowlist",
         allowedSenders: [process.env.RECIPIENT ?? "+15551234567"],
         unknownSenderAction: "skip",

@@ -1,7 +1,9 @@
 # @reactive-agents/channels
 
-External channel types and errors: webhooks, Bot API transports, triggers, and session bridging (Phase 1 scaffold).
+External channel layer: **TriggerRegistry**, **SessionBridge**, **ChannelService**, **WebhookChannelAdapter**, plus shared types/errors.
 
 **Transports:** Prefer bot tokens and HTTPS webhooks (Telegram Bot API, Discord, and similar). Adapters normalize provider payloads into shared `InboundMessage` shapes. User MTProto clients belong in optional MCP/adapters, not the default path.
 
-See `docs/superpowers/plans/2026-03-22-channels-package.md` for the full rollout plan.
+**Gateway config:** Messaging allowlist / chat mode lives under `.withGateway({ accessControl: { ... } })` (renamed from `channels` to avoid clashing with this package).
+
+See `docs/superpowers/plans/2026-03-22-channels-package.md` for the full rollout plan (`.withChannels()` builder wiring is still pending).

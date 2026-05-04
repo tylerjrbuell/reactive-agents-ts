@@ -532,8 +532,8 @@ export interface GatewayOptions {
      */
     readonly persistMemoryAcrossRuns?: boolean
     readonly port?: number
-    /** Channel access control configuration for messaging platforms. */
-    readonly channels?: {
+    /** Channel access control configuration for messaging platforms (allowlist / chat mode). */
+    readonly accessControl?: {
         /** Access control policy: "allowlist" (default), "blocklist", or "open". */
         readonly accessPolicy?: 'allowlist' | 'blocklist' | 'open'
         /** Phone numbers / user IDs allowed to message (for allowlist mode). */
@@ -5741,11 +5741,11 @@ export class ReactiveAgent {
 
             // ─── Gateway chat mode ────────────────────────────────────────
             const gwOpts = (self as any)._gatewayOptions as
-                | { channels?: { mode?: 'chat' | 'task'; sessionTtlDays?: number } }
+                | { accessControl?: { mode?: 'chat' | 'task'; sessionTtlDays?: number } }
                 | undefined
-            const channelMode = gwOpts?.channels?.mode ?? 'chat'
+            const channelMode = gwOpts?.accessControl?.mode ?? 'chat'
             const sessionTtlDays: number =
-                gwOpts?.channels?.sessionTtlDays ?? 30
+                gwOpts?.accessControl?.sessionTtlDays ?? 30
 
             const chatDeps: GatewayChatManagerDeps = {
                 agentId: self.agentId ?? 'gateway',

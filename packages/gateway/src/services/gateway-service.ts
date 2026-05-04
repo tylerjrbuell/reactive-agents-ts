@@ -99,14 +99,14 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBu
       }
 
       // Access control for channel messages (highest priority)
-      if (config.channels) {
+      if (config.accessControl) {
         policies.push(
           createAccessControlPolicy({
-            policy: config.channels.accessPolicy ?? "allowlist",
-            allowedSenders: config.channels.allowedSenders as string[] | undefined,
-            blockedSenders: config.channels.blockedSenders as string[] | undefined,
-            unknownSenderAction: config.channels.unknownSenderAction,
-            replyToUnknown: config.channels.replyToUnknown,
+            policy: config.accessControl.accessPolicy ?? "allowlist",
+            allowedSenders: config.accessControl.allowedSenders as string[] | undefined,
+            blockedSenders: config.accessControl.blockedSenders as string[] | undefined,
+            unknownSenderAction: config.accessControl.unknownSenderAction,
+            replyToUnknown: config.accessControl.replyToUnknown,
           }),
         );
       }

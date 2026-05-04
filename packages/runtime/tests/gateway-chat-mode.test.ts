@@ -86,13 +86,13 @@ describe("GatewayChatManager multi-turn history", () => {
 });
 
 describe("GatewayOptions type acceptance", () => {
-  test("builder accepts channels.mode task to preserve original behavior", async () => {
+    test("builder accepts accessControl.mode task to preserve original behavior", async () => {
     const { ReactiveAgents } = await import("../src/builder.js");
     const builder = ReactiveAgents.create()
       .withName("test-task-mode")
       .withProvider("test")
       .withGateway({
-        channels: {
+        accessControl: {
           accessPolicy: "allowlist",
           allowedSenders: ["+15551234567"],
           mode: "task",

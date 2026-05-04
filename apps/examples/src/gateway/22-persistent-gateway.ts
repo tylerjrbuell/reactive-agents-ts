@@ -11,7 +11,7 @@
  * - GatewaySummary: heartbeatsFired, totalRuns, cronChecks, chatTurns
  *
  * Channels (not tested here — requires a real Signal/Telegram MCP server):
- *   .withGateway({ channels: { accessPolicy: "allowlist", allowedSenders: ["+1..."],
+ *   .withGateway({ accessControl: { accessPolicy: "allowlist", allowedSenders: ["+1..."],
  *     mode: "chat", sessionTtlDays: 30 } })
  * See example 26 for a chat-mode configuration walkthrough.
  * See apps/docs/src/content/docs/features/gateway.md for full reference.

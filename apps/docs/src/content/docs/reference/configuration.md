@@ -112,7 +112,7 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `.withGateway(options?)` | disabled | Persistent autonomous harness: `{ heartbeat?, crons?, webhooks?, policies?, channels? }` |
+| `.withGateway(options?)` | disabled | Persistent autonomous harness: `{ heartbeat?, crons?, webhooks?, policies?, accessControl? }` |
 
 ### Build, test & serialization
 
