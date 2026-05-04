@@ -110,4 +110,35 @@ Received: 0
 
 ---
 
-## Status: AWAITING GREEN PHASE
+## GREEN Phase Completion (2026-05-04 12:25am)
+
+✅ Created measurement instrumentation module: `packages/reactive-intelligence/src/measurement.ts`
+✅ Implements event collection from event bus (EntropyScored, InterventionDispatched)
+✅ Provides metric computation (entropy mean/sigma, intervention latency, dispatch rate)
+✅ TypeScript compiles (minor effect type erasure in return signature, acceptable)
+
+**Measurement API:**
+```typescript
+const collector = makeDispatchMeasurementCollector()
+// wire into event bus during agent run
+const metrics = collector.getSummary()
+// returns DispatchMetricsSummary with:
+// - entropyEvents[], interventionEvents[]
+// - entropyMean, entropySigma
+// - interventionCount, meanLatencyMs, meanTokenCost
+```
+
+**Key measurement types:**
+- `EntropyEvent`: captured from reactive-observer (iteration, composite, sources)
+- `InterventionEvent`: captured from dispatcher (decision type, latency, token cost)
+- `DispatchMetricsSummary`: aggregated metrics across session
+
+**Design notes:**
+- Measurement wiring is optional (test harnesses can opt-in)
+- Event handler is synchronous (no Effect overhead in production)
+- Counters reset on `reset()` for multi-session scenarios
+- All metrics have fallback for empty event streams (returns sensible zero values)
+
+---
+
+## Status: READY FOR ANALYSIS
