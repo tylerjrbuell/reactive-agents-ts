@@ -17,6 +17,7 @@ import type {
   BenchmarkSession, HarnessVariant, ModelVariant,
   TaskVariantReport, AblationResult, SessionReport, RunScore,
   DimensionScore, QualityDimension, HarnessConfig, TaskRunResult,
+  SessionReproducibility,
 } from "./types.js"
 import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
@@ -785,6 +786,8 @@ export async function runSession(
   // matches any SUT model variant. When no judge URL is set, the guard skips
   // (existing bench behavior preserved for non-judge code paths).
   const judgeUrlForGuard = session.judgeUrl ?? process.env.JUDGE_URL;
+  let probedJudgeModelSha: string | undefined;
+  let probedJudgeCodeSha: string | undefined;
   if (judgeUrlForGuard) {
     let versionRes: Response;
     try {
@@ -803,17 +806,42 @@ export async function runSession(
       judgeModelSha: string;
       judgeCodeSha: string;
     };
-    const judgeModelSha = versionBody.judgeModelSha;
+    probedJudgeModelSha = versionBody.judgeModelSha;
+    probedJudgeCodeSha = versionBody.judgeCodeSha;
     for (const variant of session.models) {
-      if (judgeModelSha === variant.model) {
+      if (probedJudgeModelSha === variant.model) {
         throw new Error(
-          `Rule-4 violation: judge model (${judgeModelSha}) must differ from SUT model (${variant.model}). ` +
+          `Rule-4 violation: judge model (${probedJudgeModelSha}) must differ from SUT model (${variant.model}). ` +
             `See docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4. ` +
             `Configure a different JUDGE_MODEL env var when starting the judge-server.`,
         );
       }
     }
   }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ── Reproducibility metadata (Phase 0 Task 10) ────────────────────────────
+  // Per docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4: every SessionReport
+  // carries enough metadata to replay the run from frozen artifacts. The
+  // single `runId` is the source of truth — every judge call within this
+  // runSession invocation should reuse it (Task 12 will thread it through).
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const replayCommand =
+    `bun run --cwd packages/benchmarks bench --session ${session.id} --run-id ${runId}` +
+    (judgeUrlForGuard ? ` --judge-url ${judgeUrlForGuard}` : "");
+  const reproducibility: SessionReproducibility = judgeUrlForGuard
+    ? {
+        judgeModelSha: probedJudgeModelSha ?? "unknown-no-judge-configured",
+        judgeCodeSha: probedJudgeCodeSha ?? "unknown-no-judge-configured",
+        runId,
+        replayCommand,
+      }
+    : {
+        judgeModelSha: "unknown-no-judge-configured",
+        judgeCodeSha: "unknown-no-judge-configured",
+        runId,
+        replayCommand,
+      };
   // ──────────────────────────────────────────────────────────────────────────
 
   const tasks = resolveTasks(session, ALL_TASKS)
@@ -912,6 +940,7 @@ export async function runSession(
     ablation,
     taskReports: allVariantReports,
     dimensionSummary,
+    reproducibility,
   }
 
   if (outputPath) {

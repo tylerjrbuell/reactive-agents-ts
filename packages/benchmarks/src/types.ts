@@ -137,6 +137,30 @@ export interface AblationResult {
   readonly baselineVariantId: string;
 }
 
+/**
+ * Reproducibility metadata attached to every SessionReport (Phase 0 Task 10).
+ *
+ * Per docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4 + the post-2025
+ * reproducibility crisis literature: published bench numbers MUST include
+ * enough metadata to replay the run from frozen artifacts. External readers
+ * use these fields to verify a published score was produced by a specific
+ * frozen judge (judgeModelSha + judgeCodeSha) and a specific bench code path.
+ *
+ * When no judge URL is configured (judge SHAs unavailable), the SHA fields
+ * carry the sentinel `"unknown-no-judge-configured"` so absence of Rule-4
+ * enforcement is explicit rather than silently null.
+ */
+export interface SessionReproducibility {
+  /** SHA of the judge model used (from judge-server /version). */
+  readonly judgeModelSha: string;
+  /** SHA of the judge-server code used (from judge-server /version). */
+  readonly judgeCodeSha: string;
+  /** Unique identifier for this runSession invocation; shared by every judge call within the run. */
+  readonly runId: string;
+  /** Bash command that re-runs this exact session. */
+  readonly replayCommand: string;
+}
+
 export interface SessionReport extends MultiModelReport {
   readonly sessionId: string;
   readonly sessionVersion: string;
@@ -154,6 +178,11 @@ export interface SessionReport extends MultiModelReport {
     readonly byVariant: ReadonlyArray<{ readonly variantId: string; readonly meanScore: number }>;
   }>;
   readonly drift?: DriftReport;
+  /**
+   * Reproducibility metadata (Phase 0 Task 10). Always populated.
+   * See `SessionReproducibility` for the contract.
+   */
+  readonly reproducibility: SessionReproducibility;
 }
 
 export interface DriftReport {
