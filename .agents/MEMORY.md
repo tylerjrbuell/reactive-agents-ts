@@ -16,6 +16,20 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ## Current state (May 4, 2026)
 
+- **Spike M11: Diagnostic System Output Leak Detection — COMPLETE:**
+  - Output leak detection validated across 27 leak pattern categories.
+  - Synthetic dataset: 17 test cases (clean outputs, system prompts, API keys, credentials, false-positive controls).
+  - **Measured Results:** True positive rate 100% (target ≥95%), false positive rate 0% (target ≤5%), latency 0.02ms (target <100ms).
+  - Leak types detected: system-prompt (4), internal-instruction (2), api-key (4), credential (10).
+  - Pattern coverage: AWS AKIA/secrets, OpenAI/Anthropic keys, GitHub tokens, JWT, passwords, database URLs, system prompt headers.
+  - False positive mitigation effective: Base64/hash filters distinguish benign content (CRITICAL: AKIA keys checked before base64 filter).
+  - Test coverage: 10 M11 spike tests (64 expectations), 22 total diagnose tests, 100% pass rate. Zero regressions.
+  - Evidence: `packages/diagnose/tests/m11-diagnostic-output-leak.test.ts` (TDD: RED → GREEN complete).
+  - Verdict: **✅ KEEP** — mechanism earns its keep; FM-A3 (output-leak diagnosis) mitigated.
+  - Debrief: `docs/superpowers/debriefs/M11-diagnostic-system-validation.md`.
+  - Commit: `6f614a94` (original validation).
+  - Next: Integrate leak detector into output assembly (Phase 1.5 integration).
+
 - **Spike M12: Provider Adapter Hooks Validation — COMPLETE:**
   - All 7 hooks defined on `ProviderAdapter` interface: parseToolCalls, extractText, computeCost, validateResponse, optimizePrompt, handleError, streamSupport.
   - All 7 hooks fire on provider-specific scenarios (qwen3, Gemini, Anthropic, Ollama).
