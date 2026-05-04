@@ -135,6 +135,7 @@ export interface CliArgs {
   ci?: boolean
   baselinePath?: string
   verbose?: boolean
+  judgeUrl?: string
 }
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -155,6 +156,7 @@ export function parseArgs(argv: string[]): CliArgs {
       case "--ci":           args.ci = true; break
       case "--baseline":     args.baselinePath = next; i++; break
       case "--verbose":      args.verbose = true; break
+      case "--judge-url":    args.judgeUrl = next; i++; break
     }
   }
   return args
@@ -174,6 +176,7 @@ async function main() {
     let session = args.runs ? { ...sessionDef, runs: args.runs } : sessionDef
     if (args.taskIds?.length) session = { ...session, taskIds: args.taskIds, tiers: undefined } as typeof session
     if (args.verbose) session = { ...session, logLevel: "verbose" } as typeof session
+    if (args.judgeUrl) session = { ...session, judgeUrl: args.judgeUrl } as typeof session
     // Allow swapping the session's model via CLI: `--provider gemini --model gemini-2.5-pro`
     // Useful for spot-checking a session against a single non-default provider
     // without authoring a new session config.
