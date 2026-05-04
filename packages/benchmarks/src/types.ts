@@ -213,6 +213,13 @@ export interface BenchmarkSession {
   readonly timeoutMs?: number;
   /** Log level: "silent" = no output; "progress" = header + progress only; "verbose" = full details (default: "progress"). */
   readonly logLevel?: "silent" | "progress" | "verbose";
+  /**
+   * URL of the judge-server RPC endpoint. When set (or `JUDGE_URL` env var),
+   * `runSession` enforces Rule 4 (judge model MUST differ from SUT model) by
+   * probing `${judgeUrl}/version` before any task execution.
+   * See docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4.
+   */
+  readonly judgeUrl?: string;
 }
 
 export interface DimensionRubric {

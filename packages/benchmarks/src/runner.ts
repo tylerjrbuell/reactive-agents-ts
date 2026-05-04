@@ -776,6 +776,46 @@ export async function runSession(
   session: BenchmarkSession,
   outputPath?: string,
 ): Promise<SessionReport> {
+  // ── Rule-4 guard (Phase 0 Task 9) ─────────────────────────────────────────
+  // Per docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4: the judge model MUST
+  // be a separately-versioned, model-pinned artifact distinct from the System
+  // Under Test. Self-evaluation produces inflated scores via self-preference
+  // bias (arXiv:2410.21819). When a judge URL is configured (session.judgeUrl
+  // or JUDGE_URL env), probe /version and refuse to run if the judge model
+  // matches any SUT model variant. When no judge URL is set, the guard skips
+  // (existing bench behavior preserved for non-judge code paths).
+  const judgeUrlForGuard = session.judgeUrl ?? process.env.JUDGE_URL;
+  if (judgeUrlForGuard) {
+    let versionRes: Response;
+    try {
+      versionRes = await fetch(`${judgeUrlForGuard}/version`);
+    } catch (e) {
+      throw new Error(
+        `Could not reach judge-server at ${judgeUrlForGuard} for Rule-4 check: ${String(e)}`,
+      );
+    }
+    if (!versionRes.ok) {
+      throw new Error(
+        `Judge-server /version returned ${versionRes.status} from ${judgeUrlForGuard}`,
+      );
+    }
+    const versionBody = (await versionRes.json()) as {
+      judgeModelSha: string;
+      judgeCodeSha: string;
+    };
+    const judgeModelSha = versionBody.judgeModelSha;
+    for (const variant of session.models) {
+      if (judgeModelSha === variant.model) {
+        throw new Error(
+          `Rule-4 violation: judge model (${judgeModelSha}) must differ from SUT model (${variant.model}). ` +
+            `See docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4. ` +
+            `Configure a different JUDGE_MODEL env var when starting the judge-server.`,
+        );
+      }
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   const tasks = resolveTasks(session, ALL_TASKS)
   const gitSha = getGitSha()
   const allVariantReports: TaskVariantReport[] = []
