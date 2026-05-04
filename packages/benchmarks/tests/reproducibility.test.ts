@@ -101,4 +101,39 @@ describe("SessionReport reproducibility metadata (Task 10)", () => {
       if (prevJudgeUrl !== undefined) process.env.JUDGE_URL = prevJudgeUrl;
     }
   }, 15000);
+
+  it("generates a distinct runId on each runSession invocation", async () => {
+    // Regression guard: if someone makes runId deterministic from session.id
+    // (e.g. for "stable" run identifiers), every replay would fragment to the
+    // same id and downstream tracing would collapse. Two back-to-back runs
+    // MUST produce different runIds.
+    const prevJudgeUrl = process.env.JUDGE_URL;
+    delete process.env.JUDGE_URL;
+    try {
+      const { runSession } = await import("../src/runner.js");
+      const session: BenchmarkSession = {
+        id: "repro-uniqueness",
+        name: "runId uniqueness regression",
+        version: "1",
+        taskIds: [],
+        models: [
+          {
+            id: "sut-variant",
+            provider: "anthropic",
+            model: SUT_MODEL_ID,
+            contextTier: "frontier",
+          },
+        ],
+        harnessVariants: [],
+        runs: 1,
+        timeoutMs: 5_000,
+        logLevel: "silent",
+      };
+      const reportA = await runSession(session);
+      const reportB = await runSession(session);
+      expect(reportA.reproducibility.runId).not.toBe(reportB.reproducibility.runId);
+    } finally {
+      if (prevJudgeUrl !== undefined) process.env.JUDGE_URL = prevJudgeUrl;
+    }
+  }, 15000);
 });

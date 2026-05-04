@@ -157,7 +157,17 @@ export interface SessionReproducibility {
   readonly judgeCodeSha: string;
   /** Unique identifier for this runSession invocation; shared by every judge call within the run. */
   readonly runId: string;
-  /** Bash command that re-runs this exact session. */
+  /**
+   * Bash command that re-runs this session **as registered**. Includes
+   * `--session ${id}`, `--run-id ${runId}`, and (when set) `--judge-url`.
+   *
+   * Fidelity caveat: the command resolves through the session registry — it
+   * does not materialize the full session config (provider, model, runs,
+   * timeout, harness variants, log level) into the command line. If the
+   * session definition file changes between recording and replay, the replay
+   * will use the new definition. For exact-replay guarantees, archive the
+   * full SessionReport alongside this command.
+   */
   readonly replayCommand: string;
 }
 

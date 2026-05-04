@@ -829,19 +829,15 @@ export async function runSession(
   const replayCommand =
     `bun run --cwd packages/benchmarks bench --session ${session.id} --run-id ${runId}` +
     (judgeUrlForGuard ? ` --judge-url ${judgeUrlForGuard}` : "");
-  const reproducibility: SessionReproducibility = judgeUrlForGuard
-    ? {
-        judgeModelSha: probedJudgeModelSha ?? "unknown-no-judge-configured",
-        judgeCodeSha: probedJudgeCodeSha ?? "unknown-no-judge-configured",
-        runId,
-        replayCommand,
-      }
-    : {
-        judgeModelSha: "unknown-no-judge-configured",
-        judgeCodeSha: "unknown-no-judge-configured",
-        runId,
-        replayCommand,
-      };
+  // Both branches (with/without judge URL) collapsed: when judge wasn't probed,
+  // probedJudgeModelSha/CodeSha are undefined and the nullish-coalesce yields
+  // the sentinel naturally.
+  const reproducibility: SessionReproducibility = {
+    judgeModelSha: probedJudgeModelSha ?? "unknown-no-judge-configured",
+    judgeCodeSha: probedJudgeCodeSha ?? "unknown-no-judge-configured",
+    runId,
+    replayCommand,
+  };
   // ──────────────────────────────────────────────────────────────────────────
 
   const tasks = resolveTasks(session, ALL_TASKS)
