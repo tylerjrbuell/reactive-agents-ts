@@ -226,6 +226,25 @@ File integrity confirmed.`,
       shouldHaveLeak: false,
       expectedPatterns: [],
     },
+
+    // ── Edge cases: AKIA keys that previously were false negatives ──────────
+    {
+      name: "akia-in-json-must-detect",
+      output: JSON.stringify({
+        accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+        region: "us-east-1",
+      }, null, 2),
+      outputType: "json",
+      shouldHaveLeak: true,
+      expectedPatterns: ["AKIA"],
+    },
+    {
+      name: "akia-inline-in-text",
+      output: "AWS configuration: accessKeyId=AKIAIOSFODNN7EXAMPLE",
+      outputType: "text",
+      shouldHaveLeak: true,
+      expectedPatterns: ["AKIA"],
+    },
   ];
 }
 
@@ -437,5 +456,50 @@ describe("M11: Diagnostic System Output Leak Detection", () => {
     expect(stats.truePosRate).toBeGreaterThanOrEqual(95);
     expect(stats.falsePosRate).toBeLessThanOrEqual(5);
     expect(stats.maxLatencyMs).toBeLessThan(100);
+  });
+
+  it("handles large outputs without performance degradation", async () => {
+    // Create a large output with multiple leaks
+    const largeOutput = `
+${Array(100).fill("This is a normal log line with no sensitive data.").join("\n")}
+
+Authorization: sk-proj-abc123def456ghi789jklmnopqrstuvwxyz
+Password: "SuperSecret123!"
+AKIA_KEY: AKIAIOSFODNN7EXAMPLE
+
+${Array(100).fill("More normal data here.").join("\n")}
+`;
+
+    const result = await detectLeaks(largeOutput, "text");
+
+    // Should detect all leaks even in large output
+    expect(result.hasLeak).toBe(true);
+    expect(result.leaksDetected.length).toBeGreaterThanOrEqual(2); // At least OpenAI and AKIA
+    // Latency should still be <100ms
+    expect(result.detectionLatencyMs).toBeLessThan(100);
+  });
+
+  it("detects leaks accurately by type breakdown", async () => {
+    const results = await Promise.all(
+      testCases.map((c) => detectLeaks(c.output, c.outputType))
+    );
+
+    // Count detected leaks by type
+    const leaksByType: Record<string, number> = {};
+    for (const result of results) {
+      for (const leak of result.leaksDetected) {
+        leaksByType[leak.type] = (leaksByType[leak.type] || 0) + 1;
+      }
+    }
+
+    console.log("\n=== Leak Detection Breakdown by Type ===");
+    for (const [type, count] of Object.entries(leaksByType)) {
+      console.log(`  ${type}: ${count} detected`);
+    }
+
+    // Verify we detected all major categories
+    expect(leaksByType["api-key"]).toBeGreaterThan(0);
+    expect(leaksByType["credential"]).toBeGreaterThan(0);
+    expect(leaksByType["system-prompt"]).toBeGreaterThan(0);
   });
 });

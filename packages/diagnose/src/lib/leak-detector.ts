@@ -72,6 +72,13 @@ const LEAK_PATTERNS: PatternDef[] = [
     severity: "critical",
     regex: /aws_secret_access_key\s*[:=]\s*[^\s,}]*/gi,
   },
+  {
+    name: "secretAccessKey",
+    type: "credential",
+    severity: "critical",
+    // Match both JSON ("secretAccessKey": "value") and config (secretAccessKey=value) formats
+    regex: /secretAccessKey["\']?\s*[:=]\s*["\']?([a-zA-Z0-9\/+\-_]{20,})["\']?/gi,
+  },
 
   // ── JWT Tokens ─────────────────────────────────────────────────────────
   {
@@ -106,7 +113,7 @@ const LEAK_PATTERNS: PatternDef[] = [
     name: "database-password",
     type: "credential",
     severity: "high",
-    regex: /(postgres|mysql|mongodb|redis):\/\/[^:]+:[^@]+@[^\s,}]*/gi,
+    regex: /(postgres|postgresql|mysql|mongodb|redis):\/\/[^:@]+:[^@]+@[^\s,}]*/gi,
   },
   {
     name: "connection-string-password",
@@ -138,7 +145,13 @@ const LEAK_PATTERNS: PatternDef[] = [
     name: "you-are-an-ai",
     type: "system-prompt",
     severity: "high",
-    regex: /you\s+are\s+an?\s+(ai|assistant|language\s+model)/gi,
+    regex: /you\s+are\s+an?\s+(ai|assistant|language\s+model|helpful)/gi,
+  },
+  {
+    name: "system-prompt-in-json-key",
+    type: "system-prompt",
+    severity: "high",
+    regex: /"systemPrompt"\s*:\s*"[^"]*assistant[^"]*"/gi,
   },
 
   // ── Password patterns ──────────────────────────────────────────────────
@@ -166,24 +179,52 @@ const LEAK_PATTERNS: PatternDef[] = [
     severity: "high",
     regex: /https?:\/\/hooks\.slack\.com\/services\/[^\s,}]+/g,
   },
+  {
+    name: "aws-session-token",
+    type: "credential",
+    severity: "critical",
+    regex: /aws_session_token\s*[:=]\s*[^\s,}]+/gi,
+  },
+  {
+    name: "authorization-header-sensitive",
+    type: "credential",
+    severity: "high",
+    regex: /authorization\s*:\s*(?!Bearer\s+\w{1,10}\s)(?!Basic\s+\w{1,10})[^\s\n,}]+/gi,
+  },
 ];
 
 // ── False positive filters ─────────────────────────────────────────────────
 // These patterns should NOT be flagged as leaks
+//
+// IMPORTANT: Order matters. Check for specific secret patterns BEFORE generic filters
+// (e.g., AKIA keys BEFORE base64 filter, since AKIA keys can match base64 regex).
 
 function isFalsePositive(match: string): boolean {
+  const trimmed = match.trim();
+
+  // CRITICAL: AWS access keys (AKIA...) are NOT false positives
+  // They look like base64 but are always real credentials
+  if (/^AKIA[0-9A-Z]{16}$/i.test(trimmed)) {
+    return false; // Real AWS key, not base64
+  }
+
   // Base64 content (common in legitimate outputs)
-  if (/^[A-Za-z0-9+/]{20,}={0,2}$/.test(match.trim())) {
-    return true; // Likely base64, not a secret
+  // Only consider it base64 if it has base64-specific characters (+ / or padding =)
+  // or if it's clearly NOT a secret pattern
+  if (/[+/=]/.test(trimmed)) {
+    if (/^[A-Za-z0-9+/]{20,}={0,2}$/.test(trimmed)) {
+      return true; // Likely base64, not a secret
+    }
   }
 
   // Common hash digests (SHA256, MD5, etc.)
-  if (/^[a-fA-F0-9]{32,}$/.test(match.trim())) {
+  // Only hex characters, no uppercase letters except A-F
+  if (/^[a-fA-F0-9]{32,}$/.test(trimmed)) {
     return true; // Likely a hash digest
   }
 
   // UUID patterns (false positives for JWT detection)
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match.trim())) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
     return true; // UUID, not JWT
   }
 
