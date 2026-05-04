@@ -13,7 +13,7 @@ Works on local Ollama models (8B+) through frontier APIs — same code, same fea
 | **31 composable packages**  | Enable exactly what you need, no hidden coupling              |
 | **6 LLM providers**         | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test  |
 | **5 reasoning strategies**  | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive |
-| **4,708 tests · 528 files** | Production-grade confidence                                   |
+| **4,731 tests · 536 files** | Production-grade confidence (run `bun test` before release) |
 | **Cortex Studio**           | Live agent canvas, entropy charts, debrief UI, agent builder  |
 | **Effect-TS end to end**    | Compile-time type safety, zero `any`, explicit tagged errors  |
 
@@ -95,7 +95,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 -   **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
 -   **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
 -   **Web framework integration** — `@reactive-agents/react` (`useAgentStream`, `useAgent`), `@reactive-agents/vue` composables, `@reactive-agents/svelte` stores — consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
--   **4,708 tests** across 528 files
+-   **4,731 tests** across 536 files
 
 ## Quick Start
 
@@ -512,6 +512,8 @@ const agent = await ReactiveAgents.create()
 | [`@reactive-agents/vue`](packages/vue)                                     | Vue 3 composables: `useAgentStream`, `useAgent` with reactive refs                                                                                                                        |
 | [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores: `createAgentStream`, `createAgent` writable stores                                                                                                                     |
 
+**Branch preview (not on `main` yet):** [`feat/channels-package`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/feat/channels-package) adds **`@reactive-agents/channels`**, runtime **`.withChannels()`**, and renames gateway **`channels` → `accessControl`** for sender policy vs chat mode. Summary: [`docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md`](docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md).
+
 ## Observability & Metrics Dashboard
 
 When observability is enabled, the agent displays a professional metrics dashboard after each execution:
@@ -715,7 +717,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (4,708 tests, 528 files)
+bun test                 # Run full test suite (see runner summary; ~4,731 tests / 536 files)
 bun run build            # Build all packages (31 tasks, ESM + DTS)
 ```
 

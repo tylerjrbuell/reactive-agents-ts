@@ -91,6 +91,7 @@ import { makeHealthService } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
   GatewayChatManager,
+  channelOutboundToolGuidance,
   type GatewayChatManagerDeps,
 } from "./gateway-chat.js";
 
@@ -6008,7 +6009,13 @@ export class ReactiveAgent {
                                         }
                                     )
                                     if (channelMode === 'task') {
-                                        const instruction = `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". Use the ${event.mcpServer ?? 'signal'}/send_message_to_user tool to reply.`
+                                        const mcpServer = String(event.mcpServer ?? '').trim()
+                                        const instruction =
+                                            `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". ` +
+                                            channelOutboundToolGuidance({
+                                                mcpServer,
+                                                sender: String(event.sender ?? ''),
+                                            })
                                         yield* Effect.promise(() =>
                                             executeEvent(
                                                 gwEvent,
@@ -6022,7 +6029,7 @@ export class ReactiveAgent {
                                                 event.sender,
                                                 event.message,
                                                 event.platform ?? 'unknown',
-                                                event.mcpServer ?? 'signal',
+                                                String(event.mcpServer ?? '').trim(),
                                                 gwEvent
                                             )
                                         )

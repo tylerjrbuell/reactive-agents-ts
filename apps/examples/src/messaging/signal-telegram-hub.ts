@@ -4,16 +4,16 @@
  * Demonstrates a persistent autonomous agent that monitors Signal and Telegram
  * for incoming messages, responds intelligently, and respects rate/budget limits.
  *
- * The agent uses existing MCP servers running in Docker containers — no custom
- * adapter code needed. The gateway heartbeat drives message polling, and the
- * agent uses MCP tools (signal/receive_message, telegram/send_message, etc.)
- * to interact with both platforms.
+ * Signal MCP runs from Docker (repo / GHCR image). Telegram MCP is started via
+ * `uvx` from upstream [chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)
+ * (not maintained as an image in this repo). The gateway heartbeat drives polling;
+ * the agent uses MCP tools (signal/receive_message, telegram/get_chats, etc.).
  *
  * Prerequisites:
- *   1. Docker installed and running
+ *   1. Docker (Signal) and `uv` (https://docs.astral.sh/uv/) for Telegram
  *   2. Signal registered: ./scripts/signal-register.sh +1234567890
  *   3. Telegram session: ./scripts/telegram-session.sh
- *   4. .env.telegram with TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_SESSION_STRING
+ *   4. TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_SESSION_STRING in environment
  *   5. SIGNAL_PHONE_NUMBER and ANTHROPIC_API_KEY in environment
  *
  * Usage:
@@ -66,17 +66,17 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
         {
           name: "telegram",
           transport: "stdio" as const,
-          command: "docker",
+          command: "uvx",
           args: [
-            "run", "-i", "--rm",
-            "--cap-drop", "ALL",
-            "--no-new-privileges",
-            "--memory", "128m",
-            "--pids-limit", "30",
-            "--user", "1000:1000",
-            "--env-file", ".env.telegram",
-            "ghcr.io/reactive-agents/telegram-mcp",
+            "--from",
+            "git+https://github.com/chigwell/telegram-mcp.git@v3.0.4",
+            "telegram-mcp",
           ],
+          env: {
+            TELEGRAM_API_ID: process.env.TELEGRAM_API_ID ?? "",
+            TELEGRAM_API_HASH: process.env.TELEGRAM_API_HASH ?? "",
+            TELEGRAM_SESSION_STRING: process.env.TELEGRAM_SESSION_STRING ?? "",
+          },
         },
       ]
     : [];

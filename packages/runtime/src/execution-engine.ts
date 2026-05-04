@@ -3191,9 +3191,109 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       },
                     };
 
-                    // Re-run the think phase (single retry call)
+                    // Re-run the think phase (single retry call).
+                    //
+                    // S3 (AUDIT-overhaul-2026 §16.4): when ReasoningService is wired,
+                    // route the retry through it so it inherits state.steps[],
+                    // entropy scoring, RI dispatcher, healing pipeline, FC tool
+                    // execution, episodic memory bridge, and telemetry hooks. When
+                    // reasoning is NOT wired (test mode / minimal layer), fall back
+                    // to the original inline LLM call. The fallback is preserved
+                    // byte-for-byte to keep verification-quality-gate.test.ts green
+                    // (it pins llmCallCount === 2 and verifyCallCount === 2).
                     ctx = yield* guardedPhase(ctx, "think", (c) =>
                       Effect.gen(function* () {
+                        if (reasoningOpt._tag === "Some") {
+                          // ── Kernel-routed retry ──
+                          // availableTools: [] + maxIterations: 1 makes this
+                          // single-shot (no tool execution, no loop re-entry).
+                          // The verifier feedback message is already in
+                          // c.messages (appended above) and flows in via
+                          // initialMessages.
+                          const retryEffect = reasoningOpt.value.execute({
+                            taskDescription: extractTaskText(task.input),
+                            taskType: task.type,
+                            memoryContext: "",
+                            availableTools: [],
+                            availableToolSchemas: [],
+                            allToolSchemas: [],
+                            strategy: c.selectedStrategy ?? "reactive",
+                            contextProfile: {
+                              ...config.contextProfile,
+                              maxIterations: 1,
+                            },
+                            providerName: String(config.provider ?? ""),
+                            systemPrompt: config.systemPrompt,
+                            taskId: c.taskId,
+                            agentId: config.agentId,
+                            sessionId: c.taskId,
+                            modelId: String(config.defaultModel ?? ""),
+                            taskCategory,
+                            temperature: config.contextProfile?.temperature as number | undefined,
+                            environmentContext: config.environmentContext as Record<string, string> | undefined,
+                            initialMessages: c.messages as readonly { readonly role: "user" | "assistant"; readonly content: string }[],
+                            calibration: resolvedCalibration,
+                          });
+                          const retryOutcome = yield* Effect.exit(retryEffect);
+                          if (retryOutcome._tag === "Success") {
+                            const norm = normalizeReasoningResult(retryOutcome.value);
+                            if (norm) {
+                              const retryOutput = String(norm.output ?? "");
+                              return {
+                                ...c,
+                                messages: [
+                                  ...c.messages,
+                                  { role: "assistant", content: retryOutput },
+                                ],
+                                tokensUsed:
+                                  c.tokensUsed + (norm.metadata.tokensUsed ?? 0),
+                                cost: c.cost + (norm.metadata.cost ?? 0),
+                                iteration: c.iteration + 1,
+                                metadata: {
+                                  ...c.metadata,
+                                  lastResponse: retryOutput,
+                                  isComplete: norm.status === "completed",
+                                  reasoningResult: norm,
+                                  stepsCount: norm.metadata.stepsCount,
+                                  reasoningSteps: norm.steps ?? [],
+                                },
+                              };
+                            }
+                            // Reasoning returned an unrecognized shape — surface a
+                            // soft error and let the loop terminate (mirrors the
+                            // strategyFallback pattern at lines ~1707-1712).
+                            if (obs) {
+                              yield* obs.info(
+                                "[engine] WARN: verification retry — reasoning returned invalid shape; terminating with error",
+                              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3195", tag: errorTag(err) })));
+                            }
+                            return {
+                              ...c,
+                              metadata: {
+                                ...c.metadata,
+                                lastResponse: "Verification retry failed — reasoning returned an invalid result shape",
+                                isComplete: true,
+                              },
+                            };
+                          }
+                          // Reasoning effect failed — log + terminate.
+                          if (obs) {
+                            yield* obs.info(
+                              `[engine] WARN: verification retry — reasoning failed: ${String(retryOutcome.cause)}`,
+                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3195", tag: errorTag(err) })));
+                          }
+                          return {
+                            ...c,
+                            metadata: {
+                              ...c.metadata,
+                              lastResponse: `Verification retry failed: ${String(retryOutcome.cause)}`,
+                              isComplete: true,
+                            },
+                          };
+                        }
+
+                        // ── Fallback: inline LLM call (preserves the no-reasoning
+                        // contract asserted by verification-quality-gate.test.ts) ──
                         const llm = yield* Context.GenericTag<{
                           complete: (req: unknown) => Effect.Effect<{
                             content: string;

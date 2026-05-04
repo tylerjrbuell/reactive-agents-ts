@@ -10,22 +10,21 @@ ENV JUDGE_CODE_SHA=${JUDGE_CODE_SHA}
 ENV JUDGE_LAYER=live
 ENV PORT=8910
 
-# Copy workspace manifests first for cache efficiency
+# Copy workspace manifests first for cache efficiency.
+# Bun's --frozen-lockfile walks every workspace pattern in the root
+# package.json, so EVERY workspace's package.json must exist in the build
+# context — even ones the judge-server doesn't depend on directly.
 COPY package.json bun.lock turbo.json ./
-COPY packages/judge-server/package.json packages/judge-server/
-COPY packages/eval/package.json packages/eval/
-COPY packages/llm-provider/package.json packages/llm-provider/
-COPY packages/memory/package.json packages/memory/
-COPY packages/core/package.json packages/core/
+COPY packages/ packages/
+COPY apps/ apps/
 
-RUN bun install --frozen-lockfile
+# --ignore-scripts skips native postinstall (tree-sitter needs python+g++);
+# the judge-server runtime path doesn't touch any package whose install
+# script is required, so skipping is safe and keeps the image slim.
+RUN bun install --frozen-lockfile --ignore-scripts
 
-# Copy sources (workspace deps + judge-server itself)
-COPY packages/judge-server packages/judge-server
-COPY packages/eval packages/eval
-COPY packages/llm-provider packages/llm-provider
-COPY packages/memory packages/memory
-COPY packages/core packages/core
+# Sources are already copied above (one-shot to satisfy workspace resolver).
+# Judge-server entrypoint reads from packages/judge-server/src/index.ts.
 
 EXPOSE 8910
 

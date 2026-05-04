@@ -12,9 +12,9 @@ import { ReactiveAgents } from 'reactive-agents'
 //   - 09:30 on Monday: Weekly Metrics (cumulative progress)
 //
 // Environment Requirements:
-//   - SIGNAL_PHONE_NUMBER: Your Signal phone number (e.g., +1234567890)
-//   - GITHUB_PERSONAL_ACCESS_TOKEN: GitHub PAT with repo read access
-//   - RECIPIENT_PHONE: Target recipient for Signal messages (e.g., +1234567890)
+//   - SIGNAL_PHONE_NUMBER: Allowlist / Signal recipient (e.g., +1234567890)
+//   - TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_SESSION_STRING: for uvx Telegram MCP (chigwell)
+//   - GITHUB_PERSONAL_ACCESS_TOKEN: GitHub PAT with repo read access (if GitHub MCP enabled)
 // ─────────────────────────────────────────────────────────────────────────
 
 const RECIPIENT = process.env.SIGNAL_PHONE_NUMBER
@@ -23,30 +23,46 @@ const agent = await ReactiveAgents.create()
     .withName('production-gateway-agent')
     // Pin SQLite/memory namespace across process restarts (withName alone uses name+timestamp).
     .withAgentId('production-gateway-agent')
-    .withProvider('gemini')
-    // .withModel({ model: 'cogito:14b', temperature: 0.1 })
+    .withProvider('ollama')
+    .withModel({ model: 'cogito:14b', temperature: 0.1 })
     .withMCP([
         {
-            name: 'signal',
+            name: 'telegram',
             transport: 'stdio',
-            command: 'docker',
+            command: 'uvx',
             args: [
-                'run',
-                '-i',
-                '--rm',
-                '--cap-drop',
-                'ALL',
-                '--security-opt',
-                'no-new-privileges',
-                '--memory',
-                '512m',
-                '-v',
-                './signal-data:/data:rw',
-                '-e',
-                `SIGNAL_USER_ID=${process.env.SIGNAL_PHONE_NUMBER}`,
-                'signal-mcp:local',
+                '--from',
+                'git+https://github.com/chigwell/telegram-mcp.git@v3.0.4',
+                'telegram-mcp',
             ],
+            env: {
+                TELEGRAM_API_ID: process.env.TELEGRAM_API_ID ?? '',
+                TELEGRAM_API_HASH: process.env.TELEGRAM_API_HASH ?? '',
+                TELEGRAM_SESSION_STRING:
+                    process.env.TELEGRAM_SESSION_STRING ?? '',
+            },
         },
+        // {
+        //     name: 'signal',
+        //     transport: 'stdio',
+        //     command: 'docker',
+        //     args: [
+        //         'run',
+        //         '-i',
+        //         '--rm',
+        //         '--cap-drop',
+        //         'ALL',
+        //         '--security-opt',
+        //         'no-new-privileges',
+        //         '--memory',
+        //         '512m',
+        //         '-v',
+        //         './signal-data:/data:rw',
+        //         '-e',
+        //         `SIGNAL_USER_ID=${process.env.SIGNAL_PHONE_NUMBER}`,
+        //         'signal-mcp:local',
+        //     ],
+        // },
         // {
         //     name: 'github',
         //     transport: 'stdio',
@@ -84,14 +100,14 @@ const agent = await ReactiveAgents.create()
         //     policy: 'adaptive',
         //     instruction: `Send a last 10 commit summary to ${RECIPIENT}, for tylerjrbuell/reactive-agents-ts`,
         // },
-        // crons: [
-        //     // ─── TEST CRON: Fires every minute for verification ───
-        //     {
-        //         schedule: '* * * * *', // Every minute
-        //         instruction: `Test cron verification. Send a test message every minute to ${RECIPIENT} saying: "✅ Test cron fired at [current time]". Use signal/send_message_to_user with recipient '${RECIPIENT}'.`,
-        //         enabled: false, // Set to true to enable testing
-        //     },
-        // ],
+        crons: [
+            // ─── TEST CRON: Fires every minute for verification ───
+            {
+                schedule: '* * * * *', // Every minute
+                instruction: `Check for new messages in the Telegram`,
+                enabled: true, // Set to true to enable testing
+            },
+        ],
 
         policies: {
             // dailyTokenBudget: 100_000,

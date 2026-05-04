@@ -4,6 +4,7 @@ import {
   formatHistoryBlock,
   formatEpisodicContext,
   buildEnrichedInstruction,
+  channelOutboundToolGuidance,
 } from "../src/gateway-chat.js";
 import type { ChatMessage } from "../src/chat.js";
 
@@ -81,6 +82,22 @@ describe("formatEpisodicContext", () => {
   });
 });
 
+describe("channelOutboundToolGuidance", () => {
+  test("uses MCP prefix and sender without naming a vendor tool", () => {
+    const g = channelOutboundToolGuidance({ mcpServer: "acme-chat", sender: "user-42" });
+    expect(g).toContain("acme-chat/");
+    expect(g).toContain("user-42");
+    expect(g).toContain("outbound message");
+    expect(g).not.toContain("send_message_to_user");
+    expect(g).not.toContain("telegram");
+  });
+
+  test("falls back when mcpServer is blank", () => {
+    const g = channelOutboundToolGuidance({ mcpServer: "  ", sender: "x" });
+    expect(g).toContain("messaging/");
+  });
+});
+
 describe("buildEnrichedInstruction", () => {
   test("includes all blocks when all are provided", () => {
     const instruction = buildEnrichedInstruction({
@@ -93,7 +110,8 @@ describe("buildEnrichedInstruction", () => {
     });
     expect(instruction).toContain("--- Recent gateway activity ---");
     expect(instruction).toContain("--- Conversation history ---");
-    expect(instruction).toContain("send_message_to_user");
+    expect(instruction).toContain("signal/");
+    expect(instruction).toContain("outbound message");
     expect(instruction).toContain("User: what did you find?");
     expect(instruction).toContain("+15551234567");
   });
@@ -122,7 +140,7 @@ describe("buildEnrichedInstruction", () => {
       episodicBlock: "",
     });
     expect(instruction).toContain("multiple steps");
-    expect(instruction).toContain("send_message_to_user");
+    expect(instruction).toContain("signal/");
   });
 });
 

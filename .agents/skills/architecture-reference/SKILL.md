@@ -39,6 +39,10 @@ user-invocable: false
 - `@reactive-agents/gateway` → `core`, `llm-provider`, `tools`
 - `@reactive-agents/reactive-intelligence` → `core`, `llm-provider`
 
+**Planned (branch `feat/channels-package`, not merged to `main`):**
+
+- `@reactive-agents/channels` → `core`, `gateway` (external triggers, session bridge, webhook adapter); consumed by `@reactive-agents/runtime` via **`.withChannels()`** and optional dynamic import at `start()`. Gateway **`channels` → `accessControl`** rename separates sender policy from chat/task mode. See `docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md`.
+
 **Facade (depends on ALL):**
 
 - `@reactive-agents/runtime` → all packages (composes layers via `createRuntime()`)

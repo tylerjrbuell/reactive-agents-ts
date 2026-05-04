@@ -14,7 +14,22 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ---
 
-## Current state (May 1, 2026)
+## Current state (May 4, 2026)
+
+- **Spike M10: Memory System Validation (FM-F2) — COMPLETE:**
+  - FM-F2 ("memory pollution across runs") is **mitigated** (not a practical risk) — task-scoped queries prevent false memory injection.
+  - Recall accuracy: **66.7%** on verbose natural language, **100%** on key-term queries.
+  - Accuracy lift: **+66.7pp** vs baseline (no memory context).
+  - Memory overhead: **negligible** (0.05ms per entry, 4KB/100 entries).
+  - **Key finding:** FTS5 keyword search requires query decomposition; verbose natural language queries fail (0% match) but focused key-term queries succeed (100% match). Recommendation: ship with key-term extraction preprocessing or Tier 2 semantic embeddings for robust multi-turn learning.
+  - Evidence: `packages/memory/tests/m10-memory-system.test.ts` (7 passing tests, 16 assertions).
+  - Debrief: `docs/superpowers/debriefs/M10-memory-system-validation.md`.
+  - Audit update: Mark FM-F2 as **validated → mitigated** in `AUDIT-overhaul-2026.md §10` (was "unvalidated theoretical").
+
+- **External channels phase 1 (branch `feat/channels-package`, merge pending):** package `@reactive-agents/channels`, runtime `.withChannels()`, gateway config rename `channels` → `accessControl`, webhook adapter + tests. Debrief: `docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md`. **Mainline docs** (`apps/docs`, Starlight gateway pages) still describe `GatewayConfig.channels` until the branch merges.
+- **Test runner snapshot (main workspace):** `bun test` → 4,701+ pass (verify after M10 commit); 23 skip across **536** files / **4,731+** tests (May 4); resolve failures before treating green as release truth.
+
+### Earlier context (May 1, 2026)
 
 - **v0.10.0 release-ready** — `refactor/overhaul` branch fully prepared; changeset + CHANGELOG + release doc written; 4,672 pass / 23 skip / 4 fail across 527 files (4 pre-existing failures in untracked `packages/benchmarks/parseDate.test.ts` — not regressions).
 - **Branch:** `refactor/overhaul`. All prior `feat/*` branches archived as `archive/*` tags.

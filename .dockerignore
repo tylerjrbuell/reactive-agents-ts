@@ -16,3 +16,8 @@ assets
 apps/cli
 apps/docs
 apps/examples
+# Re-allow package.json from excluded apps so bun --frozen-lockfile can
+# satisfy the root workspaces array.
+!apps/cli/package.json
+!apps/docs/package.json
+!apps/examples/package.json

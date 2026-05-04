@@ -1,9 +1,9 @@
 ---
 title: Messaging Channels
-description: Connect agents to Signal and Telegram using MCP servers in Docker containers.
+description: Connect agents to Signal (Docker MCP in this repo) and Telegram (upstream MCP via uv or your own runner).
 ---
 
-Reactive Agents can send and receive messages on **Signal** and **Telegram** using MCP servers. No custom adapter code needed — the framework's built-in `.withMCP()` and `.withGateway()` capabilities handle everything.
+Reactive Agents can send and receive messages on **Signal** and **Telegram** using MCP servers wired through `.withMCP()` and `.withGateway()`. **Signal** ships as a hardened **Docker image** in this repo because there is no maintained third-party MCP with the same behavior. **Telegram** uses the community **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** project — run it with **`uvx`**, a local clone, or your own container; we do **not** publish a Telegram image from this monorepo.
 
 ## How It Works
 
@@ -14,7 +14,11 @@ Gateway heartbeat fires every N seconds
   → Responds via send_message MCP tool
 ```
 
-The Signal MCP server is a custom TypeScript implementation (`docker/signal-mcp/server/`) that spawns signal-cli in persistent `jsonRpc` mode — a single JVM boot with instant command execution (no cold starts per message). The Telegram MCP server uses [chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp). Both run in **hardened Docker containers**. The gateway heartbeat polls for messages; the agent uses MCP tools to read and respond.
+The **Signal** MCP server is a custom TypeScript implementation (`docker/signal-mcp/server/`) that spawns signal-cli in persistent `jsonRpc` mode — a single JVM boot with instant command execution (no cold starts per message). It is the supported way to attach Signal to the gateway.
+
+**Telegram:** use **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** directly. Plain `pip install telegram-mcp` / `uvx telegram-mcp` **without** `--from` pointing at chigwell’s sources often resolves to a **different** PyPI project (hosted relay) that expects `TELEGRAM_CHAT_ID` — not the Telethon user MCP described here.
+
+The gateway heartbeat (or webhooks) drives when the agent runs; the agent uses MCP tools to read and respond. Signal can also push `notifications/message` for faster inbound handling; Telegram typically relies on polling tools unless you add a separate relay.
 
 ## Signal Setup
 
@@ -85,7 +89,9 @@ const agent = await ReactiveAgents.create()
 
 ## Telegram Setup
 
-### 1. Generate a Session String
+There is **no** `docker/telegram-mcp/` image in this repository. Install **[uv](https://docs.astral.sh/uv/)** (or follow upstream’s clone + `uv sync` workflow), then point `.withMCP()` at the `telegram-mcp` console entrypoint from **chigwell’s** sources.
+
+### 1. Generate a session string
 
 Get API credentials from [my.telegram.org/apps](https://my.telegram.org/apps), then run:
 
@@ -93,15 +99,17 @@ Get API credentials from [my.telegram.org/apps](https://my.telegram.org/apps), t
 ./scripts/telegram-session.sh
 ```
 
-Save the output to `.env.telegram`:
+Export the values in your shell (or use a secrets manager). Example:
 
 ```bash
-TELEGRAM_API_ID=12345678
-TELEGRAM_API_HASH=abc123...
-TELEGRAM_SESSION_STRING=1BVtsO...
+export TELEGRAM_API_ID=12345678
+export TELEGRAM_API_HASH=abc123...
+export TELEGRAM_SESSION_STRING=1BVtsO...
 ```
 
-### 2. Configure the Agent
+### 2. Configure the agent (`uvx`)
+
+Pin a **tag or revision** you trust (`v3.0.4` is an example):
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -114,16 +122,17 @@ const agent = await ReactiveAgents.create()
   .withMCP([{
     name: "telegram",
     transport: "stdio",
-    command: "docker",
+    command: "uvx",
     args: [
-      "run", "-i", "--rm",
-      "--cap-drop", "ALL",
-      "--no-new-privileges",
-      "--memory", "128m",
-      "--user", "1000:1000",
-      "--env-file", ".env.telegram",
-      "ghcr.io/reactive-agents/telegram-mcp",
+      "--from",
+      "git+https://github.com/chigwell/telegram-mcp.git@v3.0.4",
+      "telegram-mcp",
     ],
+    env: {
+      TELEGRAM_API_ID: process.env.TELEGRAM_API_ID ?? "",
+      TELEGRAM_API_HASH: process.env.TELEGRAM_API_HASH ?? "",
+      TELEGRAM_SESSION_STRING: process.env.TELEGRAM_SESSION_STRING ?? "",
+    },
   }])
   .withGateway({
     heartbeat: {
@@ -135,6 +144,8 @@ const agent = await ReactiveAgents.create()
   })
   .build();
 ```
+
+Alternatives: run `uv run main.py` from a checkout of chigwell/telegram-mcp, or wrap upstream in **your own** Docker image — keep that outside this monorepo unless you want to contribute it as a separate published image.
 
 ### Available Telegram Tools
 
@@ -150,9 +161,9 @@ The Telegram MCP server exposes 70+ tools. Key ones for messaging:
 
 ## Security Best Practices
 
-### Container Hardening
+### Container Hardening (Signal)
 
-All Docker flags in the examples enforce strict isolation:
+The Signal Docker example uses strict isolation:
 
 | Flag | Purpose |
 |------|---------|
@@ -163,10 +174,12 @@ All Docker flags in the examples enforce strict isolation:
 | `--user 1000:1000` | Run as non-root |
 | `--read-only` | Immutable root filesystem |
 
+Telegram via `uvx` runs as your host user; apply process isolation separately if you need a sandbox.
+
 ### Secret Management
 
 - **Never pass secrets as MCP tool arguments** — they'd appear in agent context
-- **Use `--env-file`** for Telegram credentials
+- **For Telegram with `uvx`:** pass credentials via `.withMCP({ env: { ... } })` or your process manager — avoid putting secrets in MCP `args`
 - **Use Docker volumes** for Signal auth keys (`./signal-data/`)
 - **Add `.env.telegram` and `signal-data/` to `.gitignore`**
 
@@ -191,8 +204,17 @@ Always enable `.withKillSwitch()` for autonomous messaging agents. This provides
 - Re-run `./scripts/telegram-session.sh`
 - Update `.env.telegram` with new session string
 
+### `TELEGRAM_CHAT_ID environment variable required`
+- You are running the **wrong** PyPI `telegram-mcp` (hosted relay), not chigwell’s Telethon server.
+- Use `uvx --from git+https://github.com/chigwell/telegram-mcp.git@<tag> telegram-mcp` (or upstream’s documented install), not bare `uvx telegram-mcp` from PyPI.
+
+### `BotMethodInvalidError` / `GetDialogsRequest` / “cannot be executed as a bot”
+- chigwell/telegram-mcp is a **user-account** Telethon client (full dialogs, send as you). It does **not** work with a **@BotFather bot** session string.
+- Regenerate `TELEGRAM_SESSION_STRING` using `./scripts/telegram-session.sh` and sign in with your **personal Telegram account** (SMS / Telegram OTP), not a bot token.
+
 ### Agent not responding to messages
 - Check heartbeat interval (default: 15s)
 - Verify daily token budget isn't exhausted
 - Check `ProactiveActionSuppressed` events for policy blocks
-- Ensure MCP containers are running: `docker ps`
+- Ensure the Signal container (if used) is running: `docker ps`
+- For Telegram, confirm `uvx` resolves chigwell’s package and that `TELEGRAM_*` env vars are set for the MCP subprocess

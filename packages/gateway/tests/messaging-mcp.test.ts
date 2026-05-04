@@ -33,23 +33,21 @@ const buildSignalMCPConfig = (phoneEnvVar: string): MCPServerConfig => ({
 });
 
 /**
- * Build a Telegram MCP Docker config.
- * Security: uses --env-file, no inline secrets in args.
+ * Build a Telegram MCP config (upstream chigwell/telegram-mcp via uvx).
+ * Secrets belong in `env`, not in argv.
  */
-const buildTelegramMCPConfig = (envFilePath: string): MCPServerConfig => ({
-  command: "docker",
+const buildTelegramMCPConfig = (): MCPServerConfig => ({
+  command: "uvx",
   args: [
-    "run",
-    "--rm",
-    "-i",
-    "--security-opt=no-new-privileges",
-    "--cap-drop=ALL",
-    "--memory=128m",
-    "--user=1000:1000",
-    "--env-file",
-    envFilePath,
-    "reactive-agents/telegram-mcp:latest",
+    "--from",
+    "git+https://github.com/chigwell/telegram-mcp.git@v3.0.4",
+    "telegram-mcp",
   ],
+  env: {
+    TELEGRAM_API_ID: "12345",
+    TELEGRAM_API_HASH: "hash",
+    TELEGRAM_SESSION_STRING: "session",
+  },
 });
 
 /**
@@ -91,23 +89,18 @@ describe("Messaging MCP Integration", () => {
     expect(argsStr).not.toContain("session_string");
   });
 
-  test("MCP config for Telegram uses --env-file for secrets", () => {
-    const config = buildTelegramMCPConfig("/run/secrets/telegram.env");
-    expect(config.command).toBe("docker");
-    // Uses --env-file, not inline -e secrets
-    expect(config.args).toContain("--env-file");
-    expect(config.args).toContain("/run/secrets/telegram.env");
-    // No inline secrets — TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_SESSION_STRING must never appear
+  test("MCP config for Telegram uses uvx from chigwell git and env for secrets", () => {
+    const config = buildTelegramMCPConfig();
+    expect(config.command).toBe("uvx");
+    expect(config.args).toContain("--from");
+    expect(config.args.join(" ")).toContain("chigwell/telegram-mcp.git");
+    expect(config.args).toContain("telegram-mcp");
+    expect(config.env?.TELEGRAM_API_ID).toBe("12345");
+    expect(config.env?.TELEGRAM_SESSION_STRING).toBe("session");
     const argsStr = config.args.join(" ");
     expect(argsStr).not.toContain("TELEGRAM_API_ID=");
-    expect(argsStr).not.toContain("TELEGRAM_API_HASH=");
     expect(argsStr).not.toContain("TELEGRAM_SESSION_STRING=");
     expect(argsStr).not.toContain("BOT_TOKEN=");
-    // Security flags still present
-    expect(config.args).toContain("--security-opt=no-new-privileges");
-    expect(config.args).toContain("--cap-drop=ALL");
-    expect(config.args).toContain("--memory=128m");
-    expect(config.args).toContain("--user=1000:1000");
   });
 
   test("channel events route through gateway policy engine", async () => {

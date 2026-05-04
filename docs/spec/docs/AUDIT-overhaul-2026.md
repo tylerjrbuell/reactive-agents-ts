@@ -790,6 +790,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 42 | **react/svelte/vue zero in-repo consumers** — Cortex UI uses its own framework, not the published packages | Low (DX gap) | dogfooding gap; mark `_unstable_*` |
 | 43 | **svelte unused `derived` imports** (lint flag) and **peerDep `>=4.0.0` vs devDep `^5.0.0`** version mismatch | Low | `svelte/src/agent.ts`, `agent-stream.ts` |
 | 44 | ~~**diagnose `__tests__/` directory exists empty**~~ | ✅ **resolved W6.6** | New `packages/diagnose/tests/diagnose.test.ts` lands T11: 12 smoke tests covering `resolveTracePath` (absolute/missing/bare-id/did-you-mean), `listTraces` (mtime-desc sort), `replayCommand --json` (JSONL round-trip + default timeline header), `grepCommand` (predicate match, empty-expr reject, invalid-expr reject, silent skip on field errors), `diffCommand` (stat block emit). 12/12 pass. The empty `__tests__/` directory referenced by the original finding never existed in src; tests now live under `tests/` matching the rest of the workspace convention. |
+| 45 | ~~Verifier-retry path bypasses reasoning kernel~~ | ✅ **resolved v0.10.0 (S3)** | `execution-engine.ts:3195-3300` retry now routes through `ReasoningService.execute()` when wired (production happy path); inline `LLMService.complete()` retained as fallback for no-reasoning deployments + test mode. New test `verification-retry-routes-through-kernel.test.ts` pins the kernel-routing contract. Closes the divergence flagged in §16.4. |
 
 ### 11.3 Backlog priority for Stage 5
 
@@ -955,4 +956,247 @@ Estimated: 50–75 commits across 6–10 sessions for Stages 4–6. P0 items (#1
 
 ---
 
-*Last updated: 2026-04-30 (Stage 6 W20 — test contract migration committed; workspace fully green).*
+## 16. Strategic findings — senior-architect pass (2026-05-03)
+
+> **Frame.** Stage 5 (W1–W22) closed the largest mechanism-level defects. The framework now ships with a single-owner termination invariant, a wired RI dispatcher with live budget threading, a coordinated three-stage compression pipeline, a properly abstracted `AgentMemory` port, all 7 provider-adapter hooks, and a 4×100% frontier bench. **What remains is structural: the orchestration layer was *reorganized* (capabilities-grouped kernel, single-owner termination) but not *redesigned*.** NS v3.0's "thin orchestrator" + "single-owner everything" disciplines are unmet at the runtime/builder boundary. This pass adds five strategic gaps that the original §10/§11 didn't isolate. **Verdicts here do not block v0.10.0** — they define the post-release "Decomposition Wave" (Stage 7, W23–W28).
+>
+> **Evidence dates:** all file:line citations verified against `refactor/overhaul` tip on 2026-05-03. Six §10 verdicts changed since the original Stage 3 pass — see §16.7.
+>
+> **Methodology note:** five general-purpose subagents were dispatched in parallel (kernel, runtime, RI, ports, types); all claims here cross-validated by direct grep + Read of the cited spans before writing.
+
+### 16.1 What's strong (don't touch in Stage 7)
+
+One-line confirmations of architectural wins that should be held stable. These are not findings — they are anchors.
+
+| Anchor | Evidence | Why it's strong |
+|---|---|---|
+| Single-owner termination | `kernel/loop/terminate.ts:51-60`; 8 sites in `runner.ts` route through it; `scripts/check-termination-paths.sh` CI lint | One door, one verdict path; easy to add new exit reasons |
+| AgentMemory port | `core/src/services/agent-memory.ts:60-73` (port) + `memory/src/services/agent-memory-adapter.ts:33-60` (adapter) + `memory/src/runtime.ts:86-88` (composition) | Narrow surface (just `storeSemantic`); kernel doesn't depend on memory pkg |
+| Capability-grouped kernel | `reasoning/src/kernel/capabilities/{act,attend,comprehend,decide,reason,reflect,sense,verify}/` | Co-located concerns; enables future per-capability swaps without touching loop |
+| Strategy ↔ kernel decoupling | All 6 strategies depend only on `runKernel` / `reactKernel` / `executeReActKernel` (public APIs); no reverse imports | Adding a 7th strategy doesn't touch the loop |
+| Schema-first types | Effect Schema + derived `Schema.Schema.Type<>` aliases throughout `llm-provider/types.ts`, `tools/types.ts`, etc. | Validation and types are guaranteed in sync |
+| Three-stage compression coordination | `tool-execution.ts:574` (stash) → `context-curator.ts:206-223` (render) → `patch-applier.ts:52-59` (trim) — verified W6 | Sequenced pipeline, not redundant systems |
+| RI budget threading | `reactive-observer.ts:286-329` accumulates into `KernelState.meta.riBudget` | Suppression gates now reachable; W3 fix holds |
+
+**Restating these is not a finding.** They are the foundation Stage 7 builds on.
+
+### 16.2 S1 — Decompose the orchestration trio (REFRAMES FIX-19 + FIX-24)
+
+**The audit prescribes SHRINK; the actual debt is decomposition.** Reducing `builder.ts` from 6,082 → 2,500 LOC by inlining helpers does not solve the architectural problem. The problem is that **three files own ~12,300 LOC of orchestration** with overlapping concerns, no formal phase abstraction, and a god-class DX surface.
+
+**Evidence (verified 2026-05-03):**
+
+| File | LOC | Role | Smell |
+|---|---|---|---|
+| `runtime/src/builder.ts` | **6,082** | DX builder — 70+ private fields, 70+ `withX()` setters, builds `ReactiveAgent` AND `GatewayAgent` AND `start()` lifecycle | God class — 21 distinct concern-groups in one class (memory: 7 fields; tools: 6; observability: 6; RI: 6; …) |
+| `runtime/src/execution-engine.ts` | **4,499** | Single `Effect.gen` block running 10+ phases (bootstrap → guardrail → cost-route → strategy-select → think → act → observe → verify) | Phase-as-prose: phases are sequential code in a 4K-LOC generator, not data — adding a phase requires editing the middle of the closure |
+| `reasoning/src/kernel/loop/runner.ts` | **1,706** | Universal kernel loop driver — 30 imports across capability modules; loop-detection + harness-deliverable + strategy-switch + required-tool-nudge + token-delta-guard all in-line | Too many policies tangled in the loop body |
+
+**Why the Stage 5 prescription is incomplete:** even if you mechanically split `builder.ts` into per-feature `withX()` modules, the resulting builder still constructs an opaque `Layer.mergeAll(…)` of ~13 service layers and hands it to the engine. The DX surface and the wiring layer remain the same monolithic class.
+
+**Concrete decomposition proposal (Stage 7):**
+
+```
+builder.ts (6,082)
+  ├─ AgentDefinitionBuilder    ~400 LOC  — identity, persona, model, prompts
+  ├─ ReasoningBuilder          ~300 LOC  — strategy, calibration, contextProfile
+  ├─ ToolsBuilder              ~400 LOC  — tools, MCP, terminal, sub-agents
+  ├─ MemoryBuilder             ~250 LOC  — tier, consolidation, sessions
+  ├─ SafetyBuilder             ~300 LOC  — guardrails, verification, kill switch
+  ├─ ObservabilityBuilder      ~300 LOC  — tracing, telemetry, audit
+  ├─ ExecutionPolicyBuilder    ~200 LOC  — timeout, retry, error handler
+  └─ ReactiveAgentBuilder      ~400 LOC  — composes the above; produces AgentConfig only
+
+execution-engine.ts (4,499)
+  ├─ Phase pipeline as data    ~150 LOC  — Phase[] array, sequential runner
+  ├─ phases/bootstrap.ts       ~300 LOC
+  ├─ phases/guardrail.ts       ~200 LOC
+  ├─ phases/cost-route.ts      ~250 LOC
+  ├─ phases/strategy-select.ts ~400 LOC
+  ├─ phases/reason.ts          ~600 LOC  — wraps reasoning kernel
+  ├─ phases/observe.ts         ~250 LOC
+  ├─ phases/verify.ts          ~300 LOC
+  ├─ phases/finalize.ts        ~200 LOC
+  └─ ExecutionEngine           ~500 LOC  — phase orchestrator, hook registry, cancel
+
+runner.ts (1,706)
+  ├─ kernel loop driver        ~500 LOC  — main while, terminate, transitions
+  ├─ policies/loop-detection.ts        ~250 LOC
+  ├─ policies/harness-deliverable.ts   ~250 LOC
+  ├─ policies/required-tool-nudge.ts   ~250 LOC
+  ├─ policies/token-delta-guard.ts     ~150 LOC
+  └─ policies/strategy-switch.ts       ~300 LOC
+```
+
+**Net deletion:** ~0 LOC (this is rearrangement, not deletion). **Net leverage:** every phase becomes independently testable with a 1-service Layer; every builder becomes independently composable; every loop policy becomes a unit-testable function instead of a 100-LOC inline branch in `runner.ts`.
+
+**Anti-pattern guards:**
+- Don't add a `PhaseRegistry` interface "for flexibility" — `const phases: Phase[] = [bootstrap, guardrail, …]` is sufficient. A registry is only justified if external packages register phases.
+- Don't keep both old and new builder paths behind a flag — atomic cutover with codemod for the 11 known consumer sites (every `apps/examples/**`, CLI generators, meta-agent).
+- Don't introduce a `BuilderBase` superclass — composition (each sub-builder takes the partial config) beats inheritance here.
+
+**Verdict:** **REDESIGN (Stage 7, W23 + W26)**. Resolves the structural cause behind FIX-19 and FIX-24.
+
+### 16.3 S2 — Collapse strategy RI-scaffolding duplication (NEW)
+
+**Verified 2026-05-03 by grep across all five strategy files:**
+
+| Strategy | RI scaffolding (perStrategyRiBudget + dispatcher + early-stop)? | Lines |
+|---|---|---|
+| `plan-execute.ts` | ✅ full | 132–134, 618–762 (~75 LOC pattern) |
+| `tree-of-thought.ts` | ✅ full | 153–428 (~75 LOC pattern, comment at line 153 explicitly says "mirrors plan-execute's perStrategyRiBudget") |
+| `reflexion.ts` | ❌ none | 0 matches |
+| `adaptive.ts` | ❌ none | 0 matches |
+| `reactive.ts` | ❌ none (uses runner-level RI via `runReactiveObserver`) | 0 matches |
+
+**Two strategies (plan-execute + tree-of-thought) have explicitly mirrored ~75 LOC of RI integration:** entropy scoring, reactive controller decision, dispatcher dispatch, budget accumulation across iterations, early-stop break. The `tree-of-thought.ts:153` comment ("mirrors plan-execute's perStrategyRiBudget so cross-depth budget is honored") *acknowledges the duplication in source*.
+
+**Two other strategies (reflexion, adaptive) have no RI scaffolding at all** — already flagged in §10.2 M2 ("Reflexion/Adaptive don't currently have nested budget threading").
+
+**These are the same problem.** A shared helper would (a) deduplicate plan-execute + tree-of-thought, and (b) close the reflexion/adaptive gap by making RI integration a one-line call.
+
+**Proposal (Stage 7, W24):**
+
+```ts
+// kernel/utils/strategy-ri-scan.ts
+export const runStrategyRiScan = (
+  state: KernelState,
+  services: StrategyServices,
+  budget: { interventionsFiredThisRun: number; tokensSpentOnInterventions: number },
+  opts: { entropyHistory: number[]; iteration: number }
+): Effect.Effect<{ patches: Patch[]; budget: typeof budget; earlyStop: boolean }, never> =>
+  Effect.gen(function* () {
+    if (
+      services.entropySensor._tag !== "Some" ||
+      services.reactiveController._tag !== "Some" ||
+      services.dispatcher._tag !== "Some"
+    ) return { patches: [], budget, earlyStop: false };
+    // … the ~75 LOC pattern, once.
+  });
+```
+
+Each strategy collapses from ~75 LOC of integration → 3 LOC call. Reflexion + adaptive get RI integration for free.
+
+**Net deletion:** ~150 LOC (mirrored block × 2, minus the helper).
+**Capability gain:** RI dispatcher fires across all 5 strategies, not 2.
+
+**Verdict:** **FIX (Stage 7, W24)**. Subsumes the deferred half of FIX-5 (cross-strategy parent-budget audit).
+
+### 16.4 S3 — Eliminate dual execution paths in execution-engine (NEW)
+
+**Verified 2026-05-03 by reading `execution-engine.ts:1552-2156` and `:3195-3267`:**
+
+`ExecutionEngine.execute()` contains two parallel execution paths:
+
+1. **Reasoning-kernel path** (lines 1552–2156): goes through `ReasoningService.execute()` → `runKernel` → think/act/observe capabilities.
+2. **Verifier-retry path** (lines 3195–3267): when verification fails and retry is enabled, `execute()` constructs an LLM call **inline** — builds messages (3211–3214), pulls `LLMService` via local `Context.GenericTag` (3197–3207), calls `llm.complete()` (3222), parses response (3243–3245), appends to context (3247–3262). **Bypasses the kernel entirely.**
+
+The retry path duplicates: message-building, response handling, token tracking, fallback-transition publishing, end-turn detection, context update. None of it goes through `act.ts` / `think.ts` / kernel state — it operates on the `ExecutionContext` directly.
+
+**Why this is bad:** any improvement to think.ts (streaming behavior, FC parsing, calibration awareness, healing pipeline integration) silently misses the retry path. The retry path can produce a "successful" response that the kernel never saw, with no `state.steps[]` entry, no entropy scoring, no RI dispatcher reach.
+
+**Proposal (landing in v0.10.0):** route the verifier retry through `ReasoningService.execute()` — the public reasoning entry point — when the service is wired. Configure it with `initialMessages: ctx.messages` (verifier feedback already prepended), `contextProfile: { ..., maxIterations: 1 }`, and `availableTools: []` so the retry is a single-iteration think with no tool use. The retry then inherits the same `state.steps[]` accumulation, entropy scoring, RI dispatcher reach, healing pipeline, and telemetry as a normal reasoning step. When `ReasoningService` is **not** wired (test mode + minimal-layer deployments), keep the existing inline `LLMService.complete()` call. The branch is selected by `Option.match` on the resolved reasoning service.
+
+**Net change:** ~30 LOC added (conditional branch); inline LLM retained as fallback. Eliminates the divergence-risk for production deployments that wire reasoning (the common case); fallback preserves test contract + minimal-layer deployments.
+
+**Why not full elimination:** `runKernel` / `reactKernel` are internal to `@reactive-agents/reasoning` — only `ReasoningService.execute()` is exported. Fully removing the inline path would either require exporting kernel internals (which breaks the §16.1 strategy↔kernel decoupling anchor) or removing the no-reasoning execution mode (which breaks `verification-quality-gate.test.ts` — it wires only `LLMService` + `VerificationService` — and any minimal-layer deployment that does the same). Conditional routing captures the divergence win for the production happy path without forcing either of those breaks.
+
+**Verdict:** **FIX (landing in v0.10.0, S3)**.
+
+### 16.5 S4 — Builder layering violation: extract a thin DX surface (NEW)
+
+**`builder.ts` imports concrete service implementations from 13 packages** (verified by `grep "^import" packages/runtime/src/builder.ts | head`):
+
+```ts
+import { shellExecuteTool, shellExecuteHandler } from '@reactive-agents/tools'      // line 59
+import { KillSwitchService } from '@reactive-agents/guardrails'                      // line 70
+import { Health, makeHealthService } from '@reactive-agents/health'                  // line 89-90
+import { Redactor, TelemetryConfig } from '@reactive-agents/observability'           // line 71
+// + 9 more concrete imports across reasoning, prompts, memory, core, etc.
+```
+
+**Why this is a violation:** the builder's job is to produce `AgentConfig` — a description of an agent. Service construction is the runtime/engine's job. Today the builder reaches into 13 implementation packages, instantiates services (`makeHealthService()` at line ~5800, etc.), wires `Layer.mergeAll(…)` of ~13 layers, and hands the assembled service graph to `ExecutionEngine`. This is why `builder.ts` is 6,082 LOC: it's not just a config builder, it's the de-facto orchestrator-of-orchestrators.
+
+**Symptom:** any new package that ships a service requires editing `builder.ts`. Any service whose construction changes requires editing `builder.ts`. Adding a `withX()` setter is cheap; the cost is the corresponding wiring block at build time.
+
+**Proposal (Stage 7, W26 — sequenced after S1):**
+
+1. Builder produces only `AgentConfig` (a typed, serializable description). No `Layer` construction in `builder.ts`.
+2. `ExecutionEngine.fromConfig(cfg: AgentConfig): Effect.Effect<ExecutionEngine, ConfigError, BaseRuntime>` does the service wiring.
+3. `BaseRuntime` is a known set of common services (`LLMService`, `EventBus`, `ContextWindowManager`); package-specific layers are constructed *by the engine* from the config descriptors.
+
+**Effect:** `builder.ts` drops to ~400 LOC of pure config composition. All 13 cross-package construction imports move out. `ExecutionEngine.fromConfig` is testable with a mocked `BaseRuntime`. Examples and CLI generators that import only the builder no longer transitively pull in 13 packages at type-check time (build performance win).
+
+**Verdict:** **REDESIGN (Stage 7, W26)**.
+
+### 16.6 S5 — Extract `GatewayAgent` as a separate type (NEW; partially reframes FIX-24)
+
+**Verified 2026-05-03 (memory observation 3661):** `ReactiveAgent.start()` is **558 LOC** (`builder.ts:5500-6058`). It implements the long-running agent lifecycle: heartbeat scheduling, cron registration, channel message routing, episodic-memory bridge, chat-session manager, daily compaction housekeeping. Single-shot `agent.run(task)` callers never touch any of this.
+
+**Two distinct agent capabilities are co-located in one class:**
+- `ReactiveAgent` core: `run(task) → AgentResult`, `runEffect()`, `subscribe()`, `cancel()`, `pause()`, `resume()`.
+- `GatewayAgent` overlay: `start()`, `stop()`, scheduled lifecycle, channel ingress, daily compaction.
+
+The audit's M9 single-owner termination work demonstrates the value of this kind of separation; the builder didn't get the same treatment.
+
+**Proposal (Stage 7, W27):**
+
+```ts
+// Type-level branch in the builder
+type ReactiveAgentBuilder<HasGateway extends boolean = false> = …;
+
+builder.withGateway(opts) → ReactiveAgentBuilder<true>;
+
+// Build returns different concrete type
+build(): HasGateway extends true ? GatewayAgent : ReactiveAgent
+```
+
+`GatewayAgent extends ReactiveAgent` and adds `start()` / `stop()` / scheduling. `ReactiveAgent` loses the 558-LOC `start()` and all `if (gatewayOptions)` branches in the base class. Single-shot users get a smaller surface; gateway users get the same behavior with a clearer type contract.
+
+**Bonus:** fixes a real DX bug — today `agent.run(task)` on a gateway-mode agent throws or silently no-ops depending on which `if (gatewayOptions)` guard fires. With the type-level split, calling `run()` on a `GatewayAgent` is either rejected at compile time or is a documented operation.
+
+**Verdict:** **FIX (Stage 7, W27)**. Subsumes ~600 LOC of the FIX-24 SHRINK target.
+
+### 16.7 Verdict deltas since Stage 3
+
+Six entries in §10 require re-verdict based on Stage 5 work + this pass. **Update §10 inline; this section is a pointer.**
+
+| Item | Was | Now | Reason |
+|---|---|---|---|
+| §10.1 `runtime` (FIX-19, FIX-24) | FIX (SHRINK target) | **REDESIGN** (Stage 7 S1) | Decomposition needed, not just shrink |
+| §10.1 `reasoning` runner.ts | FIX (SHRINK > extract) | **REDESIGN** (Stage 7 S1) | Loop policies should be modules, not inline |
+| §10.2 M2 strategy switching | FIX (deferred cross-strategy) | **FIX** (Stage 7 S2 unblocks) | RI-scaffolding helper closes the gap |
+| §10.1 `core` ports | FIX (define AgentMemory + Verification) | **PARTIAL** — AgentMemory done (W11); Verification port still missing | `Verification` defined only as error type at `core/src/errors/task-subtypes.ts:14`; no service Tag |
+| §10.2 M9 termination oracle | FIX (W4 resolved) | **KEEP** + S1 cleanup | Confirmed clean; lint enforces; only structural follow-up is policy extraction |
+| §10.2 M5 compression | KEEP (resolved-by-discovery) | **KEEP** | Three-stage pipeline confirmed coordinated; no change |
+
+### 16.8 Stage 7 sequencing (post-v0.10.0)
+
+Post-release "Decomposition Wave." Each wave is independent of the others; can interleave with hotfix work.
+
+**W25 landed in v0.10.0** (S3 conditional routing); Stage 7 inherits a 5-wave scope (W23, W24, W26, W27, W28).
+
+| Wave | Focus | LOC delta target | Risk |
+|---|---|---|---|
+| **W23 — Phase-as-data redesign** | execution-engine.ts → Phase[] pipeline + per-phase modules | -3,000 from execution-engine, +3,000 across 9 phase files; ExecutionEngine ~500 LOC | Medium — touches every phase; CI must stay green at every commit |
+| **W24 — Strategy RI-scaffolding helper** | `runStrategyRiScan` helper; collapse plan-execute + tree-of-thought; activate reflexion + adaptive | -150 LOC net; +RI coverage on 2 strategies | Low — pure refactor of well-understood code |
+| **W26 — Sub-builders + thin DX surface** | Decompose `builder.ts` into 7 sub-builders + `ExecutionEngine.fromConfig()` | -5,000 LOC from builder; +2,500 across sub-builders + engine wiring | High — public API cutover; codemod required for examples + CLI generators; sequenced after W23 |
+| **W27 — `GatewayAgent` type extraction** | Type-level branch in builder; `start()` / `stop()` move to GatewayAgent | -600 LOC from ReactiveAgent | Medium — affects 2 example apps + meta-agent |
+| **W28 — Phase-typed builder validation (optional)** | TS return-type narrowing so dependency order (e.g., `withTools` requires `withReasoning`) is compile-enforced | +0 LOC; better DX | Low — purely additive type work |
+
+**Estimated:** 25–40 commits across 4–6 sessions. **No backwards-compat shims** — atomic cutovers per wave, codemod for downstream consumers. Stage 7 is the redesign Stage 5 deferred.
+
+### 16.9 What this section deliberately does NOT propose
+
+These are real but lower-leverage; intentionally excluded so Stage 7 stays focused.
+
+- **Splitting `llm-provider/types.ts` (1,063 LOC)** — semantically grouped, schema-first, no consumer pain. Cosmetic.
+- **`Effect.runSync` inside `db.transaction` at `memory/database.ts:337`** — already FIX-35, deferred to v0.11 with documented trigger conditions.
+- **`event-bus.ts` (1,252 LOC)** — large but cohesive single-responsibility; growth driven by 17 event types. Not god-class.
+- **Builder fluent-chain incremental validation (typed-state builder)** — listed as W28 optional. Real DX win but lower leverage than W23–W27.
+- **Adding a Verification service port in `core`** — single line in §16.7 verdict deltas; trivial to land alongside W26.
+
+---
+
+*Last updated: 2026-05-03 (§16 strategic-findings pass — adds Stage 7 Decomposition Wave roadmap; no v0.10.0 blockers introduced).*
+*Prior update: 2026-04-30 (Stage 6 W20 — test contract migration committed; workspace fully green).*

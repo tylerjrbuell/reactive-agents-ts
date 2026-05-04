@@ -166,6 +166,7 @@
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
+        "@reactive-agents/judge-server": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
         "@reactive-agents/reasoning": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
@@ -191,11 +192,11 @@
       "name": "@reactive-agents/core",
       "version": "0.9.0",
       "dependencies": {
+        "effect": "^3.10.0",
         "ulid": "^2.3.0",
       },
       "devDependencies": {
         "bun-types": "latest",
-        "effect": "^3.10.0",
         "typescript": "^5.7.0",
       },
       "peerDependencies": {
@@ -325,6 +326,19 @@
       },
       "peerDependencies": {
         "effect": "^3.10.0",
+      },
+    },
+    "packages/judge-server": {
+      "name": "@reactive-agents/judge-server",
+      "version": "0.10.0",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/eval": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "effect": "*",
+      },
+      "peerDependencies": {
+        "effect": "*",
       },
     },
     "packages/llm-provider": {
@@ -1412,6 +1426,8 @@
     "@reactive-agents/identity": ["@reactive-agents/identity@workspace:packages/identity"],
 
     "@reactive-agents/interaction": ["@reactive-agents/interaction@workspace:packages/interaction"],
+
+    "@reactive-agents/judge-server": ["@reactive-agents/judge-server@workspace:packages/judge-server"],
 
     "@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@workspace:packages/llm-provider"],
 

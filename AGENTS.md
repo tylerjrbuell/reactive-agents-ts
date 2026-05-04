@@ -421,6 +421,7 @@ All 22 publishable packages move together (fixed group) — bumping any one pack
 | **Cortex app**       | `apps/cortex/AGENTS.md` — Bun/Elysia desk server + SvelteKit UI (Stage/Run), WS ingest/live, SQLite; read before changing `apps/cortex/` |
 | Specs                | `spec/docs/`, `docs/superpowers/specs/`                                                                                                  |
 | Plans                | `docs/superpowers/plans/`                                                                                                                |
+| **Debriefs**         | `docs/superpowers/debriefs/` — post-feature engineering notes (e.g. channels phase 1)                                                                                    |
 | Skills               | `.claude/skills/`, `.agents/skills/`                                                                                                     |
 | Legacy compatibility | `CLAUDE.md` — compatibility pointer to `AGENTS.md` only                                                                                  |
 | Packages             | `packages/{core,llm-provider,memory,...}/`                                                                                               |
@@ -508,7 +509,7 @@ Canonical project skills live in `.agents/skills/`:
 ## Current Framework Snapshot (v0.10.0)
 
 -   Monorepo scale: **28 packages + 5 apps** (cli, cortex, docs, examples, meta-agent)
--   Verified quality: **4,708 tests across 528 test files** — run `bun test` for the authoritative count before release
+-   Verified quality: **4,731 tests across 536 test files** (last workspace run) — run `bun test` for the authoritative count before release
 -   Public facade: `reactive-agents` built on Effect-TS layered runtime
 -   Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **8 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint)
 
@@ -525,6 +526,10 @@ Canonical project skills live in `.agents/skills/`:
 9. **Calibration drift detection** — automatic entropy distribution analysis, drift event emission on significant model behavior changes
 10. **Adaptive Tool Calling System** — FC probe → `toolCallDialect` profile → `NativeFCDriver`/`TextParseDriver` routing; `HealingPipeline` (ToolNameHealer, ParamNameHealer, PathResolver, TypeCoercer); `ExperienceSummary` closes ExperienceStore dead loop; StallDetector + HarnessHarmDetector RI handlers; default driver inverted to NativeFCDriver for uncalibrated models
 11. **Gateway chat mode** — per-sender conversation history with SQLite session persistence, history windowing (40 turns / 8 k chars), episodic context injection, and daily compaction; enable with `channels.mode: 'chat'` (default). Two memory bug fixes also landed: `priorContext` now renders in the system prompt; episodic injection no longer gated behind `enableSelfImprovement`. New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added to `DailyLogEntry`. Key file: `packages/runtime/src/gateway-chat.ts`.
+
+### In flight (merge pending — not on `main` yet)
+
+Branch **`feat/channels-package`** (see worktree `.worktrees/channels` if used locally) implements **phase 1 external channels**: new package **`@reactive-agents/channels`** (trigger registry, FIFO session bridge, `ChannelService`, optional HMAC webhook adapter), runtime **`.withChannels()`**, and a **breaking rename** of gateway config **`channels` → `accessControl`** (chat/task mode stays nested under the new shape). Authoritative write-up: [`docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md`](docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md). Until merged, Starlight and builder examples on `main` still describe the current `GatewayConfig.channels` field.
 
 ### Documentation Cross-Reference Rules
 

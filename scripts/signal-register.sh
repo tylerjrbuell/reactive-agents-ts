@@ -84,10 +84,35 @@ else
 
   echo ""
   echo "Step 1: Solve the captcha"
-  echo "  Open: https://signalcaptchas.org/registration/generate.html"
-  echo "  Solve the captcha, then right-click 'Open Signal' and copy the link."
+  echo "  • Open ONLY: https://signalcaptchas.org/registration/generate.html"
+  echo "    (Do not use /challenge/ — that token is for a different flow.)"
+  echo "  • After solving, click the \"Open Signal\" link under the captcha."
+  echo "  • Right‑click \"Open Signal\" → Copy link."
+  echo "    The URL must look like: signalcaptcha://signal-hcaptcha....registration...."
+  echo "    Do NOT use sgnl://linkdevice?... (that is for linking a phone, not register.)"
+  echo "  • Solve the captcha from a browser on the SAME public IP as this machine"
+  echo "    (same Wi‑Fi / no VPN mismatch), and paste within ~1–2 minutes — tokens expire."
   echo ""
-  read -rp "Paste the signalcaptcha:// URL: " CAPTCHA
+  echo "Tip: If you already use Signal on your phone, abort and run:"
+  echo "  $0 link $PHONE $DATA_DIR"
+  echo "  …to link this CLI as a secondary device (no captcha)."
+  echo ""
+  read -rp "Paste the full signalcaptcha:// URL (or token): " CAPTCHA
+
+  # Trim whitespace; avoid embedding the token in shell -c (breaks on $ ` ! ' \" etc.)
+  CAPTCHA="${CAPTCHA#"${CAPTCHA%%[![:space:]]*}"}"
+  CAPTCHA="${CAPTCHA%"${CAPTCHA##*[![:space:]]}"}"
+
+  if [[ "$CAPTCHA" != signalcaptcha://* && "$CAPTCHA" != signal-hcaptcha* ]]; then
+    echo ""
+    echo "Warning: Expected a string starting with signalcaptcha:// or signal-hcaptcha."
+    echo "If you copied from the wrong place, registration will fail with \"Invalid captcha\"."
+    read -rp "Continue anyway? [y/N]: " CONT
+    if [[ "${CONT,,}" != "y" ]]; then
+      echo "Aborted."
+      exit 1
+    fi
+  fi
 
   echo ""
   echo "Step 2: Register + verify..."
@@ -95,9 +120,11 @@ else
     --user "$(id -u):$(id -g)" \
     -v "$REAL_DATA_DIR:/data:rw" \
     -e SIGNAL_CLI_CONFIG=/data \
+    -e SIGNAL_PHONE="$PHONE" \
+    -e SIGNAL_CAPTCHA="$CAPTCHA" \
     --entrypoint bash \
     "$IMAGE" \
-    -c "signal-cli --config /data -a '$PHONE' register --captcha '$CAPTCHA' && echo '' && read -rp 'Enter the verification code sent to $PHONE: ' CODE && signal-cli --config /data -a '$PHONE' verify \"\$CODE\""
+    -c 'signal-cli --config /data -a "$SIGNAL_PHONE" register --captcha "$SIGNAL_CAPTCHA" && echo "" && read -rp "Enter the SMS verification code for ${SIGNAL_PHONE}: " CODE && signal-cli --config /data -a "$SIGNAL_PHONE" verify "$CODE"'
 fi
 
 echo ""

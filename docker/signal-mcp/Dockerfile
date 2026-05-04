@@ -1,11 +1,12 @@
 # Signal MCP Server — TypeScript MCP server wrapping signal-cli in persistent jsonRpc mode
 # Requires one-time registration: see scripts/signal-register.sh
 #
-# Base: Eclipse Temurin JRE 21 (signal-cli requires glibc — Alpine does NOT work)
+# Base: Eclipse Temurin JRE 25 (signal-cli 0.14.x bytecode is Java 25 / class 69+)
+# signal-cli requires glibc — Alpine does NOT work
 # Runtime: Bun (TypeScript MCP server)
 
 # ── Stage 1: Build ───────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-noble AS build
+FROM eclipse-temurin:25-jre-noble AS build
 
 # Install Bun
 RUN apt-get update -qq && \
@@ -25,9 +26,10 @@ COPY server/ ./
 RUN bun build src/index.ts --target=bun --outdir=dist
 
 # ── Stage 2: Runtime ────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-noble
+FROM eclipse-temurin:25-jre-noble
 
-ARG SIGNAL_CLI_VERSION=0.13.12
+# Bump when Signal returns DeprecatedVersionException (499) on register/send.
+ARG SIGNAL_CLI_VERSION=0.14.3
 
 # Install signal-cli + Bun
 RUN apt-get update -qq && \

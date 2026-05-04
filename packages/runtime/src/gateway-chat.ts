@@ -50,6 +50,27 @@ export function formatEpisodicContext(
 }
 
 /**
+ * How the model must complete a gateway channel turn: call an MCP outbound
+ * message tool from the server that raised the event. No Signal/Telegram (or
+ * other vendor) tool names — those differ per MCP; the model picks the right
+ * tool from its registered list using that MCP server's tool name prefix.
+ */
+export function channelOutboundToolGuidance(params: {
+  readonly mcpServer: string;
+  readonly sender: string;
+}): string {
+  const server = params.mcpServer.trim() || "messaging";
+  const prefix = `${server}/`;
+  return (
+    `You MUST deliver your reply on this channel by calling a tool that sends an outbound message. ` +
+    `Choose a tool whose name starts with "${prefix}" and whose documented purpose is to send, post, DM, or reply to a user or chat. ` +
+    `Pass "${params.sender}" as the argument value that identifies this conversation partner (recipient, chat id, user id, peer, thread, etc. — use the parameter name required by that tool). ` +
+    `Do not end your turn without such a tool call. ` +
+    `If you need multiple steps, call it first with a brief acknowledgement, then again with your final answer.`
+  );
+}
+
+/**
  * Build the full enriched instruction sent to executeEvent().
  * Stacks: episodic context → conversation history → behavioral nudge → user message.
  */
@@ -64,14 +85,14 @@ export function buildEnrichedInstruction(params: {
   const parts: string[] = [];
   if (params.episodicBlock) parts.push(params.episodicBlock);
   if (params.historyBlock) parts.push(params.historyBlock);
+
   parts.push(
     `You are in a live conversation with ${params.sender} on ${params.platform}.\n\n` +
-    `User: ${params.message}\n\n` +
-    `You MUST call ${params.mcpServer}/send_message_to_user to deliver your reply:\n` +
-    `  recipient: "${params.sender}"\n` +
-    `  message: <your response text>\n\n` +
-    `This is the only way ${params.sender} receives your response — do not end your turn without calling this tool. ` +
-    `If this will take multiple steps, call it first with a brief acknowledgement, then again with your final answer.`,
+      `User: ${params.message}\n\n` +
+      channelOutboundToolGuidance({
+        mcpServer: params.mcpServer,
+        sender: params.sender,
+      }),
   );
   return parts.join("\n\n");
 }
@@ -149,7 +170,7 @@ export class GatewayChatManager {
     let runOutput: string;
     try {
       const output = await this.deps.executeEvent(gwEvent, "channel", instruction);
-      runOutput = output ?? "(sent via Signal)";
+      runOutput = output ?? `(reply sent via ${platform})`;
     } catch (err) {
       runOutput = `(error: ${err instanceof Error ? err.message : String(err)})`;
     }
