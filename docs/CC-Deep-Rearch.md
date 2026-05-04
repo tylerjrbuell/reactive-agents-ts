@@ -47,27 +47,27 @@ a framework builder should steal, avoid, or do differently.
 
 ## Section 2 — Context Window Management
 
-6. What is the exact algorithm in `autocompact`? What prompt does it use
+1. What is the exact algorithm in `autocompact`? What prompt does it use
    for summarization? How does it decide what to preserve vs. discard?
    Does it use the CLAUDE.md content to guide preservation, and if so
    how is that content referenced in the summarization prompt?
 
-7. The `compact_boundary` mechanism inserts a marker into the message
+2. The `compact_boundary` mechanism inserts a marker into the message
    history. What exactly is a `CompactBoundaryMessage`? What fields does
    it carry, and how does the query loop use it to avoid re-processing
    history that's already been summarized?
 
-8. How does `microcompact` interact with the `cache_edits` API parameter
+3. How does `microcompact` interact with the `cache_edits` API parameter
    (`clear_tool_uses_20250919`)? What's the `trigger`, `keep`, `exclude`
    configuration, and what are the failure modes if the API rejects the
    cache edit?
 
-9. How does the system prompt assembly work? Walk me through
+4. How does the system prompt assembly work? Walk me through
    `fetchSystemPromptParts` — what components are assembled, in what
    order, and what caching is applied to each part? What invalidates
    the cache?
 
-10. What does `memoized context provider` mean in practice for
+5. What does `memoized context provider` mean in practice for
     `getSystemContext()` and `getUserContext()`? What are the exact
     cache keys, what triggers invalidation, and how does
     `setSystemPromptInjection()` clear both caches?
@@ -76,30 +76,30 @@ a framework builder should steal, avoid, or do differently.
 
 ## Section 3 — Tool System Internals
 
-11. Walk me through the exact 5-step permission validation sequence for
+1. Walk me through the exact 5-step permission validation sequence for
     a tool call — tool-specific checks → settings allowlist/denylist →
     sandbox policy → active permission mode → hook overrides. Where can
     each step short-circuit, and what does the model receive as the tool
     result when a step denies the call?
 
-12. How does parallel tool execution actually work? When Claude returns
+2. How does parallel tool execution actually work? When Claude returns
     multiple tool_use blocks in one response, what determines concurrent
     vs. sequential execution? What's the exact mechanism (Promise.all vs
     queue vs something else)? How are partial failures handled when one
     concurrent tool fails?
 
-13. How does `assembleToolPool` ensure cache stability? The spec says
+3. How does `assembleToolPool` ensure cache stability? The spec says
     tools are sorted by name — but what happens when MCP tools are
     added mid-session? Does the sort happen once at session start or
     every request? How does deduplication work when a built-in and MCP
     tool have the same name?
 
-14. The `readFileState` cache enforces read-before-write. What exactly
+4. The `readFileState` cache enforces read-before-write. What exactly
     happens when a write is rejected due to mtime staleness? Does the
     model receive an error? Is there a retry? How does this interact
     with agents running multiple file-read/write cycles in a single turn?
 
-15. How does the `ToolSearch` deferred loading actually work at the API
+5. How does the `ToolSearch` deferred loading actually work at the API
     level? When the model calls ToolSearch, does the SDK inject new tool
     schemas mid-conversation, or does it restart the request with an
     expanded tool list? What does the message history look like after
@@ -109,28 +109,28 @@ a framework builder should steal, avoid, or do differently.
 
 ## Section 4 — Multi-Agent & Swarm Architecture
 
-16. Walk me through the exact lifecycle of `AgentTool` with
+1. Walk me through the exact lifecycle of `AgentTool` with
     `run_in_background: true`. How is the subagent spawned? What
     process/fiber/goroutine does it run on? How does the parent agent
     receive progress or results? What cleanup happens if the parent
     is interrupted?
 
-17. The coordinator mode uses 3 communication channels (in-process inbox,
+2. The coordinator mode uses 3 communication channels (in-process inbox,
     filesystem mailboxes, bridge). What decides which channel is used?
     What's the exact message format for each channel? How is message
     ordering guaranteed (or not) when multiple agents write concurrently?
 
-18. How does the `plan_approval_request` protocol work end-to-end?
+3. How does the `plan_approval_request` protocol work end-to-end?
     When a worker calls ExitPlanModeV2Tool, what exactly blocks it from
     continuing? How does the team leader signal approval? What's the
     timeout behavior and what happens on timeout?
 
-19. How does the swarm permission poller work at 500ms? What's the
+4. How does the swarm permission poller work at 500ms? What's the
     exact mailbox file structure? How does it prevent race conditions
     when two workers simultaneously request permission for different
     tools?
 
-20. What does a subagent actually inherit from its parent? The docs say
+5. What does a subagent actually inherit from its parent? The docs say
     "fresh conversation, no prior message history, but loads own system
     prompt and project-level context." What exactly is re-loaded vs.
     inherited? Does it re-read CLAUDE.md from disk on every spawn?
@@ -139,24 +139,24 @@ a framework builder should steal, avoid, or do differently.
 
 ## Section 5 — Memory & Skills
 
-21. Walk me through the exact 2-pass memory relevance algorithm.
+1. Walk me through the exact 2-pass memory relevance algorithm.
     What fields from frontmatter are used in pass 1 (the scan)?
     What's the exact LLM prompt used in pass 2 (the selection)?
     What is the `alreadySurfaced` set and how is it maintained across
     turns within a session?
 
-22. How does the `autoDream` memory consolidation work? What's the
+2. How does the `autoDream` memory consolidation work? What's the
     exact 4-phase prompt sequence (Orient → Gather → Consolidate →
     Prune)? How does it decide which memories to merge vs. delete?
     What does the output look like — new files, edits to existing ones?
 
-23. How are bundled skills injected into the system prompt? When a
+3. How are bundled skills injected into the system prompt? When a
     skill has a `files` field, what's the exact extraction path, nonce
     directory naming, and how does the model receive the reference?
     How are skills exposed as model-callable tools vs. user-invokable
     slash commands?
 
-24. The effort level (`low|medium|high|max`) controls reasoning depth.
+4. The effort level (`low|medium|high|max`) controls reasoning depth.
     How does this map to API parameters? Is it an `extended_thinking`
     budget, a temperature adjustment, a system prompt instruction, or
     something else? What's the exact implementation?
@@ -165,22 +165,22 @@ a framework builder should steal, avoid, or do differently.
 
 ## Section 6 — Hooks & Observability
 
-25. Walk me through the exact hook execution model. Are hooks run in
+1. Walk me through the exact hook execution model. Are hooks run in
     the same process? Same thread? What's the timeout behavior? When
     a PromptHook or AgentHook runs, how does its output get injected
     back into the conversation — as a system message, user message,
     or something else?
 
-26. How does `asyncRewake: true` work mechanically? When a background
+2. How does `asyncRewake: true` work mechanically? When a background
     hook exits with code 2, what system receives the signal, and what
     exactly gets re-queued for the agent to process?
 
-27. What telemetry events are emitted during a standard agent run?
+3. What telemetry events are emitted during a standard agent run?
     What does the hook event payload look like for PreToolUse and
     PostToolUse — what fields are present? How does the SDK expose
     these to external consumers?
 
-28. How does cost tracking work at the API call level? Is it from
+4. How does cost tracking work at the API call level? Is it from
     response headers, from the usage object in the API response, or
     from a separate billing endpoint? How does it handle streaming
     responses where usage isn't known until the stream ends?
@@ -189,29 +189,29 @@ a framework builder should steal, avoid, or do differently.
 
 ## Section 7 — Design Decisions I Can't Infer
 
-29. Why does the codebase have two code paths for tool calling (native
+1. Why does the codebase have two code paths for tool calling (native
     FC and text-based ACTION: parsing)? Are they both maintained or
     is one being deprecated? What determines which path runs?
 
-30. The `react-kernel.ts` is allegedly ~1,961 LOC. What are the main
+2. The `react-kernel.ts` is allegedly ~1,961 LOC. What are the main
     logical concerns packed into it? What's the proposed split if it
     were refactored?
 
-31. What was the original design rationale for the 4-layer settings
+3. What was the original design rationale for the 4-layer settings
     system (managed > localProject > project > global)? What problems
     does each layer solve? What would go wrong if you collapsed it to
     2 layers?
 
-32. Why does the tool permission system use pattern matching strings
+4. Why does the tool permission system use pattern matching strings
     (`"Bash(git *)"`) rather than a structured rule type? What are the
     edge cases this handles that a structured type would not?
 
-33. The `createResolveOnce` atomic guard is used in the 5-way
+5. The `createResolveOnce` atomic guard is used in the 5-way
     permission race. What exactly is racing, and what would happen
     without this guard? Has there been a documented race condition
     that motivated it?
 
-34. What is the exact algorithm for `detectCompletionGaps`? How does
+6. What is the exact algorithm for `detectCompletionGaps`? How does
     it know when a task is "complete enough" to exit the loop? What
     signals does it use — tool call history, output content, iteration
     count?

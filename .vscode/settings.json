@@ -1,5 +1,11 @@
 {
-    "cSpell.words": ["cloudrun", "litellm", "ollama", "tylerjrbuell"],
+    "cSpell.words": [
+        "Agentic",
+        "cloudrun",
+        "litellm",
+        "ollama",
+        "tylerjrbuell"
+    ],
     "chat.tools.terminal.autoApprove": {
         "bun": true,
         "timeout": true,
