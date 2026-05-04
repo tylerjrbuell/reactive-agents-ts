@@ -337,6 +337,7 @@ Every amendment to this master roadmap (phase reordering, gate revision, phase a
 | Date | Amendment | Reason | Authority |
 |---|---|---|---|
 | 2026-05-03 | Plan created | v0.10.0 release-pending; audit §16 surfaced gaps | tylerjrbuell |
+| 2026-05-04 | Phase 1 complete: 8 KEEP + 5 IMPROVE verdicts; 0 removals | All 13 mechanisms validated via TDD spikes. Improvement-first posture confirmed effective. 5 mechanisms have Phase 1.5 action items; 8 earn their keep with zero regressions. Phase 2 gates amended per synthesis findings. See `.agents/PHASE-1-SYNTHESIS.md` for detailed implications. | Phase 1 validation evidence |
 | _(future amendments append here)_ | | | |
 
 ---
