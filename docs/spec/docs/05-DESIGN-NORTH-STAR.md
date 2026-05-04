@@ -7,10 +7,10 @@
 **Mandate:** v0.10.0 release is **deferred** until this architecture is in place. No exceptions. The framework's reliability problem is structural, not surface, and shipping more features on a fractured foundation only multiplies the debt.
 
 **Companion documents (added 2026-04-27):**
-- `PROJECT-STATE.md` — current empirical state of the project. **Read first at session start.**
-- `00-RESEARCH-DISCIPLINE.md` — the 12 rules governing any harness change. Every architectural change in §6 is subject to spike validation per Rule 1.
-- `01-FAILURE-MODES.md` — catalog of failure modes. The §7 validation discipline operates against this catalog.
-- `02-IMPROVEMENT-PIPELINE.md` — operational rhythm: how discoveries flow into harness changes.
+- `04-PROJECT-STATE.md` — current empirical state of the project. **Read first at session start.**
+- `01-RESEARCH-DISCIPLINE.md` — the 12 rules governing any harness change. Every architectural change in §6 is subject to spike validation per Rule 1.
+- `02-FAILURE-MODES.md` — catalog of failure modes. The §7 validation discipline operates against this catalog.
+- `03-IMPROVEMENT-PIPELINE.md` — operational rhythm: how discoveries flow into harness changes.
 
 ---
 
@@ -625,7 +625,7 @@ This North Star v3.0 supersedes and consolidates the following analysis document
 | `harness-reports/cognitive-kernel-architecture-2026-04-26.md` | Superseded | Three-tier shape → §4 |
 | `harness-reports/agent-capability-architecture-2026-04-26.md` | Superseded | 10 capabilities + 5 traits → §3, §4.3 |
 
-The **previous** `15-design-north-star.md v2.3` is also superseded by this v3.0.
+The **previous** v2.3 is also superseded by this v3.0.
 
 Going forward, **this document is the single source of truth for architecture decisions.** When in doubt about a kernel concern or a refactor priority, refer here first.
 

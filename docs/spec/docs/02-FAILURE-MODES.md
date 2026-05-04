@@ -1,7 +1,7 @@
 # Failure Mode Catalog
 
 > **Status:** Living catalog, seeded 2026-04-27 from prior work.  
-> **Companion to:** `00-RESEARCH-DISCIPLINE.md` (rules), `02-IMPROVEMENT-PIPELINE.md` (operations).  
+> **Companion to:** `01-RESEARCH-DISCIPLINE.md` (rules), `03-IMPROVEMENT-PIPELINE.md` (operations).  
 > **Purpose:** The single source of truth for what can go wrong with the harness — categorized, prioritized, and (over time) empirically tied to mitigations.
 
 ## Categories
@@ -15,7 +15,7 @@
 - **G. Multi-turn / long-horizon** — coherence loss across turns, sub-agent failures
 - **H. Compliance** — model ignores instructions, persistence rules, or schemas
 
-Each entry follows the template in `02-IMPROVEMENT-PIPELINE.md §Stage 2`.
+Each entry follows the template in `03-IMPROVEMENT-PIPELINE.md §Stage 2`.
 
 ---
 

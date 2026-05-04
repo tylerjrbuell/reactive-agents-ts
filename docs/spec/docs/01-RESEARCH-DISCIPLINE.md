@@ -3,7 +3,7 @@
 > **Status:** FOUNDATION DOCUMENT — Project operating contract  
 > **Authority:** Pinned 2026-04-27. Changes require explicit decision + git commit.  
 > **Purpose:** Codify the development methodology so that every harness change is empirically justified, individually attributable, and provably better than the simplest alternative.  
-> **Companion to:** `00-VISION.md` (what we're building); this doc covers HOW WE BUILD it.
+> **Companion to:** `00-VISION.md` (what we're building), `02-FAILURE-MODES.md` (failure catalog), `03-IMPROVEMENT-PIPELINE.md` (operational flywheel).
 
 ---
 
@@ -126,7 +126,7 @@ The harness handles a wide failure-mode surface that no single spike can simulat
 
 ### Rule 12: Failure-mode-first investigation
 
-Spikes are scoped to known failure modes (cataloged in `01-FAILURE-MODES.md`), not "let's see what happens." Each spike asks: **"How does mechanism Y address failure mode X — and how well, on which models, at what cost?"**
+Spikes are scoped to known failure modes (cataloged in `02-FAILURE-MODES.md`), not "let's see what happens." Each spike asks: **"How does mechanism Y address failure mode X — and how well, on which models, at what cost?"**
 
 The investigation cycle is:
 1. **DISCOVERY** — observe failures across the agent test surface; new failure modes get cataloged

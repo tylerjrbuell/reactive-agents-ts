@@ -9,8 +9,8 @@
 ## TL;DR
 
 - **The project's vision is intact** (`00-VISION.md`) — control over magic, model-adaptive intelligence, observable agents.
-- **The architecture target is set** (`15-design-north-star.md` v3.0) — 10 capabilities, kernel cognitive architecture, ~22 packages.
-- **What changed this week**: we added a research discipline that says **every harness change must be empirically justified by a single-file spike that isolates one mechanism against one failure mode**. Codified in `00-RESEARCH-DISCIPLINE.md`.
+- **The architecture target is set** (`05-DESIGN-NORTH-STAR.md` v3.0) — 10 capabilities, kernel cognitive architecture, ~22 packages.
+- **What changed this week**: we added a research discipline that says **every harness change must be empirically justified by a single-file spike that isolates one mechanism against one failure mode**. Codified in `01-RESEARCH-DISCIPLINE.md`.
 - **What the empirical evidence says today**: the harness's defensible value is **trust** (refusing to ship fabrications), not capability boost. Mechanisms are tier-specific. Most of the 30+ packages haven't been spike-validated yet.
 - **The mandate**: v0.10.0 release is deferred until architecture + validation discipline are in place. No more shipping features on a fractured foundation.
 
@@ -23,10 +23,10 @@ Read in this order. Stop when you have what you need.
 | Order | Doc | What it tells you |
 |---|---|---|
 | 1 | **`00-VISION.md`** | What we're building toward. The 8 pillars (Control, Observability, Flexibility, Scalability, Reliability, Efficiency, Security, Speed). Stable. |
-| 2 | **`15-design-north-star.md`** v3.0 | The architectural target (10 capabilities, cognitive kernel, package strategy). v0.10 deferred until this is built. |
-| 3 | **`00-RESEARCH-DISCIPLINE.md`** | The 12 rules that govern any harness change. Hypothesis-first spikes. No shipping without empirical evidence per failure mode. |
-| 4 | **`01-FAILURE-MODES.md`** | The catalog: what can go wrong with the harness, prioritized by frequency × severity × controllability. 14 seed entries; living doc. |
-| 5 | **`02-IMPROVEMENT-PIPELINE.md`** | How discoveries flow into harness changes: 7-stage flywheel from DISCOVERY → CATALOG → PRIORITIZE → DISSECT → DESIGN → INTEGRATE+VALIDATE → DEPRECATE. |
+| 2 | **`05-DESIGN-NORTH-STAR.md`** v3.0 | The architectural target (10 capabilities, cognitive kernel, package strategy). v0.10 deferred until this is built. |
+| 3 | **`01-RESEARCH-DISCIPLINE.md`** | The 12 rules that govern any harness change. Hypothesis-first spikes. No shipping without empirical evidence per failure mode. |
+| 4 | **`02-FAILURE-MODES.md`** | The catalog: what can go wrong with the harness, prioritized by frequency × severity × controllability. 14 seed entries; living doc. |
+| 5 | **`03-IMPROVEMENT-PIPELINE.md`** | How discoveries flow into harness changes: 7-stage flywheel from DISCOVERY → CATALOG → PRIORITIZE → DISSECT → DESIGN → INTEGRATE+VALIDATE → DEPRECATE. |
 | 6 | **`prototypes/RESEARCH_LOG.md`** | Running record of every spike (hypothesis → outcome → next move). |
 | 7 | **`prototypes/RESULTS-*.md`** | Per-spike detailed findings. |
 | 8 | **`harness-reports/`** | Bench data + spike data. Per-run JSON. |
@@ -88,7 +88,7 @@ These are not "broken" — they're **unvalidated**. The pipeline now exists to v
 ### New way (what we're doing going forward)
 
 1. **DISCOVERY** — observe failure (failure-corpus, bench, trace mining, spike surprise)
-2. **CATALOG** — entry in `01-FAILURE-MODES.md` with severity × prevalence × controllability
+2. **CATALOG** — entry in `02-FAILURE-MODES.md` with severity × prevalence × controllability
 3. **PRIORITIZE** — top-N by composite score
 4. **DISSECT** — single-file spike (~80–200 LOC), hypothesis-locked, raw provider SDK, ONE mechanism
 5. **EVIDENCE** — spike across mechanism × model × failure-mode matrix; six-level signal taxonomy (behavioral, mechanistic, quality, cost, robustness, surprise)
@@ -97,7 +97,7 @@ These are not "broken" — they're **unvalidated**. The pipeline now exists to v
 8. **VALIDATE** — bench session re-run confirms aggregate lift
 9. **DEPRECATE** — harness mechanisms whose claimed coverage isn't backed by spike evidence become deletion candidates
 
-The discipline is codified in `00-RESEARCH-DISCIPLINE.md` (Rules 1-12). The catalog is `01-FAILURE-MODES.md`. The operational rhythm is `02-IMPROVEMENT-PIPELINE.md`.
+The discipline is codified in `01-RESEARCH-DISCIPLINE.md` (Rules 1-12). The catalog is `02-FAILURE-MODES.md`. The operational rhythm is `03-IMPROVEMENT-PIPELINE.md`.
 
 ### Critical scope-of-claims rule (Rule 11)
 
@@ -134,10 +134,10 @@ A spike validates ONE mechanism × ONE failure mode × ≤2 models × ONE task. 
 
 ### Foundational docs (the methodology layer)
 
-- `00-RESEARCH-DISCIPLINE.md` — 12 rules
-- `01-FAILURE-MODES.md` — 14 seed entries, categorized A-H
-- `02-IMPROVEMENT-PIPELINE.md` — 7-stage flywheel
-- This doc (`PROJECT-STATE.md`) — landing page
+- `01-RESEARCH-DISCIPLINE.md` — 12 rules
+- `02-FAILURE-MODES.md` — 14 seed entries, categorized A-H
+- `03-IMPROVEMENT-PIPELINE.md` — 7-stage flywheel
+- This doc (`04-PROJECT-STATE.md`) — landing page
 
 ---
 
@@ -148,10 +148,10 @@ A spike validates ONE mechanism × ONE failure mode × ≤2 models × ONE task. 
 - `09-ROADMAP.md` (Mar 11) — pre-dates Sprint 3.x work; per memory, ROADMAP is 5/5 stale
 - `11-missing-capabilities-enhancement.md` (Mar 11) — pre-dates current capability list
 - `FRAMEWORK_USAGE_GUIDE.md` (Mar 11) — pre-dates current builder API surface
-- `START_HERE_AI_AGENTS.md` / `DOCUMENT_INDEX.md` (Apr 9) — should now point to `PROJECT-STATE.md` first
+- `START_HERE_AI_AGENTS.md` / `DOCUMENT_INDEX.md` (Apr 9) — should now point to `04-PROJECT-STATE.md` first
 - Various `02-layer-*.md` through `09-layer-*.md` — subsystem deep dives; useful but may have stale claims about effectiveness
 
-**Recommendation:** don't bulk-rewrite. Each doc gets a one-line status banner if/when it's touched: `> Status: <date>; some content may not reflect post-2026-04 architecture. See PROJECT-STATE.md for current state.`
+**Recommendation:** don't bulk-rewrite. Each doc gets a one-line status banner if/when it's touched: `> Status: <date>; some content may not reflect post-2026-04 architecture. See 04-PROJECT-STATE.md for current state.`
 
 ### Cleanup tasks (carry forward)
 
@@ -201,7 +201,7 @@ Both `.agents/MEMORY.md` and personal Claude memory are updated to reflect:
 - Control pillar discipline (Rule 9 for new harness primitives)
 - Research discipline contract Rules 1-12
 - Failure-mode-first investigation
-- Pointer to this PROJECT-STATE.md as session-start read
+- Pointer to this 04-PROJECT-STATE.md as session-start read
 
 Future agent sessions will inherit this discipline at session-start.
 

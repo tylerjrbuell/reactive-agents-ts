@@ -6,7 +6,7 @@
 > - `2026-05-03-phase-0-frozen-judge.md` (written; ready to execute)
 > - `2026-MM-DD-phase-N-<focus>.md` (write before starting Phase N)
 
-**Goal:** Take Reactive Agents from v0.10.0 release-ready to v1.0 by closing the empirical, structural, and capability gaps surfaced in `docs/spec/docs/AUDIT-overhaul-2026.md` §16, while remaining true to the eight pillars of `docs/spec/docs/00-VISION.md` and adapting to AI-community research as it lands.
+**Goal:** Take Reactive Agents from v0.10.0 release-ready to v1.0 by closing the empirical, structural, and capability gaps surfaced in `docs/spec/docs/06-AUDIT-v0.10.0.md` §16, while remaining true to the eight pillars of `docs/spec/docs/00-VISION.md` and adapting to AI-community research as it lands.
 
 **Architecture:** Eight sequenced phases (Phase 0–7), each with measurable validation gates that gate the next phase. Cross-cutting disciplines (TDD, subagent-driven execution, verified improvement loops, quarterly research re-evaluation) apply uniformly. **No phase ships without its validation gate passing.**
 
@@ -19,10 +19,10 @@
 | Doc | Authority | When to consult |
 |---|---|---|
 | `docs/spec/docs/00-VISION.md` v3.0 | **Stable anchor** — the only document this plan does not amend | Every phase: confirm work serves a vision pillar |
-| `docs/spec/docs/AUDIT-overhaul-2026.md` §16 | **Authoritative gap inventory** | Phase definitions inherit gaps from §16.2–§16.6 |
-| `docs/spec/docs/01-FAILURE-MODES.md` | **Living failure-mode catalog** | Phase 1 mechanism validation maps each mechanism to a FM it claims to address |
-| `docs/spec/docs/00-RESEARCH-DISCIPLINE.md` (Rules 1–12) | **Methodology contract** | Especially Rule 4 (frozen judge — Phase 0) and Rule 11 (calibrate claims to evidence — every phase gate) |
-| `docs/spec/docs/15-design-north-star.md` v3.0 | **Architecture target** | Phase 2 decomposition conformance |
+| `docs/spec/docs/06-AUDIT-v0.10.0.md` §16 | **Authoritative gap inventory** | Phase definitions inherit gaps from §16.2–§16.6 |
+| `docs/spec/docs/02-FAILURE-MODES.md` | **Living failure-mode catalog** | Phase 1 mechanism validation maps each mechanism to a FM it claims to address |
+| `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` (Rules 1–12) | **Methodology contract** | Especially Rule 4 (frozen judge — Phase 0) and Rule 11 (calibrate claims to evidence — every phase gate) |
+| `docs/spec/docs/05-DESIGN-NORTH-STAR.md` v3.0 | **Architecture target** | Phase 2 decomposition conformance |
 | `ROADMAP.md` (root) | **Public-facing milestone tracker** | Updated at each phase completion |
 | This file | **Sequencing authority** for v0.10.0 → v1.0 | Single source of truth for phase order |
 
@@ -127,14 +127,14 @@ Per superpowers:code-reviewer: at the end of each phase, a code-review subagent 
   1. Every mechanism has either: spike evidence with a quantified lift (% improvement on a tracked failure mode at a given model tier), OR a `_unstable_sunset_*` marker with a sunset date.
   2. Mechanisms with no evidence and no sunset marker fail CI lint after Phase 1.
   3. Aggregate harness LOC drops by at least 5% (sunset mechanisms removed).
-- **Detailed plan:** Write `2026-MM-DD-phase-1-mechanism-validation-sweep.md` immediately before Phase 1 begins. The detailed plan dispatches one subagent per mechanism (M1, M2, …, M13), each running an isolated spike per the discipline in `00-RESEARCH-DISCIPLINE.md` Rule 5.
+- **Detailed plan:** Write `2026-MM-DD-phase-1-mechanism-validation-sweep.md` immediately before Phase 1 begins. The detailed plan dispatches one subagent per mechanism (M1, M2, …, M13), each running an isolated spike per the discipline in `01-RESEARCH-DISCIPLINE.md` Rule 5.
 - **Estimated effort:** 5–10 sessions over 2–3 months (one mechanism per session if validating; one batch session if sunsetting unproven ones).
 - **Dependencies:** Phase 0 (need frozen judge to generate per-mechanism evidence).
 - **Stop-the-line:** if a mechanism's spike shows neutral or negative lift, we sunset it — do not retry the spike with different conditions to "find" a positive result. Rule 11.
 
 ### Phase 2 — Orchestration Decomposition (Stage 7 W23–W28)
 
-- **Goal:** Decompose the orchestration trio (`builder.ts` 6,082 LOC, `execution-engine.ts` 4,499 LOC, `runner.ts` 1,706 LOC) into composable units per `AUDIT-overhaul-2026.md` §16.2.
+- **Goal:** Decompose the orchestration trio (`builder.ts` 6,082 LOC, `execution-engine.ts` 4,499 LOC, `runner.ts` 1,706 LOC) into composable units per `06-AUDIT-v0.10.0.md` §16.2.
 - **Vision pillars:** Composition (Pillar 6), Control, DX.
 - **Validation gate (per Stage 7 wave):**
   - **W23 (Phase-as-data execution-engine):** `execution-engine.ts` ≤ 600 LOC; 9 phase modules ≤ 400 LOC each; every existing test passes unchanged.
@@ -182,7 +182,7 @@ Per superpowers:code-reviewer: at the end of each phase, a code-review subagent 
 
 ### Phase 5 — Public Benchmark Discipline
 
-- **Goal:** Submit to or replicate at least one third-party agent benchmark with reproducible methodology, per `00-RESEARCH-DISCIPLINE.md` Rule 11.
+- **Goal:** Submit to or replicate at least one third-party agent benchmark with reproducible methodology, per `01-RESEARCH-DISCIPLINE.md` Rule 11.
 - **Vision pillars:** Reliability, Trustworthiness, Local-First (third-party validates the local-tier story).
 - **Validation gate:**
   1. At least one of {τ²-bench, BFCL V4, HAL Princeton harness} integration in `packages/benchmarks/src/sessions/` with a reproducible run command.

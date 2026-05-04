@@ -125,7 +125,7 @@ None. All existing `ReactiveAgents.create().with*()` builder chains continue to 
 
 ### Overhaul (`refactor/overhaul`, 2026-04-28 → 2026-04-30)
 
-The Stage 5 audit landed across 19 waves on `refactor/overhaul`; details are in `docs/spec/docs/AUDIT-overhaul-2026.md`.
+The Stage 5 audit landed across 19 waves on `refactor/overhaul`; details are in `docs/spec/docs/06-AUDIT-v0.10.0.md`.
 
 - **Single-owner termination (W4)** — 9 imperative termination paths in `runtime/src/execution-engine.ts` collapsed to a single `kernel/loop/terminate.ts` Arbitrator-owned exit. CI lint at `scripts/check-termination-paths.sh`.
 - **ToT outer-loop early-stop (W5)** — Tree-of-Thought BFS frontier honors `dispatcher-early-stop` patches; T4 regression test added.

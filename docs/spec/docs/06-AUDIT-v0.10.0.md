@@ -3,13 +3,13 @@
 > **Status:** Living document. Started 2026-04-28 on `refactor/overhaul`. Drives the v0.10.0 clean-break release.
 > **Scope:** Comprehensive feature + quality audit of every package, mechanism, doc, and memory artifact. Verdicts feed Stage 5 cleanup.
 > **Authority:** This is the only audit document. Older audits (Apr 17, Apr 18) are superseded; pull forward findings as needed.
-> **Companion to:** `PROJECT-STATE.md` (current state), `00-RESEARCH-DISCIPLINE.md` (Rules 1-12), `01-FAILURE-MODES.md` (catalog), `15-design-north-star.md` (architecture target).
+> **Companion to:** `04-PROJECT-STATE.md` (current state), `01-RESEARCH-DISCIPLINE.md` (Rules 1-12), `02-FAILURE-MODES.md` (catalog), `05-DESIGN-NORTH-STAR.md` (architecture target).
 
 ---
 
 ## 1. Why this audit exists
 
-The framework has accumulated ~100 commits of feature work since v0.9.0 release without a coherent quality gate. PROJECT-STATE.md documents that most harness mechanisms are **unvalidated** — not broken, but never spike-tested for net contribution. The user mandate is:
+The framework has accumulated ~100 commits of feature work since v0.9.0 release without a coherent quality gate. 04-PROJECT-STATE.md documents that most harness mechanisms are **unvalidated** — not broken, but never spike-tested for net contribution. The user mandate is:
 
 > *Push hard, make efficient progress on cleaning up the project. Plan a huge release that puts the framework in a stable state ready for future work to build on top. Trim the fat. Cultivate ultra-efficiency in dev workflows.*
 
@@ -46,7 +46,7 @@ Each verdict carries: **(a)** one-line reason, **(b)** evidence pointer (file pa
 ```
 | Dimension  | Question                                                           |
 |------------|--------------------------------------------------------------------|
-| Purpose    | What failure mode (01-FAILURE-MODES.md) does this address? Or none? |
+| Purpose    | What failure mode (02-FAILURE-MODES.md) does this address? Or none? |
 | Evidence   | Spike-validated? Bench-validated? Anecdotal? Unvalidated?           |
 | Health     | Code works / partially broken / known broken / dead.                |
 | Verdict    | KEEP / FIX / SHRINK / DELETE / DEFER + one-line reason.             |
@@ -147,26 +147,26 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 
 | Date | File | Verdict |
 |---|---|---|
-| 2026-04-27 | `PROJECT-STATE.md` | **KEEP** — landing doc |
-| 2026-04-27 | `15-design-north-star.md` v3.0 | **KEEP** — architecture target |
-| 2026-04-27 | `01-FAILURE-MODES.md` | **KEEP** — living catalog |
-| 2026-04-27 | `00-RESEARCH-DISCIPLINE.md` | **KEEP** — methodology contract |
-| 2026-04-27 | `02-IMPROVEMENT-PIPELINE.md` | **KEEP** — operational rhythm |
+| 2026-04-27 | `04-PROJECT-STATE.md` | **KEEP** — landing doc |
+| 2026-04-27 | `05-DESIGN-NORTH-STAR.md` v3.0 | **KEEP** — architecture target |
+| 2026-04-27 | `02-FAILURE-MODES.md` | **KEEP** — living catalog |
+| 2026-04-27 | `01-RESEARCH-DISCIPLINE.md` | **KEEP** — methodology contract |
+| 2026-04-27 | `03-IMPROVEMENT-PIPELINE.md` | **KEEP** — operational rhythm |
 | 2026-04-21 | `00-VISION.md` | **KEEP** — vision (stable) |
-| 2026-04-28 | `AUDIT-overhaul-2026.md` (this) | **KEEP** |
+| 2026-04-28 | `06-AUDIT-v0.10.0.md` (this) | **KEEP** |
 
 ### 7.2 Semi-recent (Apr 9) — review
 
 | Date | File | Verdict |
 |---|---|---|
-| 2026-04-09 | `START_HERE_AI_AGENTS.md` | _pending_ — should now point to PROJECT-STATE.md first |
+| 2026-04-09 | `START_HERE_AI_AGENTS.md` | _pending_ — should now point to 04-PROJECT-STATE.md first |
 | 2026-04-09 | `DOCUMENT_INDEX.md` | _pending_ — likely needs regeneration |
 
 ### 7.3 March-era (28 files) — likely SHRINK / archive
 
 | Date | File | Default verdict |
 |---|---|---|
-| 2026-03-11 | `00-master-architecture.md` | _superseded by 15-design-north-star_ → archive |
+| 2026-03-11 | `00-master-architecture.md` | _superseded by 05-DESIGN-NORTH-STAR.md_ → archive |
 | 2026-03-11 | `00-monorepo-setup.md` | _potentially still useful_ → review |
 | 2026-03-11 | `01.5-layer-llm-provider.md` | _layer doc, may have stale claims_ → review |
 | 2026-03-11 | `02-CORE-PILLARS.md` | _superseded by VISION + NS_ → archive |
@@ -197,13 +197,13 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 ### 7.4 Other spec dir files
 
 - `docs/spec/REACTIVE_AGENTS_BUSINESS_MODEL.md` — **archive** unless actively used for positioning; not architectural.
-- `docs/spec/REACTIVE_AGENTS_TECHNICAL_SPECS.md` — **archive** if superseded by `15-design-north-star.md` v3.0 (likely yes — needs spot check).
+- `docs/spec/REACTIVE_AGENTS_TECHNICAL_SPECS.md` — **archive** if superseded by `05-DESIGN-NORTH-STAR.md` v3.0 (likely yes — needs spot check).
 - `docs/spec/TOOL_SYSTEM_PROPOSAL.md` — **archive** if pre-current tool system; spot check first.
 - `docs/spec/docs/explorations/` — **keep** as-is. Speculative/exploration docs by design.
 
 ### 7.5 Stage 4 archival plan
 
-**Action:** create `docs/spec/docs/_archive/` and move March-era + superseded docs there with a one-line banner at top of each: `> Status: archived 2026-04-28; pre-overhaul. See PROJECT-STATE.md for current state.`
+**Action:** create `docs/spec/docs/_archive/` and move March-era + superseded docs there with a one-line banner at top of each: `> Status: archived 2026-04-28; pre-overhaul. See 04-PROJECT-STATE.md for current state.`
 
 **Files to archive (28):** all `2026-03-11` dated files in `docs/spec/docs/` (full list in §7.3) plus:
 - `docs/spec/REACTIVE_AGENTS_BUSINESS_MODEL.md`
@@ -211,11 +211,11 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 - `docs/spec/TOOL_SYSTEM_PROPOSAL.md` (pending spot check)
 
 **Files to FIX (regenerate, don't archive):**
-- `START_HERE_AI_AGENTS.md` → first paragraph points at `PROJECT-STATE.md`; remove pre-overhaul guidance
+- `START_HERE_AI_AGENTS.md` → first paragraph points at `04-PROJECT-STATE.md`; remove pre-overhaul guidance
 - `DOCUMENT_INDEX.md` → regenerate to list only the canonical 7 + this audit + `_archive/` link
 
 **Files to keep as-is:**
-- The canonical 7 in §7.1 (PROJECT-STATE, 15-design-north-star, 01-FAILURE-MODES, 00-RESEARCH-DISCIPLINE, 02-IMPROVEMENT-PIPELINE, 00-VISION, AUDIT-overhaul-2026)
+- The canonical 7 in §7.1 (04-PROJECT-STATE, 05-DESIGN-NORTH-STAR, 02-FAILURE-MODES, 01-RESEARCH-DISCIPLINE, 03-IMPROVEMENT-PIPELINE, 00-VISION, 06-AUDIT-v0.10.0)
 - `docs/spec/docs/explorations/`
 
 ---
@@ -231,7 +231,7 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 | `CONTRIBUTING.md` | **KEEP** | Review-only for accuracy after overhaul lands |
 | `CODING_STANDARDS.md` | **KEEP** | Review-only |
 | `CAPABILITIES.md` | **KEEP + FIX** | Verify against §10.1 package matrix; remove anything not actually shipping in v0.10.0 |
-| `FRAMEWORK_INDEX.md` | **DELETE** | Apr 17 audit confirmed "all kernel paths broken" (5/5 stale). Replaced by `PROJECT-STATE.md` + `AUDIT-overhaul-2026.md` + `15-design-north-star.md`. Don't try to fix; delete and rely on canonical 7. |
+| `FRAMEWORK_INDEX.md` | **DELETE** | Apr 17 audit confirmed "all kernel paths broken" (5/5 stale). Replaced by `04-PROJECT-STATE.md` + `06-AUDIT-v0.10.0.md` + `05-DESIGN-NORTH-STAR.md`. Don't try to fix; delete and rely on canonical 7. |
 | `ROADMAP.md` | **FIX (rewrite)** | Full rewrite for v0.10.0: what shipped, what's `_unstable_*`, what's deferred to v0.11+ (multi-agent orchestration, healing-pipeline spike validation, frontier verifier expansion). |
 
 ---
@@ -253,7 +253,7 @@ These are the **named harness mechanisms** that span multiple packages. The audi
 | `project_running_issues` — claim "dual compression uncoordinated" | ✅ confirmed | Keep, link to FIX-4/M5 verdict. |
 | Memory `MEMORY.md` line "Local is 118 commits ahead of origin" | ❌ stale | Update: `refactor/overhaul` is 100 commits ahead of `main` and now pushed; previous `feat/phase-*` branches archived. |
 | Memory `Current Status (Apr 22, 2026)` block — "v0.10.0 release prep complete" | 🟡 misleading | The release prep was docs/changeset, NOT version bumps. All 28 packages still at `0.9.0` locally. Correct phrasing: "v0.10.0 release docs drafted; version bumps + npm publish deferred to overhaul completion." |
-| Memory entries about Phase-0 / Phase-1 sprints (multiple `project_*`) | ⏸️ context | Keep historical sprint context as archive but flag with "see AUDIT-overhaul-2026.md §10 for current package state." |
+| Memory entries about Phase-0 / Phase-1 sprints (multiple `project_*`) | ⏸️ context | Keep historical sprint context as archive but flag with "see 06-AUDIT-v0.10.0.md §10 for current package state." |
 
 ### 9.2 Stage 4 walk-through plan
 
@@ -752,7 +752,7 @@ Status legend: ✅ confirmed | 🟡 partial / corrected | ❌ stale (no action n
 | 11 | ~~`bun:sqlite` + `Bun.*` without `engines` field~~ | ✅ **resolved W12 (part a; Node fallback deferred to v0.11)** | `engines: { bun: ">=1.1.0" }` added to 8 published packages with direct Bun runtime usage (a2a, cost, eval, health, llm-provider, memory, reactive-intelligence, tools) plus the umbrella `reactive-agents`. Audit by grep: `bun:sqlite` imports in `cost/budgets/budget-db.ts`, `memory/database.ts`, `reactive-intelligence/calibration-store.ts` + `bandit-store.ts`; real `Bun.*` calls (excluding doc comments) in 9 src files across the package set. `runtime` excluded — only JSDoc references. `benchmarks` excluded — `private: true` (workspace-internal). Umbrella standardized from `>=1.0.0` → `>=1.1.0`. Guard test at `core/tests/engines-field.test.ts` pins the contract going forward. **Node fallback (T14: lazy-load `bun:sqlite` vs `better-sqlite3`) is the v0.11 follow-up** — Bun is the primary engine for v0.10.0, conversion plan is separate. |
 | 12 | ~~`rax demo` is fake~~ | ❌ **stale (W15)** + ✅ **freshened W15** | The Apr 17 "fake" claim was wrong — `apps/cli/src/commands/demo.ts:runLiveDemo()` calls a real `agent.run()` whenever a provider is detected (Ollama → ANTHROPIC → OPENAI → GOOGLE). The `runReplayDemo()` fallback is honestly labeled "example output (recorded)" and only fires when no provider is reachable. **W15 freshening:** swapped the demo task from training-data regurgitation ("top 3 testing frameworks") to a real tool call (`get-hn-posts` against the live Hacker News API) — proves tool-use end-to-end on every run. Tool defined via canonical `defineTool` + Effect Schema. Fixed hardcoded `tools: 0` in metrics — now reads `meta.toolsUsed` / `debrief.toolsUsed` / `toolCallHistory` and falls through. `TerminalReplay.astro` on the docs site updated to mirror the new flow (tool call frame, live-data response, real `1 tool` metric). Side-find: `DefineToolOptions.input` constraint widened from `Schema<A, Record<string, unknown>>` to `Schema<A, any>` — the prior constraint made `Schema.Struct({...})` fail strict tsc even though decoding succeeded at runtime; tools-package tests compiled only because their tsconfig excludes the test dir. |
 | 13 | ~~`rax init` hardcodes Anthropic~~ | ✅ **resolved W16** | Apr 17 already shipped provider detection at `init.ts:27-32`, but the scaffold itself stayed Anthropic-first: (1) `.env.example` had `ANTHROPIC_API_KEY=sk-ant-...` as the active line regardless of detected provider, (2) entry templates lacked `.withModel(...)` so users got framework defaults that may not match their provider, (3) the `LLM_DEFAULT_MODEL=claude-sonnet-4-20250514` hint was anthropic-pinned + W10-superseded SHA, (4) no README scaffold. **W16 changes:** new `PROVIDER_PROFILES` map (ollama / anthropic / openai / gemini) drives model selection, env-var placement, and README setup notes. `.env.example` puts the detected provider's key first as the active uncommented line and lists alternatives commented; ollama scaffold has no key requirement. Entry templates include `.withModel(profile.model)`. New README.md scaffold with provider-specific setup. `init.ts` Next-Steps differ for ollama (no `cp .env.example .env` step). 4 new tests in `tests/generators.test.ts` pin the contract per provider; 11/11 pass. |
-| 14 | ~~`FRAMEWORK_INDEX.md` paths broken~~ | ✅ **resolved W13 (file deleted Stage 4; references purged W13)** | File no longer exists in repo. AGENTS.md "Key references" section updated to point at `docs/spec/docs/PROJECT-STATE.md` + `AUDIT-overhaul-2026.md` + `15-design-north-star.md` instead. Historical references in CHANGELOG (added/removed entries) and ROADMAP.md (deletion note) intentionally retained as record. |
+| 14 | ~~`FRAMEWORK_INDEX.md` paths broken~~ | ✅ **resolved W13 (file deleted Stage 4; references purged W13)** | File no longer exists in repo. AGENTS.md "Key references" section updated to point at `docs/spec/docs/04-PROJECT-STATE.md` + `06-AUDIT-v0.10.0.md` + `05-DESIGN-NORTH-STAR.md` instead. Historical references in CHANGELOG (added/removed entries) and ROADMAP.md (deletion note) intentionally retained as record. |
 | 15 | `VerifierRetryPolicy` + new trace event types not `_unstable_*` | ✅ **bigger than reported** | llm-provider has 14+ surfaces missing markers. M3 mechanism + llm-provider §10.1 action. |
 | 16 | ~~`RESULTS-p01.md` + `RESULTS-p02.md` overclaim language~~ | ✅ **resolved W13 (audit-only — calibration was already in place)** | Both files already carry "Scope-of-claims calibration (Rule 11)" sections (p01.md:54-67, p02.md:56-83) with explicit permitted-vs-not-permitted claim framing. No edit required; row marked closed. |
 | 17 | ~~AUC validation unproven (corpus AUC = 0.000)~~ | ✅ **resolved W17 (dispatch signal validated; entropy signal still uncalibrated for local models)** | Re-ran `validate-entropy.ts` against `.reactive-agents/traces/failure-corpus` (post-W3 corpus, generated 2026-04-28 22:40 after the budget-threading fix). **Result delta vs pre-W3 baseline:** dispatch-signal AUC moved from `0.000` (broken) → `1.000` (perfect discrimination on this corpus); entropy-signal AUC `0.500` (no signal — confirms FM-A4 / local-model logprob absence). Per-run: 4/4 failure runs fired dispatch interventions; 0/4 success runs did. Avg entropy gap 0.378 success → 0.496 failure (0.117) — directionally correct but not discriminative without bigger N. **Calibration note (Rule 11):** N=8 (4+4) is small; the dispatch=1.0 result confirms W3 wired the dispatcher correctly but does NOT establish a generalization claim. Bigger corpus (≥30 tasks) is the v0.11 follow-up before any benchmark publication. The empirical pillar's claim line is "post-W3, dispatcher is wired and discriminative on the validated corpus" — not "the harness predicts failure." |

@@ -1,7 +1,7 @@
 # The Self-Improvement Pipeline
 
 > **Status:** Operational rhythm doc, pinned 2026-04-27.  
-> **Companion to:** `00-RESEARCH-DISCIPLINE.md` (the rules), `01-FAILURE-MODES.md` (the catalog).  
+> **Companion to:** `01-RESEARCH-DISCIPLINE.md` (the rules), `02-FAILURE-MODES.md` (the catalog).  
 > **Purpose:** Answer the operational question — *how* do we systematically convert "agent failed at X" into "harness reliably handles X."
 
 ---
@@ -19,7 +19,7 @@
       failing. Capture trace + context.                                  │
                                 ↓                                        │
   [2] CATALOG ──────────────────────────────────────────────────────────┤
-      Promote observation to entry in 01-FAILURE-MODES.md:               │
+      Promote observation to entry in 02-FAILURE-MODES.md:               │
       - Manifestation (how to spot in trace)                             │
       - Reproduction recipe                                              │
       - Severity × Prevalence × Controllability scores                   │
@@ -46,7 +46,7 @@
                                 ↓                                        │
   [6] INTEGRATE + VALIDATE ─────────────────────────────────────────────┤
       Ship to harness. Re-run bench session that contains the failure    │
-      mode. Confirm lift. Update 01-FAILURE-MODES.md entry status.       │
+      mode. Confirm lift. Update 02-FAILURE-MODES.md entry status.       │
                                 ↓                                        │
   [7] DEPRECATE ────────────────────────────────────────────────────────┘
       Harness mechanisms whose claimed failure-mode coverage isn't backed
@@ -78,7 +78,7 @@ The flywheel is self-reinforcing: each pass surfaces new failure modes (from spi
 
 ### Stage 2 — Catalog
 
-Each failure-mode entry in `01-FAILURE-MODES.md` follows this template:
+Each failure-mode entry in `02-FAILURE-MODES.md` follows this template:
 
 ```
 ## FM-NN — <short name>
@@ -215,7 +215,7 @@ That's 1-2 cataloged mitigations per week, or 1 deprecation. After 10 weeks: a s
 
 | Need | Status | Action |
 |---|---|---|
-| `01-FAILURE-MODES.md` skeleton | DRAFTED | Seed with 8-12 known failure modes from existing work |
+| `02-FAILURE-MODES.md` skeleton | DRAFTED | Seed with 8-12 known failure modes from existing work |
 | Frozen judge (Rule 4) | NEEDED | Single SHA, separate process; pin model + prompt |
 | Bench `regression-gate` in CI | EXISTS, NOT WIRED | Add as required check on PRs |
 | Spike infrastructure (`prototypes/`) | EXISTS (3 spikes shipped) | Continue bottom-up extraction |
