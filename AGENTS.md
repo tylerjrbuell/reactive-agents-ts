@@ -117,15 +117,33 @@ After 5+ runs, empirical observations override shipped priors for `parallelCallC
 
 ---
 
+## Canonical Documents & Read Order
+
+**Every session: Read in this order** to understand current state and authority hierarchy.
+
+| Order | Doc | Purpose |
+|---|---|---|
+| **1st** | `docs/spec/docs/04-PROJECT-STATE.md` | Current empirical state (test count, packages, shipped capabilities) |
+| **2nd** | `docs/spec/docs/07-ROADMAP-v1.0.md` | Phase sequencing authority (v0.10.0 → v1.0, validation gates) + integrated architecture |
+| **If v0.10.0 work** | `docs/spec/docs/06-AUDIT-v0.10.0.md` | Release quality gate (28 packages, 13 mechanisms, 44-item FIX backlog) |
+| **Reference** | `docs/spec/docs/05-DESIGN-NORTH-STAR.md` | Architecture target for Phase 2+ conformance |
+| **Reference** | `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` | Methodology (12 rules for any harness change) |
+| **Reference** | `docs/spec/docs/02-FAILURE-MODES.md` | Living failure-mode catalog (FM-A1, FM-B2, etc.) |
+
+**Authority Hierarchy** (if docs conflict):
+- `07-ROADMAP-v1.0.md` > `06-AUDIT-v0.10.0.md` > `04-PROJECT-STATE.md` > `01-RESEARCH-DISCIPLINE.md`
+- Amend lower-authority doc, never silent drift
+
+**All 6 canonical docs are in `docs/spec/docs/`** (uniform `NN-NAME.md` numbering). See `docs/spec/docs/DOCUMENT_INDEX.md` for full index.
+
+---
+
 ## Coding Standards
 
 **Read `CODING_STANDARDS.md` before writing any code.** It covers Effect-TS patterns, type safety, service definitions, error handling, naming, testing, file structure, and anti-patterns. All agents and contributors must conform.
 
 Key references:
 
--   `docs/spec/docs/PROJECT-STATE.md` — canonical landing doc + system map (replaces deleted FRAMEWORK_INDEX.md)
--   `docs/spec/docs/AUDIT-overhaul-2026.md` — Stage-3+ audit findings, FIX backlog, mechanism inventory
--   `docs/spec/docs/15-design-north-star.md` — architectural target
 -   `CODING_STANDARDS.md` — authoritative coding standards (types, services, errors, testing, naming, performance)
 -   `.claude/skills/effect-ts-patterns/SKILL.md` — Effect-TS pattern reference (Schema.Struct, Context.Tag, Layer, Ref)
 -   `.claude/skills/review-patterns/SKILL.md` — 9-category compliance checklist for code review

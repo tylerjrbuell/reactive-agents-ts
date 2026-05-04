@@ -140,7 +140,46 @@ Content here...
 
 Sidebar is auto-generated from directory structure. Use `sidebar: { order: N }` in frontmatter to control ordering.
 
-## Step 6: Update Agent Skills (`.agents/skills/`)
+## Step 6: Sync Canonical Documents (Critical)
+
+**After ANY code change, verify these 6 canonical documents stay synchronized:**
+
+### Canonical Document Sync Rules
+
+All documents live in `docs/spec/docs/` with uniform naming `NN-NAME.md`:
+
+| Change Type | Update These Documents | How to Verify |
+|---|---|---|
+| New package shipped | `07-ROADMAP-v1.0.md` (architecture section) + `04-PROJECT-STATE.md` (package count) | `ls packages/ \| wc -l` matches both docs |
+| New mechanism validated | `06-AUDIT-v0.10.0.md` §10.2 (if v0.10.0) OR `07-ROADMAP-v1.0.md` (if v1.0+) | Verdict + rationale present in correct doc |
+| Test count changed | `04-PROJECT-STATE.md` (test count) + `07-ROADMAP-v1.0.md` (if impacts phase gate) | `bun test 2>&1 \| tail -3` matches docs |
+| Phase gate passed | `07-ROADMAP-v1.0.md` (amendment log, next phase unlocked) | Date + gate results documented |
+| New FM discovered | `02-FAILURE-MODES.md` (add FM entry) + relevant roadmap phase | FM-* code + references present |
+| Architecture refined | `05-DESIGN-NORTH-STAR.md` + `07-ROADMAP-v1.0.md` (Phase 2+ implications) | Both docs updated consistently |
+| Release shipped | `ROADMAP.md` (move to "Released") + `CHANGELOG.md` + `04-PROJECT-STATE.md` | Version present in all 3 |
+
+### Authority Enforcement
+
+- **DO NOT** create one-off phase/spike plans for permanent planning (e.g., `2026-MM-DD-phase-N-*.md`)
+- **Archive** all tactical phase plans to `docs/superpowers/plans/archive/` after completion
+- **If docs conflict:** Amend lower-authority doc per AGENTS.md hierarchy; never silent drift
+- **Naming:** All canonical docs use `NN-NAME.md`; no date prefixes or irregular suffixes
+
+### Quick Sync Checklist
+
+After completing ANY feature, bug fix, or validation:
+
+- [ ] `04-PROJECT-STATE.md` test count matches `bun test` output
+- [ ] `07-ROADMAP-v1.0.md` amendment log updated (if phase gate passed)
+- [ ] `06-AUDIT-v0.10.0.md` mechanism verdicts updated (if v0.10.0 work)
+- [ ] `02-FAILURE-MODES.md` updated (if new FM discovered)
+- [ ] `.agents/MEMORY.md` updated (new findings documented)
+- [ ] No orphan one-off docs left in `docs/superpowers/plans/` (archive if not current)
+- [ ] No broken cross-references in AGENTS.md or DOCUMENT_INDEX.md
+
+---
+
+## Step 6b: Update Agent Skills (`.agents/skills/`)
 
 The `.agents/skills/` directory contains skills used by agents to build with this framework. These must stay accurate — stale code examples or wrong API signatures directly cause agent errors.
 
