@@ -166,6 +166,7 @@
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
+        "@reactive-agents/judge-server": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
         "@reactive-agents/reasoning": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
@@ -187,15 +188,31 @@
         "zod": "^3.23",
       },
     },
+    "packages/channels": {
+      "name": "@reactive-agents/channels",
+      "version": "0.9.0",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/gateway": "workspace:*",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "typescript": "^5.7.0",
+      },
+      "peerDependencies": {
+        "effect": "^3.10.0",
+      },
+    },
     "packages/core": {
       "name": "@reactive-agents/core",
       "version": "0.9.0",
       "dependencies": {
+        "effect": "^3.10.0",
         "ulid": "^2.3.0",
       },
       "devDependencies": {
         "bun-types": "latest",
-        "effect": "^3.10.0",
         "typescript": "^5.7.0",
       },
       "peerDependencies": {
@@ -325,6 +342,19 @@
       },
       "peerDependencies": {
         "effect": "^3.10.0",
+      },
+    },
+    "packages/judge-server": {
+      "name": "@reactive-agents/judge-server",
+      "version": "0.10.0",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/eval": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "effect": "*",
+      },
+      "peerDependencies": {
+        "effect": "*",
       },
     },
     "packages/llm-provider": {
@@ -1385,6 +1415,8 @@
 
     "@reactive-agents/benchmarks": ["@reactive-agents/benchmarks@workspace:packages/benchmarks"],
 
+    "@reactive-agents/channels": ["@reactive-agents/channels@workspace:packages/channels"],
+
     "@reactive-agents/cli": ["@reactive-agents/cli@workspace:apps/cli"],
 
     "@reactive-agents/core": ["@reactive-agents/core@workspace:packages/core"],
@@ -1412,6 +1444,8 @@
     "@reactive-agents/identity": ["@reactive-agents/identity@workspace:packages/identity"],
 
     "@reactive-agents/interaction": ["@reactive-agents/interaction@workspace:packages/interaction"],
+
+    "@reactive-agents/judge-server": ["@reactive-agents/judge-server@workspace:packages/judge-server"],
 
     "@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@workspace:packages/llm-provider"],
 
@@ -4004,6 +4038,8 @@
     "@reactive-agents/a2a/bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
 
     "@reactive-agents/benchmarks/bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
+
+    "@reactive-agents/channels/bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
 
     "@reactive-agents/cli/bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
 
