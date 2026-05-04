@@ -6,4 +6,6 @@ External channel layer: **TriggerRegistry**, **SessionBridge**, **ChannelService
 
 **Gateway config:** Messaging allowlist / chat mode lives under `.withGateway({ accessControl: { ... } })` (renamed from `channels` to avoid clashing with this package).
 
-See `docs/superpowers/plans/2026-03-22-channels-package.md` for the full rollout plan (`.withChannels()` builder wiring is still pending).
+See `docs/superpowers/plans/2026-03-22-channels-package.md` for the full rollout plan.
+
+**Runtime:** use `.withChannels({ adapters, triggers?, defaultAgent? })` with `.withGateway()` — adapters start when `agent.start()` runs (see `ReactiveAgent.start` JSDoc for async registration timing).

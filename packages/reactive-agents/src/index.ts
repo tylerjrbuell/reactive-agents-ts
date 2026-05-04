@@ -76,6 +76,8 @@ export type {
   // Agent as Data types
   AgentConfig as RuntimeAgentConfig,
   PersonaConfig,
+  // External channels (webhooks, bots)
+  ChannelsConfig,
   // Composition types
   AgentFn,
 } from "@reactive-agents/runtime";
