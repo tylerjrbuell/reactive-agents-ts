@@ -22,6 +22,7 @@
 | 8 | `03-IMPROVEMENT-PIPELINE.md` | Operational rhythm — DISCOVERY → DEPRECATE flywheel |
 
 **Authority Hierarchy:**
+
 - `07-ROADMAP-v1.0.md` > `06-AUDIT-v0.10.0.md` > `04-PROJECT-STATE.md` > `01-RESEARCH-DISCIPLINE.md`
 - If docs conflict: amend lower-authority doc, never silent drift.
 

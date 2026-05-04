@@ -7,30 +7,36 @@
 ## 1. Where to Start (Entry Points by Task)
 
 ### You are an AI agent starting work on this repo
+
 → Read: `AGENTS.md` (operational guide) + `.agents/MEMORY.md` (project status)
-→ Query: `obsidian-vault-query` for recent decisions/experiments (wiki/Hot.md)
+→ Check: `CHANGELOG.md` for recent releases; `docs/spec/docs/DOCUMENT_INDEX.md` for canonical docs
 
 ### You need to understand the architecture
+
 → See: `docs/spec/docs/DOCUMENT_INDEX.md` (read order for canonical docs)
 → Read: `docs/spec/docs/05-DESIGN-NORTH-STAR.md` (target), then `docs/spec/docs/04-PROJECT-STATE.md` (current)
 → Reference: `AGENTS.md` §Architecture Quick Reference (package dependency tree)
 → Code: Browse `packages/{core,llm-provider,reasoning,tools}/src/` in that order
 
 ### You need to implement a feature
+
 → Read: `AGENTS.md` §Development Workflow
 → Find relevant package: Use Package Map below
 → Reference skill: Load `.agents/skills/{effect-ts-patterns, implement-service, implement-test, your-domain}`
 
 ### You need to fix a bug
+
 → Read: `docs/spec/docs/02-FAILURE-MODES.md` for category, then `AGENTS.md` §Common Debugging Entry Points
 → Narrow to file: Use Package Map below + diagnostics skill
 
 ### You need to understand a specific package
+
 → Navigate to: `packages/<name>/`
 → Read: `packages/<name>/src/index.ts` (exports), `src/runtime.ts` (layer factory)
 → Tests: `packages/<name>/tests/*.test.ts` (examples of use)
 
 ### You need docs on a feature
+
 → Search: `apps/docs/src/content/docs/` by category (guides/, features/, reference/, concepts/)
 → Code reference: Check that example in README.md or AGENTS.md matches current API
 
@@ -141,22 +147,27 @@ See PACKAGE_MAP.md for detailed package index.
 ## 4. How to Find Code
 
 ### By feature/symptom
+
 → `AGENTS.md` §Common Debugging Entry Points (11-row table mapping symptoms to files)
 
 ### By file path
+
 → Use your IDE's "Go to File" (Cmd+P / Ctrl+P)
 → Pattern examples:
+
 - Tool execution: `packages/reasoning/src/strategies/kernel/phases/act.ts`
 - Context building: `packages/reasoning/src/strategies/kernel/utils/context-builder.ts`
 - LLM calls: `packages/llm-provider/src/runtime.ts`
 - Memory: `packages/memory/src/services/`
 
 ### By package
+
 → Navigate to `packages/<name>/src/index.ts` (barrel export)
 → Read `src/runtime.ts` (Effect layer factory)
 → Browse `tests/` (usage examples)
 
 ### By error/test failure
+
 → Run: `bun test <file>` (scoped test)
 → Read: file + neighboring files + package index.ts
 
@@ -165,27 +176,34 @@ See PACKAGE_MAP.md for detailed package index.
 ## 5. How to Find Documentation
 
 ### Architecture & design (Canonical spec docs)
+
 → `docs/spec/docs/DOCUMENT_INDEX.md` (read order + authority hierarchy)
 → Then: `docs/spec/docs/05-DESIGN-NORTH-STAR.md` (target) or `04-PROJECT-STATE.md` (current)
 
 ### Feature behavior / API reference
+
 → `apps/docs/src/content/docs/reference/builder-api.md` (complete API)
 → `apps/docs/src/content/docs/guides/` (category guides)
 → `README.md` (quick example)
 
 ### Failure modes / troubleshooting
+
 → `docs/spec/docs/02-FAILURE-MODES.md` (FM-A1, FM-B2, etc.)
 → `AGENTS.md` §Common Pitfalls (9-item reference)
 
 ### Methodology / validation (Canonical spec docs)
+
 → `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` (12 rules for any harness change)
 → `docs/spec/docs/03-IMPROVEMENT-PIPELINE.md` (DISCOVERY→DEPRECATE flywheel)
 
-### Recent decisions / experiments
-→ `wiki/Hot.md` (recent context cache via `obsidian-vault-query`)
-→ `wiki/Decisions/` (architecture decisions)
+### Recent decisions / experiments (Future)
+
+→ **Planned:** Obsidian vault for persistent cross-session knowledge
+→ **Current:** Use `.agents/MEMORY.md` for session carry-over
+→ **Historical:** Check `docs/superpowers/debriefs/` for past engineering notes
 
 ### Release history
+
 → `CHANGELOG.md` (auto-generated from changesets)
 → `ROADMAP.md` (public milestone tracker)
 
@@ -194,6 +212,7 @@ See PACKAGE_MAP.md for detailed package index.
 ## 6. Common Agent Patterns (Save 50-70% of exploration time)
 
 ### Pattern 1: "I need to implement a feature in package X"
+
 ```
 1. Find package: packages/<name>/src/index.ts (see what's exported)
 2. Load skill: .agents/skills/effect-ts-patterns/SKILL.md
@@ -204,6 +223,7 @@ See PACKAGE_MAP.md for detailed package index.
 ```
 
 ### Pattern 2: "Something is broken in the kernel"
+
 ```
 1. Identify symptom: AGENTS.md §Common Debugging Entry Points (find the row)
 2. Read that file + neighbors
@@ -214,6 +234,7 @@ See PACKAGE_MAP.md for detailed package index.
 ```
 
 ### Pattern 3: "I'm adding a new provider or tool capability"
+
 ```
 1. Read: AGENTS.md §Adaptive Calibration (for providers)
          AGENTS.md §Golden Rules (no black-box helpers)
@@ -225,6 +246,7 @@ See PACKAGE_MAP.md for detailed package index.
 ```
 
 ### Pattern 4: "I need to understand the kernel phases"
+
 ```
 1. Read: docs/spec/docs/05-DESIGN-NORTH-STAR.md §Cognitive Architecture
 2. Browse: packages/reasoning/src/strategies/kernel/phases/ (12 files = 12 phases)
@@ -233,6 +255,7 @@ See PACKAGE_MAP.md for detailed package index.
 ```
 
 ### Pattern 5: "Tests are failing, where's the issue?"
+
 ```
 1. Run: bun test packages/<affected>/tests/<file>.test.ts
 2. Read: the test file (understand what it's testing)
@@ -253,11 +276,13 @@ See PACKAGE_MAP.md for detailed package index.
 4. Package Map (above) — 29-package index
 
 **After that:**
+
 - Navigate by symptom (AGENTS.md §Debugging) or task (this file §Common Patterns)
 - Use IDE's "Go to File" / grep for specific code
 - Query Obsidian vault for decisions/experiments that might be relevant
 
 **Avoid:**
+
 - Reading all 606 lines of older docs (they're in `_archive/`)
 - Exploring packages without reading their `src/index.ts` first
 - Running the full test suite to verify a change (use scoped `bun test <file>`)

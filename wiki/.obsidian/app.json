@@ -1,0 +1,32 @@
+{
+  "basePath": "",
+  "baseUrl": "",
+  "enabledPlugins": [
+    "obsidian-full-calendar",
+    "obsidian-git",
+    "obsidian-dataview",
+    "obsidian-excalidraw-plugin"
+  ],
+  "pluginEnabledStatus": {
+    "obsidian-full-calendar": true,
+    "obsidian-git": true,
+    "obsidian-dataview": true,
+    "obsidian-excalidraw-plugin": true
+  },
+  "livePreviewDisplayRes": 0.5,
+  "fontSize": 16,
+  "lineHeight": 1.6,
+  "strictLineBreaks": false,
+  "showInlineTitle": true,
+  "showLineNumber": true,
+  "useMarkdownLinks": true,
+  "useTab": true,
+  "spellcheck": true,
+  "spellcheckLanguages": [
+    "en",
+    "en-US"
+  ],
+  "obsidianCitations": {},
+  "alwaysUpdateLinks": true,
+  "newLinkFormat": "shortest"
+}

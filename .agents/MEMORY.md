@@ -16,6 +16,46 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ## Current state (May 4, 2026)
 
+### Wiki Vault Population Complete ✅ (May 4, 3:30pm EDT)
+
+**Obsidian vault fully initialized with comprehensive project brain AND all Phase 1.5 content populated:**
+
+**MOCs & Navigation (5 master hubs):**
+- ✅ Architecture MOC — 12-phase kernel, package layers, port system
+- ✅ Research MOC — Phase 1 validation (8 KEEP/5 IMPROVE), all 13 mechanisms linked
+- ✅ Concepts MOC — Cognitive architecture, tool integration, safety, memory, orchestration
+- ✅ Decisions MOC — Phase gates, north star v3.0, strategic trade-offs
+- ✅ Packages MOC — 26 packages + 5 apps by layer
+
+**Mechanism Validation (M1-M13):**
+- ✅ All 13 mechanism notes with: verdict, test results, metrics, Phase 1.5 actions, integration points
+- ✅ KEEP mechanisms: M1, M2, M4, M5, M9, M11, M12, M13 (shipped v0.10.0)
+- ✅ IMPROVE mechanisms: M3, M6, M7, M8, M10 (Phase 1.5 action items identified with owners)
+
+**Failure Mode Taxonomy (FM-A-H):**
+- ✅ All 8 categories with: manifestation, root cause, reproduction, mitigations, evidence
+- ✅ Each FM linked to mechanisms that mitigate it
+
+**Package Documentation:**
+- ✅ Package Index (all 26 packages + 5 apps quick reference)
+- ✅ Detailed notes for core, llm-provider, reasoning (template for others)
+
+**Planning & Roadmaps:**
+- ✅ Phase 1.5 Improvement Roadmap (M3, M6, M7, M8, M10 with effort, timelines, owners)
+- ✅ Documentation Consolidation Roadmap (migrate all docs to wiki by Phase 2)
+
+**Status:** 🟢 Wiki is primary knowledge base for Phase 1.5 agentic work. Team can self-serve all context.
+
+**When starting Phase 1.5/2 work:**
+1. Check `wiki/Hot.md` for recent session updates
+2. Check `wiki/Planning/Phase 1.5 Improvement Roadmap.md` for action items and owners
+3. Reference `wiki/MOCs/*` for architecture & decision context
+4. Link new work to existing mechanisms (backlinks auto-appear)
+
+**Long-term vision:** Wiki replaces all fragmented doc spaces (spec docs, debriefs, plans, markdown files). Single source of truth by Phase 2.
+
+---
+
 - **Spike M3: Verifier + Retry Validation — COMPLETE:**
   - RED phase: 22 unit tests validate verifier gate + retry policy (100% pass rate).
   - GREEN phase: Implement FM-A1 + FM-C2 retry signal builders addressing p02 findings.
