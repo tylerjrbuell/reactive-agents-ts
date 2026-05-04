@@ -31,9 +31,15 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import {
   defaultVerifier,
   defaultVerifierRetryPolicy,
+  improvedVerifierRetryPolicy,
   type VerificationContext,
   type VerifierRetryPolicyContext,
 } from "../src/kernel/capabilities/verify/verifier.js";
+import {
+  buildImprovedRetrySignal,
+  buildFMA1RetrySignal,
+  buildFMC2RetrySignal,
+} from "../src/kernel/capabilities/verify/retry-context.js";
 import type { ReasoningStep } from "../src/types/index.js";
 
 // ─── Test Fixtures ─────────────────────────────────────────────────────────
@@ -413,54 +419,30 @@ describe("M3 Verifier Retry Policy — decision logic", () => {
 // The p02 retry feedback was: "You didn't call the tool. You MUST emit a tool call."
 // Improved context should:
 //   1. Simplify system prompt (reduce cognitive load)
-//   2. Provide examples of correct tool calls
-//   3. Reduce temperature to minimize fabrication risk
+//   2. Provide examples of correct tool calls (e.g., tool_call[...] syntax)
+//   3. Address common misinterpretations (e.g., "emit" vs "describe")
 //   4. Be explicit about the model's failure
 
 describe("M3 Improved Retry Context", () => {
-  /**
-   * Build improved retry signal text that replaces generic feedback.
-   * Based on p02 findings: cogito interprets "file attachment" literally,
-   * so feedback must be EXPLICIT about what "tool call" means.
-   */
-  function buildImprovedRetrySignal(verdict: {
-    readonly summary: string;
-  }): string {
-    // For FM-A1 (agent-took-action), provide explicit tool call examples
-    if (verdict.summary.includes("agent-took-action")) {
-      return (
-        "⚠️ RETRY: You did not call any tools. You MUST emit a tool call in the next response. " +
-        "Example: To read a file, respond with: tool_call[read_csv]{filename: 'data.csv'}. " +
-        "Do not just describe what you would do — actually emit the tool call."
-      );
-    }
-
-    // For FM-C2 (synthesis-ungrounded), request grounded references
-    if (verdict.summary.includes("synthesis-grounded")) {
-      return (
-        "⚠️ RETRY: Your answer doesn't cite data from the tool results. " +
-        "You MUST reference specific numbers, SKUs, or facts from the tool output. " +
-        "Example: 'The SKU ELEC-4K-TV-001 sales dropped by $3,825.' " +
-        "Revise to include 3+ specific references from the data."
-      );
-    }
-
-    // Fallback
-    return `⚠️ RETRY: ${verdict.summary}. Please try again with more care.`;
-  }
-
   it("builds FM-A1 retry signal with explicit tool call examples", () => {
     const verdict = {
       verified: false,
       action: "final-answer",
       summary: "final-answer: failed at agent-took-action",
-      checks: [],
+      checks: [
+        {
+          name: "agent-took-action",
+          passed: false,
+          reason: "agent shipped output without calling any required data tool (required: read_csv)",
+        },
+      ],
     };
 
     const signal = buildImprovedRetrySignal(verdict);
-    expect(signal).toContain("tool call");
+    expect(signal).toContain("MUST emit");
     expect(signal).toContain("tool_call[read_csv]");
-    expect(signal).toContain("Example:");
+    expect(signal).toContain("❌ WRONG");
+    expect(signal).toContain("✅ RIGHT");
   });
 
   it("builds FM-C2 retry signal with grounding examples", () => {
@@ -468,13 +450,40 @@ describe("M3 Improved Retry Context", () => {
       verified: false,
       action: "final-answer",
       summary: "final-answer: failed at synthesis-grounded",
-      checks: [],
+      checks: [
+        {
+          name: "synthesis-grounded",
+          passed: false,
+          reason: "output doesn't cite data from evidence",
+        },
+      ],
     };
 
     const signal = buildImprovedRetrySignal(verdict);
-    expect(signal).toContain("specific numbers");
+    expect(signal).toContain("specific data");
     expect(signal).toContain("SKU");
-    expect(signal).toContain("Example:");
+    expect(signal).toContain("≥3 specific references");
+  });
+
+  it("FM-A1 signal separates 'describe' from 'emit' to address p02 misunderstanding", () => {
+    const verdict = {
+      verified: false,
+      action: "final-answer",
+      summary: "final-answer: failed at agent-took-action",
+      checks: [
+        {
+          name: "agent-took-action",
+          passed: false,
+          reason: "agent shipped output without calling any required data tool (required: read_csv)",
+        },
+      ],
+    };
+
+    const signal = buildFMA1RetrySignal(verdict);
+    // Key p02 insight: cogito says "I would call" not "I call"
+    expect(signal).toContain("WRONG: 'I would");
+    expect(signal).toContain("RIGHT: Emit");
+    expect(signal).toContain("must ACTUALLY EMIT");
   });
 
   it("stores improved signal on VerifierRetryDecision.signalText", () => {
@@ -482,17 +491,50 @@ describe("M3 Improved Retry Context", () => {
       verified: false,
       action: "final-answer",
       summary: "final-answer: failed at agent-took-action",
-      checks: [],
+      checks: [
+        {
+          name: "agent-took-action",
+          passed: false,
+          reason: "agent shipped output without calling any required data tool (required: read_csv)",
+        },
+      ],
     };
 
     const signal = buildImprovedRetrySignal(verdict);
     const policyDecision = {
       retry: true,
       signalText: signal,
-      reason: "retry with improved context",
+      reason: "improved retry policy: context-specific guidance",
     };
 
-    expect(policyDecision.signalText).toContain("tool_call[read_csv]");
+    expect(policyDecision.signalText).toContain("tool_call");
+  });
+
+  it("improved policy uses improved signals", () => {
+    const ctx: VerifierRetryPolicyContext = {
+      verdict: {
+        verified: false,
+        action: "final-answer",
+        summary: "final-answer: failed at agent-took-action",
+        checks: [
+          {
+            name: "agent-took-action",
+            passed: false,
+            reason: "agent shipped output without calling any required data tool (required: read_csv)",
+          },
+        ],
+      },
+      iteration: 1,
+      retriesUsed: 0,
+      maxRetries: 2,
+      stepCount: 3,
+      toolsUsed: new Set(),
+    };
+
+    const decision = improvedVerifierRetryPolicy(ctx);
+    expect(decision.retry).toBe(true);
+    expect(decision.signalText).toBeDefined();
+    expect(decision.signalText).toContain("MUST emit");
   });
 });
 

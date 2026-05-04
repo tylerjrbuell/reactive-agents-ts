@@ -35,6 +35,7 @@ import {
   validateOutputGroundedInEvidence,
   validateGeneralizedGrounding,
 } from "./evidence-grounding.js";
+import { buildImprovedRetrySignal } from "./retry-context.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,34 @@ export const defaultVerifierRetryPolicy: VerifierRetryPolicy = (ctx) => {
     return { retry: false, reason: "retry budget exhausted" };
   }
   return { retry: true, reason: "default policy: retry on any rejection" };
+};
+
+/**
+ * Improved retry policy — uses enhanced retry signals optimized for
+ * models with low tool-use compliance (e.g., cogito:8b per p02 spike).
+ *
+ * Changes from default:
+ *   - Generates context-specific retry signals (FM-A1 vs FM-C2) instead
+ *     of generic "please try again" feedback
+ *   - Includes explicit examples and syntax guidance
+ *   - Addresses common model misinterpretations (e.g., "emit" vs "describe")
+ *
+ * Usage: Supply as custom verifierRetryPolicy in ReactiveInput config.
+ *
+ * Evidence basis: p02 spike shows direct feedback ("you MUST call tool")
+ * produces 0/5 recovery on cogito:8b. M3 tests this improved context to
+ * see if example-driven guidance lifts recovery to ≥50%.
+ */
+export const improvedVerifierRetryPolicy: VerifierRetryPolicy = (ctx) => {
+  if (ctx.retriesUsed >= ctx.maxRetries) {
+    return { retry: false, reason: "retry budget exhausted" };
+  }
+  const signalText = buildImprovedRetrySignal(ctx.verdict);
+  return {
+    retry: true,
+    signalText,
+    reason: "improved retry policy: context-specific guidance",
+  };
 };
 
 // ─── Default implementation ───────────────────────────────────────────────────
