@@ -1,0 +1,17 @@
+{
+  "phase": 0,
+  "captured_at": "2026-05-03T23:22:00Z",
+  "judge_model": "claude-haiku-4-5-20251001",
+  "judge_code_sha": "3a57f467cad2c34d220ccb2f5fdcec7c9633c958",
+  "sut_model": "claude-sonnet-4-6",
+  "task_suite": "regression-gate",
+  "run1_score": 0.11764705882352941,
+  "run2_score": 0.11764705882352941,
+  "delta_pct": 0.0,
+  "gate_pass": true,
+  "container_image": "reactive-agents/judge-server:latest",
+  "container_built_at": "2026-05-03T23:14:00Z",
+  "regression_script": "scripts/run-frozen-judge-regression.sh",
+  "judge_url": "http://127.0.0.1:8910",
+  "notes": "Perfect reproducibility achieved: 0% delta between consecutive runs. Judge /version endpoint returns correct model SHA and code SHA. All 17 regression-gate tasks executed successfully in both runs with identical accuracy scores."
+}

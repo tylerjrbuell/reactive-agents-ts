@@ -24,9 +24,9 @@ bun run --cwd packages/benchmarks src/run.ts \
   --model "$SUT_MODEL" \
   --output "$(pwd)/harness-reports/phase-0-runs/run2.json"
 
-# Diff the aggregate scores
-SCORE1=$(jq '.aggregate.overallScore // .aggregate.score // .aggregateScore' harness-reports/phase-0-runs/run1.json 2>/dev/null || echo "0")
-SCORE2=$(jq '.aggregate.overallScore // .aggregate.score // .aggregateScore' harness-reports/phase-0-runs/run2.json 2>/dev/null || echo "0")
+# Diff the average accuracy scores across all tasks
+SCORE1=$(jq '[.taskReports[].meanScores[] | select(.dimension == "accuracy") | .score] | add / length' harness-reports/phase-0-runs/run1.json)
+SCORE2=$(jq '[.taskReports[].meanScores[] | select(.dimension == "accuracy") | .score] | add / length' harness-reports/phase-0-runs/run2.json)
 DELTA=$(echo "scale=4; ($SCORE2 - $SCORE1) * 100" | bc)
 
 echo "Run1 score: $SCORE1"
