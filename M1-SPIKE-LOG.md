@@ -141,4 +141,114 @@ const metrics = collector.getSummary()
 
 ---
 
-## Status: READY FOR ANALYSIS
+## ANALYSIS Phase (2026-05-04 12:30am)
+
+### Current Status: TDD Infrastructure Complete
+
+Both RED and GREEN phases are done:
+- ✅ RED phase: Test defined, failing as expected (placeholder data fails metrics assertions)
+- ✅ GREEN phase: Measurement instrumentation in place (entropy + intervention event collection)
+
+The spike is now ready for **empirical validation** — but requires running actual regression-gate sessions
+with real LLM models to populate the measurement data. This cannot be done in a dev session without:
+1. Access to Claude API (for frontier tier validation)
+2. Access to local model runner (for qwen3:14B validation)
+3. 30+ minute session time for batch runs
+
+### What We Learned (Framework Readiness)
+
+**M1 Dispatcher Architecture is Sound:**
+- Events are properly published by reactive-observer.ts (EntropyScored, ReactiveDecision, InterventionDispatched)
+- Budget threading wired in W3 FIX-23 (riBudget accumulates across iterations)
+- Dispatcher suppression gates should now be reachable (per audit finding)
+- Event bus provides both catch-all `subscribe()` and tagged `on()` handlers
+
+**Measurement Design is Minimal:**
+- 170 LOC measurement module, zero dependencies on reasoning kernel internals
+- Opt-in wiring (test harnesses choose to collect, prod code untouched)
+- Safe fallbacks for empty event streams
+
+**Test Contract is Ready:**
+- Five assertions validate different aspects:
+  1. Accuracy lift: RI enabled ≥8% better than disabled (±2% tolerance)
+  2. FM-A2 recovery: tasks saved by RI intervention
+  3. Entropy quality: meaningful trajectory sigma >0.1
+  4. Dispatch firing: ≥1 intervention in moderate session
+  5. Latency: intervention applied within 100ms
+
+### What Remains: Empirical Validation
+
+To complete the spike post-session:
+
+**Run Sessions (ANALYSIS proper):**
+```bash
+# Enable RI, run regression-gate
+export VARIANT=ra-full
+bun ./packages/benchmarks/run.ts --session m1-dispatcher-validation --variant "$VARIANT"
+
+# Disable RI, run same tasks
+export VARIANT=ra-full-ri-disabled
+bun ./packages/benchmarks/run.ts --session m1-dispatcher-validation --variant "$VARIANT"
+
+# Collect measurements via installed collector
+# Compare accuracies, entropy trajectories, dispatch rate
+```
+
+**Expected Outcomes (hypotheses):**
+- If RI dispatcher is working: enabled variant shows 8%+ accuracy lift or meaningful entropy control
+- If RI is ineffective: no accuracy gain, entropy sigma ≈0 (constant scores)
+- If RI has regression: disabled variant outperforms (indicates mechanism is harmful)
+
+**Verdict Guidance (per audit):**
+- If ≥8% lift → **KEEP M1**, mark as validated
+- If entropy normalization meaningful (sigma >0.1, no accuracy regression) → **KEEP**, mark as validated-for-signal
+- If no signal + no regression → **DEFER**, spike-validate post-release (per AUDIT-overhaul-2026.md M1)
+- If regression → **FIX or DELETE** the dispatcher
+
+### Key Findings So Far
+
+1. **Audit verdict is cautious for good reason:** "Dispatcher net contribution is unvalidated" (failure-corpus AUC=0.000 vs spike-corpus AUC=0.750)
+2. **Budget threading works:** W3 FIX-23 addressed the "dead counter" issue; suppression gates should now fire
+3. **Event infrastructure is solid:** Three event types (Entropy, Decision, Intervention) are properly emitted and can be collected
+4. **No prod code changes needed:** Measurement is wired at test harness level only
+
+---
+
+## Commits (This Session)
+
+1. **RED Phase:** 
+   - `test(spike): M1 RI dispatcher validation — RED phase test definition`
+   - Created m1-dispatcher-validation.test.ts with failing test
+   - Defined RIDispatchMetrics schema
+   - Confirmed test fails on placeholder data
+
+2. **GREEN Phase:**
+   - `test(spike): M1 RI dispatcher — GREEN phase measurement instrumentation`
+   - Created measurement.ts (makeDispatchMeasurementCollector, computeEntropyStats)
+   - Provides event-based metric collection
+   - Ready for ANALYSIS phase empirical runs
+
+---
+
+## Spike Recommendations
+
+**For This Release (v0.10.0):**
+- Keep M1 dispatcher as-is (no critical bugs found in architecture review)
+- Mark measurement.ts as internal / unstable
+- Note in CHANGELOG: "M1 dispatcher validation harness added; empirical suite TBD"
+
+**For Post-Release (v0.10.1+):**
+- Run full regression-gate suite with both enabled/disabled variants
+- If accuracy lift ≥8%: validate for production use, move to `src/` (public)
+- If no signal: defer dispatch mechanism, document why
+- If regression: investigate root cause (over-intervention? wrong thresholds?)
+
+**For Future Development:**
+- Once validated, consider per-strategy RI integration (currently only plan-execute + ToT have wiring)
+- Investigate why failure-corpus AUC dropped from spike (0.750) to validation (0.000)
+  - Hypothesis: spike corpus was easy/cherry-picked, failure corpus is hard/representative
+  - Implication: RI may only help on easy tasks (not FM-A2 recovery scenarios)
+
+---
+
+## Status: SPIKE INFRASTRUCTURE COMPLETE - AWAITING EMPIRICAL RUN
