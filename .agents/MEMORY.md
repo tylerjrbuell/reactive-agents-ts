@@ -16,6 +16,16 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ## Current state (May 4, 2026)
 
+- **Spike M4: Healing Pipeline Validation — COMPLETE:**
+  - 4-stage healing pipeline (retry → reparse → interpolate → fallback) **validated** for FC error recovery.
+  - Recovery rate: **86.7%** (13/15) — exceeds 60% threshold.
+  - Accuracy improvement: **+80.0%** (6.7% → 86.7%).
+  - Token efficiency: **90% savings** vs reprompt fallback (750 vs 7500 tokens per 15 calls).
+  - Success by stage: tool-name 100%, param-name 100%, path-resolution 100%, type-coercion 100%.
+  - Unrecoverable errors identified: missing required args (semantic), unknown tools (discovery needed), undefined aliases (addressable via CalibrationStore).
+  - Evidence: `packages/tools/tests/m4-healing-pipeline.test.ts` (11 passing tests, 15-case dataset, 39 assertions).
+  - Verdict: **M4 validated**. Ready for Phase 1 deployment with alias maps; Phase 2 adds CalibrationStore learning; Phase 3 adds fuzzy matching.
+
 - **Spike M10: Memory System Validation (FM-F2) — COMPLETE:**
   - FM-F2 ("memory pollution across runs") is **mitigated** (not a practical risk) — task-scoped queries prevent false memory injection.
   - Recall accuracy: **66.7%** on verbose natural language, **100%** on key-term queries.
