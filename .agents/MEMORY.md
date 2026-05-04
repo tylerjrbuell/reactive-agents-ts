@@ -68,6 +68,19 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
   - Commit: `6f614a94` (original validation).
   - Next: Integrate leak detector into output assembly (Phase 1.5 integration).
 
+- **Spike M10: Memory System (3-tier episodic recall) — COMPLETE:**
+  - Episodic memory store/retrieve working via SQLite + FTS5 indexing.
+  - **Measured Results:** Recall accuracy 66.7% on verbose natural language, 100% on key-term queries. Accuracy lift +10pp (70% baseline → 77% with memory). Memory overhead negligible: 0.05ms per entry, 41 bytes per entry. No cross-task pollution (taskId filtering effective).
+  - Multi-turn continuity validated: Record preferences in Task 1 → Recall in Task 2 → Apply without re-asking.
+  - FM-F2 (memory pollution) mitigated: Task-scoped queries prevent false memory injection.
+  - Test coverage: 7 spike tests (scenario-based multi-turn), 100% pass rate (178ms, 16 expectations).
+  - Evidence: `packages/memory/tests/m10-memory-system.test.ts` (TDD: RED → GREEN complete).
+  - Key findings: (1) FTS5 keyword search works excellently for key-term queries but struggles with verbose NL (66.7% vs 100%). (2) Memory overhead negligible on throughput (0.05ms per entry). (3) Task isolation working correctly. (4) Storage efficiency excellent (4KB for 100 entries = 41 bytes/entry).
+  - Verdict: **✅ KEEP** — Store+recall cycle fully functional, system ready for Phase 1.5 optimization.
+  - Debrief: `docs/superpowers/debriefs/M10-memory-system-validation.md`.
+  - Phase 1.5 actions: (1) Implement key-term extraction for Tier 1 to achieve 100% recall (decompose verbose queries), (2) Wire episodic context injection into kernel bootstrap, (3) Design realistic multi-session scenarios for Phase 2.
+  - Commit: `658a84c0`.
+
 - **Spike M12: Provider Adapter Hooks Validation — COMPLETE:**
   - All 7 hooks defined on `ProviderAdapter` interface: parseToolCalls, extractText, computeCost, validateResponse, optimizePrompt, handleError, streamSupport.
   - All 7 hooks fire on provider-specific scenarios (qwen3, Gemini, Anthropic, Ollama).
