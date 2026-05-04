@@ -16,13 +16,32 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ## Current state (May 1, 2026)
 
-- **v0.10.0 release-ready** — `refactor/overhaul` branch fully prepared; changeset + CHANGELOG + release doc written; 4,708 tests pass, 0 fail across 528 files (5 pre-existing failures in untracked `packages/benchmarks/parseDate.test.ts` are excluded).
+- **v0.10.0 release-ready** — `refactor/overhaul` branch fully prepared; changeset + CHANGELOG + release doc written; 4,672 pass / 23 skip / 4 fail across 527 files (4 pre-existing failures in untracked `packages/benchmarks/parseDate.test.ts` — not regressions).
 - **Branch:** `refactor/overhaul`. All prior `feat/*` branches archived as `archive/*` tags.
 - **Published on npm:** all packages at `0.9.0`. Version bumps happen via changeset merge (`release-0-10-0.md` covers all 28 packages + umbrella, `@reactive-agents/diagnose` included).
 - **cf-23 gate fixed:** `required-tools-satisfied` was moved from verifier to `runner.ts §8`; scenario now tests `agent-took-action` + positive absence. Baseline regenerated with BASELINE-UPDATE trailer.
 - **Architecture target:** `15-design-north-star.md` v3.0 (10 capabilities + cognitive kernel + 3 ports).
-- **Pending before tag:** merge `refactor/overhaul` → `main`, run `changeset version`, publish.
+- **Pending before tag:** (1) Publish `@reactive-agents/diagnose` — confirmed 404 on npm (May 1). Ships via CI changeset workflow. (2) Eval Rule 4 frozen-judge — `packages/eval/src/runtime.ts` still uses same-codepath judge; blocks any published benchmark claim. Then: merge `refactor/overhaul` → `main`, run `changeset version`, publish.
 - **Gateway chat mode shipped** (May 1): per-sender SQLite session history, 40-turn/8 k-char windowing, episodic context injection, daily compaction, mode-aware routing (`channels.mode: 'chat'|'task'`). Two memory bugs fixed: `priorContext` silently dropped (context-manager.ts) + episodic injection gated behind `enableSelfImprovement` (execution-engine.ts). New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added. Key file: `packages/runtime/src/gateway-chat.ts`.
+- **Frontier bench (W21, Apr 30):** ra-full 100% across 4 frontier models (claude-sonnet-4-6, claude-haiku-4-5, gpt-4o-mini, gemini-2.5-pro). Bare-llm 85%. Gemini W22 fix: walk `candidates[0].content.parts[]` directly; surface non-OK `finishReason` as explicit errors.
+
+### Token Optimization (May 3, 2026)
+- **rtk discover audit:** 529 sessions, 17K Bash commands analyzed. Only 18% use RTK prefix. **1.2M tokens saveable** from non-prefixed commands (grep 502K, cat 351K, git log 166K, find 99K, ls 73K).
+- **Root cause:** Behavioral, not technical. RTK hooked globally but requires consistent prefixing in Claude Code.
+- **Skill created:** `.agents/skills/token-optimization/SKILL.md` — TDD-tested (RED-GREEN-REFACTOR phases complete).
+  - RED: 18% adoption baseline, hook nudges insufficient, LSP/smart-search missing globally, bun test/run unhandled
+  - GREEN: Skill addresses rationalizations, fixes hook JSON quoting, promotes LSP/smart-search to global allowlist
+  - REFACTOR: Bulletproof against 5 key rationalizations (optional-ness, friction avoidance, invisibility, mental model gaps, RTK gaps)
+- **Fixes implemented:** (1) Corrected PostToolUse hook JSON (previous had quoting errors). (2) Global allowlist expanded to include LSP + smart-search tools. (3) Memory: `project_token_optimization_may3.md` documents discovery + implementation. (4) Skill: Full decision trees and loophole-closers documented.
+- **Action:** Prefix Bash commands with `rtk` consistently. Use `claude-mem:smart-search` (tree-sitter AST) for codebase symbol queries instead of grep + read chains (60-75% savings). Create pre-session token dashboard if hook nudges aren't sustaining behavior.
+- **Target adoption curve:** Month 1 (baseline), Month 2 (45% RTK usage), Month 3 (70%), Month 4 (85%, plateau).
+- **Savings:** ~$1,200/month at current command rates if 1.2M tokens reclaimed. Monthly re-check via `rtk discover --history` to track progress.
+
+**Resolved P0s (reference — do not resurface as blockers):**
+- ~~Publish umbrella `reactive-agents` (404)~~ — ✅ W14: already published at v0.9.0; v0.10.0 via CI.
+- ~~qwen3 thinking auto-enable~~ — ✅ W7: thinking is OPT-IN; `resolveThinking()` at `packages/llm-provider/src/providers/local.ts:226` returns `undefined` unless `configThinking === true`.
+- ~~Dual compression uncoordinated~~ — ✅ W6: three stages sequenced (tool-execution stash → curator render → compress-messages patch); regression test in `context-curator.test.ts`.
+- ~~9 termination paths, no single owner~~ — ✅ W4 (FIX-18): `kernel/loop/terminate.ts` is the single-owner helper; `kernel/capabilities/decide/arbitrator.ts` is the canonical oracle path.
 
 ---
 
@@ -46,7 +65,7 @@ Two prior memory entries are demonstrably stale or wrong. Do not propagate these
 
 | Stale claim | Actual state | Source |
 |---|---|---|
-| "3/6 skill lifecycle AgentEvents missing" | **Events exist** at `core/services/event-bus.ts:986-990` (`SkillActivated`, `SkillRefined`, `SkillConflictDetected`). What's missing: 3/6 RI hooks have **no event subscriber**. Fix at `builder.ts:2657-2681`. | AUDIT §11 item 6, M6 mechanism |
+| "3/6 skill lifecycle AgentEvents missing" | **Events exist** at `core/services/event-bus.ts:1001-1005`. **All 6 hooks wired** (W2 FIX-6) at `builder.ts:2673-2731`. This is fully resolved — do not resurface. | AUDIT §11 item 6, M6 mechanism; verified May 1 |
 | "Calibration defaults to `:memory:`" | **Already correct** at `reactive-intelligence/types.ts:246` (`~/.reactive-agents/calibration.db`). Apr 21 fix. | AUDIT §11 item 9 |
 
 Memory descriptions to update or rewrite if you encounter them in personal memory:
@@ -57,11 +76,11 @@ Memory descriptions to update or rewrite if you encounter them in personal memor
 
 ## Architecture summary (high signal, low detail)
 
-**Kernel composable phase architecture (shipped Apr 3, 2026):**
-- `strategies/kernel/phases/` — `context-builder.ts`, `think.ts`, `guard.ts`, `act.ts` (4 single-concern phase files)
-- `strategies/kernel/utils/` — 11 utility files (ICS, reactive-observer, loop-detector, etc.)
-- `Phase` type, `Guard` type, `MetaToolHandler` registry — extensions are one-line additions
-- `kernel/loop/runner.ts` is the largest file in the harness and houses 8 of 9 termination paths (M9 architectural blocker)
+**Kernel lives at `packages/reasoning/src/kernel/`** — reorganized in Stage 5 from `strategies/kernel/` to capability-grouped subdirs:
+- `capabilities/` — 8 subdirs: act, attend, comprehend, decide (arbitrator.ts), reason (think.ts), reflect (loop-detector.ts, reactive-observer.ts), sense, verify
+- `loop/` — runner.ts (1,706 LOC), react-kernel.ts, terminate.ts (single-owner termination helper), auto-checkpoint.ts, output-assembly.ts, output-synthesis.ts
+- `state/` — kernel-state.ts, kernel-hooks.ts, kernel-constants.ts
+- `utils/` — diagnostics.ts, ics-coordinator.ts, lane-controller.ts, service-utils.ts
 
 **Two records, distinct purposes:**
 - `state.messages[]` — what the LLM sees (provider conversation thread)
@@ -76,20 +95,25 @@ Memory descriptions to update or rewrite if you encounter them in personal memor
 - All providers pass `tools` to both `complete()` AND `stream()` methods
 - Anthropic streaming: use raw `streamEvent` not helper events (`inputJson` fires before `contentBlock`)
 - Gemini tool results: `functionResponse.name` must use `msg.toolName` not hard-coded "tool"
+- Gemini streaming (W22): walk `candidates[0].content.parts[]` directly — `chunk.text` strips functionCall parts. Surface non-OK `finishReason` (UNEXPECTED_TOOL_CALL, MAX_TOKENS, SAFETY, MALFORMED_FUNCTION_CALL) as explicit errors.
 - Ollama streaming: `chunk.message.tool_calls` on `chunk.done`, emit `tool_use_start` + `tool_use_delta`
-- Loop detection: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak; observations do NOT (IC-1 fix)
+- Loop detection: `maxConsecutiveThoughts: 3` — only ACTION steps reset the streak; observations do NOT. IC-1 fix Apr 12, now at `kernel/capabilities/reflect/loop-detector.ts:102`
 
 ---
 
 ## Architecture debt (current top items)
 
-The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top 5:
+The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top items as of May 1:
 
-1. **9 termination paths in kernel** — oracle wired to 1 (M9). Single highest-leverage Stage 5 action.
-2. **`builder.ts` 5,877 LOC + `execution-engine.ts` 4,476 LOC** — orchestration SHRINK targets.
-3. **RI dispatcher budget counters dead-zeroed** at `reactive-observer.ts:294`, `plan-execute.ts:698` → suppression gates unreachable.
-4. **3/6 RI hooks have no subscriber** at `builder.ts:2657-2681` (events exist; subscribers don't).
-5. **Eval Rule 4 frozen-judge fails** at `eval/src/eval-service.ts:159` (judge resolves from same context as SUT). Blocks any benchmark claim.
+1. **`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC** — orchestration SHRINK targets.
+2. **Eval Rule 4 frozen-judge** — `packages/eval/src/runtime.ts` uses same-codepath judge as SUT. Blocks any published benchmark claim. P0 before merge.
+3. **ToT outer loop still unhooked** from `dispatcher-early-stop` — each branch is a separate sub-kernel (PER inner loop fixed Apr 19 at `plan-execute.ts:737,762`).
+4. Strategy routing opt-in via `withReasoning({ strategySwitching: { enabled: true } })` — field is optional in `ReactiveInput` at `strategies/reactive.ts:70`; runtime at `runner.ts:749`.
+
+**Resolved in prior work (keep as reference — do not resurface):**
+- `_riHooks` **6/6 wired** (W2 FIX-6) at `builder.ts:2673-2731` — all 6 event subscribers wired. Events at `core/services/event-bus.ts:1001-1005`.
+- RI budget counters **live** (W3 FIX-23): `reactive-observer.ts:283-321` accumulates `riBudget`. "Dead-zeroed" claim was stale.
+- qwen3 thinking OPT-IN (W7 FIX-3): `resolveThinking()` at `packages/llm-provider/src/providers/local.ts:226`.
 
 ---
 

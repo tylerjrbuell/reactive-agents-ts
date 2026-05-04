@@ -1,6 +1,27 @@
 {
+  "permissions": {
+    "allow": [
+      "Read",
+      "WebFetch",
+      "mcp__ide__goToDefinition",
+      "mcp__ide__findReferences",
+      "mcp__ide__hover",
+      "mcp__ide__documentSymbol",
+      "mcp__ide__workspaceSymbol"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=\"$CLAUDE_CODE_COMMAND\"; if echo \"$cmd\" | grep -qE '^(grep|cat|find|git log|ls -la)\\s'; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Use rtk for 60-75% savings (e.g., rtk grep, rtk read). 1.2M tokens saveable from unpreixed commands.\"}}'; fi || true",
+            "statusMessage": "Checking RTK usage..."
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [
