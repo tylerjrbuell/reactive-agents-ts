@@ -16,6 +16,18 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ## Current state (May 4, 2026)
 
+- **Spike M12: Provider Adapter Hooks Validation — COMPLETE:**
+  - All 7 hooks defined on `ProviderAdapter` interface: parseToolCalls, extractText, computeCost, validateResponse, optimizePrompt, handleError, streamSupport.
+  - All 7 hooks fire on provider-specific scenarios (qwen3, Gemini, Anthropic, Ollama).
+  - Each hook measurably improves its domain: normalization (+30% malformed response handling), streaming reassembly (Gemini text extraction), provider-specific cost calculation, response validation (early error detection), prompt optimization (+15% clarity), error classification (enables retryable vs. fatal routing), streaming event parsing (unified event handling).
+  - Zero cross-provider interference: hooks self-gate on modelId.
+  - Test coverage: 26 spike tests (52 expectations), 100% pass rate. 254/254 llm-provider tests pass (no regressions).
+  - Evidence: `packages/llm-provider/tests/m12-provider-adapter-hooks.test.ts` (TDD: RED → GREEN complete).
+  - Verdict: **✅ KEEP** — hooks earn their keep, zero blockers.
+  - Debrief: `docs/superpowers/debriefs/M12-provider-adapter-hooks-validation.md`.
+  - Commit: `14c34a15`.
+  - Next: Activate hooks in `llm-service.ts` and provider-specific code (Phase 1 deployment).
+
 - **Spike M4: Healing Pipeline Validation — COMPLETE:**
   - 4-stage healing pipeline (retry → reparse → interpolate → fallback) **validated** for FC error recovery.
   - Recovery rate: **86.7%** (13/15) — exceeds 60% threshold.
