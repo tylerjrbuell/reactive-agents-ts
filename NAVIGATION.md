@@ -11,6 +11,7 @@
 → Query: `obsidian-vault-query` for recent decisions/experiments (wiki/Hot.md)
 
 ### You need to understand the architecture
+→ See: `docs/spec/docs/DOCUMENT_INDEX.md` (read order for canonical docs)
 → Read: `docs/spec/docs/05-DESIGN-NORTH-STAR.md` (target), then `docs/spec/docs/04-PROJECT-STATE.md` (current)
 → Reference: `AGENTS.md` §Architecture Quick Reference (package dependency tree)
 → Code: Browse `packages/{core,llm-provider,reasoning,tools}/src/` in that order
@@ -55,6 +56,7 @@ reactive-agents-ts/
 │
 ├── docs/
 │   ├── spec/docs/ ....................... canonical architecture & planning
+│   │   ├── DOCUMENT_INDEX.md ........... Authority hierarchy + read order (START HERE for spec docs)
 │   │   ├── 00-VISION.md ................. stable anchor (what we're building toward)
 │   │   ├── 04-PROJECT-STATE.md .......... current state (read at session start)
 │   │   ├── 07-ROADMAP-v1.0.md .......... phase sequencing authority
@@ -62,8 +64,7 @@ reactive-agents-ts/
 │   │   ├── 05-DESIGN-NORTH-STAR.md ..... v3.0 architecture target
 │   │   ├── 01-RESEARCH-DISCIPLINE.md ... spike-validation methodology
 │   │   ├── 02-FAILURE-MODES.md ......... FM catalog (A-H categories)
-│   │   ├── 03-IMPROVEMENT-PIPELINE.md .. DISCOVERY→DEPRECATE flywheel
-│   │   └── DOCUMENT_INDEX.md ........... index of all canonical docs + authority hierarchy
+│   │   └── 03-IMPROVEMENT-PIPELINE.md .. DISCOVERY→DEPRECATE flywheel
 │   │
 │   ├── superpowers/ ..................... project-specific AI agent resources
 │   │   ├── debriefs/ .................... post-feature engineering notes
@@ -163,8 +164,9 @@ See PACKAGE_MAP.md for detailed package index.
 
 ## 5. How to Find Documentation
 
-### Architecture & design
-→ `docs/spec/docs/05-DESIGN-NORTH-STAR.md` (target) or `04-PROJECT-STATE.md` (current)
+### Architecture & design (Canonical spec docs)
+→ `docs/spec/docs/DOCUMENT_INDEX.md` (read order + authority hierarchy)
+→ Then: `docs/spec/docs/05-DESIGN-NORTH-STAR.md` (target) or `04-PROJECT-STATE.md` (current)
 
 ### Feature behavior / API reference
 → `apps/docs/src/content/docs/reference/builder-api.md` (complete API)
@@ -172,16 +174,15 @@ See PACKAGE_MAP.md for detailed package index.
 → `README.md` (quick example)
 
 ### Failure modes / troubleshooting
-→ `docs/spec/docs/02-FAILURE-MODES.md` (FM-A1, FM-B2, etc.) + mitigation
+→ `docs/spec/docs/02-FAILURE-MODES.md` (FM-A1, FM-B2, etc.)
 → `AGENTS.md` §Common Pitfalls (9-item reference)
 
-### Methodology / validation rules
+### Methodology / validation (Canonical spec docs)
 → `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` (12 rules for any harness change)
 → `docs/spec/docs/03-IMPROVEMENT-PIPELINE.md` (DISCOVERY→DEPRECATE flywheel)
 
 ### Recent decisions / experiments
-→ `wiki/` (Obsidian vault — query via `obsidian-vault-query`)
-→ `wiki/Hot.md` (recent context cache)
+→ `wiki/Hot.md` (recent context cache via `obsidian-vault-query`)
 → `wiki/Decisions/` (architecture decisions)
 
 ### Release history
@@ -267,21 +268,22 @@ See PACKAGE_MAP.md for detailed package index.
 
 | Need | Quick Link |
 |------|-----------|
-| Package dependency graph | AGENTS.md §Architecture Quick Reference |
-| Common pitfalls | AGENTS.md §Common Pitfalls (9 items) |
-| Debug symptoms → files | AGENTS.md §Common Debugging Entry Points |
-| Failure modes + mitigations | docs/spec/docs/02-FAILURE-MODES.md |
-| CI-enforced capabilities | CAPABILITIES.md |
-| Code standards | CODING_STANDARDS.md (13.3 KB, skim for your language area) |
-| Changelog | CHANGELOG.md (auto-generated) |
-| Roadmap (public) | ROADMAP.md (milestones) |
-| Roadmap (internal) | docs/spec/docs/07-ROADMAP-v1.0.md (phases + gates) |
-| Vision + principles | docs/spec/docs/00-VISION.md + docs/spec/docs/05-DESIGN-NORTH-STAR.md |
-| Recent decisions | wiki/Hot.md (query via `obsidian-vault-query`) |
-| Methodology | docs/spec/docs/01-RESEARCH-DISCIPLINE.md (12 rules) |
-| Feature behavior | apps/docs/src/content/docs/guides/ (category guides) |
-| API reference | apps/docs/src/content/docs/reference/builder-api.md |
-| Examples | apps/examples/src/ (34 usage patterns) |
+| Spec doc read order | `docs/spec/docs/DOCUMENT_INDEX.md` (authority hierarchy) |
+| Package dependency graph | `AGENTS.md` §Architecture Quick Reference |
+| Common pitfalls | `AGENTS.md` §Common Pitfalls (9 items) |
+| Debug symptoms → files | `AGENTS.md` §Common Debugging Entry Points |
+| Failure modes + mitigations | `docs/spec/docs/02-FAILURE-MODES.md` |
+| CI-enforced capabilities | `CAPABILITIES.md` |
+| Code standards | `CODING_STANDARDS.md` (skim for your area) |
+| Changelog | `CHANGELOG.md` (auto-generated) |
+| Roadmap (public) | `ROADMAP.md` (milestones) |
+| Roadmap (internal) | `docs/spec/docs/07-ROADMAP-v1.0.md` (phases + gates) |
+| Vision + principles | `docs/spec/docs/00-VISION.md` + `05-DESIGN-NORTH-STAR.md` |
+| Recent decisions | `wiki/Hot.md` (query via `obsidian-vault-query`) |
+| Methodology | `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` (12 rules) |
+| Feature behavior | `apps/docs/src/content/docs/guides/` |
+| API reference | `apps/docs/src/content/docs/reference/builder-api.md` |
+| Examples | `apps/examples/src/` (34 usage patterns) |
 
 ---
 
