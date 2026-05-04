@@ -101,19 +101,20 @@ After 5+ runs, empirical observations override shipped priors for `parallelCallC
 
 ### Common Debugging Entry Points
 
-| Symptom                       | Start reading                                                                                            |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Agent not calling tools       | `packages/reasoning/src/strategies/kernel/kernel-runner.ts` → `phases/think.ts` → `phases/act.ts`        |
-| Context truncated / missing   | `phases/think.ts` (system prompt + guidance) → `phases/context-builder.ts` → `context/message-window.ts` |
-| Tool results lost / recall    | `utils/tool-execution.ts` (compression) → `utils/tool-utils.ts` (compressToolResult) → `phases/think.ts` |
-| EventBus events not firing    | `packages/core/src/services/event-bus.ts` → check `ManagedRuntime` is shared                             |
-| LLM call fails silently       | `packages/llm-provider/src/runtime.ts` → provider-specific file in `src/providers/`                      |
-| Memory not persisting         | `packages/memory/src/runtime.ts` → check `createMemoryLayer()` wiring                                    |
-| Plan-execute loops forever    | `packages/reasoning/src/strategies/plan-execute.ts` → `isSatisfied()` + all-steps-completed guard        |
-| Gateway not starting          | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder                   |
-| Chat history not accumulating | `packages/runtime/src/gateway-chat.ts` → `GatewayChatManager.getOrLoadHistory()` + `SessionStoreService` wiring in `builder.ts` |
-| Metrics dashboard missing     | `packages/observability/src/services/observability-service.ts` → `MetricsCollectorLive` layer            |
-| Custom kernel not registering | `packages/reasoning/src/services/strategy-registry.ts` → `registerKernel()` call                         |
+Quick reference for tracing issues to specific kernel phases/services:
+
+| Symptom | Start here |
+| --- | --- |
+| Tools not called | `packages/reasoning/src/strategies/kernel/phases/think.ts` → `phases/act.ts` |
+| Context missing | `phases/context-builder.ts` → `context/message-window.ts` |
+| Tool results lost | `utils/tool-execution.ts` → `utils/tool-utils.ts:compressToolResult` |
+| EventBus silent | `packages/core/src/services/event-bus.ts` (check shared ManagedRuntime) |
+| LLM call fails | `packages/llm-provider/src/runtime.ts` → provider-specific in `src/providers/` |
+| Memory not persisting | `packages/memory/src/runtime.ts:createMemoryLayer()` wiring |
+| Plan loops forever | `packages/reasoning/src/strategies/plan-execute.ts:isSatisfied()` guard |
+| Gateway won't start | `packages/gateway/src/services/gateway-service.ts` → check `.withGateway()` in builder |
+| Chat history missing | `packages/runtime/src/gateway-chat.ts:GatewayChatManager` + SessionStoreService wiring |
+| Metrics missing | `packages/observability/src/services/observability-service.ts:MetricsCollectorLive` |
 
 ---
 
@@ -166,35 +167,21 @@ Key references:
 8. **One concern per commit.** Don't mix unrelated changes.
 9. **Write JSDoc comments.** Every public API needs a JSDoc comment.
 
-## Terminal Execution Rules
+## Terminal Execution Rules (TL;DR)
 
-When interacting with the terminal via tools (like `run_command` or similar), agents MUST follow these constraints to avoid hung polling and unreadable outputs:
+1. **No piping long-running commands** — pipes block on buffer overflow. Read raw output instead.
+2. **Add timeouts to tests** — use `--timeout 15000` to prevent process hang from dangling event loop handles.
+3. **Run scoped tests only** — avoid the full suite; run only modified file or directory.
+4. **Kill dangling servers** — always call `.stop(true)` on `Bun.serve()` / Express in teardown to prevent hung processes.
 
-1. **Never pipe commands (`| cat`, `| tail`, `| grep`) for long-running processes.**
-   Piping routes standard output and error through an OS buffer block. If a process spins (like `bun test`) or takes more than a couple of seconds, the buffer does not flush, causing the agent's status check to return `No output` indefinitely. **Read raw output instead.**
+## Vision Alignment (Before Writing Code)
 
-2. **Always append strict timeouts to tests and scripts.**
-   Because Node/Bun and Effect-TS frequently leave dangling event loop handles (e.g., unclosed sockets, pending promises), test runners can hang successfully completed tests forever. Always use `--timeout` flags (e.g., `bun test --timeout 15000`) so the runner releases the process.
-
-3. **Avoid running the whole test suite dynamically.**
-   When verifying new work, run ONLY the exact file or directory modified (e.g., `bun test packages/llm-provider/tests/pricing.test.ts`). Running the global suite takes too long for background polling thresholds.
-
-4. **Synchronous commands for quick returns.**
-   If a command is quick (compilation, single file test, lint check), assign a sufficient `WaitMsBeforeAsync` limit (e.g., `5000ms` to `10000ms`) so it evaluates synchronously and provides immediate feedback.
-
-5. **Stop dangling servers in tests.**
-   If writing a test involving `Bun.serve()`, `Express`, or an HTTP stream, ALWAYS call `.stop(true)` (or equivalent force-close teardown). Leaving a port bound keeps the execution engine trapped in the `RUNNING` status permanently.
-
-## Vision Alignment Checklist
-
-Before you add or modify code, confirm:
-
--   **Explicit over implicit**: No hidden magic or one-liner “createAgent” helpers. New behavior is configured via explicit builders/layers, not global state.
--   **Observable over opaque**: The behavior is visible in traces/events (EventBus, ThoughtTracer, tracing), without relying on `console.log`.
--   **Type-safe reliability**: Inputs are validated (e.g. Zod schemas), errors are part of explicit tagged unions, and all public APIs use precise, generic-friendly types (no `any`/`unknown` escape hatches).
--   **Composable and testable**: Logic is factored into small, Effect-TS services/middleware that can be wired together and tested independently.
--   **Efficient and local-first**: Code respects token/latency budgets, reuses existing caching/batching/context systems, and works well with local as well as cloud models.
--   **Secure and production-first**: Changes honor guardrails, avoid leaking secrets, and default to safe behavior suitable for production workloads.
+-   **Explicit over implicit** — explicit builders/layers, no hidden globals
+-   **Observable over opaque** — visible in EventBus/ThoughtTracer events, not console.log
+-   **Type-safe** — precise types, no `any` / `unknown` escape hatches
+-   **Composable** — small Effect-TS services, independently testable
+-   **Efficient** — respects token/latency budgets, works on local + cloud models
+-   **Secure** — honors guardrails, no secret leaks, production-safe defaults
 
 ---
 
@@ -293,140 +280,49 @@ Root `ROADMAP.md` is the authoritative forward-looking plan. Update when:
 
 ---
 
-## Multi-Agent Coordination
+## Multi-Agent Coordination (Large Features)
 
-### Team Structure
+**Build order:**
+`core` → `llm-provider` → `{memory, tools, reasoning}` → `runtime`
 
-For large features (new packages, cross-cutting changes):
-
-| Role        | Does                                | Doesn't                                    |
-| ----------- | ----------------------------------- | ------------------------------------------ |
-| **Lead**    | Plans, assigns, reviews, integrates | Write package code directly                |
-| **Builder** | Implements packages using skills    | Make cross-package architectural decisions |
-| **Tester**  | Writes tests, validates coverage    | Skip pattern review                        |
-
-### Parallelization Rules
-
--   Packages with no dependency relationship can be built in parallel
--   Always validate gate dependencies before starting dependent work:
-    ```
-    core → llm-provider → {memory, tools, reasoning} → runtime
-    ```
--   Run workspace-wide `bun run build` after each package completes
--   Use `/validate-build <pkg>` before moving to dependent packages
-
-### Communication Protocol
-
-When handing off between agents:
-
-1. State what was completed (files created/modified)
-2. State what was verified (tests passed, build clean)
-3. State what's next (dependent work now unblocked)
-4. Flag any known issues or deviations from spec
+**Handoff protocol:**
+1. What completed (files created/modified)
+2. What verified (tests passed, build clean)
+3. What's next (unblocked dependent work)
+4. Blockers/deviations
 
 ---
 
-## Package Creation Checklist
+## New Package Checklist
 
-When creating a new package (e.g., `@reactive-agents/a2a`):
-
-1. [ ] Create `packages/<name>/package.json` with correct deps
-2. [ ] Create `packages/<name>/tsconfig.json` extending root
-3. [ ] Create `packages/<name>/tsup.config.ts` for build
-4. [ ] Implement `src/types.ts`, `src/errors.ts`
-5. [ ] Implement services following Effect-TS patterns
-6. [ ] Create `src/runtime.ts` with layer factory
-7. [ ] Create `src/index.ts` with all public exports
-8. [ ] Write tests in `tests/`
-9. [ ] Add to root `package.json` workspaces if needed
-10. [ ] Declare cross-package deps in `packages/<name>/package.json` — turbo derives build order from this; no manual script edit needed
-11. [ ] Run `bun install` to link workspace
-12. [ ] Run `bun test packages/<name>` — all pass
-13. [ ] Run `bun run build` — workspace compiles clean
-14. [ ] Update `AGENTS.md` package map / status snapshot
-15. [ ] Update `README.md` packages table
-16. [ ] Update architecture-reference skill dependency graph
-17. [ ] Add spec file reference to `AGENTS.md` spec index section (if applicable)
+1. [ ] `packages/<name>/{package.json, tsconfig.json, tsup.config.ts}`
+2. [ ] `src/{types.ts, errors.ts, services/*, runtime.ts, index.ts}`
+3. [ ] Tests in `tests/`; ensure all pass
+4. [ ] Declare deps in `package.json` (turbo derives build order)
+5. [ ] `bun test packages/<name>` + `bun run build` pass
+6. [ ] Update `AGENTS.md` package map, `README.md` table, architecture-reference skill
 
 ---
 
 ## Quality Gates
 
-### Before Any PR
+**Before PR:** tests pass, build clean, patterns pass (`/review-patterns`), docs accurate
 
-| Check              | Command                    | Must              |
-| ------------------ | -------------------------- | ----------------- |
-| Tests pass         | `bun test`                 | 100% green        |
-| Build clean        | `bun run build`            | No errors         |
-| Pattern compliance | `/review-patterns <files>` | 9/9 pass          |
-| Docs accurate      | Manual review              | No stale examples |
+**Before release:** all above + changeset added, docs site builds, README/ROADMAP updated
 
-### Before Any Release
-
-| Check            | Details                                                 |
-| ---------------- | ------------------------------------------------------- |
-| All above        | Plus full integration test                              |
-| Changeset added  | `bun run changeset` with a clear summary of all changes |
-| Docs site builds | `bun run docs:build`                                    |
-| README current   | Stats, packages, examples all accurate                  |
-| ROADMAP updated  | Shipped items marked, new targets set                   |
-
-> **Do not manually bump versions or edit CHANGELOG.** The `changesets/action` PR handles both automatically when the "chore: version packages" PR is merged. See Release Workflow below.
+> Never manually bump versions or edit CHANGELOG — changesets automation handles it.
 
 ---
 
-## Release Workflow
+## Release Workflow (Changesets)
 
-This project uses **[Changesets](https://github.com/changesets/changesets)** for versioning and publishing. Never manually bump `package.json` versions or edit `CHANGELOG.md` for new releases.
+**Every PR touching user-facing behavior:** `bun run changeset` → creates `.changeset/<name>.md` → commit with code
 
-### Day-to-day: adding a changeset
+**Release cycle:** changesets/action auto-creates "chore: version packages" PR → merge → publishes to npm
 
-Every PR that changes user-facing behaviour **must** include a changeset:
+**Bump types:** `patch` (fixes), `minor` (features), `major` (breaking)
 
-```bash
-bun run changeset
-# prompts: which packages changed? → select all (they're in a fixed group)
-# bump type? → patch / minor / major
-# summary? → one line description
-```
-
-This creates `.changeset/<random-name>.md`. Commit it with your code.
-
-### Release cycle
-
-```
-feature work + bun run changeset
-        ↓  push to main
-changesets/action detects pending changesets
-        ↓  opens "chore: version packages" PR automatically
-PR shows: version bumps for all packages + generated CHANGELOG entries
-        ↓  review and merge when ready to release
-changeset publish runs → builds, resolves workspace deps, publishes to npm
-        ↓
-GitHub Release created automatically with CHANGELOG notes
-```
-
-### Bump types
-
-| Type    | When to use                                      | Example         |
-| ------- | ------------------------------------------------ | --------------- |
-| `patch` | Bug fixes, test fixes, docs                      | `0.7.6 → 0.7.7` |
-| `minor` | New features, backwards-compatible API additions | `0.7.6 → 0.8.0` |
-| `major` | Breaking API changes                             | `0.7.6 → 1.0.0` |
-
-All 22 publishable packages move together (fixed group) — bumping any one package bumps all.
-
-### Private packages (never published)
-
-`@reactive-agents/benchmarks` has `"private": true` and is excluded from publishing. Do not remove this flag.
-
-### Key files
-
-| File                            | Purpose                                          |
-| ------------------------------- | ------------------------------------------------ |
-| `.changeset/config.json`        | Fixed group of all packages, public access       |
-| `.github/workflows/publish.yml` | Runs `changesets/action` on every push to `main` |
-| `package.json` `release` script | `bun run build && changeset publish`             |
+**All 22 packages move together** (fixed group in `.changeset/config.json`). `@reactive-agents/benchmarks` is private (never published).
 
 ---
 
