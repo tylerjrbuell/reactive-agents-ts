@@ -337,6 +337,7 @@ export function handleActing(
         // Repairs: fuzzy tool name matching, param name aliases, path resolution,
         // type coercion. If healing fails (unrecognized tool), use the raw call
         // so the guard pipeline can produce a meaningful rejection message.
+        // M7-E (spike): Apply calibration's knownToolAliases for auto-correction
         const healResult = runHealingPipeline(
           rawTc,
           allHealingSchemas.map((s) => ({
@@ -351,8 +352,8 @@ export function handleActing(
           })),
           FILE_TOOL_NAMES,
           process.cwd(),
-          {},  // knownToolAliases — populated from CalibrationStore in Task 12
-          {},  // knownParamAliases — populated from CalibrationStore in Task 12
+          state.calibration?.knownToolAliases ?? {},  // M7-E: Apply calibrated aliases
+          state.calibration?.knownParamAliases ?? {},  // M7-E: Apply calibrated param aliases
         );
         const tc = healResult.succeeded ? healResult.call : rawTc;
 

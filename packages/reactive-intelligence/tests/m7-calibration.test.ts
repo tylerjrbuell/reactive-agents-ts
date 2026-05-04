@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import type { ModelCalibration, ProfileOverrides } from "@reactive-agents/llm-provider";
 import { buildCalibratedAdapter, ALIAS_FREQUENCY_THRESHOLD } from "@reactive-agents/llm-provider";
+import { filterToolsBySuccessRate } from "@reactive-agents/reasoning";
 
 /**
  * M7 Calibration Validation — RED Phase
