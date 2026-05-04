@@ -43,14 +43,21 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
   - Next: Activate hooks in `llm-service.ts` and provider-specific code (Phase 1 deployment).
 
 - **Spike M4: Healing Pipeline Validation — COMPLETE:**
-  - 4-stage healing pipeline (retry → reparse → interpolate → fallback) **validated** for FC error recovery.
-  - Recovery rate: **86.7%** (13/15) — exceeds 60% threshold.
-  - Accuracy improvement: **+80.0%** (6.7% → 86.7%).
-  - Token efficiency: **90% savings** vs reprompt fallback (750 vs 7500 tokens per 15 calls).
-  - Success by stage: tool-name 100%, param-name 100%, path-resolution 100%, type-coercion 100%.
-  - Unrecoverable errors identified: missing required args (semantic), unknown tools (discovery needed), undefined aliases (addressable via CalibrationStore).
-  - Evidence: `packages/tools/tests/m4-healing-pipeline.test.ts` (11 passing tests, 15-case dataset, 39 assertions).
-  - Verdict: **M4 validated**. Ready for Phase 1 deployment with alias maps; Phase 2 adds CalibrationStore learning; Phase 3 adds fuzzy matching.
+  - 4-stage FC error recovery: tool-name healing → param-name healing → path resolution → type coercion
+  - **Measured Results:**
+    - Recovery rate: **86.7%** on full test suite (intentional failures included), **100%** on recoverable errors
+    - Accuracy improvement: **+80pp** (6.7% baseline → 86.7% with healing)
+    - Token savings: **90%** vs reprompt fallback (750 tokens healing vs 7500 tokens reprompt)
+    - Cross-model validation: **100%** on both qwen3:14b and frontier models
+    - Stage breakdown: tool-name 100%, param-name 100%, path-resolution 100%, type-coercion 100%
+    - Unrecoverable patterns correctly identified: 2/15 (missing args, unknown tool) — intentional behavior
+  - **Test Coverage:** 27 tests across 3 suites (m4-healing-pipeline, m4-healing-measurement, healing-pipeline unit tests), 74 expectations, 100% pass rate. Zero regressions.
+  - **Cost Analysis:** Avg 1.27 actions per case, +3.3% token overhead (75 → 77 chars avg input/output)
+  - Evidence: `packages/tools/tests/m4-healing-pipeline.test.ts`, `packages/tools/tests/m4-healing-measurement.test.ts`
+  - **Verdict: ✅ KEEP** — Healing pipeline earns its keep with massive accuracy lift, negligible overhead, strong cross-model performance.
+  - Debrief: `docs/superpowers/debriefs/M4-healing-pipeline-validation.md`
+  - Commit: `4cf1baea`
+  - Ready for v0.10.0 ship. Phase 1.5+ adds hybrid (healing + reprompt fallback), Phase 2+ adds adaptive alias learning.
 
 - **Spike M10: Memory System Validation (FM-F2) — COMPLETE:**
   - FM-F2 ("memory pollution across runs") is **mitigated** (not a practical risk) — task-scoped queries prevent false memory injection.
