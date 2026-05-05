@@ -15,18 +15,18 @@
     },
     "apps/cli": {
       "name": "@reactive-agents/cli",
-      "version": "0.10.3",
+      "version": "0.10.2",
       "bin": {
         "rax": "dist/index.js",
         "reactive-agents": "dist/index.js",
       },
       "dependencies": {
-        "@reactive-agents/a2a": "0.10.2",
-        "@reactive-agents/core": "0.10.2",
-        "@reactive-agents/eval": "0.10.2",
-        "@reactive-agents/llm-provider": "0.10.2",
-        "@reactive-agents/runtime": "0.10.2",
-        "@reactive-agents/trace": "0.10.2",
+        "@reactive-agents/a2a": "0.10.1",
+        "@reactive-agents/core": "0.10.1",
+        "@reactive-agents/eval": "0.10.1",
+        "@reactive-agents/llm-provider": "0.10.1",
+        "@reactive-agents/runtime": "0.10.1",
+        "@reactive-agents/trace": "0.10.1",
         "boxen": "^8.0.1",
         "chalk": "^5.4.0",
         "effect": "^3.10.0",
@@ -42,14 +42,14 @@
       "name": "@reactive-agents/cortex",
       "version": "0.10.2",
       "dependencies": {
-        "@reactive-agents/core": "0.10.2",
-        "@reactive-agents/gateway": "0.10.2",
-        "@reactive-agents/llm-provider": "0.10.2",
-        "@reactive-agents/memory": "0.10.2",
-        "@reactive-agents/observability": "0.10.2",
-        "@reactive-agents/reactive-intelligence": "0.10.2",
-        "@reactive-agents/runtime": "0.10.2",
-        "@reactive-agents/tools": "0.10.2",
+        "@reactive-agents/core": "0.10.1",
+        "@reactive-agents/gateway": "0.10.1",
+        "@reactive-agents/llm-provider": "0.10.1",
+        "@reactive-agents/memory": "0.10.1",
+        "@reactive-agents/observability": "0.10.1",
+        "@reactive-agents/reactive-intelligence": "0.10.1",
+        "@reactive-agents/runtime": "0.10.1",
+        "@reactive-agents/tools": "0.10.1",
         "effect": "^3.10.0",
         "elysia": "^1.1.0",
       },
@@ -143,7 +143,7 @@
     },
     "packages/a2a": {
       "name": "@reactive-agents/a2a",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
       },
@@ -163,7 +163,7 @@
     },
     "packages/benchmarks": {
       "name": "@reactive-agents/benchmarks",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
@@ -191,7 +191,7 @@
     },
     "packages/channels": {
       "name": "@reactive-agents/channels",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/gateway": "workspace:*",
@@ -207,7 +207,7 @@
     },
     "packages/core": {
       "name": "@reactive-agents/core",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "effect": "^3.10.0",
         "ulid": "^2.3.0",
@@ -222,7 +222,7 @@
     },
     "packages/cost": {
       "name": "@reactive-agents/cost",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/llm-provider": "0.10.1",
@@ -239,12 +239,12 @@
     },
     "packages/diagnose": {
       "name": "@reactive-agents/diagnose",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "bin": {
         "rax-diagnose": "./dist/cli.js",
       },
       "dependencies": {
-        "@reactive-agents/trace": "0.9.0",
+        "@reactive-agents/trace": "0.10.1",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -254,7 +254,7 @@
     },
     "packages/eval": {
       "name": "@reactive-agents/eval",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/llm-provider": "0.10.1",
@@ -270,7 +270,7 @@
     },
     "packages/gateway": {
       "name": "@reactive-agents/gateway",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
       },
@@ -285,7 +285,7 @@
     },
     "packages/guardrails": {
       "name": "@reactive-agents/guardrails",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/llm-provider": "0.10.1",
@@ -301,7 +301,7 @@
     },
     "packages/health": {
       "name": "@reactive-agents/health",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
@@ -313,7 +313,7 @@
     },
     "packages/identity": {
       "name": "@reactive-agents/identity",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@noble/ed25519": "^2.0.0",
         "@reactive-agents/core": "0.10.1",
@@ -329,7 +329,7 @@
     },
     "packages/interaction": {
       "name": "@reactive-agents/interaction",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/observability": "0.10.1",
@@ -360,7 +360,7 @@
     },
     "packages/llm-provider": {
       "name": "@reactive-agents/llm-provider",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/memory": "0.10.1",
@@ -384,7 +384,7 @@
     },
     "packages/memory": {
       "name": "@reactive-agents/memory",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
       },
@@ -399,7 +399,7 @@
     },
     "packages/observability": {
       "name": "@reactive-agents/observability",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0",
@@ -423,7 +423,7 @@
     },
     "packages/orchestration": {
       "name": "@reactive-agents/orchestration",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/cost": "0.10.1",
@@ -442,7 +442,7 @@
     },
     "packages/prompts": {
       "name": "@reactive-agents/prompts",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
       },
@@ -457,7 +457,7 @@
     },
     "packages/react": {
       "name": "@reactive-agents/react",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "devDependencies": {
         "@types/react": "^18.0.0",
         "tsup": "^8.0.0",
@@ -475,23 +475,23 @@
         "reactive-agents": "bin/rax.js",
       },
       "dependencies": {
-        "@reactive-agents/a2a": "0.10.2",
-        "@reactive-agents/cli": "0.10.3",
-        "@reactive-agents/core": "0.10.2",
-        "@reactive-agents/cost": "0.10.2",
-        "@reactive-agents/eval": "0.10.2",
-        "@reactive-agents/guardrails": "0.10.2",
-        "@reactive-agents/identity": "0.10.2",
-        "@reactive-agents/interaction": "0.10.2",
-        "@reactive-agents/llm-provider": "0.10.2",
-        "@reactive-agents/memory": "0.10.2",
-        "@reactive-agents/observability": "0.10.2",
-        "@reactive-agents/orchestration": "0.10.2",
-        "@reactive-agents/prompts": "0.10.2",
-        "@reactive-agents/reasoning": "0.10.2",
-        "@reactive-agents/runtime": "0.10.2",
-        "@reactive-agents/tools": "0.10.2",
-        "@reactive-agents/verification": "0.10.2",
+        "@reactive-agents/a2a": "0.10.1",
+        "@reactive-agents/cli": "0.10.1",
+        "@reactive-agents/core": "0.10.1",
+        "@reactive-agents/cost": "0.10.1",
+        "@reactive-agents/eval": "0.10.1",
+        "@reactive-agents/guardrails": "0.10.1",
+        "@reactive-agents/identity": "0.10.1",
+        "@reactive-agents/interaction": "0.10.1",
+        "@reactive-agents/llm-provider": "0.10.1",
+        "@reactive-agents/memory": "0.10.1",
+        "@reactive-agents/observability": "0.10.1",
+        "@reactive-agents/orchestration": "0.10.1",
+        "@reactive-agents/prompts": "0.10.1",
+        "@reactive-agents/reasoning": "0.10.1",
+        "@reactive-agents/runtime": "0.10.1",
+        "@reactive-agents/tools": "0.10.1",
+        "@reactive-agents/verification": "0.10.1",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -504,7 +504,7 @@
     },
     "packages/reactive-intelligence": {
       "name": "@reactive-agents/reactive-intelligence",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/llm-provider": "0.10.1",
@@ -521,7 +521,7 @@
     },
     "packages/reasoning": {
       "name": "@reactive-agents/reasoning",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/llm-provider": "0.10.1",
@@ -542,7 +542,7 @@
     },
     "packages/runtime": {
       "name": "@reactive-agents/runtime",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/a2a": "0.10.1",
         "@reactive-agents/channels": "workspace:*",
@@ -575,10 +575,10 @@
     },
     "packages/scenarios": {
       "name": "@reactive-agents/scenarios",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
-        "@reactive-agents/testing": "0.9.0",
-        "@reactive-agents/trace": "0.9.0",
+        "@reactive-agents/testing": "0.10.1",
+        "@reactive-agents/trace": "0.10.1",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -588,7 +588,7 @@
     },
     "packages/svelte": {
       "name": "@reactive-agents/svelte",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "devDependencies": {
         "svelte": "^5.0.0",
         "tsup": "^8.0.0",
@@ -600,13 +600,13 @@
     },
     "packages/testing": {
       "name": "@reactive-agents/testing",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
-        "@reactive-agents/core": "0.9.0",
-        "@reactive-agents/llm-provider": "0.9.0",
-        "@reactive-agents/runtime": "0.9.0",
-        "@reactive-agents/tools": "0.9.0",
-        "@reactive-agents/trace": "0.9.0",
+        "@reactive-agents/core": "0.10.1",
+        "@reactive-agents/llm-provider": "0.10.1",
+        "@reactive-agents/runtime": "0.10.1",
+        "@reactive-agents/tools": "0.10.1",
+        "@reactive-agents/trace": "0.10.1",
       },
       "devDependencies": {
         "bun-types": "latest",
@@ -619,7 +619,7 @@
     },
     "packages/tools": {
       "name": "@reactive-agents/tools",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.28.0",
         "@reactive-agents/core": "0.10.1",
@@ -636,7 +636,7 @@
     },
     "packages/trace": {
       "name": "@reactive-agents/trace",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "effect": "^3.10.0",
@@ -652,7 +652,7 @@
     },
     "packages/verification": {
       "name": "@reactive-agents/verification",
-      "version": "0.10.1",
+      "version": "0.10.2",
       "dependencies": {
         "@reactive-agents/core": "0.10.1",
         "@reactive-agents/llm-provider": "0.10.1",
@@ -669,7 +669,7 @@
     },
     "packages/vue": {
       "name": "@reactive-agents/vue",
-      "version": "0.10.0",
+      "version": "0.10.2",
       "devDependencies": {
         "tsup": "^8.0.0",
         "typescript": "^5.7.0",
@@ -4037,93 +4037,223 @@
 
     "@opentelemetry/sdk-trace-node/@opentelemetry/sdk-trace-base": ["@opentelemetry/sdk-trace-base@1.30.1", "", { "dependencies": { "@opentelemetry/core": "1.30.1", "@opentelemetry/resources": "1.30.1", "@opentelemetry/semantic-conventions": "1.28.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.0.0 <1.10.0" } }, "sha512-jVPgBbH1gCy2Lb7X0AVQ8XAfgg0pJ4nvl8/IiQA6nxOsPvS+0zMJaFSs2ltXe0J6C8dqjcnpyqINDJmU30+uOg=="],
 
+    "@reactive-agents/a2a/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/a2a/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
+
     "@reactive-agents/a2a/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/benchmarks/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/channels/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
-    "@reactive-agents/cli/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-M98HOkh6u4vVmNFIJM+tXNAT5lA83EqLcl/YsJn6EZC3GdCLJbuX+Ga5WiCJ8iIzTN6RWVrOMDpQTN4MWWzzLQ=="],
+    "@reactive-agents/cli/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-JUitgDCQ393JnkrGaAtO9afh8VR02cwwdqDtZjTpQHky7BFORjvHfH76QgQUcXr264Xu606NuSUPuXERITVPbA=="],
 
-    "@reactive-agents/cli/@reactive-agents/core": ["@reactive-agents/core@0.10.2", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-jgfyubLQt5/T1aCxG0swvONzRTgPlHhcpGD2QNUsTIgesfep91EXRpWmFH5CWuL5Twr8+QXsDXoifKqsutUjKA=="],
+    "@reactive-agents/cli/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
 
-    "@reactive-agents/cli/@reactive-agents/eval": ["@reactive-agents/eval@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-TsL4uuYUzDO6p1l2bQDbtpi4NTzz9aIa2k2Po7W/p5sXBDr9MH53LtN4vKqkVMc1zFJyGjBoMJ2UvZK4iPLaJw=="],
+    "@reactive-agents/cli/@reactive-agents/eval": ["@reactive-agents/eval@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-29qVfNG2saCwKCtB5k9vovL72GUxw/WhETaDG4Q2Y+Xg3S/bUxQdwhveXhK5lIDulk/Pm976kQdtpswMwYUK5g=="],
 
-    "@reactive-agents/cli/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GKxN1p25higrq0lnzVLV5D+TIv/1Zp6QMVx3aXdOKYs0ThMcFl/Igb8SEpNRuyUrpbgnqEcYeEGtPJPHQLmgZA=="],
+    "@reactive-agents/cli/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.2", "", { "dependencies": { "@reactive-agents/a2a": "0.10.2", "@reactive-agents/channels": "0.10.2", "@reactive-agents/core": "0.10.2", "@reactive-agents/cost": "0.10.2", "@reactive-agents/gateway": "0.10.2", "@reactive-agents/guardrails": "0.10.2", "@reactive-agents/health": "0.10.2", "@reactive-agents/identity": "0.10.2", "@reactive-agents/interaction": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/orchestration": "0.10.2", "@reactive-agents/prompts": "0.10.2", "@reactive-agents/reactive-intelligence": "0.10.2", "@reactive-agents/reasoning": "0.10.2", "@reactive-agents/tools": "0.10.2", "@reactive-agents/trace": "0.10.2", "@reactive-agents/verification": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-+DB357capfHmmAMbwC1jLpqQkocY2A4IGTfsW+RHr5fsdEnxzBm/HH885QtfFTIsXycCnQ92B965E5Ym3HtZ6Q=="],
+    "@reactive-agents/cli/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.1", "", { "dependencies": { "@reactive-agents/a2a": "0.10.1", "@reactive-agents/channels": "0.10.1", "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/gateway": "0.10.1", "@reactive-agents/guardrails": "0.10.1", "@reactive-agents/health": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/interaction": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/orchestration": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/reactive-intelligence": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "@reactive-agents/tools": "0.10.1", "@reactive-agents/trace": "0.10.1", "@reactive-agents/verification": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-buTShiufaxPpFmrPZCnjEH94wiqCLaOyzd/XpaN1qNU/CP9FpZTcoBmGV4S05w8vJ6f6E+IRLmRDBcaVw0eGTQ=="],
 
-    "@reactive-agents/cli/@reactive-agents/trace": ["@reactive-agents/trace@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "effect": "^3.10.0" } }, "sha512-6OViOBaIzsTDvU+c/f3W2E6lUnXds/Qzj6Q1YK8ht3iKIc0R7ZZrXgodPi+dj3oDQoZbVsxQx1NZIkyqcTYOLA=="],
+    "@reactive-agents/cli/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
 
     "@reactive-agents/cli/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/core/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
-    "@reactive-agents/cortex/@reactive-agents/core": ["@reactive-agents/core@0.10.2", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-jgfyubLQt5/T1aCxG0swvONzRTgPlHhcpGD2QNUsTIgesfep91EXRpWmFH5CWuL5Twr8+QXsDXoifKqsutUjKA=="],
+    "@reactive-agents/cortex/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
 
-    "@reactive-agents/cortex/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-tjRISWV84r3u6G1o/hp7YyEo5TWlLpHvgZGC9+vxfkujk5ND+nlHmG3t+s1+w7YRCXSZo6vEpQNxEixiLb5FpA=="],
+    "@reactive-agents/cortex/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-mGsl5V9IHv8vbfczozVXRS1yFj3Ln+b9H6BH9cl6FQwH4dgwgdaxr7EMT6EH8DfVs3mWEXUhNf4eBnyflkAxZg=="],
 
-    "@reactive-agents/cortex/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GKxN1p25higrq0lnzVLV5D+TIv/1Zp6QMVx3aXdOKYs0ThMcFl/Igb8SEpNRuyUrpbgnqEcYeEGtPJPHQLmgZA=="],
+    "@reactive-agents/cortex/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
 
-    "@reactive-agents/cortex/@reactive-agents/memory": ["@reactive-agents/memory@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-WNeKOWDg63WfALzBymiESnZkP8Y9rj+/TeF3qPh1QyBsQCHHwQAnKFnMySIs98frRqPxrrKmfgzXQmS1qaxccA=="],
+    "@reactive-agents/cortex/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
 
-    "@reactive-agents/cortex/@reactive-agents/observability": ["@reactive-agents/observability@0.10.2", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.2", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-/O4ibfUgckbRDLNt3WTcCzg3ufi/89Bcm/0u3zgKD1hJ6iH588cGDAhcgfF1BRMq9lm52SMLDyZDG0CzEXJjFw=="],
+    "@reactive-agents/cortex/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
 
-    "@reactive-agents/cortex/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/trace": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-XonOCxh982nti5iW2aVmSYD1RUUg2Bbrz+o65G6wJzg7wjsYlQxkaBDx8pmGNNcXBtPpnc/ByoFU80gmZx0SBQ=="],
+    "@reactive-agents/cortex/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/trace": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4JclinTu8Zr72fmB8tN2jWOo1jY/4lsa8mo8yYW2fFVXE27WIJ4+65TPdR10YFUm4UeDKqR2lGU44RxvivDh0w=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.2", "", { "dependencies": { "@reactive-agents/a2a": "0.10.2", "@reactive-agents/channels": "0.10.2", "@reactive-agents/core": "0.10.2", "@reactive-agents/cost": "0.10.2", "@reactive-agents/gateway": "0.10.2", "@reactive-agents/guardrails": "0.10.2", "@reactive-agents/health": "0.10.2", "@reactive-agents/identity": "0.10.2", "@reactive-agents/interaction": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/orchestration": "0.10.2", "@reactive-agents/prompts": "0.10.2", "@reactive-agents/reactive-intelligence": "0.10.2", "@reactive-agents/reasoning": "0.10.2", "@reactive-agents/tools": "0.10.2", "@reactive-agents/trace": "0.10.2", "@reactive-agents/verification": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-+DB357capfHmmAMbwC1jLpqQkocY2A4IGTfsW+RHr5fsdEnxzBm/HH885QtfFTIsXycCnQ92B965E5Ym3HtZ6Q=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.1", "", { "dependencies": { "@reactive-agents/a2a": "0.10.1", "@reactive-agents/channels": "0.10.1", "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/gateway": "0.10.1", "@reactive-agents/guardrails": "0.10.1", "@reactive-agents/health": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/interaction": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/orchestration": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/reactive-intelligence": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "@reactive-agents/tools": "0.10.1", "@reactive-agents/trace": "0.10.1", "@reactive-agents/verification": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-buTShiufaxPpFmrPZCnjEH94wiqCLaOyzd/XpaN1qNU/CP9FpZTcoBmGV4S05w8vJ6f6E+IRLmRDBcaVw0eGTQ=="],
 
-    "@reactive-agents/cortex/@reactive-agents/tools": ["@reactive-agents/tools@0.10.2", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-z2pVCpdsupIw7mUh0NHb+mwRrz3V9FE/bKGSON92ffbOpFBGIgD6G11HrXE4NX5EJNj83Mu0DvnYivp3uvsafQ=="],
+    "@reactive-agents/cortex/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
 
     "@reactive-agents/cortex/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/cortex-ui/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/cost/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/cost/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/cost/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
     "@reactive-agents/cost/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/diagnose/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
+
     "@reactive-agents/diagnose/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/eval/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/eval/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
 
     "@reactive-agents/eval/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/examples/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/gateway/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
     "@reactive-agents/gateway/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/guardrails/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/guardrails/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
 
     "@reactive-agents/guardrails/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/health/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/identity/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
     "@reactive-agents/identity/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/interaction/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/interaction/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
+
+    "@reactive-agents/interaction/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
 
     "@reactive-agents/interaction/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/llm-provider/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
     "@reactive-agents/llm-provider/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/memory/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
 
     "@reactive-agents/memory/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/meta-agent/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/observability/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
     "@reactive-agents/observability/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/orchestration/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/cost": ["@reactive-agents/cost@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-E9y+94HZaFi2VSp8GSy0yRH7WE/7y+wX3dC1wHMsg0VWUuaJ+dEGYQ7ewOemWoLIJVUn27cWFSXB2/lKSe4c5A=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
+
     "@reactive-agents/orchestration/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/prompts/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
 
     "@reactive-agents/prompts/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/react/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/reactive-intelligence/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/reactive-intelligence/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/reactive-intelligence/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
+
     "@reactive-agents/reactive-intelligence/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/reasoning/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/reasoning/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/reasoning/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/reasoning/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
+
+    "@reactive-agents/reasoning/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
+
+    "@reactive-agents/reasoning/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
 
     "@reactive-agents/reasoning/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/runtime/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-JUitgDCQ393JnkrGaAtO9afh8VR02cwwdqDtZjTpQHky7BFORjvHfH76QgQUcXr264Xu606NuSUPuXERITVPbA=="],
+
+    "@reactive-agents/runtime/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/runtime/@reactive-agents/cost": ["@reactive-agents/cost@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-E9y+94HZaFi2VSp8GSy0yRH7WE/7y+wX3dC1wHMsg0VWUuaJ+dEGYQ7ewOemWoLIJVUn27cWFSXB2/lKSe4c5A=="],
+
+    "@reactive-agents/runtime/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-mGsl5V9IHv8vbfczozVXRS1yFj3Ln+b9H6BH9cl6FQwH4dgwgdaxr7EMT6EH8DfVs3mWEXUhNf4eBnyflkAxZg=="],
+
+    "@reactive-agents/runtime/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-uBy5ZGKmIk41fRB1wKQZUBnluY36hSkPh4LGRCQfJSujNTC/FDLuDbIgqxWbwGWLvgRIP+soXHJEF1pm9sgvWw=="],
+
+    "@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.1", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-sQ3kF4kzL9rdQzymSIqkj3iB2pO3GAa0jes5f4xV1TcCrsT+SdpHAUqSaXpF3j0gd86Lw6vDGHPXux3yGTLWqA=="],
+
+    "@reactive-agents/runtime/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
+
+    "@reactive-agents/runtime/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2jW91vRnYgq+jvyi9BhHpx1YGfk/j1zJYMst91PTbGDyPjqXYS0QsY8Prapxgd4IXPXFYKyAl8yz10s/y0xRMA=="],
+
+    "@reactive-agents/runtime/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/runtime/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/runtime/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
+
+    "@reactive-agents/runtime/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/reasoning": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-Bk1Ie8SCK3ZqFSqiFcKzL8qC075UWdVwg9gqX2zQhr8WVfq0ZtWnZeHVb+MukxnmeoAcTD2xsfxs6rcllA3U8w=="],
+
+    "@reactive-agents/runtime/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
+
+    "@reactive-agents/runtime/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/trace": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4JclinTu8Zr72fmB8tN2jWOo1jY/4lsa8mo8yYW2fFVXE27WIJ4+65TPdR10YFUm4UeDKqR2lGU44RxvivDh0w=="],
+
+    "@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
+
+    "@reactive-agents/runtime/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
+
+    "@reactive-agents/runtime/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
+
+    "@reactive-agents/runtime/@reactive-agents/verification": ["@reactive-agents/verification@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GdnyBn74TwbsEn0D6xE7HwQOUx8g8YPoEU5M7lL1x9VHydx+L/U7uGnSyNKDeEN12SWXTCEO9DNGVi2CzF1fAA=="],
+
     "@reactive-agents/runtime/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing": ["@reactive-agents/testing@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/runtime": "0.10.1", "@reactive-agents/tools": "0.10.1", "@reactive-agents/trace": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GN1r5oPxjw6boBCQpZ5q8at+jkEjGT6qBp5dJe5ffFzcKfIF/XFClbzqEK65ONkfF2Y8AsGxN8+G7n8obiGKHQ=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
 
     "@reactive-agents/svelte/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/testing/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/testing/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.1", "", { "dependencies": { "@reactive-agents/a2a": "0.10.1", "@reactive-agents/channels": "0.10.1", "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/gateway": "0.10.1", "@reactive-agents/guardrails": "0.10.1", "@reactive-agents/health": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/interaction": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/orchestration": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/reactive-intelligence": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "@reactive-agents/tools": "0.10.1", "@reactive-agents/trace": "0.10.1", "@reactive-agents/verification": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-buTShiufaxPpFmrPZCnjEH94wiqCLaOyzd/XpaN1qNU/CP9FpZTcoBmGV4S05w8vJ6f6E+IRLmRDBcaVw0eGTQ=="],
+
+    "@reactive-agents/testing/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
+
+    "@reactive-agents/testing/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
+
     "@reactive-agents/testing/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/tools/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/tools/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
 
     "@reactive-agents/tools/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
+    "@reactive-agents/trace/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
     "@reactive-agents/trace/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@reactive-agents/verification/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/verification/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/verification/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
 
     "@reactive-agents/verification/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
@@ -4293,37 +4423,39 @@
 
     "rc/strip-json-comments": ["strip-json-comments@2.0.1", "", {}, "sha512-4gB8na07fecVVkOI6Rs4e7T6NOTki5EmL7TUduTs6bu3EdnSycntVJ4re8kgZA+wx9IueI2Y11bfbgwtzuE0KQ=="],
 
-    "reactive-agents/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-M98HOkh6u4vVmNFIJM+tXNAT5lA83EqLcl/YsJn6EZC3GdCLJbuX+Ga5WiCJ8iIzTN6RWVrOMDpQTN4MWWzzLQ=="],
+    "reactive-agents/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-JUitgDCQ393JnkrGaAtO9afh8VR02cwwdqDtZjTpQHky7BFORjvHfH76QgQUcXr264Xu606NuSUPuXERITVPbA=="],
 
-    "reactive-agents/@reactive-agents/core": ["@reactive-agents/core@0.10.2", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-jgfyubLQt5/T1aCxG0swvONzRTgPlHhcpGD2QNUsTIgesfep91EXRpWmFH5CWuL5Twr8+QXsDXoifKqsutUjKA=="],
+    "reactive-agents/@reactive-agents/cli": ["@reactive-agents/cli@0.10.1", "", { "dependencies": { "@reactive-agents/a2a": "0.10.1", "@reactive-agents/core": "0.10.1", "@reactive-agents/eval": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/runtime": "0.10.1", "@reactive-agents/trace": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0", "effect": "^3.10.0", "ora": "^8.2.0" }, "bin": { "rax": "dist/index.js", "reactive-agents": "dist/index.js" } }, "sha512-8dF7YtL3Pd+j6hzJJEOM2bAL7qHu1YhUoQAZL6+6I9nnzuWRmconKb/bvzx7DI6WcXBXJNRoSNWOeO70+N8W5A=="],
 
-    "reactive-agents/@reactive-agents/cost": ["@reactive-agents/cost@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-NcmizL85LGf3ib6TodQv1O1/M5W5dapjdEANL7NvEMSvSfnKTBJ0Bhw2ayWZnyfXkXcJ4GByp1txKO/Mtgm6Pg=="],
+    "reactive-agents/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
 
-    "reactive-agents/@reactive-agents/eval": ["@reactive-agents/eval@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-TsL4uuYUzDO6p1l2bQDbtpi4NTzz9aIa2k2Po7W/p5sXBDr9MH53LtN4vKqkVMc1zFJyGjBoMJ2UvZK4iPLaJw=="],
+    "reactive-agents/@reactive-agents/cost": ["@reactive-agents/cost@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-E9y+94HZaFi2VSp8GSy0yRH7WE/7y+wX3dC1wHMsg0VWUuaJ+dEGYQ7ewOemWoLIJVUn27cWFSXB2/lKSe4c5A=="],
 
-    "reactive-agents/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-ncZjppGQtQR3x1WbmOiRP+OS5B0G9JDYKILB8QttEJdhP2ukq2NhDyA+xVp6IY7KrXBjyLP3FWVN3ONcWc0UdA=="],
+    "reactive-agents/@reactive-agents/eval": ["@reactive-agents/eval@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-29qVfNG2saCwKCtB5k9vovL72GUxw/WhETaDG4Q2Y+Xg3S/bUxQdwhveXhK5lIDulk/Pm976kQdtpswMwYUK5g=="],
 
-    "reactive-agents/@reactive-agents/identity": ["@reactive-agents/identity@0.10.2", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-o7am6p0fuvOI4+ZuXVwPl7yltYCq4GI3ST1oKDO3Jb8Bel0MObfhvp8R+ys5OehPZEhGP16CJ4KEACBIy40blQ=="],
+    "reactive-agents/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-uBy5ZGKmIk41fRB1wKQZUBnluY36hSkPh4LGRCQfJSujNTC/FDLuDbIgqxWbwGWLvgRIP+soXHJEF1pm9sgvWw=="],
 
-    "reactive-agents/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/reasoning": "0.10.2", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-QNVyAHIPxyeCT87Uyi65DYByNpEWjzqI5pYvFKr9lnkoamC0HEqNXW85+seXh2nSIHzjsLP3Xhe9Yujr3UNmfA=="],
+    "reactive-agents/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
 
-    "reactive-agents/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GKxN1p25higrq0lnzVLV5D+TIv/1Zp6QMVx3aXdOKYs0ThMcFl/Igb8SEpNRuyUrpbgnqEcYeEGtPJPHQLmgZA=="],
+    "reactive-agents/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2jW91vRnYgq+jvyi9BhHpx1YGfk/j1zJYMst91PTbGDyPjqXYS0QsY8Prapxgd4IXPXFYKyAl8yz10s/y0xRMA=="],
 
-    "reactive-agents/@reactive-agents/memory": ["@reactive-agents/memory@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-WNeKOWDg63WfALzBymiESnZkP8Y9rj+/TeF3qPh1QyBsQCHHwQAnKFnMySIs98frRqPxrrKmfgzXQmS1qaxccA=="],
+    "reactive-agents/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
 
-    "reactive-agents/@reactive-agents/observability": ["@reactive-agents/observability@0.10.2", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.2", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-/O4ibfUgckbRDLNt3WTcCzg3ufi/89Bcm/0u3zgKD1hJ6iH588cGDAhcgfF1BRMq9lm52SMLDyZDG0CzEXJjFw=="],
+    "reactive-agents/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
 
-    "reactive-agents/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/cost": "0.10.2", "@reactive-agents/identity": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/reasoning": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-NqiGVdLV1sozZ/Se8beH/+bG51wgNf6moa3rU+GW0EaqDbjOdkYoY6yxdmlx6YLe45fig/TcLP8Uvo28vd6rHQ=="],
+    "reactive-agents/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
 
-    "reactive-agents/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-V9D2IGI8Xvugod68wrGT+5wmR2zCM0kgzlM3lAdfLMq4FjcUQlkS4ew7HHUcPL3zAyaRJeXUThWx3DaDIrJrKA=="],
+    "reactive-agents/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/reasoning": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-Bk1Ie8SCK3ZqFSqiFcKzL8qC075UWdVwg9gqX2zQhr8WVfq0ZtWnZeHVb+MukxnmeoAcTD2xsfxs6rcllA3U8w=="],
 
-    "reactive-agents/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/prompts": "0.10.2", "@reactive-agents/tools": "0.10.2", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-TFx8zCOJVhRJpcW3nos+s0dO5NJdmEYRT6I1HcaAptWkxopU/sABfCFsH4wvcd6l4wIOQ4ddWe6UdtrNzULk5w=="],
+    "reactive-agents/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
 
-    "reactive-agents/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.2", "", { "dependencies": { "@reactive-agents/a2a": "0.10.2", "@reactive-agents/channels": "0.10.2", "@reactive-agents/core": "0.10.2", "@reactive-agents/cost": "0.10.2", "@reactive-agents/gateway": "0.10.2", "@reactive-agents/guardrails": "0.10.2", "@reactive-agents/health": "0.10.2", "@reactive-agents/identity": "0.10.2", "@reactive-agents/interaction": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/orchestration": "0.10.2", "@reactive-agents/prompts": "0.10.2", "@reactive-agents/reactive-intelligence": "0.10.2", "@reactive-agents/reasoning": "0.10.2", "@reactive-agents/tools": "0.10.2", "@reactive-agents/trace": "0.10.2", "@reactive-agents/verification": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-+DB357capfHmmAMbwC1jLpqQkocY2A4IGTfsW+RHr5fsdEnxzBm/HH885QtfFTIsXycCnQ92B965E5Ym3HtZ6Q=="],
+    "reactive-agents/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
 
-    "reactive-agents/@reactive-agents/tools": ["@reactive-agents/tools@0.10.2", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-z2pVCpdsupIw7mUh0NHb+mwRrz3V9FE/bKGSON92ffbOpFBGIgD6G11HrXE4NX5EJNj83Mu0DvnYivp3uvsafQ=="],
+    "reactive-agents/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.1", "", { "dependencies": { "@reactive-agents/a2a": "0.10.1", "@reactive-agents/channels": "0.10.1", "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/gateway": "0.10.1", "@reactive-agents/guardrails": "0.10.1", "@reactive-agents/health": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/interaction": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/orchestration": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/reactive-intelligence": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "@reactive-agents/tools": "0.10.1", "@reactive-agents/trace": "0.10.1", "@reactive-agents/verification": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-buTShiufaxPpFmrPZCnjEH94wiqCLaOyzd/XpaN1qNU/CP9FpZTcoBmGV4S05w8vJ6f6E+IRLmRDBcaVw0eGTQ=="],
 
-    "reactive-agents/@reactive-agents/verification": ["@reactive-agents/verification@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-ZetTOoS2fh9pdfeFz8og09NldiTdvfxwXFIo/nfcstn4eecPMOYcHe06wK/NaFLfiErpUyOnitSgk9L7X3WZXw=="],
+    "reactive-agents/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
+
+    "reactive-agents/@reactive-agents/verification": ["@reactive-agents/verification@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GdnyBn74TwbsEn0D6xE7HwQOUx8g8YPoEU5M7lL1x9VHydx+L/U7uGnSyNKDeEN12SWXTCEO9DNGVi2CzF1fAA=="],
 
     "reactive-agents/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
@@ -4625,63 +4757,135 @@
 
     "@opentelemetry/sdk-trace-node/@opentelemetry/sdk-trace-base/@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.28.0", "", {}, "sha512-lp4qAiMTD4sNWW4DbKLBkfiMZ4jbAboJIGOQr5DvciMRI494OapieI9qiODpOt0XBr1LjIDy1xAGAnVs5supTA=="],
 
-    "@reactive-agents/cli/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-WNeKOWDg63WfALzBymiESnZkP8Y9rj+/TeF3qPh1QyBsQCHHwQAnKFnMySIs98frRqPxrrKmfgzXQmS1qaxccA=="],
+    "@reactive-agents/cli/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/gateway": "0.10.2", "effect": "^3.10.0" } }, "sha512-rRUIyIeX+UJhm97taj6F+w01n7S6ayvaBbBDwDUxe5nKxHkgjeWEvht2+VrwIRFlJd1jJ2+1TCJSzL8cfvb2OA=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/gateway": "0.10.1", "effect": "^3.10.0" } }, "sha512-Dac8W/BefQBxv4cW7rQfzPyU0c18CkG1GtvGN7q7Z7aPGMz3h5ZdTu515P1szEaVqNM7ehXVJ+HO1G/Hy21iTg=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/cost": ["@reactive-agents/cost@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-NcmizL85LGf3ib6TodQv1O1/M5W5dapjdEANL7NvEMSvSfnKTBJ0Bhw2ayWZnyfXkXcJ4GByp1txKO/Mtgm6Pg=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/cost": ["@reactive-agents/cost@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-E9y+94HZaFi2VSp8GSy0yRH7WE/7y+wX3dC1wHMsg0VWUuaJ+dEGYQ7ewOemWoLIJVUn27cWFSXB2/lKSe4c5A=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-tjRISWV84r3u6G1o/hp7YyEo5TWlLpHvgZGC9+vxfkujk5ND+nlHmG3t+s1+w7YRCXSZo6vEpQNxEixiLb5FpA=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-mGsl5V9IHv8vbfczozVXRS1yFj3Ln+b9H6BH9cl6FQwH4dgwgdaxr7EMT6EH8DfVs3mWEXUhNf4eBnyflkAxZg=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-ncZjppGQtQR3x1WbmOiRP+OS5B0G9JDYKILB8QttEJdhP2ukq2NhDyA+xVp6IY7KrXBjyLP3FWVN3ONcWc0UdA=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-uBy5ZGKmIk41fRB1wKQZUBnluY36hSkPh4LGRCQfJSujNTC/FDLuDbIgqxWbwGWLvgRIP+soXHJEF1pm9sgvWw=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.2", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-wKDGK7M+Zv2kqC2uCFCpsU/Nqrqsi8/wl8M3/b5yg8HZzvT6y7lZ4LrxnT2Ui9ZaIuouIzSfnv1dzdOrHoKHkw=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.1", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-sQ3kF4kzL9rdQzymSIqkj3iB2pO3GAa0jes5f4xV1TcCrsT+SdpHAUqSaXpF3j0gd86Lw6vDGHPXux3yGTLWqA=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/identity": ["@reactive-agents/identity@0.10.2", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-o7am6p0fuvOI4+ZuXVwPl7yltYCq4GI3ST1oKDO3Jb8Bel0MObfhvp8R+ys5OehPZEhGP16CJ4KEACBIy40blQ=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/reasoning": "0.10.2", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-QNVyAHIPxyeCT87Uyi65DYByNpEWjzqI5pYvFKr9lnkoamC0HEqNXW85+seXh2nSIHzjsLP3Xhe9Yujr3UNmfA=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2jW91vRnYgq+jvyi9BhHpx1YGfk/j1zJYMst91PTbGDyPjqXYS0QsY8Prapxgd4IXPXFYKyAl8yz10s/y0xRMA=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/memory": ["@reactive-agents/memory@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-WNeKOWDg63WfALzBymiESnZkP8Y9rj+/TeF3qPh1QyBsQCHHwQAnKFnMySIs98frRqPxrrKmfgzXQmS1qaxccA=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/observability": ["@reactive-agents/observability@0.10.2", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.2", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-/O4ibfUgckbRDLNt3WTcCzg3ufi/89Bcm/0u3zgKD1hJ6iH588cGDAhcgfF1BRMq9lm52SMLDyZDG0CzEXJjFw=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/cost": "0.10.2", "@reactive-agents/identity": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/reasoning": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-NqiGVdLV1sozZ/Se8beH/+bG51wgNf6moa3rU+GW0EaqDbjOdkYoY6yxdmlx6YLe45fig/TcLP8Uvo28vd6rHQ=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/reasoning": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-Bk1Ie8SCK3ZqFSqiFcKzL8qC075UWdVwg9gqX2zQhr8WVfq0ZtWnZeHVb+MukxnmeoAcTD2xsfxs6rcllA3U8w=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-V9D2IGI8Xvugod68wrGT+5wmR2zCM0kgzlM3lAdfLMq4FjcUQlkS4ew7HHUcPL3zAyaRJeXUThWx3DaDIrJrKA=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/trace": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-XonOCxh982nti5iW2aVmSYD1RUUg2Bbrz+o65G6wJzg7wjsYlQxkaBDx8pmGNNcXBtPpnc/ByoFU80gmZx0SBQ=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/trace": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4JclinTu8Zr72fmB8tN2jWOo1jY/4lsa8mo8yYW2fFVXE27WIJ4+65TPdR10YFUm4UeDKqR2lGU44RxvivDh0w=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/prompts": "0.10.2", "@reactive-agents/tools": "0.10.2", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-TFx8zCOJVhRJpcW3nos+s0dO5NJdmEYRT6I1HcaAptWkxopU/sABfCFsH4wvcd6l4wIOQ4ddWe6UdtrNzULk5w=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/tools": ["@reactive-agents/tools@0.10.2", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-z2pVCpdsupIw7mUh0NHb+mwRrz3V9FE/bKGSON92ffbOpFBGIgD6G11HrXE4NX5EJNj83Mu0DvnYivp3uvsafQ=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
 
-    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/verification": ["@reactive-agents/verification@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-ZetTOoS2fh9pdfeFz8og09NldiTdvfxwXFIo/nfcstn4eecPMOYcHe06wK/NaFLfiErpUyOnitSgk9L7X3WZXw=="],
+    "@reactive-agents/cli/@reactive-agents/runtime/@reactive-agents/verification": ["@reactive-agents/verification@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GdnyBn74TwbsEn0D6xE7HwQOUx8g8YPoEU5M7lL1x9VHydx+L/U7uGnSyNKDeEN12SWXTCEO9DNGVi2CzF1fAA=="],
 
-    "@reactive-agents/cortex/@reactive-agents/reactive-intelligence/@reactive-agents/trace": ["@reactive-agents/trace@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "effect": "^3.10.0" } }, "sha512-6OViOBaIzsTDvU+c/f3W2E6lUnXds/Qzj6Q1YK8ht3iKIc0R7ZZrXgodPi+dj3oDQoZbVsxQx1NZIkyqcTYOLA=="],
+    "@reactive-agents/cortex/@reactive-agents/reactive-intelligence/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-M98HOkh6u4vVmNFIJM+tXNAT5lA83EqLcl/YsJn6EZC3GdCLJbuX+Ga5WiCJ8iIzTN6RWVrOMDpQTN4MWWzzLQ=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-JUitgDCQ393JnkrGaAtO9afh8VR02cwwdqDtZjTpQHky7BFORjvHfH76QgQUcXr264Xu606NuSUPuXERITVPbA=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/gateway": "0.10.2", "effect": "^3.10.0" } }, "sha512-rRUIyIeX+UJhm97taj6F+w01n7S6ayvaBbBDwDUxe5nKxHkgjeWEvht2+VrwIRFlJd1jJ2+1TCJSzL8cfvb2OA=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/gateway": "0.10.1", "effect": "^3.10.0" } }, "sha512-Dac8W/BefQBxv4cW7rQfzPyU0c18CkG1GtvGN7q7Z7aPGMz3h5ZdTu515P1szEaVqNM7ehXVJ+HO1G/Hy21iTg=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/cost": ["@reactive-agents/cost@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-NcmizL85LGf3ib6TodQv1O1/M5W5dapjdEANL7NvEMSvSfnKTBJ0Bhw2ayWZnyfXkXcJ4GByp1txKO/Mtgm6Pg=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/cost": ["@reactive-agents/cost@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-E9y+94HZaFi2VSp8GSy0yRH7WE/7y+wX3dC1wHMsg0VWUuaJ+dEGYQ7ewOemWoLIJVUn27cWFSXB2/lKSe4c5A=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-ncZjppGQtQR3x1WbmOiRP+OS5B0G9JDYKILB8QttEJdhP2ukq2NhDyA+xVp6IY7KrXBjyLP3FWVN3ONcWc0UdA=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-uBy5ZGKmIk41fRB1wKQZUBnluY36hSkPh4LGRCQfJSujNTC/FDLuDbIgqxWbwGWLvgRIP+soXHJEF1pm9sgvWw=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.2", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-wKDGK7M+Zv2kqC2uCFCpsU/Nqrqsi8/wl8M3/b5yg8HZzvT6y7lZ4LrxnT2Ui9ZaIuouIzSfnv1dzdOrHoKHkw=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.1", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-sQ3kF4kzL9rdQzymSIqkj3iB2pO3GAa0jes5f4xV1TcCrsT+SdpHAUqSaXpF3j0gd86Lw6vDGHPXux3yGTLWqA=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/identity": ["@reactive-agents/identity@0.10.2", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-o7am6p0fuvOI4+ZuXVwPl7yltYCq4GI3ST1oKDO3Jb8Bel0MObfhvp8R+ys5OehPZEhGP16CJ4KEACBIy40blQ=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/reasoning": "0.10.2", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-QNVyAHIPxyeCT87Uyi65DYByNpEWjzqI5pYvFKr9lnkoamC0HEqNXW85+seXh2nSIHzjsLP3Xhe9Yujr3UNmfA=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2jW91vRnYgq+jvyi9BhHpx1YGfk/j1zJYMst91PTbGDyPjqXYS0QsY8Prapxgd4IXPXFYKyAl8yz10s/y0xRMA=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/cost": "0.10.2", "@reactive-agents/identity": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/reasoning": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-NqiGVdLV1sozZ/Se8beH/+bG51wgNf6moa3rU+GW0EaqDbjOdkYoY6yxdmlx6YLe45fig/TcLP8Uvo28vd6rHQ=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/reasoning": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-Bk1Ie8SCK3ZqFSqiFcKzL8qC075UWdVwg9gqX2zQhr8WVfq0ZtWnZeHVb+MukxnmeoAcTD2xsfxs6rcllA3U8w=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-V9D2IGI8Xvugod68wrGT+5wmR2zCM0kgzlM3lAdfLMq4FjcUQlkS4ew7HHUcPL3zAyaRJeXUThWx3DaDIrJrKA=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2", "@reactive-agents/observability": "0.10.2", "@reactive-agents/prompts": "0.10.2", "@reactive-agents/tools": "0.10.2", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-TFx8zCOJVhRJpcW3nos+s0dO5NJdmEYRT6I1HcaAptWkxopU/sABfCFsH4wvcd6l4wIOQ4ddWe6UdtrNzULk5w=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/trace": ["@reactive-agents/trace@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "effect": "^3.10.0" } }, "sha512-6OViOBaIzsTDvU+c/f3W2E6lUnXds/Qzj6Q1YK8ht3iKIc0R7ZZrXgodPi+dj3oDQoZbVsxQx1NZIkyqcTYOLA=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
 
-    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/verification": ["@reactive-agents/verification@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/memory": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-ZetTOoS2fh9pdfeFz8og09NldiTdvfxwXFIo/nfcstn4eecPMOYcHe06wK/NaFLfiErpUyOnitSgk9L7X3WZXw=="],
+    "@reactive-agents/cortex/@reactive-agents/runtime/@reactive-agents/verification": ["@reactive-agents/verification@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GdnyBn74TwbsEn0D6xE7HwQOUx8g8YPoEU5M7lL1x9VHydx+L/U7uGnSyNKDeEN12SWXTCEO9DNGVi2CzF1fAA=="],
+
+    "@reactive-agents/diagnose/@reactive-agents/trace/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/eval/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/guardrails/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/interaction/@reactive-agents/reasoning/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/interaction/@reactive-agents/reasoning/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/interaction/@reactive-agents/reasoning/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
+
+    "@reactive-agents/interaction/@reactive-agents/reasoning/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/cost/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/reasoning/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/reasoning/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/reasoning/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
+
+    "@reactive-agents/orchestration/@reactive-agents/reasoning/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
+
+    "@reactive-agents/reactive-intelligence/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/llm-provider": ["@reactive-agents/llm-provider@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "optionalDependencies": { "@anthropic-ai/sdk": "^0.30.0", "@google/genai": "^1.0.0", "ollama": "^0.6.3", "openai": "^4.70.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2mabEVXL17UN1YhftjdW2LPGyLxcH+WGueqqwKkufqyVYGKSGItfFEHWNOUEI7b8btd71++HCgyaw7oxNWkQJw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime": ["@reactive-agents/runtime@0.10.1", "", { "dependencies": { "@reactive-agents/a2a": "0.10.1", "@reactive-agents/channels": "0.10.1", "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/gateway": "0.10.1", "@reactive-agents/guardrails": "0.10.1", "@reactive-agents/health": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/interaction": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/orchestration": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/reactive-intelligence": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "@reactive-agents/tools": "0.10.1", "@reactive-agents/trace": "0.10.1", "@reactive-agents/verification": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-buTShiufaxPpFmrPZCnjEH94wiqCLaOyzd/XpaN1qNU/CP9FpZTcoBmGV4S05w8vJ6f6E+IRLmRDBcaVw0eGTQ=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/tools": ["@reactive-agents/tools@0.10.1", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.28.0", "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-7lMo0cShqA1mkxaRU7CU/y3D7ZBFYMJKy+ID2r5uwU9kH3q+kjpMEtxf6lIPzBTZTr+i8VauhdAK41qWFvSpZw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/trace/@reactive-agents/core": ["@reactive-agents/core@0.10.1", "", { "dependencies": { "effect": "^3.10.0", "ulid": "^2.3.0" } }, "sha512-2gw0Lpj/jIyCWCrB+JgRQW4kLKMAivduWKWf0EdGYcDJ1ZNTtpXJC82PfxR/WbGszSz41725IH3gzCeiPB5sTQ=="],
+
+    "@reactive-agents/testing/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-JUitgDCQ393JnkrGaAtO9afh8VR02cwwdqDtZjTpQHky7BFORjvHfH76QgQUcXr264Xu606NuSUPuXERITVPbA=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/gateway": "0.10.1", "effect": "^3.10.0" } }, "sha512-Dac8W/BefQBxv4cW7rQfzPyU0c18CkG1GtvGN7q7Z7aPGMz3h5ZdTu515P1szEaVqNM7ehXVJ+HO1G/Hy21iTg=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/cost": ["@reactive-agents/cost@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-E9y+94HZaFi2VSp8GSy0yRH7WE/7y+wX3dC1wHMsg0VWUuaJ+dEGYQ7ewOemWoLIJVUn27cWFSXB2/lKSe4c5A=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-mGsl5V9IHv8vbfczozVXRS1yFj3Ln+b9H6BH9cl6FQwH4dgwgdaxr7EMT6EH8DfVs3mWEXUhNf4eBnyflkAxZg=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-uBy5ZGKmIk41fRB1wKQZUBnluY36hSkPh4LGRCQfJSujNTC/FDLuDbIgqxWbwGWLvgRIP+soXHJEF1pm9sgvWw=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.1", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-sQ3kF4kzL9rdQzymSIqkj3iB2pO3GAa0jes5f4xV1TcCrsT+SdpHAUqSaXpF3j0gd86Lw6vDGHPXux3yGTLWqA=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2jW91vRnYgq+jvyi9BhHpx1YGfk/j1zJYMst91PTbGDyPjqXYS0QsY8Prapxgd4IXPXFYKyAl8yz10s/y0xRMA=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/reasoning": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-Bk1Ie8SCK3ZqFSqiFcKzL8qC075UWdVwg9gqX2zQhr8WVfq0ZtWnZeHVb+MukxnmeoAcTD2xsfxs6rcllA3U8w=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/trace": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4JclinTu8Zr72fmB8tN2jWOo1jY/4lsa8mo8yYW2fFVXE27WIJ4+65TPdR10YFUm4UeDKqR2lGU44RxvivDh0w=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
+
+    "@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/verification": ["@reactive-agents/verification@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GdnyBn74TwbsEn0D6xE7HwQOUx8g8YPoEU5M7lL1x9VHydx+L/U7uGnSyNKDeEN12SWXTCEO9DNGVi2CzF1fAA=="],
+
+    "@reactive-agents/tools/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
 
     "@smithy/eventstream-serde-universal/@smithy/eventstream-codec/@aws-crypto/crc32": ["@aws-crypto/crc32@5.2.0", "", { "dependencies": { "@aws-crypto/util": "^5.2.0", "@aws-sdk/types": "^3.222.0", "tslib": "^2.6.2" } }, "sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg=="],
 
@@ -4791,15 +4995,17 @@
 
     "prebuild-install/tar-fs/tar-stream": ["tar-stream@2.2.0", "", { "dependencies": { "bl": "^4.0.3", "end-of-stream": "^1.4.1", "fs-constants": "^1.0.0", "inherits": "^2.0.3", "readable-stream": "^3.1.1" } }, "sha512-ujeqbceABgwMZxEJnk2HDY2DlnUZ+9oEcb1KzTVfYHio0UE6dG71n60d8D2I4qNvleWrrXpmjpt7vZeF1LnMZQ=="],
 
-    "reactive-agents/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/gateway": "0.10.2", "effect": "^3.10.0" } }, "sha512-rRUIyIeX+UJhm97taj6F+w01n7S6ayvaBbBDwDUxe5nKxHkgjeWEvht2+VrwIRFlJd1jJ2+1TCJSzL8cfvb2OA=="],
+    "reactive-agents/@reactive-agents/cli/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
 
-    "reactive-agents/@reactive-agents/runtime/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-tjRISWV84r3u6G1o/hp7YyEo5TWlLpHvgZGC9+vxfkujk5ND+nlHmG3t+s1+w7YRCXSZo6vEpQNxEixiLb5FpA=="],
+    "reactive-agents/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/gateway": "0.10.1", "effect": "^3.10.0" } }, "sha512-Dac8W/BefQBxv4cW7rQfzPyU0c18CkG1GtvGN7q7Z7aPGMz3h5ZdTu515P1szEaVqNM7ehXVJ+HO1G/Hy21iTg=="],
 
-    "reactive-agents/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.2", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-wKDGK7M+Zv2kqC2uCFCpsU/Nqrqsi8/wl8M3/b5yg8HZzvT6y7lZ4LrxnT2Ui9ZaIuouIzSfnv1dzdOrHoKHkw=="],
+    "reactive-agents/@reactive-agents/runtime/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-mGsl5V9IHv8vbfczozVXRS1yFj3Ln+b9H6BH9cl6FQwH4dgwgdaxr7EMT6EH8DfVs3mWEXUhNf4eBnyflkAxZg=="],
 
-    "reactive-agents/@reactive-agents/runtime/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "@reactive-agents/llm-provider": "0.10.2", "@reactive-agents/trace": "0.10.2" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-XonOCxh982nti5iW2aVmSYD1RUUg2Bbrz+o65G6wJzg7wjsYlQxkaBDx8pmGNNcXBtPpnc/ByoFU80gmZx0SBQ=="],
+    "reactive-agents/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.1", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-sQ3kF4kzL9rdQzymSIqkj3iB2pO3GAa0jes5f4xV1TcCrsT+SdpHAUqSaXpF3j0gd86Lw6vDGHPXux3yGTLWqA=="],
 
-    "reactive-agents/@reactive-agents/runtime/@reactive-agents/trace": ["@reactive-agents/trace@0.10.2", "", { "dependencies": { "@reactive-agents/core": "0.10.2", "effect": "^3.10.0" } }, "sha512-6OViOBaIzsTDvU+c/f3W2E6lUnXds/Qzj6Q1YK8ht3iKIc0R7ZZrXgodPi+dj3oDQoZbVsxQx1NZIkyqcTYOLA=="],
+    "reactive-agents/@reactive-agents/runtime/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/trace": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4JclinTu8Zr72fmB8tN2jWOo1jY/4lsa8mo8yYW2fFVXE27WIJ4+65TPdR10YFUm4UeDKqR2lGU44RxvivDh0w=="],
+
+    "reactive-agents/@reactive-agents/runtime/@reactive-agents/trace": ["@reactive-agents/trace@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "effect": "^3.10.0" } }, "sha512-M5+r0yTB/Z+WGyBaO5fvTH0EZ8mINxn0k0HHnGTa2DkEQTTw1zys462MVh2t66wdY0CMwMBhXF3OveyanxAwfA=="],
 
     "read-yaml-file/js-yaml/argparse": ["argparse@1.0.10", "", { "dependencies": { "sprintf-js": "~1.0.2" } }, "sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg=="],
 
@@ -4928,6 +5134,38 @@
     "@opentelemetry/otlp-grpc-exporter-base/@opentelemetry/otlp-transformer/@opentelemetry/sdk-trace-base/@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.27.0", "", {}, "sha512-sAay1RrB+ONOem0OZanAR1ZI/k7yDpnOQSQmTMuGImUQb2y8EbSaCJ94FQluM74xoU03vlb2d2U90hZluL6nQg=="],
 
     "@opentelemetry/resource-detector-gcp/gcp-metadata/gaxios/uuid": ["uuid@9.0.1", "", { "bin": { "uuid": "dist/bin/uuid" } }, "sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/llm-provider/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/a2a": ["@reactive-agents/a2a@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "@reactive-agents/identity": ">=0.7.0", "effect": "^3.10.0" }, "optionalPeers": ["@reactive-agents/identity"] }, "sha512-JUitgDCQ393JnkrGaAtO9afh8VR02cwwdqDtZjTpQHky7BFORjvHfH76QgQUcXr264Xu606NuSUPuXERITVPbA=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/channels": ["@reactive-agents/channels@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/gateway": "0.10.1", "effect": "^3.10.0" } }, "sha512-Dac8W/BefQBxv4cW7rQfzPyU0c18CkG1GtvGN7q7Z7aPGMz3h5ZdTu515P1szEaVqNM7ehXVJ+HO1G/Hy21iTg=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/cost": ["@reactive-agents/cost@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-E9y+94HZaFi2VSp8GSy0yRH7WE/7y+wX3dC1wHMsg0VWUuaJ+dEGYQ7ewOemWoLIJVUn27cWFSXB2/lKSe4c5A=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/gateway": ["@reactive-agents/gateway@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-mGsl5V9IHv8vbfczozVXRS1yFj3Ln+b9H6BH9cl6FQwH4dgwgdaxr7EMT6EH8DfVs3mWEXUhNf4eBnyflkAxZg=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/guardrails": ["@reactive-agents/guardrails@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-uBy5ZGKmIk41fRB1wKQZUBnluY36hSkPh4LGRCQfJSujNTC/FDLuDbIgqxWbwGWLvgRIP+soXHJEF1pm9sgvWw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/health": ["@reactive-agents/health@0.10.1", "", { "peerDependencies": { "effect": "^3.10.0" } }, "sha512-sQ3kF4kzL9rdQzymSIqkj3iB2pO3GAa0jes5f4xV1TcCrsT+SdpHAUqSaXpF3j0gd86Lw6vDGHPXux3yGTLWqA=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/identity": ["@reactive-agents/identity@0.10.1", "", { "dependencies": { "@noble/ed25519": "^2.0.0", "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-VQ+L0B7XeaCEGBRlQpJvWyZj1+Iywnx+L3dACRUT0vsVSXnEtJ233b8/ufdFPGD68JSxu5dOKa07RpXqJjQL5w=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/interaction": ["@reactive-agents/interaction@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/reasoning": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2jW91vRnYgq+jvyi9BhHpx1YGfk/j1zJYMst91PTbGDyPjqXYS0QsY8Prapxgd4IXPXFYKyAl8yz10s/y0xRMA=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/memory": ["@reactive-agents/memory@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-l4WWJTKZkrwojam1qmKNFI6neMbYIaR4+LvTpykNaJp6sLrmQHEXC6fJCbH3dJD8SWJBXR4mDIonxD8/HC8CUw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/observability": ["@reactive-agents/observability@0.10.1", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0", "@opentelemetry/exporter-trace-otlp-http": "^0.213.0", "@opentelemetry/resources": "^2.6.0", "@opentelemetry/sdk-metrics": "^2.6.0", "@opentelemetry/sdk-trace-base": "^2.6.0", "@opentelemetry/semantic-conventions": "^1.40.0", "@reactive-agents/core": "0.10.1", "boxen": "^8.0.1", "chalk": "^5.4.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-5SglX2IkiqxlyrVckDt4gtkHTztD8j5IcAxh79H/r/jRZTQ0sgVhrsxtdiScR73eN9OK//2IPP76RTfTu2Cb8w=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/orchestration": ["@reactive-agents/orchestration@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/cost": "0.10.1", "@reactive-agents/identity": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/reasoning": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-Bk1Ie8SCK3ZqFSqiFcKzL8qC075UWdVwg9gqX2zQhr8WVfq0ZtWnZeHVb+MukxnmeoAcTD2xsfxs6rcllA3U8w=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/prompts": ["@reactive-agents/prompts@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4bC3+homdBdZT6LJSuPCwzMazFAyaY+EjwH7i9omepnv8njT56n5poPOnEosf25rJwgEMU7ctzLbVb1WssrYCw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/reactive-intelligence": ["@reactive-agents/reactive-intelligence@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/trace": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-4JclinTu8Zr72fmB8tN2jWOo1jY/4lsa8mo8yYW2fFVXE27WIJ4+65TPdR10YFUm4UeDKqR2lGU44RxvivDh0w=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/reasoning": ["@reactive-agents/reasoning@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1", "@reactive-agents/observability": "0.10.1", "@reactive-agents/prompts": "0.10.1", "@reactive-agents/tools": "0.10.1", "ulid": "^2.3.0" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-2HnCe8g5YJJBdOun7nO7fs9JrUFGSftJ1MhHDnkuMeeDYxbtHyNojW18yi3XUF8+17IGo6bHDW5OkHjvLhNclw=="],
+
+    "@reactive-agents/scenarios/@reactive-agents/testing/@reactive-agents/runtime/@reactive-agents/verification": ["@reactive-agents/verification@0.10.1", "", { "dependencies": { "@reactive-agents/core": "0.10.1", "@reactive-agents/llm-provider": "0.10.1", "@reactive-agents/memory": "0.10.1" }, "peerDependencies": { "effect": "^3.10.0" } }, "sha512-GdnyBn74TwbsEn0D6xE7HwQOUx8g8YPoEU5M7lL1x9VHydx+L/U7uGnSyNKDeEN12SWXTCEO9DNGVi2CzF1fAA=="],
 
     "@so-ric/colorspace/color/color-convert/color-name": ["color-name@2.1.0", "", {}, "sha512-1bPaDNFm0axzE4MEAzKPuqKWeRaT43U/hyxKPBdqTfmPF+d6n7FSoTFxLVULUJOmiLp01KjhIPPH+HrXZJN4Rg=="],
 
