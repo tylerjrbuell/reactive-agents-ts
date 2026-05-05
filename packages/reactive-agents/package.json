@@ -47,6 +47,7 @@
   "files": [
     "dist",
     "bin",
+    "cjs-shim.cjs",
     "README.md",
     "LICENSE"
   ],
@@ -79,6 +80,7 @@
       "bun": "./dist/index.js",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
+      "require": "./cjs-shim.cjs",
       "default": "./dist/index.js"
     },
     "./core": {
