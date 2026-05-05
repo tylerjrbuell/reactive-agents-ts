@@ -16,6 +16,37 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ## Current state (May 5, 2026)
 
+### v0.10.2 Post-Release Quality Sweep — COMPLETE ✅ (May 5, 2026)
+
+**Comprehensive sweep found 5 critical/high issues in SDK, CLI, and build systems**
+
+**Critical issues (blocking SDK/CLI use):**
+- **P1-5 (CRITICAL):** SDK `agent.run()` method missing — blocks standard SDK pattern
+- **P1-3 (CRITICAL):** cortex command broken in npm-installed CLI — partially fixed (turbo.json)
+- **P1-1 (HIGH):** CLI --help flags broken in 3 commands (init, create-agent, run) — ready to fix
+
+**Medium priority (UX/ecosystem):**
+- **P1-4 (MEDIUM):** CommonJS require() fails with cryptic error — needs design
+- **P1-2 (MEDIUM):** Vague LLM error messages (no actionable hints)
+- **W1-2 (MEDIUM):** Build system asset caching (fixed in turbo.json)
+
+**Documentation & actionable items:**
+- `.agents/PATCH-ISSUES-v0.11.0.md` — Complete issue catalog with effort estimates
+- `.agents/RELEASE-SWEEP-SUMMARY.md` — Full report with testing methodology, recommendations, verification checklist
+- `release_0_10_2_patch_issues.md` (memory file) — Quick reference for patch roadmap
+
+**Fixes applied:**
+- ✅ Updated turbo.json to include `assets/**` in CLI build outputs (fixes cortex bundling)
+- ✅ Updated apps/cli/package.json build script to run cortex UI before tsup
+- ✅ Improved cortex.ts error messages for dev vs bundled mode
+- ✅ Verified cortex UI assets now present (index.html, favicon.svg, _app/)
+
+**Next steps:** Investigate P1-5 (SDK agent.run), then fix P1-1 (--help), then bundle with P1-2/P1-4 for v0.11.0 patch
+
+**Details:** See `release_0_10_2_patch_issues.md` in personal memory
+
+---
+
 ### v0.10.2 Hotfix Release — SHIPPED ✅ (May 5, 3:42am EDT)
 
 **Status:** All 27 packages at 0.10.2, published to npm, stable and verified.
