@@ -131,7 +131,7 @@ async function cortexDevStack(options: {
   readonly baseUrl: string;
 }): Promise<void> {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const cortexRoot = path.resolve(__dirname, "../../../cortex");
+  const cortexRoot = path.resolve(__dirname, "../../cortex");
   const stackScript = path.join(cortexRoot, "scripts/dev-stack.ts");
 
   if (!existsSync(stackScript)) {
@@ -182,8 +182,8 @@ export async function cortexCommand(options: CortexCommandOptions = {}): Promise
   }
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const serverEntry = path.resolve(__dirname, "../../../cortex/server/index.ts");
-  const staticPath = path.resolve(__dirname, "../../assets/cortex");
+  const serverEntry = path.resolve(__dirname, "../../cortex/server/index.ts");
+  const staticPath = path.resolve(__dirname, "../assets/cortex");
   const hasStatic = existsSync(path.join(staticPath, "index.html"));
   const hasServerSource = existsSync(serverEntry);
 
@@ -219,6 +219,27 @@ export async function cortexCommand(options: CortexCommandOptions = {}): Promise
       console.error(info("  cd apps/cli"));
       console.error(info("  bun run build"));
     }
+    process.exit(1);
+  }
+
+  // npm-installed CLI scenario: cortex server source not available.
+  // The cortex server is a complex Elysia/Bun app with 8 workspace deps and is not
+  // (yet) packaged for npm. Static UI assets are bundled, but without the server
+  // there's nothing to spawn — show a clear, actionable error instead of crashing.
+  if (!hasServerSource) {
+    console.error(fail(`Cortex companion studio is not yet available in npm-installed CLI`));
+    console.error();
+    console.error(hint(`The cortex server is a complex Elysia/Bun application that depends on 8 workspace packages. It's not yet packaged for npm distribution (planned for a future release). Static UI assets are bundled with this CLI, but the server itself is not.`));
+    console.error();
+    console.error(info("To use cortex now, run from the source repository:"));
+    console.error(info("  git clone https://github.com/tylerjrbuell/reactive-agents-ts"));
+    console.error(info("  cd reactive-agents-ts"));
+    console.error(info("  bun install"));
+    console.error(info("  bun run apps/cortex/scripts/dev-stack.ts"));
+    console.error();
+    console.error(info("Or invoke `rax cortex` from a clone of the source repo."));
+    console.error();
+    console.error(info(`Track progress: https://github.com/tylerjrbuell/reactive-agents-ts/issues`));
     process.exit(1);
   }
 
