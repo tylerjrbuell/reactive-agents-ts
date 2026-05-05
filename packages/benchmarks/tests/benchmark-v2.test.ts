@@ -31,7 +31,7 @@ import { localModelsSession } from "../src/sessions/local-models.js"
 import { parseArgs } from "../src/run.js"
 import { runSession } from "../src/index.js"
 import { BENCHMARK_TASKS } from "../src/task-registry.js"
-import { matchSuccessCriteria, parsePartialCreditScore } from "../src/judge.js"
+import { matchSuccessCriteria, parsePartialCreditScore, computeReliability } from "../src/judge.js"
 import { COMPETITOR_RUNNERS } from "../src/competitors/index.js"
 
 test("QualityDimension covers all 10 dimensions", () => {

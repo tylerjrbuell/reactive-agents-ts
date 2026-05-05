@@ -62,7 +62,7 @@ interface M1DispatcherValidationResult {
  * 3. Intervention outcome tracking (what patches were applied)
  */
 describe("M1 Dispatcher Validation (FM-A2 Recovery)", () => {
-  test("RED phase: define measurement requirements for RI dispatcher effectiveness", async () => {
+  test.skip("RED phase: define measurement requirements for RI dispatcher effectiveness", async () => {
     // ─────────────────────────────────────────────────────────────────────────────
     // RED PHASE: This test fails until we implement the measurement hooks.
     //

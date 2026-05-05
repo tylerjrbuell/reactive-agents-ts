@@ -3265,7 +3265,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                             if (obs) {
                               yield* obs.info(
                                 "[engine] WARN: verification retry — reasoning returned invalid shape; terminating with error",
-                              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3195", tag: errorTag(err) })));
+                              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:invalid-shape", tag: errorTag(err) })));
                             }
                             return {
                               ...c,
@@ -3280,7 +3280,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           if (obs) {
                             yield* obs.info(
                               `[engine] WARN: verification retry — reasoning failed: ${String(retryOutcome.cause)}`,
-                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3195", tag: errorTag(err) })));
+                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:reasoning-failed", tag: errorTag(err) })));
                           }
                           return {
                             ...c,

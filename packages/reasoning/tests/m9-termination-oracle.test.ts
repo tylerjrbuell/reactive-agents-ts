@@ -82,7 +82,7 @@ describe("M9 — Termination Oracle Validation", () => {
       const terminated = terminate(state, {
         reason: "oracle_forced",
         output: "Forced exit.",
-        extraMeta: {} as any,
+        extraMeta: { nudgeCount: 2, escalateTo: "user_review" } as any,
       });
 
       expect(terminated.meta.terminatedBy).toBe("oracle_forced");
@@ -96,7 +96,7 @@ describe("M9 — Termination Oracle Validation", () => {
       const terminated = terminate(state, {
         reason: "harness_deliverable",
         output: "Assembled from artifacts.",
-        extraMeta: {} as any,
+        extraMeta: { previousTerminatedBy: "some_prior_reason" } as any,
       });
 
       expect(terminated.meta.terminatedBy).toBe("harness_deliverable");
