@@ -20,19 +20,6 @@
       ],
       "outputs": ["dist/**"]
     },
-    "@reactive-agents/cli#build": {
-      "dependsOn": ["^build"],
-      "inputs": [
-        "src/**",
-        "tsup.config.*",
-        "tsconfig.json",
-        "package.json",
-        "../cortex/ui/src/**",
-        "../cortex/ui/svelte.config.js",
-        "../cortex/ui/package.json"
-      ],
-      "outputs": ["dist/**", "assets/**"]
-    },
     "typecheck": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "tsconfig.json", "package.json"],

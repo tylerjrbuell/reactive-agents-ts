@@ -138,7 +138,7 @@ export async function runAgent(args: string[]): Promise<void> {
         `Call .withCortex() — events to Cortex ingest (CORTEX_URL or ${DEFAULT_CORTEX_URL})`,
       ),
     );
-    console.error(hint("Start studio: rax cortex   then run with --cortex in another terminal"));
+    console.error(hint("Start studio: from repo root, run `bun cortex` (contributor tool); then re-run with --cortex"));
     process.exit(1);
   }
 
@@ -224,7 +224,7 @@ export async function runAgent(args: string[]): Promise<void> {
       if (enableCortex && !verbose) {
         console.log(
           info(
-            `Cortex → ${process.env.CORTEX_URL} (ingest WS). Start studio: rax cortex`,
+            `Cortex → ${process.env.CORTEX_URL} (ingest WS). Start studio (contributors): bun cortex`,
           ),
         );
         console.log("");

@@ -8,8 +8,7 @@
     "reactive-agents": "dist/index.js"
   },
   "scripts": {
-    "build:cortex-ui": "cd ../cortex/ui && bun run build && rm -rf ../cli/assets/cortex && mkdir -p ../cli/assets/cortex && cp -r build/* ../cli/assets/cortex/",
-    "build": "bun run build:cortex-ui && tsup --config tsup.config.ts",
+    "build": "tsup --config tsup.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots"
   },
@@ -24,7 +23,6 @@
   },
   "files": [
     "dist",
-    "assets",
     "README.md",
     "LICENSE"
   ],

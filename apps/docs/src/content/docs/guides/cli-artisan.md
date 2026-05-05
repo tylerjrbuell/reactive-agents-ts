@@ -43,8 +43,7 @@ rax inspect researcher
 
 -   `rax init`: create a project with minimal, standard, or full templates.
 -   `rax create agent`: scaffold role-specific agent starters.
--   `rax run`: execute prompts with provider/model/capability flags.
--   `rax cortex`: launch the **Cortex** local studio — live agent grid, trace panel, chat, signal charts.
+-   `rax run`: execute prompts with provider/model/capability flags. Pair with `--cortex` to stream events to a locally-running Cortex studio (contributor tool — see below).
 -   `rax playground`: interactive loop with tool and thought streaming.
 -   `rax serve`: expose an A2A-compatible server.
 -   `rax discover`: inspect remote A2A agent cards.
@@ -52,16 +51,18 @@ rax inspect researcher
 -   `rax inspect`: debug runtime signals and logs.
 -   `rax dev`: run entrypoints in watch mode.
 
-## Cortex — Local Agent Studio
+## Cortex — Local Agent Studio (contributor tool)
 
-The most powerful dev workflow pairs `rax run` with `rax cortex`:
+Cortex is the companion studio. It is a Bun + Elysia + SvelteKit app shipped only via the source repository (not in the public `rax` CLI). Pair `rax run --cortex` with a locally-running Cortex instance:
 
 ```bash
-# Terminal 1 — open the Cortex studio
-rax cortex --dev
+# Terminal 1 — clone the repo and start Cortex
+git clone https://github.com/tylerjrbuell/reactive-agents-ts
+cd reactive-agents-ts && bun install
+bun cortex
 # Opens http://localhost:5173 (API on :4321)
 
-# Terminal 2 — run an agent that streams to Cortex
+# Terminal 2 — run an agent that streams to Cortex (npm-installed CLI works fine here)
 rax run "Research the top 5 AI agent frameworks" \
   --provider anthropic \
   --reasoning \

@@ -19,14 +19,16 @@ import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/compone
 Start Cortex with one command, then connect any agent with one line:
 
 <Tabs>
-  <TabItem label="rax CLI (recommended)">
+  <TabItem label="From repo clone (recommended)">
 ```bash
-# Terminal 1 — start Cortex studio
-rax cortex --dev
+# Terminal 1 — clone the repo and launch Cortex (contributor tool)
+git clone https://github.com/tylerjrbuell/reactive-agents-ts
+cd reactive-agents-ts && bun install
+bun cortex
 # → API on http://localhost:4321  (development only)
 # → UI  on http://localhost:5173  (development only — opens in your browser automatically)
 
-# Terminal 2 — run an agent that streams to Cortex
+# Terminal 2 — run an agent that streams to Cortex (npm-installed `rax` works fine here)
 
 rax run "Research the top 5 TypeScript testing frameworks" \
  --provider anthropic \
@@ -38,7 +40,7 @@ rax run "Research the top 5 TypeScript testing frameworks" \
   </TabItem>
   <TabItem label="From apps/cortex">
 ```bash
-# from apps/cortex — starts the dev server (UI on :5173, API on :4321, local only)
+# Equivalent: from apps/cortex — starts the dev server (UI on :5173, API on :4321, local only)
 cd apps/cortex && bun start
 ````
 
@@ -60,7 +62,7 @@ await agent.run('Research AI agent frameworks')
   </TabItem>
 </Tabs>
 
-When running `rax cortex --dev` locally, Cortex opens your browser at `http://localhost:5173` automatically as soon as your agent starts.
+When running `bun cortex` locally, Cortex opens your browser at `http://localhost:5173` automatically as soon as your agent starts.
 
 ---
 
@@ -242,23 +244,21 @@ Every `AgentEvent` emitted on the internal EventBus is forwarded to Cortex over 
 
 ## rax CLI Integration
 
+> **Note:** Cortex is a contributor tool, not a public CLI command. Launch it from a repo clone via `bun cortex` (or `cd apps/cortex && bun start`). The `rax run --cortex` flag still works in the published CLI — it streams events to whatever Cortex instance you have running locally.
+
 <Tabs>
-  <TabItem label="Start Cortex">
+  <TabItem label="Start Cortex (repo clone)">
 ```bash
-# Start studio with hot-reloading UI (recommended during development)
-rax cortex --dev
+# Start studio with hot-reloading UI (contributor tool)
+bun cortex
 
-# Start API only (serves static bundle if built)
+# Custom port (set CORTEX_PORT)
 
-rax cortex
-
-# Custom port
-
-rax cortex --dev --port 4444
+CORTEX_PORT=4444 bun cortex
 
 # Suppress browser auto-open
 
-rax cortex --dev --no-open
+CORTEX_NO_OPEN=1 bun cortex
 
 ````
   </TabItem>
@@ -358,5 +358,5 @@ bun run dev:server
 
 -   [Observability](/features/observability/) — terminal-based metrics and tracing that Cortex complements
 -   [Reactive Intelligence](/features/reactive-intelligence/) — the entropy signals visualized in the Signal Monitor
--   [Rax CLI Reference](/reference/cli/#rax-cortex) — full `rax cortex` flag reference
+-   [Rax CLI Reference](/reference/cli/#cortex-contributor-tool) — Cortex contributor-tool reference
 -   [Builder API Reference](/reference/builder-api/#optional-features) — `.withCortex(url?)` signature

@@ -82,7 +82,7 @@ rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
           [--model <model>] [--name <name>] [--tools] [--reasoning] [--stream] [--cortex]
 ```
 
-**`--cortex`:** Enables `.withCortex()` on the builder so run lifecycle events are sent to a local **Cortex** companion studio (WebSocket ingest). Start the studio with `rax cortex` in another terminal, or set `CORTEX_URL` to the HTTP base (default `http://127.0.0.1:4321`). See `rax cortex --help` for ports, static UI bundle, and env vars.
+**`--cortex`:** Enables `.withCortex()` on the builder so run lifecycle events are sent to a local **Cortex** companion studio (WebSocket ingest). Cortex is a contributor tool launched from a repo clone via `bun cortex` (it is not shipped in the public CLI). Set `CORTEX_URL` to the HTTP base (default `http://127.0.0.1:4321`).
 
 **Example:**
 
@@ -90,33 +90,29 @@ rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
 rax run "Explain quantum computing" --provider anthropic --model claude-sonnet-4-20250514
 ```
 
-### `rax cortex`
+### Cortex (contributor tool)
 
-Start the **Cortex** studio: HTTP API, WebSocket `/ws/ingest`, and the static UI when a bundle is present.
+Cortex is the companion studio (Bun + Elysia + SvelteKit). It depends on the workspace source tree and is **not** shipped in the public `rax` CLI. To run it, clone the repo and use the root `cortex` script:
 
 ```bash
-rax cortex [--dev] [--port <n>] [--no-open] [--help]
+git clone https://github.com/tylerjrbuell/reactive-agents-ts
+cd reactive-agents-ts
+bun install
+bun cortex
+# API on http://localhost:4321 — UI on http://localhost:5173
 ```
 
-| Flag | Purpose |
-|------|---------|
-| `--dev` | Start **API + Vite dev UI** together (same as `cd apps/cortex && bun start`). Open **http://localhost:5173**; Vite proxies `/api` and `/ws` to the API port (`CORTEX_PORT`). |
-| `--port <n>` | API listen port (default `4321`). Passed through so the dev UI proxy matches. |
+Then in another terminal (npm-installed CLI works fine for this side):
+
+```bash
+rax run "Research topic" --cortex --provider anthropic
+```
 
 | Variable | Purpose |
 |----------|---------|
-| `CORTEX_PORT` | API listen port (default `4321`); also read by `apps/cortex/ui` Vite proxy when using `--dev` |
+| `CORTEX_PORT` | API listen port (default `4321`) |
 | `CORTEX_NO_OPEN` | Set to `1` to skip opening a browser |
-| `CORTEX_URL` | Injected for the child server process so desk runners target the right host |
-| `CORTEX_STATIC_PATH` | Directory containing built `index.html` (CLI `build:cortex-ui`; not used when `--dev`) |
-
-**Example:**
-
-```bash
-rax cortex --dev
-# other terminal:
-rax run "Research topic" --cortex --provider anthropic
-```
+| `CORTEX_URL` | Base URL the agent uses to reach Cortex ingest |
 
 ### `rax serve`
 
