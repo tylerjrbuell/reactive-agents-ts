@@ -22,12 +22,14 @@ const getHnPostsTool = defineTool({
     name: 'get-hn-posts',
     description:
         'Fetch current Hacker News front-page stories (title, score, url) via the official API.',
+    // @ts-expect-error Schema.Struct type mismatch with DefineToolOptions (tools package uses loose typing)
     input: Schema.Struct({
         count: Schema.Number,
     }),
     riskLevel: 'low',
     timeoutMs: 20_000,
     handler: ({ count }) =>
+        // @ts-expect-error Effect return type strict variance issue
         Effect.tryPromise({
             try: async () => {
                 const n = Math.min(10, Math.max(1, count || 5))

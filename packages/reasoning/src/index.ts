@@ -146,7 +146,7 @@ export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 export { filterToolsByRelevance } from "./kernel/capabilities/attend/tool-formatting.js";
 export { planNextMoveBatches, filterToolsBySuccessRate } from "./kernel/capabilities/act/tool-gating.js";
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
-export type { KernelMessage } from "./kernel/state/kernel-state.js";
+export type { KernelMessage, EntropyScoreLike } from "./kernel/state/kernel-state.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
 
 // ─── Termination Oracle (CHANGE A — Verdict-Override) ───

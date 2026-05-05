@@ -28,7 +28,7 @@ describe("M12.1 — parseToolCalls hook (qwen3 normalization)", () => {
     adapter = createTestAdapterWithHooks();
   });
 
-  it("normalizes qwen3 malformed tool_calls to valid ToolCall[]", 30000, async () => {
+  it("normalizes qwen3 malformed tool_calls to valid ToolCall[]", async () => {
     const malformedResponse = {
       tool_calls: [
         {
@@ -49,7 +49,7 @@ describe("M12.1 — parseToolCalls hook (qwen3 normalization)", () => {
     ]);
   });
 
-  it("returns undefined for frontier models (no normalization needed)", 30000, async () => {
+  it("returns undefined for frontier models (no normalization needed)", async () => {
     const wellFormedResponse = {
       tool_calls: [
         {
@@ -63,7 +63,7 @@ describe("M12.1 — parseToolCalls hook (qwen3 normalization)", () => {
     expect(result).toBeUndefined();
   });
 
-  it("hook fires measurably (instrumentation confirms)", 30000, async () => {
+  it("hook fires measurably (instrumentation confirms)", async () => {
     let hookFired = false;
     const instrumentedAdapter: ProviderAdapter = {
       parseToolCalls: () => {
@@ -89,7 +89,7 @@ describe("M12.2 — extractText hook (Gemini streaming reassembly)", () => {
     adapter = createTestAdapterWithHooks();
   });
 
-  it("reassembles Gemini streaming parts into single text", 30000, async () => {
+  it("reassembles Gemini streaming parts into single text", async () => {
     const geminiParts = [
       { text: "I will search for" },
       { text: " information about" },
@@ -103,13 +103,13 @@ describe("M12.2 — extractText hook (Gemini streaming reassembly)", () => {
     expect(extracted).toBe("I will search for information about the topic.");
   });
 
-  it("returns undefined for non-streaming or frontier models", 30000, async () => {
+  it("returns undefined for non-streaming or frontier models", async () => {
     const anthropicResponse = { text: "response" };
     const result = adapter.extractText?.(anthropicResponse, "claude-sonnet-4-5");
     expect(result).toBeUndefined();
   });
 
-  it("hook fires and improves text extraction", 30000, async () => {
+  it("hook fires and improves text extraction", async () => {
     let hookFired = false;
     const instrumentedAdapter: ProviderAdapter = {
       extractText: (parts, modelId) => {
@@ -146,7 +146,7 @@ describe("M12.3 — computeCost hook (token cost calculation)", () => {
     adapter = createTestAdapterWithHooks();
   });
 
-  it("computes accurate cost for qwen3 models", 30000, async () => {
+  it("computes accurate cost for qwen3 models", async () => {
     const tokenCounts = {
       inputTokens: 100,
       outputTokens: 50,
@@ -159,7 +159,7 @@ describe("M12.3 — computeCost hook (token cost calculation)", () => {
     expect(typeof cost).toBe("number");
   });
 
-  it("computes accurate cost for claude models", 30000, async () => {
+  it("computes accurate cost for claude models", async () => {
     const tokenCounts = {
       inputTokens: 1000,
       outputTokens: 500,
@@ -171,7 +171,7 @@ describe("M12.3 — computeCost hook (token cost calculation)", () => {
     expect(cost).toBeGreaterThan(0);
   });
 
-  it("returns zero for models with no pricing info", 30000, async () => {
+  it("returns zero for models with no pricing info", async () => {
     const cost = adapter.computeCost?.({ inputTokens: 100, outputTokens: 50 }, "unknown-model");
     expect(cost).toBe(0);
   });
@@ -189,7 +189,7 @@ describe("M12.4 — validateResponse hook (response validation)", () => {
     adapter = createTestAdapterWithHooks();
   });
 
-  it("validates Gemini response structure", 30000, async () => {
+  it("validates Gemini response structure", async () => {
     const invalidResponse = {
       candidates: null,
     };
@@ -201,7 +201,7 @@ describe("M12.4 — validateResponse hook (response validation)", () => {
     expect(validation?.error).toContain("candidates");
   });
 
-  it("accepts valid responses", 30000, async () => {
+  it("accepts valid responses", async () => {
     const validResponse = {
       candidates: [{ content: { parts: [{ text: "response" }] } }],
     };
@@ -211,7 +211,7 @@ describe("M12.4 — validateResponse hook (response validation)", () => {
     expect(validation?.valid).toBe(true);
   });
 
-  it("returns valid:true for frontier models (pass-through)", 30000, async () => {
+  it("returns valid:true for frontier models (pass-through)", async () => {
     const anyResponse = {};
     const result = adapter.validateResponse?.(anyResponse, "claude-sonnet-4-5");
     expect(result?.valid).toBe(true);
@@ -230,7 +230,7 @@ describe("M12.5 — optimizePrompt hook (prompt enhancement)", () => {
     adapter = createTestAdapterWithHooks();
   });
 
-  it("enhances prompt for local models with explicit tool guidance", 30000, async () => {
+  it("enhances prompt for local models with explicit tool guidance", async () => {
     const basePrompt = "Use the tools available to answer questions.";
 
     const optimized = adapter.optimizePrompt?.(
@@ -244,13 +244,13 @@ describe("M12.5 — optimizePrompt hook (prompt enhancement)", () => {
     expect(optimized?.length).toBeGreaterThan(basePrompt.length);
   });
 
-  it("returns undefined for frontier models", 30000, async () => {
+  it("returns undefined for frontier models", async () => {
     const prompt = "Use the tools available.";
     const result = adapter.optimizePrompt?.(prompt, ["search"], "claude-sonnet-4-5");
     expect(result).toBeUndefined();
   });
 
-  it("hook improves domain (measurably different output)", 30000, async () => {
+  it("hook improves domain (measurably different output)", async () => {
     let hookFired = false;
     const instrumentedAdapter: ProviderAdapter = {
       optimizePrompt: (basePrompt, toolNames, modelId) => {
@@ -288,7 +288,7 @@ describe("M12.6 — handleError hook (error classification)", () => {
     adapter = createTestAdapterWithHooks();
   });
 
-  it("maps Gemini overquota error to retryable transient error", 30000, async () => {
+  it("maps Gemini overquota error to retryable transient error", async () => {
     const geminiError = {
       code: 429,
       message: "Quota exceeded",
@@ -301,7 +301,7 @@ describe("M12.6 — handleError hook (error classification)", () => {
     expect(classified?.errorType).toBe("rate_limit");
   });
 
-  it("maps Ollama connection error to transient", 30000, async () => {
+  it("maps Ollama connection error to transient", async () => {
     const ollamaError = new Error("connect ECONNREFUSED");
 
     const classified = adapter.handleError?.(ollamaError, "ollama:qwen");
@@ -310,7 +310,7 @@ describe("M12.6 — handleError hook (error classification)", () => {
     expect(classified?.errorType).toContain("connect");
   });
 
-  it("maps invalid API key to fatal error", 30000, async () => {
+  it("maps invalid API key to fatal error", async () => {
     const authError = {
       code: 401,
       message: "Unauthorized",
@@ -322,7 +322,7 @@ describe("M12.6 — handleError hook (error classification)", () => {
     expect(classified?.errorType).toBe("auth");
   });
 
-  it("returns undefined for unhandled error types", 30000, async () => {
+  it("returns undefined for unhandled error types", async () => {
     const unknownError = new Error("Mysterious error");
     const result = adapter.handleError?.(unknownError, "unknown-model");
     expect(result).toBeUndefined();
@@ -341,7 +341,7 @@ describe("M12.7 — streamSupport hook (streaming event parsing)", () => {
     adapter = createTestAdapterWithHooks();
   });
 
-  it("parses Gemini streaming chunks into StreamEvents", 30000, async () => {
+  it("parses Gemini streaming chunks into StreamEvents", async () => {
     const geminiChunk = {
       index: 0,
       candidates: [
@@ -360,7 +360,7 @@ describe("M12.7 — streamSupport hook (streaming event parsing)", () => {
     expect(events?.length).toBeGreaterThan(0);
   });
 
-  it("parses Anthropic streaming chunks", 30000, async () => {
+  it("parses Anthropic streaming chunks", async () => {
     const anthropicChunk = {
       type: "content_block_delta",
       delta: {
@@ -375,7 +375,7 @@ describe("M12.7 — streamSupport hook (streaming event parsing)", () => {
     expect(Array.isArray(events)).toBe(true);
   });
 
-  it("fires on streaming scenarios and improves event parsing", 30000, async () => {
+  it("fires on streaming scenarios and improves event parsing", async () => {
     let hookFired = false;
     const instrumentedAdapter: ProviderAdapter = {
       streamSupport: (chunk, modelId) => {
@@ -406,14 +406,14 @@ describe("M12.7 — streamSupport hook (streaming event parsing)", () => {
  * TEST 8: Cross-provider interference check
  */
 describe("M12.8 — Cross-provider interference check", () => {
-  it("qwen3 parseToolCalls doesn't affect Gemini", 30000, async () => {
+  it("qwen3 parseToolCalls doesn't affect Gemini", async () => {
     const adapter = createTestAdapterWithHooks();
     const geminiResponse = { candidates: [{ content: { parts: [] } }] };
     const result = adapter.parseToolCalls?.(geminiResponse, "gemini-pro");
     expect(result).toBeUndefined();
   });
 
-  it("Gemini extractText doesn't affect Anthropic", 30000, async () => {
+  it("Gemini extractText doesn't affect Anthropic", async () => {
     const adapter = createTestAdapterWithHooks();
     const anthropicResponse = { text: "response" };
     const result = adapter.extractText?.(anthropicResponse, "claude-haiku-4-5");
@@ -425,7 +425,7 @@ describe("M12.8 — Cross-provider interference check", () => {
  * TEST 9: Hook firing verification (all 7 hooks fire)
  */
 describe("M12.9 — All 7 hooks fire in correct scenarios", () => {
-  it("verifies all 7 hooks exist on adapter interface", 30000, async () => {
+  it("verifies all 7 hooks exist on adapter interface", async () => {
     const adapter = createTestAdapterWithHooks();
 
     expect(typeof adapter.parseToolCalls).toBe("function");
@@ -437,7 +437,7 @@ describe("M12.9 — All 7 hooks fire in correct scenarios", () => {
     expect(typeof adapter.streamSupport).toBe("function");
   });
 
-  it("counts hook firings across all 7 in typical workflow", 30000, async () => {
+  it("counts hook firings across all 7 in typical workflow", async () => {
     const hookFiringLog: string[] = [];
 
     const instrumentedAdapter: ProviderAdapter = {

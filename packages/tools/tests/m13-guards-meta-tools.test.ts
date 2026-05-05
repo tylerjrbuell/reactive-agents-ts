@@ -94,13 +94,14 @@ class GuardValidator {
 
 function makeKernelState(overrides?: Partial<KernelState>): KernelState {
   return {
+    status: "acting",
     iteration: 0,
     messages: [],
     steps: [],
     lastMetaToolCall: undefined,
     consecutiveMetaToolCount: 0,
     ...overrides,
-  };
+  } as any;
 }
 
 function makeKernelInput(overrides?: Partial<KernelInput>): KernelInput {
@@ -113,8 +114,9 @@ function makeKernelInput(overrides?: Partial<KernelInput>): KernelInput {
   };
 }
 
+let toolCallCounter = 0;
 function makeToolCall(name: string, args: Record<string, unknown> = {}): ToolCallSpec {
-  return { name, arguments: args };
+  return { id: `call-${++toolCallCounter}`, name, arguments: args };
 }
 
 // ─── Guard Tests ──────────────────────────────────────────────────────────────
@@ -150,7 +152,9 @@ describe("M13: Guards Validation", () => {
       const latency = performance.now() - start;
 
       expect(outcome.pass).toBe(false);
-      expect(outcome.observation).toContain("BLOCKED");
+      if (!outcome.pass) {
+        expect(outcome.observation).toContain("BLOCKED");
+      }
       validator.recordCheck(true, !outcome.pass, latency);
     });
 
@@ -169,7 +173,7 @@ describe("M13: Guards Validation", () => {
       const state = makeKernelState();
       const input = makeKernelInput({
         allToolSchemas: [
-          { name: "search", description: "Search", parameters: [], riskLevel: "low", timeoutMs: 5000, requiresApproval: false, source: "builtin" },
+          { name: "search", description: "Search", parameters: [] },
         ],
       });
       const toolCall = makeToolCall("search", { query: "test" });
@@ -199,8 +203,8 @@ describe("M13: Guards Validation", () => {
       const state = makeKernelState();
       const input = makeKernelInput({
         allToolSchemas: [
-          { name: "web-search", description: "Search", parameters: [], riskLevel: "low", timeoutMs: 5000, requiresApproval: false, source: "builtin" },
-          { name: "http-get", description: "Get", parameters: [], riskLevel: "low", timeoutMs: 5000, requiresApproval: false, source: "builtin" },
+          { name: "web-search", description: "Search", parameters: [] },
+          { name: "http-get", description: "Get", parameters: [] },
         ],
       });
       const toolCall = makeToolCall("unknown-tool", {});
@@ -210,7 +214,9 @@ describe("M13: Guards Validation", () => {
       const latency = performance.now() - start;
 
       expect(outcome.pass).toBe(false);
-      expect(outcome.observation).toContain("not available");
+      if (!outcome.pass) {
+        expect(outcome.observation).toContain("not available");
+      }
       validator.recordCheck(true, !outcome.pass, latency);
     });
   });
@@ -232,8 +238,8 @@ describe("M13: Guards Validation", () => {
     it("should block duplicate successful calls", () => {
       const state = makeKernelState({
         steps: [
-          { type: "action", content: "", metadata: { toolCall: { name: "search", arguments: { query: "test" } } } },
-          { type: "observation", content: "Result", metadata: { observationResult: { success: true } } },
+          { id: "s1" as any, type: "action" as const, content: "", timestamp: new Date(), metadata: { toolCall: { id: "c1", name: "search", arguments: { query: "test" } } } },
+          { id: "s2" as any, type: "observation" as const, content: "Result", timestamp: new Date(), metadata: { observationResult: { success: true, toolName: "search", displayText: "Result", category: "custom", resultKind: "data", preserveOnCompaction: true, trustLevel: "untrusted" } } },
         ],
       });
       const input = makeKernelInput();
@@ -244,15 +250,17 @@ describe("M13: Guards Validation", () => {
       const latency = performance.now() - start;
 
       expect(outcome.pass).toBe(false);
-      expect(outcome.observation).toContain("Already done");
+      if (!outcome.pass) {
+        expect(outcome.observation).toContain("Already done");
+      }
       validator.recordCheck(true, !outcome.pass, latency);
     });
 
     it("should allow re-attempt of failed calls", () => {
       const state = makeKernelState({
         steps: [
-          { type: "action", content: "", metadata: { toolCall: { name: "search", arguments: { query: "test" } } } },
-          { type: "observation", content: "Error", metadata: { observationResult: { success: false } } },
+          { id: "s3" as any, type: "action" as const, content: "", timestamp: new Date(), metadata: { toolCall: { id: "c2", name: "search", arguments: { query: "test" } } } },
+          { id: "s4" as any, type: "observation" as const, content: "Error", timestamp: new Date(), metadata: { observationResult: { success: false, toolName: "search", displayText: "Error", category: "custom", resultKind: "error", preserveOnCompaction: true, trustLevel: "untrusted" } } },
         ],
       });
       const input = makeKernelInput();
@@ -490,7 +498,9 @@ describe("M13: Guards Validation", () => {
 
       const outcome = check(toolCall, state, input);
       expect(outcome.pass).toBe(false);
-      expect(outcome.observation).toContain("BLOCKED");
+      if (!outcome.pass) {
+        expect(outcome.observation).toContain("BLOCKED");
+      }
     });
 
     it("should allow custom guard chains", () => {

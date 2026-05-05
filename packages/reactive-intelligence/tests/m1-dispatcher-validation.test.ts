@@ -20,7 +20,7 @@
 
 import { test, expect, describe } from "bun:test"
 import { Effect } from "effect"
-import type { EntropyScoreLike } from "@reactive-agents/reasoning"
+import type { EntropyScore } from "@reactive-agents/reactive-intelligence"
 
 /**
  * Mock data structure for tracking RI dispatch events during a session.
@@ -30,7 +30,7 @@ interface RIDispatchMetrics {
   readonly sessionId: string
   readonly riEnabled: boolean
   readonly taskIds: readonly string[]
-  readonly entropyHistory: readonly EntropyScoreLike[]
+  readonly entropyHistory: readonly EntropyScore[]
   readonly dispatchedInterventions: number
   readonly skippedDecisions: number
   readonly skippedReasons: Record<string, number>  // reason -> count
@@ -177,30 +177,54 @@ describe("M1 Dispatcher Validation (FM-A2 Recovery)", () => {
     // This test validates the dispatcher unit-level behavior
     // Once instrumentation is in place, we'll extend it with end-to-end assertions
 
-    const entropyScores: EntropyScoreLike[] = [
+    const entropyScores: EntropyScore[] = [
       {
         composite: 0.8,
-        token: 0.7,
-        structural: 0.6,
-        semantic: 0.8,
-        behavioral: 0.9,
-        contextPressure: 0.2,
+        sources: {
+          token: 0.7,
+          structural: 0.6,
+          semantic: 0.8,
+          behavioral: 0.9,
+          contextPressure: 0.2,
+        },
+        trajectory: { history: [0.2, 0.5, 0.8], derivative: 0.3, momentum: 0.2, shape: "diverging" },
+        confidence: "high",
+        modelTier: "frontier",
+        iteration: 1,
+        iterationWeight: 0.8,
+        timestamp: Date.now(),
       },
       {
         composite: 0.5,
-        token: 0.4,
-        structural: 0.5,
-        semantic: 0.6,
-        behavioral: 0.5,
-        contextPressure: 0.4,
+        sources: {
+          token: 0.4,
+          structural: 0.5,
+          semantic: 0.6,
+          behavioral: 0.5,
+          contextPressure: 0.4,
+        },
+        trajectory: { history: [0.45, 0.48, 0.52], derivative: 0.02, momentum: 0.01, shape: "flat" },
+        confidence: "medium",
+        modelTier: "frontier",
+        iteration: 2,
+        iterationWeight: 0.5,
+        timestamp: Date.now(),
       },
       {
         composite: 0.2,
-        token: 0.15,
-        structural: 0.2,
-        semantic: 0.3,
-        behavioral: 0.1,
-        contextPressure: 0.8,
+        sources: {
+          token: 0.15,
+          structural: 0.2,
+          semantic: 0.3,
+          behavioral: 0.1,
+          contextPressure: 0.8,
+        },
+        trajectory: { history: [0.8, 0.5, 0.2], derivative: -0.3, momentum: -0.2, shape: "converging" },
+        confidence: "low",
+        modelTier: "frontier",
+        iteration: 3,
+        iterationWeight: 0.2,
+        timestamp: Date.now(),
       },
     ]
 
@@ -223,7 +247,7 @@ describe("M1 Dispatcher Validation (FM-A2 Recovery)", () => {
  * Helper: compute entropy trajectory standard deviation (RED phase placeholder).
  * In GREEN phase, this will consume real entropy history from reactive-observer.
  */
-function computeEntropyStdDev(entropyHistory: readonly EntropyScoreLike[]): number {
+function computeEntropyStdDev(entropyHistory: readonly EntropyScore[]): number {
   if (entropyHistory.length === 0) return 0
 
   const composites = entropyHistory.map(e => e.composite)

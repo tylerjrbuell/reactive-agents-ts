@@ -191,6 +191,7 @@ export function discoverSkills(
   customPaths: readonly string[],
   agentId: string,
   projectRoot?: string,
+  skipGlobalPaths?: boolean,
 ): SkillDiscoveryResult {
   const root = projectRoot ?? ".";
 
@@ -198,8 +199,10 @@ export function discoverSkills(
     ...customPaths,
     path.join(root, `.${agentId}`, "skills"),
     path.join(root, ".agents", "skills"),
-    path.join(os.homedir(), ".agents", "skills"),
-    path.join(os.homedir(), ".reactive-agents", "skills"),
+    ...(skipGlobalPaths ? [] : [
+      path.join(os.homedir(), ".agents", "skills"),
+      path.join(os.homedir(), ".reactive-agents", "skills"),
+    ]),
   ];
 
   const skills: InstalledSkill[] = [];

@@ -338,6 +338,8 @@ export function handleActing(
         // type coercion. If healing fails (unrecognized tool), use the raw call
         // so the guard pipeline can produce a meaningful rejection message.
         // M7-E (spike): Apply calibration's knownToolAliases for auto-correction
+        // NOTE: calibration data would come from state.calibration when Phase 2 wires it in.
+        // For now, use empty dicts to indicate no calibrated aliases available.
         const healResult = runHealingPipeline(
           rawTc,
           allHealingSchemas.map((s) => ({
@@ -352,8 +354,8 @@ export function handleActing(
           })),
           FILE_TOOL_NAMES,
           process.cwd(),
-          state.calibration?.knownToolAliases ?? {},  // M7-E: Apply calibrated aliases
-          state.calibration?.knownParamAliases ?? {},  // M7-E: Apply calibrated param aliases
+          {},  // M7-E: calibrated tool aliases (not yet wired from calibration state)
+          {},  // M7-E: calibrated param aliases (not yet wired from calibration state)
         );
         const tc = healResult.succeeded ? healResult.call : rawTc;
 

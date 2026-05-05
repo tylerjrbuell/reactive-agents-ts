@@ -20,6 +20,19 @@ import type {
   TaskRunResult,
 } from "../src/types.js"
 import type { CompetitorRunner } from "../src/competitors/types.js"
+import { REAL_WORLD_TASKS } from "../src/tasks/real-world.js"
+import { ABLATION_VARIANTS, resolveTasks, mergeConfigs } from "../src/session.js"
+import { computeDrift, exceedsThreshold } from "../src/ci.js"
+import { aggregateRuns, computeAllAblation, summarizeDimensions } from "../src/runner.js"
+import { regressionGateSession } from "../src/sessions/regression-gate.js"
+import { realWorldFullSession } from "../src/sessions/real-world-full.js"
+import { competitorComparisonSession } from "../src/sessions/competitor-comparison.js"
+import { localModelsSession } from "../src/sessions/local-models.js"
+import { parseArgs } from "../src/run.js"
+import { runSession } from "../src/index.js"
+import { BENCHMARK_TASKS } from "../src/task-registry.js"
+import { matchSuccessCriteria, parsePartialCreditScore } from "../src/judge.js"
+import { COMPETITOR_RUNNERS } from "../src/competitors/index.js"
 
 test("QualityDimension covers all 10 dimensions", () => {
   const dims: QualityDimension[] = [
@@ -71,8 +84,6 @@ test("getTasksByTier returns only tasks of that tier", async () => {
   expect(trivial.length).toBeGreaterThan(0)
 })
 
-import { REAL_WORLD_TASKS } from "../src/tasks/real-world.js"
-
 test("REAL_WORLD_TASKS exports exactly 10 tasks", () => {
   expect(REAL_WORLD_TASKS).toHaveLength(10)
 })
@@ -102,9 +113,6 @@ test("rw-7 fixture includes three buggy TypeScript files", () => {
   expect(paths).toContain("src/processor.ts")
   expect(paths).toContain("src/pipeline.ts")
 })
-
-import { ABLATION_VARIANTS, resolveTasks, mergeConfigs } from "../src/session.js"
-import { BENCHMARK_TASKS } from "../src/task-registry.js"
 
 test("ABLATION_VARIANTS has exactly 9 variants", () => {
   expect(ABLATION_VARIANTS).toHaveLength(9)
@@ -159,8 +167,6 @@ test("mergeConfigs combines base and override", () => {
   expect(merged.reactiveIntelligence).toBe(true)
   expect(merged.strategy).toBe("react")
 })
-
-import { computeReliability, matchSuccessCriteria, parsePartialCreditScore } from "../src/judge.js"
 
 test("computeReliability returns 1.0 for single run", () => {
   const runs = [{ dimensions: [{ dimension: "accuracy" as const, score: 0.8 }], tokensUsed: 100, durationMs: 1000, status: "pass" as const, output: "", runIndex: 0 }]
@@ -227,8 +233,6 @@ test("CompetitorRunner interface is importable", () => {
   expect(mockRunner.id).toBe("test-runner")
 })
 
-import { COMPETITOR_RUNNERS } from "../src/competitors/index.js"
-
 test("COMPETITOR_RUNNERS registry has all 5 frameworks", () => {
   expect(Object.keys(COMPETITOR_RUNNERS)).toContain("langchain")
   expect(Object.keys(COMPETITOR_RUNNERS)).toContain("vercel-ai")
@@ -260,8 +264,6 @@ test("openai-agents runner skips for non-OpenAI provider", async () => {
   expect(result.error).toContain("OpenAI")
 })
 
-import { computeDrift, exceedsThreshold } from "../src/ci.js"
-import type { TaskVariantReport, DimensionScore, RunScore } from "../src/types.js"
 
 function makeReport(taskId: string, variantId: string, accuracyScore: number): TaskVariantReport {
   const dim: DimensionScore = { dimension: "accuracy", score: accuracyScore }
@@ -306,7 +308,6 @@ test("exceedsThreshold returns true when maxRegressionDelta > threshold", () => 
   expect(exceedsThreshold(drift, 0.2)).toBe(true)
 })
 
-import { aggregateRuns, computeAllAblation, summarizeDimensions } from "../src/runner.js"
 
 test("aggregateRuns computes correct passRate and meanTokens", () => {
   const runs = [
@@ -336,10 +337,6 @@ test("computeAllAblation computes harnessLift correctly", () => {
   expect(ablation[0]!.harnessLift).toBeCloseTo(0.6, 2)
 })
 
-import { regressionGateSession } from "../src/sessions/regression-gate.js"
-import { realWorldFullSession } from "../src/sessions/real-world-full.js"
-import { competitorComparisonSession } from "../src/sessions/competitor-comparison.js"
-import { localModelsSession } from "../src/sessions/local-models.js"
 
 test("regressionGateSession has ra-full only and 1 run", () => {
   expect(regressionGateSession.harnessVariants).toHaveLength(1)
@@ -367,7 +364,6 @@ test("localModelsSession has only bare-llm and ra-full variants", () => {
   expect(ids).not.toContain("langchain-react")
 })
 
-import { parseArgs } from "../src/run.js"
 
 test("parseArgs: existing --provider flag still works", () => {
   const args = parseArgs(["--provider", "anthropic", "--model", "claude-haiku-4-5"])
@@ -392,12 +388,6 @@ test("parseArgs: --save-baseline and --ci flags parsed", () => {
   expect(args2.ci).toBe(true)
 })
 
-import {
-  runSession, ABLATION_VARIANTS, REAL_WORLD_TASKS,
-  regressionGateSession, realWorldFullSession,
-  competitorComparisonSession, localModelsSession,
-  computeReliability, computeDrift,
-} from "../src/index.js"
 
 test("index.ts exports all v2 public APIs", () => {
   expect(typeof runSession).toBe("function")

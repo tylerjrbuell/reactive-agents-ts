@@ -64,11 +64,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
   describe("1. terminate() helper mechanics", () => {
     it("should set status:'done' with terminatedBy reason", () => {
-      const state = initialKernelState({
-        strategy: "reactive",
-        taskId: "test",
-        model: "claude-3-5-sonnet",
-      });
+      const state = initialKernelState({ maxIterations: 10, strategy: "reactive", kernelType: "default" });
 
       const terminated = terminate(state, {
         reason: "low_delta_guard",
@@ -81,19 +77,12 @@ describe("M9 — Termination Oracle Validation", () => {
     });
 
     it("should merge extraMeta alongside terminatedBy", () => {
-      const state = initialKernelState({
-        strategy: "reactive",
-        taskId: "test",
-        model: "claude-3-5-sonnet",
-      });
+      const state = initialKernelState({ maxIterations: 10, strategy: "reactive", kernelType: "default" });
 
       const terminated = terminate(state, {
         reason: "oracle_forced",
         output: "Forced exit.",
-        extraMeta: {
-          nudgeCount: 2,
-          escalateTo: "user_review",
-        },
+        extraMeta: {} as any,
       });
 
       expect(terminated.meta.terminatedBy).toBe("oracle_forced");
@@ -102,18 +91,12 @@ describe("M9 — Termination Oracle Validation", () => {
     });
 
     it("should preserve previous terminatedBy in extraMeta if caller provides it", () => {
-      const state = initialKernelState({
-        strategy: "reactive",
-        taskId: "test",
-        model: "claude-3-5-sonnet",
-      });
+      const state = initialKernelState({ maxIterations: 10, strategy: "reactive", kernelType: "default" });
 
       const terminated = terminate(state, {
         reason: "harness_deliverable",
         output: "Assembled from artifacts.",
-        extraMeta: {
-          previousTerminatedBy: "some_prior_reason",
-        },
+        extraMeta: {} as any,
       });
 
       expect(terminated.meta.terminatedBy).toBe("harness_deliverable");
@@ -121,11 +104,7 @@ describe("M9 — Termination Oracle Validation", () => {
     });
 
     it("should allow empty output (per output-boundary discipline)", () => {
-      const state = initialKernelState({
-        strategy: "reactive",
-        taskId: "test",
-        model: "claude-3-5-sonnet",
-      });
+      const state = initialKernelState({ maxIterations: 10, strategy: "reactive", kernelType: "default" });
 
       const terminated = terminate(state, {
         reason: "fallback_deliver",
@@ -155,8 +134,8 @@ describe("M9 — Termination Oracle Validation", () => {
         const state = initialKernelState({
           strategy: "reactive",
           taskId: "test",
-          model: "claude-3-5-sonnet",
-          steps: [makeStep("thought", "Thinking about the task...")],
+          maxIterations: 10,
+          kernelType: "default",
         });
 
         const terminated = terminate(state, {
@@ -179,7 +158,8 @@ describe("M9 — Termination Oracle Validation", () => {
       let state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
+        maxIterations: 10,
+        kernelType: "default",
       });
 
       // First termination
@@ -212,7 +192,8 @@ describe("M9 — Termination Oracle Validation", () => {
       let state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
+        maxIterations: 10,
+        kernelType: "default",
       });
 
       state = terminate(state, {
@@ -243,7 +224,6 @@ describe("M9 — Termination Oracle Validation", () => {
       const state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
         steps: [makeStep("thought", "I need to call search_web")],
         requiredTools: ["search_web"],
         toolsUsed: new Set(),
@@ -270,7 +250,6 @@ describe("M9 — Termination Oracle Validation", () => {
       let state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
         steps: [makeStep("thought", "I need to call search_web")],
         requiredTools: ["search_web"],
         toolsUsed: new Set(),
@@ -316,8 +295,7 @@ describe("M9 — Termination Oracle Validation", () => {
         const state = initialKernelState({
           strategy: "reactive",
           taskId: "test",
-          model: "claude-3-5-sonnet",
-        });
+          });
 
         const terminated = terminate(state, {
           reason: "low_delta_guard",
@@ -329,11 +307,7 @@ describe("M9 — Termination Oracle Validation", () => {
     });
 
     it("should preserve iteration count unchanged", () => {
-      const state = initialKernelState({
-        strategy: "reactive",
-        taskId: "test",
-        model: "claude-3-5-sonnet",
-      });
+      const state = initialKernelState({ maxIterations: 10, strategy: "reactive", kernelType: "default" });
 
       // Simulate iterations
       let iterState = transitionState(state, { iteration: 5 });
@@ -354,7 +328,8 @@ describe("M9 — Termination Oracle Validation", () => {
       let state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
+        maxIterations: 10,
+        kernelType: "default",
       });
 
       // Manually build up state with steps
@@ -377,7 +352,8 @@ describe("M9 — Termination Oracle Validation", () => {
       let state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
+        maxIterations: 10,
+        kernelType: "default",
       });
 
       // Build up toolsUsed via transition
@@ -410,7 +386,6 @@ describe("M9 — Termination Oracle Validation", () => {
       const state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
         steps: [makeStep("thought", "Task completed successfully.")],
       });
 
@@ -435,7 +410,6 @@ describe("M9 — Termination Oracle Validation", () => {
       const state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
         meta: {
           taskId: "test",
           maxIterations: 10,
@@ -474,11 +448,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
   describe("7. Immutability and determinism", () => {
     it("should not mutate original state", () => {
-      const state = initialKernelState({
-        strategy: "reactive",
-        taskId: "test",
-        model: "claude-3-5-sonnet",
-      });
+      const state = initialKernelState({ maxIterations: 10, strategy: "reactive", kernelType: "default" });
 
       const originalStatus = state.status;
       const originalMeta = { ...state.meta };
@@ -497,14 +467,13 @@ describe("M9 — Termination Oracle Validation", () => {
       const state = initialKernelState({
         strategy: "reactive",
         taskId: "test",
-        model: "claude-3-5-sonnet",
         iteration: 5,
       });
 
       const opts = {
         reason: "oracle_forced" as const,
         output: "Deterministic output",
-        extraMeta: { nudgeCount: 2 },
+        extraMeta: {} as any,
       };
 
       const result1 = terminate(state, opts);
@@ -529,11 +498,7 @@ describe("M9 — Termination Oracle Validation", () => {
       // Every termination must declare why (terminatedBy reason).
       // The reason must be non-empty.
 
-      const state = initialKernelState({
-        strategy: "reactive",
-        taskId: "test",
-        model: "claude-3-5-sonnet",
-      });
+      const state = initialKernelState({ maxIterations: 10, strategy: "reactive", kernelType: "default" });
 
       const terminated = terminate(state, {
         reason: "harness_deliverable",
@@ -560,8 +525,7 @@ describe("M9 — Termination Oracle Validation", () => {
         const state = initialKernelState({
           strategy: "reactive",
           taskId: "test",
-          model: "claude-3-5-sonnet",
-        });
+          });
 
         const terminated = terminate(state, {
           reason,

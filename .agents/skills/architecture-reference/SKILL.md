@@ -6,7 +6,7 @@ user-invocable: false
 
 # Architecture Reference — Reactive Agents
 
-> For the full comprehensive framework map with file-level navigation, cross-cutting data flows, and system diagrams, read `FRAMEWORK_INDEX.md` at project root.
+> For complete framework orientation, see `NAVIGATION.md` (repo structure + file mapping) and `QUICK_START.md` (5-minute quickstart). For architecture deep-dives, see `wiki/` folder (Obsidian vault with MOCs, mechanism validation, and design decisions).
 
 ## Package Dependency Graph
 

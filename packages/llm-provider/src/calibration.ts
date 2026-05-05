@@ -199,7 +199,7 @@ export function buildCalibratedAdapter(
       : calibration.parallelCallCapability === "partial"
         ? () =>
             "You may call up to 2 independent tools at once. Avoid larger batches."
-        : undefined,
+        : undefined, // type assertion needed: implementation doesn't use context params
   };
 
   const profileOverrides: ProfileOverrides = {

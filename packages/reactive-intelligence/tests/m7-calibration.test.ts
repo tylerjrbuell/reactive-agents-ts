@@ -101,14 +101,14 @@ describe("M7 Calibration: Core Field Consumers", () => {
         parallelCallCapability: "sequential-only",
       });
       expect(adapterSeq.toolGuidance).toBeDefined();
-      expect(adapterSeq.toolGuidance?.()).toContain("one at a time");
+      expect(adapterSeq.toolGuidance?.({ toolNames: [], requiredTools: [], tier: "frontier" })).toContain("one at a time");
 
       const { adapter: adapterPart } = buildCalibratedAdapter({
         ...FULL_CALIBRATION,
         parallelCallCapability: "partial",
       });
       expect(adapterPart.toolGuidance).toBeDefined();
-      expect(adapterPart.toolGuidance?.()).toContain("up to 2");
+      expect(adapterPart.toolGuidance?.({ toolNames: [], requiredTools: [], tier: "frontier" })).toContain("up to 2");
 
       const { adapter: adapterRel } = buildCalibratedAdapter({
         ...FULL_CALIBRATION,
@@ -700,7 +700,7 @@ describe("M7 Calibration: GREEN Phase Spike M7-G (toolSuccessRateByName)", () =>
       "summarize-text": 0.75,
     };
 
-    const filtered = availableTools.filter((t) => (successRates[t] ?? 1.0) > 0.3);
+    const filtered = availableTools.filter((t) => (successRates[t as keyof typeof successRates] ?? 1.0) > 0.3);
     expect(filtered.length).toBeLessThan(availableTools.length);
     expect(filtered).not.toContain("broken-ai-tool");
     expect(filtered).not.toContain("experimental-tool");

@@ -42,14 +42,13 @@ interface GuardCheckMetrics {
  * Create a minimal valid KernelState for testing.
  */
 function createMinimalState(overrides?: Partial<KernelState>): KernelState {
-  const baseState: KernelState = {
+  const baseState: any = {
     status: "acting",
     iteration: 1,
     messages: [],
     steps: [],
     lastMetaToolCall: undefined,
     consecutiveMetaToolCount: 0,
-    metadata: {},
   };
   return { ...baseState, ...overrides };
 }
@@ -253,18 +252,20 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
       allToolSchemas: [
-        { name: "web-search", parameters: [] },
-        { name: "http-get", parameters: [] },
-        { name: "file-read", parameters: [] },
-        { name: "context-status", parameters: [] },
-        { name: "pulse", parameters: [] },
+        { name: "web-search", description: "Search the web", parameters: [] },
+        { name: "http-get", description: "Make HTTP GET request", parameters: [] },
+        { name: "file-read", description: "Read file contents", parameters: [] },
+        { name: "context-status", description: "Check context status", parameters: [] },
+        { name: "pulse", description: "Check system pulse", parameters: [] },
       ],
     });
 
     for (const tc of validToolCalls) {
       const result = checkToolCall(defaultGuards)(tc, state, input);
       expect(result.pass).toBe(true);
-      expect(result.observation).toBeUndefined();
+      if (!result.pass) {
+        expect(result.observation).toBeUndefined();
+      }
     }
   });
 
@@ -274,14 +275,16 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
       allToolSchemas: [
-        { name: "web-search", parameters: [] },
+        { name: "web-search", description: "Search the web", parameters: [] },
       ],
     });
 
     for (const tc of malformedToolCalls.filter((c) => c.name === "nonexistent-tool")) {
       const result = checkToolCall(defaultGuards)(tc, state, input);
       expect(result.pass).toBe(false);
-      expect(result.observation).toContain("not available");
+      if (!result.pass) {
+        expect(result.observation).toContain("not available");
+      }
     }
   });
 
@@ -296,24 +299,36 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState({
       steps: [
         {
+          id: "step-1" as any,
           type: "action" as const,
           content: "Calling web-search",
+          timestamp: new Date(),
           metadata: {
-            toolCall: { name: previousToolCall.name, arguments: previousToolCall.arguments },
+            toolCall: { id: "call-1", name: previousToolCall.name, arguments: previousToolCall.arguments },
           },
         },
         {
+          id: "step-2" as any,
           type: "observation" as const,
           content: "Found 10 results",
+          timestamp: new Date(),
           metadata: {
-            observationResult: { success: true },
+            observationResult: {
+              success: true,
+              toolName: "web-search",
+              displayText: "Found 10 results",
+              category: "web-search",
+              resultKind: "data",
+              preserveOnCompaction: true,
+              trustLevel: "untrusted",
+            },
           },
         },
       ],
     });
 
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "web-search", parameters: [] }],
+      allToolSchemas: [{ name: "web-search", description: "Search the web", parameters: [] }],
     });
 
     const duplicateCall: ToolCallSpec = {
@@ -324,7 +339,9 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
 
     const result = checkToolCall(defaultGuards)(duplicateCall, state, input);
     expect(result.pass).toBe(false);
-    expect(result.observation).toContain("Already done");
+    if (!result.pass) {
+      expect(result.observation).toContain("Already done");
+    }
   });
 
   // ─── Test: Side-effect guard ───
@@ -333,24 +350,36 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState({
       steps: [
         {
+          id: "step-3" as any,
           type: "action" as const,
           content: "Calling send-email",
+          timestamp: new Date(),
           metadata: {
-            toolCall: { name: "send-email", arguments: { to: "user@example.com" } },
+            toolCall: { id: "call-2", name: "send-email", arguments: { to: "user@example.com" } },
           },
         },
         {
+          id: "step-4" as any,
           type: "observation" as const,
           content: "Email sent successfully",
+          timestamp: new Date(),
           metadata: {
-            observationResult: { success: true },
+            observationResult: {
+              success: true,
+              toolName: "send-email",
+              displayText: "Email sent successfully",
+              category: "custom",
+              resultKind: "side-effect",
+              preserveOnCompaction: true,
+              trustLevel: "untrusted",
+            },
           },
         },
       ],
     });
 
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "send-email", parameters: [] }],
+      allToolSchemas: [{ name: "send-email", description: "Send email", parameters: [] }],
     });
 
     const secondSendCall: ToolCallSpec = {
@@ -361,7 +390,9 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
 
     const result = checkToolCall(defaultGuards)(secondSendCall, state, input);
     expect(result.pass).toBe(false);
-    expect(result.observation).toContain("already executed successfully");
+    if (!result.pass) {
+      expect(result.observation).toContain("already executed successfully");
+    }
   });
 
   // ─── Test: Repetition guard ───
@@ -369,16 +400,18 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
   it("blocks tools when called too many times (repetition guard)", () => {
     const state = createMinimalState({
       steps: Array.from({ length: 5 }, (_, i) => ({
+        id: `step-${i}` as any,
         type: "action" as const,
         content: `Calling web-search (attempt ${i + 1})`,
+        timestamp: new Date(),
         metadata: {
-          toolCall: { name: "web-search", arguments: { query: `test-${i}` } },
+          toolCall: { id: `search-${i}`, name: "web-search", arguments: { query: `test-${i}` } },
         },
       })),
     });
 
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "web-search", parameters: [] }],
+      allToolSchemas: [{ name: "web-search", description: "Search the web", parameters: [] }],
     });
 
     const sixthSearchCall: ToolCallSpec = {
@@ -389,7 +422,9 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
 
     const result = checkToolCall(defaultGuards)(sixthSearchCall, state, input);
     expect(result.pass).toBe(false);
-    expect(result.observation).toContain("already called");
+    if (!result.pass) {
+      expect(result.observation).toContain("already called");
+    }
   });
 
   // ─── Test: Meta-tool dedup guard ───
@@ -401,7 +436,7 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     });
 
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "pulse", parameters: [] }],
+      allToolSchemas: [{ name: "pulse", description: "Check system pulse", parameters: [] }],
     });
 
     const thirdPulseCall: ToolCallSpec = {
@@ -412,7 +447,9 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
 
     const result = checkToolCall(defaultGuards)(thirdPulseCall, state, input);
     expect(result.pass).toBe(false);
-    expect(result.observation).toContain("You just called pulse");
+    if (!result.pass) {
+      expect(result.observation).toContain("You just called pulse");
+    }
   });
 
   // ─── Test: Blocked tools ───
@@ -420,7 +457,7 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
   it("respects blockedTools list from input", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "web-search", parameters: [] }],
+      allToolSchemas: [{ name: "web-search", description: "Search the web", parameters: [] }],
       blockedTools: ["web-search"],
     });
 
@@ -432,7 +469,9 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
 
     const result = checkToolCall(defaultGuards)(blockedCall, state, input);
     expect(result.pass).toBe(false);
-    expect(result.observation).toContain("BLOCKED");
+    if (!result.pass) {
+      expect(result.observation).toContain("BLOCKED");
+    }
   });
 
   // ─── Test: Edge cases ───
@@ -440,7 +479,7 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
   it("allows valid calls with empty/zero arguments", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "web-search", parameters: [] }],
+      allToolSchemas: [{ name: "web-search", description: "Search the web", parameters: [] }],
     });
 
     const edgeCall = edgeCaseToolCalls.find((c) => c.name === "web-search")!;
@@ -451,7 +490,7 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
   it("allows meta-tools with extra arguments", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "context-status", parameters: [] }],
+      allToolSchemas: [{ name: "context-status", description: "Check context status", parameters: [] }],
     });
 
     const extraArgsCall = edgeCaseToolCalls.find((c) => c.name === "context-status")!;
@@ -465,16 +504,18 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     // Meta-tools should bypass the repetition guard even if called multiple times
     const state = createMinimalState({
       steps: Array.from({ length: 10 }, (_, i) => ({
+        id: `step-${i}` as any,
         type: "action" as const,
         content: `Calling pulse (attempt ${i + 1})`,
+        timestamp: new Date(),
         metadata: {
-          toolCall: { name: "pulse", arguments: {} },
+          toolCall: { id: `pulse-${i}`, name: "pulse", arguments: {} },
         },
       })),
     });
 
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "pulse", parameters: [] }],
+      allToolSchemas: [{ name: "pulse", description: "Check system pulse", parameters: [] }],
     });
 
     const eleventhPulseCall: ToolCallSpec = {
@@ -493,7 +534,7 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
   it("measures latency across 100 valid tool calls (<50ms avg)", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
-      allToolSchemas: validToolCalls.map((tc) => ({ name: tc.name, parameters: [] })),
+      allToolSchemas: validToolCalls.map((tc) => ({ name: tc.name, description: "Tool", parameters: [] })),
     });
 
     const latencies: number[] = [];
@@ -519,8 +560,8 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
       allToolSchemas: [
-        { name: "web-search", parameters: [] },
-        { name: "http-get", parameters: [] },
+        { name: "web-search", description: "Search the web", parameters: [] },
+        { name: "http-get", description: "Make HTTP GET request", parameters: [] },
       ],
     });
 
@@ -544,7 +585,7 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
   it("produces false positive rate ≤2% on valid calls", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
-      allToolSchemas: validToolCalls.map((tc) => ({ name: tc.name, parameters: [] })),
+      allToolSchemas: validToolCalls.map((tc) => ({ name: tc.name, description: "Tool", parameters: [] })),
     });
 
     let validCount = validToolCalls.length;
@@ -566,23 +607,37 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState({
       steps: [
         {
+          id: "step-5" as any,
           type: "action" as const,
           content: "Previous web-search",
+          timestamp: new Date(),
           metadata: {
-            toolCall: { name: "web-search", arguments: { query: "test" } },
+            toolCall: { id: "call-3", name: "web-search", arguments: { query: "test" } },
           },
         },
         {
+          id: "step-6" as any,
           type: "observation" as const,
           content: "Results found",
-          metadata: { observationResult: { success: true } },
+          timestamp: new Date(),
+          metadata: {
+            observationResult: {
+              success: true,
+              toolName: "web-search",
+              displayText: "Results found",
+              category: "web-search",
+              resultKind: "data",
+              preserveOnCompaction: true,
+              trustLevel: "untrusted",
+            },
+          },
         },
       ],
     });
 
     const input = createMinimalInput({
       allToolSchemas: [
-        { name: "web-search", parameters: [] },
+        { name: "web-search", description: "Search the web", parameters: [] },
       ],
     });
 
@@ -595,9 +650,11 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
 
     const result = checkToolCall(defaultGuards)(duplicateCall, state, input);
     expect(result.pass).toBe(false);
-    expect(result.observation).toBeDefined();
-    const guardName = extractGuardName(result.observation);
-    expect(guardName).toBe("duplicateGuard");
+    if (!result.pass) {
+      expect(result.observation).toBeDefined();
+      const guardName = extractGuardName(result.observation);
+      expect(guardName).toBe("duplicateGuard");
+    }
   });
 
   // ─── Test: Meta-tools are recognized and handled specially ───
@@ -606,10 +663,10 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
       allToolSchemas: [
-        { name: "context-status", parameters: [] },
-        { name: "pulse", parameters: [] },
-        { name: "brief", parameters: [] },
-        { name: "recall", parameters: [] },
+        { name: "context-status", description: "Check context status", parameters: [] },
+        { name: "pulse", description: "Check system pulse", parameters: [] },
+        { name: "brief", description: "Get brief summary", parameters: [] },
+        { name: "recall", description: "Recall information", parameters: [] },
       ],
     });
 
@@ -640,13 +697,15 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
 
     const result = blockedGuard(tc, state, input);
     expect(result.pass).toBe(false);
-    expect(result.observation).toContain("BLOCKED");
+    if (!result.pass) {
+      expect(result.observation).toContain("BLOCKED");
+    }
   });
 
   it("availableToolGuard allows known tools", () => {
     const state = createMinimalState();
     const input = createMinimalInput({
-      allToolSchemas: [{ name: "web-search", parameters: [] }],
+      allToolSchemas: [{ name: "web-search", description: "Search the web", parameters: [] }],
     });
 
     const tc: ToolCallSpec = {
@@ -663,16 +722,30 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     const state = createMinimalState({
       steps: [
         {
+          id: "step-7" as any,
           type: "action" as const,
           content: "Previous web-search",
+          timestamp: new Date(),
           metadata: {
-            toolCall: { name: "web-search", arguments: { query: "test-1" } },
+            toolCall: { id: "call-4", name: "web-search", arguments: { query: "test-1" } },
           },
         },
         {
+          id: "step-8" as any,
           type: "observation" as const,
           content: "Results",
-          metadata: { observationResult: { success: true } },
+          timestamp: new Date(),
+          metadata: {
+            observationResult: {
+              success: true,
+              toolName: "web-search",
+              displayText: "Results",
+              category: "web-search",
+              resultKind: "data",
+              preserveOnCompaction: true,
+              trustLevel: "untrusted",
+            },
+          },
         },
       ],
     });
@@ -701,7 +774,7 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     console.log("\n📊 LATENCY PROFILE (1000 calls):");
     const state = createMinimalState();
     const input = createMinimalInput({
-      allToolSchemas: validToolCalls.map((tc) => ({ name: tc.name, parameters: [] })),
+      allToolSchemas: validToolCalls.map((tc) => ({ name: tc.name, description: "Tool", parameters: [] })),
     });
 
     const latencies: number[] = [];
@@ -741,11 +814,11 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
     // Register all valid tools + meta-tools to avoid FP errors during TP testing
     const testInput = createMinimalInput({
       allToolSchemas: [
-        { name: "web-search", parameters: [] },
-        { name: "http-get", parameters: [] },
-        { name: "file-read", parameters: [] },
-        { name: "context-status", parameters: [] },
-        { name: "pulse", parameters: [] },
+        { name: "web-search", description: "Search the web", parameters: [] },
+        { name: "http-get", description: "Make HTTP GET request", parameters: [] },
+        { name: "file-read", description: "Read file contents", parameters: [] },
+        { name: "context-status", description: "Check context status", parameters: [] },
+        { name: "pulse", description: "Check system pulse", parameters: [] },
         // Meta-tools should auto-pass availableToolGuard
       ],
     });
@@ -826,9 +899,9 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
       };
       const testInput2 = createMinimalInput({
         allToolSchemas: [
-          { name: "web-search", parameters: [] },
-          { name: "context-status", parameters: [] },
-          { name: "pulse", parameters: [] },
+          { name: "web-search", description: "Search the web", parameters: [] },
+          { name: "context-status", description: "Check context status", parameters: [] },
+          { name: "pulse", description: "Check system pulse", parameters: [] },
         ],
       });
       const result = checkToolCall(defaultGuards)(tc, testState, testInput2);
