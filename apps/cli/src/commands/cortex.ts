@@ -185,18 +185,50 @@ export async function cortexCommand(options: CortexCommandOptions = {}): Promise
   const serverEntry = path.resolve(__dirname, "../../../cortex/server/index.ts");
   const staticPath = path.resolve(__dirname, "../../assets/cortex");
   const hasStatic = existsSync(path.join(staticPath, "index.html"));
-
-  if (!existsSync(serverEntry)) {
-    console.error(fail(`Cortex server entry not found:\n  ${serverEntry}`));
-    process.exit(1);
-  }
+  const hasServerSource = existsSync(serverEntry);
 
   const baseUrl = `http://127.0.0.1:${port}`;
   const ingestWs = `ws://127.0.0.1:${port}/ws/ingest`;
 
   if (options.dev) {
+    if (!hasServerSource) {
+      console.error(fail(`Cortex server source not found (npm-installed CLI limitation):\n  ${serverEntry}`));
+      console.error();
+      console.error(hint(`The 'rax cortex --dev' command only works when running from the source repository.`));
+      console.error();
+      console.error(info("Workaround: Run cortex from source:"));
+      console.error(info("  cd <repo>/apps/cortex"));
+      console.error(info("  bun start"));
+      process.exit(1);
+    }
     await cortexDevStack({ port, baseUrl });
     return;
+  }
+
+  // Bundled static mode: check if static assets are available
+  if (!hasStatic) {
+    if (!hasServerSource) {
+      // Running from npm-installed CLI with no static assets
+      console.error(fail(`Cortex is not available in this npm-installed CLI`));
+      console.error();
+      console.error(hint(`This typically means cortex's built static UI hasn't been bundled.`));
+      console.error();
+      console.error(info("Option 1: Run cortex from the source repository:"));
+      console.error(info("  cd <repo>/apps/cortex"));
+      console.error(info("  bun start"));
+      console.error();
+      console.error(info("Option 2: Build static UI for CLI (from source repo):"));
+      console.error(info("  cd apps/cli"));
+      console.error(info("  bun run build:cortex-ui"));
+      console.error(info("  rax cortex"));
+      process.exit(1);
+    } else {
+      // Running from source, but static assets not built yet
+      console.log(warn(`Static UI not found: ${path.join(staticPath, "index.html")}`));
+      console.log(hint("You can still start the API server with: rax cortex --dev"));
+      console.log(hint("Or build static assets: cd apps/cli && bun run build:cortex-ui"));
+      console.log();
+    }
   }
 
   banner("Cortex studio", "UI + runs API + event ingest for .withCortex()");
@@ -205,13 +237,6 @@ export async function cortexCommand(options: CortexCommandOptions = {}): Promise
   console.log(kv("Ingest (WS)", ingestWs));
   console.log(kv("CORTEX_URL", `(set for child process) ${baseUrl}`));
   console.log();
-
-  if (!hasStatic) {
-    console.log(warn(`Static UI not found: ${path.join(staticPath, "index.html")}`));
-    console.log(hint("Use: rax cortex --dev   (Vite + API)"));
-    console.log(hint("Or:  cd apps/cli && bun run build:cortex-ui"));
-    console.log();
-  }
 
   console.log(info("Starting server… (Ctrl+C to stop)"));
   console.log();

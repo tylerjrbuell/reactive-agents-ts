@@ -30,7 +30,6 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "reactive-agents": "0.10.1",
     "@reactive-agents/core": "0.10.1",
     "@reactive-agents/runtime": "0.10.1",
     "@reactive-agents/eval": "0.10.1",
