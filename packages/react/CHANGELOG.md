@@ -1,5 +1,11 @@
 # @reactive-agents/react
 
+## 0.10.1
+
+### Patch Changes
+
+-   80284a4: Fix CLI module resolution: mark @reactive-agents/eval, @reactive-agents/llm-provider, @reactive-agents/a2a, @reactive-agents/trace, and @reactive-agents/tools as external dependencies in tsup config. This prevents bundling issues when the CLI is installed from npm and needs to dynamically require these modules at runtime.
+
 ## 0.10.0
 
 ### Minor Changes
