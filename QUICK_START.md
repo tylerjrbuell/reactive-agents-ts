@@ -26,8 +26,8 @@
 ## I Want to...
 
 ### Understand the architecture
-- Read: `docs/spec/docs/05-DESIGN-NORTH-STAR.md` (target architecture)
-- Then: `docs/spec/docs/04-PROJECT-STATE.md` (current empirical state)
+- Read: `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` (target architecture)
+- Then: `wiki/Architecture/Specs/04-PROJECT-STATE.md` (current empirical state)
 - Reference: `AGENTS.md` §Architecture Quick Reference (package tree)
 
 ### Add a new feature
@@ -61,7 +61,7 @@
 4. Run: `bun test packages/<name>/tests/<file>.test.ts`
 
 ### Understand the kernel (reasoning engine)
-1. Read: `docs/spec/docs/05-DESIGN-NORTH-STAR.md` §4. The Cognitive Architecture
+1. Read: `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` §4. The Cognitive Architecture
 2. Browse: `packages/reasoning/src/strategies/kernel/phases/` (12 files = 12 phases)
 3. Trace: `packages/reasoning/src/strategies/kernel/kernel-runner.ts` calls them in order
 4. Example: `packages/reasoning/tests/kernel-*.test.ts`
@@ -81,23 +81,23 @@
 5. Commit: Only one concern per commit
 
 ### Understand a failure mode
-1. Find: `docs/spec/docs/02-FAILURE-MODES.md` (FM-A1, FM-B2, etc.)
+1. Find: `wiki/Architecture/Specs/02-FAILURE-MODES.md` (FM-A1, FM-B2, etc.)
 2. Read: Manifestation, reproduction, existing mitigation, empirical evidence
 3. Code: Search for the mitigation in `packages/reasoning/src/` or `packages/tools/src/`
 4. Tests: Look for related tests in package test files
 
 ### Check current project status
 - `.agents/MEMORY.md` (session cross-memory: status, resolved issues, running issues)
-- `docs/spec/docs/04-PROJECT-STATE.md` (empirical state: validated mechanisms, unvalidated mechanisms)
-- `docs/spec/docs/07-ROADMAP-v1.0.md` (phase sequencing: gates, validation, Phase 2+ work)
+- `wiki/Architecture/Specs/04-PROJECT-STATE.md` (empirical state: validated mechanisms, unvalidated mechanisms)
+- `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` (phase sequencing: gates, validation, Phase 2+ work)
 
 ### Find what changed recently
 - `CHANGELOG.md` (auto-generated, organized by version)
 - `wiki/Hot.md` (Obsidian vault: recent decisions/experiments/sessions)
 
 ### Understand methodology / validation rules
-- `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` (12 rules for any harness change)
-- `docs/spec/docs/03-IMPROVEMENT-PIPELINE.md` (DISCOVERY→DEPRECATE flywheel)
+- `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` (12 rules for any harness change)
+- `wiki/Architecture/Specs/03-IMPROVEMENT-PIPELINE.md` (DISCOVERY→DEPRECATE flywheel)
 
 ---
 
@@ -129,10 +129,10 @@ bun run changeset               # Add changeset for next release
 | `CODING_STANDARDS.md` | TypeScript/Effect-TS authority | skim |
 | `CAPABILITIES.md` | CI-enforced capability registry | 2 min |
 | `README.md` | Public API overview + examples | 5 min |
-| `docs/spec/docs/04-PROJECT-STATE.md` | Current empirical state | 10 min |
-| `docs/spec/docs/05-DESIGN-NORTH-STAR.md` | Architecture target | 20 min |
-| `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` | Methodology (12 rules) | 5 min |
-| `docs/spec/docs/02-FAILURE-MODES.md` | Failure catalog + mitigations | as-needed |
+| `wiki/Architecture/Specs/04-PROJECT-STATE.md` | Current empirical state | 10 min |
+| `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` | Architecture target | 20 min |
+| `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` | Methodology (12 rules) | 5 min |
+| `wiki/Architecture/Specs/02-FAILURE-MODES.md` | Failure catalog + mitigations | as-needed |
 
 **Total onboarding time:** 45 min (if you do all 10), or 25 min (essential 5)
 
@@ -149,7 +149,7 @@ bun run changeset               # Add changeset for next release
 7. **Run full test suite to verify** — Use scoped tests: `bun test packages/<name>/tests/<file>.test.ts`
 8. **Mix concerns in one commit** — One PR = one feature. One commit = one concern.
 9. **Manually edit CHANGELOG** — Use `bun run changeset`. Versions are auto-bumped on merge.
-10. **Assume old docs are current** — Check dates. Use `docs/spec/docs/` (canonical) not `_archive/` (historical).
+10. **Assume old docs are current** — Check dates. Use `wiki/Architecture/Specs/` (canonical) not `_archive/` (historical).
 
 ---
 
@@ -170,7 +170,7 @@ bun run changeset               # Add changeset for next release
 - **Don't explore aimlessly.** Read the above 3 files in order, then navigate by task (section "I Want to...").
 - **Use symptom maps, not grep.** `AGENTS.md` §Common Debugging has an 11-row table — faster than searching.
 - **Scoped tests only.** `bun test packages/<name>/tests/<file>.test.ts` is 100x faster than the full suite.
-- **Avoid `_archive/` docs.** They're historical; read canonical docs in `docs/spec/docs/` instead.
+- **Avoid `_archive/` docs.** They're historical; read canonical docs in `wiki/Architecture/Specs/` instead.
 - **Query Obsidian before exploring.** `obsidian-vault-query` for recent decisions is faster than reading 500-page design docs.
 
 ---

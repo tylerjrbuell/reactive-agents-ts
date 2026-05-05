@@ -18,7 +18,7 @@ updated: 2026-05-04
 - **5 IMPROVE verdicts** — concrete Phase 1.5 action items identified
 - **0 REMOVE verdicts** — improvement-first validation confirmed effective
 - Evidence: `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
-- Debriefs: `docs/superpowers/debriefs/M*-*-validation.md` (per-mechanism)
+- Debriefs: `wiki/Research/Debriefs/M*-*-validation.md` (per-mechanism)
 
 **Key Verdicts:**
 | M | Name | Verdict | Finding |
@@ -37,7 +37,7 @@ See [[Experiments/Phase 1 Mechanism Validation|Phase 1 Results]] for full detail
 ### Documentation Consolidation Complete ✅
 - **Canonical spec docs unified** to uniform NN-NAME.md naming (00–07)
 - **Authority hierarchy codified** in DOCUMENT_INDEX.md
-- **57 tactical plans archived** to `docs/superpowers/plans/archive/`
+- **57 tactical plans archived** to `wiki/Planning/Implementation-Plans/Superpowers/archive/`
 - **All internal references updated** across 9 files
 - **AGENTS.md consolidated** (606→501 lines, high-signal only)
 - **CLAUDE.md minimized** (9 lines, pure pointer to AGENTS.md)

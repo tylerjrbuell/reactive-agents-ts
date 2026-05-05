@@ -1,4 +1,4 @@
-# Document Index — `docs/spec/docs/`
+# Document Index — `wiki/Architecture/Specs/`
 
 > **Last updated:** 2026-05-04 (consolidated naming + archival cleanup; refactor/overhaul).
 > **Purpose:** Map every document in this directory to its purpose. Ranked from "read first" to "reference when needed."
@@ -26,7 +26,7 @@
 - `07-ROADMAP-v1.0.md` > `06-AUDIT-v0.10.0.md` > `04-PROJECT-STATE.md` > `01-RESEARCH-DISCIPLINE.md`
 - If docs conflict: amend lower-authority doc, never silent drift.
 
-**That's the entire active set.** If a question isn't answered above, the answer either (a) lives in code (read it), (b) lives in `apps/docs/src/content/docs/` (Starlight), or (c) is in `docs/superpowers/plans/archive/` (historical).
+**That's the entire active set.** If a question isn't answered above, the answer either (a) lives in code (read it), (b) lives in `apps/docs/src/content/docs/` (Starlight), or (c) is in `wiki/Planning/Implementation-Plans/Superpowers/archive/` (historical).
 
 ---
 

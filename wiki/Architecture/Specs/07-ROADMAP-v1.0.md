@@ -6,7 +6,7 @@
 > - `2026-05-03-phase-0-frozen-judge.md` (written; ready to execute)
 > - `2026-MM-DD-phase-N-<focus>.md` (write before starting Phase N)
 
-**Goal:** Take Reactive Agents from v0.10.0 release-ready to v1.0 by closing the empirical, structural, and capability gaps surfaced in `docs/spec/docs/06-AUDIT-v0.10.0.md` §16, while remaining true to the eight pillars of `docs/spec/docs/00-VISION.md` and adapting to AI-community research as it lands.
+**Goal:** Take Reactive Agents from v0.10.0 release-ready to v1.0 by closing the empirical, structural, and capability gaps surfaced in `wiki/Architecture/Specs/06-AUDIT-v0.10.0.md` §16, while remaining true to the eight pillars of `wiki/Architecture/Specs/00-VISION.md` and adapting to AI-community research as it lands.
 
 **Architecture:** Eight sequenced phases (Phase 0–7), each with measurable validation gates that gate the next phase. Cross-cutting disciplines (TDD, subagent-driven execution, verified improvement loops, quarterly research re-evaluation) apply uniformly. **No phase ships without its validation gate passing.**
 
@@ -18,11 +18,11 @@
 
 | Doc | Authority | When to consult |
 |---|---|---|
-| `docs/spec/docs/00-VISION.md` v3.0 | **Stable anchor** — the only document this plan does not amend | Every phase: confirm work serves a vision pillar |
-| `docs/spec/docs/06-AUDIT-v0.10.0.md` §16 | **Authoritative gap inventory** | Phase definitions inherit gaps from §16.2–§16.6 |
-| `docs/spec/docs/02-FAILURE-MODES.md` | **Living failure-mode catalog** | Phase 1 mechanism validation maps each mechanism to a FM it claims to address |
-| `docs/spec/docs/01-RESEARCH-DISCIPLINE.md` (Rules 1–12) | **Methodology contract** | Especially Rule 4 (frozen judge — Phase 0) and Rule 11 (calibrate claims to evidence — every phase gate) |
-| `docs/spec/docs/05-DESIGN-NORTH-STAR.md` v3.0 | **Architecture target** | Phase 2 decomposition conformance |
+| `wiki/Architecture/Specs/00-VISION.md` v3.0 | **Stable anchor** — the only document this plan does not amend | Every phase: confirm work serves a vision pillar |
+| `wiki/Architecture/Specs/06-AUDIT-v0.10.0.md` §16 | **Authoritative gap inventory** | Phase definitions inherit gaps from §16.2–§16.6 |
+| `wiki/Architecture/Specs/02-FAILURE-MODES.md` | **Living failure-mode catalog** | Phase 1 mechanism validation maps each mechanism to a FM it claims to address |
+| `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` (Rules 1–12) | **Methodology contract** | Especially Rule 4 (frozen judge — Phase 0) and Rule 11 (calibrate claims to evidence — every phase gate) |
+| `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v3.0 | **Architecture target** | Phase 2 decomposition conformance |
 | `ROADMAP.md` (root) | **Public-facing milestone tracker** | Updated at each phase completion |
 | This file | **Sequencing authority** for v0.10.0 → v1.0 | Single source of truth for phase order |
 
@@ -348,7 +348,7 @@ When ready to begin Phase N:
 
 1. **Read** `harness-reports/phase-(N-1)-<focus>-YYYY-MM-DD.md` (skip if N=0).
 2. **Amend** Phase N's validation gates in this doc if the prior phase's evidence justifies it; log amendment in §9.
-3. **Write** `docs/superpowers/plans/2026-MM-DD-phase-N-<focus>.md` following superpowers:writing-plans discipline strictly (bite-sized TDD tasks, exact commands, no placeholders).
+3. **Write** `wiki/Planning/Implementation-Plans/2026-MM-DD-phase-N-<focus>.md` following superpowers:writing-plans discipline strictly (bite-sized TDD tasks, exact commands, no placeholders).
 4. **Execute** the detailed plan via superpowers:subagent-driven-development.
 5. **Verify** the validation gate. Pass → advance. Fail → stop the line.
 6. **Code review** the phase via superpowers:code-reviewer.

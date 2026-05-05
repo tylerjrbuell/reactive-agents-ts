@@ -3,7 +3,7 @@
 > **Last updated:** 2026-04-30 (refactor/overhaul — Stage 5 closed, Stage 6 in flight: workspace green)
 > **The open-source agent framework built for control, not magic.**
 
-This roadmap describes what's shipping, what's `_unstable_*`, and what's deferred. The detailed execution plan for the current overhaul lives in `docs/spec/docs/AUDIT-overhaul-2026.md` §15 (Stage 5 Wave sequencing).
+This roadmap describes what's shipping, what's `_unstable_*`, and what's deferred. The detailed execution plan for the current overhaul lives in `wiki/Architecture/Specs/AUDIT-overhaul-2026.md` §15 (Stage 5 Wave sequencing).
 
 ---
 

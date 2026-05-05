@@ -101,7 +101,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 
 Install and run your first TypeScript AI agent in under 60 seconds.
 
-> **Requires [Bun](https://bun.sh) ≥1.0.0** — the framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is [planned for a future release](docs/superpowers/plans/2026-04-17-nodejs-support.md). Install Bun in one command: `curl -fsSL https://bun.sh/install | bash`
+> **Requires [Bun](https://bun.sh) ≥1.0.0** — the framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is [planned for a future release](wiki/Planning/Implementation-Plans/Superpowers/archive/2026-04-17-nodejs-support.md). Install Bun in one command: `curl -fsSL https://bun.sh/install | bash`
 
 ```bash
 bun add reactive-agents
@@ -512,7 +512,7 @@ const agent = await ReactiveAgents.create()
 | [`@reactive-agents/vue`](packages/vue)                                     | Vue 3 composables: `useAgentStream`, `useAgent` with reactive refs                                                                                                                        |
 | [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores: `createAgentStream`, `createAgent` writable stores                                                                                                                     |
 
-**Branch preview (not on `main` yet):** [`feat/channels-package`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/feat/channels-package) adds **`@reactive-agents/channels`**, runtime **`.withChannels()`**, and renames gateway **`channels` → `accessControl`** for sender policy vs chat mode. Summary: [`docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md`](docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md).
+**Branch preview (not on `main` yet):** [`feat/channels-package`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/feat/channels-package) adds **`@reactive-agents/channels`**, runtime **`.withChannels()`**, and renames gateway **`channels` → `accessControl`** for sender policy vs chat mode. Summary: [`wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`](wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md).
 
 ## Observability & Metrics Dashboard
 

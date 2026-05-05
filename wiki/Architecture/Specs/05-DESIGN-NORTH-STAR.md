@@ -34,7 +34,7 @@
 
 ### What we're building toward
 
-`docs/spec/docs/00-VISION.md` names four properties:
+`wiki/Architecture/Specs/00-VISION.md` names four properties:
 
 > **Reliability, Control, Security, Performance** — delivered through engineering, not magic.
 
@@ -469,7 +469,7 @@ Five sprints, each ~1 week, each with explicit validation gates.
 - Update `failure-corpus.ts` to run each scenario N times (default 3) and report median + range
 - Add `corpus-compare.ts` script: takes two baseline files, reports deltas with statistical significance
 - Make multi-run validation a gate-update prerequisite for any commit affecting kernel
-- Document the methodology in `docs/spec/docs/16-validation-discipline.md`
+- Document the methodology in `wiki/Architecture/Specs/16-validation-discipline.md`
 
 ### 6.4 Phase 4 — Package Consolidation (~1 week, opportunistic)
 
