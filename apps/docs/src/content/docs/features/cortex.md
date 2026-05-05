@@ -19,30 +19,33 @@ import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/compone
 Start Cortex with one command, then connect any agent with one line:
 
 <Tabs>
-  <TabItem label="From repo clone (recommended)">
+  <TabItem label="From npm (recommended)">
 ```bash
-# Terminal 1 — clone the repo and launch Cortex (contributor tool)
-git clone https://github.com/tylerjrbuell/reactive-agents-ts
-cd reactive-agents-ts && bun install
-bun cortex
-# → API on http://localhost:4321  (development only)
-# → UI  on http://localhost:5173  (development only — opens in your browser automatically)
+# Terminal 1 — install Cortex once, then launch the studio
+bun add @reactive-agents/cortex
+rax cortex
+# → API + UI on http://127.0.0.1:4321 (opens in your browser automatically)
 
-# Terminal 2 — run an agent that streams to Cortex (npm-installed `rax` works fine here)
-
+# Terminal 2 — run an agent that streams to Cortex
 rax run "Research the top 5 TypeScript testing frameworks" \
  --provider anthropic \
  --reasoning \
  --tools \
  --cortex
-
-````
+```
   </TabItem>
-  <TabItem label="From apps/cortex">
+  <TabItem label="From source repo (contributors)">
 ```bash
-# Equivalent: from apps/cortex — starts the dev server (UI on :5173, API on :4321, local only)
-cd apps/cortex && bun start
-````
+# Terminal 1 — clone and launch the dev stack (server + Vite UI)
+git clone https://github.com/tylerjrbuell/reactive-agents-ts
+cd reactive-agents-ts && bun install
+bun cortex
+# → API on http://localhost:4321
+# → UI  on http://localhost:5173 (Vite dev mode — hot reload)
+
+# Terminal 2 — same as above; rax stream events into the studio
+rax run "Research X" --provider anthropic --cortex
+```
 
 Then connect any agent from code:
 
@@ -62,7 +65,7 @@ await agent.run('Research AI agent frameworks')
   </TabItem>
 </Tabs>
 
-When running `bun cortex` locally, Cortex opens your browser at `http://localhost:5173` automatically as soon as your agent starts.
+When running `rax cortex` (npm) Cortex opens your browser at `http://127.0.0.1:4321` automatically. From source-repo `bun cortex`, the Vite dev UI opens at `http://localhost:5173` (hot-reload), with the API on `:4321`.
 
 ---
 

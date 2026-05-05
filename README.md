@@ -556,7 +556,8 @@ rax init my-project --template full              # Scaffold a project
 rax create agent researcher --recipe researcher   # Generate an agent from recipe
 rax create agent my-agent --interactive           # Interactive scaffolding (readline prompts)
 rax run "Explain quantum computing" --provider anthropic  # Run an agent
-bun cortex                                               # Cortex API + Vite UI (contributors only — requires repo clone)
+rax cortex                                               # Cortex studio (after: bun add @reactive-agents/cortex)
+bun cortex                                               # Cortex API + Vite UI (source-repo contributors)
 rax run "Task" --cortex --provider anthropic             # Stream events to Cortex (.withCortex())
 ```
 

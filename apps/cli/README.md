@@ -25,9 +25,13 @@ rax create agent <name> [--recipe basic|researcher|coder|orchestrator]
 
 rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test] [--model <model>] [--name <name>] [--stream] [--cortex]
   Run an agent with a prompt and print the result. `--cortex` calls `.withCortex()` so events stream
-  to a local Cortex studio. Cortex is a contributor tool launched from a repo clone via `bun cortex`
-  (see Cortex section below). Override the ingest base URL with `CORTEX_URL` (default
+  to a local Cortex studio. Launch the studio with `rax cortex` (after `bun add @reactive-agents/cortex`)
+  or, in the source repo, with `bun cortex`. Override the ingest base URL with `CORTEX_URL` (default
   `http://127.0.0.1:4321`).
+
+rax cortex [--port <n>] [--no-open] [--help]
+  Launch the Cortex companion studio (UI + API for visual agent inspection). Requires
+  `@reactive-agents/cortex` to be installed (lazy peer dep — `bun add @reactive-agents/cortex`).
 
 rax dev [--entry src/index.ts] [--no-watch]
   Run your local agent entrypoint in watch mode
@@ -90,10 +94,13 @@ rax create agent researcher --recipe researcher
 export ANTHROPIC_API_KEY=sk-ant-...
 rax run "Summarize the state of fusion energy" --provider anthropic
 
-# Cortex (contributor studio — requires repo clone): launch API + Vite UI, then stream run events
-# git clone https://github.com/tylerjrbuell/reactive-agents-ts && cd reactive-agents-ts && bun install
-bun cortex
-# open http://localhost:5173 — other terminal (npm-installed CLI works fine):
+# Cortex studio: visual UI + API for inspecting agents. Two ways:
+# (a) From any project — install once, run anywhere:
+bun add @reactive-agents/cortex
+rax cortex
+# (b) From the source repo — server + Vite UI in dev mode:
+# git clone https://github.com/tylerjrbuell/reactive-agents-ts && cd reactive-agents-ts && bun install && bun cortex
+# Then in another terminal, stream run events into the studio:
 rax run "Research topic X" --cortex --provider anthropic
 ```
 

@@ -36,7 +36,11 @@ bun start
 | `bun run build:ui` | Production UI build → `ui/build`. |
 | `bun test` | Server tests under `server/tests/`. |
 
-**Contributor workflow (from repo root):** `bun cortex` runs `scripts/dev-stack.ts` — same as `bun start` here. Pair with `rax run "<prompt>" --cortex --provider …` so the agent uses `.withCortex()` against `CORTEX_URL` (default `http://127.0.0.1:4321`). The `rax cortex` command is intentionally not in the public CLI — cortex requires the source repo because the server has 8 workspace deps and is not yet published to npm.
+**Two ways to run cortex:**
+- **From any project (npm):** `bun add @reactive-agents/cortex` then `rax cortex` — the CLI lazy-loads the package and starts the bundled server + UI.
+- **From source repo (contributors):** `bun cortex` runs `scripts/dev-stack.ts` — server + Vite UI dev mode in parallel. Same as `bun start` from this folder.
+
+Pair with `rax run "<prompt>" --cortex --provider …` so the agent uses `.withCortex()` against `CORTEX_URL` (default `http://127.0.0.1:4321`).
 
 UI tests: `cd ui && bun test src/lib`. UI build: `cd ui && bun run build`.
 
