@@ -26,9 +26,15 @@ apps/cortex/.cortex/
 # Git worktrees
 .worktrees/
 
-# Harness reports — local research/improvement artifacts only, never committed
+# Harness reports moved to wiki/Research/Harness-Reports (May 2026 consolidation).
+# Old root path retained as guard against accidental recreation.
 harness-reports/
 .gate-baseline-reason
+
+# Spurious nested wiki/ trees created when scripts run from a package dir
+# instead of repo root (gate runner uses REPORTS_DIR relative to cwd).
+packages/*/wiki/
+apps/*/wiki/
 
 # Local scratch
 scratch.ts
@@ -53,4 +59,3 @@ wiki/.obsidian/workspace-mobile.json
 wiki/.obsidian/cache
 wiki/.obsidian/plugins/*/data.json
 wiki/.trash/
-packages/testing/harness-reports
