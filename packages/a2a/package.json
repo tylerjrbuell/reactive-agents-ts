@@ -11,12 +11,12 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.1"
+    "@reactive-agents/core": "0.10.2"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "bun-types": "latest",
-    "@reactive-agents/identity": "0.10.1",
+    "@reactive-agents/identity": "0.10.2",
     "effect": "^3.10.0"
   },
   "peerDependencies": {

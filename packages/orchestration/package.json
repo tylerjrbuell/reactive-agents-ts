@@ -11,11 +11,11 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.1",
-    "@reactive-agents/llm-provider": "0.10.1",
-    "@reactive-agents/identity": "0.10.1",
-    "@reactive-agents/reasoning": "0.10.1",
-    "@reactive-agents/cost": "0.10.1"
+    "@reactive-agents/core": "0.10.2",
+    "@reactive-agents/llm-provider": "0.10.2",
+    "@reactive-agents/identity": "0.10.2",
+    "@reactive-agents/reasoning": "0.10.2",
+    "@reactive-agents/cost": "0.10.2"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

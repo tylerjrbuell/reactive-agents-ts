@@ -28,12 +28,12 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.10.1",
-    "@reactive-agents/runtime": "0.10.1",
-    "@reactive-agents/eval": "0.10.1",
-    "@reactive-agents/llm-provider": "0.10.1",
-    "@reactive-agents/a2a": "0.10.1",
-    "@reactive-agents/trace": "0.10.1",
+    "@reactive-agents/core": "0.10.2",
+    "@reactive-agents/runtime": "0.10.2",
+    "@reactive-agents/eval": "0.10.2",
+    "@reactive-agents/llm-provider": "0.10.2",
+    "@reactive-agents/a2a": "0.10.2",
+    "@reactive-agents/trace": "0.10.2",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"

@@ -11,8 +11,8 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.1",
-    "@reactive-agents/memory": "0.10.1"
+    "@reactive-agents/core": "0.10.2",
+    "@reactive-agents/memory": "0.10.2"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
