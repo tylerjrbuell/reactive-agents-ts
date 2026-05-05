@@ -14,7 +14,24 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ---
 
-## Current state (May 4, 2026)
+## Current state (May 5, 2026)
+
+### v0.10.2 Hotfix Release — SHIPPED ✅ (May 5, 3:42am EDT)
+
+**Status:** All 27 packages at 0.10.2, published to npm, stable and verified.
+
+**Critical fixes:**
+- **Broken bun exports:** All 27 packages had `"bun": "./src/index.ts"` but npm packages don't include src/. Changed to `"./dist/index.js"`. This fixed "Cannot find module" errors for npm-installed consumers (CLI, downstream packages).
+- **CLI external dependencies:** Added @reactive-agents/eval, llm-provider, a2a, trace, tools to tsup external list so they're dynamically required at runtime, not bundled.
+
+**Release timeline:** 0.10.0 (May 4, broken) → 0.10.1 (May 4, broken) → 0.10.2 (May 5, stable)
+
+**Prevention gates added (CI):**
+- `validate-cli-externals.ts` — ensures CLI imports are marked external
+- `test-bun-exports.ts` — validates all packages export correct dist/ paths
+- Both prevent future broken releases
+
+**Details:** See memory file `release_0_10_2_hotfix.md`
 
 ### Wiki Vault Population Complete ✅ (May 4, 3:30pm EDT)
 
