@@ -1,0 +1,49 @@
+filters:
+  and:
+    - file.inFolder("Research/Harness-Reports")
+    - file.ext == "md"
+    - file.name != "README"
+    - "!file.path.contains('_archive')"
+formulas:
+  age_days: "(date(today()) - date(file.mtime)).days"
+properties:
+  file.mtime:
+    displayName: Modified
+  file.size:
+    displayName: Size
+  age_days:
+    displayName: Age (days)
+views:
+  - type: table
+    name: Recent Reports (last 30 days)
+    filters:
+      and:
+        - formula.age_days <= 30
+    order:
+      - file.name
+      - file.mtime
+      - age_days
+    sort:
+      - property: file.mtime
+        direction: DESC
+  - type: table
+    name: All Active Reports
+    order:
+      - file.name
+      - file.mtime
+      - age_days
+    sort:
+      - property: file.mtime
+        direction: DESC
+  - type: table
+    name: Stale (>90 days, candidates for _archive/)
+    filters:
+      and:
+        - formula.age_days > 90
+    order:
+      - file.name
+      - file.mtime
+      - age_days
+    sort:
+      - property: age_days
+        direction: DESC

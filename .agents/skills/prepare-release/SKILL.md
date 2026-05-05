@@ -6,6 +6,33 @@ argument-hint: [vX.Y.Z]
 
 # Prepare Release: $ARGUMENTS
 
+## Step 0: Gather Release Context (Wiki Workflow Orient Step)
+
+Before generating release notes, query the wiki for what shipped in this cycle. See [[wiki/Development/Wiki-Workflow|Wiki-Workflow.md]].
+
+```
+claude-obsidian:wiki-query "completed plans since <last-release-date>"
+claude-obsidian:wiki-query "debriefs <package-or-feature-area>"
+```
+
+**For high-volume release cycles** (>20 plans/debriefs), roll up first:
+
+```
+claude-obsidian:wiki-fold wiki/Research/Debriefs
+claude-obsidian:wiki-fold wiki/Planning/Implementation-Plans
+```
+
+The fold output gives you compact summaries to draft release notes from. Originals are preserved.
+
+**Wiki sources for release notes:**
+- `wiki/Planning/Planning-Index.md` — completed plans (filter by `completed: <date-range>`)
+- `wiki/Research/Debriefs/` — engineering debriefs (one per significant feature)
+- `wiki/Decisions/Decision Index.md` — architectural decisions affecting users
+- `wiki/Failure-Modes/` — newly mitigated failure modes
+- `wiki/Issues/Running Issues Log.md` — resolved blockers
+
+The `wiki/Planning/active-plans.base` view filters to active plans; `wiki/Experiments/by-verdict.base` shows mechanism validation state for the release.
+
 ## Step 1: Pre-Flight Gate — All Must Pass
 
 ```bash

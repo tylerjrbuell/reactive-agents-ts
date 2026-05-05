@@ -54,19 +54,30 @@ Read these before forming hypotheses. Misdiagnosing happens when you reason abou
 
 ### Wiki targets (knowledge graph queries)
 
-The wiki is the single source of truth for prior diagnostic work. Before probing, query it:
+The wiki is the single source of truth for prior diagnostic work. Before probing, query it.
 
-| What | Path |
-|------|------|
-| **Recent context** | `wiki/Hot.md` — current focus, recent fixes |
-| **Past harness reports** | `wiki/Research/Harness-Reports/` — phase reports, baselines, diffs (this is where YOUR reports go) |
-| **Failure mode catalog** | `wiki/Architecture/Specs/02-FAILURE-MODES.md` + `wiki/Failure-Modes/` (FM-A through FM-H) |
-| **Mechanism validations** | `wiki/Experiments/M*.md` (M1-M13 spike reports — does the failure relate to a known mechanism?) |
-| **Past debriefs** | `wiki/Research/Debriefs/` — what was already tried? |
-| **Active issues** | `wiki/Issues/Running Issues Log.md` — known blockers |
-| **Decision context** | `wiki/Decisions/Decision Index.md` — why current architecture exists |
+**Use `claude-obsidian:wiki-query` (not raw grep)** — it reads the hot cache + index + drills into specific notes, surfacing semantic matches that grep misses. Falls back to grep only if wiki-query unavailable.
 
-**Query pattern:** `grep -r "<symptom keyword>" wiki/Research/Harness-Reports/ wiki/Failure-Modes/ wiki/Experiments/` before forming a hypothesis. If the failure mode has been investigated before, the prior trace evidence + fix attempts save hours.
+```
+claude-obsidian:wiki-query "<symptom keywords> + <model tier> + <subsystem>"
+```
+
+Example queries that pay off:
+- `wiki-query "verifier rejection cogito:14b retry context"` — finds M3 + related debriefs
+- `wiki-query "tool name hallucination ollama native FC"` — finds healing pipeline (M4) work
+- `wiki-query "harness signal redirect parroting"` — finds related FM-A patterns
+
+| What | Path | Use for |
+|------|------|---------|
+| **Recent context** | `wiki/Hot.md` | Current focus, recent fixes |
+| **Past harness reports** | `wiki/Research/Harness-Reports/` | Phase reports, baselines, diffs (this is where YOUR reports go) |
+| **Failure mode catalog** | `wiki/Architecture/Specs/02-FAILURE-MODES.md` + `wiki/Failure-Modes/` | FM-A through FM-H taxonomy |
+| **Mechanism validations** | `wiki/Experiments/M*.md` | M1-M13 spike reports — does failure relate to a known mechanism? |
+| **Past debriefs** | `wiki/Research/Debriefs/` | What was already tried? |
+| **Active issues** | `wiki/Issues/Running Issues Log.md` | Known blockers |
+| **Decision context** | `wiki/Decisions/Decision Index.md` | Why current architecture exists |
+
+**If wiki-query returns nothing relevant**, the failure pattern may be genuinely new. Consider `claude-obsidian:autoresearch "<topic>"` to ground your hypothesis in external research (papers, blog posts, GitHub issues) before guessing. The autoresearch result lands in `wiki/Research/<topic>/` for future agents.
 
 Also check `git log --oneline -20` so you know what shipped recently and aren't reinventing a fix that was reverted last week.
 
@@ -362,17 +373,41 @@ No formal "pass close-out" template anymore — the diagnostic evidence lives in
 
 ### Cross-link findings to the wiki graph (high-leverage)
 
-When a session yields a non-trivial finding, link it into the knowledge graph so future sessions discover it:
+When a session yields a non-trivial finding, link it into the knowledge graph so future sessions discover it. **Use `claude-obsidian:save` to auto-structure with proper frontmatter and wikilinks** — much cleaner than hand-writing.
 
-1. **Significant fix?** → Write a debrief: `wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md`
-2. **New failure mode discovered?** → Add to `wiki/Failure-Modes/FM-<X>-<name>.md`, update `wiki/Architecture/Specs/02-FAILURE-MODES.md` catalog
-3. **Mechanism behavior changed?** → Update the relevant `wiki/Experiments/M*.md` note
-4. **Architectural decision?** → Add to `wiki/Decisions/YYYY-MM-DD-<decision>.md`, update `wiki/Decisions/Decision Index.md`
-5. **Active blocker?** → Add to `wiki/Issues/Running Issues Log.md`
+| Trigger | Action | Tool |
+|---------|--------|------|
+| **Significant fix shipped** | Write a debrief | `claude-obsidian:save` → `wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md` |
+| **New failure mode discovered** | Add FM page + update catalog | `claude-obsidian:save` → `wiki/Failure-Modes/FM-<X>-<name>.md`, then Edit `02-FAILURE-MODES.md` |
+| **Mechanism behavior changed** | Update Experiment note | Edit `wiki/Experiments/M*.md` (use `claude-obsidian:obsidian-markdown` to validate OFM) |
+| **Architectural decision** | Decision record + index | `claude-obsidian:save` → `wiki/Decisions/`, update `Decision Index.md` |
+| **Active blocker** | Issue entry | Edit `wiki/Issues/Running Issues Log.md` |
+| **External research** | Ingest with structure | `claude-obsidian:wiki-ingest` (use `defuddle` first if URL) |
 
-Use Obsidian wikilinks (`[[Failure-Modes/FM-A Tool Engagement]]`) so the graph navigates correctly.
+Use Obsidian wikilinks (`[[Failure-Modes/FM-A Tool Engagement]]`) so the graph navigates correctly. The `obsidian-markdown` skill validates OFM correctness on writes.
 
-**This is the payoff for the wiki consolidation:** every harness improvement loop pass enriches the project brain. Future agents (Claude/Cursor/Codex/etc.) discover prior diagnostic work via wiki search instead of re-running it.
+**This is the payoff for the wiki consolidation:** every harness improvement loop pass enriches the project brain. Future agents (Claude/Cursor/Codex/etc.) discover prior diagnostic work via `wiki-query` instead of re-running it.
+
+### Maintain the graph (every few sessions)
+
+```
+claude-obsidian:wiki-lint    # catches orphan reports, dead links, stale frontmatter
+```
+
+Run after a flurry of new reports/debriefs. Top-priority lint findings to fix immediately:
+- Orphan harness reports (no inbound link from MOC or Index)
+- Dead wikilinks in newly-written debriefs (typos in `[[wikilink]]`)
+- Stale `status: active` plans that should be `completed`
+
+Lower-priority lint findings can be batched into a "wiki hygiene" pass.
+
+### Periodic rollup (monthly): `claude-obsidian:wiki-fold`
+
+When `wiki/Research/Harness-Reports/` accumulates 30+ files, fold into meta-pages:
+```
+claude-obsidian:wiki-fold harness-reports
+```
+Produces `wiki/Research/Harness-Reports/_rollups/<period>.md` summaries while preserving originals. Speeds up future `wiki-query` calls.
 
 ---
 
@@ -380,8 +415,11 @@ Use Obsidian wikilinks (`[[Failure-Modes/FM-A Tool Engagement]]`) so the graph n
 
 ```
 1. ORIENT       Read kernel + recent commits.
+                → claude-obsidian:wiki-query "<symptom + tier + subsystem>"
+                → If unfamiliar: claude-obsidian:autoresearch "<topic>"
 2. PROBE        Pick a probe script; pick a model; run.
                 → traces written to ~/.reactive-agents/traces/<runId>.jsonl
+                → JSON summary lands in wiki/Research/Harness-Reports/
 3. DIAGNOSE     bun run rax:diagnose replay latest --only=...
                 bun run --silent rax:diagnose grep latest "<predicate>"
                 Identify failure mode + mechanism from trace evidence.
@@ -392,6 +430,29 @@ Use Obsidian wikilinks (`[[Failure-Modes/FM-A Tool Engagement]]`) so the graph n
                 bun test → no net new regressions.
                 Call advisor() to confirm.
 7. COMMIT       Evidence in the message. No Co-Authored-By.
+                → claude-obsidian:save findings as debrief / FM / decision (if significant)
+                → Update wiki/Issues/Running Issues Log.md if new blocker
+
+PASS CLEANUP    claude-obsidian:wiki-lint (catch orphans, dead links)
+                claude-obsidian:wiki-fold (monthly, when reports accumulate)
 
 Repeat until hypothesis-list is exhausted or new evidence demands re-orienting.
 ```
+
+## Quick Reference — claude-obsidian Skills in This Loop
+
+| Phase | Skill | Why |
+|-------|-------|-----|
+| 1. Orient | `wiki-query` | Beats grep — reads hot cache + index, surfaces semantic matches |
+| 1. Orient | `autoresearch` | When wiki has no prior context, ground hypothesis in external research |
+| 1. Orient | `wiki` | Full vault structure check (rare, only after major restructure) |
+| 7. Commit | `save` | Save debrief/FM/decision with proper frontmatter + wikilinks |
+| 7. Commit | `obsidian-markdown` | Validate OFM correctness on any wiki edit |
+| 7. Commit | `wiki-ingest` | Ingest external sources (papers, blog posts) cited in fix |
+| Cleanup | `wiki-lint` | Catch orphan reports, dead wikilinks, stale frontmatter |
+| Cleanup | `wiki-fold` | Roll up high-volume Harness-Reports/ into meta-pages |
+| Visual | `canvas` | When investigating multi-mechanism interactions spatially |
+| Pre-ingest | `defuddle` | Strip web clutter before `wiki-ingest` |
+| Indexes | `obsidian-bases` | Create `.base` files for dynamic index views |
+
+See [[wiki/Development/Wiki-Workflow|Wiki-Workflow.md]] for the canonical 4-step pattern (Orient → Capture → Persist → Maintain) used across all skills.

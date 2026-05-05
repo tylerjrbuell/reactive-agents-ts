@@ -1,0 +1,65 @@
+filters:
+  and:
+    - file.inFolder("Failure-Modes")
+    - file.ext == "md"
+    - file.name != "00 FM Catalog"
+properties:
+  fm-id:
+    displayName: FM ID
+  severity:
+    displayName: Severity
+  category:
+    displayName: Category
+  status:
+    displayName: Status
+  empirical_evidence:
+    displayName: Has Evidence
+views:
+  - type: table
+    name: All Failure Modes
+    order:
+      - fm-id
+      - file.name
+      - category
+      - severity
+      - status
+    sort:
+      - property: severity
+        direction: DESC
+      - property: fm-id
+        direction: ASC
+  - type: table
+    name: Critical / High Severity
+    filters:
+      or:
+        - severity == "critical"
+        - severity == "high"
+    order:
+      - fm-id
+      - file.name
+      - severity
+      - category
+      - status
+    sort:
+      - property: severity
+        direction: DESC
+  - type: table
+    name: Open (Unmitigated)
+    filters:
+      and:
+        - status == "open"
+    order:
+      - fm-id
+      - file.name
+      - severity
+      - category
+    sort:
+      - property: severity
+        direction: DESC
+  - type: cards
+    name: By Category
+    groupBy: category
+    order:
+      - file.name
+      - severity
+      - status

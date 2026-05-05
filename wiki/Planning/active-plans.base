@@ -1,0 +1,42 @@
+filters:
+  and:
+    - file.inFolder("Planning/Implementation-Plans")
+    - file.ext == "md"
+    - status == "active"
+    - file.name != "README"
+formulas:
+  age_days: "(date(today()) - date(created)).days"
+properties:
+  status:
+    displayName: Status
+  created:
+    displayName: Created
+  authored-by:
+    displayName: Author
+  age_days:
+    displayName: Age (days)
+views:
+  - type: table
+    name: Active Plans
+    order:
+      - file.name
+      - status
+      - created
+      - authored-by
+      - age_days
+    sort:
+      - property: created
+        direction: DESC
+  - type: table
+    name: Stale Active Plans (>30 days)
+    filters:
+      and:
+        - formula.age_days > 30
+    order:
+      - file.name
+      - created
+      - age_days
+      - authored-by
+    sort:
+      - property: age_days
+        direction: DESC

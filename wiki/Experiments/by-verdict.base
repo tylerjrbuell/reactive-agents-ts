@@ -1,0 +1,62 @@
+filters:
+  and:
+    - file.inFolder("Experiments")
+    - file.ext == "md"
+    - mechanism != null
+properties:
+  mechanism:
+    displayName: Mechanism
+  verdict:
+    displayName: Verdict
+  date:
+    displayName: Tested
+  owner:
+    displayName: Owner
+views:
+  - type: table
+    name: All Mechanism Validations
+    order:
+      - mechanism
+      - file.name
+      - verdict
+      - date
+      - owner
+    sort:
+      - property: mechanism
+        direction: ASC
+  - type: table
+    name: KEEP Verdicts (ship as-is)
+    filters:
+      and:
+        - verdict == "KEEP"
+    order:
+      - mechanism
+      - file.name
+      - date
+      - owner
+    sort:
+      - property: mechanism
+        direction: ASC
+  - type: table
+    name: IMPROVE Verdicts (Phase 1.5 backlog)
+    filters:
+      and:
+        - verdict == "IMPROVE"
+    order:
+      - mechanism
+      - file.name
+      - date
+      - owner
+    sort:
+      - property: mechanism
+        direction: ASC
+  - type: table
+    name: REMOVE Verdicts (sunset)
+    filters:
+      and:
+        - verdict == "REMOVE"
+    order:
+      - mechanism
+      - file.name
+      - date
+      - owner

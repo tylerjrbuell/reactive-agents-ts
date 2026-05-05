@@ -267,6 +267,41 @@ Despite the skill's default suggestion of `docs/superpowers/plans/`, **always ov
 - **Reduced clutter**: Root has 6 .md files (conventions + entry points), all knowledge lives in `wiki/`
 - **Single source of truth**: No "is the spec in docs/ or wiki/?" confusion
 
+### Canonical Wiki Workflow (for All Agents)
+
+The wiki is interactive infrastructure, not a passive folder. **Read [[wiki/Development/Wiki-Workflow|wiki/Development/Wiki-Workflow.md]] before any session that touches `wiki/`.** It defines the standard 4-step pattern:
+
+```
+1. ORIENT  — claude-obsidian:wiki-query before forming hypotheses
+2. CAPTURE — claude-obsidian:obsidian-markdown for any wiki write
+3. PERSIST — claude-obsidian:save / wiki-ingest for durable artifacts
+4. MAINTAIN — claude-obsidian:wiki-lint + wiki-fold periodically
+```
+
+**claude-obsidian skill family** (use these instead of raw `grep`/`find`/`Write` when working with the wiki):
+
+| Skill | One-liner |
+|-------|-----------|
+| `wiki-query` | Smart query (hot cache + index + drill-down). Beats grep. |
+| `wiki-ingest` | Ingest URL/file/transcript → structured wiki page with entities + concepts |
+| `wiki-lint` | Health check: orphans, dead links, stale frontmatter |
+| `wiki-fold` | Roll up high-volume logs into compact meta-pages |
+| `save` | Save current conversation/insight as wiki page with frontmatter |
+| `obsidian-markdown` | Validate OFM correctness (wikilinks, callouts, properties) |
+| `obsidian-bases` | Create `.base` files for dynamic database views |
+| `canvas` | Visual canvas for spatial layouts |
+| `autoresearch` | Autonomous web research → wiki ingest synthesis |
+| `defuddle` | Strip web clutter before wiki-ingest |
+| `wiki` | Bootstrap/check vault structure |
+
+**Existing dynamic Bases** (`.base` files for filtered views — beat manual indexes):
+- `wiki/Planning/active-plans.base` — all plans with `status: active`
+- `wiki/Experiments/by-verdict.base` — M-series grouped by KEEP/IMPROVE/REMOVE
+- `wiki/Failure-Modes/by-severity.base` — FMs sorted by impact
+- `wiki/Research/Harness-Reports/recent.base` — reports from last 30 days
+
+Skills that integrate with this workflow: `harness-improvement-loop`, `update-docs`, `architecture-audit`, `architecture-reference`, `effect-abstraction-audit`, `prepare-release`. New skills should follow the same pattern.
+
 ---
 
 ## Documentation Workflow

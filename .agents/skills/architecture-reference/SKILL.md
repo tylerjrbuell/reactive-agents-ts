@@ -6,7 +6,21 @@ user-invocable: false
 
 # Architecture Reference — Reactive Agents
 
-> For complete framework orientation, see `NAVIGATION.md` (repo structure + file mapping) and `QUICK_START.md` (5-minute quickstart). For architecture deep-dives, see `wiki/` folder (Obsidian vault with MOCs, mechanism validation, and design decisions).
+> For complete framework orientation, see `NAVIGATION.md` (repo structure + file mapping) and `QUICK_START.md` (5-minute quickstart).
+>
+> **For architectural questions, prefer `claude-obsidian:wiki-query "<topic>"`** over reading individual files. The wiki has MOCs, decisions, mechanism validations, and design specs that surface in semantic queries. See [[wiki/Development/Wiki-Workflow|Wiki-Workflow.md]] for the canonical pattern.
+
+## Wiki Resources for Architecture Lookup
+
+| Question | Where to look |
+|----------|---------------|
+| "What's the kernel structure?" | `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` §Cognitive Architecture |
+| "Why was decision X made?" | `wiki/Decisions/Decision Index.md` |
+| "What package contains Y?" | `wiki/Packages/00 Package Index.md` |
+| "Has mechanism Z been validated?" | `wiki/Experiments/M*.md` (or `wiki/Experiments/by-verdict.base`) |
+| "What failure modes apply here?" | `wiki/Failure-Modes/by-severity.base` |
+| "Current empirical state?" | `wiki/Architecture/Specs/04-PROJECT-STATE.md` |
+| "Roadmap for v1.0?" | `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` |
 
 ## Package Dependency Graph
 

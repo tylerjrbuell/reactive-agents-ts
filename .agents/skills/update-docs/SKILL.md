@@ -13,6 +13,17 @@ This skill ensures all documentation stays truthful after code changes. Run it a
 
 Canonical source of truth for agent guidance is `AGENTS.md`. `CLAUDE.md` is a compatibility pointer only.
 
+## Integration with the Wiki Workflow
+
+This skill follows the canonical 4-step pattern documented at [[wiki/Development/Wiki-Workflow]]. Specifically:
+
+- **Orient first:** Run `claude-obsidian:wiki-query "<feature-name>"` before writing docs to find related decisions, prior debriefs, and existing concept pages. Avoids duplicating documentation.
+- **Capture correctly:** Use `claude-obsidian:obsidian-markdown` when writing wiki pages — ensures proper OFM (wikilinks, callouts, frontmatter) so the graph stays coherent.
+- **Persist durably:** For significant changes (new public API, deprecation, architectural shift), use `claude-obsidian:save` to create a debrief at `wiki/Research/Debriefs/`.
+- **Maintain after:** End with `claude-obsidian:wiki-lint` to catch any orphan pages or dead wikilinks introduced by the doc update.
+
+**Storage convention reminder:** All plans, specs, decisions, and debriefs live in `wiki/`. The `docs/` directory was eliminated in May 2026. See `AGENTS.md` §Plans, Specs & Knowledge Storage.
+
 ## Arguments
 
 `$ARGUMENTS` = optional package name (e.g., `a2a`) or release tag (e.g., `release 0.5.0`).

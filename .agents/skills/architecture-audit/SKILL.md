@@ -27,13 +27,31 @@ System-level health check for Reactive Agents. Like `/simplify` but scoped to ar
 
 ## Phase 1: Architecture Snapshot
 
-Before launching agents, orient to current state. Read in this order:
+Before launching agents, orient to current state. **Always start with the wiki** — see [[wiki/Development/Wiki-Workflow|Wiki Workflow]].
+
+```
+claude-obsidian:wiki-query "<subsystem> architecture decisions"
+```
+
+This surfaces relevant: prior architecture audits, decisions, debriefs, and concept pages — avoiding rediscovery.
+
+Read in this order:
 
 **Authoritative docs:**
 
 ```
 AGENTS.md                                        # canonical architecture + build order
+wiki/Architecture/Specs/04-PROJECT-STATE.md      # current empirical state
+wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md  # architecture target
 apps/cortex/AGENTS.md                            # Cortex-specific patterns
+```
+
+**Wiki indexes:**
+
+```
+wiki/Decisions/Decision Index.md                 # past architectural decisions
+wiki/Issues/Running Issues Log.md                # known architectural debt
+wiki/Failure-Modes/00 FM Catalog.md              # observed failure modes
 ```
 
 **Kernel internals (highest-churn area):**

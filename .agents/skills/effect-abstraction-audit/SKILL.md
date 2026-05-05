@@ -22,6 +22,26 @@ Targeted architectural analysis for a TypeScript + Effect + Bun agentic framewor
 
 **Do NOT use for:** one-off fixes, simple feature additions, or performance-sensitive hot paths in Bun-optimized code.
 
+## Wiki Integration
+
+Before launching an audit, **query the wiki for prior abstraction work** to avoid duplicating effort. See [[wiki/Development/Wiki-Workflow|Wiki-Workflow.md]] for the canonical pattern.
+
+```
+claude-obsidian:wiki-query "<subsystem> abstraction effect-ts"
+claude-obsidian:wiki-query "service layer composition <subsystem>"
+```
+
+This surfaces:
+- Prior decisions in `wiki/Decisions/` that constrain abstractions
+- Past audits in `wiki/Research/Audit-Reports-*/` covering the same area
+- Architectural debt items in `wiki/Issues/Running Issues Log.md`
+- Mechanism validations affecting abstraction choices in `wiki/Experiments/`
+
+After the audit, persist findings:
+- Significant abstraction opportunity identified → `claude-obsidian:save` to `wiki/Research/Audit-Reports-YYYY-MM-DD/effect-abstraction-<scope>.md`
+- New architectural debt item → Edit `wiki/Issues/Running Issues Log.md`
+- Decision to defer/reject → `claude-obsidian:save` to `wiki/Decisions/`
+
 ---
 
 ## Analysis Lens — 7 Signals
