@@ -127,6 +127,98 @@ export function looksLikeFinalAnswer(content: string): boolean {
   return positiveSignals.some((re) => re.test(trimmed));
 }
 
+/**
+ * Translate raw provider errors into actionable messages with provider context
+ * and suggested fixes. Falls through to the raw message (with context) if no
+ * pattern matches, so no debugging information is lost.
+ *
+ * Common patterns covered:
+ * - Connection refused / fetch failed (service down, wrong endpoint)
+ * - 401 / Unauthorized (bad/missing API key)
+ * - 429 / Rate limit
+ * - Timeout / AbortError
+ * - 5xx server errors (transient provider failures)
+ */
+function explainProviderError(
+  rawMessage: string,
+  provider?: string,
+  model?: string,
+): string {
+  const ctx = provider ? ` (${provider}${model ? `:${model}` : ""})` : "";
+  const lower = rawMessage.toLowerCase();
+
+  // Connection refused / fetch failed → service not running or unreachable
+  if (
+    lower.includes("econnrefused") ||
+    lower.includes("fetch failed") ||
+    lower.includes("connect timeout") ||
+    lower.includes("enotfound") ||
+    lower.includes("socket hang up") ||
+    lower.includes("network request failed")
+  ) {
+    if (provider === "ollama") {
+      return `Cannot connect to Ollama${ctx}. Is the service running?\n  Start it with: ollama serve\n  Or set OLLAMA_ENDPOINT to a different host.\n  Original error: ${rawMessage}`;
+    }
+    return `Cannot reach ${provider ?? "LLM provider"}${ctx}. Connection refused or network unreachable.\n  Check network connectivity and provider endpoint.\n  Original error: ${rawMessage}`;
+  }
+
+  // Auth errors
+  if (
+    lower.includes("401") ||
+    lower.includes("unauthorized") ||
+    lower.includes("invalid api key") ||
+    lower.includes("invalid_api_key") ||
+    lower.includes("authentication") ||
+    lower.includes("403") ||
+    lower.includes("forbidden")
+  ) {
+    const envHint =
+      provider === "anthropic"
+        ? "ANTHROPIC_API_KEY"
+        : provider === "openai"
+          ? "OPENAI_API_KEY"
+          : provider === "gemini" || provider === "google"
+            ? "GOOGLE_API_KEY (or GEMINI_API_KEY)"
+            : "the appropriate API key env var";
+    return `Authentication failed for ${provider ?? "LLM provider"}${ctx}.\n  Verify ${envHint} is set correctly and has not been revoked.\n  Original error: ${rawMessage}`;
+  }
+
+  // Rate limit
+  if (
+    lower.includes("429") ||
+    lower.includes("rate limit") ||
+    lower.includes("too many requests") ||
+    lower.includes("quota")
+  ) {
+    return `Rate limit hit for ${provider ?? "LLM provider"}${ctx}.\n  Slow down requests or upgrade your provider tier.\n  Original error: ${rawMessage}`;
+  }
+
+  // Timeout / abort
+  if (
+    lower.includes("aborterror") ||
+    lower.includes("operation was aborted") ||
+    lower.includes("request timed out") ||
+    lower.includes("timeout") ||
+    lower.includes("etimedout")
+  ) {
+    return `Request to ${provider ?? "LLM provider"}${ctx} timed out.\n  Provider may be slow or unreachable. Check network and provider status.\n  Original error: ${rawMessage}`;
+  }
+
+  // 5xx server errors
+  if (
+    /\b5\d\d\b/.test(rawMessage) ||
+    lower.includes("internal server error") ||
+    lower.includes("service unavailable") ||
+    lower.includes("bad gateway") ||
+    lower.includes("gateway timeout")
+  ) {
+    return `${provider ?? "LLM provider"}${ctx} returned a server error.\n  This is likely transient — try again in a moment.\n  Original error: ${rawMessage}`;
+  }
+
+  // Generic fallthrough — preserve raw message with provider context
+  return `${provider ?? "LLM"} call failed${ctx}: ${rawMessage}`;
+}
+
 export function handleThinking(
   state: KernelState,
   context: KernelContext,
@@ -371,17 +463,23 @@ export function handleThinking(
     const streamInit = yield* Effect.either(
       llmStreamEffect.pipe(
         Effect.mapError(
-          (err) =>
-            new ExecutionError({
+          (err) => {
+            const rawMessage =
+              err && typeof err === "object" && "message" in err
+                ? (err as { message: string }).message
+                : String(err);
+            const explained = explainProviderError(
+              rawMessage,
+              input.providerName,
+              input.modelId,
+            );
+            return new ExecutionError({
               strategy,
-              message: `LLM stream failed at iteration ${state.iteration}: ${
-                err && typeof err === "object" && "message" in err
-                  ? (err as { message: string }).message
-                  : String(err)
-              }`,
+              message: `LLM stream failed at iteration ${state.iteration}: ${explained}`,
               step: state.iteration,
               cause: err,
-            }),
+            });
+          },
         ),
       ),
     );
@@ -458,9 +556,14 @@ export function handleThinking(
     );
 
     if (streamConsumeError !== undefined) {
+      const explained = explainProviderError(
+        streamConsumeError,
+        input.providerName,
+        input.modelId,
+      );
       return transitionState(state, {
         status: "failed" as const,
-        error: `LLM stream failed at iteration ${state.iteration}: ${streamConsumeError}`,
+        error: `LLM stream failed at iteration ${state.iteration}: ${explained}`,
         output: null,
         meta: {
           ...state.meta,
