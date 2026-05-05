@@ -188,6 +188,22 @@
         "zod": "^3.23",
       },
     },
+    "packages/channels": {
+      "name": "@reactive-agents/channels",
+      "version": "0.9.0",
+      "dependencies": {
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/gateway": "workspace:*",
+        "effect": "^3.10.0",
+      },
+      "devDependencies": {
+        "bun-types": "latest",
+        "typescript": "^5.7.0",
+      },
+      "peerDependencies": {
+        "effect": "^3.10.0",
+      },
+    },
     "packages/core": {
       "name": "@reactive-agents/core",
       "version": "0.9.0",
@@ -528,6 +544,7 @@
       "version": "0.9.0",
       "dependencies": {
         "@reactive-agents/a2a": "0.9.0",
+        "@reactive-agents/channels": "workspace:*",
         "@reactive-agents/core": "0.9.0",
         "@reactive-agents/cost": "0.9.0",
         "@reactive-agents/gateway": "0.9.0",
@@ -1398,6 +1415,8 @@
     "@reactive-agents/a2a": ["@reactive-agents/a2a@workspace:packages/a2a"],
 
     "@reactive-agents/benchmarks": ["@reactive-agents/benchmarks@workspace:packages/benchmarks"],
+
+    "@reactive-agents/channels": ["@reactive-agents/channels@workspace:packages/channels"],
 
     "@reactive-agents/cli": ["@reactive-agents/cli@workspace:apps/cli"],
 

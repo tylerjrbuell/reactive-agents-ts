@@ -113,7 +113,7 @@ export const GatewayConfigSchema = Schema.Struct({
   webhooks: Schema.optional(Schema.Array(WebhookConfigSchema)),
   policies: Schema.optional(PolicyConfigSchema),
   port: Schema.optionalWith(Schema.Number, { default: () => 3000 }),
-  channels: Schema.optional(Schema.Struct({
+  accessControl: Schema.optional(Schema.Struct({
     accessPolicy: Schema.optionalWith(
       Schema.Literal("allowlist", "blocklist", "open"),
       { default: () => "allowlist" as const },

@@ -690,6 +690,8 @@ export type AgentEvent =
       /**
        * An incoming message was received from a messaging channel.
        * Fired by ToolService when an MCP server sends a notifications/message notification.
+       * For Bot API / webhook transports, prefer emitting the normalized shape used by `@reactive-agents/channels`
+       * (`InboundMessage` + `telegram-bot`-style platform ids) once wired.
        */
       readonly _tag: "ChannelMessageReceived";
       /** Sender identifier (phone number, user ID, etc.) */
@@ -704,6 +706,41 @@ export type AgentEvent =
       readonly mcpServer: string;
       /** Optional group identifier */
       readonly groupId?: string;
+    }
+  | {
+      /** Outbound message was sent on a channel (bots, webhooks, MCP-backed transports). */
+      readonly _tag: "ChannelMessageSent";
+      readonly taskId: string;
+      readonly platform: string;
+      readonly messageId: string;
+      readonly channelId: string;
+      readonly timestamp: number;
+    }
+  | {
+      readonly _tag: "TriggerFired";
+      readonly taskId: string;
+      readonly triggerId: string;
+      readonly triggerName: string;
+      readonly platform: string;
+      readonly sessionId: string;
+      readonly timestamp: number;
+    }
+  | {
+      readonly _tag: "SessionCreated";
+      readonly taskId: string;
+      readonly sessionId: string;
+      readonly platform: string;
+      readonly externalUserId: string;
+      readonly externalChannelId: string;
+      readonly timestamp: number;
+    }
+  | {
+      readonly _tag: "SessionEnded";
+      readonly taskId: string;
+      readonly sessionId: string;
+      readonly reason: string;
+      readonly state: string;
+      readonly timestamp: number;
     }
   // ─── Custom/extension events ───
   | {

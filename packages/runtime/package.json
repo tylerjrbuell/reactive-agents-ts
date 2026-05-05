@@ -25,6 +25,7 @@
     "@reactive-agents/prompts": "0.9.0",
     "@reactive-agents/orchestration": "0.9.0",
     "@reactive-agents/gateway": "0.9.0",
+    "@reactive-agents/channels": "workspace:*",
     "@reactive-agents/a2a": "0.9.0",
     "@reactive-agents/health": "0.9.0",
     "@reactive-agents/reactive-intelligence": "0.9.0",

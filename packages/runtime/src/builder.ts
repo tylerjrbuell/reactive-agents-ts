@@ -94,6 +94,7 @@ import {
   channelOutboundToolGuidance,
   type GatewayChatManagerDeps,
 } from "./gateway-chat.js";
+import type { ChannelsConfig } from "@reactive-agents/channels";
 
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
@@ -533,8 +534,8 @@ export interface GatewayOptions {
      */
     readonly persistMemoryAcrossRuns?: boolean
     readonly port?: number
-    /** Channel access control configuration for messaging platforms. */
-    readonly channels?: {
+    /** Channel access control configuration for messaging platforms (allowlist / chat mode). */
+    readonly accessControl?: {
         /** Access control policy: "allowlist" (default), "blocklist", or "open". */
         readonly accessPolicy?: 'allowlist' | 'blocklist' | 'open'
         /** Phone numbers / user IDs allowed to message (for allowlist mode). */
@@ -932,6 +933,8 @@ export class ReactiveAgentBuilder {
     private _environmentContext?: Record<string, string>
     private _a2aOptions?: A2AOptions
     private _gatewayOptions?: GatewayOptions
+    /** Optional external channel layer (webhooks, bot adapters) wired in {@link ReactiveAgent.start}. */
+    private _channelsConfig?: ChannelsConfig
     private _agentTools: AgentToolOptions[] = []
     private _contextProfile?: Partial<ContextProfile>
     private _allowDynamicSubAgents: boolean = false
@@ -1207,6 +1210,21 @@ export class ReactiveAgentBuilder {
      */
     withGateway(options?: GatewayOptions): this {
         this._gatewayOptions = options ?? {}
+        return this
+    }
+
+    /**
+     * Register the external channel layer (`@reactive-agents/channels`) for webhook/bot ingress.
+     *
+     * Adapters are started when {@link ReactiveAgent.start} runs (requires `.withGateway()` so the
+     * gateway policy engine can evaluate inbound channel `GatewayEvent` values. Use
+     * `GatewayOptions.accessControl` for messaging allowlists — separate from this API.
+     * messaging allowlists — it is separate from this API.
+     *
+     * @param config - Adapters, triggers, and optional default agent config
+     */
+    withChannels(config: ChannelsConfig): this {
+        this._channelsConfig = config
         return this
     }
 
@@ -4209,6 +4227,7 @@ export class ReactiveAgentBuilder {
                 sessionPersist,
                 sessionMaxAgeDays,
                 ragStore,
+                self._channelsConfig,
                 {
                     minIterations: self._minIterations,
                     taskContext: self._taskContext,
@@ -4296,6 +4315,8 @@ export class ReactiveAgent {
         private readonly _sessionMaxAgeDays?: number,
         /** @internal Reference to the shared RAG memory store for runtime ingestion via ingest(). */
         private readonly _ragStore?: import('@reactive-agents/tools').RagMemoryStore,
+        /** @internal Optional external channels (webhooks, bots) from `.withChannels()`. */
+        private readonly _channelsConfig?: ChannelsConfig,
         /** @internal Harness improvement config fields exposed for testing. */
         private readonly _config?: {
             minIterations?: number
@@ -5511,6 +5532,10 @@ export class ReactiveAgent {
      * Returns a `GatewayHandle` with `.stop()` to end the loop and `.done` that resolves
      * when the loop stops.
      *
+     * **`.withChannels()`:** adapter registration runs on the gateway loop's first async tick.
+     * Before inbound webhook traffic, wait briefly (e.g. a short `setTimeout`) so `registerAdapter`
+     * has completed unless your caller already runs after the first gateway tick.
+     *
      * @throws Error if gateway is not configured (no `.withGateway()` call)
      * @returns GatewayHandle with stop() and done promise
      * @example
@@ -5540,6 +5565,7 @@ export class ReactiveAgent {
         let resolveStop: ((summary: GatewaySummary) => void) | null = null
         let unsubChannel: (() => void) | null = null
         let chatManagerRef: GatewayChatManager | null = null
+        let channelAdaptersCleanup: (() => Promise<void>) | null = null
 
         const stopPromise = new Promise<GatewaySummary>((resolve) => {
             resolveStop = resolve
@@ -5623,6 +5649,93 @@ export class ReactiveAgent {
             }
 
             glog('info', `started (interval=${self._gatewayIntervalMs}ms)`)
+
+            const channelsCfg = self._channelsConfig
+            if (channelsCfg?.adapters && channelsCfg.adapters.length > 0) {
+                try {
+                    const chMod = await import('@reactive-agents/channels')
+                    const triggers = new chMod.TriggerRegistry()
+                    for (const t of channelsCfg.triggers ?? []) {
+                        triggers.register(t)
+                    }
+                    if (channelsCfg.defaultAgent) {
+                        triggers.setDefaultAgent(channelsCfg.defaultAgent)
+                    }
+                    const sessions = new chMod.SessionBridge({
+                        agentFactory: async (agentConfig, sessionId) => {
+                            const session = self.session({
+                                id: sessionId,
+                                persist: self._sessionPersist,
+                            })
+                            const prefixParts: string[] = []
+                            if (agentConfig?.systemPrompt) {
+                                prefixParts.push(agentConfig.systemPrompt)
+                            }
+                            if (agentConfig?.persona?.instructions) {
+                                prefixParts.push(agentConfig.persona.instructions)
+                            }
+                            const prefix =
+                                prefixParts.length > 0
+                                    ? `${prefixParts.join('\n\n')}\n\n---\n\n`
+                                    : ''
+                            return {
+                                chat: async (message: string) => {
+                                    const r = await session.chat(
+                                        `${prefix}${message}`
+                                    )
+                                    return {
+                                        message: r.message,
+                                        tokens: r.tokens,
+                                    }
+                                },
+                            }
+                        },
+                    })
+                    const channelSvc = new chMod.ChannelService({
+                        triggers,
+                        sessions,
+                        evaluatePolicy: (event) => gw.processEvent(event),
+                        taskId: () => generateTaskId(),
+                        eventBus:
+                            eb !== null
+                                ? {
+                                      publish: (e: AgentEvent) =>
+                                          eb.publish(e) as Effect.Effect<
+                                              void,
+                                              never
+                                          >,
+                                  }
+                                : undefined,
+                    })
+                    for (const adapter of channelsCfg.adapters) {
+                        await Effect.runPromise(
+                            channelSvc.registerAdapter(adapter)
+                        )
+                    }
+                    glog(
+                        'info',
+                        `channels: started ${channelsCfg.adapters.length} adapter(s)`
+                    )
+                    channelAdaptersCleanup = async () => {
+                        for (const adapter of channelsCfg.adapters) {
+                            try {
+                                await Effect.runPromise(adapter.disconnect())
+                            } catch {
+                                /* ignore */
+                            }
+                        }
+                    }
+                } catch (err) {
+                    glog(
+                        'error',
+                        `channels: failed to start — ${
+                            err instanceof Error
+                                ? err.message
+                                : String(err)
+                        }`
+                    )
+                }
+            }
 
             // Helper to publish events safely
             const publish = async (event: any) => {
@@ -5742,11 +5855,11 @@ export class ReactiveAgent {
 
             // ─── Gateway chat mode ────────────────────────────────────────
             const gwOpts = (self as any)._gatewayOptions as
-                | { channels?: { mode?: 'chat' | 'task'; sessionTtlDays?: number } }
+                | { accessControl?: { mode?: 'chat' | 'task'; sessionTtlDays?: number } }
                 | undefined
-            const channelMode = gwOpts?.channels?.mode ?? 'chat'
+            const channelMode = gwOpts?.accessControl?.mode ?? 'chat'
             const sessionTtlDays: number =
-                gwOpts?.channels?.sessionTtlDays ?? 30
+                gwOpts?.accessControl?.sessionTtlDays ?? 30
 
             const chatDeps: GatewayChatManagerDeps = {
                 agentId: self.agentId ?? 'gateway',
@@ -6073,6 +6186,7 @@ export class ReactiveAgent {
                 stopped = true
                 if (timer) clearInterval(timer)
                 unsubChannel?.()
+                await channelAdaptersCleanup?.()
                 if (chatManagerRef) await chatManagerRef.dispose()
                 const summary: GatewaySummary = {
                     heartbeatsFired,

@@ -86,6 +86,8 @@ export type {
   AgentToolOptions,
 } from "./builder.js";
 
+export type { ChannelsConfig } from "@reactive-agents/channels";
+
 // ─── Streaming ───
 export type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 export { AgentStream } from "./agent-stream.js";

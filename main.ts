@@ -114,7 +114,7 @@ const agent = await ReactiveAgents.create()
             // maxActionsPerHour: 50,
         },
 
-        channels: {
+        accessControl: {
             accessPolicy: 'allowlist',
             allowedSenders: [RECIPIENT || ''],
             unknownSenderAction: 'skip',

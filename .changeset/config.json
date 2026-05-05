@@ -26,7 +26,8 @@
       "reactive-agents",
       "@reactive-agents/cli",
       "@reactive-agents/health",
-      "@reactive-agents/benchmarks"
+      "@reactive-agents/benchmarks",
+      "@reactive-agents/channels"
     ]
   ],
   "linked": [],

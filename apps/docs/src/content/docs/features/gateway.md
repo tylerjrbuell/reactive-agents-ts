@@ -363,7 +363,7 @@ interface GatewayConfig {
   heartbeat?: HeartbeatConfig;
   crons?: CronEntry[];
   webhooks?: WebhookConfig[];
-  channels?: ChannelsConfig;
+  accessControl?: GatewayAccessControlConfig;
   policies?: PolicyConfig;
   port?: number;                    // Default: 3000
   persistMemoryAcrossRuns?: boolean; // Share agent ID across ticks for memory continuity
@@ -390,7 +390,7 @@ interface GatewayConfig {
 | `priority` | `EventPriority` | `"normal"` | Event priority level |
 | `enabled` | `boolean` | `true` | Toggle without removing |
 
-### `ChannelsConfig`
+### `GatewayAccessControlConfig` (`accessControl`)
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -433,7 +433,7 @@ See the [Messaging Channels guide](/guides/messaging-channels/) for setup instru
 ### Channel Access Control
 
 ```typescript
-channels: {
+accessControl: {
   accessPolicy: "allowlist",           // "allowlist" | "blocklist" | "open"
   allowedSenders: ["+15551234567"],
   unknownSenderAction: "skip",         // "skip" | "escalate"
@@ -443,10 +443,10 @@ channels: {
 
 ### Gateway Chat Mode
 
-By default (`channels.mode: "chat"`), each incoming channel message starts a **stateful per-sender conversation** — not a one-shot task. The agent receives the full conversation history, recent episodic context, and a directive to respond via the channel tool.
+By default (`accessControl.mode: "chat"`), each incoming channel message starts a **stateful per-sender conversation** — not a one-shot task. The agent receives the full conversation history, recent episodic context, and a directive to respond via the channel tool.
 
 ```typescript
-channels: {
+accessControl: {
   accessPolicy: "allowlist",
   allowedSenders: ["+15551234567"],
   mode: "chat",          // default — persistent per-sender history
@@ -466,7 +466,7 @@ channels: {
 **Task mode** skips all of the above and sends a direct one-shot instruction per message:
 
 ```typescript
-channels: {
+accessControl: {
   mode: "task",   // stateless — no history, no session persistence
 }
 ```
@@ -484,7 +484,7 @@ const agent = await ReactiveAgents.create()
   .withMemory({ tier: "enhanced", dbPath: "./memory.sqlite" })
   .withGateway({
     persistMemoryAcrossRuns: true,
-    channels: {
+    accessControl: {
       accessPolicy: "allowlist",
       allowedSenders: [process.env.RECIPIENT ?? ""],
       mode: "chat",

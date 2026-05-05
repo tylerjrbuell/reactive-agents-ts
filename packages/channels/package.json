@@ -1,0 +1,52 @@
+{
+  "name": "@reactive-agents/channels",
+  "version": "0.9.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "description": "External channel layer — webhooks, bot transports, triggers, and session bridging for the gateway",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --reporter=dots",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/gateway": "workspace:*",
+    "effect": "^3.10.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/channels"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "homepage": "https://docs.reactiveagents.dev/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "peerDependencies": {
+    "effect": "^3.10.0"
+  }
+}
