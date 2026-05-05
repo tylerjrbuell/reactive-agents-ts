@@ -13,7 +13,7 @@ Works on local Ollama models (8B+) through frontier APIs — same code, same fea
 | **34 total packages**       | 29 packages + 5 apps, exactly what you need, no hidden coupling |
 | **6 LLM providers**         | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test  |
 | **5 reasoning strategies**  | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive |
-| **4,975 tests · 551 files** | Production-grade confidence (run `bun test` before release) |
+| **4,672+ tests · 527 files** | Production-grade confidence (run `bun test` before release) |
 | **Cortex Studio**           | Live agent canvas, entropy charts, debrief UI, agent builder  |
 | **Effect-TS end to end**    | Compile-time type safety, zero `any`, explicit tagged errors  |
 

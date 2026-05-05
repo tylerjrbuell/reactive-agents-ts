@@ -1,9 +1,9 @@
 ---
 title: Agent Lifecycle
-description: The 10-phase execution engine that powers every agent — now fully wired to all services.
+description: The 12-phase execution engine that powers every agent — now fully wired to all services.
 ---
 
-Every task an agent processes flows through a deterministic 10-phase lifecycle. This is the core of the ExecutionEngine — and every phase is wired to its corresponding service when enabled.
+Every task an agent processes flows through a deterministic 12-phase lifecycle. This is the core of the ExecutionEngine — and every phase is wired to its corresponding service when enabled.
 
 ## Phase Diagram
 

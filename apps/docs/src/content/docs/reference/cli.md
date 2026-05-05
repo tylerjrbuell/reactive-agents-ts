@@ -82,7 +82,7 @@ rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
           [--model <model>] [--name <name>] [--tools] [--reasoning] [--stream] [--cortex]
 ```
 
-**`--cortex`:** Enables `.withCortex()` on the builder so run lifecycle events are sent to a local **Cortex** companion studio (WebSocket ingest). Cortex is a contributor tool launched from a repo clone via `bun cortex` (it is not shipped in the public CLI). Set `CORTEX_URL` to the HTTP base (default `http://127.0.0.1:4321`).
+**`--cortex`:** Enables `.withCortex()` on the builder so run lifecycle events are sent to a local **Cortex** companion studio (WebSocket ingest). Cortex is available as a public npm package (`@reactive-agents/cortex`). For npm-installed CLI: `bun add @reactive-agents/cortex && rax cortex`. For repo contributors: `bun cortex` (runs from source with hot reload). Set `CORTEX_URL` to the HTTP base (default `http://127.0.0.1:4321`).
 
 **Example:**
 
@@ -90,19 +90,27 @@ rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
 rax run "Explain quantum computing" --provider anthropic --model claude-sonnet-4-20250514
 ```
 
-### Cortex (contributor tool)
+### Cortex (companion studio)
 
-Cortex is the companion studio (Bun + Elysia + SvelteKit). It depends on the workspace source tree and is **not** shipped in the public `rax` CLI. To run it, clone the repo and use the root `cortex` script:
+Cortex is available as a public npm package and from source. 
 
+**From npm (recommended for users):**
+```bash
+bun add @reactive-agents/cortex
+rax cortex
+# Opens http://127.0.0.1:4321 in your browser
+```
+
+**From source (for contributors with hot reload):**
 ```bash
 git clone https://github.com/tylerjrbuell/reactive-agents-ts
 cd reactive-agents-ts
 bun install
 bun cortex
-# API on http://localhost:4321 — UI on http://localhost:5173
+# API on http://localhost:4321 — UI on http://localhost:5173 (hot reload)
 ```
 
-Then in another terminal (npm-installed CLI works fine for this side):
+Then in another terminal:
 
 ```bash
 rax run "Research topic" --cortex --provider anthropic

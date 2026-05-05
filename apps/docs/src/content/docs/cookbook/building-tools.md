@@ -34,7 +34,7 @@ Register it on the agent:
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({ tools: [searchTool.definition] })
+  .withTools({ tools: [{ definition: searchTool.definition, handler: searchTool.handler }] })
   .build();
 ```
 

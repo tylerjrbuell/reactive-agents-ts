@@ -188,8 +188,8 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")  // Primary
   .withComplexityRouting({
-    simple: "claude-haiku-3-5-sonnet",    // Simple tasks use Haiku
-    threshold: 0.5                         // Routing confidence (0–1)
+    simple: "claude-haiku-4-5-20251001",  // Simple tasks use Haiku
+    threshold: 0.5                        // Routing confidence (0–1)
   })
   .build();
 
