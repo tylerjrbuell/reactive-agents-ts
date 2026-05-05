@@ -27,7 +27,7 @@ Produce a builder with the correct provider + model + any provider-specific conf
 // Anthropic — highest quality, native FC, prompt caching
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-opus-4-6")
+  .withModel("claude-sonnet-4-6")
   .withReasoning({ defaultStrategy: "adaptive" })
   .withTools()
   .build();
@@ -94,19 +94,19 @@ const agent = await ReactiveAgents.create()
 
 ## 7 adapter hooks (automatic — no configuration needed)
 
-These hooks run automatically and adapt prompts/behavior for each provider:
+These hooks run automatically and adapt prompts/behavior for each provider's strengths:
 
-| Hook | What it does |
-|------|-------------|
-| `taskFraming` | Wraps task in provider-optimal framing |
-| `toolGuidance` | Injects provider-specific tool-use instructions |
-| `continuationHint` | Tells model to continue after tool results |
-| `errorRecovery` | Recovery prompt on tool errors |
-| `synthesisPrompt` | Final answer synthesis guidance |
-| `qualityCheck` | Post-step quality assessment |
-| `systemPromptPatch` | Provider-specific system prompt additions |
+| Hook | Method name | What it does |
+|------|-------------|-------------|
+| `taskFraming` | `adapter.frameTask(task, tier)` | Wraps task in provider-optimal framing |
+| `toolGuidance` | `adapter.injectToolGuidance(prompt)` | Injects provider-specific tool-use instructions |
+| `continuationHint` | `adapter.getContinuationHint(lastMsg)` | Tells model to continue after tool results |
+| `errorRecovery` | `adapter.getErrorRecoveryPrompt(error)` | Recovery prompt on tool errors |
+| `synthesisPrompt` | `adapter.getSynthesisPrompt(context)` | Final answer synthesis guidance |
+| `qualityCheck` | `adapter.checkQuality(output, task)` | Post-step quality assessment |
+| `systemPromptPatch` | `adapter.patchSystemPrompt(base)` | Provider-specific system prompt additions |
 
-Adapter selection is automatic via `selectAdapter(capabilities, tier)`.
+Adapter selection is automatic via `selectAdapter(capabilities, tier)`. Each provider (Anthropic, OpenAI, Gemini, Ollama) has an adapter with specialized implementations.
 
 ## Builder API reference
 

@@ -84,7 +84,7 @@ builder.buildEffect()                        // returns Effect<ReactiveAgent> fo
 
 - `.build()` is async — always `await` it; forgetting causes silent "agent is undefined" errors
 - `.withProvider()` is required — there is no default provider
-- `.withTools()` with no args enables **all** built-in tools including `file-write` and `shell-execute`; use `allowedTools` to restrict
+- `.withTools()` with no args enables 5 standard tools: `web-search`, `http-get`, `file-read`, `file-write`, `code-execute`. Shell execution is **opt-in only** via `.withTerminalTools()`; use `allowedTools` to restrict standard tools
 - Strategy name is `"plan-execute-reflect"` — **not** `"plan-execute"` (throws `StrategyNotFoundError`)
 - Memory tiers are `"standard"` and `"enhanced"` — **not** `"1"` and `"2"` (those are deprecated)
 - `"groq"` and `"openrouter"` are not valid provider names — use `"litellm"` for proxy/router providers

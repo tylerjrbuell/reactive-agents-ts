@@ -53,12 +53,12 @@ const agent = await ReactiveAgents.create()
 ```ts
 .withCostTracking()
 // Enables cost tracking with defaults:
-// perRequest: $1.00, perSession: $5.00, daily: $20.00, monthly: $200.00
+// perRequest: $1.00, perSession: $5.00, daily: $25.00, monthly: $200.00
 
 .withCostTracking({
   perRequest: 0.50,    // hard stop mid-request if cost would exceed this
   perSession: 5.0,
-  daily: 20.0,
+  daily: 25.0,         // daily limit (default $25.00)
   monthly: 200.0,
 })
 ```

@@ -88,8 +88,9 @@ const agent = await ReactiveAgents.create()
 ])
 .withMemory({ tier: "enhanced", dbPath: "./agent.db" })
 .withTools({ allowedTools: ["find", "recall", "checkpoint"] })
-// find: searches over .withDocuments() content (rag-search was removed — use find)
-// recall: searches over past agent interactions in memory
+// find: searches over .withDocuments() content (rag-search was removed in v0.10.0 — use find)
+// find also searches semantic memory if memory is enabled
+// recall: searches over past agent interactions in memory only
 ```
 
 ### Multi-agent memory isolation

@@ -104,7 +104,11 @@ const evalSuite = {
 
 const program = Effect.gen(function* () {
   const evalSvc = yield* EvalService;
-  const run = yield* evalSvc.runSuite(evalSuite, agent);
+  const run = yield* evalSvc.runSuite(
+    evalSuite,
+    "my-agent-config",
+    makeAgentRunner(anthropicLLM)
+  );
   console.log(`Pass rate: ${run.summary.passRate * 100}%`);
   console.log(`Avg score: ${run.summary.averageScore}`);
 });
