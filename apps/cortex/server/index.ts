@@ -39,13 +39,21 @@ function cortexListenDisplayUrl(port: number): string {
   return `http://127.0.0.1:${port}`;
 }
 
-export async function startCortexServer(config: CortexConfig = defaultCortexConfig): Promise<void> {
+export async function startCortexServer(
+  config: Partial<CortexConfig> = {},
+): Promise<void> {
+  // Merge with defaults so callers can pass partial config (e.g. just { port }).
   // Auto-resolve UI assets path when not provided, so npm consumers get the bundled UI
   // without configuration. From dist/index.js → `../ui/build`. From source server/index.ts →
   // `../ui/build`. Both layouts go up one level to reach the package root.
-  const resolvedConfig: CortexConfig = config.staticAssetsPath
-    ? config
-    : { ...config, staticAssetsPath: new URL("../ui/build", import.meta.url).pathname };
+  const resolvedConfig: CortexConfig = {
+    ...defaultCortexConfig,
+    ...config,
+    staticAssetsPath:
+      config.staticAssetsPath ??
+      defaultCortexConfig.staticAssetsPath ??
+      new URL("../ui/build", import.meta.url).pathname,
+  };
 
   const runtime = createCortexRuntime(resolvedConfig);
 

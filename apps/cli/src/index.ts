@@ -5,6 +5,7 @@ import { runEval } from "./commands/eval.js";
 import { runPlayground } from "./commands/playground.js";
 import { runInspect } from "./commands/inspect.js";
 import { runBench } from "./commands/bench.js";
+import { runCortexCli } from "./commands/cortex.js";
 import { runDemo } from "./commands/demo.js";
 import { runAgent } from "./commands/run.js";
 import { runServe } from "./commands/serve.js";
@@ -21,6 +22,7 @@ const HELP = `
     init <name> [--template minimal|standard|full]   Scaffold a new project
     create agent <name> [--recipe basic|...]          Generate an agent file
     run <prompt> [--provider ...] [options]           Run an agent (see --help on usage error)
+    cortex [--port <n>] [--no-open] [--help]          Cortex companion studio (requires @reactive-agents/cortex)
     serve [--port <n>] [--name <name>]               Start agent as A2A server
     discover <url>                                    Fetch and display remote agent card
     dev [--entry <path>] [--no-watch]                Run agent entrypoint in dev mode
@@ -107,6 +109,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "bench":
       runAsync(runBench(argv.slice(1)));
+      break;
+
+    case "cortex":
+      runAsync(runCortexCli(argv.slice(1)));
       break;
 
     case "demo":
