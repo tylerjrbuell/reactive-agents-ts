@@ -9,7 +9,7 @@
 //      - Failing probes → targeted drill-down variants
 //      - Consistently-passing probes → graduated harder variants
 //      - Uncovered areas → new probes
-//   6. Update harness-reports/loop-state.json with accumulated knowledge
+//   6. Update wiki/Research/Harness-Reports/loop-state.json with accumulated knowledge
 //
 // Usage:
 //   bun run scripts/harness-evolve.ts
@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 
 import { join } from "path";
 import { analyzeProbeJsonl, type ProbeAnalysis } from "./harness-probe-analyze.js";
 
-const REPORT_DIR = "./harness-reports";
+const REPORT_DIR = "./wiki/Research/Harness-Reports";
 const LOOP_STATE_PATH = join(REPORT_DIR, "loop-state.json");
 const DRY_RUN = process.argv.includes("--dry-run");
 
@@ -508,7 +508,7 @@ function main() {
     .sort();
 
   if (jsonlFiles.length === 0) {
-    console.log("\nNo probe JSONL files found in harness-reports/");
+    console.log("\nNo probe JSONL files found in wiki/Research/Harness-Reports/");
     console.log("Run probe scripts first:");
     console.log("  bun run scripts/harness-probe.ts");
     console.log("  bun run scripts/harness-probe-confirm.ts");

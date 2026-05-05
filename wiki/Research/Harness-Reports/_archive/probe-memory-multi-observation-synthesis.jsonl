@@ -1,0 +1,5 @@
+{"kind":"run-started","runId":"01KPZRD1NWRM24J14M5RH057X5","timestamp":1777034757829,"iter":-1,"seq":26,"task":"","model":"qwen3:14b","provider":"ollama","config":{}}
+{"kind":"entropy-scored","runId":"01KPZRD1NWRM24J14M5RH057X5","timestamp":1777034779711,"iter":1,"seq":29,"composite":0.15,"sources":{"token":0,"structural":0.8558922558922558,"semantic":0,"behavioral":0.5,"contextPressure":0}}
+{"kind":"entropy-scored","runId":"01KPZRD1NWRM24J14M5RH057X5","timestamp":1777034796034,"iter":0,"seq":30,"composite":0.15,"sources":{"token":0,"structural":0.830787476280835,"semantic":0,"behavioral":0.5,"contextPressure":0}}
+{"kind":"entropy-scored","runId":"01KPZRD1NWRM24J14M5RH057X5","timestamp":1777034796035,"iter":6,"seq":31,"composite":0.5842404513888888,"sources":{"token":0,"structural":0.8352430555555556,"semantic":0,"behavioral":0.5,"contextPressure":0}}
+{"kind":"run-completed","runId":"01KPZRD1NWRM24J14M5RH057X5","timestamp":1777034812368,"iter":-1,"seq":32,"status":"success","totalTokens":5555,"totalCostUsd":0,"durationMs":54539}

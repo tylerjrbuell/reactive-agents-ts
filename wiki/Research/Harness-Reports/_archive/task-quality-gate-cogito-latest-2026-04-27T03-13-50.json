@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T03-13-50",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4512.256143,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13646,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 20664.368136,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=dispatcher-strategy-switch",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 4653,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 6030.425630000002,
+      "output": "1. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 207\n2. AI should elevate your thinking, not replace it — comments: 261\n3. I bought Friendster for $30k – Here's what I'm doing with it — comments: 258",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 13141,
+      "stepsCount": 13,
+      "toolCallCount": 3,
+      "wallMs": 14218.319500999998,
+      "output": "## Highest Score\n1. AI should elevate your thinking, not replace it (309)\n2. I bought Friendster for $30k – Here's what I'm doing with it (472)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (283)\n\n## Most Comments\n1. Butterflies are in decline across North America, a look at the Western Monarch (44)\n2. Fast16: High-precision software sabotage 5 years before Stuxnet (44)\n3. AI should elevate your thinking, not replace it (261)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 13059,
+      "stepsCount": 16,
+      "toolCallCount": 0,
+      "wallMs": 26697.704494999998,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=loop_graceful",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "42 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6908666666666667,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

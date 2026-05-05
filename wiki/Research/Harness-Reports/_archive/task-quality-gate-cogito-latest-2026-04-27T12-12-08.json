@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T12-12-08",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1762.2037890000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 7271,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 10098.514378,
+      "output": "1. Pgbackrest is no longer being maintained (score: 104)\n2. Fully Featured Audio DSP Firmware for the Raspberry Pi Pico (score: 55)\n3. Flipdiscs (score: 347)\n4. I bought Friendster for $30k – Here's what I'm doing with it (score: 882)\n5. TurboQuant: A first-principles walkthrough (score: 195)\n6. AI should elevate your thinking, not replace it (score: 566)\n7. Moleskine's AI Lord of the Rings collection can only mock (score: 29)\n8. Self-updating screenshots (score: 344)\n9. The Prompt API (score: 163)\n10. It's OK to abandon your side-project (2024) (score: 109)\n11. Branimir Lambov from IBM on Cassandra (score: 10)\n12. Rust Memory Management: Ownership vs. Reference Counting (score: 35)\n13. Three constraints before I build anything (score: 241)\n14. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 279)\n15. A Guide to CubeSat Mission and Bus Design (score: 41)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 7961,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 5977.086541000001,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it — comments: 451\n2. AI should elevate your thinking, not replace it — comments: 419\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 277",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 16716,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 10363.858849,
+      "output": "⚠️ Recovery required: prior tool path failed (system). Try an alternate path now: web-search. Do not finalize yet. (2/2)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 17024,
+      "stepsCount": 23,
+      "toolCallCount": 0,
+      "wallMs": 37511.482520000005,
+      "output": "# Today on Hacker News\n\n## AI/ML and Data Science\nThe top stories today showcase significant developments in artificial intelligence and machine learning. \"Google's New AI Model Outperforms Humans in Complex Tasks\" highlights a breakthrough in natural language processing, while \"OpenAI Releases New Dataset for Training Large Language Models\" demonstrates the company's commitment to advancing AI research through open-source initiatives.\n\n## Technology Infrastructure\nSeveral posts focus on infrastructure and system architecture. \"Cloudflare Introduces New Security Features for Web Applications\" discusses recent enhancements to their security platform, while \"Docker Announces Major Updates to Container Orchestration Tools\" explores improvements in container management systems that are crucial for modern software deployment.\n\n## Programming and Software Development\nThe programming community is abuzz with several interesting developments. \"New JavaScript Framework Gains Popularity Among Developers\" examines the rise of a new front-end framework, while \"Python 4.0 Release Brings Significant Performance Improvements\" discusses major updates to one of the world's most popular programming languages.\n\n## Other Notable Stories\nBeyond these main categories, several other intriguing stories caught our attention today. \"New Study Reveals Impact of Social Media on Mental Health\" explores the psychological effects of social media usage, while \"Breakthrough in Quantum Computing Could Revolutionize Cryptography\" discusses potential applications of quantum computing in cybersecurity.\n\nThese diverse topics reflect the broad range of interests and concerns within the tech community, from cutting-edge AI research to important infrastructure developments.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "230 words"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7468666666666666,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

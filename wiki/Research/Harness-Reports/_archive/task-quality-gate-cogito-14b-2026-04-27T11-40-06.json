@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T11-40-06",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 140,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6977.250655999999,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 4791,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 15046.083137,
+      "output": "- 1. Pgbackrest is no longer being maintained (score: 61)\n- 2. Fully Featured Audio DSP Firmware for the Raspberry Pi Pico (score: 32)\n- 3. Flipdiscs (score: 331)\n- 4. I bought Friendster for $30k – Here's what I'm doing with it (score: 868)\n- 5. AI should elevate your thinking, not replace it (score: 547)\n- 6. TurboQuant: A first-principles walkthrough (score: 181)\n- 7. Self-updating screenshots (score: 334)\n- 8. The Prompt API (score: 150)\n- 9. It's OK to abandon your side-project (2024) (score: 100)\n- 10. Three constraints before I build anything (score: 236)\n- 11. Rust Memory Management: Ownership vs. Reference Counting (score: 32)\n- 12. Moleskine's AI Lord of the Rings collection can only mock (score: 7)\n- 13. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 274)\n- 14. Bob Odenkirk would like to remind you that life is a meaningless farce (score: 76)\n- 15. A Guide to CubeSat Mission and Bus Design (score: 39)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 1,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.6499999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 12159,
+      "stepsCount": 9,
+      "toolCallCount": 2,
+      "wallMs": 14831.428776,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it — comments: 436\n2. AI should elevate your thinking, not replace it — comments: 399\n3. SWE-bench Verified no longer measures frontier coding capabilities — comments: 170",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.8833333333333334
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 4902,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 11549.652518000003,
+      "output": "## Highest Score\n1. I bought Friendster for $30k – Here's what I'm doing with it (868)\n2. AI should elevate your thinking, not replace it (547)\n3. TurboQuant: A first-principles walkthrough (181)\n\n## Most Comments\n1. I bought Friendster for $30k – Here's what I'm doing with it (436)\n2. AI should elevate your thinking, not replace it (399)\n3. The Prompt API (82)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0.6666666666666666,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "4/6 correct titles"
+        ],
+        "composite": 0.8166666666666667
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 10128,
+      "stepsCount": 11,
+      "toolCallCount": 4,
+      "wallMs": 31789.466035999998,
+      "output": "# Today on Hacker News\n\n## AI/ML and Technology Trends\nThe latest batch of top stories showcases significant developments in artificial intelligence and machine learning. A fascinating paper titled \"Scaling Laws for Neural Language Models\" explores how model size impacts performance, while another study examines the ethical implications of generative AI tools like ChatGPT. The discussion around these technologies has sparked debates about their societal impact and potential misuse.\n\n## Software Development and Open Source\nSeveral posts highlight important updates in software development practices and open-source projects. A new version of Rust 1.70 introduces improved error handling capabilities, while a major update to the Linux kernel brings enhanced security features. The community also discusses best practices for maintaining large-scale codebases, with particular attention to documentation standards.\n\n## Hardware and Infrastructure\nThe hardware sector sees notable advancements in both consumer electronics and data center infrastructure. A new line of AI-optimized GPUs promises significant performance improvements for machine learning workloads, while a breakthrough in quantum computing research demonstrates potential for practical applications within the next decade. Additionally, discussions around sustainable manufacturing practices in tech hardware production have gained traction.\n\n## Other Notable Developments\nOther trending stories cover a diverse range of topics including cybersecurity threats, emerging programming languages, and digital privacy concerns. A report on recent data breaches highlights vulnerabilities in widely-used software systems, while a new proposal for decentralized identity verification gains attention from the developer community. These varied discussions reflect the evolving landscape of technology and its impact across multiple sectors.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "251 words",
+          "★ called recall()"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7999999999999999,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}

@@ -15,7 +15,7 @@ owner: Architecture Team
 
 **Verdict:** ✅ KEEP
 
-**Evidence:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+**Evidence:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 
 ---
 
@@ -46,7 +46,7 @@ Mitigates [[Failure-Modes/FM-A Tool Engagement|FM-A]] (detect tool errors), [[Fa
 
 ### Key Findings
 
-**From harness-reports/phase-1-mechanism-validation-2026-05-04.md:**
+**From wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md:**
 - ✅ Measurement infrastructure in place and functional
 - ✅ Architecture sound; all 6 handlers properly registered at `builder.ts:2673-2731`
 - ✅ Early-stop termination signal validated (perRIEarlyStop at plan-execute.ts:737,762)

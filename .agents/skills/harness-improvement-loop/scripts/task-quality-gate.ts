@@ -36,7 +36,7 @@
 // Run: bun run .agents/skills/harness-improvement-loop/scripts/task-quality-gate.ts [model]
 // Default model: gemma4:e4b. Override: TASK_GATE_MODEL=cogito:14b bun ...
 //
-// Output: harness-reports/task-quality-gate-<timestamp>.json + console summary
+// Output: wiki/Research/Harness-Reports/task-quality-gate-<timestamp>.json + console summary
 
 import { ReactiveAgents } from "reactive-agents";
 import { Effect } from "effect";
@@ -46,7 +46,7 @@ import { resolve } from "node:path";
 const MODEL = process.env.TASK_GATE_MODEL ?? process.env.PROBE_MODEL ?? "gemma4:e4b";
 const PROVIDER = process.env.TASK_GATE_PROVIDER ?? "ollama";
 const RECENT_OBS_LIMIT = Number(process.env.TASK_GATE_RECENT_OBS_LIMIT ?? "5");
-const REPORTS_DIR = resolve(process.cwd(), "harness-reports");
+const REPORTS_DIR = resolve(process.cwd(), "wiki/Research/Harness-Reports");
 const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 
 // ── Cached HN data so all tasks see the same source-of-truth ────────────────

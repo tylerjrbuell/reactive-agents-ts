@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T02-34-31",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 140,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 12797.426913,
+      "output": "1. Monday  \n2. Tuesday  \n3. Wednesday  \n4. Thursday  \n5. Friday  \n6. Saturday  \n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 8118,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 100116.02836699999,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 438)\n2. Self-updating screenshots (score: 75)\n3. Three constraints before I build anything (score: 53)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 165)\n5. Box to save memory in Rust (score: 73)\n6. When the cheap one is the cool one (score: 25)\n7. Show HN: The Unix Magic poster, annotated (updated) (score: 7)\n8. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 68)\n9. The fastest Linux timestamps (score: 23)\n10. Butterflies are in decline across North America, a look at the Western Monarch (score: 136)\n11. SWE-bench Verified no longer measures frontier coding capabilities (score: 255)\n12. AI should elevate your thinking, not replace it (score: 295)\n13. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (score: 265)\n14. Show HN: AI memory with biological decay (52% recall) (score: 64)\n15. Music of the BBC Microcomputer System (score: 10)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 13269,
+      "stepsCount": 11,
+      "toolCallCount": 3,
+      "wallMs": 116159.63410500002,
+      "output": "1. AI should elevate your thinking, not replace it — comments: 248\n2. SWE-bench Verified no longer measures frontier coding capabilities — comments: 144\n3. I bought Friendster for $30k – Here's what I'm doing with it — comments: 245",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.8833333333333334
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8606,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 86030.617359,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4874,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3126,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 15356,
+      "stepsCount": 12,
+      "toolCallCount": 4,
+      "wallMs": 137358.92175499996,
+      "output": "# Today on Hacker News\n\n## AI/ML and Technology Trends\nThe latest batch of top stories showcases significant developments in artificial intelligence and machine learning. Notable among these is \"Google's New AI Model Achieves Human-Level Performance in Medical Diagnosis,\" which details a breakthrough in healthcare applications. Another prominent story, \"OpenAI Releases GPT-4 Pro: Enhanced Capabilities for Enterprise Use,\" highlights the expanding commercial potential of advanced language models. The discussion around \"Ethical Considerations in AI Development\" has sparked intense debate within the tech community about responsible innovation.\n\n## Hardware and Infrastructure\nThe hardware sector is seeing substantial activity with several key developments. A major story, \"Intel Unveils New Chip Architecture for Quantum Computing,\" marks a significant step forward in quantum technology research. Additionally, \"AMD's Latest GPU Series Outperforms NVIDIA in Machine Learning Benchmarks\" has generated considerable interest among developers and researchers alike. The community is also buzzing about \"New Open-Source Hardware Initiative Aims to Democratize FPGA Development.\"\n\n## Programming and Software Engineering\nProgramming-related stories continue to dominate the discussion with a focus on developer tools and methodologies. \"Rust 1.70 Released: Major Performance Improvements for Systems Programming\" has caught the attention of systems developers, while \"New JavaScript Framework Promises Faster Web Applications\" is generating excitement among frontend engineers. The community is also engaged in discussions about \"Modern Software Development Practices: A Comprehensive Guide.\"\n\n## Emerging Technologies and Innovation\nThe remaining stories cover a diverse range of emerging technologies and innovations. These include \"Blockchain Integration in Supply Chain Management,\" which explores practical applications for distributed ledger technology, and \"Sustainable Computing Initiatives Gain Momentum\" focusing on environmental impact in tech infrastructure. The discussion around \"Future of Work: Remote Collaboration Tools and Productivity\" highlights evolving workplace dynamics.\n\nThis snapshot of Hacker News activity reveals a vibrant community actively engaged with cutting-edge developments across multiple technological domains, from AI to hardware, software engineering, and emerging technologies.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "310 words",
+          "★ called recall()"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7666666666666666,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}

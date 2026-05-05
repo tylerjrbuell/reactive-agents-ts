@@ -1,0 +1,135 @@
+{
+  "model": "llama3.1:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T02-31-57",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4733.3519670000005,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5696,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 13093.758516999998,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 434)\n2. Self-updating screenshots (score: 73)\n3. Three constraints before I build anything (score: 52)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 165)\n5. Box to save memory in Rust (score: 72)\n6. Show HN: The Unix Magic poster, annotated (updated) (score: 6)\n7. When the cheap one is the cool one (score: 24)\n8. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 68)\n9. Butterflies are in decline across North America, a look at the Western Monarch (score: 136)\n10. SWE-bench Verified no longer measures frontier coding capabilities (score: 255)\n11. The fastest Linux timestamps (score: 22)\n12. AI should elevate your thinking, not replace it (score: 295)\n13. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (score: 265)\n14. Show HN: AI memory with biological decay (52% recall) (score: 64)\n15. Music of the BBC Microcomputer System (score: 10)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 9451,
+      "stepsCount": 7,
+      "toolCallCount": 1,
+      "wallMs": 40578.961585000005,
+      "output": "Here are the top 3 posts with the most comments:\n\n1. AI should elevate your thinking, not replace it — comments: 247\n2. I bought Friendster for $30k – Here's what I'm doing with it — comments: 245\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 200",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5845,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 63235.779448,
+      "output": "## Highest Score\n1. AI should elevate your thinking, not replace it (295)\n2. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (265)\n3. I bought Friendster for $30k – Here's what I'm doing with it (234)\n\n## Most Comments\n1. Butterflies are in decline across North America, a look at the Western Monarch (247)\n2. AI should elevate your thinking, not replace it (247)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (200)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 2551,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 31723.984664999996,
+      "output": "```json\n{\n  \"name\": \"get-hn-posts\",\n  \"parameters\": {\n    \"count\": 15\n  }\n}\n```\n\nThis function call will fetch the top 15 Hacker News posts.\n\nNext, you can use the result to format a markdown report with the following code:\n\n```json\n{\n  \"name\": \"http-get\",\n  \"parameters\": {\n    \"url\": \"https://hacker-news.firebaseio.com/v0/topstories.json\"\n  }\n}\n```\n\nThis function call will fetch the JSON response from the Hacker News API.\n\nYou can then use the `recall` function to store notes and format the markdown report:\n\n```json\n{\n  \"name\": \"recall\",\n  \"parameters\": {\n    \"key\": \"Hacker News Report\",\n    \"content\": \"# Today on Hacker News\\n\\n\"\n  }\n}\n```\n\nThis will start writing a markdown report with the title '# Today on Hacker News'.\n\nNext, you can use the `find` function to search for thematic categories in the top stories:\n\n```json\n{\n  \"name\": \"find\",\n  \"parameters\": {\n    \"query\": \"\",\n    \"scope\": \"web\"\n  }\n}\n```\n\nThis will automatically route to the right source (in this case, the web) to find information on thematic categories.\n\nYou can then use the result to format the markdown report:\n\n```json\n{\n  \"name\": \"recall\",\n  \"parameters\": {\n    \"key\": \"Hacker News Report\",\n    \"content\": \"# Today on Hacker News\\n\\n## AI/ML\\n\\n* [Story Title 1](https://news.ycombinator.com/item?id=12345)\\n* [Story Title 2](https://news.ycombinator.com/item?id=67890)\"\n  }\n}\n```\n\nThis will add a paragraph mentioning specific story titles from the tool result for each thematic category.\n\nYou can repeat this process to format the markdown report with the rest of the top stories. Finally, you can use the `recall` function to retrieve the complete content of the markdown report:\n\n```json\n{\n  \"name\": \"recall\",\n  \"parameters\": {\n    \"key\": \"Hacker News Report\",\n    \"full\": true\n  }\n}\n```\n\nThis will return the complete markdown report with a length of 200-500 words.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "273 words"
+        ],
+        "composite": 0.53
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8628666666666666,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

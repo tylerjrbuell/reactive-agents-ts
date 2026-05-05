@@ -20,9 +20,9 @@ This doc designs the answer: **three baseline JSON artifacts** that together for
 
 | Artifact | Axis | Tier | Frequency | Cost |
 |----------|------|------|-----------|------|
-| `harness-reports/benchmarks/baseline-YYYY-MM-DD.json` | **Performance** | — | Pre-release (manual) | Free, fast |
-| `harness-reports/integration-control-flow-baseline.json` | **Wiring correctness** | Tier 1 | Every PR (CI) | Free, <30s |
-| `harness-reports/integration-behavior-baseline.json` | **Real-LLM behavior** | Tier 2 | Pre-release (manual) | Local Ollama, ~5 min |
+| `wiki/Research/Harness-Reports/benchmarks/baseline-YYYY-MM-DD.json` | **Performance** | — | Pre-release (manual) | Free, fast |
+| `wiki/Research/Harness-Reports/integration-control-flow-baseline.json` | **Wiring correctness** | Tier 1 | Every PR (CI) | Free, <30s |
+| `wiki/Research/Harness-Reports/integration-behavior-baseline.json` | **Real-LLM behavior** | Tier 2 | Pre-release (manual) | Local Ollama, ~5 min |
 
 Performance artifact already shipped (commit `122a4ea0`). The other two are the work this spec proposes.
 
@@ -49,7 +49,7 @@ The runner produces a single `Tier1Baseline` JSON artifact. A bun:test file diff
 ### 2.3 JSON shape
 
 ```typescript
-// harness-reports/integration-control-flow-baseline.json
+// wiki/Research/Harness-Reports/integration-control-flow-baseline.json
 interface Tier1Baseline {
   readonly schemaVersion: 1;
   readonly capturedAt: string;            // ISO timestamp; informational only
@@ -155,7 +155,7 @@ The Tier 2 work is **wrapping** these existing scripts into a single artifact wi
 ### 3.3 JSON shape
 
 ```typescript
-// harness-reports/integration-behavior-baseline.json
+// wiki/Research/Harness-Reports/integration-behavior-baseline.json
 interface Tier2Baseline {
   readonly schemaVersion: 1;
   readonly capturedAt: string;
@@ -220,7 +220,7 @@ The advisor flagged this as the discriminating decision. Options:
 User-confirmed 2026-04-24: developer machine has an Ollama-capable GPU. Tier 2 runs against that machine.
 
 Implementation:
-- A `bun run integration:gate:behavior` script runs locally against `cogito:14b` at temp=0, num_ctx=8192. Script writes `harness-reports/integration-behavior-baseline-YYYY-MM-DD.json`.
+- A `bun run integration:gate:behavior` script runs locally against `cogito:14b` at temp=0, num_ctx=8192. Script writes `wiki/Research/Harness-Reports/integration-behavior-baseline-YYYY-MM-DD.json`.
 - A `bun run integration:gate:behavior:check` script reads the most recent dated baseline and asserts the §3.4 hard floors. Exits non-zero on regression.
 - A CI lint step rejects release tags where the most recent baseline file is older than 14 days, ensuring the ritual is performed before each release rather than skipped silently.
 - Optional future: GitHub Actions self-hosted runner registered against the same GPU machine, so Tier 2 can run on a `behavior-gate.yml` workflow triggered by `release/*` branch pushes. Out of scope for v0.
@@ -335,7 +335,7 @@ import type { ScenarioModule } from "../types.js";
 
 export const scenario: ScenarioModule = {
   id: "cf-01-iteration-off-by-one",
-  targetedWeakness: "W6",            // map to harness-reports/loop-state.json weakness ID
+  targetedWeakness: "W6",            // map to wiki/Research/Harness-Reports/loop-state.json weakness ID
   closingCommit: "0c79a350",          // commit that closed the gap; gate fails point here
   description: "Single-step task reports iterations === 1, not 2. Protects IC-16.",
   config: { /* runScenario config */ },
@@ -359,7 +359,7 @@ When a scenario's expected outcome changes intentionally (e.g., a refactor that 
 A sidecar file tracks per-scenario value over time:
 
 ```typescript
-// harness-reports/integration-control-flow-scenario-health.json
+// wiki/Research/Harness-Reports/integration-control-flow-scenario-health.json
 interface ScenarioHealth {
   readonly schemaVersion: 1;
   readonly scenarios: Record<string, {

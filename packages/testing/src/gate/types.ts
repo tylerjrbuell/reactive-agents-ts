@@ -29,7 +29,7 @@ export interface ScenarioModule {
   /**
    * Weakness or gap this scenario protects against. Format: `W6`, `G-3`,
    * `IC-13`, `S0.2`, `Principle-11`, etc. Cross-referenced against
-   * `harness-reports/loop-state.json` so harness-improvement-loop sessions
+   * `wiki/Research/Harness-Reports/loop-state.json` so harness-improvement-loop sessions
    * can detect uncovered weaknesses.
    */
   readonly targetedWeakness: string;
@@ -116,7 +116,7 @@ export interface Tier1ScenarioOutcome {
 
 /**
  * The full Tier-1 baseline written to
- * `harness-reports/integration-control-flow-baseline.json`.
+ * `wiki/Research/Harness-Reports/integration-control-flow-baseline.json`.
  *
  * The gate test deep-equals this against a fresh runner output. Any
  * divergence is either a regression (fail) or an intentional change
@@ -144,7 +144,7 @@ export interface Tier1Baseline {
  * still earning its place?" — read by harness-improvement-loop sessions to
  * suggest retirement candidates and uncovered weaknesses.
  *
- * Written to `harness-reports/integration-control-flow-scenario-health.json`.
+ * Written to `wiki/Research/Harness-Reports/integration-control-flow-scenario-health.json`.
  */
 export interface ScenarioHealth {
   readonly schemaVersion: 1;
@@ -180,7 +180,7 @@ export interface ScenarioHealthEntry {
 
   /**
    * Targeted weakness ID — copied from the ScenarioModule for cross-
-   * reference against `harness-reports/loop-state.json`.
+   * reference against `wiki/Research/Harness-Reports/loop-state.json`.
    */
   readonly targetedWeakness: string;
 }

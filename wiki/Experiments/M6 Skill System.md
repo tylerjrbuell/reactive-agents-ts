@@ -15,7 +15,7 @@ owner: Skills Team
 
 **Verdict:** 🔄 IMPROVE
 
-**Evidence:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+**Evidence:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 
 ---
 
@@ -43,7 +43,7 @@ Mitigates [[Failure-Modes/FM-G Multi-turn|FM-G1]] (coherence loss) by enabling s
 
 ### Key Findings
 
-**From harness-reports/phase-1-mechanism-validation-2026-05-04.md:**
+**From wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md:**
 - ✅ Lifecycle works; skills activate and refine correctly
 - ✅ Learning transfers within single session
 - ❌ Learning doesn't persist across sessions (requires Phase 1.5 work)

@@ -1,0 +1,473 @@
+
+======================================================================
+PROBE: trivial-1step | strategy: reactive | maxIter: 5
+TASK:   What is 12 × 15?
+EXPECT: 1 iteration, no tool calls, immediate final-answer
+======================================================================
+✓ Provider: ollama | Model: qwen3:14b | API key: (not required)
+→ [phase:execution] Starting...
+ℹ️ Reactive Intelligence — Anonymous entropy data helps improve the framework. Disable with .withReactiveIntelligence({ telemetry: false }) (https://docs.reactiveagents.dev/telemetry)
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 6.3s
+  📊 [metric:entropy] 0.15 composite
+✓ [phase:reactive:kernel] 6.3s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 2203 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 13.7s with 2203 tokens
+
+═══ Logs (3) ═══
+  12:42:53.560 INFO  Execution started {"taskId":"01KPZR7DQ2MTJBM7KMRVC48EHF","agentId":"agent-1777034573459"}
+  12:43:07.257 INFO  Execution completed {"taskId":"01KPZR7DQ2MTJBM7KMRVC48EHF","success":true,"tokensUsed":2203,"cost":0,"duration":13708}
+  12:43:07.257 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (13 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (9) ═══
+  ✓ execution.run (13722.6ms) [2504f670…]
+    ✓ execution.phase.bootstrap (6.6ms) [2504f670…]
+      ✓ phase.bootstrap.metrics (0.1ms) [2504f670…]
+    ✓ execution.phase.strategy-select (1.3ms) [2504f670…]
+      ✓ phase.strategy-select.metrics (0.0ms) [2504f670…]
+    ✓ execution.phase.think (6269.7ms) [2504f670…]
+      ✓ phase.think.metrics (0.0ms) [2504f670…]
+    ✓ execution.phase.complete (1.4ms) [2504f670…]
+      ✓ phase.complete.metrics (0.0ms) [2504f670…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ───────────────────────╮
+│ Status:   Success   Duration: 13.7s   Steps: 1 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 2,203 │
+╰────────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            6ms
+├─ ✅  [strategy-select]      1ms
+├─ ✅  [think]               6.3s (1 steps, 100% of time)
+└─ ✅  [complete]             1ms
+
+🧠 Reasoning Signal
+├─ Grade: A   Signal: flat   Mean: 0.150   Delta: 0.000
+├─ Solved in one pass — no trajectory to analyze
+└─  iter  1 ███░░░░░░░░░░░░░░░░░ 0.150 →
+
+--- RESULT ---
+Success:              true
+Iterations:           2 / 5
+Max entropy:          0.150
+Interventions:        0 dispatched, 0 suppressed
+Tokens:               2203
+Duration:             13.7s
+Cost:                 $0.0000
+
+Output preview:
+The result of 12 multiplied by 15 is 180.
+
+Trace: .reactive-agents/traces/01KPZR7DQ2MTJBM7KMRVC48EHF.jsonl
+Inspect: rax trace inspect .reactive-agents/traces/01KPZR7DQ2MTJBM7KMRVC48EHF.jsonl
+
+======================================================================
+PROBE: memory-retrieval-fidelity | strategy: reactive | maxIter: 8
+TASK:   Use web-search to look up 'top programming languages 2024'. Then list EXACTLY 10 programming languages from the results in your final answer. Each entry must include the language name and one distinguishing feature that appeared in the search results. Do not invent entries — only use what the search returned.
+EXPECT: 1–2 web-search calls; final answer cites only items present in tool observations; no hallucinated language names; if preview truncates results, agent calls recall or find to get full data
+======================================================================
+✓ Provider: ollama | Model: qwen3:14b | API key: (not required)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 4.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:web-search] call 0
+  ✓ [tool:web-search] 0.94s
+✓ [phase:think] 0.9s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 15.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 23.4s
+  📊 [metric:entropy] 0.15 composite
+✓ [phase:reactive:kernel] 69.6s
+✓ [completion] Reactive strategy terminated: final_answer
+  📊 [metric:tokens_used] 9795 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 96.5s with 9795 tokens
+
+═══ Logs (3) ═══
+  12:43:07.359 INFO  Execution started {"taskId":"01KPZR7V6P7G0P1TK8V0BV9S4E","agentId":"agent-1777034587296"}
+  12:44:43.797 INFO  Execution completed {"taskId":"01KPZR7V6P7G0P1TK8V0BV9S4E","success":true,"tokensUsed":9795,"cost":0,"duration":96440}
+  12:44:43.797 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (14 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (15) ═══
+  ✓ execution.run (96450.0ms) [bd6d6039…]
+    ✓ execution.phase.bootstrap (2.2ms) [bd6d6039…]
+      ✓ phase.bootstrap.metrics (0.0ms) [bd6d6039…]
+    ✓ execution.phase.strategy-select (1.7ms) [bd6d6039…]
+      ✓ phase.strategy-select.metrics (0.0ms) [bd6d6039…]
+    ✓ execution.phase.think (69556.6ms) [bd6d6039…]
+      ✓ phase.think.metrics (0.0ms) [bd6d6039…]
+    ✓ execution.phase.act (1.6ms) [bd6d6039…]
+      ✓ phase.act.metrics (0.0ms) [bd6d6039…]
+    ✓ execution.phase.observe (1.3ms) [bd6d6039…]
+      ✓ phase.observe.metrics (0.0ms) [bd6d6039…]
+    ✓ execution.phase.memory-flush (11589.9ms) [bd6d6039…]
+      ✓ phase.memory-flush.metrics (0.0ms) [bd6d6039…]
+    ✓ execution.phase.complete (1.5ms) [bd6d6039…]
+      ✓ phase.complete.metrics (0.0ms) [bd6d6039…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ───────────────────────╮
+│ Status:   Success   Duration: 96.4s   Steps: 7 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 9,795 │
+╰────────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            2ms
+├─ ✅  [strategy-select]      1ms
+├─ ⚠️  [think]              69.6s (7 steps, 86% of time)
+├─ ✅  [act]                  1ms (2 calls)
+├─ ✅  [observe]              1ms
+├─ ⚠️  [memory-flush]       11.6s
+└─ ✅  [complete]             1ms
+
+🔧 Tool Execution (2 calls across 2 tools)
+├─ ✅  web-search  1 calls, 942ms avg
+└─ ✅  recall      1 calls, 1ms avg
+
+🧠 Reasoning Signal
+├─ Grade: B   Signal: flat   Mean: 0.150   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 ███░░░░░░░░░░░░░░░░░ 0.150 →
+├─  iter  1 ███░░░░░░░░░░░░░░░░░ 0.150 →
+└─  iter  2 ███░░░░░░░░░░░░░░░░░ 0.150 →
+   ┈┈┈
+└─ 💡 Consider enabling strategy switching (.withReasoning({ enableStrategySwitching: true }))
+
+⚠️  Alerts & Insights
+├─ ⚠️  think phase blocked ≥10s (LLM latency)
+├─ ⚠️  memory-flush phase blocked ≥10s (LLM latency)
+└─ ℹ️  7 reasoning steps (complex reasoning)
+
+--- RESULT ---
+Success:              true
+Iterations:           3 / 8
+Max entropy:          0.150
+Interventions:        2 dispatched, 0 suppressed
+Tokens:               9795
+Duration:             96.5s
+Cost:                 $0.0000
+
+Output preview:
+1. Technology | 2024 Stack Overflow Developer Survey: https://survey.stackoverflow.co/2024/technology
+   JavaScript, Python and SQL are all highly-desired and admired programming languages, but Rust continues to be the most-admired programming language with an 83% ...
+2. TIOBE Index: https://www.tiobe.com/tiobe-index/
+   The award is given to the programming language that has the highest rise in r
+
+Trace: .reactive-agents/traces/01KPZR7V6P7G0P1TK8V0BV9S4E.jsonl
+Inspect: rax trace inspect .reactive-agents/traces/01KPZR7V6P7G0P1TK8V0BV9S4E.jsonl
+
+======================================================================
+PROBE: memory-recall-invocation | strategy: reactive | maxIter: 8
+TASK:   Use web-search with the query 'popular javascript frameworks' to get results. Then answer: what was the 7th search result? Give its exact title and URL. If you cannot see it in the compressed preview, use recall to fetch the full stored tool result.
+EXPECT: Exactly 1 web-search call; at least 1 recall call with a _tool_result_N key; final answer cites the 7th result accurately
+======================================================================
+✓ Provider: ollama | Model: qwen3:14b | API key: (not required)
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 13.8s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:web-search] call 0
+  ✓ [tool:web-search] 3.37s
+✓ [phase:think] 3.4s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 4.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 24.7s
+  📊 [metric:entropy] 0.15 composite
+⚠️ [warning] [output-gate] Synthesized output to match requested format: prose
+✓ [phase:reactive:kernel] 49.9s
+✓ [completion] Reactive strategy terminated: final_answer
+  📊 [metric:tokens_used] 9574 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 73.9s with 9574 tokens
+
+═══ Logs (3) ═══
+  12:44:43.883 INFO  Execution started {"taskId":"01KPZRASF2M5A8XE39VWKC4BXV","agentId":"agent-1777034683821"}
+  12:45:57.731 INFO  Execution completed {"taskId":"01KPZRASF2M5A8XE39VWKC4BXV","success":true,"tokensUsed":9574,"cost":0,"duration":73849}
+  12:45:57.731 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (15 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (15) ═══
+  ✓ execution.run (73856.2ms) [54665b25…]
+    ✓ execution.phase.bootstrap (14.8ms) [54665b25…]
+      ✓ phase.bootstrap.metrics (0.0ms) [54665b25…]
+    ✓ execution.phase.strategy-select (1.1ms) [54665b25…]
+      ✓ phase.strategy-select.metrics (0.0ms) [54665b25…]
+    ✓ execution.phase.think (49946.5ms) [54665b25…]
+      ✓ phase.think.metrics (0.0ms) [54665b25…]
+    ✓ execution.phase.act (1.5ms) [54665b25…]
+      ✓ phase.act.metrics (0.0ms) [54665b25…]
+    ✓ execution.phase.observe (1.3ms) [54665b25…]
+      ✓ phase.observe.metrics (0.0ms) [54665b25…]
+    ✓ execution.phase.memory-flush (7013.7ms) [54665b25…]
+      ✓ phase.memory-flush.metrics (0.0ms) [54665b25…]
+    ✓ execution.phase.complete (1.3ms) [54665b25…]
+      ✓ phase.complete.metrics (0.0ms) [54665b25…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ───────────────────────╮
+│ Status:   Success   Duration: 73.8s   Steps: 7 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 9,574 │
+╰────────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]           14ms
+├─ ✅  [strategy-select]      1ms
+├─ ⚠️  [think]              49.9s (7 steps, 88% of time)
+├─ ✅  [act]                  1ms (2 calls)
+├─ ✅  [observe]              1ms
+├─ ✅  [memory-flush]        7.0s
+└─ ✅  [complete]             1ms
+
+🔧 Tool Execution (2 calls across 2 tools)
+├─ ✅  web-search  1 calls, 3.4s avg
+└─ ✅  recall      1 calls, 0ms avg
+
+🧠 Reasoning Signal
+├─ Grade: B   Signal: flat   Mean: 0.150   Delta: 0.000
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 ███░░░░░░░░░░░░░░░░░ 0.150 →
+├─  iter  1 ███░░░░░░░░░░░░░░░░░ 0.150 →
+└─  iter  2 ███░░░░░░░░░░░░░░░░░ 0.150 →
+   ┈┈┈
+└─ 💡 Consider enabling strategy switching (.withReasoning({ enableStrategySwitching: true }))
+
+⚠️  Alerts & Insights
+├─ ⚠️  think phase blocked ≥10s (LLM latency)
+└─ ℹ️  7 reasoning steps (complex reasoning)
+
+--- RESULT ---
+Success:              true
+Iterations:           3 / 8
+Max entropy:          0.150
+Interventions:        2 dispatched, 0 suppressed
+Tokens:               9574
+Duration:             73.9s
+Cost:                 $0.0000
+
+Output preview:
+The provided raw data contains only five search results, numbered 1 through 5. There is no 7th search result available in the given data.
+
+Trace: .reactive-agents/traces/01KPZRASF2M5A8XE39VWKC4BXV.jsonl
+Inspect: rax trace inspect .reactive-agents/traces/01KPZRASF2M5A8XE39VWKC4BXV.jsonl
+
+======================================================================
+PROBE: memory-multi-observation-synthesis | strategy: plan-execute-reflect | maxIter: 12
+TASK:   Search for each of these in turn: 'Rust memory safety', 'Go concurrency model', 'Python type hints'. After all 3 searches, produce a 3-paragraph synthesis — one paragraph per topic — drawing only on facts returned by the searches. Each paragraph must cite at least one specific result from that topic's search.
+EXPECT: 3 distinct web-search calls; synthesis references observations from all 3 (not just the most recent); no conflation between topics; auto-checkpoint or find may fire as context grows
+======================================================================
+✓ Provider: ollama | Model: qwen3:14b | API key: (not required)
+→ [phase:execution] Starting...
+→ [phase:plan-execute:plan] Starting...
+✓ [phase:plan-execute:plan] 16.3s
+  📊 [metric:tokens_used] 1098 tokens
+  [iter:1:action] — Plan refinement 1 of 3
+→ [phase:plan-execute:execute] Starting...
+  → [tool:web-search] call 1
+  → [tool:web-search] call 2
+  → [tool:web-search] call 3
+  ✓ [tool:web-search] 0.65s
+  ✓ [tool:web-search] 0.73s
+  ✓ [tool:web-search] 1.08s
+✓ [phase:plan-execute:execute] 26.6s
+  📊 [metric:tokens_used] 2587 tokens
+→ [phase:plan-execute:reflect] Starting...
+✓ [phase:plan-execute:reflect] 32.6s
+  📊 [metric:tokens_used] 4051 tokens
+✓ [completion] Plan execution completed successfully
+  📊 [metric:tokens_used] 5555 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 54.5s with 5555 tokens
+
+═══ Logs (3) ═══
+  12:45:57.831 INFO  Execution started {"taskId":"01KPZRD1NWRM24J14M5RH057X5","agentId":"agent-1777034757759"}
+  12:46:52.362 INFO  Execution completed {"taskId":"01KPZRD1NWRM24J14M5RH057X5","success":true,"tokensUsed":5555,"cost":0,"duration":54533}
+  12:46:52.362 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (16 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (11) ═══
+  ✓ execution.run (54539.2ms) [e2495ea4…]
+    ✓ execution.phase.bootstrap (4.1ms) [e2495ea4…]
+      ✓ phase.bootstrap.metrics (0.0ms) [e2495ea4…]
+    ✓ execution.phase.strategy-select (1.1ms) [e2495ea4…]
+      ✓ phase.strategy-select.metrics (0.0ms) [e2495ea4…]
+    ✓ execution.phase.think (40356.0ms) [e2495ea4…]
+      ✓ phase.think.metrics (0.0ms) [e2495ea4…]
+    ✓ execution.phase.memory-flush (8571.9ms) [e2495ea4…]
+      ✓ phase.memory-flush.metrics (0.0ms) [e2495ea4…]
+    ✓ execution.phase.complete (1.2ms) [e2495ea4…]
+      ✓ phase.complete.metrics (0.0ms) [e2495ea4…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ───────────────────────╮
+│ Status:   Success   Duration: 54.5s   Steps: 7 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 5,555 │
+╰────────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            4ms
+├─ ✅  [strategy-select]      1ms
+├─ ⚠️  [think]              40.4s (7 steps, 82% of time)
+├─ ✅  [memory-flush]        8.6s
+└─ ✅  [complete]             1ms
+
+🔧 Tool Execution (3 calls across 1 tools)
+└─ ✅  web-search  3 calls, 821ms avg
+
+🧠 Reasoning Signal
+├─ Grade: B   Signal: flat   Mean: 0.295   Delta: +0.434
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 ███░░░░░░░░░░░░░░░░░ 0.150 →
+├─  iter  1 ███░░░░░░░░░░░░░░░░░ 0.150 →
+├─  ┈┈┈ 4 tool/system steps (no thought scored) ┈┈┈
+└─  iter  6 ████████████░░░░░░░░ 0.584 →
+   ┈┈┈
+└─ 💡 Consider enabling strategy switching (.withReasoning({ enableStrategySwitching: true }))
+
+⚠️  Alerts & Insights
+├─ ⚠️  think phase blocked ≥10s (LLM latency)
+└─ ℹ️  7 reasoning steps (complex reasoning)
+
+--- RESULT ---
+Success:              true
+Iterations:           7 / 12
+Max entropy:          0.584
+Interventions:        0 dispatched, 0 suppressed
+Tokens:               5555
+Duration:             54.5s
+Cost:                 $0.0000
+
+Output preview:
+Rust's memory safety is enforced through compile-time checks that prevent common errors like dangling pointers and data races. As highlighted by InfoWorld, Rust's memory safety features are "baked right into the language" and enforced before code execution, ensuring programs avoid undefined behavior. The Rustonomicon further explains that Safe Rust automatically handles type and memory safety, eli
+
+Trace: .reactive-agents/traces/01KPZRD1NWRM24J14M5RH057X5.jsonl
+Inspect: rax trace inspect .reactive-agents/traces/01KPZRD1NWRM24J14M5RH057X5.jsonl
+
+======================================================================
+PROBE: memory-context-pressure-degradation | strategy: plan-execute-reflect | maxIter: 15
+TASK:   Research the history of functional programming languages from LISP to today. Cover at least 8 languages with dates and key innovations for each. Use at least 3 web-search calls to gather material before synthesizing.
+EXPECT: Multiple searches, auto-checkpoint fires at least once, final output coherently covers 8+ languages with correct dates drawn from tool observations
+======================================================================
+✓ Provider: ollama | Model: qwen3:14b | API key: (not required)
+→ [phase:execution] Starting...
+→ [phase:plan-execute:plan] Starting...
+✓ [phase:plan-execute:plan] 18.4s
+  📊 [metric:tokens_used] 1137 tokens
+  [iter:1:action] — Plan refinement 1 of 3
+→ [phase:plan-execute:execute] Starting...
+  → [tool:web-search] call 1
+  → [tool:web-search] call 2
+  → [tool:web-search] call 3
+  ✓ [tool:web-search] 0.61s
+  ✓ [tool:web-search] 0.74s
+  ✓ [tool:web-search] 0.81s
+✓ [phase:plan-execute:execute] 45.0s
+  📊 [metric:tokens_used] 4009 tokens
+→ [phase:plan-execute:reflect] Starting...
+✓ [phase:plan-execute:reflect] 51.5s
+  📊 [metric:tokens_used] 5909 tokens
+✓ [completion] Plan execution completed successfully
+  📊 [metric:tokens_used] 10103 tokens
+  📊 [metric:cost_usd] 0 usd
+✓ [completion] Task completed in 116.7s with 10103 tokens
+
+═══ Logs (3) ═══
+  12:46:52.443 INFO  Execution started {"taskId":"01KPZREQ0NX28ZJX7EB14X4TY1","agentId":"agent-1777034812387"}
+  12:48:49.090 INFO  Execution completed {"taskId":"01KPZREQ0NX28ZJX7EB14X4TY1","success":true,"tokensUsed":10103,"cost":0,"duration":116648}
+  12:48:49.090 INFO  ◉ [calibration] calibration: qwen3:14b | source: prior+local (17 samples) | parallel=sequential-only classifier=high
+
+═══ Spans (11) ═══
+  ✓ execution.run (116654.8ms) [b6ea583a…]
+    ✓ execution.phase.bootstrap (1.9ms) [b6ea583a…]
+      ✓ phase.bootstrap.metrics (0.0ms) [b6ea583a…]
+    ✓ execution.phase.strategy-select (1.2ms) [b6ea583a…]
+      ✓ phase.strategy-select.metrics (0.0ms) [b6ea583a…]
+    ✓ execution.phase.think (98853.7ms) [b6ea583a…]
+      ✓ phase.think.metrics (0.0ms) [b6ea583a…]
+    ✓ execution.phase.memory-flush (11759.7ms) [b6ea583a…]
+      ✓ phase.memory-flush.metrics (0.0ms) [b6ea583a…]
+    ✓ execution.phase.complete (1.4ms) [b6ea583a…]
+      ✓ phase.complete.metrics (0.0ms) [b6ea583a…]
+
+═══ Metrics Summary ═══
+╭ Agent Execution Summary ────────────────────────╮
+│ Status:   Success   Duration: 116.6s   Steps: 7 │
+│ Model:    qwen3:14b   (ollama)   Tokens: 10,103 │
+╰─────────────────────────────────────────────────╯
+
+📊 Execution Timeline
+├─ ✅  [bootstrap]            2ms
+├─ ✅  [strategy-select]      1ms
+├─ ⚠️  [think]              98.9s (7 steps, 89% of time)
+├─ ⚠️  [memory-flush]       11.8s
+└─ ✅  [complete]             1ms
+
+🔧 Tool Execution (3 calls across 1 tools)
+└─ ✅  web-search  3 calls, 719ms avg
+
+🧠 Reasoning Signal
+├─ Grade: B   Signal: flat   Mean: 0.309   Delta: +0.478
+├─ Model stalled — entropy didn't decrease across iterations
+├─  iter  0 ███░░░░░░░░░░░░░░░░░ 0.150 →
+├─  iter  1 ███░░░░░░░░░░░░░░░░░ 0.150 →
+├─  ┈┈┈ 4 tool/system steps (no thought scored) ┈┈┈
+└─  iter  6 █████████████░░░░░░░ 0.628 →
+   ┈┈┈
+└─ 💡 Consider enabling strategy switching (.withReasoning({ enableStrategySwitching: true }))
+
+⚠️  Alerts & Insights
+├─ ⚠️  think phase blocked ≥10s (LLM latency)
+├─ ⚠️  memory-flush phase blocked ≥10s (LLM latency)
+└─ ℹ️  7 reasoning steps (complex reasoning)
+
+--- RESULT ---
+Success:              true
+Iterations:           7 / 15
+Max entropy:          0.628
+Interventions:        0 dispatched, 0 suppressed
+Tokens:               10103
+Duration:             116.7s
+Cost:                 $0.0000
+
+Output preview:
+The history of functional programming languages spans decades, evolving from theoretical foundations to modern applications. Here are eight key languages with their dates and innovations:
+
+1. **LISP (1958)**: Developed by John McCarthy, LISP was the first high-level functional language. It introduced **lambda calculus**, **list processing (S-expressions)**, and **dynamic typing**, becoming foundat
+
+Trace: .reactive-agents/traces/01KPZREQ0NX28ZJX7EB14X4TY1.jsonl
+Inspect: rax trace inspect .reactive-agents/traces/01KPZREQ0NX28ZJX7EB14X4TY1.jsonl
+
+✅ All probes complete.
+   Traces:   .reactive-agents/traces/<runId>.jsonl
+   Summary:  harness-reports/probe-summary-2026-04-24-12:48.json
+   Analyze:  bun run scripts/validate-entropy.ts .reactive-agents/traces
+   Reports:  harness-reports/improvement-report-*.md

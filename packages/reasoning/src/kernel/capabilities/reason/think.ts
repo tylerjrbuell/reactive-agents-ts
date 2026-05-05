@@ -313,7 +313,7 @@ export function handleThinking(
     // Visible set = required + relevant + already-used + discovered +
     // meta-tools. Anything else is reachable via discover-tools.
     // Pydantic-AI-style per-step Toolset.get_tools() — see
-    // harness-reports/oss-prompt-curation-research-2026-04-26.md.
+    // wiki/Research/Harness-Reports/oss-prompt-curation-research-2026-04-26.md.
     // Default-on as of 2026-04-26 (curator empirical validation). Opt out
     // via RA_LAZY_TOOLS=0.
     let promptSchemas: readonly ToolSchema[];

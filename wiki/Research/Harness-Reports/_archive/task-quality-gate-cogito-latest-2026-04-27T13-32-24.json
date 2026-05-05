@@ -1,0 +1,136 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T13-32-24",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1444.54572,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 14278,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 25283.797511,
+      "output": "Your next step: call get-hn-posts. You have all the information you need.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 8172,
+      "stepsCount": 10,
+      "toolCallCount": 0,
+      "wallMs": 8313.269232000002,
+      "output": "Your next step: call get-hn-posts. You have all the information you need.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 1525,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4522.2249509999965,
+      "output": "I'll help you fetch top Hacker News posts and format them as requested.\n\n1. First, let's use `find` to search for Hacker News posts with a high score.\n2. Then, we'll extract the top 3 posts by score.\n3. Next, we'll find the most commented posts (top 3).\n4. Finally, we'll format everything in markdown as required.\n\nHere are your results:\n\n## Highest Score\n1. Why We Need to Talk About the Future of Tech [165 points]\n2. The Rise and Fall of a Tech Empire [124 points]\n3. AI vs Human Intelligence: What's Next? [95 points]\n\n## Most Comments\n1. Understanding Quantum Computing for Beginners [1457 comments]\n2. Open Source Revolution in Cybersecurity [987 comments]\n3. Blockchain Beyond Cryptocurrency [756 comments]",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "0/6 correct titles"
+        ],
+        "composite": 0.44999999999999996
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 14307,
+      "stepsCount": 20,
+      "toolCallCount": 7,
+      "wallMs": 14899.925886000005,
+      "output": "# Today on Hacker News\n\n## Tech & Innovation\nToday's top stories showcase the evolving tech landscape, from AI advancements to emerging hardware solutions. The resurgence of Friendster as a modern platform highlights the changing dynamics in social media and software development. Meanwhile, innovative 10 GbE USB adapters demonstrate how smaller form factors can achieve faster speeds without sacrificing functionality.\n\n## Programming & Development\nThe programming community is buzzing with activity today, particularly around new tools and frameworks. The announcement of a Karpathy-style AI framework has generated significant interest among developers eager to integrate cutting-edge machine learning capabilities into their applications. This trend reflects the broader shift towards more intuitive and accessible AI development tools.\n\n## Hardware & Infrastructure\nIn the realm of hardware, a recent breakthrough in 10 GbE USB adapters has caught the attention of tech enthusiasts and professionals alike. These new adapters not only provide faster speeds but also achieve this through smaller form factors, making them more practical for everyday use. This innovation could have significant implications for future peripheral designs.\n\n## Other Notable Stories\nBeyond these main categories, several other interesting stories are making waves on Hacker News today. From updates on the NSF's oversight board to new developments in cybersecurity, there's no shortage of compelling content to explore.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "214 words",
+          "★ called recall()"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5489999999999999,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

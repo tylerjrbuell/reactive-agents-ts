@@ -1,0 +1,135 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T23-36-22",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 106,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1861.603188,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5596,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 28873.813611999998,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 204)\n2. Fast16: High-precision software sabotage",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 0.13333333333333333,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "2/15 titles cited",
+          "1/15 scores cited",
+          "2 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.44833333333333336
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6130,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 21230.412694000002,
+      "output": "1. An AI agent deleted our production database. The agent's confession is below — comments: 521\n2. AI should elevate your thinking, not replace it — comments: 169\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 119",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "1/3 correct titles",
+          "1/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.7666666666666667
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 12083,
+      "stepsCount": 5,
+      "toolCallCount": 0,
+      "wallMs": 75411.30822,
+      "output": "[{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":204,\"by\":\"ca98am79\",\"descendants\":111,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":102,\"by\":\"dd23\",\"descendants\":33,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47914350,\"title\":\"Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race\",\"score\":175,\"by\":\"berkeleyjunk\",\"descendants\":119,\"url\":\"https://www.bbc.com/sport/athletics/articles/crm1m7e0zwzo\"},{\"id\":47914677,\"title\":\"Butterflies are in decline across North America, a look at the Western Monarch\",\"score\":80,\"by\":\"1659447091\",\"descendants\":21,\"url\":\"https://www.smithsonianmag.com/science-nature/butterflies-are-in-dramatic-decline-across-north-america-a-close-look-at-the-western-monarch-shows-why-180988582/\"},{\"id\":47914438,\"title\":\"Two Athletes Break Sub-2-HR Marathon in Adizero Adios Pro Evo 3\",\"score\":31,\"by\":\"canucker2016\",\"descendants\":15,\"url\":\"https://news.adidas.com/running/two-adidas-athletes-sabastian-sawe-and-yomif-kejelcha-break-the-sub-2-hour-marathon-barrier-in-the-r/s/d4be4eac-a3b8-47d5-835f-9cbd685638ca\"},{\"id\":47914367,\"title\":\"Show HN: AI memory with biological decay (52% recall)\",\"score\":39,\"by\":\"SachitRafa\",\"descendants\":18,\"url\":\"https://github.com/sachitrafa/YourMemory\"},{\"id\":47883839,\"title\":\"Magic: The Gathering took me from N2 to Japanese fluency\",\"score\":70,\"by\":\"pwim\",\"descendants\":19,\"url\":\"https://www.tokyodev.com/articles/how-magic-the-gathering-took-me-from-n2-to-japanese-fluency\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":213,\"by\":\"koshyjohn\",\"descendants\":169,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47910388,\"title\":\"SWE-bench Verified no longer measures frontier coding capabilities\",\"score\":228,\"by\":\"kmdupree\",\"descendants\":135,\"url\":\"https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/\"},{\"id\":47885719,\"title\":\"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\",\"score\":17,\"by\":\"MrBuddyCasino\",\"descendants\":1,\"url\":\"https://tingouw.com/blog/embedded/esp32/run_rust_on_app_core\"},{\"id\":47914161,\"title\":\"MoQ Boy\",\"score\":27,\"by\":\"mmcclure\",\"descendants\":3,\"url\":\"https://moq.dev/blog/moq-boy/\"},{\"id\":47878231,\"title\":\"Box to Save Memory in Rust\",\"score\":17,\"by\":\"emschwartz\",\"descendants\":2,\"url\":\"https://dystroy.org/blog/box-to-save-memory/\"},{\"id\":47884850,\"title\":\"XOXO Festival Archive\",\"score\":28,\"by\":\"surprisetalk\",\"descendants\":2,\"url\":\"https://xoxofest.com/\"},{\"id\":47911350,\"title\":\"Clay PCB Tutorial\",\"score\":184,\"by\":\"j0r0b0\",\"descendants\":117,\"url\":\"https://feministhackerspaces.cargo.site/Clay-PCB-Tutorial\"},{\"id\":47911644,\"title\":\"The Visible Zorker: Zork 1\",\"score\":89,\"by\":\"PLenz\",\"descendants\":13,\"url\":\"https://eblong.com/infocom/visi/zork1/\"},{\"id\":47898142,\"title\":\"The Last of the Lost Generation\",\"score\":5,\"by\":\"benbreen\",\"descendants\":1,\"url\":\"https://porticoquarterly.com/book/the-last-of-the-lost-generation/\"},{\"id\":47913406,\"title\":\"The 1944 Warsaw Uprising, in Color\",\"score\":104,\"by\":\"keiferski\",\"descendants\":42,\"url\":\"https://www.barwypowstania.pl/\"},{\"id\":47915274,\"title\":\"Show HN: Startup Equity Adventure Game\",\"score\":6,\"by\":\"iliabara\",\"descendants\":3,\"url\":\"https://options-game-polymathrobotics.pythonanywhere.com/\"},{\"id\":47911524,\"title\":\"An AI agent deleted our production database. The agent's confession is below\",\"score\":374,\"by\":\"jeremyccrane\",\"descendants\":521,\"url\":\"https://twitter.com/lifeof_jer/status/2048103471019434248\"},{\"id\":47911013,\"title\":\"Show HN: Free textbook on engineering thermodynamics\",\"score\":91,\"by\":\"2DcAf\",\"descendants\":27,\"url\":\"https://thermodynamicsbook.com/\"}]",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "6/6 correct titles"
+        ],
+        "composite": 0.8499999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6906,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 39898.807337000006,
+      "output": "# Today on Hacker News\n\nThe top stories circulating on Hacker News this period show a strong current of discussion around the rapid evolution of AI, deep dives into low-level programming, and fascinating achievements across science and culture. The community continues to grapple with the implications of advanced technology while also celebrating human ingenuity, whether athletic or creative.\n\n### 🤖 AI & Systems Development\nThe conversation around Artificial Intelligence remains highly active, focusing not just on capability but on philosophy and engineering safeguards. Several posts addressed the state of AI, including discussions on whether **AI should elevate your thinking, not replace it**, and critiques of evaluation metrics like the report on **SWE-bench Verified no longer measures frontier coding capabilities**. On the engineering front, developers are tackling memory management and embedded systems, seen in the deep dive into **Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core**, and the technical exploration of **Box to Save Memory in Rust**. Furthermore, the intersection of AI and memory was featured with **Show HN: AI memory with biological decay (52% recall)**.\n\n### 💻 Cybersecurity & Hardware Projects\nThe technical depth extends into hardware and security vulnerabilities. Users examined historical threats with the report on **Fast16: High-precision software sabotage 5 years before Stuxnet**, providing valuable context for modern cybersecurity. On the DIY and embedded side, the community was engaged by the **Clay PCB Tutorial**, suggesting accessible entry points into hardware design. Projects like **MoQ Boy** and the archival look at **The Visible Zorker: Zork 1** highlight a continuous stream of passion projects and retro computing exploration.\n\n### 🌎 Science, Culture, & Human Endeavor\nBeyond code and circuits, the top stories celebrated human performance and environmental concerns. In the realm of athletics, records were broken, highlighted by stories covering both **Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race** and other notable endurance achievements. On a broader scale, environmental awareness was raised by the piece on **Butterflies are in decline across North America, a look at the Western Monarch**. These achievements are complemented by cultural learning, such as the journey detailed in **Magic: The Gathering took me from N2 to Japanese fluency**.\n\n### 🌐 General & Miscellaneous\nThe remaining top stories provided glimpses into digital culture and historical context. These included interesting deep dives into digital history, such as the article on **I bought Friendster for $30k – Here's what I'm doing with it**, and general retrospectives like the **XOXO Festival Archive**, rounding out a diverse day of reading.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.9333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "14/15 titles cited",
+          "417 words"
+        ],
+        "composite": 0.9016666666666666
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7933333333333332,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

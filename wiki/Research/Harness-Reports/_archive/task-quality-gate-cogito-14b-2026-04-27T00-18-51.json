@@ -1,0 +1,135 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T00-18-51",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 140,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6470.623038000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 4958,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 13567.821317,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 275)\n2. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 119)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (score: 210)\n4. Two Athletes Break Sub-2-HR Marathon in Adizero Adios Pro Evo 3 (score: 55)\n5. Box to Save Memory in Rust (score: 34)\n6. Butterflies are in decline across North America, a look at the Western Monarch (score: 92)\n7. AI should elevate your thinking, not replace it (score: 233)\n8. Show HN: AI memory with biological decay (52% recall) (score: 48)\n9. Magic: The Gathering took me from N2 to Japanese fluency (score: 71)\n10. SWE-bench Verified no longer measures frontier coding capabilities (score: 232)\n11. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (score: 21)\n12. XOXO Festival Archive (score: 37)\n13. MoQ Boy (score: 28)\n14. Clay PCB Tutorial (score: 186)\n15. The Visible Zorker: Zork 1 (score: 93)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 13248,
+      "stepsCount": 9,
+      "toolCallCount": 0,
+      "wallMs": 20405.409130999997,
+      "output": "1. An AI agent deleted our production database. The agent's confession is below — comments: 559\n\n2. I bought Friendster for $30k – Here's what I'm doing with it — comments: 140\n\n3. SWE-bench Verified no longer measures frontier coding capabilities — comments: 136",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "1/3 correct titles",
+          "1/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.6676666666666667
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8682,
+      "stepsCount": 7,
+      "toolCallCount": 0,
+      "wallMs": 12233.627999999997,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4902,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3098,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 9472,
+      "stepsCount": 9,
+      "toolCallCount": 0,
+      "wallMs": 23754.023955000004,
+      "output": "# Today on Hacker News\n\n## Technology and Innovation\n\nThe tech world is buzzing with developments in software security, AI tools, and programming advancements. Fast16 has emerged as a fascinating reference to Stuxnet-style sabotage from five years prior, highlighting the evolution of high-precision cyber attacks. Meanwhile, an innovative Rust package called Box aims to optimize memory usage, while new embedded systems projects demonstrate how Bare-Metal Rust can work alongside ESP-IDF on the ESP32-S3's second core.\n\n## Sports and Athletics\n\nA major milestone in athletics has been achieved with Sebastian Sawe becoming the first athlete to run a sub-two-hour marathon competitively. This groundbreaking performance was made possible using Adidas' Adizero Adios Pro Evo 3, which also helped another athlete break this barrier shortly after. The news comes at an exciting time for sports innovation.\n\n## Nature and Science\n\nEnvironmental concerns are taking center stage as butterfly populations face significant decline across North America. The Western Monarch's situation in particular has drawn attention from scientists studying the broader implications of this wildlife crisis, emphasizing the need for urgent conservation efforts.\n\n## Other Notable Stories\n\nIn a unique twist on business history, someone recently purchased Friendster for just $30k and is now planning its future. A discussion about AI's role in elevating human thinking rather than replacing it has sparked debate among tech enthusiasts. Additionally, the XOXO Festival Archive provides a digital preservation of an important cultural event.\n\nThese stories reflect the diverse range of developments impacting our world today, from technological breakthroughs to environmental challenges and cultural shifts.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "1/15 titles cited",
+          "256 words"
+        ],
+        "composite": 0.6733333333333333
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7282,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

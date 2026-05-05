@@ -71,4 +71,4 @@ if (redundancy.length > 0) {
 }
 
 console.log(``);
-console.log(`Tip: cross-reference with harness-reports/loop-state.json knownWeaknesses to find gaps.`);
+console.log(`Tip: cross-reference with wiki/Research/Harness-Reports/loop-state.json knownWeaknesses to find gaps.`);

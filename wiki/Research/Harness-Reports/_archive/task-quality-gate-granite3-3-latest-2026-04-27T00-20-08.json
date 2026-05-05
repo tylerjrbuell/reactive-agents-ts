@@ -1,0 +1,135 @@
+{
+  "model": "granite3.3:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T00-20-08",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": false,
+      "tokensUsed": 0,
+      "stepsCount": 0,
+      "toolCallCount": 0,
+      "wallMs": 505.936555,
+      "output": "LLM stream failed at iteration 0: Ollama request failed: \"granite3.3:latest\" does not support thinking",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 1,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/7 days found",
+          "no numbered list ✗"
+        ],
+        "composite": 0.7249999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 0,
+      "stepsCount": 0,
+      "toolCallCount": 0,
+      "wallMs": 136.20867899999985,
+      "output": "LLM stream failed at iteration 0: Ollama request failed: \"granite3.3:latest\" does not support thinking",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 0,
+      "stepsCount": 0,
+      "toolCallCount": 0,
+      "wallMs": 119.63066799999979,
+      "output": "LLM stream failed at iteration 0: Ollama request failed: \"granite3.3:latest\" does not support thinking",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 0,
+      "stepsCount": 0,
+      "toolCallCount": 0,
+      "wallMs": 119.77113599999984,
+      "output": "LLM stream failed at iteration 0: Ollama request failed: \"granite3.3:latest\" does not support thinking",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 0,
+      "stepsCount": 0,
+      "toolCallCount": 0,
+      "wallMs": 120.88741399999981,
+      "output": "LLM stream failed at iteration 0: Ollama request failed: \"granite3.3:latest\" does not support thinking",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "14 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.40800000000000003,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

@@ -233,7 +233,7 @@ tags: [packages, architecture, index]
 ### 26. benchmarks
 - **Purpose:** Performance and accuracy benchmarks, harness reports
 - **Location:** `apps/benchmarks`
-- **Key Files:** `src/`, `harness-reports/`
+- **Key Files:** `src/`, `wiki/Research/Harness-Reports/`
 - **Owner:** Performance team
 - **Results:** Frontier 100%, bare-llm 85% (pending frozen judge)
 - **Status:** ✅ Shipping with v0.10.0

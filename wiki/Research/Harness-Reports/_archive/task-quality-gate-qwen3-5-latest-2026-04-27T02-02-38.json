@@ -1,0 +1,135 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T02-02-38",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 235,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 12302.473924,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 10380,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 46876.009502,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 407)\n2. Self-updating screenshots (score: 53)\n3. Three constraints before I build anything (score: 41)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 154)\n5. Box to save memory in Rust (score: 62)\n6. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 56)\n7. Butterflies are in decline across North America, a look at the Western Monarch (score: 130)\n8. SWE-bench Verified no longer measures frontier coding capabilities (score: 250)\n9. The fastest Linux timestamps (score: 17)\n10. Lessons from building multiplayer browsers (score: 9)\n11. When the cheap one is the cool one (score: 15)\n12. Show HN: AI memory with biological decay (52% recall) (score: 59)\n13. AI should elevate your thinking, not replace it (score: 284)\n14. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (score: 34)\n15. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (score: 254)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8791,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 41422.64880599999,
+      "output": "1. AI should elevate your thinking, not replace it — comments: 241\n2. I bought Friendster for $30k – Here's what I'm doing with it — comments: 230\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 198",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 6471,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 56833.519079000005,
+      "output": "## Highest Score\n\n1. I bought Friendster for $30k – Here's what I'm doing with it (407)\n2. AI should elevate your thinking, not replace it (284)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (254)\n\n## Most Comments\n\n1. AI should elevate your thinking, not replace it (241)\n2. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (198)\n3. SWE-bench Verified no longer measures frontier coding capabilities (141)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 21032,
+      "stepsCount": 15,
+      "toolCallCount": 5,
+      "wallMs": 49173.87671500002,
+      "output": "# Today on Hacker News\n\n## AI/ML\nThe AI community is actively debating the role and measurement of artificial intelligence. Notable discussions include the post \"AI should elevate your thinking, not replace it,\" which sparked 241 comments about responsible AI use. OpenAI announced that \"SWE-bench Verified no longer measures frontier coding capabilities,\" reflecting evolving benchmarks for evaluating AI systems. Also featured was a Show HN project demonstrating \"AI memory with biological decay (52% recall),\" exploring how neural networks can mimic biological forgetting patterns. Meanwhile, \"Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft\" highlights the strategic shift toward distributed AI processing at the edge, a critical development as tech giants compete in the cloud infrastructure race.\n\n## Programming & Systems\nProgramming and systems development stories dominated the feed. The embedded systems community explored \"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core,\" showcasing Rust's growing footprint in hardware development. Memory safety discussions continued with \"Box to save memory in Rust,\" while \"Fast16: High-precision software sabotage 5 years before Stuxnet\" revealed historical cybersecurity insights. Web development enthusiasts shared \"Lessons from building multiplayer browsers,\" and systems programmers discussed \"The fastest Linux timestamps\" and \"Three constraints before I build anything.\" Creative coding found expression in \"Self-updating screenshots,\" demonstrating practical applications of generative techniques.\n\n## Other\nBeyond technical content, the community engaged with broader topics. Business history took center stage with \"I bought Friendster for $30k – Here's what I'm doing with it,\" offering a rare look at internet company acquisitions. Environmental awareness emerged through \"Butterflies are in decline across North America, a look at the Western Monarch,\" while sports news highlighted \"Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race.\" Cultural commentary appeared in \"When the cheap one is the cool one,\" reflecting on consumer preferences and aesthetic values.\n\nThe 15 top stories reflect Hacker News' diverse interests, balancing cutting-edge technical developments with broader cultural and environmental awareness.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.9333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "3 category sections",
+          "14/15 titles cited",
+          "325 words"
+        ],
+        "composite": 0.9766666666666667
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9522,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

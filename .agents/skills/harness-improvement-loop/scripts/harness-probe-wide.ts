@@ -1,7 +1,7 @@
 // harness-probe-wide.ts — Pass 2 wide feature-sweep probes
 // Uses qwen3:14b (native FC via <tools> XML template) to cover all major framework areas.
 //
-//   bun run scripts/harness-probe-wide.ts 2>&1 | tee harness-reports/probe-wide-$(date +%Y%m%d-%H%M).txt
+//   bun run scripts/harness-probe-wide.ts 2>&1 | tee wiki/Research/Harness-Reports/probe-wide-$(date +%Y%m%d-%H%M).txt
 //
 // Override model:
 //   WIDE_MODEL=qwen3:14b bun run scripts/harness-probe-wide.ts
@@ -10,7 +10,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from "fs";
 
 const WIDE_MODEL = process.env.WIDE_MODEL ?? "qwen3:14b";
-const REPORT_DIR = "./harness-reports";
+const REPORT_DIR = "./wiki/Research/Harness-Reports";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Probe definitions

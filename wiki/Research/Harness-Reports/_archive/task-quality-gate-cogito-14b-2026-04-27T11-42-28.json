@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T11-42-28",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 140,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6922.680942,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 7956,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 23525.518386,
+      "output": "1. Pgbackrest is no longer being maintained (score: 65)\n2. Fully Featured Audio DSP Firmware for the Raspberry Pi Pico (score: 33)\n3. Flipdiscs (score: 331)\n4. I bought Friendster for $30k – Here's what I'm doing with it (score: 869)\n5. AI should elevate your thinking, not replace it (score: 548)\n6. TurboQuant: A first-principles walkthrough (score: 183)\n7. Self-updating screenshots (score: 335)\n8. The Prompt API (score: 151)\n9. It's OK to abandon your side-project (2024) (score: 101)\n10. Moleskine's AI Lord of the Rings collection can only mock (score: 9)\n11. Three constraints before I build anything (score: 236)\n12. Rust Memory Management: Ownership vs. Reference Counting (score: 32)\n13. Bob Odenkirk would like to remind you that life is a meaningless farce (score: 77)\n14. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 275)\n15. Branimir Lambov from IBM on Cassandra (score: 4)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 11896,
+      "stepsCount": 9,
+      "toolCallCount": 2,
+      "wallMs": 14903.635653999998,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it — comments: 438\n2. AI should elevate your thinking, not replace it — comments: 404\n3. The Prompt API — comments: 82",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.8833333333333334
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8384,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 11661.347966000001,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4762,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3238,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 8271,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 16790.876156,
+      "output": "# Today on Hacker News\n\n## AI and Technology Ethics\nThe discourse around artificial intelligence continues to evolve, with Koshy John's thought-provoking piece \"AI should elevate your thinking, not replace it\" garnering significant attention (548 points). This discussion is complemented by the Chrome Developer's announcement of The Prompt API (151 points), which promises to integrate AI capabilities directly into web browsers. These developments highlight both the practical applications and ethical considerations surrounding AI technology.\n\n## Software Development and Tools\nThe software development community remains active with several notable projects. TurboQuant, a first-principles walkthrough by Kweezar (183 points), offers insights into quantitative analysis tools. Meanwhile, Fast16: High-precision software sabotage 5 years before Stuxnet (275 points) reveals historical cybersecurity developments that predate the infamous Stuxnet attack. Additionally, the announcement of Flipdiscs (331 points), a new platform for digital creativity, showcases innovation in web-based tools.\n\n## Business and Entrepreneurship\nEntrepreneurial stories continue to captivate readers, with Ca98am79's account of purchasing Friendster for $30k and plans for its revival (869 points) leading the pack. This narrative is supported by Branimir Lambov from IBM discussing Cassandra (4 points), though this particular discussion received less engagement. The theme extends to practical advice, with Jordan Lord's \"Three constraints before I build anything\" (236 points) offering valuable insights for aspiring entrepreneurs and developers.\n\n## Hardware and Firmware\nThe hardware sector saw notable developments with the introduction of Fully Featured Audio DSP Firmware for the Raspberry Pi Pico by WeebLabs (33 points). This project demonstrates the growing ecosystem around single-board computers, particularly in audio processing applications. The announcement also aligns with broader trends in DIY electronics and embedded systems development.\n\nThese categories reflect the diverse interests and discussions within the Hacker News community, from cutting-edge AI developments to practical software tools and entrepreneurial ventures.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.4666666666666667,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "7/15 titles cited",
+          "295 words",
+          "★ called recall()"
+        ],
+        "composite": 0.8133333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7993333333333333,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}

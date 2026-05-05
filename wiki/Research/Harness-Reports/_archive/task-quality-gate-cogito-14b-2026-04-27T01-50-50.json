@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T01-50-50",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 140,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6902.044089,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 8156,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 24246.283775,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 393)\n2. Self-updating screenshots (score: 47)\n3. Three constraints before I build anything (score: 35)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 150)\n5. Box to save memory in Rust (score: 57)\n6. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 52)\n7. Butterflies are in decline across North America, a look at the Western Monarch (score: 124)\n8. AI should elevate your thinking, not replace it (score: 281)\n9. SWE-bench Verified no longer measures frontier coding capabilities (score: 248)\n10. Show HN: AI memory with biological decay (52% recall) (score: 58)\n11. The fastest Linux timestamps (score: 15)\n12. Lessons from building multiplayer browsers (score: 8)\n13. Magic: The Gathering took me from N2 to Japanese fluency (score: 85)\n14. When the cheap one is the cool one (score: 11)\n15. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (score: 32)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 12303,
+      "stepsCount": 9,
+      "toolCallCount": 2,
+      "wallMs": 15109.881929,
+      "output": "1. An AI agent deleted our production database. The agent's confession is below — comments: 620\n\n2. AI should elevate your thinking, not replace it — comments: 233\n\n3. SWE-bench Verified no longer measures frontier coding capabilities — comments: 140",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks",
+          "★ called recall()"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8577,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 11485.729216,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4851,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3149,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 8642,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 21915.430665999993,
+      "output": "# Today on Hacker News\n\n## AI and Technology Trends\nThe latest discussions in artificial intelligence continue to shape our understanding of its role in society. A compelling piece titled \"AI should elevate your thinking, not replace it\" (281 points) emphasizes the importance of maintaining human judgment alongside AI capabilities. This theme is further explored in a report from Google (\"Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft\") which highlights their strategic focus on leveraging AI technology for competitive advantage.\n\n## Software Development and Engineering\nSeveral posts delve into software development practices and tools. An interesting article titled \"Three constraints before I build anything\" (35 points) offers practical guidelines for developers, while another post discusses the limitations of SWE-bench Verified in measuring frontier coding capabilities (\"SWE-bench Verified no longer measures frontier coding capabilities\", 248 points). Additionally, a technical deep dive into \"The fastest Linux timestamps\" (15 points) showcases optimization techniques in system programming.\n\n## Hardware and Embedded Systems\nIn the hardware space, there's significant discussion around embedded systems. A post titled \"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\" (32 points) demonstrates advanced techniques for utilizing microcontroller resources efficiently. This follows a trend of optimizing performance in constrained environments.\n\n## Cultural and Historical Perspectives\nA fascinating historical piece, \"I bought Friendster for $30k – Here's what I'm doing with it\" (393 points), offers insights into the evolution of social media platforms and their potential second lives. The post combines nostalgia with practical business strategy, showing how legacy technologies can be repurposed in innovative ways.\n\n## Environmental Science\nThe environmental section features a concerning report on butterfly populations (\"Butterflies are in decline across North America\", 124 points), which highlights the Western Monarch's struggles and broader implications for biodiversity conservation. This post underscores the importance of monitoring and protecting endangered species.\n\nThese diverse topics reflect the breadth of discussions happening on Hacker News, from cutting-edge technology to environmental concerns, demonstrating the platform's role as a hub for both technical innovation and societal awareness.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.5333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "5 category sections",
+          "8/15 titles cited",
+          "339 words",
+          "★ called recall()"
+        ],
+        "composite": 0.8366666666666667
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7841999999999999,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}

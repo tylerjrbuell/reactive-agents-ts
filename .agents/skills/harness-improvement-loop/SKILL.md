@@ -39,6 +39,8 @@ If you're going to remember one thing: **`rax:diagnose replay <runId> --only=ker
 
 Read these before forming hypotheses. Misdiagnosing happens when you reason about runtime behavior without knowing what the kernel is supposed to do.
 
+### Code targets
+
 | What | File |
 |------|------|
 | Kernel main loop | `packages/reasoning/src/kernel/loop/runner.ts` |
@@ -49,6 +51,22 @@ Read these before forming hypotheses. Misdiagnosing happens when you reason abou
 | Context profiles (per-tier knobs) | `packages/reasoning/src/context/context-profile.ts` |
 | Diagnostic emit helpers | `packages/reasoning/src/kernel/utils/diagnostics.ts` |
 | AGENTS.md root + memory | `AGENTS.md`, `~/.claude/projects/.../memory/MEMORY.md` |
+
+### Wiki targets (knowledge graph queries)
+
+The wiki is the single source of truth for prior diagnostic work. Before probing, query it:
+
+| What | Path |
+|------|------|
+| **Recent context** | `wiki/Hot.md` — current focus, recent fixes |
+| **Past harness reports** | `wiki/Research/Harness-Reports/` — phase reports, baselines, diffs (this is where YOUR reports go) |
+| **Failure mode catalog** | `wiki/Architecture/Specs/02-FAILURE-MODES.md` + `wiki/Failure-Modes/` (FM-A through FM-H) |
+| **Mechanism validations** | `wiki/Experiments/M*.md` (M1-M13 spike reports — does the failure relate to a known mechanism?) |
+| **Past debriefs** | `wiki/Research/Debriefs/` — what was already tried? |
+| **Active issues** | `wiki/Issues/Running Issues Log.md` — known blockers |
+| **Decision context** | `wiki/Decisions/Decision Index.md` — why current architecture exists |
+
+**Query pattern:** `grep -r "<symptom keyword>" wiki/Research/Harness-Reports/ wiki/Failure-Modes/ wiki/Experiments/` before forming a hypothesis. If the failure mode has been investigated before, the prior trace evidence + fix attempts save hours.
 
 Also check `git log --oneline -20` so you know what shipped recently and aren't reinventing a fix that was reverted last week.
 
@@ -75,7 +93,7 @@ TASK_GATE_MODEL=cogito:latest bun .agents/skills/harness-improvement-loop/script
 PROBE_MODEL=qwen3:14b          bun .agents/skills/harness-improvement-loop/scripts/harness-probe.ts
 ```
 
-The probe writes a JSON summary under `harness-reports/`. Tracing is automatic — one `<runId>.jsonl` per task run lands in `~/.reactive-agents/traces/`.
+The probe writes a JSON summary under `wiki/Research/Harness-Reports/`. Tracing is automatic — one `<runId>.jsonl` per task run lands in `~/.reactive-agents/traces/`.
 
 **Adapting probes is expected, not an anti-pattern.** If the existing scripts don't exercise the failure mode you suspect, add a task or tweak `maxIterations` directly. Just commit the change with the run that justifies it.
 
@@ -338,9 +356,23 @@ Per session you'll accumulate JSONL traces and probe summaries. The diagnose CLI
 ls -t ~/.reactive-agents/traces/*.jsonl | tail -n +51 | xargs -I{} mv {} ~/.reactive-agents/traces/archive/ 2>/dev/null || true
 ```
 
-`harness-reports/` should keep the latest probe summary per model and the current improvement log. Older runs can move to `harness-reports/archive/`.
+`wiki/Research/Harness-Reports/` should keep the latest probe summary per model and the current improvement log. Older runs can move to `wiki/Research/Harness-Reports/_archive/`.
 
-No formal "pass close-out" template anymore — the diagnostic evidence lives in the trace JSONL and the commit message. If you want a session log, write a single `harness-reports/improvement-YYYY-MM-DD.md` with a paragraph per fix; don't reach for the heavy template.
+No formal "pass close-out" template anymore — the diagnostic evidence lives in the trace JSONL and the commit message. If you want a session log, write a single `wiki/Research/Harness-Reports/improvement-YYYY-MM-DD.md` with a paragraph per fix; don't reach for the heavy template.
+
+### Cross-link findings to the wiki graph (high-leverage)
+
+When a session yields a non-trivial finding, link it into the knowledge graph so future sessions discover it:
+
+1. **Significant fix?** → Write a debrief: `wiki/Research/Debriefs/YYYY-MM-DD-<feature>-debrief.md`
+2. **New failure mode discovered?** → Add to `wiki/Failure-Modes/FM-<X>-<name>.md`, update `wiki/Architecture/Specs/02-FAILURE-MODES.md` catalog
+3. **Mechanism behavior changed?** → Update the relevant `wiki/Experiments/M*.md` note
+4. **Architectural decision?** → Add to `wiki/Decisions/YYYY-MM-DD-<decision>.md`, update `wiki/Decisions/Decision Index.md`
+5. **Active blocker?** → Add to `wiki/Issues/Running Issues Log.md`
+
+Use Obsidian wikilinks (`[[Failure-Modes/FM-A Tool Engagement]]`) so the graph navigates correctly.
+
+**This is the payoff for the wiki consolidation:** every harness improvement loop pass enriches the project brain. Future agents (Claude/Cursor/Codex/etc.) discover prior diagnostic work via wiki search instead of re-running it.
 
 ---
 

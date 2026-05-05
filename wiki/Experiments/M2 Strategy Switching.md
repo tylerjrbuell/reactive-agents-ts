@@ -15,7 +15,7 @@ owner: Reasoning Team
 
 **Verdict:** ✅ KEEP
 
-**Evidence:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+**Evidence:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 
 ---
 
@@ -45,7 +45,7 @@ Mitigates [[Failure-Modes/FM-C Reasoning|FM-C]] (reasoning quality drops on comp
 
 ### Key Findings
 
-**From harness-reports/phase-1-mechanism-validation-2026-05-04.md:**
+**From wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md:**
 - ✅ 20 passing tests; switching heuristics validated
 - ✅ Strategy selection heuristics proven effective
 - ✅ Zero regressions from strategy switching

@@ -11,7 +11,7 @@
  *     [--max 6]
  *
  * Environment overrides flags. Output goes to stdout AND
- * harness-reports/multi-model-<datetime>/<model-slug>.log
+ * wiki/Research/Harness-Reports/multi-model-<datetime>/<model-slug>.log
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
@@ -101,7 +101,7 @@ async function main(): Promise<void> {
     .filter((m) => m.length > 0);
 
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  const outDir = join(process.cwd(), "harness-reports", `multi-model-${ts}`);
+  const outDir = join(process.cwd(), "wiki/Research/Harness-Reports", `multi-model-${ts}`);
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
   console.log(`\n🧪 Multi-Model Harness Probe`);

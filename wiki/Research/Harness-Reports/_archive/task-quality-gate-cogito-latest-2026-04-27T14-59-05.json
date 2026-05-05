@@ -1,0 +1,136 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T14-59-05",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1600.3774680000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13479,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 17867.682872,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 7636,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 7740.220111999999,
+      "output": "[{\"id\":47919997,\"title\":\"Pgbackrest is no longer being maintained\",\"score\":253,\"by\":\"c0l0\",\"descendants\":117,\"url\":\"https://github.com/pgbackrest/pgbackrest\"},{\"id\":47920787,\"title\":\"Show HN: OSS Agent I built topped the TerminalBench on Gemini-3-flash-preview\",\"score\":109,\"by\":\"GodelNumbering\",\"descendants\":33,\"url\":\"https://github.com/dirac-run/dirac\"},{\"id\":47919630,\"title\":\"4TB of voice samples just stolen from 40k AI contractors at Mercor\",\"score\":130,\"by\":\"Oravys\",\"descendants\":47,\"url\":\"https://app.oravys.com/blog/mercor-breach-2026\"},{\"id\":47901433,\"title\":\"Fully Featured Audio DSP Firmware for the Raspberry Pi Pico\",\"score\":154,\"by\":\"BoingBoomTschak\",\"descendants\":31,\"url\":\"https://github.com/WeebLabs/DSPi\"},{\"id\":47922079,\"title\":\"\\\"Why not just use Lean?\\\"\",\"score\":8,\"by\":\"ibobev\",\"descendants\":0,\"url\":\"https://lawrencecpaulson.github.io//2026/04/23/Why_not_Lean.html\"},{\"id\":47921377,\"title\":\"Tendril – a self-extending agent that builds and registers its own tools\",\"score\":11,\"by\":\"walmsles\",\"descendants\":2,\"url\":\"https://github.com/serverless-dna/tendril\"},{\"id\":47920074,\"title\":\"Men Who Stare at Walls\",\"score\":121,\"by\":\"aselimov3\",\"descendants\":62,\"url\":\"https://www.alexselimov.com/posts/men_who_stare_at_walls/\"},{\"id\":47919733,\"title\":\"FDA Approves First-Ever Gene Therapy for Treatment of Genetic Hearing Loss\",\"score\":69,\"by\":\"JeanKage\",\"descendants\":22,\"url\":\"https://www.fda.gov/news-events/press-announcements/fda-approves-first-ever-gene-therapy-treatment-genetic-hearing-loss-under-national-priority-voucher\"},{\"id\":47875795,\"title\":\"Flipdiscs\",\"score\":415,\"by\":\"skogstokig\",\"descendants\":69,\"url\":\"https://flipdisc.io\"},{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":965,\"by\":\"ca98am79\",\"descendants\":494,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47921064,\"title\":\"Running Local LLMs Offline on a Ten-Hour Flight\",\"score\":18,\"by\":\"darccio\",\"descendants\":6,\"url\":\"https://deploy.live/blog/running-local-llms-offline-on-a-ten-hour-flight/\"},{\"id\":47921248,\"title\":\"Microsoft to Stop Sharing Revenue with Main AI Partner OpenAI\",\"score\":76,\"by\":\"helsinkiandrew\",\"descendants\":15,\"url\":\"https://www.bloomberg.com/news/articles/2026-04-27/microsoft-to-stop-sharing-revenue-with-main-ai-partner-openai\"},{\"id\":47905761,\"title\":\"Understanding the short circuit in solid-state batteries\",\"score\":14,\"by\":\"hhs\",\"descendants\":0,\"url\":\"https://www.mpie.de/5151287/short-circuit-solid-state-batteries\"},{\"id\":47919240,\"title\":\"Quarkdown – Markdown with Superpowers\",\"score\":85,\"by\":\"amai\",\"descendants\":13,\"url\":\"https://quarkdown.com/\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":691,\"by\":\"koshyjohn\",\"descendants\":492,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47920289,\"title\":\"Show HN: A terminal spreadsheet editor with Vim keybindings\",\"score\":34,\"by\":\"garritfra\",\"descendants\":14,\"url\":\"https://github.com/garritfra/cell\"},{\"id\":47916890,\"title\":\"TurboQuant: A first-principles walkthrough\",\"score\":237,\"by\":\"kweezar\",\"descendants\":51,\"url\":\"https://arkaung.github.io/interactive-turboquant/\"},{\"id\":47908051,\"title\":\"Self-updating screenshots\",\"score\":390,\"by\":\"bjhess\",\"descendants\":62,\"url\":\"https://interblah.net/self-updating-screenshots\"},{\"id\":47900649,\"title\":\"Getting my daily news from a dot matrix printer 2024\",\"score\":41,\"by\":\"xupybd\",\"descendants\":7,\"url\":\"https://aschmelyun.com/blog/getting-my-daily-news-from-a-dot-matrix-printer/\"},{\"id\":47917026,\"title\":\"The Prompt API\",\"score\":207,\"by\":\"gslin\",\"descendants\":113,\"url\":\"https://developer.chrome.com/docs/ai/prompt-api\"},{\"id\":47899399,\"title\":\"Managing the Unmanaged Switch\",\"score\":5,\"by\":\"luu\",\"descendants\":2,\"url\":\"https://watchmysys.com/blog/2026/03/managing-the-unmanaged-switch/\"},{\"id\":47910287,\"title\":\"Branimir Lambov from IBM on Cassandra\",\"score\":36,\"by\":\"eatonphil\",\"descendants\":3,\"url\":\"https://theconsensus.dev/p/2026/04/26/branimir-lambov-from-ibm-on-cassandra.html\"},{\"id\":47918961,\"title\":\"It's OK to abandon your side-project (2024)\",\"score\":146,\"by\":\"hisamafahri\",\"descendants\":69,\"url\":\"https://robbowen.digital/wrote-about/abandoned-side-projects/\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":301,\"by\":\"dd23\",\"descendants\":75,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47887907,\"title\":\"Electrostatics and High Voltage Links\",\"score\":26,\"by\":\"ludicrousdispla\",\"descendants\":3,\"url\":\"http://amasci.com/static/electrostatic1.html\"}]",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0,
+        "noFabrication": 0.33999999999999997,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 2 score-confusion picks",
+          "★ called recall()"
+        ],
+        "composite": 0.3803333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 4988,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 9909.459135000001,
+      "output": "Here are the top posts from Hacker News:\n\n## Highest Score\n1. [Show HN: C++17's parallel algorithms are faster than OpenMP](https://news.ycombinator.com/item?id=1234567) (100)\n2. [The future of software is not in code but in configuration](https://news.ycombinator.com/item?id=9876543) (95)\n3. [Python 4: The language we should have built](https://news.ycombinator.com/item?id=5432109) (90)\n\n## Most Comments\n1. [Why does everyone on Reddit think they're a programmer?](https://news.ycombinator.com/item?id=1234567) (500)\n2. [The difference between JavaScript and Java is getting harder to explain](https://news.ycombinator.com/item?id=9876543) (450)\n3. [I tried using Vim for a week, here's what happened](https://news.ycombinator.com/item?id=5432109) (400)\n\nNote: This is sample data and not actual Hacker News posts.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "0/6 correct titles"
+        ],
+        "composite": 0.44999999999999996
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 16992,
+      "stepsCount": 22,
+      "toolCallCount": 0,
+      "wallMs": 33541.98439700001,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "0 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5000666666666665,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

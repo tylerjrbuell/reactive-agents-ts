@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T14-12-17",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1490.037464,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 14332,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 25804.684594000002,
+      "output": "Your next step: call get-hn-posts. You have all the information you need.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 9102,
+      "stepsCount": 10,
+      "toolCallCount": 2,
+      "wallMs": 7146.5227529999975,
+      "output": "1. I Bought Friendster for $30k — Here's What I'm Doing with It — comments: 478\n2. AI Should Elevate Your Thinking, Not Replace It — comments: 475\n3. France's Mistral Built a $14B AI Empire by Not Being American — comments: 72",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "2/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.7666666666666667
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 16715,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 9980.729719000003,
+      "output": "{\"query\":\"hacker news top posts\",\"results\":[{\"content\":\"Hacker News · 1. The West forgot how to make things, now it's forgetting how to code (techtrenches. · 2. I bought Friendster for $30k – Here's what I'm doing with ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/best\",\"score\":0.5},{\"content\":\"1. New 10 GbE USB adapters are cooler, smaller, cheaper (jeffgeerling.com) · 2. Trump fires NSF's oversight board (science.org) · 3. Show HN: A Karpathy-style LLM ...\",\"source\":\"web\",\"identifier\":\"https://hntoplinks.com/\",\"score\":0.5},{\"content\":\"1. I bought Friendster for $30k – Here's what I'm doing with it (ca98am79.medium.com) · 2. An AI agent deleted our production database. · 3. Asahi Linux Progress ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/best?h=24\",\"score\":0.5}],\"totalResults\":5,\"sourcesSearched\":[\"web\"],\"storedAs\":\"_find_1777299177323\"}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 0.3333333333333333,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "2/6 correct titles"
+        ],
+        "composite": 0.4833333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 16460,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 14262.084702,
+      "output": "{\"query\":\"top hacker news stories\",\"results\":[{\"content\":\"1. The West forgot how to make things, now it's forgetting how to code (techtrenches. · 2. I bought Friendster for $30k – Here's what I'm doing with it (ca98am79 ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/best\",\"score\":0.5},{\"content\":\"1. New 10 GbE USB adapters are cooler, smaller, cheaper (jeffgeerling.com) · 2. Trump fires NSF's oversight board (science.org) · 3. Show HN: A Karpathy-style ...\",\"source\":\"web\",\"identifier\":\"https://hntoplinks.com/\",\"score\":0.5},{\"content\":\"The Hacker News is the top cybersecurity news platform, delivering real-time updates, threat intelligence, data breach reports, expert analysis, ...\",\"source\":\"web\",\"identifier\":\"https://thehackernews.com/\",\"score\":0.5}],\"totalResults\":5,\"sourcesSearched\":[\"web\"],\"storedAs\":\"_find_1777299190586\"}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "1/15 titles cited",
+          "78 words"
+        ],
+        "composite": 0.3933333333333333
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5886666666666667,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

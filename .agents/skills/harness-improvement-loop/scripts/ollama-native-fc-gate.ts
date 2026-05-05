@@ -19,7 +19,7 @@ type ProbeReport = {
   readonly aggregateByScenario: Record<string, ScenarioAggregate>;
 };
 
-const REPORTS_DIR = join(process.cwd(), "harness-reports");
+const REPORTS_DIR = join(process.cwd(), "wiki/Research/Harness-Reports");
 const MIN_RUNS = Math.max(1, Number(process.env.PROBE_MIN_RUNS ?? "3"));
 const ALLOW_MISMATCH_RUNS = Math.max(0, Number(process.env.PROBE_ALLOW_MISMATCH_RUNS ?? "0"));
 const ALLOW_MISMATCH_NO_THINKING_RUNS = Math.max(

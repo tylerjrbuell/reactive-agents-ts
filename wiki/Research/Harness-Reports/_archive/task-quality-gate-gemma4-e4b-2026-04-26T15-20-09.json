@@ -1,0 +1,136 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T15-20-09",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 284,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6602.833688,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 10635,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 40144.320143000004,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(15) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47909226  title=Asahi Linux Progress Linux 7.0  score=294  by=elisaado\n  [1] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=28  by=kmdupree\n  [2] id=47908833  title=Statecharts: hierarchical state machines  score=158  by=sph\n  [3] id=47903126  title=Amateur armed with ChatGPT solves an Erdős problem  score=543  by=pr337h4m\n  [4] id=47894124  title=The Nintendo Switch Switch (2019)  score=24  by=zdw\n  [5] id=47876071  title=Show HN: Turning a Gaussian Splat into a videogame  score=99  by=yak32\n  [6] id=47905984  title=Why has there been so little progress on Alzheimer's disease  score=317  by=chiefalchemist\n  [7] id=47907879  title=The West forgot how to make things, now it’s forgetting how   score=761  by=milkglass\n  ...7 more\n  — full text is stored. Use recall(\"_tool_result_1\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0.5333333333333333,
+        "completeness": 0,
+        "noFabrication": 0,
+        "callsRecall": false,
+        "notes": [
+          "8/15 titles cited",
+          "9/15 scores cited",
+          "0 numbered lines",
+          "★ tool-preview echoed as output",
+          "no recall needed"
+        ],
+        "composite": 0.18666666666666665
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 9689,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 22205.365292000002,
+      "output": "[recall result — compressed preview]\nType: Object(4 keys)\n  key: _tool_result_2\n  content: [{\"id\":47909226,\"title\":\"Asahi Linux Progress Linux 7.0\",\"score\":294,\"by\":\"elisa\n  bytes: 4751\n  truncated: false\n  — full text is stored. Use recall(\"_tool_result_3\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 9656,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 25082.110407,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts×3 (2/3 satisfied).\nrequired=[get-hn-posts×3 (2/3 satisfied)]\ncalled=[get-hn-posts]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find]\nterminatedBy=controller_early_stop:dispatcher_early_stop",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 9696,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 22677.509810999996,
+      "output": "[recall result — compressed preview]\nType: Object(4 keys)\n  key: _tool_result_5\n  content: [{\"id\":47909226,\"title\":\"Asahi Linux Progress Linux 7.0\",\"score\":294,\"by\":\"elisa\n  bytes: 2760\n  truncated: false\n  — full text is stored. Use recall(\"_tool_result_6\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 0.2,
+        "noFabrication": 0,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "1/15 titles cited",
+          "29 words",
+          "★ tool-preview echoed"
+        ],
+        "composite": 0.09333333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.38499999999999995,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

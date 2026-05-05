@@ -2,10 +2,10 @@
 //
 // Tier-1 gate runner. Discovers scenarios via the registry, executes each
 // using `runScenario`, captures a Tier1ScenarioOutcome, and writes the
-// aggregate Tier1Baseline to `harness-reports/integration-control-flow-baseline.json`.
+// aggregate Tier1Baseline to `wiki/Research/Harness-Reports/integration-control-flow-baseline.json`.
 //
 // Designed for the harness improvement loop:
-//   - Failure path archives the offending trace under `harness-reports/regressions/`
+//   - Failure path archives the offending trace under `wiki/Research/Harness-Reports/regressions/`
 //     so the next session has a frozen snapshot to analyze.
 //   - Health sidecar updates increment executions/regressionsCaught.
 //   - Coverage report (weakness → scenarios) surfaces uncovered weaknesses
@@ -28,7 +28,7 @@ import { discoverScenarios, summarizeCoverage } from "./registry.js";
 
 // ─── Filesystem layout ────────────────────────────────────────────────────────
 
-export const REPORTS_DIR = "harness-reports";
+export const REPORTS_DIR = "wiki/Research/Harness-Reports";
 export const BASELINE_PATH = join(REPORTS_DIR, "integration-control-flow-baseline.json");
 export const HEALTH_PATH = join(REPORTS_DIR, "integration-control-flow-scenario-health.json");
 export const REGRESSIONS_DIR = join(REPORTS_DIR, "regressions");
@@ -274,7 +274,7 @@ export function formatFailure(diffs: readonly ScenarioDiff[]): string {
 
 /**
  * When the gate fails, copy the failing scenario's JSONL trace to
- * `harness-reports/regressions/<id>-<iso>.jsonl`. The improvement-loop
+ * `wiki/Research/Harness-Reports/regressions/<id>-<iso>.jsonl`. The improvement-loop
  * session can read these directly without re-running the agent.
  */
 export function archiveFailingTrace(

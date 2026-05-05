@@ -15,7 +15,7 @@ tags: [MOC]
 - [[Experiments/Phase 1 Mechanism Validation|Phase 1 Results]] — All 13 mechanisms validated via TDD
 - **8 KEEP verdicts** — M1, M2, M4, M5, M9, M11, M12, M13
 - **5 IMPROVE verdicts** — M3, M6, M7, M8, M10
-- **Evidence:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+- **Evidence:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 
 ### KEEP Mechanisms
 - [[Experiments/M1 RI Dispatcher|M1 RI Dispatcher]] — ✅ KEEP | All 6 handlers wired; architecture sound; entropy-driven intervention
@@ -119,7 +119,7 @@ tags: [MOC]
 
 ### Spike Result Archives
 - All 13 spike debriefs in `docs/superpowers/debriefs/M*-*-validation.md`
-- Full evidence in `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+- Full evidence in `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 - Detailed specs in `docs/superpowers/specs/`
 
 ### Learning Log

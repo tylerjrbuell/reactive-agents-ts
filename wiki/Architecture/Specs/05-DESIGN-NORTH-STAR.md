@@ -613,17 +613,17 @@ The refactor SHRINKS total LOC. Decomposition extracts well-defined responsibili
 
 ## 11. Superseded Documents
 
-This North Star v3.0 supersedes and consolidates the following analysis documents. They remain in `harness-reports/` as historical evidence (the diagnostic trail), but are no longer authoritative for forward direction:
+This North Star v3.0 supersedes and consolidates the following analysis documents. They remain in `wiki/Research/Harness-Reports/` as historical evidence (the diagnostic trail), but are no longer authoritative for forward direction:
 
 | Document | Status | What it contributed to v3.0 |
 |---|---|---|
-| `harness-reports/north-star-status-audit-20260424.md` | Historical | G-1..G-6 status table → §2.7 |
-| `harness-reports/improvement-report-20260424-north-star-1.md` | Historical | Apr 24 corpus baseline → §2.1 |
-| `harness-reports/north-star-closure-scorecard-2026-04-25.md` | Historical | Post-Phase-1 corpus → §2.2 |
-| `harness-reports/north-star-diagnosis-2026-04-25.md` | Historical | W4 verdict via trace inspector → §2.4 |
-| `harness-reports/change-a-empirical-validation-2026-04-26.md` | Historical | 9-termination-paths finding → §2.5 |
-| `harness-reports/cognitive-kernel-architecture-2026-04-26.md` | Superseded | Three-tier shape → §4 |
-| `harness-reports/agent-capability-architecture-2026-04-26.md` | Superseded | 10 capabilities + 5 traits → §3, §4.3 |
+| `wiki/Research/Harness-Reports/north-star-status-audit-20260424.md` | Historical | G-1..G-6 status table → §2.7 |
+| `wiki/Research/Harness-Reports/improvement-report-20260424-north-star-1.md` | Historical | Apr 24 corpus baseline → §2.1 |
+| `wiki/Research/Harness-Reports/north-star-closure-scorecard-2026-04-25.md` | Historical | Post-Phase-1 corpus → §2.2 |
+| `wiki/Research/Harness-Reports/north-star-diagnosis-2026-04-25.md` | Historical | W4 verdict via trace inspector → §2.4 |
+| `wiki/Research/Harness-Reports/change-a-empirical-validation-2026-04-26.md` | Historical | 9-termination-paths finding → §2.5 |
+| `wiki/Research/Harness-Reports/cognitive-kernel-architecture-2026-04-26.md` | Superseded | Three-tier shape → §4 |
+| `wiki/Research/Harness-Reports/agent-capability-architecture-2026-04-26.md` | Superseded | 10 capabilities + 5 traits → §3, §4.3 |
 
 The **previous** v2.3 is also superseded by this v3.0.
 

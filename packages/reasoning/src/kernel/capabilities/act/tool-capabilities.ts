@@ -111,7 +111,7 @@ export const resolveExecutableToolCapabilities = (input: {
       // model surface anything else it needs at runtime. Schemas already carry
       // name/description/parameters — pass them straight through.
       // Default-on as of 2026-04-26 (curator empirical validation —
-      // harness-reports/bare-vs-harness-curation-2026-04-26.md). Opt out via
+      // wiki/Research/Harness-Reports/bare-vs-harness-curation-2026-04-26.md). Opt out via
       // RA_LAZY_TOOLS=0 for backward compatibility while downstream agents
       // adapt.
       if (process.env.RA_LAZY_TOOLS !== "0") {

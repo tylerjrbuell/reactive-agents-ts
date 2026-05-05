@@ -1,0 +1,135 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T21-16-45",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 106,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1876.273201,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 4907,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 27662.087258,
+      "output": "1. Fast16: Cyberweapon that predates Stuxnet by five years (score: 34)\n2. Magic: The Gathering took me from N2 to Japanese fluency (score: 37)\n3. Human Source License (HSL) (score: 13)\n4. The 1944 Warsaw Uprising, in Color (score: 20)\n5. SWE-bench Verified no longer measures frontier coding capabilities (score: 200)\n6. Clay PCB Tutorial (score: 161)\n7. The Visible Zorker: Zork 1 (score: 65)\n8. Show HN: AI memory with biological decay (52% recall) (score: 4)\n9. GoDaddy gave a domain to a stranger without any documentation (score: 404)\n10. Show HN: Free textbook on engineering thermodynamics (score: 76)\n11. AI should elevate your thinking, not replace it (score: 100)\n12. Statecharts: hierarchical state machines (score: 260)\n13. An AI agent deleted our production database. The agent's confession is below (score: 265)\n14. Amateur armed with ChatGPT solves an Erdős problem (score: 709)\n15. Orinoco: Young Generation Garbage Collection (score: 21)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6277,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 35055.578526,
+      "output": "1. Amateur armed with ChatGPT solves an Erdős problem — comments: 486\n2. An AI agent deleted our production database. The agent's confession is below — comments: 346\n3. Why has there been so little progress on Alzheimer's disease? — comments: 259",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 10661,
+      "stepsCount": 5,
+      "toolCallCount": 0,
+      "wallMs": 67343.948091,
+      "output": "## Highest Score\n1. Amateur armed with ChatGPT solves an Erdős problem (709)\n2. Asahi Linux Progress Linux 7.0 (557)\n3. Why has there been so little progress on Alzheimer's disease? (384)\n\n## Most Comments\n1. Amateur armed with ChatGPT solves an Erdős problem (486)\n2. An AI agent deleted our production database. The agent's confession is below (346)\n3. Asahi Linux Progress Linux 7.0 (255)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "5/6 correct titles"
+        ],
+        "composite": 0.9083333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 10220,
+      "stepsCount": 5,
+      "toolCallCount": 0,
+      "wallMs": 69006.78613200001,
+      "output": "# Today on Hacker News\n\nThe top stories on Hacker News today reveal a fascinating mix of cutting-edge AI developments, deep dives into software architecture, and reminders of the persistent vulnerabilities in digital infrastructure. From the theoretical limits of machine intelligence to the practical challenges of building physical hardware, the community is engaged with the full spectrum of modern technology.\n\n### Artificial Intelligence & Machine Learning\nThe most dominant theme today is the rapid evolution and inherent risks of AI. Discussions ranged from the academic to the alarming. One major story highlighted the potential for AI to solve complex problems, such as the piece detailing how an amateur armed with ChatGPT solved an Erdős problem. However, the posts also served as cautionary tales, including the dramatic report on \"An AI agent deleted our production database,\" and the discussion on \"SWE-bench Verified no longer measures frontier coding capabilities,\" suggesting that current benchmarks may be lagging behind real-world AI capabilities.\n\n### Software Engineering & Development\nThe core of",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "2/15 titles cited",
+          "166 words"
+        ],
+        "composite": 0.5216666666666666
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8859999999999999,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

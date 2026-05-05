@@ -104,9 +104,10 @@ reactive-agents-ts/
 │   │   ├── Changelog-History/ .......... archived CHANGELOG entries
 │   │   └── (release artifacts)
 │   │
-│   ├── Research/ ....................... research, debriefs, audits
+│   ├── Research/ ....................... research, debriefs, audits, harness data
 │   │   ├── Debriefs/ ................... post-feature engineering notes
 │   │   ├── Audit-Reports-YYYY-MM-DD/ ... periodic audit reports
+│   │   ├── Harness-Reports/ ............ phase validations, baselines, gate traces (REPORTS_DIR)
 │   │   └── (deep research archives)
 │   │
 │   ├── Development/ .................... contributor docs (mirrors of root files)

@@ -1,0 +1,135 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T23-45-15",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 106,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1839.640069,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5428,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 17594.373466999998,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 212)\n2. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 105)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (score: 181)\n4. Butterflies are in decline across North America, a look at the Western Monarch (score: 82)\n5. Two Athletes Break Sub-2-HR Marathon in Adizero Adios Pro Evo 3 (score: 33)\n6. Magic: The Gathering took me from N2 to Japanese fluency (score: 70)\n7. Show HN: AI memory with biological decay (52% recall) (score: 42)\n8. AI should elevate your thinking, not replace it (score: 218)\n9. SWE-bench Verified no longer measures frontier coding capabilities (score: 228)\n10. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (score: 17)\n11. Box to Save Memory in Rust (score: 19)\n12. MoQ Boy (score: 27)\n13. XOXO Festival Archive (score: 32)\n14. Clay PCB Tutorial (score: 185)\n15. The Visible Zorker: Zork 1 (score: 89)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6822,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 37589.693886,
+      "output": "1. An AI agent deleted our production database. The agent's confession is below — comments: 535\n2. AI should elevate your thinking, not replace it — comments: 172\n3. SWE-bench Verified no longer measures frontier coding capabilities — comments: 135",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "1/3 correct titles",
+          "1/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.7666666666666667
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 6290,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 41528.52137,
+      "output": "## Highest Score\n1. SWE-bench Verified no longer measures frontier coding capabilities (228)\n2. AI should elevate your thinking, not replace it (218)\n3. I bought Friendster for $30k – Here's what I'm doing with it (212)\n\n## Most Comments\n1. An AI agent deleted our production database. The agent's confession is below (535)\n2. AI should elevate your thinking, not replace it (172)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (121)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 10927,
+      "stepsCount": 5,
+      "toolCallCount": 0,
+      "wallMs": 70366.606558,
+      "output": "# Today on Hacker News\n\nThe top stories on Hacker News today showcased a diverse mix of technological breakthroughs, environmental concerns, and personal achievements, reflecting the breadth of modern innovation. From the cutting edge of AI research to hands-on hardware projects, the community was deeply engaged with how technology is evolving and how we can build with it.\n\nIn the realm of **Artificial Intelligence and Computing**, the conversation was dominated by the rapid pace of AI development. Several posts addressed the state of AI capabilities, including the discussion titled \"AI should elevate your thinking, not replace it,\" which garnered significant attention. The industry also debated evaluation methods, highlighted by the article noting that \"SWE-bench Verified no longer measures frontier coding capabilities.\" On a more technical front, a \"Show HN\" post detailed \"AI memory with biological decay (52% recall),\" suggesting novel approaches to artificial memory models.\n\nA strong focus was placed",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "2/15 titles cited",
+          "150 words"
+        ],
+        "composite": 0.5216666666666666
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8576666666666666,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

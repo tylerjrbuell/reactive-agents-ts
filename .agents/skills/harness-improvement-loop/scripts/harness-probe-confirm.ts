@@ -1,13 +1,13 @@
 // harness-probe-confirm.ts — Pass 2 confirmation probes
 // Targets W1 (cogito text-format FC), W2 (ICS masks loop detector), W4 (maxIterations wiring)
 //
-//   bun run scripts/harness-probe-confirm.ts 2>&1 | tee harness-reports/probe-confirm-$(date +%Y%m%d-%H%M).txt
+//   bun run scripts/harness-probe-confirm.ts 2>&1 | tee wiki/Research/Harness-Reports/probe-confirm-$(date +%Y%m%d-%H%M).txt
 
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from "fs";
 
 const COGITO_MODEL = "cogito:8b";
-const REPORT_DIR = "./harness-reports";
+const REPORT_DIR = "./wiki/Research/Harness-Reports";
 
 interface ConfirmProbeConfig {
   id: string;

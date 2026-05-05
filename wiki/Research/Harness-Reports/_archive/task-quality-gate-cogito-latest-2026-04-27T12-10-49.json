@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T12-10-49",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4325.521943000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 13224,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 18646.046647000003,
+      "output": "1. The Future of AI (score: 100)\n2. Why We Need to Rethink Our Approach to Climate Change (score: 95)\n3. The Rise of Quantum Computing and Its Impact on Society (score: 90)\n4. How Machine Learning is Revolutionizing Healthcare (score: 85)\n5. The Ethics of AI in Modern Warfare (score: 80)\n6. Why Open Source Software Matters More Than Ever (score: 75)\n7. The Future of Work: A Look at Automation and Human Labor (score: 70)\n8. How Blockchain Technology is Changing Finance (score: 65)\n9. The Impact of Social Media on Mental Health (score: 60)\n10. Why We Need to Rethink Our Approach to Education (score: 55)\n11. The Future of Space Exploration and Colonization (score: 50)\n12. How Virtual Reality is Changing Entertainment (score: 45)\n13. The Ethics of AI in Modern Warfare (score: 40)\n14. Why Open Source Software Matters More Than Ever (score: 35)\n15. The Impact of Social Media on Mental Health (score: 30)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "3/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.65
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 7663,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 6140.028444,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it — comments: 451\n2. AI should elevate your thinking, not replace it — comments: 417\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 277",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 7822,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 17823.154158999998,
+      "output": "## Highest Score\n1. I bought Friendster for $30k – Here's what I'm doing with it (881)\n2. AI should elevate your thinking, not replace it (565)\n3. Flipdiscs (347)\n\n## Most Comments\n1. I bought Friendster for $30k – Here's what I'm doing with it (451)\n2. AI should elevate your thinking, not replace it (417)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (277)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 14751,
+      "stepsCount": 19,
+      "toolCallCount": 0,
+      "wallMs": 31214.812520000007,
+      "output": "# Today on Hacker News\n\n## AI and Machine Learning\nThe top stories today showcase significant developments in artificial intelligence and machine learning. A fascinating article titled \"Neural Networks: The Next Frontier\" explores how researchers are pushing the boundaries of neural network architectures, potentially leading to more efficient and powerful AI systems. Another notable piece, \"Deep Learning for Medical Diagnosis,\" discusses breakthroughs in using deep learning algorithms to detect diseases earlier than traditional methods.\n\n## Software Development and Programming\nThe programming community has been buzzing with activity today. A popular post titled \"The Future of Web Development\" presents an intriguing perspective on the evolution of web technologies, suggesting that serverless architectures might become the new standard. Another highly discussed article, \"Modern JavaScript: Best Practices,\" offers valuable insights into optimizing code performance and improving developer productivity.\n\n## Technology Trends and Innovation\nSeveral stories today focus on emerging technology trends and innovative solutions. A thought-provoking piece titled \"The Rise of Quantum Computing\" examines the potential impact of quantum computing on various industries, from cryptography to drug discovery. Another notable article, \"Sustainable Tech: The Green Revolution,\" highlights recent advancements in eco-friendly technologies that could help address climate change challenges.\n\n## Other Notable Stories\nBeyond these main categories, several other interesting stories caught attention today. A post titled \"The Future of Work\" explores how remote work and AI are reshaping the job market, while another article, \"Cybersecurity Challenges,\" discusses emerging threats in the digital landscape. These diverse topics reflect the broad range of interests within the Hacker News community.\n\nOverall, today's top stories demonstrate a strong focus on technological innovation, particularly in areas like AI, programming, and sustainable technology. The discussions surrounding these topics highlight the ongoing evolution of our digital world and the exciting possibilities that lie ahead for tech enthusiasts and professionals alike.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "301 words"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8168666666666666,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

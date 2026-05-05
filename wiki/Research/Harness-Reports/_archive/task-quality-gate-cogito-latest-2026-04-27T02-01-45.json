@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T02-01-45",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4531.001133000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13892,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 23154.89773,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=dispatcher-strategy-switch",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8956,
+      "stepsCount": 10,
+      "toolCallCount": 2,
+      "wallMs": 8868.748974000002,
+      "output": "1. AI should elevate your thinking, not replace it — comments: 241\n2. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 198\n3. An AI agent deleted our production database. The agent's confession is below — comments: 628",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 7579,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 6869.601418000006,
+      "output": "## Highest Score\n1. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (253)\n2. AI should elevate your thinking, not replace it (283)\n3. I bought Friendster for $30k – Here's what I'm doing with it (405)\n\n## Most Comments\n1. Magic: The Gathering took me from N2 to Japanese fluency (198)\n2. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (198)\n3. Butterflies are in decline across North America, a look at the Western Monarch (37)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 7150,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 8466.657336999997,
+      "output": "# Today on Hacker News\n\n## AI/ML and Technology\nThe top stories today showcase significant developments in artificial intelligence and technology. Google is making a bold move to catch up with cloud rivals Amazon and Microsoft by leveraging AI edge computing. Meanwhile, an intriguing story highlights Fast16, a high-precision software sabotage technique that was active five years before the infamous Stuxnet virus. Another fascinating development comes from Friendster's new owner, who purchased the platform for $30k and is planning to revitalize it.\n\n## Programming and Software Development\nIn the programming world, several interesting developments are worth noting. A developer has created a clever solution called \"Box\" that helps save memory in Rust programming language. Additionally, there's an important discussion about SWE-bench Verified no longer measuring frontier coding capabilities, which is sparking debate among developers.\n\n## Hardware and Embedded Systems\nFor hardware enthusiasts, there's a detailed report on running Bare-Metal Rust alongside ESP-IDF on the ESP32-S3's Second Core. This technical achievement demonstrates the growing potential of embedded systems development using modern programming languages.\n\n## Other Topics\nBeyond technology, today's top stories include an environmental concern about butterflies being in decline across North America, with a particular focus on the Western Monarch population. There's also a remarkable athletic achievement highlighted by Sawe becoming the first athlete to run a sub-two-hour marathon in a competitive race.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "1/15 titles cited",
+          "223 words"
+        ],
+        "composite": 0.6733333333333333
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7515333333333334,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

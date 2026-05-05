@@ -1,0 +1,135 @@
+{
+  "model": "llama3.1:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T01-50-12",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4686.266198,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 7703,
+      "stepsCount": 8,
+      "toolCallCount": 1,
+      "wallMs": 12798.475976999998,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 391)\n2. Self-updating screenshots (score: 47)\n3. Three constraints before I build anything (score: 34)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 150)\n5. Box to save memory in Rust (score: 57)\n6. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 51)\n7. Butterflies are in decline across North America, a look at the Western Monarch (score: 123)\n8. AI should elevate your thinking, not replace it (score: 280)\n9. SWE-bench Verified no longer measures frontier coding capabilities (score: 248)\n10. Show HN: AI memory with biological decay (52% recall) (score: 57)\n11. The fastest Linux timestamps (score: 15)\n12. Lessons from building multiplayer browsers (score: 7)\n13. Magic: The Gathering took me from N2 to Japanese fluency (score: 84)\n14. When the cheap one is the cool one (score: 11)\n15. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (score: 32)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 9392,
+      "stepsCount": 7,
+      "toolCallCount": 1,
+      "wallMs": 9774.353557000002,
+      "output": "1. AI should elevate your thinking, not replace it — comments: 233\n2. An AI agent deleted our production database. The agent's confession is below — comments: 620\n3. I bought Friendster for $30k – Here's what I'm doing with it — comments: 220",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5782,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 7345.202573999995,
+      "output": "## Highest Score\n1. AI should elevate your thinking, not replace it (280)\n2. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (247)\n3. Clay PCB Tutorial (194)\n\n## Most Comments\n1. I bought Friendster for $30k – Here's what I'm doing with it (233)\n2. AI should elevate your thinking, not replace it (233)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (197)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "5/6 correct titles"
+        ],
+        "composite": 0.9083333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 2118,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 2687.437015000003,
+      "output": "Here is the JSON for a function call with its proper arguments that best answers the given prompt:\n\n```\n{\n    \"name\": \"get-hn-posts\",\n    \"parameters\": {\n        \"count\": 15\n    }\n}\n```",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "29 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8556666666666665,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

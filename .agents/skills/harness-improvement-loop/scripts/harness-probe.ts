@@ -173,7 +173,7 @@ async function runProbe(probe: ProbeConfig): Promise<ProbeResult> {
 }
 
 async function main() {
-  mkdirSync("harness-reports", { recursive: true });
+  mkdirSync("wiki/Research/Harness-Reports", { recursive: true });
   mkdirSync(TRACE_DIR, { recursive: true });
 
   // Optional single-probe filter: `bun run harness-probe.ts <probe-id>`
@@ -190,14 +190,14 @@ async function main() {
     results.push(result);
   }
 
-  const summaryPath = `harness-reports/probe-summary-${new Date().toISOString().slice(0, 16).replace("T", "-")}.json`;
+  const summaryPath = `wiki/Research/Harness-Reports/probe-summary-${new Date().toISOString().slice(0, 16).replace("T", "-")}.json`;
   writeFileSync(summaryPath, JSON.stringify(results, null, 2));
 
   console.log("\n✅ All probes complete.");
   console.log(`   Traces:   ${TRACE_DIR}/<runId>.jsonl`);
   console.log(`   Summary:  ${summaryPath}`);
   console.log(`   Analyze:  bun run scripts/validate-entropy.ts ${TRACE_DIR}`);
-  console.log(`   Reports:  harness-reports/improvement-report-*.md`);
+  console.log(`   Reports:  wiki/Research/Harness-Reports/improvement-report-*.md`);
 }
 
 main().catch(console.error);

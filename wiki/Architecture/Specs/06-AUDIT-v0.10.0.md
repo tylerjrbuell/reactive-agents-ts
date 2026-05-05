@@ -573,7 +573,7 @@ Stage 4 produces a single MEMORY-RECONCILIATION.md log of all changes for tracea
 
 > Cross-cutting verdicts that span multiple packages. **Updated 2026-05-04 with Phase 1 mechanism validation spike results.** This section now reflects empirically-grounded verdicts from TDD-driven mechanism spikes (RED → GREEN → ANALYSIS discipline) rather than pre-validation audit assessments.
 
-> **Phase 1 Validation Gate:** All 13 mechanisms (M1–M13) spike-tested. **8 KEEP verdicts earn their keep; 5 IMPROVE verdicts have concrete Phase 1.5 action items; 0 removals.** Evidence at `harness-reports/phase-1-mechanism-validation-2026-05-04.md`.
+> **Phase 1 Validation Gate:** All 13 mechanisms (M1–M13) spike-tested. **8 KEEP verdicts earn their keep; 5 IMPROVE verdicts have concrete Phase 1.5 action items; 0 removals.** Evidence at `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`.
 
 ##### M1 — Reactive Intelligence dispatcher (entropy → intervention) ✅ KEEP
 

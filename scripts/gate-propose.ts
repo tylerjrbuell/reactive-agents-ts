@@ -18,7 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { discoverScenarios, summarizeCoverage } from "../packages/testing/src/gate/registry.js";
 
-const LOOP_STATE_PATH = "harness-reports/loop-state.json";
+const LOOP_STATE_PATH = "wiki/Research/Harness-Reports/loop-state.json";
 const SCENARIOS_DIR = "packages/testing/src/gate/scenarios";
 
 interface LoopStateWeakness {

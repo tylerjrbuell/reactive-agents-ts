@@ -1,0 +1,2 @@
+{"kind":"run-started","runId":"01KQTTPNAS4WX26F6PP8NHCGBN","timestamp":1777943139677,"iter":-1,"seq":702,"task":"","model":"test-model","provider":"test","config":{}}
+{"kind":"run-completed","runId":"01KQTTPNAS4WX26F6PP8NHCGBN","timestamp":1777943139726,"iter":-1,"seq":703,"status":"success","totalTokens":2,"totalCostUsd":0,"durationMs":49}

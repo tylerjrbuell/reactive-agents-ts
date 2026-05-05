@@ -1,0 +1,137 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T01-46-00",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 236,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 12344.304503,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 10026,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 60890.977494,
+      "output": "[{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":385,\"by\":\"ca98am79\",\"descendants\":217,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47908051,\"title\":\"Self-updating screenshots\",\"score\":47,\"by\":\"bjhess\",\"descendants\":8,\"url\":\"https://interblah.net/self-updating-screenshots\"},{\"id\":47903541,\"title\":\"Three constraints before I build anything\",\"score\":32,\"by\":\"nervous_north\",\"descendants\":4,\"url\":\"https://jordanlord.co.uk/blog/3-constraints/\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":150,\"by\":\"dd23\",\"descendants\":43,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47916410,\"title\":\"Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft\",\"score\":51,\"by\":\"donsupreme\",\"descendants\":13,\"url\":\"https://www.ft.com/content/2429f0f0-b685-4747-b425-bf8001a2e94c\"},{\"id\":47878231,\"title\":\"Box to save memory in Rust\",\"score\":56,\"by\":\"emschwartz\",\"descendants\":10,\"url\":\"https://dystroy.org/blog/box-to-save-memory/\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":279,\"by\":\"koshyjohn\",\"descendants\":227,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47914677,\"title\":\"Butterflies are in decline across North America, a look at the Western Monarch\",\"score\":122,\"by\":\"1659447091\",\"descendants\":32,\"url\":\"https://www.smithsonianmag.com/science-nature/butterflies-are-in-dramatic-decline-across-north-america-a-close-look-at-the-western-monarch-shows-why-180988582/\"},{\"id\":47910388,\"title\":\"SWE-bench Verified no longer measures frontier coding capabilities\",\"score\":247,\"by\":\"kmdupree\",\"descendants\":139,\"url\":\"https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/\"},{\"id\":47914367,\"title\":\"Show HN: AI memory with biological decay (52% recall)\",\"score\":57,\"by\":\"SachitRafa\",\"descendants\":29,\"url\":\"https://github.com/sachitrafa/YourMemory\"},{\"id\":47909979,\"title\":\"The fastest Linux timestamps\",\"score\":15,\"by\":\"hmpc\",\"descendants\":3,\"url\":\"https://www.hmpcabral.com/2026/04/26/the-fastest-linux-timestamps/\"},{\"id\":47910877,\"title\":\"Lessons from building multiplayer browsers\",\"score\":7,\"by\":\"alejandrohacks\",\"descendants\":1,\"url\":\"https://www.alejandro.pe/writing/sail-muddy-lessons\"},{\"id\":47883839,\"title\":\"Magic: The Gathering took me from N2 to Japanese fluency\",\"score\":84,\"by\":\"pwim\",\"descendants\":28,\"url\":\"https://www.tokyodev.com/articles/how-magic-the-gathering-took-me-from-n2-to-japanese-fluency\"},{\"id\":47906420,\"title\":\"When the cheap one is the cool one\",\"score\":11,\"by\":\"ddrmaxgt37\",\"descendants\":3,\"url\":\"https://arun.is/blog/cheap-cool/\"},{\"id\":47885719,\"title\":\"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\",\"score\":31,\"by\":\"MrBuddyCasino\",\"descendants\":4,\"url\":\"https://tingouw.com/blog/embedded/esp32/run_rust_on_app_core\"}]",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 1,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.6499999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 10909,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 44485.937359999996,
+      "output": "[{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":385,\"by\":\"ca98am79\",\"descendants\":217,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47908051,\"title\":\"Self-updating screenshots\",\"score\":47,\"by\":\"bjhess\",\"descendants\":8,\"url\":\"https://interblah.net/self-updating-screenshots\"},{\"id\":47903541,\"title\":\"Three constraints before I build anything\",\"score\":32,\"by\":\"nervous_north\",\"descendants\":4,\"url\":\"https://jordanlord.co.uk/blog/3-constraints/\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":150,\"by\":\"dd23\",\"descendants\":43,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47916410,\"title\":\"Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft\",\"score\":51,\"by\":\"donsupreme\",\"descendants\":13,\"url\":\"https://www.ft.com/content/2429f0f0-b685-4747-b425-bf8001a2e94c\"},{\"id\":47878231,\"title\":\"Box to save memory in Rust\",\"score\":56,\"by\":\"emschwartz\",\"descendants\":10,\"url\":\"https://dystroy.org/blog/box-to-save-memory/\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":279,\"by\":\"koshyjohn\",\"descendants\":227,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47914677,\"title\":\"Butterflies are in decline across North America, a look at the Western Monarch\",\"score\":122,\"by\":\"1659447091\",\"descendants\":32,\"url\":\"https://www.smithsonianmag.com/science-nature/butterflies-are-in-dramatic-decline-across-north-america-a-close-look-at-the-western-monarch-shows-why-180988582/\"},{\"id\":47910388,\"title\":\"SWE-bench Verified no longer measures frontier coding capabilities\",\"score\":247,\"by\":\"kmdupree\",\"descendants\":139,\"url\":\"https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/\"},{\"id\":47914367,\"title\":\"Show HN: AI memory with biological decay (52% recall)\",\"score\":57,\"by\":\"SachitRafa\",\"descendants\":29,\"url\":\"https://github.com/sachitrafa/YourMemory\"},{\"id\":47909979,\"title\":\"The fastest Linux timestamps\",\"score\":15,\"by\":\"hmpc\",\"descendants\":3,\"url\":\"https://www.hmpcabral.com/2026/04/26/the-fastest-linux-timestamps/\"},{\"id\":47910877,\"title\":\"Lessons from building multiplayer browsers\",\"score\":7,\"by\":\"alejandrohacks\",\"descendants\":1,\"url\":\"https://www.alejandro.pe/writing/sail-muddy-lessons\"},{\"id\":47883839,\"title\":\"Magic: The Gathering took me from N2 to Japanese fluency\",\"score\":84,\"by\":\"pwim\",\"descendants\":28,\"url\":\"https://www.tokyodev.com/articles/how-magic-the-gathering-took-me-from-n2-to-japanese-fluency\"},{\"id\":47906420,\"title\":\"When the cheap one is the cool one\",\"score\":11,\"by\":\"ddrmaxgt37\",\"descendants\":3,\"url\":\"https://arun.is/blog/cheap-cool/\"},{\"id\":47885719,\"title\":\"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\",\"score\":31,\"by\":\"MrBuddyCasino\",\"descendants\":4,\"url\":\"https://tingouw.com/blog/embedded/esp32/run_rust_on_app_core\"},{\"id\":47898660,\"title\":\"Quirks of Human Anatomy\",\"score\":88,\"by\":\"gurjeet\",\"descendants\":55,\"url\":\"https://www.sdbonline.org/sites/fly/lewheldquirk/figlegq6.htm\"},{\"id\":47914161,\"title\":\"MoQ Boy\",\"score\":37,\"by\":\"mmcclure\",\"descendants\":3,\"url\":\"https://moq.dev/blog/moq-boy/\"},{\"id\":47911350,\"title\":\"Clay PCB Tutorial\",\"score\":193,\"by\":\"j0r0b0\",\"descendants\":120,\"url\":\"https://feministhackerspaces.cargo.site/Clay-PCB-Tutorial\"},{\"id\":47914350,\"title\":\"Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race\",\"score\":246,\"by\":\"berkeleyjunk\",\"descendants\":197,\"url\":\"https://www.bbc.com/sport/athletics/articles/crm1m7e0zwzo\"},{\"id\":47884850,\"title\":\"XOXO Festival Archive\",\"score\":42,\"by\":\"surprisetalk\",\"descendants\":7,\"url\":\"https://xoxofest.com/\"},{\"id\":47911644,\"title\":\"The Visible Zorker: Zork 1\",\"score\":106,\"by\":\"PLenz\",\"descendants\":19,\"url\":\"https://eblong.com/infocom/visi/zork1/\"},{\"id\":47913382,\"title\":\"Chernobyl Wildlife Forty Years On\",\"score\":40,\"by\":\"reconnecting\",\"descendants\":1,\"url\":\"https://www.bbc.com/future/article/20260424-chernobyl-wildlife-forty-years-on\"},{\"id\":47901819,\"title\":\"Music of the BBC Microcomputer System\",\"score\":6,\"by\":\"eightb\",\"descendants\":0,\"url\":\"https://www.acornelectron.co.uk/eug/72/a-musi.html\"},{\"id\":47911524,\"title\":\"An AI agent deleted our production database. The agent's confession is below\",\"score\":449,\"by\":\"jeremyccrane\",\"descendants\":617,\"url\":\"https://twitter.com/lifeof_jer/status/2048103471019434248\"},{\"id\":47915274,\"title\":\"Show HN: Startup Equity Adventure Game\",\"score\":14,\"by\":\"iliabara\",\"descendants\":7,\"url\":\"https://options-game-polymathrobotics.pythonanywhere.com/\"}]",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 1,
+        "completeness": 0,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "★ 1 score-confusion picks",
+          "★ called recall()"
+        ],
+        "composite": 0.596
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 42190,
+      "stepsCount": 62,
+      "toolCallCount": 27,
+      "wallMs": 60658.87849799999,
+      "output": "{\"key\":\"top20_ids\",\"content\":\"[47914165,47908051,47903541,47913855,47878231,47916410,47914677,47913650,47910388,47914367,47909979,47910877,47883839,47906420,47885719,47898660,47914161,47911350,47914350,47884850]\",\"bytes\":181,\"truncated\":false}",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles",
+          "★ called recall()"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 19428,
+      "stepsCount": 18,
+      "toolCallCount": 6,
+      "wallMs": 71719.226317,
+      "output": "[{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":385,\"by\":\"ca98am79\",\"descendants\":217,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47908051,\"title\":\"Self-updating screenshots\",\"score\":47,\"by\":\"bjhess\",\"descendants\":8,\"url\":\"https://interblah.net/self-updating-screenshots\"},{\"id\":47903541,\"title\":\"Three constraints before I build anything\",\"score\":32,\"by\":\"nervous_north\",\"descendants\":4,\"url\":\"https://jordanlord.co.uk/blog/3-constraints/\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":150,\"by\":\"dd23\",\"descendants\":43,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47916410,\"title\":\"Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft\",\"score\":51,\"by\":\"donsupreme\",\"descendants\":13,\"url\":\"https://www.ft.com/content/2429f0f0-b685-4747-b425-bf8001a2e94c\"},{\"id\":47878231,\"title\":\"Box to save memory in Rust\",\"score\":56,\"by\":\"emschwartz\",\"descendants\":10,\"url\":\"https://dystroy.org/blog/box-to-save-memory/\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":279,\"by\":\"koshyjohn\",\"descendants\":227,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47914677,\"title\":\"Butterflies are in decline across North America, a look at the Western Monarch\",\"score\":122,\"by\":\"1659447091\",\"descendants\":32,\"url\":\"https://www.smithsonianmag.com/science-nature/butterflies-are-in-dramatic-decline-across-north-america-a-close-look-at-the-western-monarch-shows-why-180988582/\"},{\"id\":47910388,\"title\":\"SWE-bench Verified no longer measures frontier coding capabilities\",\"score\":247,\"by\":\"kmdupree\",\"descendants\":139,\"url\":\"https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/\"},{\"id\":47914367,\"title\":\"Show HN: AI memory with biological decay (52% recall)\",\"score\":57,\"by\":\"SachitRafa\",\"descendants\":29,\"url\":\"https://github.com/sachitrafa/YourMemory\"},{\"id\":47909979,\"title\":\"The fastest Linux timestamps\",\"score\":15,\"by\":\"hmpc\",\"descendants\":3,\"url\":\"https://www.hmpcabral.com/2026/04/26/the-fastest-linux-timestamps/\"},{\"id\":47910877,\"title\":\"Lessons from building multiplayer browsers\",\"score\":7,\"by\":\"alejandrohacks\",\"descendants\":1,\"url\":\"https://www.alejandro.pe/writing/sail-muddy-lessons\"},{\"id\":47883839,\"title\":\"Magic: The Gathering took me from N2 to Japanese fluency\",\"score\":84,\"by\":\"pwim\",\"descendants\":28,\"url\":\"https://www.tokyodev.com/articles/how-magic-the-gathering-took-me-from-n2-to-japanese-fluency\"},{\"id\":47906420,\"title\":\"When the cheap one is the cool one\",\"score\":11,\"by\":\"ddrmaxgt37\",\"descendants\":3,\"url\":\"https://arun.is/blog/cheap-cool/\"},{\"id\":47885719,\"title\":\"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\",\"score\":31,\"by\":\"MrBuddyCasino\",\"descendants\":4,\"url\":\"https://tingouw.com/blog/embedded/esp32/run_rust_on_app_core\"}]",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 1,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "15/15 titles cited",
+          "109 words"
+        ],
+        "composite": 0.7799999999999999
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6651999999999999,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}

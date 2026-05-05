@@ -1,0 +1,84 @@
+{
+  "probe": "p03-harness-qwen3-thinking-bug",
+  "suffix": "PRE-FIX",
+  "model": "qwen3:4b",
+  "provider": "ollama",
+  "task": "rw-2",
+  "n_runs": 3,
+  "max_iterations": 15,
+  "generated_at": "2026-04-28T03:51:53.980Z",
+  "aggregate": {
+    "empty_outputs": 0,
+    "identified_true_cause": 0,
+    "grabbed_red_herring": 0,
+    "avg_iterations": 9,
+    "avg_tokens": 11876,
+    "avg_duration_ms": 29499,
+    "avg_empty_content_ratio": 0
+  },
+  "runs": [
+    {
+      "run": 0,
+      "status": "pass",
+      "durationMs": 27629.463246000003,
+      "output": "⚠️ Recovery required: prior tool path failed (file-read). Try an alternate path now: web-search. Do not finalize yet. (1/2)",
+      "outputLength": 123,
+      "outputEmpty": false,
+      "identifiedTrueCause": false,
+      "grabbedRedHerring": false,
+      "metadata": {
+        "tokensUsed": 10979,
+        "iterations": 8
+      },
+      "events": {
+        "llmCallsCompleted": 0,
+        "toolCallsExecuted": 2,
+        "reasoningSteps": 9,
+        "emptyAssistantContentCount": 0,
+        "nonEmptyAssistantContentCount": 0
+      }
+    },
+    {
+      "run": 1,
+      "status": "pass",
+      "durationMs": 25589.147349000003,
+      "output": "⚠️ Recovery required: prior tool path failed (file-read). Try an alternate path now: web-search. Do not finalize yet. (1/2)",
+      "outputLength": 123,
+      "outputEmpty": false,
+      "identifiedTrueCause": false,
+      "grabbedRedHerring": false,
+      "metadata": {
+        "tokensUsed": 10336,
+        "iterations": 8
+      },
+      "events": {
+        "llmCallsCompleted": 0,
+        "toolCallsExecuted": 2,
+        "reasoningSteps": 9,
+        "emptyAssistantContentCount": 0,
+        "nonEmptyAssistantContentCount": 0
+      }
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "durationMs": 35278.983262,
+      "output": "Loop detected: 3 consecutive thinking steps with no tool calls.\nFix: (1) Verify the model supports function calling for your provider, (2) Simplify the task description — the model may not know which tool to use, (3) For local models, try .withContextProfile({ tier: 'local' }) for stronger tool guidance.",
+      "outputLength": 305,
+      "outputEmpty": false,
+      "identifiedTrueCause": false,
+      "grabbedRedHerring": false,
+      "metadata": {
+        "tokensUsed": 14313,
+        "iterations": 12
+      },
+      "events": {
+        "llmCallsCompleted": 0,
+        "toolCallsExecuted": 1,
+        "reasoningSteps": 11,
+        "emptyAssistantContentCount": 0,
+        "nonEmptyAssistantContentCount": 0
+      }
+    }
+  ]
+}

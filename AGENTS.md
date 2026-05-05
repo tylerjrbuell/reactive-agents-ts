@@ -380,6 +380,7 @@ Root `ROADMAP.md` is the authoritative forward-looking plan. Update when:
 | **Design specs**     | `wiki/Architecture/Design-Specs/` — feature design documents                                                                             |
 | **Debriefs**         | `wiki/Research/Debriefs/` — post-feature engineering notes                                                                               |
 | **Audit reports**    | `wiki/Research/Audit-Reports-*/` — periodic audits and reviews                                                                          |
+| **Harness reports**  | `wiki/Research/Harness-Reports/` — phase validations, baselines, regressions, improvement loop artifacts (REPORTS_DIR in gate runner)   |
 | **Cortex app**       | `apps/cortex/AGENTS.md` — Bun/Elysia server + SvelteKit UI; read before changing                                                        |
 | Skills               | `.agents/skills/` (24 contributor skills), `.claude/skills/` (optional), `apps/docs/skills/` (consumer-facing)                          |
 | Packages             | `packages/{core,llm-provider,memory,...}/` — see NAVIGATION.md §Package Map                                                             |

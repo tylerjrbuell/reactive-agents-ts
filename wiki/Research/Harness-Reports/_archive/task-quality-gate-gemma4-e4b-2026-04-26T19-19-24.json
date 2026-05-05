@@ -1,0 +1,136 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T19-19-24",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 106,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6249.511788,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5555,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 17199.056109999998,
+      "output": "1. GoDaddy Gave a Domain to a Stranger Without Any Documentation (score: 167)\n2. Dillo Browser Release 3.3.0 (score: 45)\n3. Asahi Linux Progress Linux 7.0 (score: 502)\n4. Clay PCB Tutorial (score: 129)\n5. Why SWE-bench Verified no longer measures frontier coding capabilities (score: 157)\n6. The Visible Zorker: Zork 1 (score: 41)\n7. An AI agent deleted our production database. The agent's confession is below (score: 75)\n8. Statecharts: hierarchical state machines (score: 242)\n9. Free Textbook on Engineering Thermodynamics (score: 47)\n10. Amateur armed with ChatGPT solves an Erdős problem (score: 669)\n11. Waymo says expecting driverless taxis to stay out of bike lanes is unrealistic (score: 30)\n12. Sloppy Copies (score: 26)\n13. Why has there been so little progress on Alzheimer's disease? (score: 368)\n14. Show HN: Turning a Gaussian Splat into a videogame (score: 152)\n15. GitHub unwanted UX change: issue links now open in a popup (score: 172)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6905,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 34711.833717,
+      "output": "1. Amateur armed with ChatGPT solves an Erdős problem — comments: 463\n2. Why has there been so little progress on Alzheimer's disease? — comments: 247\n3. Asahi Linux Progress Linux 7.0 — comments: 220",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 11455,
+      "stepsCount": 5,
+      "toolCallCount": 0,
+      "wallMs": 37327.46561300001,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(20) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47911780  title=GoDaddy Gave a Domain to a Stranger Without Any Documentatio  score=167  by=jamesponddotco\n  [1] id=47911977  title=Dillo Browser Release 3.3.0  score=45  by=rodarima\n  [2] id=47909226  title=Asahi Linux Progress Linux 7.0  score=502  by=elisaado\n  [3] id=47911350  title=Clay PCB Tutorial  score=129  by=j0r0b0\n  [4] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=157  by=kmdupree\n  [5] id=47911644  title=The Visible Zorker: Zork 1  score=41  by=PLenz\n  [6] id=47911524  title=An AI agent deleted our production database. The agent's con  score=75  by=jeremyccrane\n  [7] id=47908833  title=Statecharts: hierarchical state machines  score=242  by=sph\n  ...12 more\n  — full text is stored. Use recall(\"_tool_result_3\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 0.3333333333333333,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "2/6 correct titles"
+        ],
+        "composite": 0.4833333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6411,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 40841.68629899999,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(15) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47911780  title=GoDaddy Gave a Domain to a Stranger Without Any Documentatio  score=167  by=jamesponddotco\n  [1] id=47911977  title=Dillo Browser Release 3.3.0  score=45  by=rodarima\n  [2] id=47909226  title=Asahi Linux Progress Linux 7.0  score=502  by=elisaado\n  [3] id=47911350  title=Clay PCB Tutorial  score=129  by=j0r0b0\n  [4] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=157  by=kmdupree\n  [5] id=47911644  title=The Visible Zorker: Zork 1  score=41  by=PLenz\n  [6] id=47911524  title=An AI agent deleted our production database. The agent's con  score=75  by=jeremyccrane\n  [7] id=47908833  title=Statecharts: hierarchical state machines  score=242  by=sph\n  ...7 more\n  — full text is stored. Use recall(\"_tool_result_4\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0.5333333333333333,
+        "completeness": 0.5,
+        "noFabrication": 0,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "8/15 titles cited",
+          "111 words",
+          "★ tool-preview echoed"
+        ],
+        "composite": 0.31666666666666665
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7168666666666667,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "model": "gpt-oss:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T00-46-20",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 152,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6109.814201,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 11547,
+      "stepsCount": 13,
+      "toolCallCount": 3,
+      "wallMs": 7031.313246000001,
+      "output": "controller_signal_veto: 2 stall-detect, with tool-failure evidence without switch-strategy escalation",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6635,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 4589.093804999999,
+      "output": "1. Fast16: High-precision software sabotage 5 years before Stuxnet — comments: 39\n2. SWE-bench Verified no longer measures frontier coding capabilities — comments: 137\n3. An AI agent deleted our production database. The agent's confession is below — comments: 571",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "1/3 correct titles",
+          "1/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.7666666666666667
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 17067,
+      "stepsCount": 15,
+      "toolCallCount": 3,
+      "wallMs": 6318.238494000001,
+      "output": "## Highest Score\n1. **TITLE (1)**: A new programming language is being developed\n2. **TITLE (2)**: How to create a simple chatbot using Python and Flask\n3. **TITLE (3)**: The future of artificial intelligence in healthcare\n\n## Most Comments\n1. **TITLE (1)**: How to create a simple chatbot using Python and Flask (123 comments)\n2. **TITLE (2)**: A new programming language is being developed (90 comments)\n3. **TITLE (3)**: The future of artificial intelligence in healthcare (78 comments)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "0/6 correct titles",
+          "★ called recall()"
+        ],
+        "composite": 0.44999999999999996
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 14649,
+      "stepsCount": 13,
+      "toolCallCount": 4,
+      "wallMs": 15336.137454999996,
+      "output": "# Today on Hacker News\n\n## AI/ML\nThe field of artificial intelligence continues to advance at a rapid pace. A recent study published in the journal Nature found that AI systems can now learn and improve their performance on complex tasks without human intervention. This breakthrough has significant implications for industries such as healthcare, finance, and transportation. For example, researchers have developed an AI system that can predict patient outcomes with unprecedented accuracy, leading to improved treatment options and better patient care.\n\n## Hardware\nAdvances in hardware technology are also driving innovation in the field of artificial intelligence. A recent development in the field of quantum computing has led to the creation of a new type of processor that is capable of performing complex calculations at speeds previously thought impossible. This breakthrough has significant implications for industries such as finance, healthcare, and cybersecurity.\n\n## Programming\nFor programmers, there are always new tools and techniques to learn about. A recent development in the field of programming languages has led to the creation of a new language called Rust, which is designed to be faster and more secure than existing languages. The language has already gained popularity among developers due to its simplicity and performance.\n\n## Other\nIn other news, a recent study found that butterflies are in decline across North America, with the Western Monarch being particularly affected. This decline has significant implications for ecosystems and biodiversity. Additionally, a new startup equity adventure game has been launched, which allows players to experience the thrill of entrepreneurship without the risks.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "258 words"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6333333333333333,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

@@ -17,7 +17,7 @@ updated: 2026-05-04
 - **8 KEEP verdicts** — mechanisms earn their keep with zero regressions
 - **5 IMPROVE verdicts** — concrete Phase 1.5 action items identified
 - **0 REMOVE verdicts** — improvement-first validation confirmed effective
-- Evidence: `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+- Evidence: `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 - Debriefs: `wiki/Research/Debriefs/M*-*-validation.md` (per-mechanism)
 
 **Key Verdicts:**

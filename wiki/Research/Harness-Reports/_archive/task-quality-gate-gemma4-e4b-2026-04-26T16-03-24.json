@@ -1,0 +1,136 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T16-03-24",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 284,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6395.095337000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 11754,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 43936.866045999996,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(15) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47909226  title=Asahi Linux Progress Linux 7.0  score=333  by=elisaado\n  [1] id=47908833  title=Statecharts: hierarchical state machines  score=173  by=sph\n  [2] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=60  by=kmdupree\n  [3] id=47903126  title=Amateur armed with ChatGPT solves an Erdős problem  score=568  by=pr337h4m\n  [4] id=47894124  title=The Nintendo Switch Switch (2019)  score=40  by=zdw\n  [5] id=47876071  title=Show HN: Turning a Gaussian Splat into a videogame  score=112  by=yak32\n  [6] id=47905984  title=Why has there been so little progress on Alzheimer's disease  score=323  by=chiefalchemist\n  [7] id=47907879  title=The West forgot how to make things, now it’s forgetting how   score=808  by=milkglass\n  ...7 more\n  — full text is stored. Use recall(\"_tool_result_1\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0.5333333333333333,
+        "completeness": 0,
+        "noFabrication": 0,
+        "callsRecall": false,
+        "notes": [
+          "8/15 titles cited",
+          "9/15 scores cited",
+          "0 numbered lines",
+          "★ tool-preview echoed as output",
+          "no recall needed"
+        ],
+        "composite": 0.18666666666666665
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 12311,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 45116.400223,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(25) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47909226  title=Asahi Linux Progress Linux 7.0  score=333  by=elisaado\n  [1] id=47908833  title=Statecharts: hierarchical state machines  score=173  by=sph\n  [2] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=60  by=kmdupree\n  [3] id=47903126  title=Amateur armed with ChatGPT solves an Erdős problem  score=568  by=pr337h4m\n  [4] id=47894124  title=The Nintendo Switch Switch (2019)  score=40  by=zdw\n  [5] id=47876071  title=Show HN: Turning a Gaussian Splat into a videogame  score=112  by=yak32\n  [6] id=47905984  title=Why has there been so little progress on Alzheimer's disease  score=323  by=chiefalchemist\n  [7] id=47907879  title=The West forgot how to make things, now it’s forgetting how   score=808  by=milkglass\n  ...17 more\n  — full text is stored. Use recall(\"_tool_result_2\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.3,
+        "faithfulness": 0.5,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.52
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 12323,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 46026.56509499998,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(20) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47909226  title=Asahi Linux Progress Linux 7.0  score=333  by=elisaado\n  [1] id=47908833  title=Statecharts: hierarchical state machines  score=173  by=sph\n  [2] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=60  by=kmdupree\n  [3] id=47903126  title=Amateur armed with ChatGPT solves an Erdős problem  score=568  by=pr337h4m\n  [4] id=47894124  title=The Nintendo Switch Switch (2019)  score=40  by=zdw\n  [5] id=47876071  title=Show HN: Turning a Gaussian Splat into a videogame  score=112  by=yak32\n  [6] id=47905984  title=Why has there been so little progress on Alzheimer's disease  score=323  by=chiefalchemist\n  [7] id=47907879  title=The West forgot how to make things, now it’s forgetting how   score=808  by=milkglass\n  ...12 more\n  — full text is stored. Use recall(\"_tool_result_3\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "5/6 correct titles"
+        ],
+        "composite": 0.7583333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 12079,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 45728.46232699999,
+      "output": "[get-hn-posts result — compressed preview]\nType: Array(15) | Schema: id, title, score, by, descendants, url\nPreview (first 8):\n  [0] id=47909226  title=Asahi Linux Progress Linux 7.0  score=333  by=elisaado\n  [1] id=47908833  title=Statecharts: hierarchical state machines  score=173  by=sph\n  [2] id=47910388  title=Why SWE-bench Verified no longer measures frontier coding ca  score=60  by=kmdupree\n  [3] id=47903126  title=Amateur armed with ChatGPT solves an Erdős problem  score=568  by=pr337h4m\n  [4] id=47894124  title=The Nintendo Switch Switch (2019)  score=40  by=zdw\n  [5] id=47876071  title=Show HN: Turning a Gaussian Splat into a videogame  score=112  by=yak32\n  [6] id=47905984  title=Why has there been so little progress on Alzheimer's disease  score=323  by=chiefalchemist\n  [7] id=47907879  title=The West forgot how to make things, now it’s forgetting how   score=808  by=milkglass\n  ...7 more\n  — full text is stored. Use recall(\"_tool_result_4\") to retrieve.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0.5333333333333333,
+        "completeness": 0.5,
+        "noFabrication": 0,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "8/15 titles cited",
+          "122 words",
+          "★ tool-preview echoed"
+        ],
+        "composite": 0.31666666666666665
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5563333333333332,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

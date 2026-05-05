@@ -15,7 +15,7 @@ owner: Reasoning Team
 
 **Verdict:** ✅ KEEP
 
-**Evidence:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+**Evidence:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 
 ---
 
@@ -44,7 +44,7 @@ Mitigates [[Failure-Modes/FM-F Context and Memory|FM-F1]] (context overflow, tok
 
 ### Key Metrics
 
-**From harness-reports/phase-1-mechanism-validation-2026-05-04.md:**
+**From wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md:**
 - ✅ Compression ratio: **60.7%**
 - ✅ Token savings: **38.6%** (massive reduction)
 - ✅ Coordinated 3-stage pipeline validated

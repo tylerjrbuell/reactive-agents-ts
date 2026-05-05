@@ -1,0 +1,136 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T15-03-21",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1608.301547,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13650,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 19320.1396,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8098,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 7507.0270820000005,
+      "output": "{\"key\":\"_tool_result_1\",\"preview\":\"[{\\\"id\\\":47919997,\\\"title\\\":\\\"Pgbackrest is no longer being maintained\\\",\\\"score\\\":259,\\\"by\\\":\\\"c0l0\\\",\\\"descendants\\\":118,\\\"url\\\":\\\"https://github.com/pgbackrest/pgbackrest\\\"},{\\\"id\\\":47920787,\\\"title\\\":\\\"Show HN: OSS Agen\",\"bytes\":4731,\"truncated\":true}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 13078,
+      "stepsCount": 20,
+      "toolCallCount": 0,
+      "wallMs": 13706.13857,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 16441,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 15144.181075,
+      "output": "{\"query\":\"top 15 Hacker News posts\",\"results\":[{\"content\":\"1. The West forgot how to make things, now it's forgetting how to code (techtrenches. · 2. I bought Friendster for $30k – Here's what I'm doing with it (ca98am79 ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/best\",\"score\":0.5},{\"content\":\"#26 Show HN: Portable Secret – How I store my secrets and communicate privately · #27 Show HN: Tetris in a PDF · #28 Show HN: Bel · #29 Show HN: I built a synth ...\",\"source\":\"web\",\"identifier\":\"https://bestofshowhn.com/\",\"score\":0.5},{\"content\":\"Interesting how Stratechery (Ben Thompson) is #15 in the last 5 years but not even top 100 in 2025. ... top-X HN blogs and auto-posting the links with a bot.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=46478377\",\"score\":0.5},{\"content\":\"1. New 10 GbE USB adapters are cooler, smaller, cheaper (jeffgeerling.com) · 2. Trump fires NSF's oversight board (science.org) · 3. Show HN: A Karpathy-style LLM ...\",\"source\":\"web\",\"identifier\":\"https://hntoplinks.com/\",\"score\":0.5},{\"content\":\"Here are the top 50. The first column is the fave count. It's interesting how many are Ask HNs, ie text posts with no external URL.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=24351073\",\"score\":0.5}],\"totalResults\":5,\"sourcesSearched\":[\"web\"]}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "1/15 titles cited",
+          "150 words"
+        ],
+        "composite": 0.45333333333333337
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.4796666666666667,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

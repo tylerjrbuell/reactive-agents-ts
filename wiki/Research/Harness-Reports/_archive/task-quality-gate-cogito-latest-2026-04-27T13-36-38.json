@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T13-36-38",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1477.0389609999997,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 8379,
+      "stepsCount": 8,
+      "toolCallCount": 1,
+      "wallMs": 10652.713913,
+      "output": "Review your answer: does it fully address the task \"Fetch the top 15 Hacker News posts via get-hn-posts. Then write a numbered markdown list with one line per post in this \"? Include EXACT numbers, prices, and data values from the tool results above — do not say \"no data found\" if the numbers appear in the results. If the output format doesn't match what was requested, fix it now.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8906,
+      "stepsCount": 10,
+      "toolCallCount": 2,
+      "wallMs": 8049.461857,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it — comments: 469\n2. AI should elevate your thinking, not replace it — comments: 462\n3. Flipdiscs — comments: 67",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 7913,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 8328.424060000001,
+      "output": "## Highest Score\n1. I bought Friendster for $30k – Here's what I'm doing with it (930)\n2. AI should elevate your thinking, not replace it (639)\n3. Flipdiscs (380)\n\n## Most Comments\n1. I bought Friendster for $30k – Here's what I'm doing with it (469)\n2. AI should elevate your thinking, not replace it (462)\n3. TurboQuant: A first-principles walkthrough (46)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "5/6 correct titles"
+        ],
+        "composite": 0.9083333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 17131,
+      "stepsCount": 22,
+      "toolCallCount": 0,
+      "wallMs": 34663.649984,
+      "output": "Your next step: call get-hn-posts. You have all the information you need.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "12 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6725333333333333,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

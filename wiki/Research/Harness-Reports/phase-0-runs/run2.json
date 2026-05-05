@@ -1,0 +1,631 @@
+{
+  "generatedAt": "2026-05-04T03:22:43.114Z",
+  "runs": [],
+  "sessionId": "regression-gate",
+  "sessionVersion": "1.0.0",
+  "gitSha": "3a57f467",
+  "ablation": [],
+  "taskReports": [
+    {
+      "taskId": "m1-merge-intervals",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 544.979131,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 545,
+      "passRate": 1
+    },
+    {
+      "taskId": "m2-word-problem",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 531.4313749999999,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 531,
+      "passRate": 1
+    },
+    {
+      "taskId": "m3-sql-injection",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 377.19178899999997,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 377,
+      "passRate": 1
+    },
+    {
+      "taskId": "m4-remove-duplicates",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 342.484064,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 342,
+      "passRate": 1
+    },
+    {
+      "taskId": "m5-tool-search",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 369.6934650000003,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 370,
+      "passRate": 1
+    },
+    {
+      "taskId": "c1-distributed-queue",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 288.29766100000006,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 288,
+      "passRate": 1
+    },
+    {
+      "taskId": "c2-auth-vulnerabilities",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 359.40734199999997,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Plan generation failed: LLM call failed: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cagp16S4yiCgz1wBqpDGb\"}\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/plan-execute.ts:174:15)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 359,
+      "passRate": 1
+    },
+    {
+      "taskId": "c3-test-suite",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 392.2458080000001,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Plan generation failed: LLM call failed: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cagp18AFadhQkYL8irTBG\"}\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/plan-execute.ts:174:15)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 392,
+      "passRate": 1
+    },
+    {
+      "taskId": "c4-db-decomposition",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 337.96084500000006,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 338,
+      "passRate": 1
+    },
+    {
+      "taskId": "c5-multi-tool",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 413.35192800000004,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Plan generation failed: LLM call failed: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cagp1BVvNVxrnTcZRjppK\"}\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/plan-execute.ts:174:15)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 413,
+      "passRate": 1
+    },
+    {
+      "taskId": "c6-multi-agent",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 367.2305529999994,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Plan generation failed: LLM call failed: 400 {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.\"},\"request_id\":\"req_011Cagp1D7QRuhXh4N3jeNsX\"}\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/plan-execute.ts:174:15)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 367,
+      "passRate": 1
+    },
+    {
+      "taskId": "e1-lis-optimization",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 361.79062499999964,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Expansion failed at depth 1\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/tree-of-thought.ts:205:21)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 362,
+      "passRate": 1
+    },
+    {
+      "taskId": "e2-incident-response",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 371.0948180000005,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Expansion failed at depth 1\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/tree-of-thought.ts:205:21)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 371,
+      "passRate": 1
+    },
+    {
+      "taskId": "e3-logic-fallacy",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 378.66766199999984,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Expansion failed at depth 1\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/tree-of-thought.ts:205:21)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 379,
+      "passRate": 1
+    },
+    {
+      "taskId": "e4-crdt-design",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 360.9682439999997,
+          "status": "pass",
+          "output": "Strategy execution failed: ExecutionError: Expansion failed at depth 1\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/tree-of-thought.ts:205:21)"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 361,
+      "passRate": 1
+    },
+    {
+      "taskId": "e5-file-execute",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 392.192129,
+          "status": "pass",
+          "output": ""
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 392,
+      "passRate": 1
+    },
+    {
+      "taskId": "e6-guardrail-injection",
+      "modelVariantId": "claude-sonnet-4-6",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "runs": [
+        {
+          "runIndex": 0,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ],
+          "tokensUsed": 0,
+          "durationMs": 66.79369000000042,
+          "status": "pass",
+          "output": "Input guardrail check failed: prompt-injection: Prompt injection detected: Instruction override attempt"
+        }
+      ],
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 67,
+      "passRate": 1
+    }
+  ],
+  "dimensionSummary": [
+    {
+      "dimension": "accuracy",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 0.11764705882352941
+        }
+      ]
+    },
+    {
+      "dimension": "reliability",
+      "byVariant": [
+        {
+          "variantId": "ra-full",
+          "meanScore": 1
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "judgeModelSha": "claude-haiku-4-5-20251001",
+    "judgeCodeSha": "3a57f467cad2c34d220ccb2f5fdcec7c9633c958",
+    "runId": "run-1777864956718-humomswz",
+    "replayCommand": "bun run --cwd packages/benchmarks bench --session regression-gate --run-id run-1777864956718-humomswz --judge-url http://127.0.0.1:8910"
+  }
+}

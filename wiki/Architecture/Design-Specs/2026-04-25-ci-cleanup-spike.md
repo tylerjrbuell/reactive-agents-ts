@@ -26,7 +26,7 @@
 6. **`BASELINE-UPDATE:` trailer is documented but unenforced.** Test Gate baseline can be silently mutated.
 7. **No GitHub Actions step summary.** Failure messages bury the gate's actionable output. The `formatFailure()` text never reaches the PR conversation.
 8. **Capabilities check only runs in `test` job.** A typecheck-only re-run won't catch drift in `scripts/check-capabilities.ts` invariants.
-9. **No artifact uploads.** Microbench baseline + gate outputs are written to `harness-reports/` but lost when the runner is destroyed. No cross-PR comparability.
+9. **No artifact uploads.** Microbench baseline + gate outputs are written to `wiki/Research/Harness-Reports/` but lost when the runner is destroyed. No cross-PR comparability.
 10. **Setup steps duplicated in every job.** `actions/checkout@v4` + `actions/setup-node@v4` + `oven-sh/setup-bun@v2` + `bun install --frozen-lockfile` appears 5 times across workflows. Reusable workflow would collapse this.
 
 ### 1.2 Pain quantified
@@ -130,7 +130,7 @@ Add a step that fails the test job when the gate baseline file changed AND no `B
     BASE_SHA: ${{ github.event.pull_request.base.sha }}
     HEAD_SHA: ${{ github.event.pull_request.head.sha }}
   run: |
-    if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE '^harness-reports/integration-control-flow-baseline\.json$'; then
+    if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE '^wiki/Research/Harness-Reports/integration-control-flow-baseline\.json$'; then
       if ! git log "$BASE_SHA".."$HEAD_SHA" --pretty=%B | grep -q '^BASELINE-UPDATE:'; then
         echo "::error::Gate baseline changed but no BASELINE-UPDATE: trailer found in any commit." >&2
         echo "Run \`bun run gate:update\` and include the prompted reason as the trailer." >&2

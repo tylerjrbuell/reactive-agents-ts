@@ -15,7 +15,7 @@ owner: Calibration Team
 
 **Verdict:** 🔄 IMPROVE
 
-**Evidence:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+**Evidence:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 
 ---
 
@@ -45,7 +45,7 @@ Mitigates [[Failure-Modes/FM-C Reasoning|FM-C]] (reasoning quality), [[Failure-M
 
 ### Calibration Profile Status
 
-**From harness-reports/phase-1-mechanism-validation-2026-05-04.md:**
+**From wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md:**
 - ✅ 14 fields defined with type safety
 - ❌ Only 3 active consumers (M2, M3, M13)
 - ❌ No empirical lift data (awaiting Phase 1.5 activation)

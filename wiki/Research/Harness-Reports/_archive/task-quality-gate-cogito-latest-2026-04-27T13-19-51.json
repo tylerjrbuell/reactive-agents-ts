@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T13-19-51",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1474.455111,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13794,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 22180.974596,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=dispatcher-strategy-switch",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 16223,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 11794.040785999998,
+      "output": "{\"query\":\"top 3 Hacker News posts with most comments\",\"results\":[{\"content\":\"Most-upvoted comments of the last 48 hours. You can change the number of ... ycombinator.com/item?id=18894792). Aug 2022: [Tell HN: Godaddy canceled my ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/bestcomments\",\"score\":0.5},{\"content\":\"I loaded up the hacker news dataset in google bigquery, which turned out https://news.ycombinator.com/item?id=42057647 as the biggest at 9624 comments.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=46134233\",\"score\":0.5},{\"content\":\"The OP says \\\"The most favorited articles by the top 10k most active Hacker News members.\\\" How was \\\"most active\\\" defined?\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=24351073\",\"score\":0.5},{\"content\":\"938 points | 358 comments | Jan 04, 2021 | by _andychung · visit website · #95 Show HN: Hacker News user blogroll. 937 points | 184 comments | Jul 05, 2023 | by ...\",\"source\":\"web\",\"identifier\":\"https://bestofshowhn.com/\",\"score\":0.5},{\"content\":\"Most favorited Hacker News posts of all time ; 1. Show HN: Web Design in 4 minutes ; 96 faves | comments ; 2. Music Theory: An Education from First ...\",\"source\":\"web\",\"identifier\":\"https://observablehq.com/@tomlarkworthy/hacker-favourites-analysis\",\"score\":0.5}],\"totalResults\":5,\"sourcesSearched\":[\"web\"]}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 11427,
+      "stepsCount": 16,
+      "toolCallCount": 0,
+      "wallMs": 13265.447510999998,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=loop_graceful",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 7302,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 9603.293267000001,
+      "output": "# Today on Hacker News\n\n## AI and Technology\nThe top stories today showcase significant developments in artificial intelligence and technology. Koshy John's thought-provoking article \"AI should elevate your thinking, not replace it\" has garnered substantial attention with 450 comments. This piece highlights the importance of AI as a tool to enhance human capabilities rather than simply replacing them. The article also discusses practical applications and future implications of AI in our daily lives.\n\n## Business and Entrepreneurship\nIn the business realm, two notable stories stand out. First, \"I bought Friendster for $30k – Here's what I'm doing with it\" has become a viral hit on Hacker News, receiving an impressive 917 points and 464 comments. This story details the purchase of the defunct social media platform Friendster and outlines plans to revive its legacy. Another interesting business-related post is \"Men Who Stare at Walls,\" which explores unconventional approaches to problem-solving in the tech industry.\n\n## Hardware and Software Development\nThe hardware and software development community has been active today, with several notable posts. The most discussed technical story is \"Fully Featured Audio DSP Firmware for the Raspberry Pi Pico,\" which has attracted 19 comments and showcases impressive work on audio processing capabilities. Another interesting post is \"Show HN: OSS Agent I built topped the TerminalBench on Gemini-3-flash-preview,\" highlighting innovative achievements in terminal performance optimization.\n\n## Other Notable Stories\nBeyond these main categories, several other stories have caught attention. The \"It's OK to abandon your side-project (2024)\" article has sparked a meaningful discussion about project management and personal goals, with 58 comments. Additionally, the \"Self-updating screenshots\" post has generated interest in automated screenshot technology, while \"TurboQuant: A first-principles walkthrough\" offers insights into advanced financial modeling techniques.\n\nThese diverse stories reflect the broad range of interests within the Hacker News community, from technical innovations to business ventures and personal development topics.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.5333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "8/15 titles cited",
+          "310 words"
+        ],
+        "composite": 0.8366666666666667
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5563333333333332,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

@@ -5,7 +5,7 @@
 //   bun run .agents/skills/harness-improvement-loop/scripts/microbench.ts
 //
 // Writes the result to:
-//   harness-reports/benchmarks/baseline-YYYY-MM-DD.json
+//   wiki/Research/Harness-Reports/benchmarks/baseline-YYYY-MM-DD.json
 //
 // Phase 0 S0.5: required artifact before any Phase 2+ performance work
 // (North Star v2.3 §9 principle 8 — no perf claims without a baseline).
@@ -177,7 +177,7 @@ async function main(): Promise<void> {
   };
 
   const today = new Date().toISOString().slice(0, 10);
-  const outDir = join(process.cwd(), "harness-reports", "benchmarks");
+  const outDir = join(process.cwd(), "wiki/Research/Harness-Reports", "benchmarks");
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
   const outPath = join(outDir, `baseline-${today}.json`);
   writeFileSync(outPath, JSON.stringify(artifact, null, 2));

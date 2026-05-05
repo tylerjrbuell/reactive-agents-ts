@@ -1,0 +1,99 @@
+{
+  "probe": "p03-harness-qwen3-thinking-bug",
+  "suffix": "POST-FIX",
+  "model": "qwen3:4b",
+  "provider": "ollama",
+  "task": "rw-2",
+  "n_runs": 3,
+  "max_iterations": 15,
+  "generated_at": "2026-04-28T13:07:54.341Z",
+  "aggregate": {
+    "empty_outputs": 3,
+    "agent_success_true": 0,
+    "agent_success_false": 3,
+    "runs_with_structured_error": 3,
+    "identified_true_cause": 0,
+    "grabbed_red_herring": 0,
+    "avg_iterations": 18,
+    "avg_tokens": 21301,
+    "avg_duration_ms": 69186,
+    "avg_empty_content_ratio": 0
+  },
+  "runs": [
+    {
+      "run": 0,
+      "status": "pass",
+      "agentSuccess": false,
+      "agentError": "Reasoning failed",
+      "agentTerminatedBy": "max_iterations",
+      "agentGoalAchieved": false,
+      "durationMs": 41825.98583899999,
+      "output": "",
+      "outputLength": 0,
+      "outputEmpty": true,
+      "identifiedTrueCause": false,
+      "grabbedRedHerring": false,
+      "metadata": {
+        "tokensUsed": 21787,
+        "iterations": 19
+      },
+      "events": {
+        "llmCallsCompleted": 0,
+        "toolCallsExecuted": 5,
+        "reasoningSteps": 20,
+        "emptyAssistantContentCount": 0,
+        "nonEmptyAssistantContentCount": 0
+      }
+    },
+    {
+      "run": 1,
+      "status": "pass",
+      "agentSuccess": false,
+      "agentError": "Reasoning failed",
+      "agentTerminatedBy": "max_iterations",
+      "agentGoalAchieved": false,
+      "durationMs": 28313.798110999996,
+      "output": "",
+      "outputLength": 0,
+      "outputEmpty": true,
+      "identifiedTrueCause": false,
+      "grabbedRedHerring": false,
+      "metadata": {
+        "tokensUsed": 14993,
+        "iterations": 12
+      },
+      "events": {
+        "llmCallsCompleted": 0,
+        "toolCallsExecuted": 2,
+        "reasoningSteps": 14,
+        "emptyAssistantContentCount": 0,
+        "nonEmptyAssistantContentCount": 0
+      }
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "agentSuccess": false,
+      "agentError": "Reasoning failed",
+      "agentTerminatedBy": "max_iterations",
+      "agentGoalAchieved": false,
+      "durationMs": 137417.76423000003,
+      "output": "",
+      "outputLength": 0,
+      "outputEmpty": true,
+      "identifiedTrueCause": false,
+      "grabbedRedHerring": false,
+      "metadata": {
+        "tokensUsed": 27124,
+        "iterations": 24
+      },
+      "events": {
+        "llmCallsCompleted": 0,
+        "toolCallsExecuted": 5,
+        "reasoningSteps": 24,
+        "emptyAssistantContentCount": 0,
+        "nonEmptyAssistantContentCount": 0
+      }
+    }
+  ]
+}

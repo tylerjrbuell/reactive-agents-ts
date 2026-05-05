@@ -1,0 +1,136 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T14-10-34",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4376.324194,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13716,
+      "stepsCount": 20,
+      "toolCallCount": 0,
+      "wallMs": 20254.663861,
+      "output": "Your next step: call get-hn-posts. You have all the information you need.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 12085,
+      "stepsCount": 13,
+      "toolCallCount": 3,
+      "wallMs": 6607.332946999999,
+      "output": "{\"key\":\"_tool_result_1\",\"preview\":\"[{\\\"id\\\":47921262,\\\"title\\\":\\\"The next phase of the Microsoft OpenAI partnership – OpenAI\\\",\\\"score\\\":42,\\\"by\\\":\\\"helsinkiandrew\\\",\\\"descendants\\\":29,\\\"url\\\":\\\"https://openai.com/index/next-phase-of-microsoft-partners\",\"bytes\":4824,\"truncated\":true} [Already done — do NOT repeat. Give FINAL ANSWER if all steps are complete.]",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 13574,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 18048.930638,
+      "output": "Your next step: call get-hn-posts. You have all the information you need.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 3965,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 8774.322153000001,
+      "output": "{\"query\":\"Hacker News top 15\",\"results\":[{\"content\":\"Hacker News ; 8. Trump fires NSF's oversight board (science.org) ; 509 points by skullone 1 day ago | 305 comments ; 9. USB Cheat Sheet (2022) (fabiensanglard.net).\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/best\",\"score\":0.5},{\"content\":\"Interesting how Stratechery (Ben Thompson) is #15 in the last 5 years but not even top 100 in 2025. ... top-X HN blogs and auto-posting the links with a bot.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=46478377\",\"score\":0.5},{\"content\":\"Best of Show HN all time · #1 Show HN: This up votes itself · #2 Show HN: Gemini Pro 3 imagines the HN front page 10 years from now · #3 Show HN: I made an open- ...\",\"source\":\"web\",\"identifier\":\"https://bestofshowhn.com/\",\"score\":0.5},{\"content\":\"Most-upvoted stories of the last 24 hours. 1. I bought Friendster for $30k – Here's what I'm doing with it (ca98am79.medium.com).\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/best?h=24\",\"score\":0.5},{\"content\":\"Here are the top 50. The first column is the fave count. It's interesting how many are Ask HNs, ie text posts with no external URL.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=24351073\",\"score\":0.5}],\"totalResults\":5,\"sourcesSearched\":[\"web\"]} [Already done — do NOT repeat. Give FINAL ANSWER if all steps are complete.]",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "1/15 titles cited",
+          "157 words"
+        ],
+        "composite": 0.45333333333333337
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.4796666666666667,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

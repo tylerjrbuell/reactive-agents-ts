@@ -1,0 +1,2 @@
+{"kind":"run-started","runId":"01KQTTRXAP15EP75BVC6P3185X","timestamp":1777943213402,"iter":-1,"seq":700,"task":"","model":"test-model","provider":"test","config":{}}
+{"kind":"run-completed","runId":"01KQTTRXAP15EP75BVC6P3185X","timestamp":1777943213440,"iter":-1,"seq":701,"status":"success","totalTokens":2,"totalCostUsd":0,"durationMs":37}

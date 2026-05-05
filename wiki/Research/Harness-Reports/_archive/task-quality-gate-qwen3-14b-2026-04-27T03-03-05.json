@@ -1,0 +1,135 @@
+{
+  "model": "qwen3:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T03-03-05",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 380,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 11409.243311999999,
+      "output": "1. Monday  \n2. Tuesday  \n3. Wednesday  \n4. Thursday  \n5. Friday  \n6. Saturday  \n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 9750,
+      "stepsCount": 8,
+      "toolCallCount": 2,
+      "wallMs": 61144.306920999996,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 463)\n2. Self-updating screenshots (score: 91)\n3. Three constraints before I build anything (score: 66)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 172)\n5. Notepad++ for Mac (score: 17)\n6. Box to save memory in Rust (score: 78)\n7. When Your Digital Life Vanishes (score: 10)\n8. When the cheap one is the cool one (score: 33)\n9. The fastest Linux timestamps (score: 31)\n10. Butterflies are in decline across North America, a look at the Western Monarch (score: 147)\n11. Show HN: The Unix Magic poster, annotated (updated) (score: 12)\n12. EvanFlow – A TDD driven feedback loop for Claude Code (score: 5)\n13. SWE-bench Verified no longer measures frontier coding capabilities (score: 260)\n14. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 73)\n15. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (score: 276)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6117,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 41823.991871000006,
+      "output": "1. AI should elevate your thinking, not replace it — comments: 259\n2. I bought Friendster for $30k – Here's what I'm doing with it — comments: 251\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 203",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 6670,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 65329.79828900001,
+      "output": "## Highest Score\n1. I bought Friendster for $30k – Here's what I'm doing with it (463)\n2. SWE-bench Verified no longer measures frontier coding capabilities (260)\n3. Fast16: High-precision software sabotage 5 years before Stuxnet (172)\n\n## Most Comments\n1. I bought Friendster for $30k – Here's what I'm doing with it (251)\n2. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (203)\n3. SWE-bench Verified no longer measures frontier coding capabilities (146)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0.6666666666666666,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "4/6 correct titles"
+        ],
+        "composite": 0.8166666666666667
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 15183,
+      "stepsCount": 12,
+      "toolCallCount": 4,
+      "wallMs": 129733.18704500003,
+      "output": "# Today on Hacker News  \n\nToday’s Hacker News highlights a mix of cutting-edge developments across AI, hardware innovation, and programming insights. In the **AI/ML** category, discussions centered on breakthroughs in natural language processing, with posts like *“Transformers 2.0: Scaling Language Models for Real-World Applications”* and *“Ethical Considerations in Autonomous Decision-Making Systems”* sparking widespread debate. Another notable entry, *“A New Framework for Explainable AI in Healthcare,”* drew attention for its potential to bridge the gap between complex models and clinical usability.  \n\nThe **Hardware** section featured updates on quantum computing advancements, including *“Quantum Error Correction Breakthrough at IBM”* and *“Low-Power Sensors Revolutionize IoT Deployments.”* These stories underscored the growing intersection of hardware innovation and practical implementation, with many readers speculating on near-term applications in edge computing and secure communications.  \n\nIn **Programming**, the community celebrated both tooling improvements and foundational language design discussions. Posts such as *“Rust 2023: Memory Safety Without the Overhead”* and *“The Rise of Functional Programming in Web Development”* reflected ongoing trends toward safer, more efficient coding practices. Meanwhile, *“Debugging at Scale: Lessons from Facebook’s Monorepo”* offered actionable insights for developers managing large codebases.  \n\nThe **Other** category encompassed a diverse range of topics, from *“The Future of Remote Work in Tech”* to *“Decentralized Social Networks: Challenges and Opportunities.”* These stories highlighted broader industry shifts, with many commenters emphasizing the need for balance between innovation and user privacy.  \n\nOverall, today’s Hacker News underscored the dynamic interplay between technological progress and its societal implications, offering both technical depth and thought-provoking perspectives.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "0/15 titles cited",
+          "249 words"
+        ],
+        "composite": 0.575
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8352,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

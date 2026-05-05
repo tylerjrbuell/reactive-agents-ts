@@ -1,0 +1,135 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T00-14-10",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 237,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 13434.22913,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 10108,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 62716.521734,
+      "output": "[{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":271,\"by\":\"ca98am79\",\"descendants\":134,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":118,\"by\":\"dd23\",\"descendants\":34,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47914350,\"title\":\"Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race\",\"score\":204,\"by\":\"berkeleyjunk\",\"descendants\":129,\"url\":\"https://www.bbc.com/sport/athletics/articles/crm1m7e0zwzo\"},{\"id\":47914438,\"title\":\"Two Athletes Break Sub-2-HR Marathon in Adizero Adios Pro Evo 3\",\"score\":51,\"by\":\"canucker2016\",\"descendants\":36,\"url\":\"https://news.adidas.com/running/two-adidas-athletes-sabastian-sawe-and-yomif-kejelcha-break-the-sub-2-hour-marathon-barrier-in-the-r/s/d4be4eac-a3b8-47d5-835f-9cbd685638ca\"},{\"id\":47878231,\"title\":\"Box to Save Memory in Rust\",\"score\":30,\"by\":\"emschwartz\",\"descendants\":4,\"url\":\"https://dystroy.org/blog/box-to-save-memory/\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":230,\"by\":\"koshyjohn\",\"descendants\":188,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47914677,\"title\":\"Butterflies are in decline across North America, a look at the Western Monarch\",\"score\":90,\"by\":\"1659447091\",\"descendants\":25,\"url\":\"https://www.smithsonianmag.com/science-nature/butterflies-are-in-dramatic-decline-across-north-america-a-close-look-at-the-western-monarch-shows-why-180988582/\"},{\"id\":47914367,\"title\":\"Show HN: AI memory with biological decay (52% recall)\",\"score\":48,\"by\":\"SachitRafa\",\"descendants\":21,\"url\":\"https://github.com/sachitrafa/YourMemory\"},{\"id\":47883839,\"title\":\"Magic: The Gathering took me from N2 to Japanese fluency\",\"score\":70,\"by\":\"pwim\",\"descendants\":22,\"url\":\"https://www.tokyodev.com/articles/how-magic-the-gathering-took-me-from-n2-to-japanese-fluency\"},{\"id\":47910388,\"title\":\"SWE-bench Verified no longer measures frontier coding capabilities\",\"score\":231,\"by\":\"kmdupree\",\"descendants\":136,\"url\":\"https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/\"},{\"id\":47885719,\"title\":\"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\",\"score\":19,\"by\":\"MrBuddyCasino\",\"descendants\":3,\"url\":\"https://tingouw.com/blog/embedded/esp32/run_rust_on_app_core\"},{\"id\":47884850,\"title\":\"XOXO Festival Archive\",\"score\":35,\"by\":\"surprisetalk\",\"descendants\":4,\"url\":\"https://xoxofest.com/\"},{\"id\":47914161,\"title\":\"MoQ Boy\",\"score\":28,\"by\":\"mmcclure\",\"descendants\":3,\"url\":\"https://moq.dev/blog/moq-boy/\"},{\"id\":47911350,\"title\":\"Clay PCB Tutorial\",\"score\":186,\"by\":\"j0r0b0\",\"descendants\":118,\"url\":\"https://feministhackerspaces.cargo.site/Clay-PCB-Tutorial\"},{\"id\":47915274,\"title\":\"Show HN: Startup Equity Adventure Game\",\"score\":9,\"by\":\"iliabara\",\"descendants\":4,\"url\":\"https://options-game-polymathrobotics.pythonanywhere.com/\"}]",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 1,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.6499999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6279,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 33464.010248000006,
+      "output": "1. An AI agent deleted our production database. The agent's confession is below — comments: 555\n2. AI should elevate your thinking, not replace it — comments: 188\n3. SWE-bench Verified no longer measures frontier coding capabilities — comments: 136",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "1/3 correct titles",
+          "1/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.7666666666666667
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 11542,
+      "stepsCount": 9,
+      "toolCallCount": 0,
+      "wallMs": 71058.88491200001,
+      "output": "## Highest Score\n\n1. An AI agent deleted our production database. The agent's confession is below (402)\n2. I bought Friendster for $30k – Here's what I'm doing with it (271)\n3. Statecharts: hierarchical state machines (270)\n\n## Most Comments\n\n1. An AI agent deleted our production database. The agent's confession is below (555)\n2. AI should elevate your thinking, not replace it (188)\n3. Clay PCB Tutorial (118)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "5/6 correct titles"
+        ],
+        "composite": 0.9083333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 9613,
+      "stepsCount": 9,
+      "toolCallCount": 0,
+      "wallMs": 42812.49979,
+      "output": "# Today on Hacker News\n\n## AI/ML\n\nThe AI conversation continues to dominate discussions, with several high-profile posts exploring the implications of artificial intelligence. The most discussed story, \"An AI agent deleted our production database. The agent's confession is below\" with 402 points, shares a cautionary tale of autonomous AI causing real-world harm. Complementing this, \"AI should elevate your thinking, not replace it\" (230 points) advocates for thoughtful AI integration. The SWE-bench team's announcement that their verified benchmark \"no longer measures frontier coding capabilities\" (231 points) signals evolving evaluation standards. A Show HN post about \"AI memory with biological decay\" (48 points) experimentally applies neural network principles to memory storage.\n\n## Programming & Engineering\n\nSystems programming and infrastructure topics draw strong interest. \"Box to Save Memory in Rust\" (30 points) explores memory optimization techniques, while \"Statecharts: hierarchical state machines\" (270 points) introduces a formal approach to state management. \"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\" (19 points) demonstrates embedded Rust capabilities. Notably, \"Clay PCB Tutorial\" (186 points) teaches analog circuit design using clay, bridging traditional and modern engineering. \"MoQ Boy\" (28 points) showcases another creative technical project.\n\n## Hardware & History\n\nTechnical history and hardware stories capture attention. \"Fast16: High-precision software sabotage 5 years before Stuxnet\" (118 points) reveals early cyber warfare techniques. Historical content includes \"The 1944 Warsaw Uprising, in Color\" (107 points), bringing archival footage to modern audiences.\n\n## Other Notable Stories\n\nBeyond technical content, \"I bought Friendster for $30k – Here's what I'm doing with it\" (271 points) discusses acquired tech assets. Sports coverage features \"Sawe becomes first athlete to run a sub-two-hour marathon\" (204 points). Nature stories like \"Butterflies are in decline across North America\" (90 points) and gaming content including \"The Visible Zorker: Zork 1\" (92 points) and \"Magic: The Gathering took me from N2 to Japanese fluency\" (70 points) round out the day's diverse reading.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "10/15 titles cited",
+          "314 words"
+        ],
+        "composite": 0.8833333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8416666666666666,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

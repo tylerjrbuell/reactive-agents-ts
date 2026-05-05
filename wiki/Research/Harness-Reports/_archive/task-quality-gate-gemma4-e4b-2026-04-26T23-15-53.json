@@ -1,0 +1,135 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-26T23-15-53",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 106,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 7638.261226,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5286,
+      "stepsCount": 4,
+      "toolCallCount": 0,
+      "wallMs": 27217.933915,
+      "output": "[{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":179,\"by\":\"ca98am79\",\"descendants\":81,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":94,\"by\":\"dd23\",\"descendants\":33,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47914350,\"title\":\"Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race\",\"score\":160,\"by\":\"berkeleyjunk\",\"descendants\":109,\"url\":\"https://www.bbc.com/sport/athletics/articles/crm1m7e0zwzo\"},{\"id\":47914677,\"title\":\"Butterflies are in decline across North America, a look at the Western Monarch\",\"score\":73,\"by\":\"1659447091\",\"descendants\":18,\"url\":\"https://www.smithsonianmag.com/science-nature/butterflies-are-in-dramatic-decline-across-north-america-a-close-look-at-the-western-monarch-shows-why-180988582/\"},{\"id\":47914367,\"title\":\"Show HN: AI memory with biological decay (52% recall)\",\"score\":34,\"by\":\"SachitRafa\",\"descendants\":16,\"url\":\"https://github.com/sachitrafa/YourMemory\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":201,\"by\":\"koshyjohn\",\"descendants\":163,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47883839,\"title\":\"Magic: The Gathering took me from N2 to Japanese fluency\",\"score\":64,\"by\":\"pwim\",\"descendants\":19,\"url\":\"https://www.tokyodev.com/articles/how-magic-the-gathering-took-me-from-n2-to-japanese-fluency\"},{\"id\":47914438,\"title\":\"Two Athletes Break Sub-2-HR Marathon in Adizero Adios Pro Evo 3\",\"score\":19,\"by\":\"canucker2016\",\"descendants\":5,\"url\":\"https://news.adidas.com/running/two-adidas-athletes-sabastian-sawe-and-yomif-kejelcha-break-the-sub-2-hour-marathon-barrier-in-the-r/s/d4be4eac-a3b8-47d5-835f-9cbd685638ca\"},{\"id\":47910388,\"title\":\"SWE-bench Verified no longer measures frontier coding capabilities\",\"score\":226,\"by\":\"kmdupree\",\"descendants\":133,\"url\":\"https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/\"},{\"id\":47914161,\"title\":\"MoQ Boy\",\"score\":26,\"by\":\"mmcclure\",\"descendants\":2,\"url\":\"https://moq.dev/blog/moq-boy/\"},{\"id\":47884850,\"title\":\"XOXO Festival Archive\",\"score\":26,\"by\":\"surprisetalk\",\"descendants\":1,\"url\":\"https://xoxofest.com/\"},{\"id\":47885719,\"title\":\"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\",\"score\":14,\"by\":\"MrBuddyCasino\",\"descendants\":1,\"url\":\"https://tingouw.com/blog/embedded/esp32/run_rust_on_app_core\"},{\"id\":47878231,\"title\":\"Box to Save Memory in Rust\",\"score\":14,\"by\":\"emschwartz\",\"descendants\":0,\"url\":\"https://dystroy.org/blog/box-to-save-memory/\"},{\"id\":47911350,\"title\":\"Clay PCB Tutorial\",\"score\":183,\"by\":\"j0r0b0\",\"descendants\":116,\"url\":\"https://feministhackerspaces.cargo.site/Clay-PCB-Tutorial\"},{\"id\":47911644,\"title\":\"The Visible Zorker: Zork 1\",\"score\":83,\"by\":\"PLenz\",\"descendants\":13,\"url\":\"https://eblong.com/infocom/visi/zork1/\"}]",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 1,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.6499999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 6399,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 33864.220587,
+      "output": "1. Amateur armed with ChatGPT solves an Erdős problem — comments: 509\n2. An AI agent deleted our production database. The agent's confession is below — comments: 505\n3. AI should elevate your thinking, not replace it — comments: 163",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.8833333333333334
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 12508,
+      "stepsCount": 7,
+      "toolCallCount": 0,
+      "wallMs": 71274.99845199999,
+      "output": "## Highest Score\n1. Amateur armed with ChatGPT solves an Erdős problem (731)\n2. An AI agent deleted our production database. The agent's confession is below (363)\n3. Statecharts: hierarchical state machines (267)\n\n## Most Comments\n1. Amateur armed with ChatGPT solves an Erdős problem (509)\n2. An AI agent deleted our production database. The agent's confession is below (505)\n3. AI should elevate your thinking, not replace it (163)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 12531,
+      "stepsCount": 5,
+      "toolCallCount": 0,
+      "wallMs": 78212.82057099999,
+      "output": "# Today on Hacker News\n\nThe discussions on Hacker News today were heavily dominated by the rapid evolution and ethical considerations surrounding Artificial Intelligence, alongside deep dives into low-level programming and hardware development. In the AI sphere, the conversation was highly technical, ranging from philosophical discussions on how \"AI should elevate your thinking, not replace it,\" to practical advancements like the \"Show HN: AI memory with biological decay (52% recall).\" The industry itself was grappling with its own metrics, highlighted by the report that \"SWE-bench Verified no longer measures frontier coding capabilities.\" Complementing these high-level topics were detailed programming explorations, including articles on memory management in Rust, such as \"Box to Save Memory in Rust,\" and advanced embedded systems work, like \"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core.\" For those interested in the physical intersection of code and creation, the hardware category featured practical tutorials, notably the \"Clay",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "0 category sections",
+          "5/15 titles cited",
+          "151 words"
+        ],
+        "composite": 0.5916666666666666
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.825,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

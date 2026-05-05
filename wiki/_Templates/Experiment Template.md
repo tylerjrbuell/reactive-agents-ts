@@ -46,7 +46,7 @@ owner: Team Name
 
 - **Test file:** `packages/.../tests/M#-*.test.ts`
 - **Measurement file:** `docs/superpowers/debriefs/M#-mechanism-name-validation.md`
-- **Harness report:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`
+- **Harness report:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
 
 ### Key Findings
 

@@ -1,0 +1,136 @@
+{
+  "model": "qwen3.5:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T02-26-45",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 238,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 29164.276217000002,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 9580,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 127153.62657400001,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 426)\n2. Self-updating screenshots (score: 70",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 0.13333333333333333,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "2/15 titles cited",
+          "3/15 scores cited",
+          "2 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.44833333333333336
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 9920,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 48326.140048,
+      "output": "[{\"id\":47914165,\"title\":\"I bought Friendster for $30k – Here's what I'm doing with it\",\"score\":426,\"by\":\"ca98am79\",\"descendants\":244,\"url\":\"https://ca98am79.medium.com/i-bought-friendster-for-30k-heres-what-i-m-doing-with-it-d5e8ddb3991d\"},{\"id\":47908051,\"title\":\"Self-updating screenshots\",\"score\":70,\"by\":\"bjhess\",\"descendants\":11,\"url\":\"https://interblah.net/self-updating-screenshots\"},{\"id\":47903541,\"title\":\"Three constraints before I build anything\",\"score\":51,\"by\":\"nervous_north\",\"descendants\":9,\"url\":\"https://jordanlord.co.uk/blog/3-constraints/\"},{\"id\":47913855,\"title\":\"Fast16: High-precision software sabotage 5 years before Stuxnet\",\"score\":163,\"by\":\"dd23\",\"descendants\":43,\"url\":\"https://www.sentinelone.com/labs/fast16-mystery-shadowbrokers-reference-reveals-high-precision-software-sabotage-5-years-before-stuxnet/\"},{\"id\":47878231,\"title\":\"Box to save memory in Rust\",\"score\":71,\"by\":\"emschwartz\",\"descendants\":12,\"url\":\"https://dystroy.org/blog/box-to-save-memory/\"},{\"id\":47916769,\"title\":\"Show HN: The Unix Magic poster, annotated (updated)\",\"score\":6,\"by\":\"drio\",\"descendants\":0,\"url\":\"https://github.com/drio/unixmagic\"},{\"id\":47906420,\"title\":\"When the cheap one is the cool one\",\"score\":22,\"by\":\"ddrmaxgt37\",\"descendants\":9,\"url\":\"https://arun.is/blog/cheap-cool/\"},{\"id\":47916410,\"title\":\"Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft\",\"score\":64,\"by\":\"donsupreme\",\"descendants\":27,\"url\":\"https://www.ft.com/content/2429f0f0-b685-4747-b425-bf8001a2e94c\"},{\"id\":47914677,\"title\":\"Butterflies are in decline across North America, a look at the Western Monarch\",\"score\":133,\"by\":\"1659447091\",\"descendants\":40,\"url\":\"https://www.smithsonianmag.com/science-nature/butterflies-are-in-dramatic-decline-across-north-america-a-close-look-at-the-western-monarch-shows-why-180988582/\"},{\"id\":47910388,\"title\":\"SWE-bench Verified no longer measures frontier coding capabilities\",\"score\":254,\"by\":\"kmdupree\",\"descendants\":144,\"url\":\"https://openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/\"},{\"id\":47913650,\"title\":\"AI should elevate your thinking, not replace it\",\"score\":293,\"by\":\"koshyjohn\",\"descendants\":247,\"url\":\"https://www.koshyjohn.com/blog/ai-should-elevate-your-thinking-not-replace-it/\"},{\"id\":47914350,\"title\":\"Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race\",\"score\":263,\"by\":\"berkeleyjunk\",\"descendants\":199,\"url\":\"https://www.bbc.com/sport/athletics/articles/crm1m7e0zwzo\"},{\"id\":47914367,\"title\":\"Show HN: AI memory with biological decay (52% recall)\",\"score\":63,\"by\":\"SachitRafa\",\"descendants\":30,\"url\":\"https://github.com/sachitrafa/YourMemory\"},{\"id\":47901819,\"title\":\"Music of the BBC Microcomputer System\",\"score\":10,\"by\":\"eightb\",\"descendants\":1,\"url\":\"https://www.acornelectron.co.uk/eug/72/a-musi.html\"},{\"id\":47909979,\"title\":\"The fastest Linux timestamps\",\"score\":19,\"by\":\"hmpc\",\"descendants\":5,\"url\":\"https://www.hmpcabral.com/2026/04/26/the-fastest-linux-timestamps/\"},{\"id\":47910877,\"title\":\"Lessons from building multiplayer browsers\",\"score\":11,\"by\":\"alejandrohacks\",\"descendants\":4,\"url\":\"https://www.alejandro.pe/writing/sail-muddy-lessons\"},{\"id\":47885719,\"title\":\"Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core\",\"score\":36,\"by\":\"MrBuddyCasino\",\"descendants\":7,\"url\":\"https://tingouw.com/blog/embedded/esp32/run_rust_on_app_core\"},{\"id\":47898660,\"title\":\"Quirks of Human Anatomy\",\"score\":92,\"by\":\"gurjeet\",\"descendants\":59,\"url\":\"https://www.sdbonline.org/sites/fly/lewheldquirk/figlegq6.htm\"},{\"id\":47883839,\"title\":\"Magic: The Gathering took me from N2 to Japanese fluency\",\"score\":88,\"by\":\"pwim\",\"descendants\":31,\"url\":\"https://www.tokyodev.com/articles/how-magic-the-gathering-took-me-from-n2-to-japanese-fluency\"},{\"id\":47884850,\"title\":\"XOXO Festival Archive\",\"score\":44,\"by\":\"surprisetalk\",\"descendants\":9,\"url\":\"https://xoxofest.com/\"},{\"id\":47914161,\"title\":\"MoQ Boy\",\"score\":39,\"by\":\"mmcclure\",\"descendants\":4,\"url\":\"https://moq.dev/blog/moq-boy/\"},{\"id\":47911644,\"title\":\"The Visible Zorker: Zork 1\",\"score\":108,\"by\":\"PLenz\",\"descendants\":19,\"url\":\"https://eblong.com/infocom/visi/zork1/\"},{\"id\":47911350,\"title\":\"Clay PCB Tutorial\",\"score\":195,\"by\":\"j0r0b0\",\"descendants\":121,\"url\":\"https://feministhackerspaces.cargo.site/Clay-PCB-Tutorial\"},{\"id\":47915632,\"title\":\"FreeBSD Device Drivers Book\",\"score\":16,\"by\":\"myth_drannon\",\"descendants\":1,\"url\":\"https://github.com/ebrandi/FDD-book\"},{\"id\":47913382,\"title\":\"Chernobyl wildlife forty years on\",\"score\":46,\"by\":\"reconnecting\",\"descendants\":2,\"url\":\"https://www.bbc.com/future/article/20260424-chernobyl-wildlife-forty-years-on\"}]",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks",
+          "★ called recall()"
+        ],
+        "composite": 0.4793333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 9825,
+      "stepsCount": 12,
+      "toolCallCount": 4,
+      "wallMs": 51828.88218700001,
+      "output": "## Highest Score\n1. An AI agent deleted our production database. The agent's confession is below (339 points)\n2. The West forgot how to make things, now it's forgetting how to code (298 points)\n3. Amateur armed with ChatGPT solves an Erdős problem (287 points)\n\n## Most Comments\n1. An AI agent deleted our production database. The agent's confession is below (1421 comments)\n2. The West forgot how to make things, now it's forgetting how to code (892 comments)\n3. Amateur armed with ChatGPT solves an Erdős problem (756 comments)",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "0/6 correct titles"
+        ],
+        "composite": 0.44999999999999996
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 26904,
+      "stepsCount": 24,
+      "toolCallCount": 8,
+      "wallMs": 54024.118896,
+      "output": "# Today on Hacker News\n\n## AI/ML & Machine Learning\n\nToday's top stories featured a remarkable concentration of AI-related content, reflecting the field's continued dominance in tech discussions. The most viral story, \"An AI agent deleted our production database. The agent's confession is below,\" captured widespread concern and humor around autonomous AI systems making catastrophic mistakes in production environments. This tale of an AI's confession resonated deeply with developers who've faced similar challenges. Complementing this, \"Show HN: A Karpathy-style LLM\" showcased another AI project, while \"Amateur armed with ChatGPT solves an Erdős problem\" demonstrated the surprising capabilities of current large language models in tackling complex mathematical challenges. The conversation around AI productivity also surfaced, with discussions questioning whether current AI tools genuinely enhance productivity or primarily serve workforce reduction agendas.\n\n## Hardware & Engineering\n\nThe hardware section was represented by several practical contributions. \"New 10 GbE USB adapters are cooler, smaller, cheaper\" from jeffgeerling highlighted affordable networking solutions for enthusiasts. The \"Free Universal Construction Kit\" offered a creative approach to physical building projects. Additionally, \"Fast16: High-precision software sabotage 5 years before Stuxnet\" provided historical context on cybersecurity threats and the evolution of sophisticated malware techniques, serving as both a technical resource and cautionary tale about long-term planning in security architecture.\n\n## Programming & Developer Tools\n\nThe programming category featured diverse content ranging from developer anecdotes to practical tooling. \"The West forgot how to make things, now it's forgetting how to code\" sparked reflection on manufacturing and software development trends. \"I bought Friendster for $30k – Here's what I'm doing with it\" shared insights about social network ownership and platform strategy. Developer discussions included \"Using coding assistance tools\" and reflections on \"The Free Universal Construction Kit\" for physical projects. The HN community also explored practical matters like \"When the cheap one is the cool one\" and \"Quirks of Human Anatomy,\" showing the site's breadth beyond technical content.\n\n## Other\n\nBeyond tech, \"Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race\" from BBC highlighted sports achievements, demonstrating Hacker News's diverse community interests. The platform continues to serve as a crossroads where technical expertise meets broader cultural topics, from scientific discoveries to athletic accomplishments, maintaining its position as a comprehensive tech news destination.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0.26666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "4/15 titles cited",
+          "374 words"
+        ],
+        "composite": 0.7433333333333333
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6241999999999999,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

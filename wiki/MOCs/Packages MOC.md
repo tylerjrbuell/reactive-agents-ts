@@ -196,7 +196,7 @@ High-level facades that expose the framework to users.
 
 ### Benchmarks
 - [[Apps/benchmarks|benchmarks]] — Performance and accuracy benchmarks
-  - Key files: `src/`, `harness-reports/`
+  - Key files: `src/`, `wiki/Research/Harness-Reports/`
   - Owner: Performance team
   - Status: ✅ Frontier models 100%, bare-llm 85%
 

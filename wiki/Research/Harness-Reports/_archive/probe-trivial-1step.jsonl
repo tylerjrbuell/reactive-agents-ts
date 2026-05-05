@@ -1,0 +1,4 @@
+{"kind":"run-started","runId":"01KPZR7DQ2MTJBM7KMRVC48EHF","timestamp":1777034573549,"iter":-1,"seq":0,"task":"","model":"qwen3:14b","provider":"ollama","config":{}}
+{"kind":"entropy-scored","runId":"01KPZR7DQ2MTJBM7KMRVC48EHF","timestamp":1777034587243,"iter":1,"seq":3,"composite":0.15,"sources":{"token":0,"structural":0.8833333333333333,"semantic":0,"behavioral":0.5,"contextPressure":0}}
+{"kind":"entropy-scored","runId":"01KPZR7DQ2MTJBM7KMRVC48EHF","timestamp":1777034587245,"iter":1,"seq":4,"composite":0.15,"sources":{"token":0,"structural":0.8833333333333333,"semantic":0,"behavioral":0.5,"contextPressure":0}}
+{"kind":"run-completed","runId":"01KPZR7DQ2MTJBM7KMRVC48EHF","timestamp":1777034587269,"iter":-1,"seq":5,"status":"success","totalTokens":2203,"totalCostUsd":0,"durationMs":13720}

@@ -20,7 +20,7 @@ None. All existing `ReactiveAgents.create().with*()` builder chains continue to 
 
 ### New Features — 13 Validated Mechanisms
 
-This release features **Phase 1 mechanism validation sweep**: all 13 harness mechanisms spike-tested via TDD (RED → GREEN → ANALYSIS). **8 KEEP verdicts** ship as-is; **5 IMPROVE verdicts** have concrete Phase 1.5 action items with clear success criteria. Evidence at `harness-reports/phase-1-mechanism-validation-2026-05-04.md`.
+This release features **Phase 1 mechanism validation sweep**: all 13 harness mechanisms spike-tested via TDD (RED → GREEN → ANALYSIS). **8 KEEP verdicts** ship as-is; **5 IMPROVE verdicts** have concrete Phase 1.5 action items with clear success criteria. Evidence at `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`.
 
 #### M1 — Reactive Intelligence Dispatcher ✅ KEEP
 - **Measurement infrastructure complete** — entropy signal + dispatch-rate tracking. Budget threading fixed (W3): RI budget counters no longer dead-zeroed each iteration; suppression gates (`maxFiresPerRun=5`, `maxInterventionTokenBudget=1500`) now reachable.

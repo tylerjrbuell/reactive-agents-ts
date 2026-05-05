@@ -3,13 +3,13 @@
 // generalizable harness improvements (vs per-model hardcoding).
 //
 // Run AFTER multiple PROBE_MODEL=X bun run task-quality-gate.ts invocations.
-// Reads the latest report per model from harness-reports/, classifies each
+// Reads the latest report per model from wiki/Research/Harness-Reports/, classifies each
 // task's failure shape, and prints a cross-model failure-mode matrix.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const REPORTS_DIR = resolve(import.meta.dir, "../../../../harness-reports");
+const REPORTS_DIR = resolve(import.meta.dir, "../../../../wiki/Research/Harness-Reports");
 
 type TaskResult = {
   taskId: string;

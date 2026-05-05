@@ -211,7 +211,7 @@ function buildIterationSystemPrompt(
   // compact tool list. Used to validate the curator-as-signal-optimizer
   // hypothesis: bare Ollama with this shape hits 100%; harness over-scaffolds
   // and induces structurally-weird outputs on local models.
-  // See harness-reports/bare-vs-harness-curation-2026-04-26.md.
+  // See wiki/Research/Harness-Reports/bare-vs-harness-curation-2026-04-26.md.
   if (process.env.RA_MINIMAL_PROMPT === "1") {
     const minimal: string[] = [];
     if (availableTools.length > 0) {

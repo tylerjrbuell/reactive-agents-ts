@@ -265,7 +265,7 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 Executed parallel TDD spike validations for all 13 harness mechanisms (M1–M13). Applied **improvement-first philosophy:** no mechanism sunset without evidence; every under-performing mechanism viewed as improvable. Result: zero removals, 5 clear improvement paths, 8 confident KEEP verdicts.
 
-**Evidence artifact:** `harness-reports/phase-1-mechanism-validation-2026-05-04.md`  
+**Evidence artifact:** `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`  
 **Synthesis document:** `.agents/PHASE-1-SYNTHESIS.md` (actionable insights for Phase 2+)
 
 ### Full Mechanism Verdicts
@@ -354,7 +354,7 @@ Executed parallel TDD spike validations for all 13 harness mechanisms (M1–M13)
 ### Files Updated
 
 - ✅ `.agents/PHASE-1-SYNTHESIS.md` — Comprehensive findings → actionable insights
-- ✅ `harness-reports/phase-1-mechanism-validation-2026-05-04.md` — Validation evidence artifact
+- ✅ `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md` — Validation evidence artifact
 - ✅ `docs/superpowers/plans/2026-05-03-v1-master-roadmap.md` — Amendment log entry (Phase 1 complete)
 - ✅ `docs/spec/docs/AUDIT-overhaul-2026.md` — Final mechanism verdicts in §10.2 (Phase 1 validated, 8 KEEP + 5 IMPROVE)
 

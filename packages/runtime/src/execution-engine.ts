@@ -1237,7 +1237,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // Tools the user didn't literally invoke are demoted to
                   // "relevant" — still visible/usable, but not enforced by
                   // the dispatcher early-stop. Cross-model failure analysis:
-                  // harness-reports/cross-model-failure-modes-2026-04-26.md.
+                  // wiki/Research/Harness-Reports/cross-model-failure-modes-2026-04-26.md.
                   const taskTextLower = extractTaskText(task.input);
                   const literalMentions = literalMentionRequired(
                     taskTextLower,

@@ -1,0 +1,136 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T13-01-43",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4476.06197,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13969,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 24274.811310999998,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=dispatcher-strategy-switch",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 7687,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 7952.305464000005,
+      "output": "1. \"I bought Friendster for $30k – Here's what I'm doing with it\" — comments: 459\n2. \"AI should elevate your thinking, not replace it\" — comments: 444\n3. \"Fast16: High-precision software sabotage 5 years before Stuxnet\" — comments: 59",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.8833333333333334
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 13387,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 17628.174436,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=dispatcher-strategy-switch",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6860,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 8648.52609,
+      "output": "# Today on Hacker News\n\n## AI and Technology\nThe top stories today showcase significant developments in artificial intelligence and technology. Notably, \"AI should elevate your thinking, not replace it\" by koshyjohn has garnered substantial attention with 610 points, highlighting the importance of AI as a tool to enhance human capabilities rather than replace them entirely. This perspective is complemented by discussions around innovative technologies like the Prompt API, which offers advanced features for developers working with AI systems.\n\n## Business and Entrepreneurship\nIn the business section, two notable stories stand out. \"I bought Friendster for $30k – Here's what I'm doing with it\" details an intriguing entrepreneurial venture where a user purchased the domain of the once-popular social network platform for a significant sum. This story has attracted 902 points and sparked interesting discussions about digital asset acquisition and potential future uses.\n\n## Programming and Development\nThe programming community is actively engaged with several interesting projects today. \"Fully Featured Audio DSP Firmware for the Raspberry Pi Pico\" showcases impressive work in audio processing, while \"Show HN: A terminal spreadsheet editor with Vim keybindings\" presents a novel approach to data manipulation tools. These stories demonstrate the ongoing innovation and creativity within the programming community.\n\n## Other Notable Stories\nBeyond these main categories, several other interesting posts have caught attention. \"Pgbackrest is no longer being maintained\" raises concerns about database backup solutions, while \"It's OK to abandon your side-project (2024)\" offers valuable insights for developers struggling with their personal projects. These stories highlight the importance of maintaining healthy perspectives on technical work and project management.\n\nThe overall theme across these top stories emphasizes innovation, practical problem-solving, and the evolving landscape of technology and business in today's digital age.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.4,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "6/15 titles cited",
+          "287 words"
+        ],
+        "composite": 0.7899999999999999
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6546666666666666,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

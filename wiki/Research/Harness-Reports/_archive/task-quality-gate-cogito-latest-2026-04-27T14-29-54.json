@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T14-29-54",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1499.6182689999998,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13492,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 17935.594169,
+      "output": "Your next step: call get-hn-posts. You have all the information you need.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 17091,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 10157.457538999999,
+      "output": "{\"query\":\"Hacker News top posts with highest comment counts 25\",\"results\":[{\"content\":\"Most-upvoted comments of the last 48 hours. You can change the number of hours like this: bestcomments?h=24. jdw64 ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/bestcomments\",\"score\":0.5},{\"content\":\"The Most Popular Blogs of Hacker News in 2025 · #1 Simon Willison🔗 · #2 Jeff Geerling🔗 · #3 Sean Goedecke🔗 · #4 Brian Krebs🔗 · #5 Neal Agarwal🔗.\",\"source\":\"web\",\"identifier\":\"https://refactoringenglish.com/blog/2025-hn-top-5/\",\"score\":0.5},{\"content\":\"Here are the top 50. The first column is the fave count. It's interesting how many are Ask HNs, ie text posts with no external URL.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=24351073\",\"score\":0.5},{\"content\":\"Hacker News ; 8. Trump fires NSF's oversight board (science.org) ; 509 points by skullone 1 day ago | 305 comments ; 9. USB Cheat Sheet (2022) (fabiensanglard.net).\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/best\",\"score\":0.5},{\"content\":\"#26 Show HN: Portable Secret – How I store my secrets and communicate privately · #27 Show HN: Tetris in a PDF · #28 Show HN: Bel · #29 Show HN: I built a synth ...\",\"source\":\"web\",\"identifier\":\"https://bestofshowhn.com/\",\"score\":0.5}],\"totalResults\":5,\"sourcesSearched\":[\"web\"]}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 8833,
+      "stepsCount": 8,
+      "toolCallCount": 1,
+      "wallMs": 8544.277836000001,
+      "output": "Review your answer: does it fully address the task \"Fetch top 20 Hacker News posts. Output exactly TWO markdown sections: '## Highest Score' (top 3 by score) and '## Most C\"? Include EXACT numbers, prices, and data values from the tool results above — do not say \"no data found\" if the numbers appear in the results. If the output format doesn't match what was requested, fix it now.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.375
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 16122,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 11207.784526000003,
+      "output": "{\"query\":\"Hacker News top stories AI ML Hardware Programming Other\",\"results\":[{\"content\":\"As programmers, we find coding to be fun and glamorous and writing to be difficult. Emotionally, it's much easier to finish a piece of code and ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=47557185\",\"score\":0.5},{\"content\":\"We're supply constrained in the short-term because demand for these AI tools is so high that TSMC and other chip manufacturers can't keep up.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=47236218\",\"score\":0.5},{\"content\":\"Very unskilled programmers can use generative AI to create complex code that is hard to understand. Unskilled programmers on their own write simpler code with ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=45405177\",\"score\":0.5},{\"content\":\"Kimi K2.5 is at least as good as the best closed source models today for my purposes. I've switched from Claude Code w/ Opus 4.5 to OpenCode ...\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=47062534\",\"score\":0.5},{\"content\":\"Now the big claims are that coding jobs are going away, or if you at least don't use it you'll be left behind. People are posting AI stories every day.\",\"source\":\"web\",\"identifier\":\"https://news.ycombinator.com/item?id=44616479\",\"score\":0.5}],\"totalResults\":5,\"sourcesSearched\":[\"web\"]}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "139 words"
+        ],
+        "composite": 0.43000000000000005
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.48999999999999994,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "model": "llama3.1:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T00-47-00",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4439.543571,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5839,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 13526.957584999998,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 315)\n2. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 128)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (score: 222)\n4. Two Athletes Break Sub-2-HR Marathon in Adizero Adios Pro Evo 3 (score: 66)\n5. Box to Save Memory in Rust (score: 39)\n6. Butterflies are in decline across North America, a look at the Western Monarch (score: 106)\n7. Show HN: AI memory with biological decay (52% recall) (score: 50)\n8. AI should elevate your thinking, not replace it (score: 251)\n9. Magic: The Gathering took me from N2 to Japanese fluency (score: 73)\n10. SWE-bench Verified no longer measures frontier coding capabilities (score: 237)\n11. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (score: 24)\n12. Google controls ~25% of global AI compute, with ~3.8M TPUs and 1.3M GPUs (score: 15)\n13. XOXO Festival Archive (score: 40)\n14. Show HN: Startup Equity Adventure Game (score: 12)\n15. The Visible Zorker: Zork 1 (score: 95)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 5879,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 8195.654610999998,
+      "output": "1. An AI agent deleted our production database. The agent's confession is below — comments: 571\n2. GoDaddy gave a domain to a stranger without any documentation — comments: 212\n3. I bought Friendster for $30k – Here's what I'm doing with it — comments: 169",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 6061,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 8853.053250999998,
+      "output": "## Highest Score\n1. An AI agent deleted our production database. The agent's confession is below (416)\n2. I bought Friendster for $30k – Here's what I'm doing with it (315)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (222)\n\n## Most Comments\n1. An AI agent deleted our production database. The agent's confession is below (571)\n2. SWE-bench Verified no longer measures frontier coding capabilities (137)\n3. I bought Friendster for $30k – Here's what I'm doing with it (169)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0.6666666666666666,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "4/6 correct titles"
+        ],
+        "composite": 0.8166666666666667
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6473,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 18701.790097999998,
+      "output": "# Today on Hacker News\n\n## AI and Machine Learning\n\nThe top stories on Hacker News today highlight the growing importance of artificial intelligence and machine learning in various fields. One article discusses how Friendster, a social media platform from the early 2000s, has been acquired for $30k, with its new owner planning to revamp the site using modern AI techniques. Another story showcases an AI-powered memory system that mimics biological decay, achieving a remarkable 52% recall rate.\n\n## Hardware and Programming\n\nIn the realm of hardware and programming, several articles caught our attention. A developer has created a Rust library called \"Box\" that helps save memory in applications, reducing the risk of memory leaks. Another story highlights the use of Rust alongside ESP-IDF on the ESP32-S3's second core, demonstrating the versatility of this programming language.\n\n## Sports and Science\n\nThe world of sports and science also made an appearance on Hacker News today. Two athletes have broken the sub-2-hour marathon barrier in a competitive race, with one of them wearing Adidas' Adizero Adios Pro Evo 3 shoes. Another article discusses the decline of butterflies across North America, specifically focusing on the Western Monarch species.\n\n## Other Stories\n\nFinally, several other stories caught our attention today. One article argues that AI should elevate human thinking rather than replace it, highlighting the need for a more nuanced understanding of AI's role in society. A developer has created a game called \"Startup Equity Adventure\" that simulates the challenges of startup equity, while another story showcases an archive of the XOXO Festival, a conference focused on technology and culture.\n\n## Miscellaneous\n\nIn other news, Google's control over global AI compute is highlighted, with approximately 25% of all AI processing power attributed to the company. Additionally, a developer has created a game called \"The Visible Zorker\" that recreates the classic text adventure game Zork 1 in a visually stunning way.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "5 category sections",
+          "0/15 titles cited",
+          "316 words"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8502000000000001,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

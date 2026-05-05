@@ -559,7 +559,7 @@ async function main(): Promise<void> {
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const outputDir = join(process.cwd(), "harness-reports");
+  const outputDir = join(process.cwd(), "wiki/Research/Harness-Reports");
   const outputPath = join(outputDir, `ollama-native-fc-context-probe-${timestamp}.json`);
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(

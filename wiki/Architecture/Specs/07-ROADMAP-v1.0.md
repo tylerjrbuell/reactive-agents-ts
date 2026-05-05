@@ -80,7 +80,7 @@ Each phase has:
 - **Baseline measurement** taken before phase work begins (commit the numbers).
 - **Validation gate** with a quantitative threshold (e.g., "qwen3 τ-bench retail ≥30% of frontier").
 - **Stop-the-line condition** — if the gate fails after phase implementation, the phase work is reverted or revised; we do not advance.
-- **Evidence artifact** — every phase produces a dated report under `harness-reports/phase-N-<focus>-YYYY-MM-DD.md` with raw data, methodology, and the gate result.
+- **Evidence artifact** — every phase produces a dated report under `wiki/Research/Harness-Reports/phase-N-<focus>-YYYY-MM-DD.md` with raw data, methodology, and the gate result.
 
 ### 2.4 Verification-before-completion
 
@@ -173,7 +173,7 @@ Per superpowers:code-reviewer: at the end of each phase, a code-review subagent 
 - **Validation gate:**
   1. qwen3:14B on a τ-bench-derived retail subset achieves ≥30% of frontier (claude-sonnet) score.
   2. Thinking-mode + tool_calls coexistence works on Ollama qwen3:14B without dropped tool calls (regression test).
-  3. At least 8 of the 14 currently-unused calibration fields have active consumers (audit at `harness-reports/phase-4-calibration-consumption-YYYY-MM-DD.md`).
+  3. At least 8 of the 14 currently-unused calibration fields have active consumers (audit at `wiki/Research/Harness-Reports/phase-4-calibration-consumption-YYYY-MM-DD.md`).
   4. Tool-result paging caps observed in production traces (no message exceeds 200KB; spill artifacts on disk for oversized results).
 - **Detailed plan:** Write `2026-MM-DD-phase-4-local-model-engineering.md` before execution. Three subagent-dispatchable tracks: per-provider parser, calibration consumers, tool-result paging.
 - **Estimated effort:** 4–6 sessions.
@@ -186,7 +186,7 @@ Per superpowers:code-reviewer: at the end of each phase, a code-review subagent 
 - **Vision pillars:** Reliability, Trustworthiness, Local-First (third-party validates the local-tier story).
 - **Validation gate:**
   1. At least one of {τ²-bench, BFCL V4, HAL Princeton harness} integration in `packages/benchmarks/src/sessions/` with a reproducible run command.
-  2. A run is published to `harness-reports/public-bench-<name>-YYYY-MM-DD.md` with: model + provider + date pinned; cost reported alongside accuracy; ≥3 seed variance reported (mean ± stdev or P50/P95); raw traces released as JSONL.
+  2. A run is published to `wiki/Research/Harness-Reports/public-bench-<name>-YYYY-MM-DD.md` with: model + provider + date pinned; cost reported alongside accuracy; ≥3 seed variance reported (mean ± stdev or P50/P95); raw traces released as JSONL.
   3. The framework's positioning doc (`README.md`) contains exactly one external benchmark claim with full methodology disclosure.
 - **Detailed plan:** Write `2026-MM-DD-phase-5-public-benchmark.md` before execution. Pick ONE benchmark first (recommend τ²-bench-retail — clearest reproducibility story); add others later.
 - **Estimated effort:** 2–3 sessions per benchmark.
@@ -233,10 +233,10 @@ Each phase produces evidence that informs the next. This is the dogfooding disci
 
 ```
 Phase N
-  ├─ Baseline measurement (committed to harness-reports/phase-N-baseline.json)
+  ├─ Baseline measurement (committed to wiki/Research/Harness-Reports/phase-N-baseline.json)
   ├─ Implementation (TDD, subagent-driven, frequent commits)
-  ├─ Post-impl measurement (committed to harness-reports/phase-N-postimpl.json)
-  ├─ Evidence artifact (harness-reports/phase-N-<focus>-YYYY-MM-DD.md)
+  ├─ Post-impl measurement (committed to wiki/Research/Harness-Reports/phase-N-postimpl.json)
+  ├─ Evidence artifact (wiki/Research/Harness-Reports/phase-N-<focus>-YYYY-MM-DD.md)
   ├─ Code review (superpowers:code-reviewer subagent)
   ├─ Validation gate check (numerical comparison baseline → postimpl)
   └─ Verdict: PASS → next phase | FAIL → revert/revise
@@ -245,7 +245,7 @@ Phase N
 ### 4.2 Evidence informs Phase N+1
 
 After each phase, before defining the detailed plan for Phase N+1:
-1. Read `harness-reports/phase-N-<focus>-YYYY-MM-DD.md`.
+1. Read `wiki/Research/Harness-Reports/phase-N-<focus>-YYYY-MM-DD.md`.
 2. Identify any unexpected findings (e.g., Phase 1 might find that the healing pipeline only matters for one model — Phase 4 plan should reflect that).
 3. Amend Phase N+1's validation gates if the evidence justifies it (loosen if too strict, tighten if too loose).
 4. Document the amendment in this master roadmap (§9 amendment log).
@@ -256,7 +256,7 @@ Every 90 days from this plan's start date (2026-05-03):
 1. Read framework changelogs (LangGraph, OpenAI Agents SDK, Anthropic Agent SDK, smolagents, Mastra, Pydantic AI).
 2. Read the agentic-track papers from arxiv (search "agent harness", "agent benchmark", "function calling", date range last 90 days).
 3. Read updates to public benchmarks (τ-bench, BFCL, HAL).
-4. Produce a research-amendment artifact: `harness-reports/research-amendment-YYYY-Q.md`.
+4. Produce a research-amendment artifact: `wiki/Research/Harness-Reports/research-amendment-YYYY-Q.md`.
 5. If amendments justify it: update this master roadmap's phase order, add new phases, or kill obsolete phases.
 
 **The vision document (`00-VISION.md`) is the only stable anchor — all other docs (including this plan) adapt.**
@@ -323,8 +323,8 @@ At v1.0 release, each pillar must have a concrete artifact demonstrating fulfill
 | **2. Observability** | EventBus 15+ event types fire on every run; replay primitive works | `bun test packages/runtime/tests/replay-determinism.test.ts` passes |
 | **3. Flexibility** | 6 reasoning strategies (incl. CodeAgentStrategy); ≥6 providers | `ls packages/reasoning/src/strategies/` ≥ 6 files |
 | **4. Scalability** | Concurrent execution + persistent gateway + A2A all wired and tested | `bun test packages/orchestration packages/gateway packages/a2a` all green |
-| **5. Reliability** | Frozen judge + reproducible bench + Effect-TS typed errors + circuit breakers | `harness-reports/phase-0-frozen-judge-final.md` shows ≤±0.5% reproducibility |
-| **6. Efficiency** | Code-as-action shows ≥25% token reduction on multi-step suite; semantic cache live; tool-result paging caps observed | `harness-reports/phase-3-code-as-action-validation.md` |
+| **5. Reliability** | Frozen judge + reproducible bench + Effect-TS typed errors + circuit breakers | `wiki/Research/Harness-Reports/phase-0-frozen-judge-final.md` shows ≤±0.5% reproducibility |
+| **6. Efficiency** | Code-as-action shows ≥25% token reduction on multi-step suite; semantic cache live; tool-result paging caps observed | `wiki/Research/Harness-Reports/phase-3-code-as-action-validation.md` |
 | **7. Security** | Sandboxed code execution; guardrails wired and tested; Ed25519 identity has at least one production consumer | `bun test packages/guardrails packages/identity packages/tools/src/skills/code-execution` green; example using identity in `apps/examples/` |
 | **8. Speed** | Bun-native; AgentStream.toSSE works in one line; parallel tool execution gated by `parallelCallCapability` calibration field | `bun test packages/runtime/tests/streaming.test.ts`, demo in `apps/examples/` |
 
@@ -346,13 +346,13 @@ Every amendment to this master roadmap (phase reordering, gate revision, phase a
 
 When ready to begin Phase N:
 
-1. **Read** `harness-reports/phase-(N-1)-<focus>-YYYY-MM-DD.md` (skip if N=0).
+1. **Read** `wiki/Research/Harness-Reports/phase-(N-1)-<focus>-YYYY-MM-DD.md` (skip if N=0).
 2. **Amend** Phase N's validation gates in this doc if the prior phase's evidence justifies it; log amendment in §9.
 3. **Write** `wiki/Planning/Implementation-Plans/2026-MM-DD-phase-N-<focus>.md` following superpowers:writing-plans discipline strictly (bite-sized TDD tasks, exact commands, no placeholders).
 4. **Execute** the detailed plan via superpowers:subagent-driven-development.
 5. **Verify** the validation gate. Pass → advance. Fail → stop the line.
 6. **Code review** the phase via superpowers:code-reviewer.
-7. **Commit** the evidence artifact (`harness-reports/phase-N-<focus>-YYYY-MM-DD.md`).
+7. **Commit** the evidence artifact (`wiki/Research/Harness-Reports/phase-N-<focus>-YYYY-MM-DD.md`).
 8. **Update** ROADMAP.md (root) with phase completion.
 9. **Begin** Phase N+1 dispatch protocol.
 

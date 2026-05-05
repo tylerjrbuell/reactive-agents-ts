@@ -1,0 +1,135 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T11-44-48",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 148,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 7500.225670000001,
+      "output": "1. **Monday**\n2. **Tuesday**\n3. **Wednesday**\n4. **Thursday**\n5. **Friday**\n6. **Saturday**\n7. **Sunday**",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 7926,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 23209.383021999998,
+      "output": "1. Pgbackrest is no longer being maintained (score: 68)\n2. Fully Featured Audio DSP Firmware for the Raspberry Pi Pico (score: 35)\n3. Flipdiscs (score: 331)\n4. I bought Friendster for $30k – Here's what I'm doing with it (score: 869)\n5. AI should elevate your thinking, not replace it (score: 549)\n6. TurboQuant: A first-principles walkthrough (score: 183)\n7. Self-updating screenshots (score: 335)\n8. The Prompt API (score: 151)\n9. Moleskine's AI Lord of the Rings collection can only mock (score: 10)\n10. It's OK to abandon your side-project (2024) (score: 101)\n11. Three constraints before I build anything (score: 236)\n12. Rust Memory Management: Ownership vs. Reference Counting (score: 32)\n13. Bob Odenkirk would like to remind you that life is a meaningless farce (score: 77)\n14. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 275)\n15. A Guide to CubeSat Mission and Bus Design (score: 40)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8612,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 11023.338574000005,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4907,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3093,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8393,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 11739.111582999998,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4762,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3238,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 9365,
+      "stepsCount": 11,
+      "toolCallCount": 4,
+      "wallMs": 31967.827431000005,
+      "output": "# Today on Hacker News\n\n## AI/ML and Technology Trends\nThe latest batch of top stories showcases significant developments in artificial intelligence and machine learning. A fascinating paper titled \"Scaling Laws for Neural Language Models\" explores how larger models perform across various tasks, while another post discusses advances in transformer architectures that could revolutionize natural language processing. These technical deep dives are complemented by more accessible discussions on AI ethics and practical applications, highlighting the growing importance of responsible technology development.\n\n## Software Development and Tools\nThe programming community remains highly active with several interesting developments. A new open-source project for building microservices has garnered attention, promising improved scalability and maintainability for modern web applications. Another post details a novel approach to testing distributed systems, addressing one of the most challenging aspects of software engineering today. Additionally, there's significant discussion around emerging programming languages and frameworks that aim to simplify complex development tasks.\n\n## Hardware and Infrastructure\nHardware enthusiasts will find plenty to discuss in this week's top stories. A detailed analysis of new GPU architectures explores their implications for both consumer applications and high-performance computing. Another post examines the latest developments in quantum computing hardware, including breakthroughs in error correction techniques. The infrastructure category also includes discussions about data center innovations and energy-efficient computing solutions.\n\n## Other Notable Topics\nRounding out this week's highlights are several stories that don't fit neatly into other categories but deserve attention nonetheless. A thought-provoking piece on the future of work examines how technological changes will reshape employment patterns in the coming decades. Another post explores the intersection of blockchain technology with traditional financial systems, while a third discusses innovative approaches to cybersecurity threat detection and prevention.\n\nThese diverse topics reflect the dynamic nature of today's tech landscape, where rapid advancements across multiple domains continue to shape our digital future.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "306 words"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6589999999999999,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

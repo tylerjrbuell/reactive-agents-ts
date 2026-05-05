@@ -6,7 +6,7 @@
 // This test runs every auto-discovered scenario under
 // `packages/testing/src/gate/scenarios/cf-*.ts`, captures Tier1ScenarioOutcomes,
 // and diffs against the committed baseline at
-// `harness-reports/integration-control-flow-baseline.json`. Any divergence
+// `wiki/Research/Harness-Reports/integration-control-flow-baseline.json`. Any divergence
 // fails CI with an actionable failure message.
 //
 // On first run (no baseline): test snapshots the current outcomes as the

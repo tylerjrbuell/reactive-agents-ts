@@ -1,0 +1,135 @@
+{
+  "model": "llama3.1:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T03-11-44",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4495.6307879999995,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5706,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 13482.014444,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 471)\n2. Notepad++ for Mac (score: 34)\n3. Self-updating screenshots (score: 96)\n4. Three constraints before I build anything (score: 73)\n5. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 172)\n6. EvanFlow – A TDD driven feedback loop for Claude Code (score: 8)\n7. When the cheap one is the cool one (score: 37)\n8. Box to save memory in Rust (score: 79)\n9. Show HN: The Unix Magic poster, annotated (updated) (score: 16)\n10. When Your Digital Life Vanishes (score: 14)\n11. The fastest Linux timestamps (score: 32)\n12. Butterflies are in decline across North America, a look at the Western Monarch (score: 150)\n13. SWE-bench Verified no longer measures frontier coding capabilities (score: 260)\n14. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 75)\n15. TurboQuant: A First-Principles Walkthrough (score: 5)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 7499,
+      "stepsCount": 8,
+      "toolCallCount": 1,
+      "wallMs": 8299.119474,
+      "output": "1. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 206\n2. AI should elevate your thinking, not replace it — comments: 260\n3. I bought Friendster for $30k – Here's what I'm doing with it — comments: 256",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5777,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 7560.6285789999965,
+      "output": "## Highest Score\n1. AI should elevate your thinking, not replace it (307)\n2. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (282)\n3. I bought Friendster for $30k – Here's what I'm doing with it (260)\n\n## Most Comments\n1. AI should elevate your thinking, not replace it (260)\n2. Butterflies are in decline across North America, a look at the Western Monarch (206)\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race (206)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 5966,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 16684.780949,
+      "output": "# Today on Hacker News\n\n## AI and Machine Learning\n\nThe top stories on Hacker News today highlight several interesting developments in the field of artificial intelligence and machine learning. One story that caught our attention is \"Fast16: High-precision software sabotage 5 years before Stuxnet,\" which reveals a high-precision software sabotage technique used by hackers five years before the infamous Stuxnet virus was discovered. Another article, \"Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft,\" discusses how Google is leveraging its AI capabilities to stay competitive in the cloud computing market.\n\n## Programming\n\nProgrammers will be interested in several stories featured on Hacker News today. For example, \"Notepad++ for Mac\" introduces a popular text editor that has been ported to macOS, while \"Box to save memory in Rust\" explores an innovative technique for optimizing memory usage in the Rust programming language. Additionally, \"SWE-bench Verified no longer measures frontier coding capabilities\" discusses how OpenAI's SWE-bench tool is being reevaluated due to changes in its methodology.\n\n## Hardware and Science\n\nIn addition to AI and programming stories, Hacker News also features several articles related to hardware and science. For instance, \"The fastest Linux timestamps\" provides a detailed analysis of the performance of different timestamping methods on Linux systems. Meanwhile, \"Butterflies are in decline across North America, a look at the Western Monarch\" highlights the alarming decline of butterfly populations in North America.\n\n## Miscellaneous\n\nFinally, several stories on Hacker News today don't fit neatly into any one category. For example, \"I bought Friendster for $30k – Here's what I'm doing with it\" shares an interesting anecdote about a person who purchased the defunct social media platform Friendster for $30,000 and is now exploring its potential uses. Additionally, \"When Your Digital Life Vanishes\" offers a thought-provoking exploration of the consequences of losing one's digital identity.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "9/15 titles cited",
+          "307 words"
+        ],
+        "composite": 0.86
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9288666666666666,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

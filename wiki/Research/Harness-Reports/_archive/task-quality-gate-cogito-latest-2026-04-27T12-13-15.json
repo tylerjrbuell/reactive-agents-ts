@@ -1,0 +1,135 @@
+{
+  "model": "cogito:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T12-13-15",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 142,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1460.888082,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 4802,
+      "stepsCount": 6,
+      "toolCallCount": 0,
+      "wallMs": 7675.220647,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=loop_graceful",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 4517,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 5190.350605,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it — comments: 451\n2. AI should elevate your thinking, not replace it — comments: 419\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 277",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 9826,
+      "stepsCount": 14,
+      "toolCallCount": 4,
+      "wallMs": 11841.023679,
+      "output": "## Highest Score\n1. I bought Friendster for $30k – Here's what I'm doing with it (882)\n2. AI should elevate your thinking, not replace it (566)\n3. Flipdiscs (347)\n\n## Most Comments\n1. I bought Friendster for $30k – Here's what I'm doing with it (451)\n2. AI should elevate your thinking, not replace it (419)\n3. Self-updating screenshots (53)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "5/6 correct titles"
+        ],
+        "composite": 0.9083333333333333
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 7401,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 9345.395583999998,
+      "output": "# Today on Hacker News\n\n## AI and Technology\nThe top stories today showcase significant developments in artificial intelligence and technology. The most discussed article is \"AI should elevate your thinking, not replace it\" by koshyjohn, which garnered 566 points of discussion. Another notable piece is \"TurboQuant: A first-principles walkthrough,\" a detailed interactive guide that has attracted 195 upvotes. These articles highlight the ongoing conversation about AI's role in society and its potential to enhance human capabilities rather than replace them.\n\n## Hardware and Software Development\nIn the realm of hardware and software development, several interesting projects have caught attention. \"Fully Featured Audio DSP Firmware for the Raspberry Pi Pico\" by BoingBoomTschak has generated 55 points of discussion, showcasing a comprehensive audio processing solution for the popular microcontroller. Additionally, \"Pgbackrest is no longer being maintained\" by c0l0, with 105 upvotes, signals an important development in database backup tools.\n\n## Business and Entrepreneurship\nThe business section today features a fascinating story about acquiring Friendster for $30k. The article \"I bought Friendster for $30k – Here's what I'm doing with it\" by ca98am79 has become the most popular post, receiving 882 points of discussion and 451 comments. This entrepreneurial tale demonstrates the potential value in acquiring defunct technology platforms.\n\n## Other Notable Stories\nOther notable stories include \"Flipdiscs,\" a new digital platform that has attracted 347 upvotes, and \"Self-updating screenshots\" by bjhess, which has garnered 345 points of discussion. These articles showcase innovative approaches to digital content creation and management.\n\nThe top stories today reflect a diverse range of interests among Hacker News users, from AI and technology to business ventures and hardware development projects. The high engagement levels on these posts indicate their relevance and interest to the community.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.4666666666666667,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "7/15 titles cited",
+          "288 words"
+        ],
+        "composite": 0.8133333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.7612,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

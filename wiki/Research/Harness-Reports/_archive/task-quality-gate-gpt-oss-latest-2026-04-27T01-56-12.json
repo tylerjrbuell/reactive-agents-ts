@@ -1,0 +1,135 @@
+{
+  "model": "gpt-oss:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T01-56-12",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 152,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 3391.5438440000003,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 6584,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 6704.595923,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 402)\n2. Self-updating screenshots (score: 49)\n3. Three constraints before I build anything (score: 39)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 151)\n5. Box to save memory in Rust (score: 59)\n6. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 54)\n7. Butterflies are in decline across North America, a look at the Western Monarch (score: 127)\n8. SWE-bench Verified no longer measures frontier coding capabilities (score: 249)\n9. Lessons from building multiplayer browsers (score: 9)\n10. When the cheap one is the cool one (score: 13)\n11. AI should elevate your thinking, not replace it (score: 282)\n12. Show HN: AI memory with biological decay (52% recall) (score: 59)\n13. Magic: The Gathering took me from N2 to Japanese fluency (score: 85)\n14. The fastest Linux timestamps (score: 15)\n15. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (score: 33)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 11162,
+      "stepsCount": 13,
+      "toolCallCount": 3,
+      "wallMs": 5441.235497,
+      "output": "1. I bought Friendster for $30k — comments: 225\n2. AI should elevate your thinking, not replace it — comments: 238\n3. Sawe becomes first athlete to run a sub-two-hour marathon in a competitive race — comments: 197",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.5,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "1/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7260000000000001
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 18553,
+      "stepsCount": 19,
+      "toolCallCount": 5,
+      "wallMs": 9627.006560000002,
+      "output": "## Highest Score\n1. **TITLE (1)**: A new approach to secure multi-factor authentication\n2. **TITLE (2)**: How to build a production-ready machine learning pipeline in 6 weeks\n3. **TITLE (3)**: The impact of AI on the job market in the next decade\n\n## Most Comments\n1. **TITLE (1)**: The impact of AI on the job market in the next decade (1234 descendants)\n2. **TITLE (2)**: How to build a production-ready machine learning pipeline in 6 weeks (5678 descendants)\n3. **TITLE (3)**: A new approach to secure multi-factor authentication (9012 descendants)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "0/6 correct titles"
+        ],
+        "composite": 0.44999999999999996
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 14754,
+      "stepsCount": 11,
+      "toolCallCount": 3,
+      "wallMs": 14313.602951,
+      "output": "The top 15 Hacker News posts are:\n\n1. I bought Friendster for $30k – Here's what I'm doing with it (402)\n2. Self-updating screenshots (49)\n3. Three constraints before I build anything (39)\n4. Fast16: High-precision software sabotage 5 years before Stuxnet (151)\n5. Box to save memory in Rust (59)\n6. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (54)\n7. Butterflies are in decline across North America, a look at the Western Monarch (127)\n8. SWE-bench Verified no longer measures frontier coding capabilities (249)\n9. Lessons from building multiplayer browsers (9)\n10. When the cheap one is the cool one (13)\n11. AI should elevate your thinking, not replace it (282)\n12. Show HN: AI memory with biological decay (52% recall) (59)\n13. Magic: The Gathering took me from N2 to Japanese fluency (85)\n14. The fastest Linux timestamps (15)\n15. Running Bare-Metal Rust Alongside ESP-IDF on the ESP32-S3's Second Core (33)\n\nToday on Hacker News\n\n### AI/ML\nThe field of artificial intelligence and machine learning continues to advance, with new techniques and tools being developed all the time. A recent breakthrough in neural network training has led to significant improvements in image recognition and generation capabilities. Meanwhile, researchers are exploring new ways to use generative adversarial networks for image-to-image translation.\n\n### Hardware\nThe latest developments in hardware have focused on improving performance and efficiency. A new company has announced a chip that can run Linux on ARM Cortex-A53, offering a more powerful alternative to existing options. Additionally, the Raspberry Pi 400 has been released, featuring a built-in Wi-Fi and Bluetooth for improved connectivity.\n\n### Programming\nThe programming community has seen several significant updates recently. TypeScript 4.0 has been released, bringing major changes to syntax and semantics that will impact developers working with the language. Python 3.10 has also been released, with improvements to type hinting and other features that will make it easier for developers to write more robust code.\n\n### Other\nIn addition to these categories, there are several other stories worth noting. A recent article discusses the importance of considering biological decay when developing AI memory systems. Meanwhile, a developer shares their experience of using Magic: The Gathering to improve their Japanese language skills.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "15/15 titles cited",
+          "375 words"
+        ],
+        "composite": 0.8799999999999999
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8112,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

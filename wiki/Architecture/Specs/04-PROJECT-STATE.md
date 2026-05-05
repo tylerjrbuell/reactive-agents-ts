@@ -29,7 +29,7 @@ Read in this order. Stop when you have what you need.
 | 5 | **`03-IMPROVEMENT-PIPELINE.md`** | How discoveries flow into harness changes: 7-stage flywheel from DISCOVERY → CATALOG → PRIORITIZE → DISSECT → DESIGN → INTEGRATE+VALIDATE → DEPRECATE. |
 | 6 | **`prototypes/RESEARCH_LOG.md`** | Running record of every spike (hypothesis → outcome → next move). |
 | 7 | **`prototypes/RESULTS-*.md`** | Per-spike detailed findings. |
-| 8 | **`harness-reports/`** | Bench data + spike data. Per-run JSON. |
+| 8 | **`wiki/Research/Harness-Reports/`** | Bench data + spike data. Per-run JSON. |
 
 Layer-specific deep dives (memory, reasoning, tools, etc.) live in `02-layer-*.md` through `09-layer-*.md`. These are subsystem references — read when investigating a specific subsystem, not at session start.
 
@@ -129,8 +129,8 @@ A spike validates ONE mechanism × ONE failure mode × ≤2 models × ONE task. 
 - 5 spike files in `prototypes/` (p00, p00v2, p01, p01b, p02)
 - 4 RESULTS docs (p00, p00v2, p01, p02) — **p01 and p02 contain pre-Rule-11 overclaim language flagged for calibration**
 - `RESEARCH_LOG.md` running record
-- `harness-reports/spike-results/` raw JSON per spike
-- `harness-reports/bench-comparison-2026-04-27/` bench data + SUMMARY
+- `wiki/Research/Harness-Reports/spike-results/` raw JSON per spike
+- `wiki/Research/Harness-Reports/bench-comparison-2026-04-27/` bench data + SUMMARY
 
 ### Foundational docs (the methodology layer)
 

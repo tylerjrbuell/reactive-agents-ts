@@ -1,0 +1,135 @@
+{
+  "model": "granite3.3:latest",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T03-15-04",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 156,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4239.936793,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 15886,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 35713.273955,
+      "output": "Task incomplete — missing_required_tool: required tool(s) not called: get-hn-posts.\nrequired=[get-hn-posts]\ncalled=[]\navailable=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nvisible=[web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli, get-hn-posts, brief, pulse, recall, find, discover-tools]\nterminatedBy=dispatcher-strategy-switch",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 15409,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 29949.894773000007,
+      "output": "controller_early_stop_with_failure_evidence: controller_signal_veto: 4 tool-inject, with tool-failure evidence without switch-strategy escalation",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 15837,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 35084.675246,
+      "output": "controller_early_stop_with_failure_evidence: controller_signal_veto: 3 tool-inject, with tool-failure evidence without switch-strategy escalation",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 2345,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 22915.119628999993,
+      "output": "To complete this task, I'll follow these steps:\n\n1. Use `find(query)` to fetch the top 15 Hacker News posts.\n2. Review and categorize the stories into thematic groups: AI/ML, Hardware, Programming, and Other.\n3. Write a markdown report titled '# Today on Hacker News' summarizing these categories with specific story titles.\n\n### Step 1: Fetch Top 15 Hacker News Posts\nSince I don't have direct web access to fetch real-time data from Hacker News, I'll simulate the process using `find(query)` as if we had an API or preloaded data source. For this example, let's assume we have a function `getHNStories()` that returns a list of story titles and URLs.\n\n```python\n# Simulated function to fetch Hacker News stories\ndef getHNStories():\n    # In real use, this would interact with an API or local data source\n    return [\n        {\"title\": \"New AI model achieves state-of-the-art results\", \"url\": \"...\"},\n        {\"title\": \"Innovative hardware design reduces power consumption by 30%\", \"url\": \"...\"},\n        {\"title\": \"Open-source programming language gains popularity\", \"url\": \"...\"},\n        # ... (12 more stories)\n    ]\n```\n\nLet's retrieve the top 15 stories:\n\n```python\nstories = getHNStories()[:15]\n```\n\n### Step 2: Categorize Stories\nNow, I'll group these stories based on their content into thematic categories. This is a simplified example; in practice, you'd need more sophisticated natural language processing to categorize accurately.\n\n```python\ncategories = {\n    \"AI/ML\": [],\n    \"Hardware\": [],\n    \"Programming\": [],\n    \"Other\": []\n}\n\nfor story in stories:\n    if \"AI\" in story[\"title\"] or \"Machine Learning\" in story[\"title\"]:\n        categories[\"AI/ML\"].append(story)\n    elif \"hardware\" in story[\"title\"].lower() or \"circuit\" in story[\"title\"].lower():\n        categories[\"Hardware\"].append(story)\n    elif \"programming\" in story[\"title\"].lower() or \"language\" in story[\"title\"].lower():\n        categories[\"Programming\"].append(story)\n    else:\n        categories[\"Other\"].append(story)\n```\n\n### Step 3: Write Markdown Report\nUsing the categorized stories, I'll now draft a markdown report.\n\n```markdown\n# Today on Hacker News\n\n## AI/ML\n- **New AI model achieves state-of-the-art results**: A groundbreaking AI model has surpassed previous benchmarks in performance metrics, setting new standards in the field. The research details how the model optimizes through novel architectural designs and advanced training techniques. [Read more](...)\n\n## Hardware\n- **Innovative hardware design reduces power consumption by 30%**: Engineers have unveiled a pioneering hardware architecture that significantly lowers energy use without compromising performance, marking a substantial leap forward in green technology. [Read more](...)\n\n## Programming\n- **Open-source programming language gains popularity**: A newly open-sourced programming language has rapidly gathered a community, promising improved developer productivity and novel paradigms for software construction. [Read more](...)\n\n## Other\n- **[Remaining stories here]**\n  - Story 1 title...\n  - Story 2 title...\n```\n\n### Conclusion\nThis markdown report provides an overview of the top Hacker News stories, grouped into thematic categories as AI/ML, Hardware, Programming, and Other. Each category includes a specific story title with a brief description to illustrate content. In a real scenario, you'd need to replace simulated data fetching (`getHNStories`) and processing logic with actual APIs or web scraping capabilities, ensuring compliance with the sources' terms of service. Always remember to complete all steps in sequence as instructed for consistent and accurate task execution.",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "494 words"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5189999999999999,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

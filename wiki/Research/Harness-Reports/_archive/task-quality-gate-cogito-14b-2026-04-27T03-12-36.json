@@ -1,0 +1,136 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-04-27T03-12-36",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 140,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6692.11991,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 4858,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 19143.025262,
+      "output": "1. I bought Friendster for $30k – Here's what I'm doing with it (score: 472)\n2. Notepad++ for Mac (score: 35)\n3. Self-updating screenshots (score: 96)\n4. Three constraints before I build anything (score: 73)\n5. Fast16: High-precision software sabotage 5 years before Stuxnet (score: 172)\n6. EvanFlow – A TDD driven feedback loop for Claude Code (score: 8)\n7. When the cheap one is the cool one (score: 37)\n8. Box to save memory in Rust (score: 79)\n9. Show HN: The Unix Magic poster, annotated (updated) (score: 16)\n10. When Your Digital Life Vanishes (score: 14)\n11. The fastest Linux timestamps (score: 32)\n12. Butterflies are in decline across North America, a look at the Western Monarch (score: 150)\n13. SWE-bench Verified no longer measures frontier coding capabilities (score: 260)\n14. Google banks on AI edge to catch up to cloud rivals Amazon and Microsoft (score: 75)\n15. TurboQuant: A First-Principles Walkthrough (score: 5)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8611,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 9605.884559999999,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4927,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3073,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8589,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 12530.313598999994,
+      "output": "{\n  \"signal\": {\n    \"grade\": \"unknown\",\n    \"composite\": -1,\n    \"shape\": \"unknown\",\n    \"momentum\": 0,\n    \"confidence\": \"low\"\n  },\n  \"behavior\": {\n    \"loopScore\": 0,\n    \"toolSuccessRate\": 1,\n    \"repeatedActions\": [],\n    \"actionDiversity\": 1\n  },\n  \"context\": {\n    \"iterationsUsed\": 1,\n    \"iterationsRemaining\": 9,\n    \"tokens\": 4845,\n    \"pressureLevel\": \"moderate\",\n    \"headroomTokens\": 3155,\n    \"atRiskSections\": []\n  },\n  \"controller\": {\n    \"decisionsThisRun\": [],\n    \"pendingDecisions\": []\n  },\n  \"recommendation\": \"Execution is on track. Continue with your current approach.\",\n  \"readyToAnswer\": true,\n  \"blockers\": []\n}",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "★ missing Most Comments section",
+          "0/6 correct titles"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 9250,
+      "stepsCount": 11,
+      "toolCallCount": 4,
+      "wallMs": 24801.354829999997,
+      "output": "# Today on Hacker News\n\n## AI/ML and Technology Trends\nSeveral posts highlight the evolving landscape of artificial intelligence. One story discusses Fast16, a mysterious software sabotage operation that preceded Stuxnet by five years. Another piece from OpenAI explains why SWE-bench Verified is no longer used for measuring advanced coding capabilities. The report also introduces TurboQuant, an interactive tool offering a first-principles walkthrough.\n\n## Software Development and Tools\nThere's notable activity in the software development space. A post details efforts to revive Friendster with modern updates, while another introduces EvanFlow, a TDD-driven feedback loop for programming. Additionally, there are updates on tools like Notepad++ for Mac users and Rust's memory-saving Box implementation.\n\n## Hardware and Infrastructure\nSeveral stories focus on hardware developments and infrastructure. These include discussions around Unix Magic poster annotations, the fastest Linux timestamps, and the challenges faced when your digital life vanishes unexpectedly. The Western Monarch butterfly decline story highlights environmental concerns.\n\n## Other Notable Stories\nGoogle's strategic move to catch up with Amazon and Microsoft in cloud services using AI advancements makes headlines. Also notable is a piece on self-updating screenshots technology, demonstrating innovations in visual presentation tools.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "1/15 titles cited",
+          "192 words",
+          "★ called recall()"
+        ],
+        "composite": 0.5733333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6436666666666666,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}
