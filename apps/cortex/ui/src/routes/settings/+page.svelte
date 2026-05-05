@@ -179,7 +179,7 @@
         </div>
       </div>
       <p class="font-mono text-[10px] text-outline/60">
-        To use a different server, set <code class="text-primary">CORTEX_URL</code> before starting: <code class="text-primary">CORTEX_URL=http://host:port rax cortex</code>
+        To use a different server, set <code class="text-primary">CORTEX_URL</code> before starting: <code class="text-primary">CORTEX_URL=http://host:port bun cortex</code>
       </p>
       <div>
         <label for="settings-ollama-endpoint" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">

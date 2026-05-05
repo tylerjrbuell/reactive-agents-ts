@@ -5,7 +5,7 @@
  * Vite proxies `/api` and `/ws` to the API (host/port from `CORTEX_PORT`, default 4321).
  * Open the **Vite** URL in the browser, not the API port alone.
  *
- * Used by `apps/cortex` `bun start` and `rax cortex --dev`.
+ * Used by `apps/cortex` `bun start` and root `bun cortex`.
  */
 const cortexRoot = new URL("..", import.meta.url).pathname;
 
