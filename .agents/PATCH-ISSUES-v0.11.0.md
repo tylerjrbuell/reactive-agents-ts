@@ -169,21 +169,22 @@ OR create explicit turbo task for cortex UI build:
 
 ---
 
-### Issue P1-5: Agent.run() method missing or wrong return type
-**Severity:** CRITICAL (SDK completely broken for most use cases)  
-**Problem:**
+### Issue P1-5: ~~Agent.run() method missing~~ ✅ RESOLVED — Not a bug
+**Status:** FALSE ALARM — Original test was missing `await` on `.build()`
+
+**Verified working:**
 ```typescript
-const agent = ReactiveAgents.create().withProvider("test").build();
-const result = await agent.run("Say hello");  // ← TypeError: agent.run is not a function
+const agent = await ReactiveAgents.create()  // ← await is critical
+  .withName("test-agent")
+  .withProvider("test")
+  .build();  // build() returns Promise<ReactiveAgent>
+
+const result = await agent.run("test");  // ✓ Works correctly, returns AgentResult
 ```
 
-**Expected behavior:** Built agent should have `.run(prompt)` method that returns `Promise<AgentResult>`
+**Recommendation for v0.11.0:** Strengthen documentation to emphasize that `.build()` is async. Update README quickstart examples to ensure await is prominent.
 
-**Root cause:** Build return type mismatch or async builder not awaiting properly
-
-**Finding:** `.build()` returns a Promise, but the issue is that agent.run() doesn't exist on the returned object
-
-**Effort:** HIGH (needs investigation into builder pattern and return types)
+**No code change needed.**
 
 ---
 
