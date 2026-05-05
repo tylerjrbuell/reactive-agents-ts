@@ -132,12 +132,13 @@ export function looksLikeFinalAnswer(content: string): boolean {
  * and suggested fixes. Falls through to the raw message (with context) if no
  * pattern matches, so no debugging information is lost.
  *
- * Common patterns covered:
+ * Common patterns covered (checked in this order):
  * - Connection refused / fetch failed (service down, wrong endpoint)
- * - 401 / Unauthorized (bad/missing API key)
+ * - 5xx server errors (transient provider failures) — checked before auth so
+ *   a server-error body containing stray "401"/"403" digits isn't misclassified
+ * - 401 / 403 / Unauthorized (bad/missing API key)
  * - 429 / Rate limit
  * - Timeout / AbortError
- * - 5xx server errors (transient provider failures)
  */
 function explainProviderError(
   rawMessage: string,
@@ -162,6 +163,19 @@ function explainProviderError(
     return `Cannot reach ${provider ?? "LLM provider"}${ctx}. Connection refused or network unreachable.\n  Check network connectivity and provider endpoint.\n  Original error: ${rawMessage}`;
   }
 
+  // 5xx server errors — checked BEFORE auth so a 5xx body that happens to
+  // contain a stray "401"/"403" digit sequence isn't misclassified as an auth
+  // failure. The connection branch above already eliminated transport failures.
+  if (
+    /\b5\d\d\b/.test(rawMessage) ||
+    lower.includes("internal server error") ||
+    lower.includes("service unavailable") ||
+    lower.includes("bad gateway") ||
+    lower.includes("gateway timeout")
+  ) {
+    return `${provider ?? "LLM provider"}${ctx} returned a server error.\n  This is likely transient — try again in a moment.\n  Original error: ${rawMessage}`;
+  }
+
   // Auth errors
   if (
     lower.includes("401") ||
@@ -172,14 +186,15 @@ function explainProviderError(
     lower.includes("403") ||
     lower.includes("forbidden")
   ) {
+    const apiKeyEnvByProvider: Record<string, string> = {
+      anthropic: "ANTHROPIC_API_KEY",
+      openai: "OPENAI_API_KEY",
+      gemini: "GOOGLE_API_KEY (or GEMINI_API_KEY)",
+      google: "GOOGLE_API_KEY (or GEMINI_API_KEY)",
+      litellm: "LITELLM_API_KEY (or proxy-specific env vars)",
+    };
     const envHint =
-      provider === "anthropic"
-        ? "ANTHROPIC_API_KEY"
-        : provider === "openai"
-          ? "OPENAI_API_KEY"
-          : provider === "gemini" || provider === "google"
-            ? "GOOGLE_API_KEY (or GEMINI_API_KEY)"
-            : "the appropriate API key env var";
+      apiKeyEnvByProvider[provider ?? ""] ?? "the appropriate API key env var";
     return `Authentication failed for ${provider ?? "LLM provider"}${ctx}.\n  Verify ${envHint} is set correctly and has not been revoked.\n  Original error: ${rawMessage}`;
   }
 
@@ -202,17 +217,6 @@ function explainProviderError(
     lower.includes("etimedout")
   ) {
     return `Request to ${provider ?? "LLM provider"}${ctx} timed out.\n  Provider may be slow or unreachable. Check network and provider status.\n  Original error: ${rawMessage}`;
-  }
-
-  // 5xx server errors
-  if (
-    /\b5\d\d\b/.test(rawMessage) ||
-    lower.includes("internal server error") ||
-    lower.includes("service unavailable") ||
-    lower.includes("bad gateway") ||
-    lower.includes("gateway timeout")
-  ) {
-    return `${provider ?? "LLM provider"}${ctx} returned a server error.\n  This is likely transient — try again in a moment.\n  Original error: ${rawMessage}`;
   }
 
   // Generic fallthrough — preserve raw message with provider context
