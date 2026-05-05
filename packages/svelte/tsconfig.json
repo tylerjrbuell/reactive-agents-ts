@@ -7,7 +7,8 @@
     "skipLibCheck": true,
     "outDir": "dist",
     "declaration": true,
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2022", "DOM"],
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"]
 }
