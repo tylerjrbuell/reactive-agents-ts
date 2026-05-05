@@ -4,7 +4,29 @@ import { banner, fail, info, kv, section, success } from "../ui.js";
 
 const VALID_TEMPLATES: ProjectTemplate[] = ["minimal", "standard", "full"];
 
+const HELP = `
+  Usage: rax init <name> [options]
+
+  Scaffold a new reactive-agents project from a template.
+
+  Arguments:
+    <name>             Project directory name to create
+
+  Options:
+    --template <type>  Template: minimal | standard | full (default: standard)
+    --help, -h         Show this help
+
+  Examples:
+    rax init my-agent
+    rax init my-agent --template full
+`.trimEnd();
+
 export function runInit(args: string[]): void {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+
   const name = args[0];
   if (!name) {
     console.error(fail("Usage: rax init <project-name> [--template minimal|standard|full]"));

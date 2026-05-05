@@ -5,6 +5,25 @@ import { fail, info, section, success } from "../ui.js";
 const VALID_RECIPES: AgentRecipe[] = ["basic", "researcher", "coder", "orchestrator"];
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini"];
 
+const HELP = `
+  Usage: rax create agent <name> [options]
+
+  Generate a new agent file from a recipe.
+
+  Arguments:
+    <name>              Agent name (used for file name)
+
+  Options:
+    --recipe <type>     Recipe: basic | researcher | coder | orchestrator (default: basic)
+    --interactive       Run in interactive mode (prompts for options)
+    --help, -h          Show this help
+
+  Examples:
+    rax create agent my-agent
+    rax create agent my-agent --recipe researcher
+    rax create agent --interactive
+`.trimEnd();
+
 async function promptUser(
   question: string,
   defaultVal: string,
@@ -26,6 +45,11 @@ async function promptUser(
 }
 
 export async function runCreateAgent(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+
   // Check if interactive mode is enabled
   const isInteractive = args.includes("--interactive") && Boolean(process.stdin.isTTY);
 

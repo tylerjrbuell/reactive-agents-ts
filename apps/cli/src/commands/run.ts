@@ -41,8 +41,39 @@ function isValidProvider(p: string): p is Provider {
   return (VALID_PROVIDERS as readonly string[]).includes(p);
 }
 
+const HELP = `
+  Usage: rax run <prompt> [options]
+
+  Run an agent with a one-shot prompt.
+
+  Arguments:
+    <prompt>              Prompt text (positional, may be multiple words)
+
+  Options:
+    --provider <name>     anthropic, openai, ollama, gemini, litellm, test (default: anthropic)
+    --model <model>       Model identifier
+    --name <name>         Agent name (default: cli-agent)
+    --tools               Enable tool calling
+    --reasoning           Enable reasoning strategies
+    --mcp-config <path>   Path to MCP server config JSON
+    --verbose, -v         Show phase-by-phase execution details
+    --quiet, -q           Show only output (no metadata)
+    --stream              Stream LLM output tokens
+    --cortex              Send events to Cortex ingest (CORTEX_URL or ${DEFAULT_CORTEX_URL})
+    --help, -h            Show this help
+
+  Examples:
+    rax run "Summarize the README"
+    rax run "Plan a trip" --provider openai --model gpt-4o-mini --reasoning
+    rax run "List files" --tools --stream
+`.trimEnd();
 
 export async function runAgent(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+
   // Parse arguments
   const promptParts: string[] = [];
   let provider: Provider = "anthropic";
