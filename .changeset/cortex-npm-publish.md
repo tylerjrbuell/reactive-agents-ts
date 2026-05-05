@@ -1,8 +1,11 @@
 ---
-"@reactive-agents/cortex": minor
+"@reactive-agents/cortex": patch
 "@reactive-agents/cli": patch
 "@reactive-agents/diagnose": patch
 "@reactive-agents/trace": patch
+"@reactive-agents/react": patch
+"@reactive-agents/scenarios": patch
+"@reactive-agents/svelte": patch
 "reactive-agents": patch
 ---
 
