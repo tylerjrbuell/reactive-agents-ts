@@ -1,5 +1,16 @@
 # @reactive-agents/prompts
 
+## 0.10.4
+
+### Patch Changes
+
+-   fe4b058: Critical: Fix all package.json bun exports pointing to non-existent src/ directory. All packages were exporting `"bun": "./src/index.ts"` in their exports, but npm packages only include dist/. This caused Bun module resolution to fail when importing these packages from npm-installed CLI.
+
+    This fix is critical for v0.10.1 release viability.
+
+-   Updated dependencies [fe4b058]
+    -   @reactive-agents/core@0.10.4
+
 ## 0.10.1
 
 ### Patch Changes

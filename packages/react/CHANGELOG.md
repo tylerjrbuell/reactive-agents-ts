@@ -1,5 +1,21 @@
 # @reactive-agents/react
 
+## 0.10.2
+
+### Patch Changes
+
+-   8fb1311: feat(cortex): publish @reactive-agents/cortex to npm with lazy-load CLI support
+
+    -   Made cortex publishable to npm as a standalone package with tsup bundling
+    -   Restored `rax cortex` command with lazy-load pattern for optional peer dependency
+    -   Updated CLI with cortex command restoration and full documentation
+    -   Synced all package versions to match coordinated releases
+    -   Cortex fully validated: health API returns 200, UI serves correctly from npm install
+
+-   fe4b058: Critical: Fix all package.json bun exports pointing to non-existent src/ directory. All packages were exporting `"bun": "./src/index.ts"` in their exports, but npm packages only include dist/. This caused Bun module resolution to fail when importing these packages from npm-installed CLI.
+
+    This fix is critical for v0.10.1 release viability.
+
 ## 0.10.1
 
 ### Patch Changes

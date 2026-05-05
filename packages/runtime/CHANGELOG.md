@@ -1,5 +1,35 @@
 # @reactive-agents/runtime
 
+## 0.10.4
+
+### Patch Changes
+
+-   fe4b058: Critical: Fix all package.json bun exports pointing to non-existent src/ directory. All packages were exporting `"bun": "./src/index.ts"` in their exports, but npm packages only include dist/. This caused Bun module resolution to fail when importing these packages from npm-installed CLI.
+
+    This fix is critical for v0.10.1 release viability.
+
+-   Updated dependencies [8fb1311]
+-   Updated dependencies [fe4b058]
+    -   @reactive-agents/trace@0.10.2
+    -   @reactive-agents/a2a@0.10.4
+    -   @reactive-agents/channels@0.10.4
+    -   @reactive-agents/core@0.10.4
+    -   @reactive-agents/cost@0.10.4
+    -   @reactive-agents/gateway@0.10.4
+    -   @reactive-agents/guardrails@0.10.4
+    -   @reactive-agents/health@0.10.4
+    -   @reactive-agents/identity@0.10.4
+    -   @reactive-agents/interaction@0.10.4
+    -   @reactive-agents/llm-provider@0.10.4
+    -   @reactive-agents/memory@0.10.4
+    -   @reactive-agents/observability@0.10.4
+    -   @reactive-agents/orchestration@0.10.4
+    -   @reactive-agents/prompts@0.10.4
+    -   @reactive-agents/reactive-intelligence@0.10.4
+    -   @reactive-agents/tools@0.10.4
+    -   @reactive-agents/verification@0.10.4
+    -   @reactive-agents/reasoning@0.10.4
+
 ## 0.10.1
 
 ### Patch Changes
