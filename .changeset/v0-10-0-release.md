@@ -1,6 +1,7 @@
 ---
 "@reactive-agents/a2a": minor
 "@reactive-agents/benchmarks": minor
+"@reactive-agents/channels": minor
 "@reactive-agents/core": minor
 "@reactive-agents/cost": minor
 "@reactive-agents/diagnose": minor
@@ -55,6 +56,7 @@ v0.10.0: Complete Phase 1 Mechanism Validation Release
 - Diagnostic System (100% TP, 0% FP, real-time health)
 - Provider Adapters (7 lifecycle hooks, 6 LLM providers)
 - Guards & Meta-tools (6 guards, 100% accuracy)
+- Channels Package (webhook adapters, trigger registry, session bridging for external messaging)
 
 ## No Breaking Changes
 
