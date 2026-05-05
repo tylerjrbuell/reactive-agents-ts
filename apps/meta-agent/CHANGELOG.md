@@ -1,5 +1,13 @@
 # @reactive-agents/meta-agent
 
+## 0.1.7
+
+### Patch Changes
+
+-   Updated dependencies [fe4b058]
+    -   @reactive-agents/health@0.10.2
+    -   reactive-agents@0.10.2
+
 ## 0.1.6
 
 ### Patch Changes

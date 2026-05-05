@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/interaction",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,9 +11,9 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.1",
-    "@reactive-agents/reasoning": "0.10.1",
-    "@reactive-agents/observability": "0.10.1",
+    "@reactive-agents/core": "0.10.2",
+    "@reactive-agents/reasoning": "0.10.2",
+    "@reactive-agents/observability": "0.10.2",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
