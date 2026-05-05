@@ -4,6 +4,14 @@
 
 ### Patch Changes
 
+-   Updated dependencies [2cfded2]
+    -   @reactive-agents/health@0.10.0
+    -   reactive-agents@0.10.0
+
+## 0.1.5
+
+### Patch Changes
+
 -   Updated dependencies [3f8146a]
 -   Updated dependencies [3f8146a]
     -   @reactive-agents/health@0.10.0

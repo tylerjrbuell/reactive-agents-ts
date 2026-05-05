@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/guardrails",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,8 +11,8 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.9.0",
-    "@reactive-agents/llm-provider": "0.9.0"
+    "@reactive-agents/core": "0.10.0",
+    "@reactive-agents/llm-provider": "0.10.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

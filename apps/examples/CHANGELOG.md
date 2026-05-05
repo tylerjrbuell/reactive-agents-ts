@@ -4,6 +4,29 @@
 
 ### Patch Changes
 
+-   Updated dependencies [2cfded2]
+    -   @reactive-agents/a2a@0.10.0
+    -   @reactive-agents/core@0.10.0
+    -   @reactive-agents/cost@0.10.0
+    -   @reactive-agents/eval@0.10.0
+    -   @reactive-agents/guardrails@0.10.0
+    -   @reactive-agents/identity@0.10.0
+    -   @reactive-agents/interaction@0.10.0
+    -   @reactive-agents/llm-provider@0.10.0
+    -   @reactive-agents/memory@0.10.0
+    -   @reactive-agents/observability@0.10.0
+    -   @reactive-agents/orchestration@0.10.0
+    -   @reactive-agents/prompts@0.10.0
+    -   @reactive-agents/reasoning@0.10.0
+    -   @reactive-agents/runtime@0.10.0
+    -   @reactive-agents/tools@0.10.0
+    -   @reactive-agents/verification@0.10.0
+    -   reactive-agents@0.10.0
+
+## 0.1.5
+
+### Patch Changes
+
 -   Updated dependencies [3f8146a]
 -   Updated dependencies [3f8146a]
     -   @reactive-agents/a2a@0.10.0

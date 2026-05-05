@@ -2,6 +2,18 @@
 
 ## 0.10.0
 
+### Patch Changes
+
+-   Updated dependencies [2cfded2]
+    -   @reactive-agents/a2a@0.10.0
+    -   @reactive-agents/core@0.10.0
+    -   @reactive-agents/eval@0.10.0
+    -   @reactive-agents/llm-provider@0.10.0
+    -   @reactive-agents/runtime@0.10.0
+    -   @reactive-agents/trace@0.10.0
+
+## 0.10.0
+
 ### Minor Changes
 
 -   3f8146a: **core: typed framework error taxonomy (Phase 0 S0.1)**

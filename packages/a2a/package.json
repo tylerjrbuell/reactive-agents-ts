@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/a2a",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,12 +11,12 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.9.0"
+    "@reactive-agents/core": "0.10.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "bun-types": "latest",
-    "@reactive-agents/identity": "0.9.0",
+    "@reactive-agents/identity": "0.10.0",
     "effect": "^3.10.0"
   },
   "peerDependencies": {
