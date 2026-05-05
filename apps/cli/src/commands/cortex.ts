@@ -192,43 +192,34 @@ export async function cortexCommand(options: CortexCommandOptions = {}): Promise
 
   if (options.dev) {
     if (!hasServerSource) {
-      console.error(fail(`Cortex server source not found (npm-installed CLI limitation):\n  ${serverEntry}`));
+      console.error(fail(`Cortex dev mode requires source repository`));
       console.error();
-      console.error(hint(`The 'rax cortex --dev' command only works when running from the source repository.`));
+      console.error(hint(`The 'rax cortex --dev' command requires cortex source code to run Vite dev server.`));
       console.error();
-      console.error(info("Workaround: Run cortex from source:"));
-      console.error(info("  cd <repo>/apps/cortex"));
+      console.error(info("From source repository:"));
+      console.error(info("  cd apps/cortex"));
       console.error(info("  bun start"));
+      console.error();
+      console.error(info("From npm-installed CLI:"));
+      console.error(info("  rax cortex  (uses bundled static UI)"));
       process.exit(1);
     }
     await cortexDevStack({ port, baseUrl });
     return;
   }
 
-  // Bundled static mode: check if static assets are available
+  // Bundled static mode — static assets should always be available
   if (!hasStatic) {
-    if (!hasServerSource) {
-      // Running from npm-installed CLI with no static assets
-      console.error(fail(`Cortex is not available in this npm-installed CLI`));
-      console.error();
-      console.error(hint(`This typically means cortex's built static UI hasn't been bundled.`));
-      console.error();
-      console.error(info("Option 1: Run cortex from the source repository:"));
-      console.error(info("  cd <repo>/apps/cortex"));
-      console.error(info("  bun start"));
-      console.error();
-      console.error(info("Option 2: Build static UI for CLI (from source repo):"));
+    console.error(fail(`Cortex static UI assets not found`));
+    console.error();
+    console.error(hint(`Static UI should be bundled when CLI was built.`));
+    console.error();
+    if (hasServerSource) {
+      console.error(info("From source repository, rebuild CLI:"));
       console.error(info("  cd apps/cli"));
-      console.error(info("  bun run build:cortex-ui"));
-      console.error(info("  rax cortex"));
-      process.exit(1);
-    } else {
-      // Running from source, but static assets not built yet
-      console.log(warn(`Static UI not found: ${path.join(staticPath, "index.html")}`));
-      console.log(hint("You can still start the API server with: rax cortex --dev"));
-      console.log(hint("Or build static assets: cd apps/cli && bun run build:cortex-ui"));
-      console.log();
+      console.error(info("  bun run build"));
     }
+    process.exit(1);
   }
 
   banner("Cortex studio", "UI + runs API + event ingest for .withCortex()");
