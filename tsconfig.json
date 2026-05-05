@@ -16,7 +16,10 @@
     "sourceMap": true,
     "types": ["bun-types"],
     "noImplicitReturns": true,
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "@reactive-agents/*": ["./packages/*/src/index.ts"]
+    }
   },
   "exclude": ["node_modules", "dist", "**/dist/**"]
 }
