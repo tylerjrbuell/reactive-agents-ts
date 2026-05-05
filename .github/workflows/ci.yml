@@ -64,6 +64,8 @@ jobs:
       - run: bun run build
       - name: Validate CLI external dependencies
         run: bun run scripts/validate-cli-externals.ts
+      - name: Validate package exports for npm
+        run: bun run scripts/test-bun-exports.ts
       - name: Check capability manifest
         run: bun run scripts/check-capabilities.ts
       - run: bun test
