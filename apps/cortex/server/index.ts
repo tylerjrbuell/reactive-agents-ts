@@ -40,7 +40,14 @@ function cortexListenDisplayUrl(port: number): string {
 }
 
 export async function startCortexServer(config: CortexConfig = defaultCortexConfig): Promise<void> {
-  const runtime = createCortexRuntime(config);
+  // Auto-resolve UI assets path when not provided, so npm consumers get the bundled UI
+  // without configuration. From dist/index.js → `../ui/build`. From source server/index.ts →
+  // `../ui/build`. Both layouts go up one level to reach the package root.
+  const resolvedConfig: CortexConfig = config.staticAssetsPath
+    ? config
+    : { ...config, staticAssetsPath: new URL("../ui/build", import.meta.url).pathname };
+
+  const runtime = createCortexRuntime(resolvedConfig);
 
   const bridgeSvc = await Effect.runPromise(
     CortexEventBridge.pipe(Effect.provide(runtime.bridgeLayer)),
@@ -94,19 +101,19 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
       },
     })
     .get("/*", ({ set }) => {
-      if (config.staticAssetsPath) {
-        return Bun.file(`${config.staticAssetsPath}/index.html`);
+      if (resolvedConfig.staticAssetsPath) {
+        return Bun.file(`${resolvedConfig.staticAssetsPath}/index.html`);
       }
       set.status = 404;
       return "Cortex UI not built. Run: cd apps/cortex/ui && bun run build";
     });
 
-  const displayUrl = cortexListenDisplayUrl(config.port);
+  const displayUrl = cortexListenDisplayUrl(resolvedConfig.port);
 
   // Bun’s default idleTimeout (~10s) drops connections that send no response bytes yet — e.g. long MCP
   // `refresh-tools` (docker pull / handshake). Node’s Vite proxy then logs "socket hang up". 0 disables.
   app.listen(
-    { port: config.port, idleTimeout: 0 },
+    { port: resolvedConfig.port, idleTimeout: 0 },
     () => {
       if (process.env.CORTEX_SPAWNED_BY_RAX !== "1") {
         console.log(`\n◈ CORTEX running at ${displayUrl}\n`);
@@ -119,7 +126,7 @@ export async function startCortexServer(config: CortexConfig = defaultCortexConf
     },
   );
 
-  if (config.openBrowser) {
+  if (resolvedConfig.openBrowser) {
     const { exec } = await import("node:child_process");
     const platform = process.platform;
     const cmd = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
@@ -133,6 +140,7 @@ if (import.meta.main) {
     ...defaultCortexConfig,
     port: parseInt(process.env.CORTEX_PORT ?? "4321", 10),
     openBrowser: process.env.CORTEX_NO_OPEN !== "1",
-    staticAssetsPath: staticFromEnv || new URL("../ui/build", import.meta.url).pathname,
+    // Honor explicit env override; otherwise startCortexServer auto-resolves to ../ui/build.
+    ...(staticFromEnv ? { staticAssetsPath: staticFromEnv } : {}),
   });
 }

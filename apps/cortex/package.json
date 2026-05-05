@@ -1,13 +1,56 @@
 {
   "name": "@reactive-agents/cortex",
-  "version": "0.1.2",
+  "version": "0.11.0",
   "type": "module",
-  "private": true,
+  "description": "Cortex companion studio — visual UI + API for inspecting and managing reactive-agents in real time",
+  "keywords": [
+    "reactive-agents",
+    "cortex",
+    "agent-studio",
+    "agent-ui",
+    "agent-observability",
+    "ai-agents",
+    "elysia"
+  ],
+  "license": "MIT",
+  "homepage": "https://docs.reactiveagents.dev/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "apps/cortex"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "ui/build",
+    "scripts/dev-stack.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.1.0"
+  },
   "scripts": {
     "dev": "bun run server/index.ts",
     "dev:server": "bun run server/index.ts",
     "dev:ui": "cd ui && bun run dev",
     "start": "bun run scripts/dev-stack.ts",
+    "build": "tsup && cd ui && bun run build",
     "build:ui": "cd ui && bun run build",
     "test": "bun test server/tests --timeout 15000",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -15,17 +58,18 @@
   "dependencies": {
     "elysia": "^1.1.0",
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/memory": "workspace:*",
-    "@reactive-agents/runtime": "workspace:*",
-    "@reactive-agents/observability": "workspace:*",
-    "@reactive-agents/gateway": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/tools": "workspace:*",
-    "@reactive-agents/reactive-intelligence": "workspace:*"
+    "@reactive-agents/core": "0.10.2",
+    "@reactive-agents/memory": "0.10.2",
+    "@reactive-agents/runtime": "0.10.2",
+    "@reactive-agents/observability": "0.10.2",
+    "@reactive-agents/gateway": "0.10.2",
+    "@reactive-agents/llm-provider": "0.10.2",
+    "@reactive-agents/tools": "0.10.2",
+    "@reactive-agents/reactive-intelligence": "0.10.2"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
+    "tsup": "^8.5.1",
     "@types/bun": "latest"
   }
 }
