@@ -18,6 +18,7 @@ export default defineConfig({
     "@reactive-agents/llm-provider",
     "@reactive-agents/a2a",
     "@reactive-agents/trace",
+    "@reactive-agents/tools",
     "bun:sqlite",
     "chalk",
     "ora",

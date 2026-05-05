@@ -62,6 +62,8 @@ jobs:
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - name: Validate CLI external dependencies
+        run: bun run scripts/validate-cli-externals.ts
       - name: Check capability manifest
         run: bun run scripts/check-capabilities.ts
       - run: bun test
