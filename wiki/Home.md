@@ -21,6 +21,17 @@ tags: [MOC, root]
 - [[MOCs/Decisions MOC|Decisions & Trade-offs]] — Phase gates, north star alignment, strategic choices
 - [[MOCs/Packages MOC|Packages & Dependencies]] — 26 packages + 5 apps, layer organization, ownership
 
+### 📋 Plans, Specs & Decisions (Agent-Agnostic Storage)
+
+**All plans and specs from any AI agent (Claude/Cursor/Codex/etc.) live here:**
+
+- [[Planning/Planning-Index|Planning Index]] — All implementation plans (active, completed, archived)
+- [[Planning/Implementation-Plans|Implementation Plans]] — `YYYY-MM-DD-<feature>.md` format
+- [[Architecture/Specs|Canonical Specs]] — Numbered project specs (00-VISION through 07-ROADMAP-v1.0)
+- [[Architecture/Design-Specs|Design Specs]] — Feature-level architecture documents
+- [[Decisions/Decision Index|Decision Index]] — Searchable decision log
+- [[Research/Debriefs|Engineering Debriefs]] — Post-feature notes from completed work
+
 ### 🏗️ By Category
 - **[[MOCs/Architecture MOC|System Architecture]]** — 12-phase kernel, 26 packages + 5 apps, port system, phase details
 - **[[Packages/00 Package Index|Package Index]]** — Quick reference for all packages with purposes, dependencies, ownership
