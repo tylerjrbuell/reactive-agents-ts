@@ -82,7 +82,7 @@ import FeatureCarousel from '../../components/FeatureCarousel.astro'
     <ul class="ra-readout-rows">
       <li class="ok"><span>False positives</span><b>0%</b></li>
       <li class="ok"><span>Detection latency</span><b>0.02ms</b></li>
-      <li><span>Leak types</span><b>system · key · cred · prompt</b></li>
+      <li><span>Leak categories</span><b>4 types</b></li>
     </ul>
   </div>
   <div class="ra-readout">
@@ -100,7 +100,7 @@ import FeatureCarousel from '../../components/FeatureCarousel.astro'
 <div class="ra-bench">
   <div class="ra-bench-label">
     <strong>Frontier Benchmark</strong>
-    ra-full · 4 models · Apr 30 2026 (W21)
+    ra-full · 4 frontier models · Apr 30 2026 (W21)
   </div>
   <div class="ra-bench-bars">
     <div class="ra-bar"><span class="ra-bar-name">claude-sonnet-4-6</span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:100%"></span></span><span class="ra-bar-pct">100%</span></div>
@@ -110,6 +110,21 @@ import FeatureCarousel from '../../components/FeatureCarousel.astro'
     <div class="ra-bar"><span class="ra-bar-name">bare LLM (no harness)</span><span class="ra-bar-track"><span class="ra-bar-fill bare" style="width:85%"></span></span><span class="ra-bar-pct">85%</span></div>
   </div>
 </div>
+
+<div class="ra-bench">
+  <div class="ra-bench-label">
+    <strong>Local Model Benchmark</strong>
+    ra-full · same harness · 35-task suite (Apr 7 2026 baseline)
+  </div>
+  <div class="ra-bench-bars">
+    <div class="ra-bar"><span class="ra-bar-name">gemma4:e4b<em> (local · 4 GB)</em></span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:94%"></span></span><span class="ra-bar-pct">94%</span></div>
+    <div class="ra-bar"><span class="ra-bar-name">gemini-2.5-flash<em> (frontier ref)</em></span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:94%"></span></span><span class="ra-bar-pct">94%</span></div>
+    <div class="ra-bar"><span class="ra-bar-name">cogito:14b<em> (local · 9 GB)</em></span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:91%"></span></span><span class="ra-bar-pct">91%</span></div>
+    <div class="ra-bar"><span class="ra-bar-name">gpt-4o-mini<em> (frontier ref)</em></span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:91%"></span></span><span class="ra-bar-pct">91%</span></div>
+  </div>
+</div>
+
+<p class="ra-bench-note">Local models tied with frontier on the same 35-task harness. The Healing Pipeline closes the gap that bare prompting can't: tool-call recovery for 4B+ Ollama lifts accuracy by <b>+80pp</b> on FC-heavy tasks (6.7% → 86.7%). Same agent code, same builder chain — just <code>.withProvider("ollama")</code>.</p>
 
   </div>
 </div>
