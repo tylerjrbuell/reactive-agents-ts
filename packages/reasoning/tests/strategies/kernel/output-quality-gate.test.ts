@@ -255,6 +255,53 @@ describe("output quality gate", () => {
     expect(state.status).not.toBe("done");
   });
 
+  it("Pivot A — harness-deliverable fires verifier-driven retry before terminating", async () => {
+    // M3 Pivot A (2026-05-06): Pre-fix, harness fallback shipped raw tool
+    // artifacts as the final answer without verifier evaluation. Now the
+    // runner inlines verifier.verify() at the assembly site with
+    // terminatedBy="harness_deliverable", which triggers
+    // output-is-model-authored rejection. The retry path injects a
+    // synthesis-prompting signal and continues thinking.
+    //
+    // This kernel keeps stalling — it never calls final-answer. With
+    // maxVerifierRetries=1, we expect:
+    //   1. Retry fires once (verifierRetries: 0 → 1)
+    //   2. After retry exhaustion, harness_deliverable terminates as before
+    //   3. Final state: status=done, terminatedBy=harness_deliverable
+    //   4. Iteration count is HIGHER than no-retry baseline (extra retry iter)
+    const kernel = makeQuotaSatisfyingSearchKernel([
+      "XRP price: $1.33",
+      "XLM price: $0.1558",
+      "ETH price: $3,000",
+      "BTC price: $50,000",
+    ]);
+    const state = await runWithTestLLM(
+      runKernel(
+        kernel,
+        {
+          task: "Fetch XRP, XLM, ETH, BTC prices",
+          requiredTools: ["web-search"],
+          requiredToolQuantities: { "web-search": 4 },
+          maxVerifierRetries: 1,
+        },
+        {
+          ...defaultOptions,
+          maxIterations: 12,
+          loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+        },
+      ),
+    );
+
+    // Ultimately still terminates via harness_deliverable (kernel never
+    // calls final-answer even after retry signal). The retry just gives
+    // the model one more chance — it doesn't guarantee recovery.
+    expect(state.status).toBe("done");
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    // The retry must have fired — otherwise iteration would be the same
+    // as the no-retry path (which the previous test asserts is iter 4).
+    expect(state.iteration).toBeGreaterThan(4);
+  });
+
   it("allows harness-deliverable after required tool quantity is fully satisfied", async () => {
     const kernel = makeQuotaSatisfyingSearchKernel([
       "XRP price: $1.33",
@@ -269,6 +316,11 @@ describe("output quality gate", () => {
           task: "Fetch XRP, XLM, ETH, BTC prices",
           requiredTools: ["web-search"],
           requiredToolQuantities: { "web-search": 4 },
+          // Disable Pivot A retry-on-fallback so this test continues to
+          // exercise the harness_deliverable terminal path. See M3 Pivot A
+          // (2026-05-06) for the verifier-driven retry behavior, which is
+          // covered separately in m3-verifier-retry.test.ts.
+          maxVerifierRetries: 0,
         },
         { ...defaultOptions, maxIterations: 8, loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 } },
       ),
@@ -288,7 +340,11 @@ describe("output quality gate", () => {
     const state = await runWithTestLLM(
       runKernel(
         kernel,
-        { task: "collect crypto prices via delegated sub-agents" },
+        {
+          task: "collect crypto prices via delegated sub-agents",
+          // Disable Pivot A retry-on-fallback (see m3-verifier-retry.test.ts).
+          maxVerifierRetries: 0,
+        },
         {
           ...defaultOptions,
           maxIterations: 8,

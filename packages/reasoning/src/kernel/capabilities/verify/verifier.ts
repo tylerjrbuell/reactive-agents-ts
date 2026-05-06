@@ -82,6 +82,22 @@ export interface VerificationContext {
    * checks. Otherwise, only the action-level checks run.
    */
   readonly terminal?: boolean;
+  /**
+   * The kernel's `state.meta.terminatedBy` value when verifying terminal
+   * output. Distinguishes model-authored answers from harness-assembled
+   * fallbacks. The Verifier rejects `"harness_deliverable"` outputs because
+   * they indicate the model failed to synthesize — the harness dumped
+   * scratchpad artifacts to give the user *something*. That's a signal of
+   * synthesis failure, not a synthesized answer, regardless of grounding.
+   *
+   * Empirical motivation (2026-05-06, cogito:14b T5 trace
+   * `01KQZFHFQA97RHHCNXQ792VWNQ`): harness assembled raw `[{...}]` JSON
+   * from `_tool_result_*` keys; synthesis-grounded passed because every
+   * "claim" was verbatim from observations; quality scorer rated
+   * faithfulness=7%. Without this signal the verifier had no way to tell
+   * fallback from synthesis.
+   */
+  readonly terminatedBy?: string;
 }
 
 /**
@@ -283,6 +299,27 @@ export const defaultVerifier: Verifier = {
     // Skip these for non-terminal actions. They're expensive and only
     // meaningful when evaluating a candidate final answer.
     if (ctx.terminal && ctx.actionSuccess && hasContent) {
+      // Check 3a: output-is-model-authored
+      // Reject outputs assembled by the harness fallback path
+      // (terminatedBy="harness_deliverable"). The harness assembles raw
+      // tool-result artifacts when the model stalls without calling
+      // final-answer. Such outputs trivially "ground" because every byte
+      // came from observations, but they aren't synthesis — they're a
+      // signal of synthesis failure. The retry policy should fire on these.
+      //
+      // Empirical basis (2026-05-06): cogito:14b T5 trace produced a raw
+      // `[{...}]` JSON dump via harness_deliverable; pre-fix synthesis-grounded
+      // passed (verified=true, faithfulness=7%). Post-fix the verdict is
+      // verified=false here, retry path becomes reachable.
+      if (ctx.terminatedBy === "harness_deliverable") {
+        checks.push({
+          name: "output-is-model-authored",
+          passed: false,
+          reason:
+            "output was assembled by harness fallback (terminatedBy=harness_deliverable) — model never produced a synthesized final answer",
+        });
+      }
+
       // NOTE: required-tools-satisfied was removed — runner's post-loop required-tools
       // check (runner.ts §8) already enforces this with delegation awareness
       // (sub-agent tools satisfy parent requirements). The verifier's flat

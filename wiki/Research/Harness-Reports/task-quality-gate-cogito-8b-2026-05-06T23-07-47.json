@@ -1,0 +1,135 @@
+{
+  "model": "cogito:8b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-06T23-07-47",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 181,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4919.047245,
+      "output": "Here are the 7 days of the week, formatted as a numbered markdown list:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13671,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 20414.668807000002,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 8626,
+      "stepsCount": 7,
+      "toolCallCount": 1,
+      "wallMs": 5548.858916000001,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 11822,
+      "stepsCount": 12,
+      "toolCallCount": 2,
+      "wallMs": 9431.901207000003,
+      "output": "## Highest Score\n1. Knitting bullshit (416)\n2. Multi-stroke text effect in CSS (324)\n3. Higher usage limits for Claude and a compute deal with SpaceX (325)\n\n## Most Comments\n1. Vibe coding and agentic engineering are getting closer than I'd like (319)\n2. The bottleneck was never the code (310)\n3. Ted Turner has died (158)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.5,
+        "completeness": 0.5,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "3/6 correct titles"
+        ],
+        "composite": 0.725
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 6112,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 14820.465293000001,
+      "output": "# Today on Hacker News\n\n## Technology and Hardware\nValve has made its Steam Controller CAD files available under Creative Commons license, allowing developers to access and modify the design for their own projects. This move demonstrates Valve's commitment to open-source collaboration in gaming hardware development.\n\n## Productivity and Workplace Culture\nA thought-provoking article titled \"Appearing productive in the workplace\" explores how employees can maintain a professional appearance while working remotely or in hybrid settings. The piece offers practical insights into balancing visibility with actual productivity during work hours.\n\n## AI/ML and Deep Learning\nThe discussion around deep learning continues to evolve, as seen in \"A Theory of Deep Learning,\" which presents new perspectives on neural networks and their applications. Additionally, the article \"Vibe coding and agentic engineering are getting closer than I'd like\" raises concerns about the increasing role of AI in software development.\n\n## Security and Authentication\nGoogle Cloud has introduced a new fraud defense system that builds upon reCAPTCHA technology. This evolution aims to enhance online security by detecting suspicious activities across Google's cloud infrastructure. Meanwhile, \"From Supabase to Clerk to Better Auth\" discusses various authentication solutions for web applications, highlighting the importance of secure user management systems.\n\n## Show and Tell\nSeveral interesting projects have been showcased on Hacker News recently. Tilde.run presents an innovative agent sandbox with a transactional, versioned filesystem, while Hallucinopedia offers a unique approach to knowledge organization. These tools demonstrate the creative potential in software development and information management.\n\n## Other Notable Stories\nThe passing of media mogul Ted Turner has been widely covered on Hacker News, with tributes highlighting his significant contributions to broadcasting and philanthropy. Additionally, discussions around jet fuel rationing in the UK have sparked conversations about global supply chain vulnerabilities and their impact on businesses.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.26666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "6 category sections",
+          "4/15 titles cited",
+          "297 words"
+        ],
+        "composite": 0.7433333333333333
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.6226666666666666,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

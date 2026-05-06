@@ -538,6 +538,99 @@ describe("M3 Improved Retry Context", () => {
   });
 });
 
+// ─── Pivot A: Harness-Fallback Verifier Blind Spot (2026-05-06) ────────────
+//
+// Empirical finding: cogito:14b stalls without calling final-answer; the
+// kernel's harness_deliverable path assembles raw `_tool_result_*` artifacts
+// and ships them. Pre-fix the verifier's synthesis-grounded check trivially
+// passed these (every byte was from observations), so quality-degraded JSON
+// dumps reached the user. Trace evidence: 01KQZFHFQA97RHHCNXQ792VWNQ shows
+// verified=true on a raw `[{...}]` dump rated 7% faithfulness.
+//
+// Fix: Add `output-is-model-authored` check that fails when
+// `terminatedBy === "harness_deliverable"`. Runner inlines a verifier call
+// at the assembly site so the retry policy can fire if budget allows.
+
+describe("M3 Pivot A — output-is-model-authored check (harness fallback rejection)", () => {
+  it("rejects terminal output when terminatedBy=harness_deliverable", () => {
+    const verdict = defaultVerifier.verify({
+      action: "final-answer",
+      content: '[{"id":48037555,"title":"Valve releases Steam Controller CAD files"}]',
+      actionSuccess: true,
+      task: "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic.",
+      priorSteps: [],
+      terminal: true,
+      terminatedBy: "harness_deliverable",
+    });
+
+    expect(verdict.verified).toBe(false);
+    const failed = verdict.checks.find((c) => c.name === "output-is-model-authored");
+    expect(failed).toBeDefined();
+    expect(failed?.passed).toBe(false);
+    expect(failed?.reason).toContain("harness_deliverable");
+  });
+
+  it("passes when terminatedBy is undefined (model-authored final answer)", () => {
+    const verdict = defaultVerifier.verify({
+      action: "final-answer",
+      content:
+        "Hacker News leans toward gaming and developer tools today: Valve released Steam Controller CAD files, the bottleneck-was-never-the-code post hit 417 points, and Inkscape 1.4.4 shipped.",
+      actionSuccess: true,
+      task: "Summarize the top HN posts.",
+      priorSteps: [],
+      terminal: true,
+      terminatedBy: undefined,
+    });
+
+    expect(verdict.checks.find((c) => c.name === "output-is-model-authored"))
+      .toBeUndefined();
+  });
+
+  it("passes when terminatedBy is a model-authored exit reason (end_turn, loop_graceful)", () => {
+    for (const reason of ["end_turn", "loop_graceful", "low_delta_guard"]) {
+      const verdict = defaultVerifier.verify({
+        action: "final-answer",
+        content: "A model-authored synthesis answer.",
+        actionSuccess: true,
+        task: "Some task.",
+        priorSteps: [],
+        terminal: true,
+        terminatedBy: reason,
+      });
+      expect(verdict.checks.find((c) => c.name === "output-is-model-authored"))
+        .toBeUndefined();
+    }
+  });
+
+  it("does not fire on non-terminal observations even with harness_deliverable", () => {
+    // Defensive: the check only matters for terminal outputs.
+    const verdict = defaultVerifier.verify({
+      action: "get-hn-posts",
+      content: "tool ran successfully",
+      actionSuccess: true,
+      task: "Some task.",
+      priorSteps: [],
+      terminal: false,
+      terminatedBy: "harness_deliverable",
+    });
+    expect(verdict.checks.find((c) => c.name === "output-is-model-authored"))
+      .toBeUndefined();
+  });
+
+  it("verdict summary surfaces the failed check name for retry policy routing", () => {
+    const verdict = defaultVerifier.verify({
+      action: "final-answer",
+      content: '[{"raw":"json"}]',
+      actionSuccess: true,
+      task: "Some task.",
+      priorSteps: [],
+      terminal: true,
+      terminatedBy: "harness_deliverable",
+    });
+    expect(verdict.summary.toLowerCase()).toContain("output-is-model-authored");
+  });
+});
+
 // ─── Analysis: Measurement Framework ───────────────────────────────────────
 
 interface VerifierAccuracyMetrics {

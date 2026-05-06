@@ -951,10 +951,90 @@ export function runKernel(
         }
 
         if (totalArtifacts > 0) {
+          // Verifier-driven retry on harness fallback (Pivot A, 2026-05-06).
+          //
+          // Pre-fix: the harness assembled raw `_tool_result_*` artifacts and
+          // shipped them as the final answer. The verifier never saw the
+          // output (loop broke before §9.0 ran), so quality-degraded JSON
+          // dumps silently passed to the user. Empirical evidence: cogito:14b
+          // T5 trace 01KQZFHFQA97RHHCNXQ792VWNQ — verified=true on a raw
+          // JSON dump rated 7% faithfulness by the quality scorer.
+          //
+          // Post-fix: run the verifier on the candidate harness output with
+          // terminatedBy="harness_deliverable" so the new
+          // `output-is-model-authored` check rejects it. If retry budget
+          // allows, inject the verdict-driven signal and continue thinking
+          // — the model gets one more chance to synthesize from the
+          // artifacts before the harness ships them as-is. If retry budget
+          // is exhausted (or verifier passes — should be impossible with
+          // the new check), fall through to the original terminate path.
+          const candidateOutput = assembleDeliverable(state);
+          const availableUserToolsForFallback =
+            (currentInput.availableToolSchemas ?? []).map((t) => t.name);
+          const fallbackVerdict = verifier.verify({
+            action: "final-answer",
+            content: candidateOutput,
+            actionSuccess: true,
+            task: currentInput.task,
+            priorSteps: state.steps,
+            requiredTools: currentInput.requiredTools,
+            relevantTools: currentInput.relevantTools,
+            toolsUsed: state.toolsUsed,
+            availableUserTools: availableUserToolsForFallback,
+            terminal: true,
+            terminatedBy: "harness_deliverable",
+          });
+          yield* emitVerifierVerdict({
+            taskId: currentOptions.taskId ?? state.taskId,
+            iteration: state.iteration,
+            action: fallbackVerdict.action,
+            terminal: true,
+            verified: fallbackVerdict.verified,
+            summary: fallbackVerdict.summary,
+            checks: fallbackVerdict.checks,
+          });
+          if (
+            !fallbackVerdict.verified &&
+            verifierRetries < maxVerifierRetries &&
+            state.iteration < currentOptions.maxIterations - 1
+          ) {
+            verifierRetries++;
+            const decision = verifierRetryPolicy({
+              verdict: fallbackVerdict,
+              iteration: state.iteration,
+              retriesUsed: verifierRetries - 1,
+              maxRetries: maxVerifierRetries,
+              stepCount: state.steps.length,
+              toolsUsed: state.toolsUsed,
+            });
+            if (decision.retry) {
+              const failedCheck = fallbackVerdict.checks.find((c) => !c.passed);
+              const fallbackText =
+                `[verifier] Harness was about to ship fallback output assembled from ${totalArtifacts} tool artifacts because you stalled without producing a synthesized answer. ` +
+                `Rejected at "${failedCheck?.name ?? "verification"}": ${failedCheck?.reason ?? fallbackVerdict.summary}\n` +
+                `You have all the data you need in the prior tool results. Synthesize a real answer to the task and call final-answer now. (retry ${verifierRetries}/${maxVerifierRetries})`;
+              const signalText = decision.signalText ?? fallbackText;
+              const signalStep = makeStep("observation", signalText);
+              yield* emitHarnessSignalInjected({
+                taskId: currentOptions.taskId ?? state.taskId,
+                iteration: state.iteration,
+                signalKind: "redirect",
+                content: signalText,
+                origin: `runner.ts:harness-deliverable-retry${decision.reason ? ` (${decision.reason})` : ""}`,
+              });
+              state = transitionState(state, {
+                status: "thinking",
+                steps: [...state.steps, signalStep],
+              });
+              continue;
+            }
+          }
+          // Retry not available (or policy declined): proceed with original
+          // harness fallback. terminate() preserves the single-owner invariant.
           yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`, timestamp: new Date() });
           state = terminate(state, {
             reason: "harness_deliverable",
-            output: assembleDeliverable(state),
+            output: candidateOutput,
           });
           break;
         }
@@ -1369,6 +1449,7 @@ export function runKernel(
           toolsUsed: state.toolsUsed,
           availableUserTools,
           terminal: true,
+          terminatedBy: state.meta.terminatedBy,
         });
         if (!verdict.verified) {
           // Emit only on rejection — §9.0 outer gate handles the success
