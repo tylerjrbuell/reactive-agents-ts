@@ -47,6 +47,76 @@ import FeatureCarousel from '../../components/FeatureCarousel.astro'
     </div>
 </div>
 
+<section class="ra-lab" aria-labelledby="ra-telemetry-title">
+  <div class="ra-lab-head">
+    <div>
+      <p class="ra-lab-kicker">— Telemetry · Phase 1 Validation Sweep · May 2026</p>
+      <h2 id="ra-telemetry-title" class="ra-lab-title">Real numbers from real runs.</h2>
+    </div>
+    <div class="ra-lab-meta">
+      13 mechanisms · <b>8 KEEP</b> / 5 IMPROVE / 0 REMOVE<br />
+      Source: <code>wiki/Research/Harness-Reports/</code>
+    </div>
+  </div>
+
+  <div class="ra-lab-grid">
+    <div class="ra-readout">
+      <span class="ra-readout-mark">M4 · 86.7%</span>
+      <p class="ra-readout-label">Healing Pipeline</p>
+      <p class="ra-readout-value">+80<span class="unit">pp</span></p>
+      <ul class="ra-readout-rows">
+        <li class="ok"><span>FC recovery</span><b>86.7%</b></li>
+        <li class="ok"><span>Token cost vs reprompt</span><b>−90%</b></li>
+        <li><span>Stages</span><b>4</b></li>
+      </ul>
+    </div>
+    <div class="ra-readout">
+      <span class="ra-readout-mark">M5 · 60.7%</span>
+      <p class="ra-readout-label">Context Curation</p>
+      <p class="ra-readout-value">38.6<span class="unit">% saved</span></p>
+      <ul class="ra-readout-rows">
+        <li><span>Compression</span><b>60.7%</b></li>
+        <li class="ok"><span>Latency</span><b>0.16ms</b></li>
+        <li><span>Aggressive mode</span><b>44.1%</b></li>
+      </ul>
+    </div>
+    <div class="ra-readout">
+      <span class="ra-readout-mark">M11 · 100/0</span>
+      <p class="ra-readout-label">Diagnostic System</p>
+      <p class="ra-readout-value">0.02<span class="unit">ms</span></p>
+      <ul class="ra-readout-rows">
+        <li class="ok"><span>True positive</span><b>100%</b></li>
+        <li class="ok"><span>False positive</span><b>0%</b></li>
+        <li><span>Patterns + filters</span><b>25 + 4</b></li>
+      </ul>
+    </div>
+    <div class="ra-readout">
+      <span class="ra-readout-mark">M9 · 24/24</span>
+      <p class="ra-readout-label">Termination Oracle</p>
+      <p class="ra-readout-value">100<span class="unit">% paths</span></p>
+      <ul class="ra-readout-rows">
+        <li class="ok"><span>Tests passing</span><b>24/24</b></li>
+        <li class="ok"><span>CI lint</span><b>enforced</b></li>
+        <li><span>Single owner</span><b>arbitrator</b></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="ra-bench">
+    <div class="ra-bench-label">
+      <strong>Frontier Benchmark</strong>
+      ra-full · 4 models · Apr 30 2026 (W21)
+    </div>
+    <div class="ra-bench-bars">
+      <div class="ra-bar"><span class="ra-bar-name">claude-sonnet-4-6</span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:100%"></span></span><span class="ra-bar-pct">100%</span></div>
+      <div class="ra-bar"><span class="ra-bar-name">claude-haiku-4-5</span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:100%"></span></span><span class="ra-bar-pct">100%</span></div>
+      <div class="ra-bar"><span class="ra-bar-name">gpt-4o-mini</span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:100%"></span></span><span class="ra-bar-pct">100%</span></div>
+      <div class="ra-bar"><span class="ra-bar-name">gemini-2.5-pro</span><span class="ra-bar-track"><span class="ra-bar-fill" style="width:100%"></span></span><span class="ra-bar-pct">100%</span></div>
+      <div class="ra-bar"><span class="ra-bar-name">bare LLM (no harness)</span><span class="ra-bar-track"><span class="ra-bar-fill bare" style="width:85%"></span></span><span class="ra-bar-pct">85%</span></div>
+    </div>
+  </div>
+</section>
+
 <FeatureCarousel />
 
 <div class="ra-section-card ra-panel">
@@ -264,23 +334,80 @@ agent.start(); // Runs forever, Ctrl+C to stop
 
 ## Architecture at a Glance
 
+<section class="ra-flow" aria-labelledby="ra-flow-title">
+  <div class="ra-flow-head">
+    <h3 id="ra-flow-title" class="ra-flow-title">12-Phase Execution Lifecycle</h3>
+    <span class="ra-flow-legend">↻ <span>loop body</span></span>
+  </div>
+  <div class="ra-flow-grid">
+    <div class="ra-phase">
+      <span class="ra-phase-num">01</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">bootstrap</p><p class="ra-phase-desc">Load context, semantic + episodic memory</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">02</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">guardrail</p><p class="ra-phase-desc">Block injection, PII, toxicity pre-LLM</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">03</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">cost-route</p><p class="ra-phase-desc">Pick cheapest capable model tier</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">04</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">strategy-select</p><p class="ra-phase-desc">ReAct · Reflexion · Plan-Execute · ToT</p></div>
+    </div>
+    <div class="ra-phase" data-loop="1">
+      <span class="ra-phase-num">05</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">think</p><p class="ra-phase-desc">LLM reasoning step (one of N iterations)</p></div>
+    </div>
+    <div class="ra-phase" data-loop="1">
+      <span class="ra-phase-num">06</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">act</p><p class="ra-phase-desc">Tool execution + healing pipeline</p></div>
+    </div>
+    <div class="ra-phase" data-loop="1">
+      <span class="ra-phase-num">07</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">observe</p><p class="ra-phase-desc">Append tool results, curate context</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">08</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">verify</p><p class="ra-phase-desc">Entropy, fact decomposition, NLI check</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">09</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">memory-flush</p><p class="ra-phase-desc">Persist session, episodic, procedural</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">10</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">cost-track</p><p class="ra-phase-desc">Record spend, enforce budget</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">11</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">audit</p><p class="ra-phase-desc">Emit audit events for compliance</p></div>
+    </div>
+    <div class="ra-phase">
+      <span class="ra-phase-num">12</span>
+      <div class="ra-phase-body"><p class="ra-phase-name">complete</p><p class="ra-phase-desc">Build AgentResult with full metadata</p></div>
+    </div>
+  </div>
+</section>
+
 ```
 
 ReactiveAgentBuilder
-→ CoreServices (EventBus, AgentService, TaskService)
-→ LLMProvider (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+)
-→ Memory (Working, Semantic, Episodic, Procedural)
-→ Reasoning (ReAct, Reflexion, Plan-Execute, ToT, Adaptive)
-→ Tools (Registry, Sandbox, MCP Client)
-→ A2A (Agent Cards, JSON-RPC, SSE Streaming)
-→ Guardrails (Injection, PII, Toxicity, Behavioral Contracts)
-→ Verification (Semantic Entropy, Fact Decomposition, Hallucination Detection)
-→ Cost (Complexity Router, Budget Enforcer)
-→ Identity (Certificates, RBAC)
-→ Observability (Tracing, Metrics, Structured Logging)
-→ Interaction (5 Modes, Checkpoints, Preference Learning)
-→ Gateway (Heartbeats, Crons, Webhooks, Policy Engine)
-→ ExecutionEngine (12-phase lifecycle with hooks)
+→ CoreServices       EventBus, AgentService, TaskService
+→ LLMProvider        Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+
+→ Memory             Working · Semantic · Episodic · Procedural
+→ Reasoning          ReAct · Reflexion · Plan-Execute · ToT · Adaptive
+→ Tools              Registry · Sandbox · MCP Client · Healing Pipeline
+→ A2A                Agent Cards · JSON-RPC · SSE Streaming
+→ Guardrails         Injection · PII · Toxicity · Behavioral Contracts
+→ Verification       Semantic Entropy · Fact Decomposition · NLI
+→ Cost               Complexity Router · Budget Enforcer · Cache
+→ Identity           Ed25519 Certificates · RBAC · Delegation
+→ Observability      Tracing · Metrics · Structured Logging · Cortex Live
+→ Interaction        5 Modes · Checkpoints · Preference Learning
+→ Gateway            Heartbeats · Crons · Webhooks · Policy Engine
+→ ExecutionEngine    12-phase lifecycle, before / after / on-error hooks
 
 ```
 

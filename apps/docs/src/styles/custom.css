@@ -629,3 +629,358 @@ html {
     font-size: 0.58rem;
   }
 }
+
+/* ================================================================
+   Lab / Telemetry — instrument-data-sheet aesthetic
+   Counter-positions vs the violet-cyan SaaS panels above.
+   Mono + tabular numerals + hairline rules + warm accents.
+   ================================================================ */
+
+/* Mono + serif imports — fall back gracefully if CDN is blocked */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Fraunces:opsz,wght,SOFT@9..144,400;9..144,500;9..144,600;9..144,700&display=swap");
+
+:root {
+  --ra-mono:
+    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --ra-display-serif:
+    "Fraunces", "Georgia", "Times New Roman", serif;
+
+  /* Lab palette — distinct from violet/cyan */
+  --ra-amber: #f5a623;          /* sodium / instrument amber */
+  --ra-amber-soft: #f5a62333;
+  --ra-mint: #7dd3a8;            /* electric mint */
+  --ra-mint-soft: #7dd3a833;
+  --ra-signal: #4a90e2;          /* signal blue */
+  --ra-warn: #e25555;            /* warning red */
+  --ra-paper: #f5f1e8;           /* warm cream */
+  --ra-ink: #0a0e14;             /* deep ink */
+
+  --ra-hair: rgba(255, 255, 255, 0.09);
+  --ra-hair-bright: rgba(255, 255, 255, 0.18);
+}
+[data-theme="light"] {
+  --ra-hair: rgba(15, 23, 42, 0.10);
+  --ra-hair-bright: rgba(15, 23, 42, 0.22);
+}
+
+/* Lab section wrapper — replaces .ra-panel for these blocks */
+.ra-lab {
+  position: relative;
+  margin: 3rem auto;
+  padding: 2rem 1.75rem;
+  border: 1px solid var(--ra-hair);
+  background:
+    linear-gradient(180deg, rgba(245, 166, 35, 0.012) 0%, transparent 30%),
+    var(--sl-color-bg);
+  font-family: var(--ra-mono);
+  font-feature-settings: "tnum" 1, "ss01" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tick marks at corners — instrument feel */
+.ra-lab::before,
+.ra-lab::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--ra-amber);
+  pointer-events: none;
+  opacity: 0.5;
+}
+.ra-lab::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+.ra-lab::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+}
+
+.ra-lab-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1.5rem;
+  align-items: end;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--ra-hair);
+}
+.ra-lab-kicker {
+  font-family: var(--ra-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ra-amber);
+  margin: 0 0 0.5rem 0;
+  font-weight: 500;
+}
+.ra-lab-title {
+  font-family: var(--ra-display-serif);
+  font-variation-settings: "opsz" 144, "SOFT" 0;
+  font-size: clamp(1.6rem, 3.2vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0;
+  font-weight: 500;
+  color: var(--sl-color-white);
+}
+.ra-lab-meta {
+  font-family: var(--ra-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--sl-color-gray-3);
+  text-align: right;
+  white-space: nowrap;
+}
+.ra-lab-meta b {
+  color: var(--ra-mint);
+  font-weight: 500;
+}
+
+.ra-lab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0;
+  border: 1px solid var(--ra-hair);
+}
+
+/* Single readout tile */
+.ra-readout {
+  position: relative;
+  padding: 1.5rem 1.4rem 1.25rem;
+  border-right: 1px solid var(--ra-hair);
+  border-bottom: 1px solid var(--ra-hair);
+  background: transparent;
+  transition: background 0.25s ease;
+}
+.ra-readout:hover {
+  background: rgba(245, 166, 35, 0.025);
+}
+.ra-readout:last-child { border-right: 0; }
+
+/* Small index marker top-right */
+.ra-readout-mark {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.9rem;
+  font-family: var(--ra-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--ra-amber);
+  opacity: 0.7;
+}
+
+.ra-readout-label {
+  font-family: var(--ra-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+  margin: 0 0 0.85rem 0;
+}
+.ra-readout-value {
+  font-family: var(--ra-mono);
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--ra-amber);
+  margin: 0;
+  font-feature-settings: "tnum" 1;
+}
+.ra-readout-value .unit {
+  font-size: 0.5em;
+  letter-spacing: 0;
+  color: var(--sl-color-gray-2);
+  margin-left: 0.15em;
+  font-weight: 400;
+}
+.ra-readout-rows {
+  margin: 1rem 0 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+.ra-readout-rows li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  font-family: var(--ra-mono);
+  font-size: 0.72rem;
+  color: var(--sl-color-gray-2);
+  border-bottom: 1px dotted var(--ra-hair);
+  padding-bottom: 0.3rem;
+}
+.ra-readout-rows li:last-child { border-bottom: 0; }
+.ra-readout-rows li b {
+  color: var(--sl-color-white);
+  font-weight: 500;
+  font-feature-settings: "tnum" 1;
+}
+.ra-readout-rows li.ok b { color: var(--ra-mint); }
+.ra-readout-rows li.warn b { color: var(--ra-amber); }
+
+/* Frontier bench panel */
+.ra-bench {
+  margin-top: 1.5rem;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid var(--ra-hair);
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1.5rem;
+  align-items: center;
+}
+.ra-bench-label {
+  font-family: var(--ra-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: var(--sl-color-gray-3);
+}
+.ra-bench-label strong {
+  display: block;
+  color: var(--sl-color-white);
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+.ra-bench-bars {
+  display: grid;
+  gap: 0.5rem;
+}
+.ra-bar {
+  display: grid;
+  grid-template-columns: 12rem 1fr 3.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--ra-mono);
+  font-size: 0.7rem;
+}
+.ra-bar-name { color: var(--sl-color-gray-2); }
+.ra-bar-track {
+  height: 4px;
+  background: var(--ra-hair);
+  position: relative;
+}
+.ra-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ra-mint);
+  transition: width 1.2s cubic-bezier(.2,.8,.2,1);
+}
+.ra-bar-fill.bare { background: var(--ra-amber); }
+.ra-bar-pct {
+  text-align: right;
+  color: var(--sl-color-white);
+  font-weight: 500;
+  font-feature-settings: "tnum" 1;
+}
+
+/* ================================================================
+   Phase Flow Diagram — replaces ASCII Architecture block
+   12 ordered tiles in a wrapping grid with index markers
+   ================================================================ */
+
+.ra-flow {
+  margin: 2rem auto;
+  padding: 1.5rem;
+  border: 1px solid var(--ra-hair);
+  background: var(--sl-color-bg);
+}
+.ra-flow-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--ra-hair);
+}
+.ra-flow-title {
+  font-family: var(--ra-display-serif);
+  font-variation-settings: "opsz" 144, "SOFT" 0;
+  font-size: 1.4rem;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.015em;
+  color: var(--sl-color-white);
+}
+.ra-flow-legend {
+  font-family: var(--ra-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  color: var(--sl-color-gray-3);
+  text-transform: uppercase;
+}
+.ra-flow-legend span { color: var(--ra-amber); }
+.ra-flow-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--ra-hair);
+}
+.ra-phase {
+  position: relative;
+  padding: 0.85rem 0.9rem 0.95rem;
+  border-right: 1px solid var(--ra-hair);
+  border-bottom: 1px solid var(--ra-hair);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  transition: background 0.15s ease;
+}
+.ra-phase:hover {
+  background: rgba(125, 211, 168, 0.04);
+}
+.ra-phase-num {
+  font-family: var(--ra-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--ra-amber);
+  letter-spacing: 0.05em;
+  font-feature-settings: "tnum" 1;
+  padding-top: 0.05rem;
+}
+.ra-phase-body { display: grid; gap: 0.18rem; }
+.ra-phase-name {
+  font-family: var(--ra-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--sl-color-white);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.ra-phase-desc {
+  font-family: var(--ra-mono);
+  font-size: 0.65rem;
+  color: var(--sl-color-gray-3);
+  line-height: 1.35;
+  margin: 0;
+}
+.ra-phase[data-loop="1"] .ra-phase-num::after {
+  content: " ↻";
+  color: var(--ra-mint);
+  margin-left: 0.1em;
+}
+
+@media (max-width: 900px) {
+  .ra-flow-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 540px) {
+  .ra-flow-grid { grid-template-columns: 1fr; }
+  .ra-phase { border-right: 0; }
+  .ra-bench { grid-template-columns: 1fr; }
+  .ra-bar { grid-template-columns: 8rem 1fr 3rem; }
+  .ra-lab-head { grid-template-columns: 1fr; }
+  .ra-lab-meta { text-align: left; }
+}
