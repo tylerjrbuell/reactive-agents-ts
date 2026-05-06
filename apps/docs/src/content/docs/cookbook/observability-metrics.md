@@ -2,7 +2,7 @@
 title: Observability & Metrics
 description: Read the metrics dashboard, export telemetry, subscribe to EventBus events, and wire up external monitoring.
 sidebar:
-  order: 8
+  order: 10
 ---
 
 `withObservability()` turns on distributed tracing, the metrics dashboard, and structured logging with a single builder call. This recipe shows how to use each piece.
@@ -31,7 +31,7 @@ At `verbosity: "normal"` you get a dashboard like this printed to stdout:
 │ ✅ Agent Execution Summary                                   │
 ├─────────────────────────────────────────────────────────────┤
 │ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
-│ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │
+│ Tokens:    1,963        Cost: ~$0.003     Model: haiku-4.5  │
 └─────────────────────────────────────────────────────────────┘
 
 📊 Execution Timeline

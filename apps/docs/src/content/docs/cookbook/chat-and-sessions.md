@@ -2,7 +2,7 @@
 title: Chat & Sessions
 description: Build conversational agents with multi-turn memory using agent.chat() and agent.session().
 sidebar:
-  order: 7
+  order: 8
 ---
 
 `agent.chat()` enables multi-turn conversation with automatic routing — simple questions go directly to the LLM, complex tasks spin up the full ReAct loop. `agent.session()` wraps a conversation with persistent context. When **`.withTools()`** is on, the **`recall`** meta-tool (Conductor's Suite) is the supported way for the model to read/write working notes across turns — not legacy note builtins.

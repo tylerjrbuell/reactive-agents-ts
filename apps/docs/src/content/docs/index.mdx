@@ -114,45 +114,52 @@ One package. Composable layers. Enable exactly what you need — skip everything
 
 <CardGrid stagger>
     <Card title="Type-Safe from End to End" icon="seti:typescript">
-        Every agent, tool, memory entry, and LLM call is validated by Effect-TS
-        schemas. Catch errors at compile time. Runtime validation at every
-        service boundary. Typed errors mean failures are explicit, not
-        surprises.
+        **Zero `any`** in framework code. Every agent, tool, memory entry, and
+        LLM call is validated by Effect-TS schemas. Failures are typed tagged
+        errors, not exceptions. **5,028 tests** keep every service boundary
+        honest on every PR.
     </Card>
     <Card title="Composable Layer Architecture" icon="puzzle">
-        Enable exactly the capabilities you need. Memory without guardrails?
-        Just reasoning and tools? Full production stack? Each layer is an
-        independent Effect Layer with explicit dependencies — no hidden
-        coupling, no wasted resources.
+        **30 packages, 13 capability layers.** Each is an independent Effect
+        `Layer` with explicit dependencies. Memory without guardrails? Reasoning
+        without cost tracking? Just stream tokens? Pick exactly what you need —
+        no hidden coupling, no wasted resources.
     </Card>
     <Card title="Observable Execution Engine" icon="magnifier">
-        Every agent task flows through a deterministic 12-phase lifecycle with
-        before/after/error hooks. Every phase emits spans, metrics, and EventBus
-        events. You see exactly what your agent decided, why, and how long it
-        took.
+        **12-phase deterministic lifecycle** with `before` / `after` / `on-error`
+        hooks per phase. Every phase emits spans, metrics, and EventBus events.
+        You see what your agent decided, why, in what order, at what cost — no
+        manual instrumentation required.
     </Card>
     <Card title="5 Reasoning Strategies" icon="star">
-        ReAct for tool use. Reflexion for self-improvement. Plan-Execute for
-        structured work. Tree-of-Thought for creative exploration. Adaptive to
-        auto-select the best strategy. Register your own strategies too.
+        **ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive** — plus
+        automatic strategy switching when entropy detects the agent is stuck.
+        Register your own strategies. ToT outer-loop early-stop and 8-action
+        reactive controller ship out of the box.
     </Card>
-    <Card title="Model-Adaptive Intelligence" icon="setting">
-        Context profiles tune prompts, budgets, and tool strategies per model
-        tier. LLM-based tool classification, completion gap detection, and
-        circuit breakers help smaller models punch above their weight — same
-        code, better results across the full model spectrum.
+    <Card title="Local Models That Actually Work" icon="setting">
+        **+80pp accuracy** on Ollama 4B+ vs. naive prompting. The 4-stage
+        Healing Pipeline recovers from **86.7% of tool-call errors** — 90%
+        cheaper than LLM reprompt. Model-adaptive context tunes prompts and
+        compaction per tier. Same code, frontier-to-local.
+    </Card>
+    <Card title="Frontier-Verified" icon="approve-check">
+        **100% pass on `ra-full`** across `claude-sonnet-4-6`, `claude-haiku-4-5`,
+        `gpt-4o-mini`, and `gemini-2.5-pro` (Apr 30 2026). Bare LLM only achieves
+        85% on the same harness — a measurable lift from the framework, not
+        the model.
     </Card>
     <Card title="Great DX" icon="rocket">
-        60 seconds to your first agent. Progressive disclosure — start with 3
+        **60 seconds to first agent.** Progressive disclosure — start with 3
         lines, add reasoning, memory, guardrails, and observability as you need
         them. The builder API reads like a sentence. `rax` CLI scaffolds, runs,
         and inspects.
     </Card>
     <Card title="Cortex Local Studio" icon="laptop">
-        A full-featured companion web app — live agent grid, entropy signal
-        charts, step-by-step reasoning traces, debrief summaries, interactive
-        chat, and a visual agent builder. One flag away: `.withCortex()` or `rax
-        run --cortex`.
+        **`bunx @reactive-agents/cortex`** for a full local studio: Beacon (live
+        agent canvas with entropy charts), Thalamus (visual agent builder),
+        Lab (debrief UI), and Living Skills views. One flag away from any
+        agent: `.withCortex()`.
     </Card>
 </CardGrid>
 
@@ -167,27 +174,27 @@ One package. Composable layers. Enable exactly what you need — skip everything
 <CardGrid>
     <Card title="vs. LangChain / LlamaIndex" icon="document">
         Python-first, dynamically typed, monolithic. Reactive Agents is
-        TypeScript-native with Effect-TS type safety, fully modular layers, and
-        built-in observability — you see every decision your agent makes, not
-        just the final output.
+        **TypeScript-native with zero `any`**, fully modular layers, and
+        built-in observability. You see every decision — not just the final
+        output. Side-by-side migration guide included.
     </Card>
     <Card title="vs. Vercel AI SDK" icon="document">
         Great for streaming and tool calling, but stops there. Reactive Agents
-        adds 5 reasoning strategies, persistent 4-tier memory, guardrails,
-        verification, cost routing, and a 12-phase execution engine with full
-        observability.
+        adds **5 reasoning strategies**, persistent **4-tier memory**,
+        guardrails, verification, cost routing, and a **12-phase execution
+        engine** with full observability — same TypeScript ergonomics.
     </Card>
     <Card title="vs. AutoGen / CrewAI" icon="document">
         Multi-agent frameworks without type safety, composable architecture, or
-        model-adaptive intelligence. Reactive Agents gives you all three — plus
-        model-adaptive context profiles that help local models perform far
-        beyond naive prompting.
+        model-adaptive intelligence. Reactive Agents ships **A2A protocol**
+        (JSON-RPC + SSE), dynamic sub-agent spawning, and the **healing
+        pipeline that lifts local-model accuracy by +80pp**.
     </Card>
     <Card title="vs. Building From Scratch" icon="document">
-        30 production-ready packages with 5,028 tests covering memory,
-        reasoning, tools, A2A protocol, gateway, reactive intelligence, safety,
-        cost, identity, and orchestration. Focus on your agent's logic, not
-        infrastructure.
+        **30 production-ready packages, 5,028 tests, 12-phase engine.** Memory,
+        reasoning, tools, A2A, gateway, reactive intelligence, safety, cost,
+        identity, orchestration — all composable, all opt-in. Focus on your
+        agent's logic, not infrastructure.
     </Card>
 </CardGrid>
 

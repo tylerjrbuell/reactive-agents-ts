@@ -411,7 +411,7 @@ Setting `live: true` additionally streams phase events to the console in real-ti
 │ ✅ Agent Execution Summary                                   │
 ├─────────────────────────────────────────────────────────────┤
 │ Status:    ✅ Success   Duration: 13.9s   Steps: 7          │
-│ Tokens:    1,963        Cost: ~$0.003     Model: claude-3.5 │
+│ Tokens:    1,963        Cost: ~$0.003     Model: haiku-4.5  │
 └─────────────────────────────────────────────────────────────┘
 
 📊 Execution Timeline

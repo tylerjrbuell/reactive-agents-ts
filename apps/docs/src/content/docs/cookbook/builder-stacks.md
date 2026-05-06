@@ -1,6 +1,8 @@
 ---
 title: Common builder stacks
 description: Copy-paste ReactiveAgents.create() chains — tools, memory, streaming, Agent as Data — with links to the full API reference.
+sidebar:
+  order: 1
 ---
 
 Use this page to assemble **realistic builder chains**. For every method, default, and env var, see the authoritative references:
