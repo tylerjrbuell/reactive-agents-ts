@@ -9,14 +9,14 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 
 ## Supported Providers
 
-| Provider          | Models                                            | Tool Calling | Streaming | Embeddings      | Prompt Caching  |
-| ----------------- | ------------------------------------------------- | :----------: | :-------: | :-------------: | :-------------: |
-| **Anthropic**     | Claude 3.5 Haiku, Claude Sonnet 4, Claude Opus 4  |     Yes      |    Yes    | No (use OpenAI) | Yes (explicit)  |
-| **OpenAI**        | GPT-4o, GPT-4o-mini                               |     Yes      |    Yes    |       Yes       | Yes (automatic) |
-| **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Flash, Gemini 2.5 Pro|     Yes      |    Yes    |       No        | Yes (automatic) |
-| **Ollama**        | Any locally hosted model                          |     Yes      |    Yes    |       Yes       | No              |
-| **LiteLLM**       | 100+ models via LiteLLM proxy                     |     Yes      |    Yes    |       No        | Depends         |
-| **Test**          | Mock provider for testing (`withTestScenario`)    |     Yes\*    |    Yes\*  |       No        | No              |
+| Provider          | Models                                                  | Tool Calling | Streaming | Embeddings      | Prompt Caching  |
+| ----------------- | ------------------------------------------------------- | :----------: | :-------: | :-------------: | :-------------: |
+| **Anthropic**     | Claude Haiku 4.5, Claude Sonnet 4.6, Claude Opus 4.7    |     Yes      |    Yes    | No (use OpenAI) | Yes (explicit)  |
+| **OpenAI**        | GPT-4o, GPT-4o-mini                                     |     Yes      |    Yes    |       Yes       | Yes (automatic) |
+| **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Flash, Gemini 2.5 Pro      |     Yes      |    Yes    |       No        | Yes (automatic) |
+| **Ollama**        | Any locally hosted model — see [Local Models Guide](/guides/local-models/) |     Yes      |    Yes    |       Yes       | No              |
+| **LiteLLM**       | 40+ models via LiteLLM proxy                            |     Yes      |    Yes    |       No        | Depends         |
+| **Test**          | Mock provider for testing (`withTestScenario`)          |     Yes\*    |    Yes\*  |       No        | No              |
 
 \*The test provider advertises native tool calling so kernels exercise the same FC path as real providers; responses are still fully deterministic from your scenario.
 
@@ -27,16 +27,16 @@ Set your API key in `.env` and specify the provider:
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
-// Anthropic
+// Anthropic — canonical aliases pinned in capability.ts
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")        // or "claude-haiku-4-5", "claude-opus-4-7"
   .build();
 
 // OpenAI
 const agent = await ReactiveAgents.create()
   .withProvider("openai")
-  .withModel("gpt-4o")
+  .withModel("gpt-4o")                   // or "gpt-4o-mini" for cost-routed work
   .build();
 
 // Google Gemini
@@ -45,13 +45,14 @@ const agent = await ReactiveAgents.create()
   .withModel("gemini-2.5-flash")
   .build();
 
-// Ollama (local)
+// Ollama (local) — Healing Pipeline lifts 4B+ models by +80pp accuracy
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
-  .withModel("cogito")
+  .withModel("qwen3:14b")                // Best native FC at this size
+  .withContextProfile({ tier: "local" })
   .build();
 
-// LiteLLM proxy (100+ models)
+// LiteLLM proxy (40+ models)
 const agent = await ReactiveAgents.create()
   .withProvider("litellm")
   .withModel("gpt-4o")
@@ -71,7 +72,7 @@ TAVILY_API_KEY=tvly-...                  # web search — Tavily (primary)
 BRAVE_SEARCH_API_KEY=BSA...              # web search — Brave (fallback)
 SERPER_API_KEY=...                       # web search — Serper/Google (fallback)
 
-LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
+LLM_DEFAULT_MODEL=claude-sonnet-4-6
 LLM_DEFAULT_TEMPERATURE=0.7
 LLM_MAX_RETRIES=3
 LLM_TIMEOUT_MS=30000
