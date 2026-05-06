@@ -5,6 +5,8 @@ sidebar:
   order: 6
 ---
 
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 Use this guide to choose a default stack quickly, then tune for cost and reliability.
 
 ## Default Recommendation
@@ -88,12 +90,31 @@ const agent = await ReactiveAgents.create()
 ## Anti-Patterns to Avoid
 
 - Turning on all layers before proving need
-- Using Tier 2 memory without embedding provider configured
+- Using `tier: "enhanced"` memory without an embedding provider configured
 - Long max iterations without budget controls
 - MCP subprocess usage without guaranteed disposal
 
 ## Next Steps
 
-- Tune context budgets in [Context Engineering](../context-engineering/)
-- Configure tools and MCP in [Tools](../tools/)
-- Harden production defaults in [Production Deployment](../../cookbook/production-deployment/)
+<CardGrid>
+  <LinkCard
+    title="Context Engineering"
+    description="Tune compaction, truncation, and tier-aware prompts for your model size."
+    href="../context-engineering/"
+  />
+  <LinkCard
+    title="Tools & MCP"
+    description="Wire built-in tools, MCP servers, and custom ToolBuilder definitions."
+    href="../tools/"
+  />
+  <LinkCard
+    title="Production Deployment"
+    description="Harden the stack you just chose: budgets, kill switch, structured logs, audit."
+    href="../../cookbook/production-deployment/"
+  />
+  <LinkCard
+    title="Local Models Guide"
+    description="Pick a model + tier on Ollama. Healing pipeline lifts 4B+ models +80pp."
+    href="../local-models/"
+  />
+</CardGrid>

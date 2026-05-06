@@ -5,7 +5,13 @@ sidebar:
   order: 7
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 Reactive Agents ships five reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.
+
+<Aside type="tip" title="If you don't want to think about it">
+Use **Adaptive** — it auto-selects per task: `.withReasoning({ defaultStrategy: "adaptive" })`. Or use the default **ReAct** — it works for ~80% of agent workloads. Only switch to one of the others when you have a specific reason from the decision tree below.
+</Aside>
 
 ## Decision Tree
 
