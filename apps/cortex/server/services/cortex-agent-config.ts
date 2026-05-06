@@ -366,11 +366,28 @@ export function mergeCortexUiToolNames(
   return [...names];
 }
 
-/** Conductor / kernel tools that must stay callable when `allowedTools` filtering is on. */
+/** All builtin and meta-tools that should be available by default in Cortex agents. */
 const CORTEX_FRAMEWORK_ALLOWED_TOOLS = [
+  // Conductor meta-tools (always callable, injected internally)
   "final-answer",
   "task-complete",
   "context-status",
+  // Builtin tools (default availability)
+  "web-search",
+  "crypto-price",
+  "http-get",
+  "file-read",
+  "file-write",
+  "code-execute",
+  "git-cli",
+  "gh-cli",
+  "gws-cli",
+  // Meta-tools (available when .withMetaTools() is called)
+  "brief",
+  "find",
+  "pulse",
+  "recall",
+  "discover-tools",
 ] as const;
 
 export type CortexMetaToolsConfig = {

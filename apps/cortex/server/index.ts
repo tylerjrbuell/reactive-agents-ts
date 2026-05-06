@@ -108,6 +108,21 @@ export async function startCortexServer(
         handleLiveClose(ws as unknown as ElysiaWS<LiveWsData>, bridgeSvc);
       },
     })
+    // Serve static assets from the built UI (JS, CSS, fonts, images, etc.)
+    // Must come before the SPA fallback route so asset requests are matched first.
+    .get("/_app/*", async ({ params, set }) => {
+      if (!resolvedConfig.staticAssetsPath) {
+        set.status = 404;
+        return "Cortex UI not built. Run: cd apps/cortex/ui && bun run build";
+      }
+      const assetPath = `${resolvedConfig.staticAssetsPath}/_app/${params["*"]}`;
+      const file = Bun.file(assetPath);
+      if (!(await file.exists())) {
+        set.status = 404;
+        return "Asset not found";
+      }
+      return file;
+    })
     .get("/*", ({ set }) => {
       if (resolvedConfig.staticAssetsPath) {
         return Bun.file(`${resolvedConfig.staticAssetsPath}/index.html`);
