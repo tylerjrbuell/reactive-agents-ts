@@ -161,7 +161,7 @@ const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning() // ReAct reasoning loop
     .withTools() // Built-in tools + MCP support
-    .withMemory('1') // Persistent memory (FTS5 search)
+    .withMemory() // Persistent memory: tier "standard" (FTS5 search). Use { tier: "enhanced" } for vector embeddings.
     .withGuardrails() // Block injection, PII, toxicity
     .withKillSwitch() // Per-agent + global emergency halt
     .withBehavioralContracts({
@@ -250,7 +250,7 @@ const builder = ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning({ defaultStrategy: 'plan-execute-reflect' })
     .withTools({ adaptive: true })
-    .withMemory('2')
+    .withMemory({ tier: 'enhanced' })
 
 const config = builder.toConfig()
 const json = agentConfigToJSON(config)

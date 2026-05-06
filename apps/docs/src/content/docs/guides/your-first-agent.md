@@ -22,9 +22,8 @@ const agent = await ReactiveAgents.create()
 ```
 
 This creates a minimal agent with:
-- LLM provider (Anthropic)
-- In-memory SQLite for memory (Tier 1)
-- Direct LLM loop (no reasoning strategy)
+- LLM provider (Anthropic, Claude Sonnet 4)
+- Direct LLM loop (no reasoning strategy, no memory, no tools)
 
 ## Adding Memory
 
@@ -35,13 +34,22 @@ const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory()  // Default memory tier (FTS5-backed semantic search; no embedding API required)
+  .withMemory()                          // tier: "standard" (default)
   .build();
 ```
 
-**Tier 1** gives you working memory, semantic storage, episodic logging, and full-text search — all backed by bun:sqlite.
+The 4-layer memory system has two tiers:
 
-**Tier 2** adds vector embeddings for semantic similarity search (requires an embedding provider).
+| Tier         | Layers active                                      | When to use                                |
+|--------------|----------------------------------------------------|--------------------------------------------|
+| `"standard"` | Working + Episodic + FTS5 keyword search           | Conversational agents, default for most apps |
+| `"enhanced"` | All 4 layers + vector embeddings (semantic recall) | Research agents, long-running tasks needing semantic similarity |
+
+```typescript
+.withMemory({ tier: "enhanced", dbPath: "./data/memory.db" })   // Full 4-layer
+```
+
+`"enhanced"` requires an embedding provider — set `EMBEDDING_PROVIDER=openai` or `EMBEDDING_PROVIDER=ollama` in `.env`.
 
 ## Adding Reasoning
 

@@ -198,15 +198,14 @@ const result1 = await agent.run("Hi, my name is Alice");
 const result2 = await agent.run("What is my name?");
 ```
 
-Reactive Agents provides a 4-layer memory architecture:
+Reactive Agents provides a 4-layer memory architecture with two configurable tiers:
 
-| Tier | Layers Active | Use Case |
-|---|---|---|
-| `"basic"` | Working only | Stateless single-run agents |
-| `"standard"` | Working + Episodic | Conversational agents with history |
-| `"enhanced"` | Working + Episodic + Procedural + Semantic | Research agents, long-running tasks |
+| Tier         | Layers active                                          | Use case                                          |
+|--------------|--------------------------------------------------------|---------------------------------------------------|
+| `"standard"` | Working + Episodic + FTS5 keyword search               | Conversational agents, default for most apps      |
+| `"enhanced"` | All 4 layers (+ vector embeddings, semantic recall)    | Research agents, long-running tasks               |
 
-The `semantic` layer supports vector similarity search via SQLite + embeddings. The `procedural` layer stores learned tool-use patterns across runs.
+The `semantic` layer supports vector similarity search via SQLite + embeddings (requires `EMBEDDING_PROVIDER` env var). The `procedural` layer stores learned tool-use patterns across runs. Default is `"standard"` when `.withMemory()` is called with no args.
 
 ---
 
