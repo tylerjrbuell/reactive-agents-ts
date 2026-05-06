@@ -1,5 +1,17 @@
 # @reactive-agents/benchmarks
 
+## 0.10.5
+
+### Patch Changes
+
+-   Updated dependencies [d350fc2]
+    -   @reactive-agents/core@0.10.5
+    -   @reactive-agents/cost@0.10.5
+    -   @reactive-agents/llm-provider@0.10.5
+    -   @reactive-agents/reasoning@0.10.5
+    -   @reactive-agents/runtime@0.10.5
+    -   @reactive-agents/judge-server@0.9.4
+
 ## 0.10.4
 
 ### Patch Changes

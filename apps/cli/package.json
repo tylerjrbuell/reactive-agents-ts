@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/cli",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -28,19 +28,19 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.10.4",
-    "@reactive-agents/runtime": "0.10.4",
-    "@reactive-agents/eval": "0.10.4",
-    "@reactive-agents/llm-provider": "0.10.4",
-    "@reactive-agents/a2a": "0.10.4",
-    "@reactive-agents/trace": "0.10.4",
-    "@reactive-agents/tools": "0.10.4",
+    "@reactive-agents/core": "0.10.5",
+    "@reactive-agents/runtime": "0.10.5",
+    "@reactive-agents/eval": "0.10.5",
+    "@reactive-agents/llm-provider": "0.10.5",
+    "@reactive-agents/a2a": "0.10.5",
+    "@reactive-agents/trace": "0.10.5",
+    "@reactive-agents/tools": "0.10.5",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"
   },
   "peerDependencies": {
-    "@reactive-agents/cortex": "0.10.4"
+    "@reactive-agents/cortex": "0.10.5"
   },
   "peerDependenciesMeta": {
     "@reactive-agents/cortex": {
