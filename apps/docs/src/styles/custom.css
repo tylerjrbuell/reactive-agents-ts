@@ -458,10 +458,17 @@ html {
   color: #5b21b6 !important;
 }
 
-/* ── Tables — readable columns (Starlight sets display:block + overflow:auto) ─ */
+/* ── Tables — readable columns ─────────────────────────────────
+   Starlight wraps tables in a scrolling container; we tune column
+   widths, header behavior, and word-breaking so:
+   1. Header labels never break mid-word ("Description" stays intact)
+   2. Body text wraps gracefully on long descriptions
+   3. Inline `code` cells don't force ultra-narrow columns
+   4. Long URLs and identifiers can break to avoid horizontal scroll
+   ─────────────────────────────────────────────────────────────── */
 .sl-markdown-content table:not(:where(.not-content *)) {
   border-collapse: collapse;
-  /* Prefer content-driven column widths; scroll horizontally if the grid is wider than the panel */
+  /* Content-driven by default; cap to panel width and scroll if wider */
   width: max-content;
   max-width: 100%;
   table-layout: auto;
@@ -469,28 +476,54 @@ html {
 
 .sl-markdown-content :is(th, td):not(:where(.not-content *)) {
   vertical-align: top;
-  padding: 0.65rem 1rem;
+  padding: 0.7rem 1rem;
+  text-align: left;
+}
+
+/* Body cells: wrap long prose at word boundaries, NOT mid-letter.
+   `break-word` breaks only when no other option exists; `anywhere`
+   was too aggressive and caused short labels to stack 1 char per row. */
+.sl-markdown-content td:not(:where(.not-content *)) {
+  border: 1px solid rgba(139, 92, 246, 0.08);
   hyphens: auto;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
-/* Inline code / links in cells: wrap instead of forcing ultra-narrow columns */
-.sl-markdown-content td:not(:where(.not-content *)) code,
-.sl-markdown-content th:not(:where(.not-content *)) code {
-  white-space: normal;
-  word-break: break-word;
-}
-
+/* Headers: never break labels. Always single-line, full label visible. */
 .sl-markdown-content th:not(:where(.not-content *)) {
   background: rgba(139, 92, 246, 0.08);
   border: 1px solid rgba(139, 92, 246, 0.15);
   padding: 0.75rem 1rem;
   font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: -0.005em;
 }
 
-.sl-markdown-content td:not(:where(.not-content *)) {
-  border: 1px solid rgba(139, 92, 246, 0.08);
+/* Inline code / identifiers in body cells: break only at sensible points
+   (hyphens, slashes, dots) — not inside method names. */
+.sl-markdown-content td:not(:where(.not-content *)) code {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Inline code in headers: stay on one line with the rest of the header */
+.sl-markdown-content th:not(:where(.not-content *)) code {
+  white-space: nowrap;
+}
+
+/* Make sure the Starlight scroll wrapper actually scrolls when needed */
+.sl-markdown-content :where(.sl-table-wrapper, .table-wrapper, figure.starlight-table) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sensible per-column widths for the most common 2-column reference tables
+   (e.g. cheatsheet "Method | What it does"). The first column shouldn't
+   shrink below the longest method name. */
+.sl-markdown-content td:first-child:not(:where(.not-content *)) code {
+  white-space: nowrap; /* method names like .withRequiredTools() shouldn't wrap */
 }
 
 [data-theme="light"] .sl-markdown-content th:not(:where(.not-content *)) {
