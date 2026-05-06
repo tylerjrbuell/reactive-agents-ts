@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/channels",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

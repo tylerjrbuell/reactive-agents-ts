@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/scenarios",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -18,8 +18,8 @@
     "test": "bun test --reporter=dots"
   },
   "dependencies": {
-    "@reactive-agents/trace": "0.10.3",
-    "@reactive-agents/testing": "0.10.3"
+    "@reactive-agents/trace": "0.10.4",
+    "@reactive-agents/testing": "0.10.4"
   },
   "devDependencies": {
     "tsup": "*",
