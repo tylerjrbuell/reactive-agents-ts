@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/diagnose",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,7 +13,7 @@
     "test": "bun test --reporter=dots"
   },
   "dependencies": {
-    "@reactive-agents/trace": "0.10.4"
+    "@reactive-agents/trace": "0.10.5"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

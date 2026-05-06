@@ -1,5 +1,27 @@
 # @reactive-agents/core
 
+## 0.10.5
+
+### Patch Changes
+
+-   d350fc2: fix(cli): resolve runtime dependency cycle and missing imports breaking npm-installed CLI
+
+    The CLI imported `reactive-agents` (umbrella) and `@reactive-agents/tools` in `serve`, `playground`, `run`, and `demo` commands. The umbrella import wasn't declared in `dependencies` and would have created a circular dep with the umbrella package (which already includes CLI). Result: every CLI invocation in a clean npm install crashed with `Cannot find package 'reactive-agents'`.
+
+    **Fixes:**
+
+    -   CLI commands now import `ReactiveAgents` directly from `@reactive-agents/runtime` (where it actually lives)
+    -   Added `@reactive-agents/tools` to CLI dependencies
+    -   Added `@reactive-agents/cortex` as optional peerDependency (was already lazy-loaded)
+
+    **New CI gates to prevent recurrence:**
+
+    -   `scripts/validate-cli-externals.ts` upgraded — now also validates that every external workspace import is declared as a dependency in `package.json` (was only checking tsup config), and matches the umbrella `reactive-agents` package (was only matching `@reactive-agents/*`)
+    -   `scripts/test-clean-install.ts` (new) — packs every package as an npm tarball, installs into a fresh project, runs CLI + SDK smoke tests. Wired into `publish.yml` as a pre-publish gate so broken releases fail before hitting npm
+    -   `scripts/check-npm-versions.ts` (new) — flags drift between local versions and npm-published versions
+
+    **Lockstep release:** all packages bumped together to keep versions aligned and prevent the manual-publish drift that created earlier release issues.
+
 ## 0.10.4
 
 ### Patch Changes

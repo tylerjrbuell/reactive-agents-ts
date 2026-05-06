@@ -1,5 +1,14 @@
 # @reactive-agents/judge-server
 
+## 0.9.4
+
+### Patch Changes
+
+-   Updated dependencies [d350fc2]
+    -   @reactive-agents/core@0.10.5
+    -   @reactive-agents/eval@0.10.5
+    -   @reactive-agents/llm-provider@0.10.5
+
 ## 0.9.3
 
 ### Patch Changes
