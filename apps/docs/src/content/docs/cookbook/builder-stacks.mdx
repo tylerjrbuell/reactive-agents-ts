@@ -5,6 +5,12 @@ sidebar:
   order: 1
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip" title="Read me first">
+Each "Stack" below is a **complete, runnable builder chain** for a specific shape of agent. Pick the one closest to your workload, paste into `src/agent.ts`, run with `bun run src/agent.ts`. The builder methods are independent layers — compose stacks freely; nothing locks you into one shape.
+</Aside>
+
 Use this page to assemble **realistic builder chains**. For every method, default, and env var, see the authoritative references:
 
 - **[Builder API](/reference/builder-api/)** — signatures, option types, `ReactiveAgent` methods, events, and `AgentResult`.
@@ -23,7 +29,7 @@ For a first end-to-end walkthrough, see [Quickstart](/guides/quickstart/) and [Y
 
 Single-shot Q&A; no tools, no multi-step loop. Smallest surface area.
 
-```typescript
+```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
@@ -40,7 +46,7 @@ console.log(result.output);
 
 Enables the reasoning kernel and the default tool registry (file I/O, web search when keys exist, etc.). With `.withTools()`, **Conductor meta-tools** (`brief`, `find`, `pulse`, `recall`) default **on** unless you pass `.withMetaTools(false)` — see [Tools](/guides/tools/) and [Builder API — MetaToolsConfig](/reference/builder-api/#metatoolsconfig).
 
-```typescript
+```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
@@ -59,7 +65,7 @@ console.log(result.output);
 
 `.withMemory()` uses the **standard** tier by default (SQLite + FTS5; no embedding API required). Use **`{ tier: "enhanced" }`** when you want vector similarity (embedding provider + env). Debrief-style artifacts are tied to memory + reasoning — details in [Debrief & chat](/features/debrief-chat/) and [Memory](/guides/memory/).
 
-```typescript
+```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
@@ -79,7 +85,7 @@ if (result.debrief) console.log(result.debrief.summary);
 
 Guardrails toggle **injection / PII / toxicity** detectors (all default **on** when guardrails are enabled). Observability drives the **metrics dashboard** at `normal+` verbosity. Cost tracking enforces **USD** budgets when you pass limits.
 
-```typescript
+```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
@@ -100,7 +106,7 @@ await agent.run("Draft a short status update for the team.");
 
 `.withStreaming()` sets the default density for **`agent.runStream()`** (`tokens` vs `full`). You can override per call. See [Streaming](/features/streaming/) and [Streaming responses](/cookbook/streaming-responses/).
 
-```typescript
+```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
@@ -120,7 +126,7 @@ for await (const event of agent.runStream("Write a haiku about TypeScript.")) {
 
 `toConfig()` captures the builder state as **`AgentConfig`**. Use **`agentConfigToJSON`** / **`agentConfigFromJSON`** (from `reactive-agents`) for strings. Some runtime-only fields (e.g. custom ICS functions) are not round-tripped — see [Builder API — Agent as Data](/reference/builder-api/#agent-as-data-toconfig--serialization).
 
-```typescript
+```typescript title="src/agent.ts"
 import {
   ReactiveAgents,
   agentConfigToJSON,
@@ -144,7 +150,7 @@ await agent.run("Ping.");
 
 If **`defaultStrategy` is `"adaptive"`**, you must set **`adaptive: { enabled: true }`** — [Reasoning](/guides/reasoning/), [Builder API — ReasoningOptions](/reference/builder-api/#reasoningoptions).
 
-```typescript
+```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
@@ -160,20 +166,39 @@ await using agent = await ReactiveAgents.create()
 await agent.run("Plan then execute: list two pros and two cons of serverless agents.");
 ```
 
-## Related cookbook pages
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-| Topic | Page |
-|-------|------|
-| Custom tools | [Building tools](/cookbook/building-tools/) |
-| Streaming details | [Streaming responses](/cookbook/streaming-responses/) |
-| Tests | [Testing agents](/cookbook/testing-agents/) |
-| Multi-agent | [Multi-agent patterns](/cookbook/multi-agent-patterns/) |
+## Where to next
 
-## More guides
-
-| Goal | Guide or reference |
-|------|-------------------|
-| Lifecycle hooks | [Hooks](/guides/hooks/) |
-| MCP servers | [Builder API — MCP](/reference/builder-api/#mcp) |
-| Sub-agents | [Sub-agents](/guides/sub-agents/) |
-| Effect composition | [Effect-TS primer](/concepts/effect-ts/) |
+<CardGrid>
+  <LinkCard
+    title="Building Custom Tools"
+    description="Define typed tools with the fluent ToolBuilder, or wire MCP servers."
+    href="/cookbook/building-tools/"
+  />
+  <LinkCard
+    title="Streaming Responses"
+    description="Token streaming, SSE endpoints, AbortSignal cancellation."
+    href="/cookbook/streaming-responses/"
+  />
+  <LinkCard
+    title="Testing Agents"
+    description="Deterministic tests with the test provider, scenario fixtures, and stream assertions."
+    href="/cookbook/testing-agents/"
+  />
+  <LinkCard
+    title="Multi-Agent Patterns"
+    description="Pipelines, map-reduce, orchestrator-workers, and dynamic delegation."
+    href="/cookbook/multi-agent-patterns/"
+  />
+  <LinkCard
+    title="Lifecycle Hooks"
+    description="Intercept any of the 12 phases with before / after / on-error hooks."
+    href="/guides/hooks/"
+  />
+  <LinkCard
+    title="API Cheatsheet"
+    description="Every important builder method, runtime call, and event tag — on one page."
+    href="/reference/cheatsheet/"
+  />
+</CardGrid>
