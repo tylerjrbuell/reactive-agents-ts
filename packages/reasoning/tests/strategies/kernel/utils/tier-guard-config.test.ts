@@ -19,7 +19,11 @@ describe("TIER_GUARD_THRESHOLDS", () => {
     const cfg = TIER_GUARD_THRESHOLDS["local"]
     expect(cfg.tokenDeltaThreshold).toBe(300)
     expect(cfg.maxSameToolDefault).toBe(2)
-    expect(cfg.oracleNudgeLimit).toBe(1)
+    // M3 Pivot B (2026-05-06): raised from 1 → 2. Empirical evidence (cogito:14b
+    // T4 baseline) showed one nudge insufficient for cogito to translate
+    // "you should answer" into a final-answer tool call. Two nudges give the
+    // model a structurally different signal (verbatim re-injection).
+    expect(cfg.oracleNudgeLimit).toBe(2)
   })
 
   it("mid tier preserves original defaults", () => {
@@ -86,8 +90,12 @@ describe("tier-aware shouldExitOnLowDelta", () => {
 })
 
 describe("tier-aware shouldForceOracleExit", () => {
-  it("local tier force-exits after 1 nudge", () => {
-    expect(shouldForceOracleExit({ oracleReady: true, readyToAnswerNudgeCount: 1, tier: "local" })).toBe(true)
+  it("local tier force-exits after 2 nudges (M3 Pivot B)", () => {
+    // Pre-Pivot-B: limit was 1; cogito:14b T4 baseline showed one nudge
+    // insufficient for the model to switch from descriptive thoughts to
+    // emitting final-answer. Post-Pivot-B: 2 nudges before force-exit.
+    expect(shouldForceOracleExit({ oracleReady: true, readyToAnswerNudgeCount: 1, tier: "local" })).toBe(false)
+    expect(shouldForceOracleExit({ oracleReady: true, readyToAnswerNudgeCount: 2, tier: "local" })).toBe(true)
   })
 
   it("mid tier force-exits after 2 nudges (backward compatible)", () => {

@@ -217,7 +217,16 @@ export interface TierGuardConfig {
 
 /** Tier-specific guard thresholds — local is strict, frontier is lenient. */
 export const TIER_GUARD_THRESHOLDS: Record<string, TierGuardConfig> = {
-  local:    { tokenDeltaThreshold: 300,  maxSameToolDefault: 2, oracleNudgeLimit: 1 },
+  // M3 Pivot B (2026-05-06): local-tier oracleNudgeLimit raised from 1 → 2.
+  // Empirical evidence (cogito:14b T4 baseline trace 01KQZFH4YSJX6X4BJA94PEZXWG):
+  // model called `pulse` instead of `final-answer`, oracle injected one
+  // mandatory nudge, model ignored it, oracle force-terminated with empty
+  // output (outputLen=0, status=failed). One nudge wasn't enough for cogito
+  // to translate "you should answer" into an actual final-answer tool call —
+  // the second nudge gives the model a structurally different signal
+  // (verbatim re-injection after seeing the first didn't terminate the run)
+  // that it can recognize as a behavioral imperative.
+  local:    { tokenDeltaThreshold: 300,  maxSameToolDefault: 2, oracleNudgeLimit: 2 },
   mid:      { tokenDeltaThreshold: 500,  maxSameToolDefault: 3, oracleNudgeLimit: 2 },
   large:    { tokenDeltaThreshold: 700,  maxSameToolDefault: 4, oracleNudgeLimit: 3 },
   frontier: { tokenDeltaThreshold: 1000, maxSameToolDefault: 5, oracleNudgeLimit: 3 },
@@ -1101,8 +1110,26 @@ export function runKernel(
             });
           }
         } else if (shouldNudgeForOracle) {
-          // Stage 1: inject mandatory oracle guidance, increment count
-          const mandatoryNudge = "You are ready to answer. Call `final-answer` now with your complete response. This is mandatory.";
+          // Stage 1: inject mandatory oracle guidance, increment count.
+          //
+          // M3 Pivot B (2026-05-06): replaced generic "Call final-answer now"
+          // with M3's example-driven "describe vs emit" format. p02 spike
+          // findings: cogito-class models interpret "Call X" literally
+          // ("I would call X" / "I'll now provide..." in the next thought)
+          // rather than as a function-call directive. The example pair makes
+          // the function-call shape unambiguous and terminates the descriptive
+          // pattern that the previous nudge accidentally encouraged.
+          //
+          // Escalates on the second nudge (only relevant for local tier
+          // post-Pivot-B with limit=2; mid/large/frontier already had ≥2).
+          const isFinalNudge = nudgeCount + 1 >= ((TIER_GUARD_THRESHOLDS[profile.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit);
+          const mandatoryNudge =
+            "You have everything you need. STOP describing what you would do — emit a final-answer tool call NOW with your synthesized response.\n\n" +
+            "❌ WRONG: \"I'll now provide the answer...\" or another thought / pulse / recall.\n" +
+            "✅ RIGHT: Emit the final-answer tool call directly. Put your complete deliverable in the `output` parameter.\n\n" +
+            (isFinalNudge
+              ? "This is your LAST chance — if you don't emit final-answer in the next response, the run terminates with no output."
+              : "If you don't emit final-answer in the next response, this signal will repeat one more time and then the run will terminate.");
           state = transitionState(state, {
             readyToAnswerNudgeCount: nudgeCount + 1,
             pendingGuidance: { oracleGuidance: mandatoryNudge },

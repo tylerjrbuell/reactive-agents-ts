@@ -1,0 +1,136 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-06T23-13-29",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 215,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 8298.391042000001,
+      "output": "Here are the 7 days of the week, starting with Monday:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 4873,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 13790.215522,
+      "output": "1. Valve releases Steam Controller CAD files under Creative Commons license (score: 917)\n2. Appearing productive in the workplace (score: 582)\n3. UK businesses brace for jet fuel rationing (score: 17)\n4. Vibe coding and agentic engineering are getting closer than I'd like (score: 306)\n5. Google Cloud fraud defense, the next evolution of reCAPTCHA (score: 167)\n6. From Supabase to Clerk to Better Auth (score: 175)\n7. The bottleneck was never the code (score: 467)\n8. Learning the Integral of a Diffusion Model (score: 68)\n9. David Sacks crashed and burned in the White House (score: 30)\n10. Show HN: Tilde.run – Agent sandbox with a transactional, versioned filesystem (score: 112)\n11. Inkscape 1.4.4 (score: 170)\n12. Show HN: Hallucinopedia (score: 96)\n13. A Theory of Deep Learning (score: 98)\n14. Show HN: PHP-fts – Full-text search engine in pure PHP, no extensions (score: 17)\n15. Community firmware for the Xteink X4 e-paper reader (score: 22)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8791,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 11261.948332,
+      "output": "1. Vibe coding and agentic engineering are getting closer than I'd like — comments: 330\n2. Valve releases Steam Controller CAD files under Creative Commons license — comments: 307\n3. The bottleneck was never the code — comments: 310",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8623,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 15887.529201000005,
+      "output": "## Highest Score\n1. **Valve releases Steam Controller CAD files under Creative Commons license** (917)\n2. **Vibe coding and agentic engineering are getting closer than I'd like** (306)\n3. **The bottleneck was never the code** (467)\n## Most Comments\n1. **Appearing productive in the workplace** (231)\n2. **Vibe coding and agentic engineering are getting closer than I'd like** (330)\n3. **Valve releases Steam Controller CAD files under Creative Commons license** (307)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 5796,
+      "stepsCount": 10,
+      "toolCallCount": 4,
+      "wallMs": 20938.92803899999,
+      "output": "./output/today-on-hacker-news.md",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "1 words",
+          "★ called recall()"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8739999999999999,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}
