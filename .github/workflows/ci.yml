@@ -68,6 +68,9 @@ jobs:
         run: bun run scripts/test-bun-exports.ts
       - name: Check capability manifest
         run: bun run scripts/check-capabilities.ts
+      - name: Check npm version drift
+        run: bun run scripts/check-npm-versions.ts
+        continue-on-error: true
       - run: bun test
       # T1.5 — North Star Test Gate (Tier 1). On failure, the formatted
       # output (weakness ID, closing commit, recovery commands) is captured

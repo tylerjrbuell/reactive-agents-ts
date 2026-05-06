@@ -1,6 +1,6 @@
 # @reactive-agents/eval
 
-Evaluation framework for [Reactive Agents](https://docs.reactiveagents.dev/) — benchmark agent quality, track regressions, and run automated test suites.
+Evaluation framework for [Reactive Agents](https://docs.reactiveagents.dev/) — benchmark agent quality, track regressions, and run automated test suites against an isolated frozen judge. **v0.10.2**
 
 ## Installation
 
@@ -10,23 +10,28 @@ bun add @reactive-agents/eval
 
 ## Features
 
-- **5-dimension scoring** — Accuracy, Relevance, Completeness, Safety, Cost Efficiency
-- **LLM-as-judge** — Uses an LLM to evaluate agent outputs against expected answers
-- **Evaluation suites** — Define test cases with inputs, expected outputs, and dimensions
-- **SQLite persistence** — Store eval runs via `EvalStore` for history and comparison
-- **Dataset service** — Load and manage evaluation datasets
-- **CLI integration** — Run evaluations via `rax eval`
+- **5-dimension scoring** — `accuracy`, `relevance`, `completeness`, `safety`, `cost-efficiency`
+- **LLM-as-judge** — judge runs through `JudgeLLMService`, a tag isolated from the system-under-test (Rule 4: judge MUST differ from SUT)
+- **Evaluation suites** — `EvalSuite` describes cases + dimensions + suite metadata
+- **SQLite persistence** — `createEvalStore` for run history, regression diffs, comparison reports
+- **Dataset loader** — `DatasetService` for sharing evaluation corpora across suites
+- **CLI integration** — `rax eval` runs suites and writes reports
 
-## Usage
+## Suite Runner Contract
 
 `runSuite(suite, agentConfig, agentRunner, config?)` requires three things:
 
-- **`suite`**: cases + dimensions + suite metadata
-- **`agentConfig`**: a string identifying the system under test (used in result records and the Rule-4 guard)
-- **`agentRunner`**: a function that takes the case input, runs the SUT (your agent), and returns its actual output + metrics. Pre-W6.5 this was hardcoded to a placeholder, which made every score meaningless — callers now supply this themselves.
+- **`suite`** — cases + dimensions + suite metadata (`EvalSuite`)
+- **`agentConfig`** — string identifying the system under test (used in result records and the Rule-4 guard)
+- **`agentRunner`** — caller-supplied function that invokes YOUR agent and returns its output + metrics. Pre-W6.5 this was hardcoded to a placeholder; callers now supply this themselves
+- **`config?`** — optional `EvalConfig`, including the judge model selection (must differ from the SUT)
 
 ```typescript
-import { EvalService, createEvalLayer, type SuiteAgentRunner } from "@reactive-agents/eval";
+import {
+  EvalService,
+  createEvalLayer,
+  type SuiteAgentRunner,
+} from "@reactive-agents/eval";
 import { Effect } from "effect";
 
 // Caller-supplied SUT runner. This invokes YOUR agent. It MUST NOT use the
@@ -37,7 +42,11 @@ const myAgentRunner: SuiteAgentRunner = (input) =>
     const result = yield* runMyAgent(input); // your agent invocation
     return {
       actualOutput: result.output,
-      metrics: { latencyMs: result.elapsedMs, tokensUsed: result.tokens, costUsd: result.costUsd },
+      metrics: {
+        latencyMs: result.elapsedMs,
+        tokensUsed: result.tokens,
+        costUsd: result.costUsd,
+      },
     };
   });
 
@@ -51,40 +60,68 @@ const program = Effect.gen(function* () {
       dimensions: ["accuracy", "relevance"],
       cases: [
         { id: "q1", input: "What is the capital of France?", expectedOutput: "Paris" },
+        { id: "q2", input: "Who wrote 'The Great Gatsby'?", expectedOutput: "F. Scott Fitzgerald" },
       ],
     },
-    "openai/gpt-4o", // SUT identifier
+    "anthropic/claude-sonnet-4-20250514",      // SUT identifier
     myAgentRunner,
-    { judge: { model: "claude-haiku-4-5", provider: "anthropic" } }, // judge MUST differ from SUT
+    {
+      judge: {
+        model: "claude-haiku-4-5-20251001",     // judge MUST differ from SUT
+        provider: "anthropic",
+      },
+    },
   );
 
   console.log(`avgScore: ${run.summary.avgScore}, passed: ${run.summary.passed}/${run.summary.totalCases}`);
 });
 ```
 
-The judge LLM is wired separately via `JudgeLLMService` (see `createEvalLayer` JSDoc) so the judge code path is fully isolated from the SUT.
+The judge LLM is wired separately via `JudgeLLMService` so the judge code path is fully isolated from the SUT. See `createEvalLayer` JSDoc for layer composition.
 
 ## Dimensions
 
-| Dimension         | What It Measures                                     |
-| ----------------- | ---------------------------------------------------- |
-| `accuracy`        | Factual correctness against expected output          |
-| `relevance`       | How well the response addresses the question         |
-| `completeness`    | Coverage of all aspects of the expected answer       |
-| `safety`          | Absence of harmful, biased, or inappropriate content |
-| `cost-efficiency` | Token usage and cost relative to quality             |
+| Dimension         | What it measures                                     | Scorer                  |
+| ----------------- | ---------------------------------------------------- | ----------------------- |
+| `accuracy`        | Factual correctness against expected output          | `scoreAccuracy`         |
+| `relevance`       | How well the response addresses the question         | `scoreRelevance`        |
+| `completeness`    | Coverage of all aspects of the expected answer       | `scoreCompleteness`     |
+| `safety`          | Absence of harmful, biased, or inappropriate content | `scoreSafety`           |
+| `cost-efficiency` | Token usage and cost relative to quality             | `scoreCostEfficiency`   |
+
+Each dimension scorer is a standalone Effect that takes the LLM tag + scoring params and returns a `DimensionScore`.
 
 ## Persistence
 
-Use `EvalStore` for SQLite-backed eval history:
-
 ```typescript
-import { createEvalStore } from "@reactive-agents/eval";
+import { createEvalStore, makeEvalServicePersistentLive } from "@reactive-agents/eval";
 
 const store = createEvalStore("./eval-history.db");
-// Eval runs are automatically persisted when using EvalServicePersistentLive
+// `makeEvalServicePersistentLive(store)` wires automatic persistence
+// — every `runSuite` call writes to SQLite for diffing and regression checks.
 ```
+
+`EvalStore` exposes `listRuns`, `getRun`, `compareRuns`, `getRegressions` for downstream tooling.
+
+## Key Exports
+
+| Export                                                                | Purpose                                          |
+| --------------------------------------------------------------------- | ------------------------------------------------ |
+| `EvalService`, `EvalServiceLive`, `makeEvalServiceLive`               | Suite runner with frozen-judge isolation         |
+| `makeEvalServicePersistentLive`                                       | Persistent variant wired to `EvalStore`          |
+| `JudgeLLMService`                                                     | Frozen-judge tag (Rule 4 isolation)              |
+| `DatasetService`, `DatasetServiceLive`                                | Dataset loader                                   |
+| `createEvalStore`                                                     | SQLite-backed history                            |
+| `createEvalLayer`                                                     | Factory for the runtime layer                    |
+| `scoreAccuracy`, `scoreRelevance`, `scoreCompleteness`, `scoreSafety`, `scoreCostEfficiency` | Per-dimension scorers   |
+| `SuiteAgentRunner`, `EvalSuite`, `EvalCase`, `EvalRun`, `EvalRunSummary`, `JudgeConfig`, `EvalConfig` | Schemas + types |
+| `EvalError`, `BenchmarkError`, `DatasetError`                         | Tagged errors                                    |
 
 ## Documentation
 
-Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
+- Full docs: [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
+- Eval guide: [docs.reactiveagents.dev/guides/evaluation/](https://docs.reactiveagents.dev/guides/evaluation/)
+
+## License
+
+MIT

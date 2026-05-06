@@ -1,8 +1,8 @@
 # @reactive-agents/health
 
-Health checks and readiness probes for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+Health checks and readiness probes for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
 
-Provides an HTTP health server with registered probes, returning structured status responses. Integrates with the builder via `.withHealthCheck()` and exposes `agent.health()` for programmatic access.
+Provides an HTTP health server with registered probes, returning structured status responses suitable for Kubernetes liveness/readiness, load-balancer health checks, and dashboards. Integrates with the builder via `.withHealthCheck()` and exposes `agent.health()` for programmatic access.
 
 ## Installation
 
@@ -10,29 +10,34 @@ Provides an HTTP health server with registered probes, returning structured stat
 bun add @reactive-agents/health
 ```
 
-Or install everything at once:
+Or via the umbrella:
 
 ```bash
 bun add reactive-agents
 ```
 
-## Usage
+## Quick Example
+
+### Builder Integration
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("my-agent")
-  .withProvider("anthropic")
-  .withHealthCheck()
+  .withProvider("anthropic", { model: "claude-haiku-4-5-20251001" })
+  .withHealthCheck({ port: 8080 })
   .build();
 
 const health = await agent.health();
 // {
-//   status: "healthy",
+//   status: "healthy" | "degraded" | "unhealthy",
 //   uptime: 12345,
-//   checks: [{ name: "llm", healthy: true, durationMs: 42 }],
-//   timestamp: "2026-03-15T..."
+//   checks: [
+//     { name: "llm", healthy: true, durationMs: 42 },
+//     { name: "memory", healthy: true, durationMs: 3 },
+//   ],
+//   timestamp: "2026-05-05T19:55:00Z",
 // }
 ```
 
@@ -44,20 +49,50 @@ import { makeHealthService, Health } from "@reactive-agents/health";
 
 const program = Effect.gen(function* () {
   const health = yield* Health;
-  yield* health.registerCheck("db", () => Effect.succeed(true));
-  yield* health.start();
+  yield* health.registerCheck("db", () =>
+    Effect.tryPromise(() => myDb.ping().then(() => true)),
+  );
+  yield* health.start({ port: 8080 });
   const status = yield* health.check();
   return status;
 });
 ```
 
+## HTTP Endpoints
+
+| Endpoint   | Returns                                                            |
+| ---------- | ------------------------------------------------------------------ |
+| `/health`  | Aggregate `HealthResponse` — overall status + per-probe results    |
+| `/ready`   | Readiness probe — 200 when all checks pass, 503 otherwise          |
+
+## Aggregation Logic
+
+| Probe results          | Overall status |
+| ---------------------- | -------------- |
+| All probes healthy     | `healthy`      |
+| Some probes unhealthy  | `degraded`     |
+| All probes unhealthy   | `unhealthy`    |
+
+Each probe reports its own `durationMs`, so latency regressions in dependencies surface immediately.
+
 ## Key Features
 
 - **HTTP endpoints** — `/health` and `/ready` with structured JSON responses
-- **Registered probes** — add custom checks for LLM connectivity, database, external services
-- **Aggregate status** — reports `healthy`, `degraded`, or `unhealthy` based on all probes
-- **Builder integration** — single `.withHealthCheck()` call enables health probes
-- **Per-check timing** — each probe reports its own `durationMs` for latency visibility
+- **Registered probes** — `registerCheck(name, fn)` for LLM, database, queue, etc.
+- **Aggregate status** — `healthy` / `degraded` / `unhealthy`
+- **Builder integration** — single `.withHealthCheck()` call enables the server
+- **Per-check timing** — every probe reports its `durationMs`
+
+## Key Exports
+
+| Export                | Purpose                                       |
+| --------------------- | --------------------------------------------- |
+| `Health`              | Service tag                                   |
+| `makeHealthService`   | Constructs the health service                 |
+| `HealthConfig`        | Configuration schema (`port`, `path`, etc.)   |
+| `HealthResponse`      | Aggregate response shape                      |
+| `HealthCheckResult`   | Per-probe result shape                        |
+| `HealthServerError`   | Tagged error                                  |
 
 ## Documentation
 
