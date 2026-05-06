@@ -16,6 +16,22 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ## Current state (May 5, 2026)
 
+### NPM Version Drift Prevention — ADDED ✅ (May 5, 2026 — 8:00pm EDT)
+
+**Problem:** Manual `npm publish` operations bypassed changesets, leaving main package.json versions behind npm-published versions. When changeset patch-bumps from main's lower version, it produced collisions with already-published npm versions (e.g., main bumped 0.10.2→0.10.3 while CLI was already at 0.10.3 on npm).
+
+**Fix:**
+- New script `scripts/check-npm-versions.ts` queries the npm registry for every published package and fails if local version <= npm version, or if internal `@reactive-agents/*` deps drift from workspace versions
+- Wired into `.github/workflows/ci.yml` as `continue-on-error` step (surfaces drift, doesn't block unrelated commits)
+- Available locally as `bun run check:versions`
+- All packages aligned to 0.10.3 on main (matching CLI's highest npm version) so v0.10.4 release bumps cleanly
+
+**Rule going forward:** Never run `npm publish` manually. If drift occurs, run `check:versions` and bump main past npm BEFORE creating a changeset.
+
+### Eval Workflow Disabled (May 5, 2026 — 8:00pm EDT)
+
+`.github/workflows/eval.yml` auto-triggers (push/pull_request) removed; only `workflow_dispatch` remains. Was failing consistently and blocking unrelated work. Re-enable when eval suite is stabilized.
+
 ### v0.10.2 Post-Release Quality Sweep — COMPLETE ✅ (May 5, 2026)
 
 **Comprehensive sweep found 5 critical/high issues in SDK, CLI, and build systems**
