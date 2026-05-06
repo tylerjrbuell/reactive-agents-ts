@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "metrics": "bun run scripts/generate-metrics.ts",
+    "metrics:sync-readme": "bun run scripts/sync-readme-metrics.ts",
+    "metrics:check": "bun run scripts/sync-readme-metrics.ts --check",
     "predev": "bun run scripts/generate-metrics.ts",
     "prebuild": "bun run scripts/generate-metrics.ts",
     "dev": "astro dev",
