@@ -1,0 +1,293 @@
+---
+title: API Cheatsheet
+description: Every important builder method, agent runtime call, and event tag — on one page.
+sidebar:
+  order: 1
+---
+
+The 80% of the API you'll use, all on one page. For full signatures and option types, see the [Builder API reference](/reference/builder-api/).
+
+## Minimum viable agent
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .build();
+
+const result = await agent.run("What's 2 + 2?");
+console.log(result.output);
+```
+
+That's it. Provider key from `.env`, model auto-picked, direct LLM loop.
+
+---
+
+## Builder Methods (most-used)
+
+### Identity & provider
+
+| Method | What it does |
+|--------|--------------|
+| `.withName(name)` | Identifier for logs, telemetry, A2A |
+| `.withProvider(p)` | `"anthropic"` · `"openai"` · `"gemini"` · `"ollama"` · `"litellm"` · `"test"` |
+| `.withModel(id)` | e.g. `"claude-sonnet-4-6"`, `"gpt-4o"`, `"qwen3:14b"` |
+| `.withSystemPrompt(s)` | Persona / instructions for the agent |
+
+### Cognition
+
+| Method | What it does |
+|--------|--------------|
+| `.withReasoning()` | ReAct loop (default). Pass `{ defaultStrategy: "tree-of-thought" }` to switch. |
+| `.withTools()` | Built-in tools + meta-tools (`recall`, `find`, `brief`, `pulse`) |
+| `.withTools({ tools: [myTool] })` | Add custom tools to the registry |
+| `.withMemory()` | 4-layer memory, tier `"standard"` (FTS5 keyword search) |
+| `.withMemory({ tier: "enhanced" })` | + vector embeddings (needs `EMBEDDING_PROVIDER`) |
+| `.withSkills({ paths: ["./skills/"] })` | Living Skills System — agentskills.io compatible |
+
+### Production safety
+
+| Method | What it does |
+|--------|--------------|
+| `.withGuardrails()` | Pre-LLM injection / PII / toxicity blocking |
+| `.withVerification()` | Post-LLM fact-check (semantic entropy, NLI) |
+| `.withCostTracking()` | Complexity routing + budget enforcement |
+| `.withIdentity()` | Ed25519 certificates + RBAC + delegation |
+| `.withKillSwitch()` | Per-agent + global emergency halt |
+| `.withRequiredTools({ tools: ["web-search"] })` | Force critical tool calls before answering |
+
+### Observability
+
+| Method | What it does |
+|--------|--------------|
+| `.withObservability({ verbosity: "normal", live: true })` | Metrics dashboard + live phase logs + tracing |
+| `.withLogging({ level, format, filePath })` | Structured logs (rotates at `maxFileSizeMb`) |
+| `.withCortex()` | Stream telemetry to Cortex Studio over WebSocket |
+| `.withHealthCheck()` | Adds `agent.health()` probe |
+
+### Reliability
+
+| Method | What it does |
+|--------|--------------|
+| `.withTimeout(ms)` | Hard execution timeout |
+| `.withRetryPolicy({ maxRetries, backoffMs })` | Retry on transient LLM failures |
+| `.withFallbacks({ providers, errorThreshold })` | Provider/model fallback chain |
+| `.withErrorHandler(fn)` | Global error callback |
+| `.withMinIterations(n)` | Force at least N reasoning steps |
+| `.withVerificationStep({ mode: "reflect" })` | LLM self-review before answering |
+| `.withOutputValidator(fn)` | Retry until output passes a predicate |
+| `.withCustomTermination(fn)` | User-defined "done" check |
+
+### Multi-agent & gateway
+
+| Method | What it does |
+|--------|--------------|
+| `.withDynamicSubAgents({ maxIterations })` | Model-spawned sub-agents at runtime |
+| `.withAgentTool(name, config)` | Named purpose-built sub-agent |
+| `.withOrchestration()` | Sequential / parallel / pipeline / map-reduce |
+| `.withA2A()` | Agent Cards + JSON-RPC + SSE for cross-agent calls |
+| `.withGateway({ heartbeat, crons, webhooks, policies })` | Persistent autonomous harness |
+
+### Hooks
+
+| Method | What it does |
+|--------|--------------|
+| `.withHook({ phase, timing, handler })` | Intercept any of the 12 phases |
+
+```typescript
+.withHook({
+  phase: "act",
+  timing: "after",
+  handler: (ctx) => Effect.succeed(ctx),
+})
+```
+
+Phases: `bootstrap` · `guardrail` · `cost-route` · `strategy-select` · `think` · `act` · `observe` · `verify` · `memory-flush` · `cost-track` · `audit` · `complete`
+
+---
+
+## Runtime methods (after `.build()`)
+
+| Method | Returns |
+|--------|---------|
+| `agent.run(task)` | `Promise<AgentResult>` — full execution |
+| `agent.runStream(task, { signal })` | `AsyncGenerator<AgentEvent>` — token streaming |
+| `agent.chat(question)` | `Promise<string>` — single-turn Q&A with adaptive routing |
+| `agent.session()` | Multi-turn session with memory |
+| `agent.subscribe(tag, fn)` | Listen to EventBus events |
+| `agent.registerTool(def, handler)` | Add a tool at runtime |
+| `agent.unregisterTool(name)` | Remove a tool at runtime |
+| `agent.health()` | `{ status, checks[] }` — readiness probe |
+| `agent.dispose()` | Cleanup MCP + open resources |
+
+`AgentResult` shape:
+
+```typescript
+{
+  output: string,
+  success: boolean,
+  debrief?: { summary, keyFindings, metrics },
+  terminatedBy: "final_answer" | "max_iterations" | "error",
+  metadata: { duration, cost, tokensUsed, stepsCount, strategyUsed },
+}
+```
+
+---
+
+## Event tags (subscribe via `agent.on()`)
+
+| Tag | Fires when |
+|-----|-----------|
+| `AgentStarted` / `AgentCompleted` | Task begins / ends |
+| `ReasoningStepCompleted` | Each thought / action / observation |
+| `ToolCallCompleted` | Each tool call (`{ toolName, durationMs, success }`) |
+| `IterationProgress` | Every reasoning loop iteration (streaming) |
+| `StrategySwitched` | Auto-strategy-switch triggered |
+| `GuardrailViolationDetected` | Input blocked |
+| `LLMRequestStarted` / `LLMRequestCompleted` | Each LLM API call |
+| `MemoryBootstrapped` / `MemoryFlushed` | Memory loaded / written |
+| `FinalAnswerProduced` | Final answer extracted from loop |
+| `ContextSynthesized` | Context curation step ran |
+| `TextDelta` | Token-level streaming chunk (runStream only) |
+| `StreamCompleted` / `StreamCancelled` | Stream end states |
+
+---
+
+## Streaming pattern
+
+```typescript
+const controller = new AbortController();
+
+for await (const event of agent.runStream("Analyze this", { signal: controller.signal })) {
+  if (event._tag === "TextDelta") process.stdout.write(event.text);
+  if (event._tag === "IterationProgress") console.log(`Step ${event.iteration}/${event.maxIterations}`);
+  if (event._tag === "StreamCompleted") {
+    console.log(event.toolSummary);  // Array<{ toolName, calls, successRate }>
+  }
+}
+
+// Cancel from anywhere
+controller.abort();
+```
+
+One-line SSE endpoint:
+
+```typescript
+import { AgentStream } from "reactive-agents";
+Bun.serve({ fetch: (req) => AgentStream.toSSE(agent.runStream("Hello")) });
+```
+
+---
+
+## Functional composition
+
+```typescript
+import { agentFn, pipe, parallel, race } from "reactive-agents";
+
+// Lazy agent functions
+const researcher = agentFn({ name: "researcher", provider: "anthropic" }, (b) =>
+  b.withReasoning().withTools()
+);
+
+// Sequential pipeline
+const pipeline = pipe(researcher, summarizer);
+const result = await pipeline("Find latest AI news");
+
+// Parallel fan-out — output contains labeled results from all 3
+const multi = parallel(sentimentAgent, keywordAgent, summaryAgent);
+
+// Fastest wins
+const fastest = race(claudeAgent, gpt4Agent);
+
+// Cleanup
+await pipeline.dispose();
+```
+
+---
+
+## Agent as data
+
+```typescript
+import { agentConfigToJSON, ReactiveAgents } from "reactive-agents";
+
+const builder = ReactiveAgents.create()
+  .withName("researcher")
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "plan-execute-reflect" })
+  .withTools({ adaptive: true })
+  .withMemory({ tier: "enhanced" });
+
+const json = agentConfigToJSON(builder.toConfig());
+// Save to DB / send over wire / commit to repo
+
+const restored = await ReactiveAgents.fromJSON(json);
+const agent = await restored.build();
+```
+
+---
+
+## Environment variables
+
+```bash
+# Pick one provider key (or run local Ollama)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+
+# Optional — enables built-in tools
+TAVILY_API_KEY=tvly-...      # Web search
+SERPER_API_KEY=...           # Web search (alt)
+
+# Optional — vector memory ("enhanced" tier)
+EMBEDDING_PROVIDER=openai    # or "ollama"
+EMBEDDING_MODEL=text-embedding-3-small
+
+# Tuning
+LLM_DEFAULT_MODEL=claude-sonnet-4-6
+LLM_DEFAULT_TEMPERATURE=0.7
+LLM_MAX_RETRIES=3
+LLM_TIMEOUT_MS=30000
+```
+
+---
+
+## CLI (`rax`)
+
+```bash
+bunx rax init my-app --template standard      # Scaffold a project
+rax create agent researcher --recipe researcher  # Generate from recipe
+rax run "Explain X" --provider anthropic         # Run an agent
+rax serve --port 4111                            # Expose as A2A HTTP server
+rax cortex                                       # Launch Cortex Studio
+rax playground                                   # Interactive REPL
+rax eval run --suite ./eval-suite.yaml           # Run an evaluation
+rax inspect <agent-id>                           # Debug a session
+rax health                                       # Check provider readiness
+```
+
+Full reference: [CLI Commands](/reference/cli/).
+
+---
+
+## Mental model
+
+**A `ReactiveAgent` is a runtime built from composable `Layer`s.** Each `.with*()` adds a Layer. `build()` composes them into the `ExecutionEngine`'s 12-phase lifecycle. `agent.run()` flows a task through all 12 phases. Hooks intercept any phase. Events fire from every phase. No singletons, no global state — each agent is its own isolated runtime.
+
+```
+.withProvider() · .withReasoning() · .withTools() · .withMemory()
+                          ↓
+                  build() composes Layers
+                          ↓
+                   12-phase ExecutionEngine
+                          ↓
+                bootstrap → guardrail → cost-route → strategy-select
+                          ↓
+                       ⟲ think → act → observe ⟲
+                          ↓
+                  verify → memory-flush → cost-track → audit → complete
+                          ↓
+                      AgentResult
+```
+
+For the deep dive, see [Architecture](/concepts/architecture/) and [Layer System](/concepts/layer-system/).

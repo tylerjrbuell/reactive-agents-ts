@@ -1,0 +1,163 @@
+---
+title: Examples Catalog
+description: 30+ runnable examples across 11 categories — every layer of the framework, ready to clone and run.
+sidebar:
+  order: 25
+---
+
+The repo includes a complete, tested example suite at [`apps/examples/`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/main/apps/examples). Every example exports a `run()` function, can be executed standalone with `bun run`, and runs in CI. **The fastest way to learn this framework is to copy one of these and tweak it.**
+
+## Quick Start
+
+```bash
+git clone https://github.com/tylerjrbuell/reactive-agents-ts
+cd reactive-agents-ts/apps/examples
+
+# Run all offline examples (no API key needed)
+bun run index.ts --offline
+
+# Run a specific example
+bun run src/foundations/01-simple-agent.ts
+
+# Run all examples that match a category
+bun run index.ts --filter foundations
+```
+
+---
+
+## Foundations
+
+The shortest path from `bun add reactive-agents` to a working agent.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 01 | [simple-agent](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/foundations/01-simple-agent.ts) | The minimum builder chain — provider, build, run |
+| 02 | [lifecycle-hooks](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/foundations/02-lifecycle-hooks.ts) | Intercept any of the 12 phases with `before` / `after` / `on-error` |
+| 03 | [multi-turn-memory](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/foundations/03-multi-turn-memory.ts) | `agent.session()` for conversational memory |
+| 04 | [agent-composition](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/foundations/04-agent-composition.ts) | Compose specialized agents into pipelines |
+| 05 | [agent-config](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/foundations/05-agent-config.ts) | Agent-as-data: serialize → JSON → reconstruct |
+| 06 | [composition](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/foundations/06-composition.ts) | `pipe()`, `parallel()`, `race()` functional combinators |
+
+## Tools
+
+Built-in tools, MCP servers, and runtime tool registration.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 05 | [builtin-tools](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/tools/05-builtin-tools.ts) | `web-search`, `file-read`, `code-execute`, etc. |
+| 06 | [mcp-filesystem](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/tools/06-mcp-filesystem.ts) | MCP filesystem server via `.withMCP()` |
+| 07 | [mcp-github](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/tools/07-mcp-github.ts) | MCP GitHub server |
+| — | [dynamic-registration](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/tools/dynamic-registration.ts) | `agent.registerTool()` / `unregisterTool()` at runtime |
+
+## Reasoning
+
+The 5 strategies and model-adaptive context profiles.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 19 | [reasoning-strategies](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/reasoning/19-reasoning-strategies.ts) | ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive |
+| 20 | [context-profiles](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/reasoning/20-context-profiles.ts) | Local / mid / large / frontier tier tuning |
+
+## Trust & Safety
+
+Identity, guardrails, and verification.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 11 | [identity](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/trust/11-identity.ts) | Ed25519 certificates, RBAC, delegation |
+| 12 | [guardrails](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/trust/12-guardrails.ts) | Pre-LLM injection, PII, toxicity blocking |
+| 13 | [verification](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/trust/13-verification.ts) | Semantic entropy, fact decomposition, NLI |
+
+## Multi-Agent
+
+A2A protocol, orchestration, and dynamic sub-agent spawning.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 08 | [a2a-protocol](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/multi-agent/08-a2a-protocol.ts) | Agent Cards, JSON-RPC server/client, SSE |
+| 09 | [orchestration](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/multi-agent/09-orchestration.ts) | Sequential / parallel / pipeline / map-reduce workflows |
+| 10 | [dynamic-spawning](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/multi-agent/10-dynamic-spawning.ts) | `.withDynamicSubAgents()` — model-driven delegation |
+
+## Streaming
+
+Token streaming, SSE endpoints, and abort signals.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 23 | [token-streaming](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/streaming/23-token-streaming.ts) | `agent.runStream()` AsyncGenerator with `IterationProgress` events |
+| 24 | [streaming-sse-server](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/streaming/24-streaming-sse-server.ts) | One-line `AgentStream.toSSE()` HTTP endpoint |
+
+## Web Framework Integrations
+
+Drop-in adapters for popular Node/Bun servers.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 25 | [nextjs-streaming](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/integrations/25-nextjs-streaming.ts) | Next.js Route Handler with `useAgentStream` |
+| 26 | [hono-agent-api](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/integrations/26-hono-agent-api.ts) | Hono on Bun with SSE streaming |
+| 27 | [express-middleware](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/integrations/27-express-middleware.ts) | Express middleware pattern |
+
+## Gateway
+
+Persistent autonomous agents with heartbeats, crons, and webhooks.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 22 | [persistent-gateway](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/gateway/22-persistent-gateway.ts) | Adaptive heartbeat + cron scheduling + webhook ingestion |
+| 25 | [hn-gateway-monitor](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/gateway/25-hn-gateway-monitor.ts) | Real-world monitor: 24/7 Hacker News watcher with policy budgets |
+| 26 | [gateway-chat-mode](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/gateway/26-gateway-chat-mode.ts) | Per-sender SQLite session history + episodic context injection |
+
+## Messaging
+
+Connect agents to Signal and Telegram via MCP.
+
+| Example | What it shows |
+|---------|---------------|
+| [signal-telegram-hub](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/messaging/signal-telegram-hub.ts) | Multi-channel message hub bridging Signal + Telegram + the agent |
+
+## Interaction
+
+Autonomy modes and approval gates.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 21 | [interaction-modes](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/interaction/21-interaction-modes.ts) | Autonomous · Supervised · Collaborative · Consultative · Interrogative |
+
+## Advanced
+
+Cost tracking, observability, self-improvement, evaluation.
+
+| # | Example | What it shows |
+|---|---------|---------------|
+| 14 | [cost-tracking](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/14-cost-tracking.ts) | Complexity routing + budget enforcement + dynamic pricing |
+| 15 | [prompt-experiments](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/15-prompt-experiments.ts) | A/B testing prompts via the prompt library |
+| 16 | [eval-framework](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/16-eval-framework.ts) | LLM-as-judge scoring with frozen-judge isolation |
+| 17 | [observability](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/17-observability.ts) | Distributed tracing + metrics dashboard + structured logging |
+| 18 | [self-improvement](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/18-self-improvement.ts) | Cross-task strategy outcome learning |
+| 19 | [lifecycle-hooks](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/19-lifecycle-hooks.ts) | Advanced multi-phase hook composition |
+
+---
+
+## Running Patterns
+
+```bash
+# Offline only (test provider — no API keys needed)
+bun run index.ts --offline
+
+# Filter by category
+bun run index.ts --filter reasoning
+
+# Single file, standalone
+bun run src/foundations/01-simple-agent.ts
+
+# All examples (requires ANTHROPIC_API_KEY etc. in .env)
+bun run index.ts
+```
+
+Every example is exercised by the test runner on every PR — if it's listed here, it works.
+
+## Next steps
+
+- [Quickstart](/guides/quickstart/) — set up your own project from scratch
+- [Common Builder Stacks](/cookbook/builder-stacks/) — copy-paste chains organized by use case
+- [Choosing a Stack](/guides/choosing-a-stack/) — match provider · model · memory to your workload
