@@ -24,7 +24,7 @@ Top-level fields apply to every strategy unless overridden:
 ```typescript
 .withReasoning({
   synthesis: "auto",
-  synthesisModel: "claude-3-5-haiku-20241022",
+  synthesisModel: "claude-haiku-4-5-20251001",
   synthesisProvider: "anthropic",
   synthesisTemperature: 0,
 })
@@ -80,4 +80,4 @@ When synthesis runs, the framework publishes a **`ContextSynthesized`** event on
 
 - [Reasoning guide](/guides/reasoning/) — strategy overview
 - [Builder API — ReasoningOptions](/reference/builder-api/#reasoningoptions)
-- Design spec: `docs/superpowers/specs/2026-03-28-intelligent-context-synthesis-design.md`
+- Design spec: [`wiki/Architecture/Design-Specs/2026-03-28-intelligent-context-synthesis-design.md`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/wiki/Architecture/Design-Specs/2026-03-28-intelligent-context-synthesis-design.md)

@@ -316,7 +316,7 @@ At runtime, `ReasoningOptions` may also include a non-JSON `synthesisStrategy` f
 // ICS: fast templates globally, but deep LLM synthesis when running ReAct
 .withReasoning({
   synthesis: "fast",
-  strategies: { reactive: { synthesis: "deep", synthesisModel: "claude-3-5-haiku-20241022" } },
+  strategies: { reactive: { synthesis: "deep", synthesisModel: "claude-haiku-4-5-20251001" } },
 })
 ```
 

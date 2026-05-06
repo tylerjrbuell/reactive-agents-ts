@@ -170,7 +170,7 @@ Build agents with different capability profiles for different roles:
 const classifier = await ReactiveAgents.create()
   .withName("classifier")
   .withProvider("anthropic")
-  .withModel("claude-3-5-haiku-latest")
+  .withModel("claude-haiku-4-5")
   .build();
 
 // Quality-focused agent for writing
