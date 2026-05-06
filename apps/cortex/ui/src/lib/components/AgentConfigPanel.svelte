@@ -204,16 +204,49 @@
 
   const PROVIDERS = ["anthropic", "openai", "gemini", "ollama", "litellm", "test"] as const;
 
-  const AVAILABLE_TOOLS = [
-    { id: "web-search",   label: "Web Search",   icon: "search" },
-    { id: "http-get",     label: "HTTP GET",     icon: "link" },
-    { id: "file-read",    label: "File Read",    icon: "folder_open" },
-    { id: "file-write",   label: "File Write",   icon: "edit_document" },
-    { id: "code-execute", label: "Code Execute", icon: "terminal" },
-    { id: "checkpoint",   label: "Checkpoint",   icon: "bookmark_added" },
-    { id: "recall",       label: "Recall",       icon: "psychology" },
-    { id: "find",         label: "Find",         icon: "manage_search" },
-  ];
+  // Icon mappings for common tool names
+  const TOOL_ICONS: Record<string, string> = {
+    "web-search": "search",
+    "http-get": "link",
+    "file-read": "folder_open",
+    "file-write": "edit_document",
+    "code-execute": "terminal",
+    "shell-execute": "terminal",
+    "git-cli": "code",
+    "gh-cli": "code",
+    "crypto-price": "trending_up",
+    "checkpoint": "bookmark_added",
+    "recall": "psychology",
+    "find": "manage_search",
+    "brief": "description",
+    "pulse": "favorite",
+    "discover-tools": "auto_awesome",
+    "gws-cli": "cloud",
+  };
+
+  // Load available tools from cortex catalog API (includes all builtin + meta tools)
+  let AVAILABLE_TOOLS = $state<{ id: string; label: string; icon: string }[]>([]);
+  onMount(async () => {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/tools/catalog`);
+      if (res.ok) {
+        const catalog = await res.json();
+        // Filter to builtin and meta tools (exclude MCP/custom/disabled)
+        const tools = catalog
+          .filter((t: any) => (t.kind === "built-in" || t.kind === "meta") && !t.disabled)
+          .map((t: any) => ({
+            id: t.name,
+            label: t.displayName || t.name,
+            icon: TOOL_ICONS[t.name] || "settings",
+          }))
+          .sort((a: any, b: any) => a.label.localeCompare(b.label));
+        AVAILABLE_TOOLS = tools;
+      }
+    } catch (err) {
+      console.warn("Failed to load tools catalog:", err);
+      // Fallback to empty (users can still manually enter tool names)
+    }
+  });
 
   const STRATEGIES = [
     { value: "reactive",             label: "ReAct",                desc: "Think→Act→Observe loop. Best for most tasks." },

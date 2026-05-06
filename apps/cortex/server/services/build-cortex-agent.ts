@@ -265,13 +265,15 @@ export async function buildCortexAgent(
     b = b.withVerification();
   }
 
-  if (params.metaTools?.enabled) {
+  // Enable meta-tools by default in Cortex (dev environment); allow explicit disable via enabled: false
+  const metaToolsEnabled = params.metaTools?.enabled ?? true;
+  if (metaToolsEnabled) {
     b = b.withMetaTools({
-      brief: params.metaTools.brief ?? false,
-      find: params.metaTools.find ?? false,
-      pulse: params.metaTools.pulse ?? false,
-      recall: params.metaTools.recall ?? false,
-      harnessSkill: params.metaTools.harnessSkill ?? false,
+      brief: params.metaTools?.brief ?? true,
+      find: params.metaTools?.find ?? true,
+      pulse: params.metaTools?.pulse ?? false,
+      recall: params.metaTools?.recall ?? true,
+      harnessSkill: params.metaTools?.harnessSkill ?? false,
     });
   }
 

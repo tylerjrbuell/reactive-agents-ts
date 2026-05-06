@@ -8,7 +8,7 @@
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "ignoreDeprecations": "6.0",
+  "ignoreDeprecations": "6.0",
     "lib": ["ESNext"],
     "types": ["bun-types"],
     "noEmit": true,

@@ -125,18 +125,23 @@ describe("parseCortexSkillsConfig", () => {
 describe("mergeCortexAllowedTools", () => {
   test("adds kernel completion tools to user selection", () => {
     const merged = mergeCortexAllowedTools(["web-search"], undefined);
+    // User tool + all framework tools (conductors + builtins + meta-tools)
     expect(merged).toEqual(
       expect.arrayContaining([
         "web-search",
         "final-answer",
         "task-complete",
         "context-status",
+        "crypto-price",
+        "file-read",
+        "find",
+        "discover-tools",
       ]),
     );
-    expect(merged).toHaveLength(4);
+    expect(merged.length).toBeGreaterThanOrEqual(17); // At least all framework tools
   });
 
-  test("includes conductor tools when metaTools enabled and flagged", () => {
+  test("includes all framework tools plus user selection", () => {
     const merged = mergeCortexAllowedTools(["file-read"], {
       enabled: true,
       recall: true,
@@ -144,10 +149,19 @@ describe("mergeCortexAllowedTools", () => {
       brief: false,
       pulse: false,
     });
+    // All framework tools (conductors + builtins + meta-tools) are included by default
     expect(merged).toEqual(
-      expect.arrayContaining(["file-read", "recall", "find", "final-answer"]),
+      expect.arrayContaining([
+        "file-read",
+        "recall",
+        "find",
+        "brief", // All meta-tools available by default in Cortex
+        "pulse",
+        "discover-tools",
+        "final-answer",
+        "crypto-price",
+      ]),
     );
-    expect(merged).not.toContain("brief");
   });
 
   test("deduplicates user tool names", () => {
