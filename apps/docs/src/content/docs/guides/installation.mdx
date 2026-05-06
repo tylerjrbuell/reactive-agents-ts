@@ -5,6 +5,45 @@ sidebar:
   order: 4
 ---
 
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Bun ≥1.0.0 required">
+The framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is on the roadmap. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
+</Aside>
+
+## From zero to running agent
+
+<Steps>
+
+1. **Install the meta-package.**
+
+   ```bash
+   bun add reactive-agents
+   ```
+
+2. **Set at least one provider key** in `.env` (or skip if you're going local).
+
+   ```bash
+   echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+   # or OPENAI_API_KEY, GOOGLE_API_KEY, LITELLM_API_KEY
+   ```
+
+3. **Build your first agent** — three lines is enough.
+
+   ```typescript
+   import { ReactiveAgents } from "reactive-agents";
+   const agent = await ReactiveAgents.create().withProvider("anthropic").build();
+   console.log((await agent.run("Hello")).output);
+   ```
+
+4. **Run it.**
+
+   ```bash
+   bun run src/agent.ts
+   ```
+
+</Steps>
+
 ## Simple Install
 
 The easiest way to get started is with the `reactive-agents` meta-package, which bundles everything:

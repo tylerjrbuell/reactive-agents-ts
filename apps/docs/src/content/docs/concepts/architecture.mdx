@@ -3,7 +3,41 @@ title: Architecture
 description: The layered architecture of Reactive Agents.
 ---
 
+import { FileTree, Aside } from '@astrojs/starlight/components';
+
 Reactive Agents uses a layered, composable architecture built on Effect-TS.
+
+<Aside type="tip" title="Mental model">
+Every `.with*()` call adds a Layer. `build()` composes Layers into the **12-phase ExecutionEngine**. `agent.run()` flows a task through all 12 phases. No singletons, no global state — each agent is its own isolated runtime.
+</Aside>
+
+## Kernel structure
+
+The reasoning kernel was reorganized in v0.10 to group code by capability. If you're contributing or reading the source, this is the layout:
+
+<FileTree>
+- packages/reasoning/src/kernel/
+  - **capabilities/**
+    - act/ tool execution, gating, parsing, healing pipeline
+    - attend/ context utils + tool formatting
+    - comprehend/ task intent
+    - decide/ arbitrator (single-owner termination)
+    - reason/ think · think-guards · stream parser
+    - reflect/ loop detector · reactive observer · strategy evaluator
+    - sense/ step utils
+    - verify/ evidence grounding · quality utils · verifier
+  - **loop/**
+    - runner.ts main 12-phase orchestrator
+    - react-kernel.ts ReAct strategy kernel
+    - terminate.ts single-owner termination helper
+    - auto-checkpoint.ts
+    - output-assembly.ts
+    - output-synthesis.ts
+  - **state/** kernel-state · kernel-hooks · kernel-constants
+  - **utils/** diagnostics · ICS coordinator · lane controller
+</FileTree>
+
+The single-owner termination invariant (M9 mechanism, 100% path coverage) is enforced by `kernel/loop/terminate.ts` plus a CI lint guard at `scripts/check-termination-paths.sh` — no path bypasses the arbitrator.
 
 ## Layer Stack
 

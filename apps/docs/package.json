@@ -9,6 +9,7 @@
     "preview": "astro preview"
   },
   "dependencies": {
+    "@astrojs/rss": "^4.0.18",
     "@astrojs/starlight": "0.38.2",
     "@fontsource-variable/geist": "^5.0.0",
     "astro": "6.1.2",

@@ -5,7 +5,28 @@ sidebar:
   order: 25
 ---
 
+import { FileTree } from '@astrojs/starlight/components';
+
 The repo includes a complete, tested example suite at [`apps/examples/`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/main/apps/examples). Every example exports a `run()` function, can be executed standalone with `bun run`, and runs in CI. **The fastest way to learn this framework is to copy one of these and tweak it.**
+
+## Directory at a glance
+
+<FileTree>
+- apps/examples/
+  - **foundations/** the minimum builder chain → memory → composition
+  - **tools/** built-in tools, MCP servers, dynamic registration
+  - **reasoning/** strategies + model-adaptive context profiles
+  - **trust/** identity, guardrails, verification
+  - **multi-agent/** A2A protocol, orchestration, dynamic spawning
+  - **streaming/** token streaming + SSE endpoints
+  - **integrations/** Next.js · Hono · Express adapters
+  - **gateway/** persistent autonomous agents
+  - **messaging/** Signal + Telegram via MCP
+  - **interaction/** 5 autonomy modes
+  - **advanced/** cost · observability · self-improvement · eval
+  - index.ts CLI runner — `bun run index.ts --filter <category>`
+  - README.md
+</FileTree>
 
 ## Quick Start
 

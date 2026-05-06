@@ -5,12 +5,18 @@ sidebar:
   order: 3
 ---
 
+import { Steps, FileTree, Aside, Badge } from '@astrojs/starlight/components';
+
 ## Prerequisites
 
 - [Bun](https://bun.sh) ≥1.0.0 (`curl -fsSL https://bun.sh/install | bash`)
 - An API key from [Anthropic](https://console.anthropic.com), [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com), or [LiteLLM](https://www.litellm.ai) — *or* run a local model with [Ollama](https://ollama.com) (no key needed)
 
 The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agents Executable).
+
+<Aside type="tip" title="In a hurry?">
+The minimum viable agent is **3 lines**. Skip to step 3 if you've already got Bun + an API key.
+</Aside>
 
 ## 1. Create a Project
 
@@ -21,6 +27,19 @@ bunx rax init my-agent-app --template standard
 cd my-agent-app
 bun install
 ```
+
+`rax init --template standard` scaffolds:
+
+<FileTree>
+- my-agent-app/
+  - src/
+    - **agent.ts** Your first agent — runnable with `bun run src/agent.ts`
+    - tools/ Drop custom tools here; auto-discovered when wired into builder
+  - .env Provider API keys (gitignored by default)
+  - package.json `reactive-agents` dependency + `bun run agent` script
+  - tsconfig.json strict mode + Bun-aware module resolution
+  - README.md
+</FileTree>
 
 Or manually:
 
