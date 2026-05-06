@@ -37,6 +37,16 @@ export default defineConfig({
             "data-domains": "docs.reactiveagents.dev",
           },
         },
+        // Deep tracking — custom events for code copies, outbound clicks,
+        // CTAs, tab switches, search queries, scroll depth, and the
+        // "Was this helpful?" feedback widget. See public/umami-deep.js.
+        {
+          tag: "script",
+          attrs: {
+            defer: true,
+            src: "/umami-deep.js",
+          },
+        },
       ],
       sidebar: [
         {
