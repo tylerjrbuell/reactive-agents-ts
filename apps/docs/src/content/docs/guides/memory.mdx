@@ -5,7 +5,13 @@ sidebar:
   order: 10
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 Reactive Agents provides a four-tier memory architecture inspired by cognitive science.
+
+<Aside type="tip" title="Two tiers, one decision">
+The four memory layers are bundled into two tiers you pick at build time: **`"standard"`** (working + episodic + FTS5 keyword search — works without an embedding provider) or **`"enhanced"`** (all four layers + vector embeddings — requires `EMBEDDING_PROVIDER=openai` or `ollama` in `.env`). Default is `"standard"`. Pick `"enhanced"` only if you need semantic similarity recall over old conversations or stored documents.
+</Aside>
 
 ## Memory Types
 
