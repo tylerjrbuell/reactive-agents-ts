@@ -1,5 +1,35 @@
 # reactive-agents
 
+## 0.10.4
+
+### Patch Changes
+
+-   8415dbc: Coordinated v0.10.4 release — uniform patch bump across all published packages
+
+    -   Aligned all packages to 0.10.2 baseline matching current npm release
+    -   Cortex published to npm with lazy-load CLI support (0.10.2→0.10.4)
+    -   Fixed bun exports pointing to non-existent src/ directory
+    -   All packages bump uniformly to 0.10.4 for coordinated release
+
+-   Updated dependencies [8415dbc]
+    -   @reactive-agents/a2a@0.10.4
+    -   @reactive-agents/cli@0.10.4
+    -   @reactive-agents/core@0.10.4
+    -   @reactive-agents/cost@0.10.4
+    -   @reactive-agents/eval@0.10.4
+    -   @reactive-agents/guardrails@0.10.4
+    -   @reactive-agents/identity@0.10.4
+    -   @reactive-agents/interaction@0.10.4
+    -   @reactive-agents/llm-provider@0.10.4
+    -   @reactive-agents/memory@0.10.4
+    -   @reactive-agents/observability@0.10.4
+    -   @reactive-agents/orchestration@0.10.4
+    -   @reactive-agents/prompts@0.10.4
+    -   @reactive-agents/reasoning@0.10.4
+    -   @reactive-agents/runtime@0.10.4
+    -   @reactive-agents/tools@0.10.4
+    -   @reactive-agents/verification@0.10.4
+
 ## 0.10.1
 
 ### Patch Changes
