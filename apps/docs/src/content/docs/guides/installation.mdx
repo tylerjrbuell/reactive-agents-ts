@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-import { Steps, Aside } from '@astrojs/starlight/components';
+import { Steps, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 <Aside type="caution" title="Bun ≥1.0.0 required">
 The framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is on the roadmap. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
@@ -167,7 +167,7 @@ LLM_TIMEOUT_MS=30000
 
 Reactive Agents requires TypeScript 5.5+ with strict mode:
 
-```json
+```json title="tsconfig.json"
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -179,3 +179,28 @@ Reactive Agents requires TypeScript 5.5+ with strict mode:
   }
 }
 ```
+
+## Where to next
+
+<CardGrid>
+  <LinkCard
+    title="Quickstart — first agent in 5 minutes"
+    description="Provider key + 3 lines of code. The shortest path to a working agent."
+    href="../quickstart/"
+  />
+  <LinkCard
+    title="Your First Agent (full walkthrough)"
+    description="Step-by-step: memory, reasoning, guardrails, hooks. Build out the minimum into a real one."
+    href="../your-first-agent/"
+  />
+  <LinkCard
+    title="Choosing a Stack"
+    description="Pick provider · model tier · memory · reasoning strategy with a decision tree."
+    href="../choosing-a-stack/"
+  />
+  <LinkCard
+    title="API Cheatsheet"
+    description="One-page reference of every important builder method, runtime call, and event."
+    href="/reference/cheatsheet/"
+  />
+</CardGrid>

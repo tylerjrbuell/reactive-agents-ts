@@ -5,6 +5,8 @@ sidebar:
   order: 5
 ---
 
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
 This guide walks through building a research assistant agent with memory, reasoning, and guardrails.
 
 ## The Builder Pattern
@@ -144,7 +146,7 @@ Each phase supports `before`, `after`, and `on-error` timing.
 
 Use `withTestScenario()` for deterministic tests:
 
-```typescript
+```typescript title="src/agent.test.ts"
 const agent = await ReactiveAgents.create()
   .withName("test-agent")
   .withTestScenario([
@@ -156,3 +158,38 @@ const agent = await ReactiveAgents.create()
 const result = await agent.run("What is the capital of France?");
 expect(result.output).toContain("Paris");
 ```
+
+## Where to next
+
+<CardGrid>
+  <LinkCard
+    title="Common Builder Stacks"
+    description="Copy-paste recipes for streaming, multi-agent, gateway, and Agent-as-data."
+    href="/cookbook/builder-stacks/"
+  />
+  <LinkCard
+    title="Choosing a Reasoning Strategy"
+    description="ReAct vs Reflexion vs Plan-Execute vs ToT vs Adaptive — decision tree + perf characteristics."
+    href="../choosing-strategies/"
+  />
+  <LinkCard
+    title="Memory Guide"
+    description="The 4-layer memory architecture: working, episodic, semantic, procedural."
+    href="../memory/"
+  />
+  <LinkCard
+    title="Local Models"
+    description="Run on Ollama 4B+ with the same code — Healing Pipeline lifts accuracy +80pp."
+    href="../local-models/"
+  />
+  <LinkCard
+    title="Production Checklist"
+    description="Everything to enable before deploying: budgets, kill switch, structured logs."
+    href="../production-checklist/"
+  />
+  <LinkCard
+    title="Architecture"
+    description="The full layer system, 12-phase lifecycle, and the kernel structure."
+    href="../../concepts/architecture/"
+  />
+</CardGrid>
