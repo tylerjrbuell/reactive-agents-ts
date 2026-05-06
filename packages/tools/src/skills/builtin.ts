@@ -169,6 +169,26 @@ export const builtinTools: ReadonlyArray<{
 ];
 
 /**
+ * Set of canonical built-in tool names. Used by the runtime to filter
+ * built-ins out of the LLM-facing tool schema by default. Built-ins remain
+ * registered in the ToolService (so `discover-tools` can surface them at
+ * runtime), but are excluded from the base schema unless the consumer
+ * explicitly opts in via `withTools({ builtins: ... })`.
+ *
+ * Rationale: built-in tools (file-write, web-search, code-execute, etc.)
+ * have semantic descriptions ("write to file", "search the web") that
+ * cause the relevance classifier to surface them as "relevant" for tasks
+ * like "write a markdown report" — even when the user never asked for
+ * filesystem or network access. Empirical evidence (2026-05-06 cogito:14b
+ * T5 trace): model called `file-write` to produce a file then returned
+ * the path as the answer, because file-write was visible in the tool
+ * roster despite the user only registering `hnTool`.
+ */
+export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(
+  builtinTools.map((t) => t.definition.name),
+);
+
+/**
  * Meta-tool definitions (no default handlers — must be wired with live state).
  * Exported for schema inspection, documentation, and dynamic registration.
  */

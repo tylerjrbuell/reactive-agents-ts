@@ -20,7 +20,7 @@ import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
-import { ToolService } from "@reactive-agents/tools";
+import { ToolService, BUILTIN_TOOL_NAMES } from "@reactive-agents/tools";
 import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
@@ -1439,6 +1439,34 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                   // Snapshot the full unfiltered schemas for the completion guard
                   const allToolSchemas = [...availableToolSchemas];
+
+                  // ── Built-ins opt-in (2026-05-06) ──
+                  // Built-in tools (file-write, web-search, code-execute, etc.) are
+                  // registered unconditionally in ToolServiceLive so `discover-tools`
+                  // can surface them at runtime, but should NOT appear in the base
+                  // LLM schema unless the consumer explicitly opts in. Without this
+                  // filter, the relevance classifier promotes built-ins like
+                  // file-write on tasks like "write a markdown report" — leading to
+                  // gratuitous filesystem writes and the model returning file paths
+                  // as final answers. Required + relevant + meta-tools are unaffected.
+                  const builtinsOpt = config.builtins;
+                  const optedInBuiltins = new Set<string>();
+                  if (builtinsOpt === true) {
+                    // Opt-in to all built-ins (legacy behavior).
+                    for (const name of BUILTIN_TOOL_NAMES) optedInBuiltins.add(name);
+                  } else if (Array.isArray(builtinsOpt)) {
+                    for (const name of builtinsOpt) optedInBuiltins.add(name);
+                  }
+                  // Always honor explicit allowedTools / requiredTools — those are
+                  // the consumer's intent regardless of the builtins opt-in default.
+                  for (const name of effectiveAllowedTools) optedInBuiltins.add(name);
+                  for (const name of effectiveRequiredTools ?? []) optedInBuiltins.add(name);
+                  if (builtinsOpt !== true) {
+                    availableToolSchemas = availableToolSchemas.filter((ts) =>
+                      !BUILTIN_TOOL_NAMES.has(ts.name) || optedInBuiltins.has(ts.name),
+                    );
+                    availableToolNames = availableToolSchemas.map((t) => t.name);
+                  }
 
                   // ── allowedTools prompt filtering (IC-6) ──
                   // When allowedTools is specified, restrict the schemas shown in the prompt

@@ -72,6 +72,7 @@ export { validateToolInput } from "./validation/input-validator.js";
 // ─── Skills ───
 export {
   builtinTools,
+  BUILTIN_TOOL_NAMES,
   metaToolDefinitions,
   ragMemoryStore,
   scratchpadStoreRef,

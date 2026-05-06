@@ -488,6 +488,13 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
    */
   readonly allowedTools?: readonly string[];
   /**
+   * Opt-in for built-in tools in the base schema. See `ToolsOptions.builtins`
+   * for full semantics. Default `undefined`/`false`: built-ins are excluded
+   * from the LLM-facing schema (still registered + discoverable via
+   * `discover-tools`).
+   */
+  readonly builtins?: boolean | readonly string[];
+  /**
    * Per-model calibration mode. Resolved to a `ModelCalibration` in execution-engine
    * and forwarded to the kernel for steering channel selection and context tuning.
    */

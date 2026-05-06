@@ -603,6 +603,23 @@ export interface RuntimeOptions {
   adaptiveToolFiltering?: boolean;
 
   /**
+   * Opt-in for built-in tools in the LLM-facing schema. Built-ins
+   * (file-write, file-read, web-search, http-get, code-execute, git-cli,
+   * gh-cli, gws-cli, crypto-price) are registered unconditionally so
+   * `discover-tools` can surface them at runtime, but excluded from the
+   * base schema by default. Set to `true` for legacy behavior (all
+   * built-ins shown), or pass an array of names for an explicit subset.
+   *
+   * @example
+   * ```typescript
+   * { builtins: ["file-write", "web-search"] }
+   * ```
+   *
+   * Default: undefined (no built-ins in base schema)
+   */
+  builtins?: boolean | readonly string[];
+
+  /**
    * Enable ExperienceStore cross-agent learning.
    * Records tool-use patterns and queries them at bootstrap to surface tips from prior runs.
    *
@@ -845,6 +862,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       : undefined,
     adaptiveToolFiltering: options.adaptiveToolFiltering,
     allowedTools: options.allowedTools,
+    builtins: options.builtins,
     enableMemory: options.enableMemory ?? false,
     enableExperienceLearning: options.enableExperienceLearning,
     enableMemoryConsolidation: options.enableMemoryConsolidation,

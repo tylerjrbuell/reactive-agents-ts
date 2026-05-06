@@ -211,6 +211,34 @@ export interface ToolsOptions {
      */
     readonly adaptive?: boolean
     /**
+     * Opt in to built-in tools (file-write, file-read, web-search, http-get,
+     * code-execute, git-cli, gh-cli, gws-cli, crypto-price).
+     *
+     * As of 2026-05-06, built-ins are NOT included in the agent's base tool
+     * schema by default. They remain registered (callable by name and
+     * surfaceable via the `discover-tools` meta-tool at runtime), but are
+     * excluded from the prompt-level tool list unless the consumer opts in
+     * here. Rationale: built-in descriptions like "write to file" and
+     * "search the web" cause the relevance classifier to promote them on
+     * unrelated tasks ("write a markdown report" → file-write surfaces),
+     * leading to gratuitous tool calls and degraded synthesis quality on
+     * local models. See `wiki/Research/Debriefs/2026-05-06-M3-cogito-14b-divergence.md`.
+     *
+     * Values:
+     *   - `false` / unset (default): no built-ins in base schema.
+     *   - `true`: all 9 built-ins in base schema (legacy behavior).
+     *   - `readonly string[]`: explicit subset by name.
+     *
+     * @example
+     * ```typescript
+     * agent.withTools({ tools: [...], builtins: ["file-write", "web-search"] })
+     * agent.withTools({ tools: [...], builtins: true })  // legacy
+     * ```
+     *
+     * Default: undefined (treated as `false` — no built-ins in base schema).
+     */
+    readonly builtins?: boolean | readonly string[]
+    /**
      * Enable/configure the shell-execute tool for terminal/CLI command execution.
      *
      * When true, the agent gains access to controlled shell command execution with:
@@ -2975,6 +3003,7 @@ export class ReactiveAgentBuilder {
                         : undefined),
                 allowedTools: self._toolsOptions?.allowedTools,
                 adaptiveToolFiltering: self._toolsOptions?.adaptive,
+                builtins: self._toolsOptions?.builtins,
                 enableMemory: self._enableMemory,
                 enableExperienceLearning: self._enableExperienceLearning,
                 enableMemoryConsolidation: self._enableMemoryConsolidation,
