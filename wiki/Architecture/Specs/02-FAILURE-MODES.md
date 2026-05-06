@@ -29,12 +29,12 @@ Each entry follows the template in `03-IMPROVEMENT-PIPELINE.md §Stage 2`.
 Model produces a confident, well-formatted final answer without ever invoking a tool, despite tools being available and required. Trace shows `tool-call-start` count = 0; the answer text typically contains fabricated specifics ("$12,500 figure", "payment processing issue") not grounded in any observation.
 
 **Reproduction:**
-- `prototypes/p00-bare-vs-harness.ts` — cogito:8b on rw-2, 5/5 fabricate
+- `wiki/Research/Prototypes/p00-bare-vs-harness.ts` — cogito:8b on rw-2, 5/5 fabricate
 - Generally elicited by: model whose native FC is unreliable + task that doesn't include data inline
 
 **Existing harness mitigation:**
 - `defaultVerifier.agent-took-action` check (`packages/reasoning/src/kernel/capabilities/verify/verifier.ts`)
-- Status: empirically-validated for cogito:8b — converts 5/5 confident-wrong → 5/5 honest-fail (`prototypes/RESULTS-p01.md`)
+- Status: empirically-validated for cogito:8b — converts 5/5 confident-wrong → 5/5 honest-fail (`wiki/Research/Prototypes/RESULTS-p01.md`)
 
 **Empirical evidence:**
 - `p01b` (cogito:8b): verification gate FAIL 5/5 (rejects all fabrication) ✓
@@ -55,7 +55,7 @@ Model produces a confident, well-formatted final answer without ever invoking a 
 Model never emits structured FC tool calls regardless of system prompt strictness or feedback iterations. Trace shows iterative apologies ("I don't see the file") with `tool_calls.length === 0` across all attempts.
 
 **Reproduction:**
-- `prototypes/p02-bare-with-verify-retry-cogito.ts` — cogito:8b, 0/5 recovery after 3 attempts each
+- `wiki/Research/Prototypes/p02-bare-with-verify-retry-cogito.ts` — cogito:8b, 0/5 recovery after 3 attempts each
 
 **Existing harness mitigation:**
 - `TextParseDriver` exists but isn't routed for cogito (calibration says `native-fc`)
@@ -124,8 +124,8 @@ Tool returns "almost passing" results (e.g., test runner: "2/3 passed, 1 failure
 Model calls the tool, reads the data, but identifies a salient surface-level cause and stops investigating deeper. Output IS grounded in observations (verification passes), but the conclusion is wrong because the model didn't enumerate alternative hypotheses.
 
 **Reproduction:**
-- `prototypes/p00v2-competent-bare-vs-harness.ts` — qwen3:4b on rw-2: 5/5 grab the 15% discount (red herring) instead of TV out-of-stock (real cause)
-- `prototypes/p01-bare-with-verification.ts` — same model + verification gate doesn't help (gate passes the wrong-but-grounded answer)
+- `wiki/Research/Prototypes/p00v2-competent-bare-vs-harness.ts` — qwen3:4b on rw-2: 5/5 grab the 15% discount (red herring) instead of TV out-of-stock (real cause)
+- `wiki/Research/Prototypes/p01-bare-with-verification.ts` — same model + verification gate doesn't help (gate passes the wrong-but-grounded answer)
 
 **Existing harness mitigation:**
 - None directly. Verifier-driven retry (commit `45960be6`) doesn't fire because verification passes.

@@ -27,8 +27,8 @@ Read in this order. Stop when you have what you need.
 | 3 | **`01-RESEARCH-DISCIPLINE.md`** | The 12 rules that govern any harness change. Hypothesis-first spikes. No shipping without empirical evidence per failure mode. |
 | 4 | **`02-FAILURE-MODES.md`** | The catalog: what can go wrong with the harness, prioritized by frequency × severity × controllability. 14 seed entries; living doc. |
 | 5 | **`03-IMPROVEMENT-PIPELINE.md`** | How discoveries flow into harness changes: 7-stage flywheel from DISCOVERY → CATALOG → PRIORITIZE → DISSECT → DESIGN → INTEGRATE+VALIDATE → DEPRECATE. |
-| 6 | **`prototypes/RESEARCH_LOG.md`** | Running record of every spike (hypothesis → outcome → next move). |
-| 7 | **`prototypes/RESULTS-*.md`** | Per-spike detailed findings. |
+| 6 | **`wiki/Research/Prototypes/RESEARCH_LOG.md`** | Running record of every spike (hypothesis → outcome → next move). |
+| 7 | **`wiki/Research/Prototypes/RESULTS-*.md`** | Per-spike detailed findings. |
 | 8 | **`wiki/Research/Harness-Reports/`** | Bench data + spike data. Per-run JSON. |
 
 Layer-specific deep dives (memory, reasoning, tools, etc.) live in `02-layer-*.md` through `09-layer-*.md`. These are subsystem references — read when investigating a specific subsystem, not at session start.
@@ -126,7 +126,7 @@ A spike validates ONE mechanism × ONE failure mode × ≤2 models × ONE task. 
 
 ### Research artifacts
 
-- 5 spike files in `prototypes/` (p00, p00v2, p01, p01b, p02)
+- 5 spike files in `wiki/Research/Prototypes/` (p00, p00v2, p01, p01b, p02)
 - 4 RESULTS docs (p00, p00v2, p01, p02) — **p01 and p02 contain pre-Rule-11 overclaim language flagged for calibration**
 - `RESEARCH_LOG.md` running record
 - `wiki/Research/Harness-Reports/spike-results/` raw JSON per spike

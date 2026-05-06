@@ -31,6 +31,10 @@ apps/cortex/.cortex/
 harness-reports/
 .gate-baseline-reason
 
+# Spike prototypes moved to wiki/Research/Prototypes (May 2026 consolidation).
+# Old root path retained as guard against accidental recreation.
+prototypes/
+
 # Spurious nested wiki/ trees created when scripts run from a package dir
 # instead of repo root (gate runner uses REPORTS_DIR relative to cwd).
 packages/*/wiki/

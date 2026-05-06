@@ -95,7 +95,7 @@ Each failure-mode entry in `02-FAILURE-MODES.md` follows this template:
 
 **Reproduction:**
   Spike or scenario that reliably elicits it. Reference failure-corpus ID
-  or prototypes/ file.
+  or wiki/Research/Prototypes/ file.
 
 **Existing harness mitigation:**
   What mechanisms (if any) the harness uses to address this. Cite code paths.
@@ -218,7 +218,7 @@ That's 1-2 cataloged mitigations per week, or 1 deprecation. After 10 weeks: a s
 | `02-FAILURE-MODES.md` skeleton | DRAFTED | Seed with 8-12 known failure modes from existing work |
 | Frozen judge (Rule 4) | NEEDED | Single SHA, separate process; pin model + prompt |
 | Bench `regression-gate` in CI | EXISTS, NOT WIRED | Add as required check on PRs |
-| Spike infrastructure (`prototypes/`) | EXISTS (3 spikes shipped) | Continue bottom-up extraction |
+| Spike infrastructure (`wiki/Research/Prototypes/`) | EXISTS (3 spikes shipped) | Continue bottom-up extraction |
 | `RESEARCH_LOG.md` per-spike entries | EXISTS | Maintain discipline |
 | Deprecation tooling (JSDoc + lint rules) | NOT STARTED | Add when first deprecation lands |
 
