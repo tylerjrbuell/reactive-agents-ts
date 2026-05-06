@@ -55,6 +55,15 @@ jobs:
       - name: Test
         run: bun test
 
+      # Pre-publish gate: pack every workspace package as a tarball, install
+      # them into a clean project, and run smoke tests against the artifacts
+      # that would actually ship. Catches the class of bug that broke v0.10.4
+      # (imports declared `external` in tsup but missing from `dependencies`
+      # — passes typecheck/build/test under workspace resolution, then crashes
+      # `Cannot find package` after a real `npm install`).
+      - name: Clean-install smoke test
+        run: bun run scripts/test-clean-install.ts
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1

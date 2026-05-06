@@ -34,9 +34,18 @@
     "@reactive-agents/llm-provider": "0.10.4",
     "@reactive-agents/a2a": "0.10.4",
     "@reactive-agents/trace": "0.10.4",
+    "@reactive-agents/tools": "0.10.4",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"
+  },
+  "peerDependencies": {
+    "@reactive-agents/cortex": "0.10.4"
+  },
+  "peerDependenciesMeta": {
+    "@reactive-agents/cortex": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@reactive-agents/benchmarks": "workspace:*",

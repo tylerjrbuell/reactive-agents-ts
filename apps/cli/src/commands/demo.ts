@@ -1,7 +1,7 @@
 import * as readline from 'node:readline'
 import chalk from 'chalk'
 import { Effect, Schema } from 'effect'
-import { ReactiveAgents } from 'reactive-agents'
+import { ReactiveAgents } from '@reactive-agents/runtime'
 import { defineTool } from '@reactive-agents/tools'
 import {
     banner,

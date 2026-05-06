@@ -2,7 +2,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { writeFileSync } from "node:fs";
 import chalk from "chalk";
-import { ReactiveAgents } from "reactive-agents";
+import { ReactiveAgents } from "@reactive-agents/runtime";
 import type { AgentDebrief } from "@reactive-agents/runtime";
 import {
   banner,

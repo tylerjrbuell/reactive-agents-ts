@@ -1,4 +1,4 @@
-import { ReactiveAgents, type ReactiveAgent } from "reactive-agents";
+import { ReactiveAgents, type ReactiveAgent } from "@reactive-agents/runtime";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { createSpinner, kv, muted, fail, section, info, hint } from "../ui.js";
