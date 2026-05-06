@@ -2,7 +2,7 @@
 title: Choosing a Stack
 description: Pick the right provider, model tier, memory, and reasoning strategy for your workload.
 sidebar:
-  order: 10
+  order: 6
 ---
 
 Use this guide to choose a default stack quickly, then tune for cost and reliability.

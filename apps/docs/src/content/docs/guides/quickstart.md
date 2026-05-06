@@ -1,12 +1,14 @@
 ---
 title: Quickstart
 description: Build your first Reactive Agent in 5 minutes.
+sidebar:
+  order: 3
 ---
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.1+
-- An API key from [Anthropic](https://console.anthropic.com), [Gemini](https://ai.google.dev/), [LiteLLM](https://www.litellm.ai) or [OpenAI](https://platform.openai.com)
+- [Bun](https://bun.sh) ≥1.0.0 (`curl -fsSL https://bun.sh/install | bash`)
+- An API key from [Anthropic](https://console.anthropic.com), [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com), or [LiteLLM](https://www.litellm.ai) — *or* run a local model with [Ollama](https://ollama.com) (no key needed)
 
 The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agents Executable).
 
@@ -34,13 +36,23 @@ bun add reactive-agents
 
 ## 2. Set Up Environment
 
-```bash
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
-echo 'GOOGLE_API_KEY=...' >> .env
-echo 'TAVILY_API_KEY=tvly-...' >> .env
-echo 'LITELLM_API_KEY=...' >> .env
-echo 'OPENAI_API_KEY=...' >> .env
+Set at least one provider key. Pick whichever you have access to:
 
+```bash
+# Pick at least one
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env  # Recommended for first agent
+echo 'OPENAI_API_KEY=sk-...'        >> .env
+echo 'GOOGLE_API_KEY=...'           >> .env
+
+# Or run fully local — no key needed
+ollama pull qwen3:4b
+```
+
+Optional keys for built-in tools (web search, etc.) — add them later when you call `.withTools()`:
+
+```bash
+echo 'TAVILY_API_KEY=tvly-...' >> .env   # Web search (Tavily backend)
+echo 'SERPER_API_KEY=...'      >> .env   # Web search (Serper.dev backend)
 ```
 
 ## 3. Build an Agent

@@ -1,6 +1,8 @@
 ---
 title: "Migrating from LangChain.js"
 description: "Side-by-side guide for moving agents from LangChain.js to Reactive Agents"
+sidebar:
+  order: 20
 ---
 
 This guide maps LangChain.js concepts to their Reactive Agents equivalents and shows side-by-side code examples for common patterns.

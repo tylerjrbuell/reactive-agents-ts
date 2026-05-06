@@ -1,6 +1,8 @@
 ---
 title: Memory
 description: How agent memory works in Reactive Agents.
+sidebar:
+  order: 10
 ---
 
 Reactive Agents provides a four-tier memory architecture inspired by cognitive science.

@@ -1,6 +1,8 @@
 ---
 title: Installation
 description: How to install and configure Reactive Agents.
+sidebar:
+  order: 4
 ---
 
 ## Simple Install
@@ -25,27 +27,73 @@ import { ReactiveAgents } from "reactive-agents";
 
 The framework is modular — install only the packages you need:
 
-| Package                          | Description                                                               | Required? |
-| -------------------------------- | ------------------------------------------------------------------------- | --------- |
-| `@reactive-agents/core`          | EventBus, AgentService, TaskService, types                                | Yes       |
-| `@reactive-agents/runtime`       | ExecutionEngine, ReactiveAgentBuilder                                     | Yes       |
-| `@reactive-agents/llm-provider`  | LLM adapters (Anthropic, OpenAI, Gemini, Ollama, LiteLLM 40+)             | Yes       |
-| `@reactive-agents/memory`        | Working, Semantic, Episodic, Procedural memory                            | Optional  |
-| `@reactive-agents/reasoning`     | ReAct, Plan-Execute, Tree-of-Thought, Reflexion                           | Optional  |
-| `@reactive-agents/tools`         | Tool registry, sandbox, MCP client                                        | Optional  |
-| `@reactive-agents/guardrails`    | Injection, PII, toxicity detection                                        | Optional  |
-| `@reactive-agents/verification`  | Semantic entropy, fact decomposition                                      | Optional  |
-| `@reactive-agents/cost`          | Complexity routing, budget enforcement                                    | Optional  |
-| `@reactive-agents/identity`      | Agent certificates, RBAC                                                  | Optional  |
-| `@reactive-agents/observability` | Tracing, metrics, structured logging                                      | Optional  |
-| `@reactive-agents/interaction`   | 5 interaction modes, checkpoints                                          | Optional  |
-| `@reactive-agents/orchestration` | Multi-agent workflows                                                     | Optional  |
-| `@reactive-agents/a2a`           | Agent-to-Agent protocol, Agent Cards, JSON-RPC, SSE streaming             | Optional  |
-| `@reactive-agents/prompts`       | Template engine, built-in prompt library                                  | Optional  |
-| `@reactive-agents/gateway`       | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine | Optional  |
-| `@reactive-agents/reactive-intelligence` | Entropy sensor, reactive controller, learning engine, living-skills wiring, telemetry client | Optional  |
-| `@reactive-agents/eval`          | Evaluation suites, LLM-as-judge scoring, `EvalStore` (SQLite)            | Optional  |
-| `@reactive-agents/testing`       | Mock `LLMService` / `ToolService` / `EventBus`, assertion helpers (dev/test) | Dev-only  |
+**Foundation (required)**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/core`          | EventBus, AgentService, TaskService, canonical types                      |
+| `@reactive-agents/runtime`       | 12-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`         |
+| `@reactive-agents/llm-provider`  | LLM adapters: Anthropic, OpenAI, Gemini, Ollama, LiteLLM (40+), Test      |
+
+**Cognition (recommended)**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/reasoning`     | 5 strategies (ReAct, Plan-Execute, Reflexion, ToT, Adaptive) + composable kernel |
+| `@reactive-agents/memory`        | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite    |
+| `@reactive-agents/tools`         | Tool registry, sandbox, MCP client, healing pipeline                      |
+| `@reactive-agents/prompts`       | Template engine, version-controlled prompt library                        |
+| `@reactive-agents/reactive-intelligence` | Entropy sensor, reactive controller, learning engine, telemetry   |
+
+**Production safety**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/guardrails`    | Injection, PII, toxicity detection, kill switch                           |
+| `@reactive-agents/verification`  | Semantic entropy, fact decomposition, NLI hallucination detection         |
+| `@reactive-agents/cost`          | 27-signal complexity routing, budget enforcement, semantic cache          |
+| `@reactive-agents/identity`      | Ed25519 agent certificates, RBAC, delegation, audit                       |
+| `@reactive-agents/diagnose`      | Output-leak detection (system-prompt, api-key, credential, internal)      |
+| `@reactive-agents/health`        | Health checks and readiness probes                                        |
+
+**Observability**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/observability` | OTLP tracing, MetricsCollector, structured logging                        |
+| `@reactive-agents/trace`         | Trace event types and OTLP exporters                                      |
+
+**Composition & multi-agent**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/orchestration` | Sequential, parallel, pipeline, map-reduce workflows                      |
+| `@reactive-agents/a2a`           | Agent-to-Agent protocol: Agent Cards, JSON-RPC 2.0, SSE streaming         |
+| `@reactive-agents/gateway`       | Persistent autonomous harness: heartbeats, crons, webhooks, policy engine |
+| `@reactive-agents/channels`      | Per-sender access control + chat-mode session storage for the gateway     |
+| `@reactive-agents/interaction`   | 5 autonomy modes, checkpoints, preference learning                        |
+
+**Evaluation & testing**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/eval`          | Evaluation suites, LLM-as-judge scoring, `EvalStore` (SQLite)             |
+| `@reactive-agents/scenarios`     | Pre-built test scenarios + scenario builder                               |
+| `@reactive-agents/testing`       | Mock `LLMService` / `ToolService` / `EventBus`, assertion helpers (dev)   |
+
+**Frontend integration**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/react`         | React 18+ hooks: `useAgentStream`, `useAgent`                             |
+| `@reactive-agents/vue`           | Vue 3 composables: `useAgentStream`, `useAgent` with reactive refs        |
+| `@reactive-agents/svelte`        | Svelte 4/5 stores: `createAgentStream`, `createAgent`                     |
+
+**Developer tooling**
+
+| Package                          | Description                                                               |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `@reactive-agents/cortex`        | Cortex Studio (Beacon, Thalamus, Lab, living skills) — `bunx @reactive-agents/cortex` |
 
 ```bash
 bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider

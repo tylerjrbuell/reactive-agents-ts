@@ -2,7 +2,7 @@
 title: Guardrails
 description: Input and output safety — injection detection, PII scanning, toxicity filtering, kill switch, and behavioral contracts.
 sidebar:
-  order: 9
+  order: 12
 ---
 
 The guardrails layer protects agents from adversarial inputs and prevents unsafe outputs. It runs automatically during the execution engine's guardrail phase.

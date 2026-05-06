@@ -1,6 +1,8 @@
 ---
 title: "Production Deployment Checklist"
 description: "Everything to enable before deploying Reactive Agents to production"
+sidebar:
+  order: 21
 ---
 
 This checklist covers the builder methods and configuration options you should evaluate before deploying a Reactive Agents application to production. Each section is independent — enable the layers that match your threat model and reliability requirements.

@@ -1,6 +1,8 @@
 ---
 title: Lifecycle Hooks
 description: Intercept and extend the 12-phase execution engine with custom hooks
+sidebar:
+  order: 16
 ---
 
 # Lifecycle Hooks

@@ -2,7 +2,7 @@
 title: Troubleshooting
 description: Fast diagnosis for common Reactive Agents issues in development and production.
 sidebar:
-  order: 11
+  order: 23
 ---
 
 Use this page as a symptom → cause → fix reference when agents fail, hang, or behave unexpectedly.

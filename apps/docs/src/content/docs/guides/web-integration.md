@@ -2,7 +2,7 @@
 title: Web Framework Integration
 description: React hooks, Vue composables, and Svelte stores for streaming agent output in browser applications.
 sidebar:
-  order: 9
+  order: 15
 ---
 
 Reactive Agents includes first-class support for streaming agent output into React, Vue, and Svelte applications. The pattern is consistent across frameworks:

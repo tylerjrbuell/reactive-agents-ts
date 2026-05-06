@@ -1,6 +1,8 @@
 ---
 title: Context Engineering
 description: Model-adaptive context management for efficient, reliable agents.
+sidebar:
+  order: 17
 ---
 
 Context engineering is the practice of **finding the smallest set of high-signal tokens that maximize the likelihood of desired outcomes**. Reactive Agents provides a systematic context engineering system that adapts to your model's capabilities.

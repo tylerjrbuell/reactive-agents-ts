@@ -1,6 +1,8 @@
 ---
 title: Introduction
 description: What is Reactive Agents and why should you use it?
+sidebar:
+  order: 1
 ---
 
 Reactive Agents is a TypeScript framework for building autonomous AI agents. It's built on [Effect-TS](https://effect.website) — giving you type-safe, composable, and observable agent systems from day one.
@@ -46,14 +48,16 @@ Every agent task flows through a deterministic lifecycle:
 
 1. **Bootstrap** — Load memory context
 2. **Guardrail** — Safety checks on input
-3. **Cost Route** — Select optimal model
+3. **Cost Route** — Select optimal model tier
 4. **Strategy Select** — Choose reasoning strategy
-5. **Think** — LLM completion
+5. **Think** — LLM completion (one or more iterations)
 6. **Act** — Tool execution
-7. **Observe** — Append results
-8. **Verify** — Fact-check output
-9. **Memory Flush** — Persist session
-10. **Complete** — Return result
+7. **Observe** — Append tool results to context
+8. **Verify** — Fact-check output (entropy, decomposition, NLI)
+9. **Memory Flush** — Persist session, episodic, and procedural memories
+10. **Cost Track** — Record spend against budget
+11. **Audit** — Emit audit events (tokens, cost, strategy, duration)
+12. **Complete** — Return final result with metadata
 
 Each phase supports `before`, `after`, and `on-error` lifecycle hooks.
 

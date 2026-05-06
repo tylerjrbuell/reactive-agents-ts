@@ -1,6 +1,8 @@
 ---
 title: Your First Agent
 description: A step-by-step guide to building a complete agent.
+sidebar:
+  order: 5
 ---
 
 This guide walks through building a research assistant agent with memory, reasoning, and guardrails.

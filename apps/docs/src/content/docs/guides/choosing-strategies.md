@@ -1,6 +1,8 @@
 ---
 title: "Choosing a Reasoning Strategy"
 description: "Decision tree and performance characteristics for selecting the right reasoning strategy"
+sidebar:
+  order: 7
 ---
 
 Reactive Agents ships five reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.

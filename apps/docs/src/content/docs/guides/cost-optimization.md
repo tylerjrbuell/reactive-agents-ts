@@ -2,7 +2,7 @@
 title: Cost Optimization
 description: Budget planning, provider pricing, and cost control strategies for Reactive Agents
 sidebar:
-  order: 35
+  order: 24
 ---
 
 Smart cost management is essential for production agents. This guide covers pricing, budget controls, and zero-cost local model options.

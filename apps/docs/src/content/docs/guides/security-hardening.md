@@ -2,7 +2,7 @@
 title: Security Hardening
 description: Practical hardening checklist for production agents, tools, and MCP transports.
 sidebar:
-  order: 12
+  order: 22
 ---
 
 This guide focuses on secure defaults and common mistakes in real deployments.

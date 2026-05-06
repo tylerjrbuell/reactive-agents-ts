@@ -1,6 +1,8 @@
 ---
 title: Local Models Guide
 description: Choose the right local model for your task and configure Reactive Agents for optimal performance
+sidebar:
+  order: 11
 ---
 
 # Local Models Guide

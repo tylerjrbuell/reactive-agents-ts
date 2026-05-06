@@ -1,6 +1,8 @@
 ---
 title: "Working with Sub-Agents"
 description: "Delegate tasks to specialized sub-agents with persona control and context forwarding"
+sidebar:
+  order: 13
 ---
 
 ## Overview

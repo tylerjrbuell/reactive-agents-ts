@@ -1,6 +1,8 @@
 ---
 title: Messaging Channels
 description: Connect agents to Signal (Docker MCP in this repo) and Telegram (upstream MCP via uv or your own runner).
+sidebar:
+  order: 19
 ---
 
 Reactive Agents can send and receive messages on **Signal** and **Telegram** using MCP servers wired through `.withMCP()` and `.withGateway()`. **Signal** ships as a hardened **Docker image** in this repo because there is no maintained third-party MCP with the same behavior. **Telegram** uses the community **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** project — run it with **`uvx`**, a local clone, or your own container; we do **not** publish a Telegram image from this monorepo.

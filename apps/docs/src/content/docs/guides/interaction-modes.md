@@ -1,6 +1,8 @@
 ---
 title: Interaction Modes
 description: How agents adjust their autonomy level.
+sidebar:
+  order: 14
 ---
 
 Reactive Agents supports 5 interaction modes that control how much autonomy an agent has.
