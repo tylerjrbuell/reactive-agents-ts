@@ -78,7 +78,7 @@ echo 'SERPER_API_KEY=...'      >> .env   # Web search (Serper.dev backend)
 
 Create `src/agent.ts`:
 
-```typescript
+```typescript title="src/agent.ts"
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
@@ -93,7 +93,7 @@ That's the minimum. `.withProvider()` picks the default model for the provider a
 
 To pin a specific model or add a name:
 
-```typescript
+```typescript title="src/agent.ts" {2-5}
 const agent = await ReactiveAgents.create()
   .withName("my-first-agent")
   .withProvider("anthropic")
@@ -120,15 +120,15 @@ bun run src/agent.ts
 
 Enable memory, reasoning, and safety:
 
-```typescript
+```typescript title="src/agent.ts" {5-8}
 const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory() // Default memory tier (see [Memory](../memory/); use `{ tier: "enhanced" }` for embeddings)
-  .withReasoning() // ReAct reasoning loop
-  .withGuardrails() // Input safety checks
-  .withCostTracking() // Budget enforcement
+  .withMemory()         // Default tier "standard" (FTS5 keyword search)
+  .withReasoning()      // ReAct loop: Think → Act → Observe
+  .withGuardrails()     // Pre-LLM injection / PII / toxicity blocking
+  .withCostTracking()   // Complexity routing + budget enforcement
   .build();
 ```
 

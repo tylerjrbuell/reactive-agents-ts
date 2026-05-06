@@ -5,7 +5,13 @@ sidebar:
   order: 21
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 This checklist covers the builder methods and configuration options you should evaluate before deploying a Reactive Agents application to production. Each section is independent — enable the layers that match your threat model and reliability requirements.
+
+<Aside type="caution" title="Before you ship">
+Three settings are non-negotiable for any production agent: a **budget cap** (`.withCostTracking()`), an **iteration limit** (`.withBehavioralContracts({ maxIterations })`), and **structured logging** (`.withLogging()`). Without these, a single misbehaving prompt can drain a wallet, loop forever, or fail silently.
+</Aside>
 
 ## Security
 
