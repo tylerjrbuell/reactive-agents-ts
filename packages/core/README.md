@@ -1,6 +1,6 @@
 # @reactive-agents/core
 
-Core services and types for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Core services and types for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 The foundational package every other `@reactive-agents/*` package depends on. Provides the EventBus, AgentService, TaskService, ContextWindowManager, framework error taxonomy, canonical schemas, and the narrow ports (`AgentMemory`, `EntropySensorService`) that other layers resolve.
 

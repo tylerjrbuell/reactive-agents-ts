@@ -1,6 +1,6 @@
 # @reactive-agents/memory
 
-> Version: **0.10.2** — memory system for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.10.3** — memory system for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 Four memory tiers — **Working**, **Semantic**, **Episodic**, **Procedural** — backed by
 `bun:sqlite` with FTS5 full-text search (Tier 1) and optional `sqlite-vec` KNN vectors (Tier 2).

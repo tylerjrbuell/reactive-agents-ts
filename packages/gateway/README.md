@@ -1,6 +1,6 @@
 # @reactive-agents/gateway
 
-> Version: **0.10.2** — persistent autonomous agent harness for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.10.3** — persistent autonomous agent harness for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 Keeps an agent running long-term with **adaptive heartbeats**, **cron scheduling**, **webhook
 ingestion**, a composable **policy engine**, **chat mode** (per-sender SQLite session history),

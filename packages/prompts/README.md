@@ -1,6 +1,6 @@
 # @reactive-agents/prompts
 
-Prompt management for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Prompt management for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 A version-controlled template engine with `{{variable}}` interpolation, type-safe variable bindings, and a built-in library of agent prompts covering reasoning strategies (ReAct, Plan-Execute, Tree-of-Thought, Reflexion), evaluation judges (accuracy, relevance, completeness, safety), and tier-adaptive system prompts (frontier vs. local models).
 

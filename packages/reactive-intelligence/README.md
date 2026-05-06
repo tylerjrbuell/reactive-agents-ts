@@ -1,6 +1,6 @@
 # @reactive-agents/reactive-intelligence
 
-Metacognitive layer for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Metacognitive layer for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Real-time entropy sensing, adaptive intervention dispatch, and local learning. Monitors agent reasoning quality every iteration through 5 entropy sources, triggers interventions (early-stop, context compression, strategy switch) when the agent is struggling, and learns from outcomes via conformal calibration, Thompson Sampling, and skill synthesis.
 

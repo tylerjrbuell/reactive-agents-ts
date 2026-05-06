@@ -1,6 +1,6 @@
 # @reactive-agents/benchmarks
 
-> **Private package — not published to npm.** Internal evaluation suite for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+> **Private package — not published to npm.** Internal evaluation suite for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 In-repo benchmark suite that measures real-world agent performance against live LLM providers — latency, token usage, cost, and correctness. Drives the regression gate, ablation matrix, drift detection, and competitor-comparison sessions on `refactor/overhaul`.
 

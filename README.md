@@ -40,7 +40,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **No type safety**        | Effect-TS schemas validate every service boundary at compile time                                                   |
 | **Monolithic**            | 13 independent layers -- enable only what you need                                                                  |
-| **Opaque decisions**      | 10-phase execution engine with before/after/error hooks on every phase                                              |
+| **Opaque decisions**      | 12-phase execution engine with before/after/error hooks on every phase                                              |
 | **Model lock-in**         | Model-adaptive context profiles (4 tiers: local, mid, large, frontier) help smaller models punch above their weight |
 | **Single reasoning mode** | 5 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive)                                            |
 | **Unsafe by default**     | Guardrails block injection/PII/toxicity before the LLM sees input                                                   |
@@ -346,7 +346,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Reasoning strategies          |  5 + adaptive   |  1 (ReAct)   |      --       |    1    |
 | Model-adaptive context        |     4 tiers     |      --      |      --       |   --    |
 | Local model optimization      |       Yes       |      --      |      --       |   --    |
-| Execution lifecycle hooks     |    10 phases    |  Callbacks   |  Middleware   |   --    |
+| Execution lifecycle hooks     |    12 phases    |  Callbacks   |  Middleware   |   --    |
 | Multi-agent orchestration     | A2A + workflows |     Yes      |      --       |   Yes   |
 | Token streaming               |       Yes       |     Yes      |      Yes      |   Yes   |
 | Production guardrails         |       Yes       |      --      |      --       |   --    |
@@ -387,7 +387,7 @@ ReactiveAgentBuilder
     -> Orchestration     Sequential, Parallel, Pipeline, Map-Reduce
     -> Prompts           Template Engine, Version Control
     -> Gateway           Heartbeats, Crons, Webhooks, Policy Engine
-    -> ExecutionEngine   10-phase lifecycle with hooks
+    -> ExecutionEngine   12-phase lifecycle with hooks
 ```
 
 Every layer is an Effect `Layer` -- composable, independently testable, and tree-shakeable.
@@ -488,7 +488,7 @@ const agent = await ReactiveAgents.create()
 | Package                                                                    | Description                                                                                                                                                                               |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@reactive-agents/core`](packages/core)                                   | EventBus pub/sub, AgentService lifecycle, TaskService state machine, canonical types                                                                                                      |
-| [`@reactive-agents/runtime`](packages/runtime)                             | 10-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` layer composer                                                                                                          |
+| [`@reactive-agents/runtime`](packages/runtime)                             | 12-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` layer composer                                                                                                          |
 | [`@reactive-agents/llm-provider`](packages/llm-provider)                   | Unified LLM interface for Anthropic, OpenAI, Gemini, Ollama, LiteLLM, and Test providers                                                                                                  |
 | [`@reactive-agents/memory`](packages/memory)                               | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite; ExperienceStore cross-agent learning; background consolidation + decay                                            |
 | [`@reactive-agents/reasoning`](packages/reasoning)                         | 5 strategies (ReAct, Reflexion, Plan-Execute, ToT, Adaptive) with composable kernel architecture                                                                                          |

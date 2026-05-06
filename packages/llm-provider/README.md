@@ -1,6 +1,6 @@
 # @reactive-agents/llm-provider
 
-> Version: **0.10.2** — LLM provider adapters for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.10.3** — LLM provider adapters for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 A unified `LLMService` interface (`complete`, `stream`, `embed`, structured output) with adapters
 for **Anthropic**, **OpenAI**, **Google Gemini**, **Ollama**, **LiteLLM**, and a deterministic

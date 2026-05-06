@@ -1,6 +1,6 @@
 # @reactive-agents/identity
 
-Cryptographic identity, authorization, and audit for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Cryptographic identity, authorization, and audit for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 > **Stability note:** This package ships as `@unstable`. Scaffolding (Ed25519 certificates, RBAC, audit log, delegation chains) and the runtime layer are merged, but no in-tree consumer reads it yet. The audit verdict is DEFER, meaning the surface may change in v0.10.x without notice. See `AUDIT-overhaul-2026.md` §10.1 for context.
 

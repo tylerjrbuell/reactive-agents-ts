@@ -1,6 +1,6 @@
 # @reactive-agents/interaction
 
-Interaction modes and human-in-the-loop primitives for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Interaction modes and human-in-the-loop primitives for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Five autonomy modes, configurable checkpoints, approval gates, escalation rules, and a preference learner that adapts mode selection over time. Designed for agents that occasionally need human judgment — without forcing every run to be supervised.
 

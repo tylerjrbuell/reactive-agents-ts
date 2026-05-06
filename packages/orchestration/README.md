@@ -1,6 +1,6 @@
 # @reactive-agents/orchestration
 
-Multi-agent orchestration for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Multi-agent orchestration for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Coordinate fleets of agents through workflow patterns: sequential pipelines, parallel fan-out / fan-in, map-reduce, and durable event-sourced executions. The `WorkflowEngine` runs workflows as Effects with typed message passing, checkpoint persistence, and per-step failure isolation.
 

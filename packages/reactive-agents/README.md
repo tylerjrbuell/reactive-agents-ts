@@ -23,7 +23,7 @@ One install. Five reasoning strategies. Six LLM providers. A live local studio. 
 - **5 reasoning strategies** — ReAct, Reflexion, Plan-Execute, Tree-of-Thought, and an Adaptive meta-strategy that picks the right one per task.
 - **6 LLM providers** — Anthropic, OpenAI, Google Gemini, Ollama (local), LiteLLM (40+ models), and a deterministic Test provider.
 - **4-tier memory** — working, episodic, semantic (FTS5 + vectors), and procedural — all on `bun:sqlite`.
-- **10-phase execution engine** — every phase is hookable (`before` / `after` / `on-error`).
+- **12-phase execution engine** — every phase is hookable (`before` / `after` / `on-error`).
 - **Production guardrails** — injection, PII, toxicity, kill switch, behavioral contracts.
 - **Adaptive tool calling** — native function calling on capable providers with a healing pipeline that recovers ~87% of malformed tool calls from local models.
 - **Real-time streaming** — `agent.runStream()` AsyncGenerator with `AbortSignal` cancellation.

@@ -1,6 +1,6 @@
 # @reactive-agents/eval
 
-Evaluation framework for [Reactive Agents](https://docs.reactiveagents.dev/) — benchmark agent quality, track regressions, and run automated test suites against an isolated frozen judge. **v0.10.2**
+Evaluation framework for [Reactive Agents](https://docs.reactiveagents.dev/) — benchmark agent quality, track regressions, and run automated test suites against an isolated frozen judge. **v0.10.3**
 
 ## Installation
 

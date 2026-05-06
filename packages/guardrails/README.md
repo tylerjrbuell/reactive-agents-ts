@@ -1,6 +1,6 @@
 # @reactive-agents/guardrails
 
-Pre-LLM safety guardrails for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Pre-LLM safety guardrails for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Blocks unsafe inputs and outputs *before* they reach the model: prompt injection detection, PII scanning, toxicity filtering, behavioral contracts (denied tools, max iterations), and a global+per-agent KillSwitch. Applied automatically during the `guardrail` execution phase.
 

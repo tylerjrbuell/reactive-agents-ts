@@ -1,6 +1,6 @@
 # @reactive-agents/observability
 
-Production observability for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Production observability for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Distributed tracing (OpenTelemetry / OTLP), metrics collection, structured logging with file rotation, kernel thought tracing, and privacy-aware telemetry export — all wired into the agent execution pipeline so every phase, tool call, and entropy score is observable.
 

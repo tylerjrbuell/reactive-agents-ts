@@ -1,6 +1,6 @@
 # @reactive-agents/reasoning
 
-> Version: **0.10.2** — reasoning strategies and the composable kernel for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.10.3** — reasoning strategies and the composable kernel for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 This package contains five reasoning strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought,
 Adaptive), the composable **reasoning kernel** that powers the runtime's `think → act → observe →

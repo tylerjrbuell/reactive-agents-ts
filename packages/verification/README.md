@@ -1,6 +1,6 @@
 # @reactive-agents/verification
 
-Post-LLM output verification for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Post-LLM output verification for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Reduces hallucinations by combining multiple complementary techniques: semantic entropy (consistency across samples), fact decomposition (atomic claim checking), NLI-based hallucination detection, multi-source corroboration, and self-consistency voting. Each layer is independent — pick the ones that fit your latency and cost budget.
 

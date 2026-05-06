@@ -1,6 +1,6 @@
 # @reactive-agents/testing
 
-Testing utilities for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Testing utilities for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Mock services (LLM, tools, EventBus), assertion helpers, deterministic test scenarios, streaming assertions, trace assertions, and a Tier-1 deterministic scenario gate. Build reliable agent tests without real LLM calls or network access.
 

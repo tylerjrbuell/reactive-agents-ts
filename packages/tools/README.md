@@ -1,6 +1,6 @@
 # @reactive-agents/tools
 
-> Version: **0.10.2** — tool system for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Version: **0.10.3** — tool system for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 A type-safe tool registry, sandboxed execution (process + Docker), an MCP (Model Context Protocol)
 client, native + text-parse function-calling drivers, the **healing pipeline** that recovers

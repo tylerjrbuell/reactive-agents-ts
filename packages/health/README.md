@@ -1,6 +1,6 @@
 # @reactive-agents/health
 
-Health checks and readiness probes for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.2**
+Health checks and readiness probes for the [Reactive Agents](https://docs.reactiveagents.dev/) framework. **v0.10.3**
 
 Provides an HTTP health server with registered probes, returning structured status responses suitable for Kubernetes liveness/readiness, load-balancer health checks, and dashboards. Integrates with the builder via `.withHealthCheck()` and exposes `agent.health()` for programmatic access.
 
