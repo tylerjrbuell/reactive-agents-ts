@@ -1,0 +1,154 @@
+---
+title: FAQ
+description: Honest answers to "should I use this?" — production readiness, gotchas, comparisons, what we don't do well yet.
+sidebar:
+  order: 22
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import metrics from '../../../data/metrics.json';
+
+Skeptical-engineer questions answered straight. If you have one that isn't here, [open an issue](https://github.com/tylerjrbuell/reactive-agents-ts/issues) or ask in [Discord](https://discord.gg/498xEG5A) and we'll add it.
+
+## Should I use this?
+
+### Is it production-ready?
+
+The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.testFiles} files** on every PR; current main has 0 failures. The frontier benchmark passes at **100% across `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, and `gemini-2.5-pro`** on the `ra-full` 35-task suite. Local-tier `gemma4:e4b` and `cogito:14b` hit 91-94% on the same suite — tied with `gemini-2.5-flash` and `gpt-4o-mini`.
+
+**Honest caveats:**
+- The framework requires **Bun ≥ 1.0** — we use Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is on the roadmap but not shipped.
+- We're at **v0.10.x** — the API has been stable since 0.9.0 (no breaking changes), but we haven't tagged 1.0 yet.
+- Some advanced features (cross-session skill persistence, full multi-session memory transfer) are still being hardened — see "What's not done yet" below.
+
+If you need an HTTP-API-as-a-service or a hosted control plane, we don't ship that. The framework is a TypeScript SDK.
+
+### Why Bun, not Node?
+
+The framework leans hard on Bun-native APIs:
+
+- `bun:sqlite` for the 4-layer memory store, calibration observations, and gateway session history
+- `Bun.spawn` for the sandboxed `code-execute` and CLI tools
+- Bun's HTTP server / fetch / streaming primitives for SSE endpoints
+
+We could add a Node compatibility layer, but it'd duplicate ~30% of the code. Bun is also genuinely faster for the workloads agents do (concurrent IO, SQLite). [Install Bun](https://bun.sh) is one command.
+
+### Why Effect-TS?
+
+Three reasons that matter once you're past hello-world:
+
+1. **Typed error channels** — `Effect.fail()` returns a tagged error type. The compiler tells you which errors a function can produce. No more "what does this throw?" guessing.
+2. **Layer composition** — every capability (memory, reasoning, guardrails, etc.) is an independent `Layer` you compose with `Layer.merge` and `Layer.provide`. No singletons, no global state, every agent is its own runtime.
+3. **Dependency injection that survives hot-reload** — services are looked up via `Tag`, swappable per agent without touching call sites.
+
+**Cost:** Effect has a learning curve. We provide an [Effect-TS primer](/concepts/effect-ts/) and 90% of users never touch raw Effect — they call `.withProvider("anthropic").build()` and run their agent.
+
+### What's the catch with local models?
+
+Local Ollama models (4B+) hit 91-94% on the same harness as paid frontier models — *because* of the framework, not despite it. Specifically:
+
+- The **Healing Pipeline** recovers 86.7% of malformed tool calls (with +80 pp accuracy lift on FC-heavy tasks)
+- The **TextParseDriver** handles models without native function-calling via XML / JSON / pseudo-code cascade
+- The **calibration system** learns each model's tool-call dialect after 5 runs
+
+**Catch:** Local inference is slower (1-5 s/response on 14B vs 100 ms on a fast frontier API), and you need ~9 GB RAM for `qwen3:14b` / `cogito:14b`. The 4 GB `gemma4:e4b` is faster and still hits 94%.
+
+If you only ever want one paid frontier model, you're paying for capabilities (healing, calibration, dialect detection) you don't strictly need — but you also pay nothing extra for them, so there's no real downside.
+
+---
+
+## How does it compare?
+
+### vs LangChain.js / LlamaIndex
+
+LangChain is Python-first, dynamically typed, monolithic. Reactive Agents is **TypeScript-native with zero `any`** in framework code, modular by layer, and observable by design (every phase emits spans + EventBus events).
+
+We ship a [side-by-side migration guide](/guides/migrating-from-langchain/) — the API maps cleanly: `ChatOpenAI` → `.withProvider("openai")`, `AgentExecutor` → `ReactiveAgent`, `BufferMemory` → `.withMemory()`, callbacks → `.withHook()`.
+
+### vs Vercel AI SDK
+
+Great for streaming + tool calling, but stops there. Reactive Agents adds **{metrics.strategies} reasoning strategies** (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive), persistent **4-tier memory**, guardrails, verification, cost routing, and a **{metrics.phases}-phase execution engine** with full observability. Same TypeScript ergonomics; you can use both side-by-side if you already have AI SDK in production.
+
+### vs AutoGen / CrewAI
+
+Multi-agent frameworks without type safety, composable architecture, or model-adaptive intelligence. Reactive Agents ships **A2A protocol** (JSON-RPC + SSE for cross-agent calls), dynamic sub-agent spawning, and the healing pipeline that lifts local-model accuracy by +80pp. We see them as complementary — you can wrap a CrewAI agent as a Reactive Agents tool via `agent-tool-adapter`.
+
+### vs Building from scratch
+
+You'd reinvent: provider adapters (6 LLM providers), guardrails, verification, semantic entropy, cost routing, A2A protocol, gateway + cron + webhooks, structured logging, OTLP tracing, the {metrics.phases}-phase engine, the healing pipeline, and 4 layers of memory. **{metrics.testFiles}** test files keep it honest. Three months of work minimum, and you'd own the maintenance forever.
+
+---
+
+## What's not done yet?
+
+We try to be honest about gaps. Things on the roadmap that aren't shipped:
+
+- **Node.js support** — Bun-only today.
+- **Cross-session skill persistence** — Living Skills work within a session, but the persistence layer (SQLite-backed cross-session learning) is being hardened.
+- **Multi-session memory transfer** — episodic recall works within a process. Cross-process / cross-machine transfer is being designed.
+- **Sub-agent delegation effectiveness metrics** — the test harness exists; we haven't measured whether delegation beats inline execution on multi-step tasks.
+- **`v1.0` tag** — API is stable since 0.9; we'll tag 1.0 once the items above ship and the calibration store has 1k+ runs across community models.
+
+Track progress in the [GitHub issues](https://github.com/tylerjrbuell/reactive-agents-ts/issues) or the [project state spec](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/wiki/Architecture/Specs/04-PROJECT-STATE.md).
+
+<Aside type="tip" title="Found a missing capability?">
+Open an issue with the `enhancement` label. We prioritize the gaps that block real production deploys; the roadmap reshuffles based on community feedback.
+</Aside>
+
+---
+
+## How do I…
+
+### …get help when I'm stuck?
+
+In order of speed:
+
+1. **[Troubleshooting guide](/guides/troubleshooting/)** — symptom → cause → fix for the most common failures
+2. **[Discord](https://discord.gg/498xEG5A)** — community support, usually a response within hours
+3. **[GitHub Issues](https://github.com/tylerjrbuell/reactive-agents-ts/issues)** — for repeatable bugs / feature requests
+4. **[GitHub Discussions](https://github.com/tylerjrbuell/reactive-agents-ts/discussions)** — for "how do I X" questions and design conversations
+
+### …keep an eye on releases?
+
+Subscribe to the [`/rss.xml`](/rss.xml) feed — built dynamically from the [What's New](/guides/whats-new/) page. Or watch the [GitHub releases](https://github.com/tylerjrbuell/reactive-agents-ts/releases).
+
+### …feed the docs to my AI coding tool?
+
+Three flat-text routes are auto-generated on every build:
+
+- [`/llms.txt`](/llms.txt) — index file pointing at the others
+- [`/llms-small.txt`](/llms-small.txt) — abridged docs (~650 KB)
+- [`/llms-full.txt`](/llms-full.txt) — complete docs (~800 KB, 20k lines)
+
+Cursor / Claude Code / Continue / etc. can ingest these directly so the assistant has full framework context.
+
+### …contribute?
+
+Read [Contributing](/guides/contributing/) for the coding standards. Every page in the docs has an "Edit this page on GitHub" link at the bottom — if you spot a typo or unclear section, that's the fastest path to a PR.
+
+---
+
+## Where to next
+
+<CardGrid>
+  <LinkCard
+    title="Quickstart"
+    description="3-line first agent — provider key + .build()."
+    href="/guides/quickstart/"
+  />
+  <LinkCard
+    title="API Cheatsheet"
+    description="Every important method, runtime call, and event tag — on one page."
+    href="/reference/cheatsheet/"
+  />
+  <LinkCard
+    title="Production Checklist"
+    description="What to enable before you ship: budgets, kill switch, structured logs."
+    href="/guides/production-checklist/"
+  />
+  <LinkCard
+    title="What's New"
+    description="v0.9.0 → v0.10.6 release highlights with concrete user gains."
+    href="/guides/whats-new/"
+  />
+</CardGrid>
