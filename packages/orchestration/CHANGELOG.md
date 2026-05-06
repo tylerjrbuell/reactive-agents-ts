@@ -1,5 +1,15 @@
 # @reactive-agents/orchestration
 
+## 0.10.6
+
+### Patch Changes
+
+-   @reactive-agents/core@0.10.6
+-   @reactive-agents/llm-provider@0.10.6
+-   @reactive-agents/reasoning@0.10.6
+-   @reactive-agents/cost@0.10.6
+-   @reactive-agents/identity@0.10.6
+
 ## 0.10.5
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @reactive-agents/judge-server
 
+## 0.9.5
+
+### Patch Changes
+
+-   @reactive-agents/core@0.10.6
+-   @reactive-agents/llm-provider@0.10.6
+-   @reactive-agents/eval@0.10.6
+
 ## 0.9.4
 
 ### Patch Changes

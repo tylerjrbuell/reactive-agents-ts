@@ -1,5 +1,12 @@
 # @reactive-agents/scenarios
 
+## 0.10.6
+
+### Patch Changes
+
+-   @reactive-agents/testing@0.10.6
+-   @reactive-agents/trace@0.10.6
+
 ## 0.10.5
 
 ### Patch Changes

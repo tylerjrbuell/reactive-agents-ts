@@ -1,5 +1,24 @@
 # @reactive-agents/cortex
 
+## 0.10.6
+
+### Patch Changes
+
+-   1a934f0: feat(cortex-ui): load tools dynamically from catalog API
+
+    Replaces the hardcoded AVAILABLE_TOOLS list in AgentConfigPanel with a dynamic fetch from `/api/tools/catalog`. This ensures the UI automatically shows all builtin and meta-tools (web-search, crypto-price, file operations, git/gh CLIs, brief, find, discover-tools, etc.) without requiring UI code changes when new tools are added.
+
+    The fix also adds comprehensive icon mappings for all tools so they display consistently in the UI.
+
+    -   @reactive-agents/core@0.10.6
+    -   @reactive-agents/llm-provider@0.10.6
+    -   @reactive-agents/memory@0.10.6
+    -   @reactive-agents/tools@0.10.6
+    -   @reactive-agents/observability@0.10.6
+    -   @reactive-agents/gateway@0.10.6
+    -   @reactive-agents/reactive-intelligence@0.10.6
+    -   @reactive-agents/runtime@0.10.6
+
 ## 0.10.5
 
 ### Patch Changes
