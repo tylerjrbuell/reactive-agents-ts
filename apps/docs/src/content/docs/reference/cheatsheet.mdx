@@ -5,7 +5,17 @@ sidebar:
   order: 1
 ---
 
+import { Badge, Aside } from '@astrojs/starlight/components';
+
 The 80% of the API you'll use, all on one page. For full signatures and option types, see the [Builder API reference](/reference/builder-api/).
+
+<Aside type="tip" title="Reading guide">
+Method tables below use these markers:
+&nbsp;<Badge text="essential" variant="success" /> in any working agent.
+&nbsp;<Badge text="recommended" variant="note" /> for any production agent.
+&nbsp;<Badge text="opt-in" variant="tip" /> niche capability — enable when you need it.
+&nbsp;<Badge text="advanced" variant="caution" /> requires understanding the lifecycle.
+</Aside>
 
 ## Minimum viable agent
 
@@ -28,34 +38,34 @@ That's it. Provider key from `.env`, model auto-picked, direct LLM loop.
 
 ### Identity & provider
 
-| Method | What it does |
-|--------|--------------|
-| `.withName(name)` | Identifier for logs, telemetry, A2A |
-| `.withProvider(p)` | `"anthropic"` · `"openai"` · `"gemini"` · `"ollama"` · `"litellm"` · `"test"` |
-| `.withModel(id)` | e.g. `"claude-sonnet-4-6"`, `"gpt-4o"`, `"qwen3:14b"` |
-| `.withSystemPrompt(s)` | Persona / instructions for the agent |
+| Method | Status | What it does |
+|--------|:------:|--------------|
+| `.withName(name)` | <Badge text="recommended" variant="note" size="small" /> | Identifier for logs, telemetry, A2A |
+| `.withProvider(p)` | <Badge text="essential" variant="success" size="small" /> | `"anthropic"` · `"openai"` · `"gemini"` · `"ollama"` · `"litellm"` · `"test"` |
+| `.withModel(id)` | <Badge text="recommended" variant="note" size="small" /> | e.g. `"claude-sonnet-4-6"`, `"gpt-4o"`, `"qwen3:14b"` |
+| `.withSystemPrompt(s)` | <Badge text="opt-in" variant="tip" size="small" /> | Persona / instructions for the agent |
 
 ### Cognition
 
-| Method | What it does |
-|--------|--------------|
-| `.withReasoning()` | ReAct loop (default). Pass `{ defaultStrategy: "tree-of-thought" }` to switch. |
-| `.withTools()` | Built-in tools + meta-tools (`recall`, `find`, `brief`, `pulse`) |
-| `.withTools({ tools: [myTool] })` | Add custom tools to the registry |
-| `.withMemory()` | 4-layer memory, tier `"standard"` (FTS5 keyword search) |
-| `.withMemory({ tier: "enhanced" })` | + vector embeddings (needs `EMBEDDING_PROVIDER`) |
-| `.withSkills({ paths: ["./skills/"] })` | Living Skills System — agentskills.io compatible |
+| Method | Status | What it does |
+|--------|:------:|--------------|
+| `.withReasoning()` | <Badge text="essential" variant="success" size="small" /> | ReAct loop (default). Pass `{ defaultStrategy: "tree-of-thought" }` to switch. |
+| `.withTools()` | <Badge text="recommended" variant="note" size="small" /> | Built-in tools + meta-tools (`recall`, `find`, `brief`, `pulse`) |
+| `.withTools({ tools: [myTool] })` | <Badge text="opt-in" variant="tip" size="small" /> | Add custom tools to the registry |
+| `.withMemory()` | <Badge text="recommended" variant="note" size="small" /> | 4-layer memory, tier `"standard"` (FTS5 keyword search) |
+| `.withMemory({ tier: "enhanced" })` | <Badge text="opt-in" variant="tip" size="small" /> | + vector embeddings (needs `EMBEDDING_PROVIDER`) |
+| `.withSkills({ paths: ["./skills/"] })` | <Badge text="opt-in" variant="tip" size="small" /> | Living Skills System — agentskills.io compatible |
 
 ### Production safety
 
-| Method | What it does |
-|--------|--------------|
-| `.withGuardrails()` | Pre-LLM injection / PII / toxicity blocking |
-| `.withVerification()` | Post-LLM fact-check (semantic entropy, NLI) |
-| `.withCostTracking()` | Complexity routing + budget enforcement |
-| `.withIdentity()` | Ed25519 certificates + RBAC + delegation |
-| `.withKillSwitch()` | Per-agent + global emergency halt |
-| `.withRequiredTools({ tools: ["web-search"] })` | Force critical tool calls before answering |
+| Method | Status | What it does |
+|--------|:------:|--------------|
+| `.withGuardrails()` | <Badge text="recommended" variant="note" size="small" /> | Pre-LLM injection / PII / toxicity blocking |
+| `.withVerification()` | <Badge text="opt-in" variant="tip" size="small" /> | Post-LLM fact-check (semantic entropy, NLI) |
+| `.withCostTracking()` | <Badge text="recommended" variant="note" size="small" /> | Complexity routing + budget enforcement |
+| `.withIdentity()` | <Badge text="advanced" variant="caution" size="small" /> | Ed25519 certificates + RBAC + delegation |
+| `.withKillSwitch()` | <Badge text="recommended" variant="note" size="small" /> | Per-agent + global emergency halt |
+| `.withRequiredTools({ tools: ["web-search"] })` | <Badge text="opt-in" variant="tip" size="small" /> | Force critical tool calls before answering |
 
 ### Observability
 

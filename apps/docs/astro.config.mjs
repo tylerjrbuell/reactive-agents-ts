@@ -3,6 +3,7 @@ import starlight from "@astrojs/starlight";
 import skills from "astro-skills";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
+import starlightImageZoom from "starlight-image-zoom";
 
 export default defineConfig({
   // Docs now deploy to a custom domain at the root path.
@@ -53,6 +54,9 @@ export default defineConfig({
           errorOnRelativeLinks: false, // Starlight uses many relative paths; only block hard breaks
           errorOnInvalidHashes: false, // anchors get added/renamed often; warn but don't block
         }),
+        // Click-to-zoom on every image. Cortex screenshots are large and
+        // unreadable inline; zoom modal makes the actual UI visible.
+        starlightImageZoom(),
         // Generates /llms.txt + /llms-full.txt — a flat plain-text view of
         // the entire docs site, optimized for LLM ingestion. On-brand for an
         // AI agent framework: the docs are themselves consumable by agents.
