@@ -245,11 +245,19 @@ Default entrypoint is `src/index.ts`. Use `--entry` if your project uses a diffe
 
 ### `rax eval`
 
-Run an evaluation suite (placeholder).
+Run an evaluation suite from a YAML/JSON dataset file. Uses `@reactive-agents/eval` with frozen-judge isolation (Rule 4) — the judge LLM is wired through a separate `JudgeLLMService` Tag so its code path is isolated from the SUT.
 
 ```bash
-rax eval run --suite <suite-name>
+rax eval run --suite <path-to-suite> [--provider anthropic|openai|test] [--agent <name>]
 ```
+
+Options:
+
+- `--suite <path>` — required. Path to the suite definition file.
+- `--provider <name>` — `anthropic`, `openai`, or `test` (default: `test`)
+- `--agent <name>` — agent config name to load from your project (default: `default`)
+
+The runtime guard rejects identical `judge.model === sutModel` pairings to prevent self-judging bias.
 
 ### `rax playground`
 
