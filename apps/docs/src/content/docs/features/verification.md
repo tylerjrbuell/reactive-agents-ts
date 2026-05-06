@@ -154,7 +154,7 @@ const verificationLayer = createVerificationLayer({
 
 ## Integration with Execution Engine
 
-Verification runs during **Phase 6 (Verify)** of the 10-phase execution lifecycle. When the verification score and risk level are computed, they're stored in the execution context metadata — accessible via lifecycle hooks:
+Verification runs during **Phase 6 (Verify)** of the 12-phase execution lifecycle. When the verification score and risk level are computed, they're stored in the execution context metadata — accessible via lifecycle hooks:
 
 ```typescript
 import { Effect } from "effect";

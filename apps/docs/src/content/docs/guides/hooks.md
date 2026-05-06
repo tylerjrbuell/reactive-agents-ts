@@ -1,11 +1,11 @@
 ---
 title: Lifecycle Hooks
-description: Intercept and extend the 10-phase execution engine with custom hooks
+description: Intercept and extend the 12-phase execution engine with custom hooks
 ---
 
 # Lifecycle Hooks
 
-Every agent execution flows through a deterministic 10-phase lifecycle. Hooks let you intercept any phase to add logging, metrics, validation, or custom behavior.
+Every agent execution flows through a deterministic 12-phase lifecycle. Hooks let you intercept any phase to add logging, metrics, validation, or custom behavior.
 
 :::tip[Effect imports for hooks]
 Hook handlers must return an **`Effect`** (not a raw value). At the top of your module:

@@ -196,7 +196,7 @@ const history = yield* obs.getSnapshots("agent-1", 10);
 
 When observability is enabled, the execution engine automatically:
 
-1. Creates a span for each of the 10 execution phases
+1. Creates a span for each of the 12 execution phases
 2. Records phase duration as histogram metrics
 3. Increments completion/error counters per phase
 4. Logs audit entries at Phase 9 with full task summary

@@ -13,7 +13,7 @@ Reactive Agents uses a layered, composable architecture built on Effect-TS.
                     └────────────┬────────────┘
                                  │
                     ┌────────────▼────────────┐
-                    │      ExecutionEngine     │  10-phase lifecycle
+                    │      ExecutionEngine     │  12-phase lifecycle
                     └────────────┬────────────┘
                                  │
          ┌───────────────────────┼───────────────────────┐

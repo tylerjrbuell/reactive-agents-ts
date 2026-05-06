@@ -4,18 +4,21 @@
 
 # Reactive Agents — TypeScript AI Agent Framework
 
-Run your first agent in 60 seconds. Scale up by composing layers — add reasoning loops, persistent 4-tier memory, production guardrails, cost routing, and a live local studio one `.with()` call at a time.
+**Built for control, not magic.** A composable TypeScript agent framework with end-to-end Effect-TS type safety, a deterministic 12-phase execution engine, and a live local studio. See every decision your agent makes — why, when, and at what cost.
 
-Works on local Ollama models (8B+) through frontier APIs — same code, same features. Built on Effect-TS for compile-time type safety at every boundary. No `any`.
+Run your first agent in 60 seconds. Scale up by composing layers — add reasoning loops, persistent 4-tier memory, production guardrails, cost routing, and reactive intelligence one `.with()` call at a time.
 
-|                             |                                                               |
-| --------------------------- | ------------------------------------------------------------- |
-| **34 total packages**       | 29 packages + 5 apps, exactly what you need, no hidden coupling |
-| **6 LLM providers**         | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test  |
-| **5 reasoning strategies**  | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive |
-| **4,672+ tests · 527 files** | Production-grade confidence (run `bun test` before release) |
-| **Cortex Studio**           | Live agent canvas, entropy charts, debrief UI, agent builder  |
-| **Effect-TS end to end**    | Compile-time type safety, zero `any`, explicit tagged errors  |
+Works on local Ollama models (4B+) through frontier APIs — **same code, same features**. Type safety at every service boundary. No `any`.
+
+|                              |                                                                  |
+| ---------------------------- | ---------------------------------------------------------------- |
+| **35 total**                 | 30 packages + 5 apps — exactly what you need, no hidden coupling |
+| **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
+| **5 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive    |
+| **5,028 tests · 556 files**  | Production-grade confidence (verified `bun test` on every PR)    |
+| **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
+| **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
+| **Effect-TS end to end**     | Compile-time type safety, zero `any`, explicit tagged errors     |
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
@@ -65,37 +68,62 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 
 ## Features
 
--   **5 reasoning strategies** + adaptive meta-strategy (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive) + **Intelligent Context Synthesis** — optional fast-template or deep-LLM transcript shaping each iteration (`withReasoning({ synthesis, strategies: { … } })`, `ContextSynthesized` on EventBus)
--   **6 LLM providers** -- Anthropic, OpenAI, Google Gemini, Ollama (local), LiteLLM (40+ models), Test (deterministic)
--   **Model-adaptive context profiles** -- 4 tiers (local, mid, large, frontier) with tier-aware prompts, compaction, and truncation
--   **4-layer memory** -- working, episodic, semantic (vector + FTS5), procedural (bun:sqlite); ExperienceStore for cross-agent learning; background consolidation + decay
--   **Real-time token streaming** + SSE via `agent.runStream()` with AbortSignal cancellation, `IterationProgress` + `StreamCancelled` events, and `StreamCompleted.toolSummary`
--   **Persistent autonomous gateway** -- adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine; **gateway chat mode** with per-sender SQLite session history, episodic context injection, and history windowing (`channels.mode: 'chat'`)
--   **Agent debrief + conversational chat** -- `agent.chat()` and `agent.session()` (with optional SQLite persistence via `SessionStoreService`) for adaptive Q&A; post-run `DebriefSynthesizer` produces structured summaries persisted to SQLite
--   **A2A multi-agent protocol** -- Agent Cards, JSON-RPC 2.0 server/client, SSE streaming, agent-as-tool composition
--   **Multi-agent orchestration** -- sequential, parallel, pipeline, and map-reduce workflows with dynamic sub-agent spawning
--   **Production guardrails** -- injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
--   **Ed25519 identity** -- real cryptographic agent certificates, RBAC, delegation, and audit trails
--   **Cost tracking** -- complexity routing across 27 signals, semantic caching, budget enforcement with persistence across restarts, dynamic pricing fetching via `.withDynamicPricing()` (e.g. OpenRouter), cache-aware token discounts
--   **Professional metrics dashboard** -- EventBus-driven execution timeline, tool call summary, smart alerts, and cost estimation (zero manual instrumentation)
--   **Native function-calling harness** -- provider capability routing with robust fallback parsing for JSON tool calls embedded in model text (fenced or bare JSON) when native tool calls are missing
--   **Required tools guard** -- ensure agents call critical tools before answering (static list or adaptive LLM inference), with relevant-tool pass-through, satisfied-required re-calls, and per-tool call budgets (`maxCallsPerTool`) to prevent research loops
--   **Builder hardening** -- `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, consolidated `withGuardrails()` thresholds, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, automatic strategy switching
--   **Harness quality controls** -- `withMinIterations(n)` blocks early exit, `withVerificationStep()` adds LLM self-review, `withOutputValidator(fn)` retries on invalid output, `withCustomTermination(fn)` user-defined done predicate, `withProgressCheckpoint(n)` resumable agents, `withTaskContext(record)` background data injection
--   **ToolBuilder fluent API** -- define tools without raw schema objects
--   **Provider fallback chains** -- `FallbackChain` + `withFallbacks()` for graceful degradation across providers/models
--   **Cortex live reporting** -- `.withCortex(url?)` streams runtime EventBus telemetry to Cortex over WebSocket (`/ws/ingest`) with best-effort delivery
--   **Structured logging** -- `makeLoggerService()` with level filtering, JSON/text format, and file output with rotation via `withLogging()`
--   **Health checks** -- `withHealthCheck()` + `agent.health()` returns `{ status, checks[] }`
--   **Adaptive calibration** -- three-tier live learning (shipped prior → community profile → local posterior); per-run observations stored at `~/.reactive-agents/observations/`; `parallelCallCapability` and `classifierReliability` adapt empirically after 5 runs; classifier bypass saves an LLM round-trip when reliability is low; `toolCallDialect` probed per model (native-fc vs text-parse routing); auto-enabled when `.withReasoning()` is active, opt out with `.withCalibration("skip")`
--   **Adaptive tool calling** -- `toolCallDialect` FC probe routes models to `NativeFCDriver` (native FC) or `TextParseDriver` (3-tier XML/JSON/pseudo-code cascade); `HealingPipeline` normalizes tool-name aliases, param aliases, paths, and types before every execution; `ToolCallObservation` closes the ExperienceStore feedback loop with N≥3 alias frequency gate
--   **Reactive intelligence** -- 5-source entropy sensor, reactive controller (8 dispatched interventions: early-stop, context-compress, strategy-switch, temp-adjust, tool-inject, skill-activate, tool-failure-redirect, stall-detect; 4 advisory via pulse tool: prompt-switch, memory-boost, skill-reinject, human-escalate), local learning engine (conformal calibration, Thompson Sampling bandit, skill synthesis), telemetry client (api.reactiveagents.dev), `.withReactiveIntelligence()` builder method with hooks, constraints, and autonomy control
--   **Living Skills System** -- agentskills.io SKILL.md compatibility, `SkillStoreService` (SQLite-backed), `SkillEvolutionService` (LLM refinement + version management), unified `SkillResolverService` (SQLite + filesystem), 5-stage compression pipeline, context-aware injection guard with model-tier budgets, `activate_skill` + `get_skill_section` meta-tools, `.withSkills()` builder, `agent.skills()` / `exportSkill()` / `loadSkill()` / `refineSkills()` runtime API
--   **Agent as Data** -- `AgentConfig` JSON-serializable schema, `builder.toConfig()` reverse mapping, `ReactiveAgents.fromConfig()` / `.fromJSON()` reconstruction, roundtrip serialization
--   **Lightweight composition** -- `agentFn()` lazy agent primitives, `pipe()` sequential chains, `parallel()` concurrent fan-out, `race()` first-to-complete — all composable
--   **Dynamic tool registration** -- `agent.registerTool()` / `agent.unregisterTool()` for runtime tool management on live agents
--   **Web framework integration** — `@reactive-agents/react` (`useAgentStream`, `useAgent`), `@reactive-agents/vue` composables, `@reactive-agents/svelte` stores — consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
--   **4,731 tests** across 536 files
+Grouped by capability. **Every layer is opt-in** — call `.with*()` only for what you need.
+
+### 🧠 Reasoning & Cognition
+-   **5 reasoning strategies** + adaptive meta-strategy: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
+-   **Intelligent context synthesis** — fast-template or deep-LLM transcript shaping per iteration (`ContextSynthesized` on EventBus)
+-   **Reactive intelligence** — 5-source entropy sensor + 8-action controller (early-stop, compress, switch strategy, adjust temp, inject tool, activate skill, redirect on failure, stall-detect) + Thompson Sampling bandit
+-   **Adaptive calibration** — three-tier live learning (shipped prior → community profile → local posterior) with per-run observations and classifier bypass
+
+### 💾 Memory & Skills
+-   **4-layer memory** — working, episodic, semantic (vector + FTS5), procedural — backed by `bun:sqlite` with background consolidation + decay
+-   **ExperienceStore** — cross-agent learning loop closed by `ToolCallObservation`
+-   **Living Skills System** — agentskills.io `SKILL.md` compatible, SQLite-backed, LLM-refined evolution, 5-stage compression, context-aware injection guard
+-   **Agent debrief + chat** — `agent.chat()` for one-shot Q&A, `agent.session()` for multi-turn (optional SQLite persistence), post-run `DebriefSynthesizer`
+
+### 🔌 Providers & Models
+-   **6 LLM providers** — Anthropic, OpenAI, Google Gemini, Ollama (local), LiteLLM (40+ models), Test (deterministic)
+-   **Model-adaptive context profiles** — 4 tiers (local / mid / large / frontier) with tier-aware prompts, compaction, and truncation; **4B+ Ollama models work** with the same code
+-   **Adaptive tool calling** — FC dialect probe routes to `NativeFCDriver` or 3-tier `TextParseDriver` (XML / JSON / pseudo-code)
+-   **HealingPipeline** — normalizes tool-name aliases, param aliases, paths, and type coercion before every execution (86.7% recovery rate, +80pp accuracy on small models)
+-   **Provider fallback chains** — `withFallbacks()` for graceful degradation across providers and models
+
+### 🛡️ Production Safety
+-   **Guardrails** — pre-LLM injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
+-   **Ed25519 identity** — real cryptographic agent certificates, RBAC, delegation chains, audit trails
+-   **Verification** — semantic entropy, fact decomposition, NLI hallucination detection
+-   **Cost controls** — 27-signal complexity router, semantic cache, budget enforcement (persists across restarts), dynamic pricing via OpenRouter
+-   **Required tools guard** — ensure critical tools are called before answering, with `maxCallsPerTool` budgets to prevent research loops
+
+### 🔭 Observability
+-   **12-phase execution engine** — deterministic lifecycle with `before` / `after` / `on-error` hooks per phase
+-   **Professional metrics dashboard** — EventBus-driven execution timeline, tool-call summary, cost estimation, smart alerts (zero manual instrumentation)
+-   **Distributed tracing** (OTLP) + structured logging via `withLogging({ level, format, filePath })`
+-   **Cortex Studio live reporting** — `.withCortex(url?)` streams runtime telemetry over WebSocket
+-   **Streaming + SSE** — `agent.runStream()` with `AbortSignal` cancellation; one-line SSE endpoint via `AgentStream.toSSE()`
+
+### 🧩 Composition & Multi-Agent
+-   **Builder API** — chains capabilities in one place; **Agent-as-data** via `toConfig()` / `fromJSON()` for save/share/restore
+-   **Functional combinators** — `agentFn()`, `pipe()`, `parallel()`, `race()` for declarative agent pipelines
+-   **A2A protocol** — Agent Cards, JSON-RPC 2.0 server/client, SSE streaming, agent-as-tool
+-   **Orchestration** — sequential, parallel, pipeline, map-reduce; dynamic sub-agent spawning with depth limits
+-   **Persistent gateway** — adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine, **chat mode** with per-sender SQLite session history
+
+### ⚙️ Builder Hardening
+- `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withProgressCheckpoint()`, `withTaskContext()`
+- **ToolBuilder** fluent API — define tools without raw schema objects
+- **Dynamic tool registration** — `agent.registerTool()` / `agent.unregisterTool()` at runtime
+
+### 🌐 Frontend Integration
+- **`@reactive-agents/react`** — `useAgentStream`, `useAgent` hooks
+- **`@reactive-agents/vue`** — Vue 3 composables with reactive refs
+- **`@reactive-agents/svelte`** — Svelte 4/5 writable stores
+- All consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
+
+### ✅ Confidence
+- **5,028 tests** across 556 files — 5,002 pass / 26 skip / 0 fail in ~65s
+- **Zero `any`** in framework code — Effect-TS schemas validate every service boundary
 
 ## Quick Start
 
@@ -333,7 +361,7 @@ const agent = await ReactiveAgents.create()
     .build()
 ```
 
-Available phases: `bootstrap`, `guardrail`, `cost-route`, `strategy`, `think`, `act`, `observe`, `verify`, `memory-flush`, `complete`. Each supports `before`, `after`, and `on-error` timing.
+Available phases (12): `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`. Each supports `before`, `after`, and `on-error` timing.
 
 ## Comparison
 
@@ -357,7 +385,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   4,975 tests   |      --      |      --       |   --    |
+| Test suite                    |   5,028 tests   |      --      |      --       |   --    |
 
 ## Use Cases
 
@@ -392,7 +420,7 @@ ReactiveAgentBuilder
 
 Every layer is an Effect `Layer` -- composable, independently testable, and tree-shakeable.
 
-## 10-Phase Execution Engine
+## 12-Phase Execution Engine
 
 Every task flows through a deterministic lifecycle. Each phase calls its corresponding service when enabled:
 
@@ -717,8 +745,8 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (see runner summary; ~4,731 tests / 536 files)
-bun run build            # Build all packages (31 tasks, ESM + DTS)
+bun test                 # Run full test suite (5,028 tests / 556 files, ~65s)
+bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
 ## Environment Variables

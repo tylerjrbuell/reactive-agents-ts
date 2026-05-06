@@ -22,7 +22,7 @@ Reactive Agents solves each of these with a layered, composable architecture:
 |---------|----------|
 | No type safety | Effect-TS schemas validate every boundary |
 | Monolithic | Layer system — enable only what you need |
-| Opaque | 10-phase execution engine with lifecycle hooks |
+| Opaque | 12-phase execution engine with lifecycle hooks |
 | Unsafe | Built-in guardrails, verification, and cost controls |
 
 ## Key Features
@@ -40,7 +40,7 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-### 10-Phase Execution Engine
+### 12-Phase Execution Engine
 
 Every agent task flows through a deterministic lifecycle:
 

@@ -155,7 +155,7 @@ Define behavioral boundaries for agents using topic-level constraints:
 
 ## How It Works in the Execution Engine
 
-Guardrails run during **Phase 2** of the 10-phase execution lifecycle:
+Guardrails run during **Phase 2** of the 12-phase execution lifecycle:
 
 ```text
 1. Bootstrap → 2. GUARDRAIL → 3. Cost Route → ...

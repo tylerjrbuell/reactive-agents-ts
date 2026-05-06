@@ -14,7 +14,7 @@ This guide maps LangChain.js concepts to their Reactive Agents equivalents and s
 | `DynamicStructuredTool` | `ToolDefinition` + handler object |
 | `BufferMemory` / `ConversationSummaryMemory` | `.withMemory({ tier: "standard" })` |
 | `RunnableSequence` / `Chain` | Reasoning strategies (ReAct, Plan-Execute-Reflect, etc.) |
-| `CallbackManager` | `.withHook()` (10-phase lifecycle) |
+| `CallbackManager` | `.withHook()` (12-phase lifecycle) |
 | `OutputParser` | `OutputFormat` on `AgentResult` |
 
 ---
@@ -112,9 +112,9 @@ const agent = await ReactiveAgents.create()
 
 ## Callbacks to Hooks
 
-LangChain.js uses a `CallbackManager` with event-named handler functions. Reactive Agents uses a typed 10-phase lifecycle with explicit `phase` and `timing` fields.
+LangChain.js uses a `CallbackManager` with event-named handler functions. Reactive Agents uses a typed 12-phase lifecycle with explicit `phase` and `timing` fields.
 
-The 10 phases in order: `bootstrap`, `guardrail`, `strategy`, `think`, `act`, `observe`, `verify`, `memory-flush`, `audit`, `complete`.
+The 12 phases in order: `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`.
 
 **LangChain.js**
 
@@ -210,7 +210,7 @@ The `semantic` layer supports vector similarity search via SQLite + embeddings. 
 
 ## Key Differences
 
-- **Explicit 10-phase lifecycle** — every execution passes through named phases (`bootstrap` through `complete`), each hookable, vs LangChain's implicit chain execution where instrumentation points vary by chain type.
+- **Explicit 12-phase lifecycle** — every execution passes through named phases (`bootstrap` through `complete`), each hookable, vs LangChain's implicit chain execution where instrumentation points vary by chain type.
 
 - **Effect-TS composition** — services, hooks, and layers are composed using [Effect-TS](https://effect.website/) for typed errors and dependency injection. LangChain uses Promise chains and class inheritance.
 
