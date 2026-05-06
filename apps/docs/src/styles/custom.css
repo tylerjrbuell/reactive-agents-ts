@@ -966,7 +966,10 @@ html {
   cursor: pointer;
   font: inherit;
   font-size: 0.82rem;
+  /* Fixed width keeps yes / no buttons identical despite different label widths */
+  min-width: 5.25rem;
   padding: 0.45rem 0.95rem;
+  text-align: center;
   background: transparent;
   border: 1px solid rgba(139, 92, 246, 0.30);
   border-radius: 8px;
