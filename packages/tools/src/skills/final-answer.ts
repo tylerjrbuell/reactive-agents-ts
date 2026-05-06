@@ -10,12 +10,19 @@ export const finalAnswerTool: ToolDefinition = {
     "are complete. Provide the actual deliverable in 'output', its format in 'format', " +
     "and a brief summary of what was accomplished in 'summary'. " +
     "This is the preferred way to end a task — do NOT write 'FINAL ANSWER:' in text when you can call this tool. " +
-    "When your task involves code generation, your output field MUST contain the actual complete code — not a description of the code or a reference to code you wrote earlier.",
+    "When your task involves code generation, your output field MUST contain the actual complete code — not a description of the code or a reference to code you wrote earlier. " +
+    "When your task involves writing a summary, report, paragraph, or any prose content, your output field MUST contain the actual prose itself — NOT a file path, NOT a reference to a file you wrote, NOT a description of what you wrote. The user wants the content, not its location.",
   parameters: [
     {
       name: "output",
       type: "string",
-      description: "The actual deliverable — the answer, result, file path, JSON data, etc.",
+      description:
+        "The actual substantive deliverable the user asked for. " +
+        "If they asked for a summary, this is the summary text. If they asked for code, this is the code. " +
+        "If they asked for an analysis, this is the analysis. " +
+        "Return a file path here ONLY when the task explicitly asked you to report a path " +
+        "(e.g. 'create a file at X and tell me where it is'). " +
+        "When the task asks for content (prose, code, data), the content goes here directly — not in a separate file.",
       required: true,
     },
     {

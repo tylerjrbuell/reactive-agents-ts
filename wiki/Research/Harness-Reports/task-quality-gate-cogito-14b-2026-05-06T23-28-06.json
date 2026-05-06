@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-06T23-28-06",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 201,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 7294.916992,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5010,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 13792.373753000002,
+      "output": "1. Valve releases Steam Controller CAD files under Creative Commons license (score: 930)\n2. UK businesses brace for jet fuel rationing (score: 35)\n3. Appearing productive in the workplace (score: 598)\n4. Vibe coding and agentic engineering are getting closer than I'd like (score: 312)\n5. Google Cloud fraud defense, the next evolution of reCAPTCHA (score: 174)\n6. From Supabase to Clerk to Better Auth (score: 175)\n7. The bottleneck was never the code (score: 469)\n8. David Sacks crashed and burned in the White House (score: 44)\n9. Learning the Integral of a Diffusion Model (score: 71)\n10. Show HN: Tilde.run – Agent sandbox with a transactional, versioned filesystem (score: 113)\n11. Inkscape 1.4.4 (score: 176)\n12. Show HN: Hallucinopedia (score: 103)\n13. A Theory of Deep Learning (score: 102)\n14. Community firmware for the Xteink X4 e-paper reader (score: 26)\n15. Ted Turner has died (score: 202)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 13207,
+      "stepsCount": 15,
+      "toolCallCount": 5,
+      "wallMs": 15410.378850999998,
+      "output": "1. Vibe coding and agentic engineering are getting closer than I'd like — comments: 338\n2. Higher usage limits for Claude and a compute deal with SpaceX — comments: 262\n3. Valve releases Steam Controller CAD files under Creative Commons license — comments: 311",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks",
+          "★ called recall()"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5128,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 12689.890582,
+      "output": "# ## Highest Score\n1. Valve releases Steam Controller CAD files under Creative Commons license (930)\n2. Appearing productive in the workplace (598)\n3. The bottleneck was never the code (469)\n\n## Most Comments\n1. Vibe coding and agentic engineering are getting closer than I'd like (338)\n2. Ted Turner has died (161)\n3. Valve releases Steam Controller CAD files under Creative Commons license (311)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 13767,
+      "stepsCount": 15,
+      "toolCallCount": 5,
+      "wallMs": 31932.815742000006,
+      "output": "# Today on Hacker News\n\n## AI/ML & Technology \nValve releasing the CAD files for their Steam Controller under a Creative Commons license is a significant move toward open hardware development, potentially inspiring new innovations in gaming peripherals.\n\nGoogle Cloud has introduced its next generation of fraud defense as an evolution beyond reCAPTCHA, focusing on advanced protection against sophisticated attack vectors. Additionally, Sander's exploration into the integral of diffusion models presents interesting insights for AI and machine learning practitioners.\n\nThe integration of Vibe coding with agentic engineering seems to be progressing at a pace that has some developers concerned about ethical considerations and control implications.\n\n## Business & Workplace \nThe article on appearing productive in the workplace highlights common practices used by employees to create an illusion of busyness, while 'David Sacks crashed and burned' details his departure from Trump's White House following controversies related to AI model reviews. The UK's looming jet fuel rationing for businesses underscores global supply chain challenges.\n\n## Programming & Development \nThe launch of Hallucinopedia offers a curated collection of hallucinations in various media formats, while Tilde.run introduces an agent sandbox with transactional, versioned filesystem capabilities. Clerk's 'From Supabase to Better Auth' discusses evolving authentication solutions for modern web applications.\n\n## Hardware & Tools \nThe latest Inkscape 1.4.4 release brings updates and bug fixes to the popular vector graphics editor, while a community firmware project for the Xteink X4 e-paper reader showcases user-driven hardware improvements.\n\n## Other\nTed Turner's passing marks the end of an era in media broadcasting. Elonlit's theoretical exploration of deep learning provides new perspectives on neural network architectures and training methodologies.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "5 category sections",
+          "2/15 titles cited",
+          "270 words",
+          "★ called recall()"
+        ],
+        "composite": 0.6966666666666667
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8962,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}
