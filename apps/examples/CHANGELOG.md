@@ -1,5 +1,27 @@
 # @reactive-agents/examples
 
+## 0.1.9
+
+### Patch Changes
+
+-   reactive-agents@0.10.6
+-   @reactive-agents/core@0.10.6
+-   @reactive-agents/llm-provider@0.10.6
+-   @reactive-agents/memory@0.10.6
+-   @reactive-agents/reasoning@0.10.6
+-   @reactive-agents/tools@0.10.6
+-   @reactive-agents/guardrails@0.10.6
+-   @reactive-agents/verification@0.10.6
+-   @reactive-agents/cost@0.10.6
+-   @reactive-agents/identity@0.10.6
+-   @reactive-agents/observability@0.10.6
+-   @reactive-agents/interaction@0.10.6
+-   @reactive-agents/orchestration@0.10.6
+-   @reactive-agents/prompts@0.10.6
+-   @reactive-agents/eval@0.10.6
+-   @reactive-agents/a2a@0.10.6
+-   @reactive-agents/runtime@0.10.6
+
 ## 0.1.8
 
 ### Patch Changes

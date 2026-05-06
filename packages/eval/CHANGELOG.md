@@ -1,5 +1,12 @@
 # @reactive-agents/eval
 
+## 0.10.6
+
+### Patch Changes
+
+-   @reactive-agents/core@0.10.6
+-   @reactive-agents/llm-provider@0.10.6
+
 ## 0.10.5
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/cortex",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "type": "module",
   "description": "Cortex companion studio — visual UI + API for inspecting and managing reactive-agents in real time",
   "keywords": [
@@ -58,14 +58,14 @@
   "dependencies": {
     "elysia": "^1.1.0",
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.10.5",
-    "@reactive-agents/memory": "0.10.5",
-    "@reactive-agents/runtime": "0.10.5",
-    "@reactive-agents/observability": "0.10.5",
-    "@reactive-agents/gateway": "0.10.5",
-    "@reactive-agents/llm-provider": "0.10.5",
-    "@reactive-agents/tools": "0.10.5",
-    "@reactive-agents/reactive-intelligence": "0.10.5"
+    "@reactive-agents/core": "0.10.6",
+    "@reactive-agents/memory": "0.10.6",
+    "@reactive-agents/runtime": "0.10.6",
+    "@reactive-agents/observability": "0.10.6",
+    "@reactive-agents/gateway": "0.10.6",
+    "@reactive-agents/llm-provider": "0.10.6",
+    "@reactive-agents/tools": "0.10.6",
+    "@reactive-agents/reactive-intelligence": "0.10.6"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
