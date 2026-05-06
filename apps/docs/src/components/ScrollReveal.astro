@@ -1,0 +1,23 @@
+---
+// ScrollReveal.astro
+//
+// Lives in an .astro file (not inline in MDX) so that:
+//   1. Smart-quote / paragraph-wrapping in MDX doesn't mangle the script text
+//   2. The TypeScript generics inside scroll-reveal.ts don't get parsed as JSX
+//   3. Astro can bundle the imported module and apply <script type="module">
+//
+// Renders two <script> tags:
+//   - is:inline    — runs synchronously in document order, adds `js-reveal`
+//                    class to <html> *before* first paint so CSS hidden
+//                    states apply without FOUC.
+//   - bundled      — Astro processes the import, ships a hashed deferred
+//                    module. IntersectionObserver lives there.
+---
+
+<script is:inline>
+    document.documentElement.classList.add('js-reveal')
+</script>
+
+<script>
+    import '../scripts/index-scroll-reveal.ts'
+</script>

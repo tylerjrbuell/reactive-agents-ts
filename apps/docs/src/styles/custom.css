@@ -255,11 +255,167 @@ html {
 /* ── Section cards ───────────────────────────────────────────── */
 .ra-section-card {
   margin-bottom: 2.5rem;
-  animation: ra-fade-up 0.5s ease-out both;
 }
 
 .ra-section-card .ra-panel-inner h2 {
   margin-top: 0 !important;
+}
+
+/* ── Scroll-driven reveals ────────────────────────────────────────
+   Hidden states are scoped under `html.js-reveal`, which is set by an
+   inline script before first paint. No-JS users never get the class
+   so content shows normally; users who prefer reduced motion get the
+   media-query escape hatch below. Observer (in index.mdx) adds
+   `.is-visible` when each container enters the viewport.            */
+
+@media (prefers-reduced-motion: no-preference) {
+
+  /* Section-level fade-up */
+  html.js-reveal .ra-stats-panel,
+  html.js-reveal .ra-section-card {
+    opacity: 0;
+    transform: translateY(32px);
+    transition:
+      opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  html.js-reveal .ra-stats-panel.is-visible,
+  html.js-reveal .ra-section-card.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Children inside revealed containers — staggered fade */
+  html.js-reveal .ra-stats-panel .ra-stat,
+  html.js-reveal .ra-section-card .ra-readout,
+  html.js-reveal .ra-section-card .card-grid > article,
+  html.js-reveal .ra-section-card .ra-flow-grid .ra-phase {
+    opacity: 0;
+    transform: translateY(14px);
+    transition:
+      opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  html.js-reveal .ra-stats-panel.is-visible .ra-stat,
+  html.js-reveal .ra-section-card.is-visible .ra-readout,
+  html.js-reveal .ra-section-card.is-visible .card-grid > article,
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Stat counter cells stagger */
+  html.js-reveal .ra-stats-panel.is-visible .ra-stat:nth-child(1) { transition-delay: 0.10s; }
+  html.js-reveal .ra-stats-panel.is-visible .ra-stat:nth-child(2) { transition-delay: 0.18s; }
+  html.js-reveal .ra-stats-panel.is-visible .ra-stat:nth-child(3) { transition-delay: 0.26s; }
+  html.js-reveal .ra-stats-panel.is-visible .ra-stat:nth-child(4) { transition-delay: 0.34s; }
+  html.js-reveal .ra-stats-panel.is-visible .ra-stat:nth-child(5) { transition-delay: 0.42s; }
+
+  /* Readout cards stagger (the "What You Get" 4-up) */
+  html.js-reveal .ra-section-card.is-visible .ra-readout:nth-child(1) { transition-delay: 0.18s; }
+  html.js-reveal .ra-section-card.is-visible .ra-readout:nth-child(2) { transition-delay: 0.30s; }
+  html.js-reveal .ra-section-card.is-visible .ra-readout:nth-child(3) { transition-delay: 0.42s; }
+  html.js-reveal .ra-section-card.is-visible .ra-readout:nth-child(4) { transition-delay: 0.54s; }
+
+  /* CardGrid articles (Why RA, How It's Different, Why-framework paths) */
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(1)  { transition-delay: 0.12s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(2)  { transition-delay: 0.18s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(3)  { transition-delay: 0.24s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(4)  { transition-delay: 0.30s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(5)  { transition-delay: 0.36s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(6)  { transition-delay: 0.42s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(7)  { transition-delay: 0.48s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(8)  { transition-delay: 0.54s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(9)  { transition-delay: 0.60s; }
+  html.js-reveal .ra-section-card.is-visible .card-grid > article:nth-child(10) { transition-delay: 0.66s; }
+
+  /* 12-phase architecture cascade */
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(1)  { transition-delay: 0.06s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(2)  { transition-delay: 0.12s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(3)  { transition-delay: 0.18s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(4)  { transition-delay: 0.24s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(5)  { transition-delay: 0.30s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(6)  { transition-delay: 0.36s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(7)  { transition-delay: 0.42s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(8)  { transition-delay: 0.48s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(9)  { transition-delay: 0.54s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(10) { transition-delay: 0.60s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(11) { transition-delay: 0.66s; }
+  html.js-reveal .ra-section-card.is-visible .ra-flow-grid .ra-phase:nth-child(12) { transition-delay: 0.72s; }
+
+  /* Harness-pick green card — slight extra delay so it lands AFTER the 2 warning cards */
+  html.js-reveal .ra-section-card.is-visible .ra-harness-pick {
+    animation: ra-pick-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.42s both;
+  }
+  @keyframes ra-pick-rise {
+    from { opacity: 0; transform: translateY(18px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Benchmark bar fills: collapse to 0 until bench enters viewport,
+     then animate to their inline `style="width:N%"` targets, staggered. */
+  html.js-reveal .ra-bench .ra-bar-fill {
+    transform-origin: left center;
+  }
+  html.js-reveal .ra-bench:not(.is-visible) .ra-bar-fill {
+    width: 0 !important;
+  }
+  html.js-reveal .ra-bench.is-visible .ra-bar:nth-of-type(1) .ra-bar-fill { transition-delay: 0.10s; }
+  html.js-reveal .ra-bench.is-visible .ra-bar:nth-of-type(2) .ra-bar-fill { transition-delay: 0.24s; }
+  html.js-reveal .ra-bench.is-visible .ra-bar:nth-of-type(3) .ra-bar-fill { transition-delay: 0.38s; }
+  html.js-reveal .ra-bench.is-visible .ra-bar:nth-of-type(4) .ra-bar-fill { transition-delay: 0.52s; }
+  html.js-reveal .ra-bench.is-visible .ra-bar:nth-of-type(5) .ra-bar-fill { transition-delay: 0.66s; }
+
+  /* Stat number tabular-num + soft glow as it ticks */
+  html.js-reveal .ra-stats-panel .ra-stat-value {
+    font-feature-settings: "tnum" 1;
+    transition: text-shadow 0.4s ease-out;
+  }
+  html.js-reveal .ra-stats-panel.is-visible .ra-stat-value {
+    text-shadow: 0 0 18px rgba(139, 92, 246, 0.18);
+  }
+}
+
+/* Reduced-motion users get content immediately, no animation choreography. */
+@media (prefers-reduced-motion: reduce) {
+  html.js-reveal .ra-stats-panel,
+  html.js-reveal .ra-section-card,
+  html.js-reveal .ra-stats-panel .ra-stat,
+  html.js-reveal .ra-section-card .ra-readout,
+  html.js-reveal .ra-section-card .card-grid > article,
+  html.js-reveal .ra-section-card .ra-flow-grid .ra-phase,
+  html.js-reveal .ra-bench .ra-bar-fill {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── Harness pick — full-width emphasis card sitting below the 2-col warning grid */
+.ra-harness-pick {
+  margin-top: 1.25rem;
+}
+
+.ra-harness-pick .card {
+  width: 100%;
+  border-color: rgba(34, 197, 94, 0.55) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.12) 0%,
+    rgba(16, 185, 129, 0.06) 100%
+  ) !important;
+  box-shadow:
+    0 0 0 1px rgba(34, 197, 94, 0.32),
+    0 8px 28px rgba(34, 197, 94, 0.12);
+}
+
+[data-theme="light"] .ra-harness-pick .card {
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.18) 0%,
+    rgba(16, 185, 129, 0.10) 100%
+  ) !important;
 }
 
 /* Terminal at bottom of a panel — pulls edge-to-edge flush with panel edges */

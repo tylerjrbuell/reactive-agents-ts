@@ -3,7 +3,7 @@ title: Reactive Agents
 description: The open-source agent framework built for control, not magic. Type-safe, observable, and composable.
 template: splash
 hero:
-    tagline: 'The TypeScript agent framework built for control — not magic. End-to-end type-safe with Effect-TS. Fully observable 12-phase execution engine. Runs the same code on local Ollama (4B+) through Claude, GPT, and Gemini. 30 packages, take only what you need.'
+    tagline: 'A transparent agent harness for TypeScript — every prompt, tool call, and reasoning step is a typed event you can subscribe to. 12-phase pipeline with before/after/on-error hooks at every stage; raw provider clients ship standalone. MCP-native, type-safe with Effect-TS. The healing pipeline recovers 86.7% of tool-call errors so local Ollama (4B+) runs the same code as Claude, GPT, and Gemini.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -27,7 +27,15 @@ import {
 import HeroInteraction from '../../components/HeroInteraction.astro'
 import TerminalReplay from '../../components/TerminalReplay.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
+import ScrollReveal from '../../components/ScrollReveal.astro'
 import metrics from '../../data/metrics.json'
+
+{/*
+  Scroll-reveal scripts (both the inline FOUC-prevention class signal
+  AND the bundled IntersectionObserver) live in ScrollReveal.astro so
+  MDX doesn't mangle script contents with smart quotes or <p> wrapping.
+*/}
+<ScrollReveal />
 
 {/*
   All numeric stats below are auto-generated at build time by
@@ -62,7 +70,80 @@ import metrics from '../../data/metrics.json'
     </div>
 </div>
 
-<FeatureCarousel />
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
+
+## Start in 60 Seconds
+
+```bash
+bun add reactive-agents
+```
+
+```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withReasoning() // ReAct loop: Think → Act → Observe
+    .withTools() // Built-in: web-search, file-read, code-execute
+    .withObservability()
+    .build()
+
+const result = await agent.run('Find the top 3 TypeScript testing frameworks')
+console.log(result.output)
+```
+
+One package. Composable layers. Enable exactly what you need — skip everything you don't.
+
+<TerminalReplay />
+
+  </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
+
+## Why use a framework? Why not just write the loop?
+
+You can. An agent is a loop — LLM → tool → observe → repeat. Hand-rolling works fine for prototypes, and we'd never tell you otherwise.
+
+It breaks when reality arrives. On our 35-task benchmark, a bare ReAct loop (LLM in a `while` with tools) tops out at **85%**. The same models inside this harness hit **100%**. That gap is everything that isn't the loop:
+
+- Tool calls returning malformed JSON, wrong types, or hallucinated tool names
+- Loops that don't terminate — or terminate too early
+- Context that overflows mid-run; memory that leaks between runs
+- Local models dropping reasoning tags, repeating themselves, or refusing structured output
+- Provider-specific streaming quirks; path resolution; type coercion
+- No clean overrides, hooks, or escape hatches when *your* edge case shows up
+
+This is **harness engineering**, and there are three honest paths:
+
+<CardGrid>
+    <Card title="Build it yourself" icon="warning">
+        Doable. It's also months of work and a permanent maintenance tax — every new provider, every new model quirk, every edge case you missed in v1 is yours to chase. Most teams underestimate this by 3×.
+    </Card>
+    <Card title="Use a black-box harness" icon="warning">
+        Fast to start. Opaque to debug, audit, or override. When the magic breaks at 2am, you're reading framework internals — without source-level control over the parts that actually matter to your agent.
+    </Card>
+</CardGrid>
+
+<div class="ra-harness-pick">
+    <Card title="Use a transparent harness ← Reactive Agents" icon="approve-check">
+        Every phase emits typed events. The 12-phase pipeline exposes
+        before/after/on-error hooks; system prompts are readable templates,
+        not buried strings; raw provider clients ship standalone so you
+        can skip the harness entirely. Components like the healing pipeline,
+        context curator, and arbitrator are exported and inspectable today —
+        custom-replacement surfaces land progressively (see
+        [stability tiers](/reference/stability/)). No hidden prompts, no
+        proprietary loop.
+    </Card>
+</div>
+
+If you're going to spend the time anyway, spend it on **your agent's logic** — not on rebuilding tool-call recovery, context curation, and termination oracles for the third time this year.
+
+  </div>
+</div>
 
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
@@ -263,84 +344,6 @@ import metrics from '../../data/metrics.json'
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## 🚀 Launch Pad
-
-Pick the path that matches where you are.
-
-<CardGrid>
-    <LinkCard
-        title="Build something fast"
-        description="Zero to working agent in 5 minutes — copy-paste ready"
-        href="guides/quickstart/"
-    />
-    <LinkCard
-        title="Browse 30+ examples"
-        description="Runnable across 11 categories: tools, memory, multi-agent, gateway, streaming, more"
-        href="guides/examples/"
-    />
-    <LinkCard
-        title="One-page API cheatsheet"
-        description="Every important builder method, runtime call, and event tag — on one page"
-        href="reference/cheatsheet/"
-    />
-    <LinkCard
-        title="Should I use this? (FAQ)"
-        description="Production readiness, honest caveats, comparisons vs LangChain / AI SDK / AutoGen, what's not done yet."
-        href="guides/faq/"
-    />
-    <LinkCard
-        title="Migrating from LangChain"
-        description="Side-by-side mapping of LangChain concepts to Reactive Agents"
-        href="guides/migrating-from-langchain/"
-    />
-    <LinkCard
-        title="Choosing your stack"
-        description="Pick provider · model tier · memory · reasoning strategy in 2 minutes"
-        href="guides/choosing-a-stack/"
-    />
-    <LinkCard
-        title="Deploy to production"
-        description="Observability, cost controls, guardrails, and the full checklist"
-        href="guides/production-checklist/"
-    />
-</CardGrid>
-
-  </div>
-</div>
-
-<div class="ra-section-card ra-panel">
-  <div class="ra-panel-inner">
-
-## Start in 60 Seconds
-
-```bash
-bun add reactive-agents
-```
-
-```typescript
-import { ReactiveAgents } from 'reactive-agents'
-
-const agent = await ReactiveAgents.create()
-    .withProvider('anthropic')
-    .withReasoning() // ReAct loop: Think → Act → Observe
-    .withTools() // Built-in: web-search, file-read, code-execute
-    .withObservability()
-    .build()
-
-const result = await agent.run('Find the top 3 TypeScript testing frameworks')
-console.log(result.output)
-```
-
-One package. Composable layers. Enable exactly what you need — skip everything you don't.
-
-<TerminalReplay />
-
-  </div>
-</div>
-
-<div class="ra-section-card ra-panel">
-  <div class="ra-panel-inner">
-
 ## Why Reactive Agents?
 
 <CardGrid stagger>
@@ -373,6 +376,18 @@ One package. Composable layers. Enable exactly what you need — skip everything
         Healing Pipeline recovers from **86.7% of tool-call errors** — 90%
         cheaper than LLM reprompt. Model-adaptive context tunes prompts and
         compaction per tier. Same code, frontier-to-local.
+    </Card>
+    <Card title="MCP-Native Tool I/O" icon="puzzle">
+        **Connect any Model Context Protocol server** — local or remote, stdio
+        or HTTP. The 9,400+ public MCP servers (filesystem, GitHub, Slack,
+        browsers, databases) plug in alongside your custom tools. The protocol
+        is the integration layer; we don't reinvent it.
+    </Card>
+    <Card title="Skills as a Primitive" icon="open-book">
+        **First-class SKILL.md lifecycle** — load, activate, and hand-off built
+        into the kernel, not bolted on. Compatible with the emerging
+        cross-tool skill format used by Claude Code, Codex, and Cursor.
+        [Browse the Skills guide &rarr;](/guides/agent-skills/)
     </Card>
     <Card title="Frontier-Verified" icon="approve-check">
         **100% pass on `ra-full`** across `claude-sonnet-4-6`,
@@ -416,10 +431,11 @@ One package. Composable layers. Enable exactly what you need — skip everything
         engine** with full observability — same TypeScript ergonomics.
     </Card>
     <Card title="vs. AutoGen / CrewAI" icon="document">
-        Multi-agent frameworks without type safety, composable architecture, or
-        model-adaptive intelligence. Reactive Agents ships **A2A protocol**
-        (JSON-RPC + SSE), dynamic sub-agent spawning, and the **healing pipeline
-        that lifts local-model accuracy by +80pp**.
+        Multi-agent-first frameworks. Reactive Agents takes the
+        Cognition-aligned posture: **single-threaded writes, sub-agent
+        delegation only when it pays for itself**. Type-safe, composable, with
+        the **healing pipeline that lifts local-model accuracy by +80pp** —
+        and A2A (JSON-RPC + SSE) ready when you actually need fan-out.
     </Card>
     <Card title="vs. Building From Scratch" icon="document">
         **30 production-ready packages, 5,028 tests, 12-phase engine.** Memory,
@@ -486,6 +502,56 @@ agent.start(); // Runs forever, Ctrl+C to stop
 ```
   </TabItem>
 </Tabs>
+
+  </div>
+</div>
+
+<FeatureCarousel />
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
+
+## 🚀 Launch Pad
+
+Pick the path that matches where you are.
+
+<CardGrid>
+    <LinkCard
+        title="Build something fast"
+        description="Zero to working agent in 5 minutes — copy-paste ready"
+        href="guides/quickstart/"
+    />
+    <LinkCard
+        title="Browse 30+ examples"
+        description="Runnable across 11 categories: tools, memory, multi-agent, gateway, streaming, more"
+        href="guides/examples/"
+    />
+    <LinkCard
+        title="One-page API cheatsheet"
+        description="Every important builder method, runtime call, and event tag — on one page"
+        href="reference/cheatsheet/"
+    />
+    <LinkCard
+        title="Should I use this? (FAQ)"
+        description="Production readiness, honest caveats, comparisons vs LangChain / AI SDK / AutoGen, what's not done yet."
+        href="guides/faq/"
+    />
+    <LinkCard
+        title="Migrating from LangChain"
+        description="Side-by-side mapping of LangChain concepts to Reactive Agents"
+        href="guides/migrating-from-langchain/"
+    />
+    <LinkCard
+        title="Choosing your stack"
+        description="Pick provider · model tier · memory · reasoning strategy in 2 minutes"
+        href="guides/choosing-a-stack/"
+    />
+    <LinkCard
+        title="Deploy to production"
+        description="Observability, cost controls, guardrails, and the full checklist"
+        href="guides/production-checklist/"
+    />
+</CardGrid>
 
   </div>
 </div>
