@@ -15,45 +15,50 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
-## v0.10.x — Phase 1 Validation Release (May 2026)
+## v0.10.x — Local models match frontier (May 2026)
 
-The largest release to date. **22-wave overhaul**, **full empirical validation of all 13 harness mechanisms** (8 KEEP / 5 IMPROVE / 0 REMOVE), and a complete adaptive tool-calling pipeline that makes local models dramatically more reliable. Read the full [v0.10.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for the long form.
+The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four weeks. The headline: **local Ollama models now hit 91–94% on the same task suite as paid frontier APIs**, thanks to a closed-loop healing pipeline and adaptive tool-calling. Read the full [v0.10.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for engineering detail.
 
-### Highlights
+### What you gain
 
-- **Healing Pipeline (M4)** — 4-stage closed-loop FC recovery (tool-name → param-name → path resolution → type coercion). **86.7% recovery rate**, **+80pp accuracy lift**, **90% token savings** vs LLM reprompt fallback. Ships on every tool call by default — see [LLM Providers](/features/llm-providers/) and [Resilience](/features/resilience/).
-- **Composable kernel architecture** — `kernel/` reorganized into capability-grouped subdirs (`act/`, `attend/`, `comprehend/`, `decide/`, `reason/`, `reflect/`, `sense/`, `verify/` + `loop/` + `state/`). Single-owner termination via `kernel/loop/terminate.ts` with CI-enforced lint guard — see [Composable Kernel](/concepts/composable-kernel/).
-- **Reactive Intelligence dispatcher fully wired** — 6 intervention handlers active (early-stop, temp-adjust, switch-strategy, context-compress, tool-inject, skill-activate); budget threading fixed; suppression gates reachable — see [Reactive Intelligence](/features/reactive-intelligence/).
-- **Three-stage context curation** — `tool-execution` compress-and-stash → curator render-from-stash → optional RI-driven trim. **60.7% context reduction**, **38.6% token savings** (44.1% aggressive), **0.16ms latency** — see [Intelligent Context Synthesis](/features/intelligent-context-synthesis/).
-- **Calibration system** — 3-tier resolver (shipped prior → community profile → local observations); `parallelCallCapability`, `classifierReliability`, and `toolCallDialect` adapt empirically after 5 runs; auto-enabled when `.withReasoning()` is active.
-- **Adaptive tool calling** — `toolCallDialect` FC probe routes models to `NativeFCDriver` or 3-tier `TextParseDriver` (XML / JSON / pseudo-code cascade); `ToolCallObservation` closes the ExperienceStore feedback loop with N≥3 alias frequency gate.
-- **`@reactive-agents/diagnose`** — standalone npm package for output-leak detection. **100% true positive, 0% false positive, 0.02ms detection latency**; 25 regex patterns + 4 FP filters across system-prompt, api-key, credential, and internal-instruction leaks.
-- **Gateway chat mode** (May 1) — per-sender SQLite session history, episodic context injection, daily compaction, `channels.mode: 'chat' | 'task'` — see [Gateway](/features/gateway/) and [Messaging Channels](/guides/messaging-channels/).
-- **`@reactive-agents/cortex`** — Cortex Studio is now an installable npm package with Beacon, Thalamus, Lab, and living-skills views. Run via `bunx @reactive-agents/cortex` or `rax cortex` — see [Cortex](/features/cortex/).
-- **Frontier benchmarks: 100% pass on `ra-full`** — verified across `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, and `gemini-2.5-pro` (W21, Apr 30 2026). Bare LLM only achieves 85% under the same harness.
-- **5,028 tests** across 556 files (5,002 pass / 26 skip / 0 fail in ~65s) — verified by `bun test` on every PR.
+#### Local models that actually work
 
-### Phase 1 Mechanism Verdicts
+- **Healing Pipeline** — 4-stage closed-loop recovery on every tool call (tool-name fuzzy match → parameter-name aliasing → path resolution → type coercion). **86.7% recovery rate, +80pp accuracy, 90% cheaper than LLM reprompt.** Ships on by default — see [LLM Providers](/features/llm-providers/) and [Resilience](/features/resilience/).
+- **Adaptive tool calling** — Each model gets fingerprinted on first run; native FC capable models route through the JSON path, weaker ones through a 3-tier text-parse cascade (XML → JSON → pseudo-code). The framework learns each model's dialect after 5 runs and stops asking it to do things it can't.
+- **Calibration system** — Per-model observations (parallel-call capability, classifier reliability, tool-call dialect) adapt empirically. Auto-enabled when `.withReasoning()` is on.
+- **Frontier benchmark: 100% on `ra-full`** verified across `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, `gemini-2.5-pro`. Bare LLM only reaches 85% on the same suite.
+- **Local benchmark: 91–94% on `ra-full`** for `gemma4:e4b` (4 GB) and `cogito:14b` (9 GB) — tied with `gemini-2.5-flash` and `gpt-4o-mini` on the same 35-task suite.
 
-| Mechanism | Verdict | Headline |
-|-----------|---------|----------|
-| M1 RI Dispatcher | ✅ KEEP | Measurement infra in place; budget threading fixed |
-| M2 Strategy Switching | ✅ KEEP | 20 tests passing; ToT outer-loop early-stop fixed |
-| M3 Verifier + Retry | 🔄 IMPROVE | Core works; retry context tuning needed for cogito:14b |
-| M4 Healing Pipeline | ✅ KEEP | 86.7% recovery, +80pp accuracy |
-| M5 Context Curation | ✅ KEEP | 60.7% compression, 38.6% token savings |
-| M6 Skills System | 🔄 IMPROVE | Lifecycle works; cross-session persistence pending |
-| M7 Calibration | 🔄 IMPROVE | 3-tier resolver works; ≥8 of 14 fields to activate |
-| M8 Sub-Agent Delegation | 🔄 IMPROVE | Test harness ready; effectiveness metrics pending |
-| M9 Termination Oracle | ✅ KEEP | 100% path coverage; CI-enforced |
-| M10 Memory System | 🔄 IMPROVE | Recall functional; multi-session scenarios pending |
-| M11 Diagnostic System | ✅ KEEP | 100% TP, 0% FP, 0.02ms latency |
-| M12 Provider Adapters | ✅ KEEP | All 7 hooks fire, 254/254 tests pass |
-| M13 Guards + Meta-tools | ✅ KEEP | 100% accuracy, 0.001ms latency |
+#### Long agent runs stay cheap
 
-### Breaking Changes
+- **Three-stage context curation** — Tool results get compressed and stashed → curator renders only what's needed → optional reactive trim. **60.7% context reduction, 38.6% token savings, 0.16 ms overhead per step.** See [Intelligent Context Synthesis](/features/intelligent-context-synthesis/).
+- **Reactive Intelligence dispatcher** — 6 corrective interventions fire automatically when an agent shows entropy signs (early-stop, temperature adjust, strategy switch, context compress, tool inject, skill activate). Suppression gates prevent runaway dispatch. See [Reactive Intelligence](/features/reactive-intelligence/).
 
-None. All existing `ReactiveAgents.create().with*()` builder chains continue to work unchanged. New fields on `ModelCalibrationSchema` are forward-compatible.
+#### Production safety hardened
+
+- **`@reactive-agents/diagnose`** — Standalone npm package detects system-prompt, API-key, credential, and internal-instruction leaks in any output. **100% true positive, 0% false positive, 0.02 ms latency.** 25 regex patterns + 4 FP filters.
+- **Single-owner termination** — All 12 phases route stop decisions through one arbitrator. CI lint guard prevents future bypass paths. Agents always finish cleanly, never get stuck.
+
+#### Better runtime + tooling
+
+- **`@reactive-agents/cortex`** — Cortex Studio is now installable from npm: `bunx @reactive-agents/cortex` or `rax cortex` launches the live agent canvas, debrief UI, and visual builder. See [Cortex](/features/cortex/).
+- **Gateway chat mode** — Per-sender SQLite session history, episodic context injection, daily compaction. Set `channels.mode: 'chat'` for conversational webhooks; keep `'task'` for one-shot triggers. See [Gateway](/features/gateway/) and [Messaging Channels](/guides/messaging-channels/).
+- **Composable kernel architecture** — Internal `kernel/` reorganized by capability (`act/` · `attend/` · `comprehend/` · `decide/` · `reason/` · `reflect/` · `sense/` · `verify/` + `loop/` + `state/`). Doesn't change the public API; makes contributing to the framework easier. See [Composable Kernel](/concepts/composable-kernel/).
+- **5,028 tests** across 556 files (5,002 pass / 26 skip / 0 fail in ~65 s) — verified by `bun test` on every PR.
+
+### Patch releases
+
+| Version | Highlights |
+|---------|-----------|
+| `0.10.0` | Phase 1 release — healing pipeline, calibration, diagnose, cortex npm |
+| `0.10.1–0.10.2` | Documentation polish, version drift fixes across 28 packages |
+| `0.10.3` | Coordinated package alignment, npm publish drift CI guard |
+| `0.10.4` | Coordinated changeset release (single source of truth) |
+| `0.10.5–0.10.6` | Static-asset serving in Cortex server, README + cookbook freshness |
+
+### Breaking changes
+
+None. All existing `ReactiveAgents.create().with*()` builder chains keep working unchanged. New calibration fields are forward-compatible — existing `~/.reactive-agents/observations/` files decode cleanly.
 
 ---
 
