@@ -694,15 +694,21 @@ html {
 .ra-readout:last-child { border-right: 0; }
 
 .ra-readout-mark {
-  position: absolute;
-  top: 0.85rem;
-  right: 1rem;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.6rem;
-  letter-spacing: 0.08em;
+  display: inline-block;
+  margin-top: 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: var(--ra-cyan);
   opacity: 0.85;
-  font-feature-settings: "tnum" 1;
+  text-transform: lowercase;
+  font-variant: small-caps;
+}
+.ra-readout-mark::before {
+  content: "▸ ";
+  color: var(--ra-violet);
+  margin-right: 0.15em;
+  opacity: 0.7;
 }
 
 .ra-readout-label {
