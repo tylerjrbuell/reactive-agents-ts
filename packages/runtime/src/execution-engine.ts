@@ -57,9 +57,12 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { runGuardedPhase } from "./engine/pipeline.js";
 import type { PhaseDeps } from "./engine/runtime-context.js";
 import { audit } from "./engine/phases/audit.js";
+import { bootstrap } from "./engine/phases/bootstrap.js";
 import { guardrail } from "./engine/phases/guardrail.js";
 import { costRoute } from "./engine/phases/cost-route.js";
 import { costTrack } from "./engine/phases/cost-track.js";
+import { memoryFlush } from "./engine/phases/memory-flush.js";
+import { strategySelect } from "./engine/phases/strategy-select.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -826,30 +829,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 1: BOOTSTRAP ──
-                ctx = yield* guardedPhase(ctx, "bootstrap", (c) =>
-                  Effect.gen(function* () {
-                    const memoryContext = yield* Effect.serviceOption(
-                      Context.GenericTag<{
-                        bootstrap: (id: string) => Effect.Effect<unknown>;
-                      }>("MemoryService"),
-                    ).pipe(
-                      Effect.flatMap((opt) =>
-                        opt._tag === "Some"
-                          ? opt.value
-                              .bootstrap(c.agentId)
-                              .pipe(Effect.map((mc) => mc))
-                          : Effect.succeed(undefined),
-                      ),
-                      Effect.catchAll(() => Effect.succeed(undefined)),
-                    );
-
-                    return {
-                      ...c,
-                      agentState: "running" as const,
-                      memoryContext,
-                    };
-                  }),
-                );
+                // Extracted to engine/phases/bootstrap.ts (W23). The post-bootstrap
+                // initialization that follows (skill application, tip injection,
+                // MemorySnapshot publishing) is orchestrator-level work and stays
+                // inline for now.
+                ctx = yield* runGuardedPhase(bootstrap, ctx, deps);
 
                 // ── Apply learned skills from procedural memory ──
                 {
@@ -1024,33 +1008,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 4: STRATEGY_SELECT ──
-                ctx = yield* guardedPhase(ctx, "strategy-select", (c) =>
-                  Effect.gen(function* () {
-                    const selectorOpt = yield* Effect.serviceOption(
-                      Context.GenericTag<{
-                        select: (
-                          selCtx: unknown,
-                          memCtx: unknown,
-                        ) => Effect.Effect<string>;
-                      }>("StrategySelector"),
-                    );
-                    const strategy =
-                      selectorOpt._tag === "Some"
-                        ? yield* selectorOpt.value
-                            .select(
-                              {
-                                taskDescription: extractTaskText(task.input),
-                                taskType: task.type,
-                                complexity: 0.5,
-                                urgency: 0.5,
-                              },
-                              c.memoryContext,
-                            )
-                            .pipe(Effect.catchAll(() => Effect.succeed(config.defaultStrategy ?? "reactive")))
-                        : (config.defaultStrategy ?? "reactive");
-                    return { ...c, selectedStrategy: strategy };
-                  }),
-                );
+                // Extracted to engine/phases/strategy-select.ts (W23). Post-phase
+                // work below (tool registry fetch, allowedTools mismatch warn,
+                // log line) is orchestrator-level setup and stays inline.
+                ctx = yield* runGuardedPhase(strategySelect, ctx, deps);
 
                 // ── Single tool registry fetch (reused for logging, classification, and reasoning) ──
                 const cachedToolDefs = yield* Effect.serviceOption(ToolService).pipe(
@@ -3451,150 +3412,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // Store complexity on ctx metadata for later use in result assembly
                   ctx = { ...ctx, metadata: { ...ctx.metadata, taskComplexity: complexity } };
 
-                  const memoryFlushEffect = guardedPhase(ctx, "memory-flush", (c) =>
-                    Effect.gen(function* () {
-                      // ── Guard: skip entirely when no memory services are configured ──
-                      const memoryServiceOpt = yield* Effect.serviceOption(
-                        Context.GenericTag<{
-                          snapshot: (s: unknown) => Effect.Effect<void>;
-                          flush?: (agentId: string) => Effect.Effect<void>;
-                        }>("MemoryService"),
-                      );
-                      const memoryConsolidatorOpt = yield* Effect.serviceOption(
-                        Context.GenericTag<{
-                          decayUnused: (agentId: string, decayFactor: number) => Effect.Effect<number>;
-                        }>("MemoryConsolidator"),
-                      );
-                      const memoryExtractorOpt = yield* Effect.serviceOption(
-                        Context.GenericTag<{
-                          extractFromConversation: (
-                            agentId: string,
-                            messages: readonly { role: string; content: string }[],
-                          ) => Effect.Effect<unknown[], unknown>;
-                        }>("MemoryExtractor"),
-                      );
-                      if (
-                        memoryServiceOpt._tag === "None" &&
-                        memoryConsolidatorOpt._tag === "None" &&
-                        memoryExtractorOpt._tag === "None"
-                      ) {
-                        return { ...c, agentState: "flushing" as const };
-                      }
-
-                      // ── Guard: skip on trivial runs (≤1 iteration, no tool calls) ──
-                      const hadToolCalls = c.toolResults.length > 0;
-                      if (c.iteration <= 1 && !hadToolCalls) {
-                        return { ...c, agentState: "flushing" as const };
-                      }
-
-                      // ── MemoryService: snapshot + flush ──
-                      yield* Effect.succeed(memoryServiceOpt).pipe(
-                        Effect.flatMap((opt) =>
-                          opt._tag === "Some"
-                            ? Effect.gen(function* () {
-                                yield* opt.value.snapshot({
-                                  id: c.sessionId,
-                                  agentId: c.agentId,
-                                  messages: c.messages,
-                                  summary: String(c.metadata.lastResponse ?? ""),
-                                  keyDecisions: [],
-                                  taskIds: [c.taskId],
-                                  startedAt: c.startedAt,
-                                  endedAt: new Date(),
-                                  totalCost: c.cost,
-                                  totalTokens: c.tokensUsed,
-                                });
-                                // H5: flush(agentId) writes the memory.md projection to disk
-                                if (opt.value.flush) {
-                                  yield* opt.value
-                                    .flush(c.agentId)
-                                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3343", tag: errorTag(err) })));
-                                }
-                              })
-                            : Effect.void,
-                        ),
-                        Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3348", tag: errorTag(err) })),
-                      );
-
-                      // Lightweight consolidation: decay unused memory entries
-                      yield* Effect.succeed(memoryConsolidatorOpt).pipe(
-                        Effect.flatMap((opt) =>
-                          opt._tag === "Some"
-                            ? opt.value
-                                .decayUnused(c.agentId, 0.05)
-                                .pipe(Effect.catchAll(() => Effect.succeed(0)))
-                            : Effect.succeed(0),
-                        ),
-                        Effect.catchAll(() => Effect.succeed(0)),
-                      );
-
-                      // ── Auto-extract semantic memories ──
-                      // Only extract when there's meaningful content:
-                      // tool calls happened OR response is substantial (>200 chars)
-                      const lastResponse = String(c.metadata.lastResponse ?? "");
-                      const substantialResponse = lastResponse.length > 200;
-
-                      if (hadToolCalls || substantialResponse) {
-                        yield* Effect.succeed(memoryExtractorOpt).pipe(
-                          Effect.flatMap((extractorOpt) => {
-                            if (extractorOpt._tag !== "Some") return Effect.void;
-                            const extractor = extractorOpt.value;
-
-                            // Build messages from the execution context
-                            const messages: { role: string; content: string }[] = [];
-                            // Add the task input as user message
-                            messages.push({ role: "user", content: String(task.input).slice(0, 1000) });
-                            // Add tool results as context
-                            for (const tr of c.toolResults) {
-                              const toolResult = tr as { toolName?: string; result?: unknown };
-                              messages.push({
-                                role: "assistant",
-                                content: `Tool ${toolResult.toolName ?? "unknown"}: ${String(toolResult.result ?? "").slice(0, 500)}`,
-                              });
-                            }
-                            // Add the final response
-                            if (lastResponse) {
-                              messages.push({ role: "assistant", content: lastResponse.slice(0, 2000) });
-                            }
-
-                            return Effect.gen(function* () {
-                              const entries = yield* extractor.extractFromConversation(c.agentId, messages);
-
-                              // Store extracted semantic entries via MemoryService
-                              if (entries.length > 0) {
-                                const memStoreOpt = yield* Effect.serviceOption(
-                                  Context.GenericTag<{
-                                    storeSemantic: (entry: unknown) => Effect.Effect<unknown>;
-                                  }>("MemoryService"),
-                                ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
-
-                                if (memStoreOpt._tag === "Some") {
-                                  for (const entry of entries) {
-                                    yield* memStoreOpt.value
-                                      .storeSemantic(entry)
-                                      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3407", tag: errorTag(err) })));
-                                  }
-                                }
-                              }
-                            });
-                          }),
-                          Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3413", tag: errorTag(err) })),
-                        );
-                      }
-
-                      return { ...c, agentState: "flushing" as const };
-                    }),
-                  );
-
+                  // Phase body extracted to engine/phases/memory-flush.ts (W23).
+                  // Dispatch mode (trivial/moderate/complex) stays inline because
+                  // it gates whether to skip / fork / run blocking, which is an
+                  // orchestrator concern, not phase composition.
                   if (complexity === "trivial") {
-                    // Skip memory-flush entirely for trivial tasks
                     ctx = { ...ctx, agentState: "flushing" as const };
                   } else if (complexity === "moderate") {
-                    // Fire-and-forget: fork the flush as a daemon fiber
-                    yield* Effect.forkDaemon(memoryFlushEffect);
+                    yield* Effect.forkDaemon(runGuardedPhase(memoryFlush, ctx, deps));
                   } else {
-                    // Full blocking pipeline for complex tasks
-                    ctx = yield* memoryFlushEffect;
+                    ctx = yield* runGuardedPhase(memoryFlush, ctx, deps);
                   }
                 }
 
