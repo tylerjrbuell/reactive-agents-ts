@@ -1,0 +1,12 @@
+{
+  "modelId": "cogito:14b",
+  "calibratedAt": "2026-05-07T13:33:12.854Z",
+  "probeVersion": 1,
+  "runsAveraged": 3,
+  "steeringCompliance": "hybrid",
+  "parallelCallCapability": "reliable",
+  "observationHandling": "uses-recall",
+  "systemPromptAttention": "strong",
+  "optimalToolResultChars": 2000,
+  "toolCallDialect": "none"
+}

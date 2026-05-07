@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T13-33-40",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 182,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 6758.953928,
+      "output": "Here's a numbered markdown list of the 7 days of the week, starting with Monday:\n\n1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 4906,
+      "stepsCount": 4,
+      "toolCallCount": 1,
+      "wallMs": 18996.496077,
+      "output": "1. Valve releases Steam Controller CAD files under Creative Commons license (score: 1562)\n2. Boris Cherny: TI-83 Plus Basic Programming Tutorial (2004) (score: 81)\n3. Appearing productive in the workplace (score: 1351)\n4. SQLite Is a Library of Congress Recommended Storage Format (score: 389)\n5. Permacomputing Principles (score: 189)\n6. Grand Theft Oil Futures: Insider traders keep making a killing at our expense (score: 129)\n7. Diskless Linux boot using ZFS, iSCSI and PXE (score: 128)\n8. Chevrolet Performance eCrate package (400v/200hp) (score: 88)\n9. LinkedIn profile visitor lists belong to the people, says Noyb (score: 84)\n10. Indian matchbox labels as a visual archive (score: 45)\n11. SingleRide: Longest route on NYC Subway without visiting the same station twice (score: 46)\n12. RaTeX: KaTeX-compatible LaTeX rendering engine in pure Rust (score: 25)\n13. Agent-harness-kit scaffolding for multi-agent workflows (MCP, provider-agnostic) (score: 35)\n14. The brave souls who bought a used, 340k-mile rental camper van (score: 34)\n15. GovernGPT (YC W24) Is Hiring Engineers to Build Thinking Systems in Montreal (score: 1)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 9815,
+      "stepsCount": 7,
+      "toolCallCount": 2,
+      "wallMs": 12004.458621999998,
+      "output": "1. Vibe coding and agentic engineering are getting closer than I'd like — comments: 743\n2. Appearing productive in the workplace — comments: 535\n3. Valve releases Steam Controller CAD files under Creative Commons license — comments: 518",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8864,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 14414.243715999997,
+      "output": "## Highest Score\n1. Appearing productive in the workplace (1351)\n2. Vibe coding and agentic engineering are getting closer than I'd like (657)\n3. Valve releases Steam Controller CAD files under Creative Commons license (1562)\n\n## Most Comments\n1. Appearing productive in the workplace (535)\n2. Vibe coding and agentic engineering are getting closer than I'd like (743)\n3. Valve releases Steam Controller CAD files under Creative Commons license (518)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 5542,
+      "stepsCount": 10,
+      "toolCallCount": 4,
+      "wallMs": 22494.408382,
+      "output": "# Today on Hacker News\n## Technology & Software\nThe technology sector is currently dominated by several key developments. Notably, Valve has released the Steam Controller CAD files under a Creative Commons license, allowing enthusiasts to modify or create custom controllers for their gaming setups. In software development circles, RaTeX emerges as an interesting project—a KaTeX-compatible LaTeX rendering engine written entirely in Rust, promising faster and more efficient mathematical typesetting. Additionally, Grand Theft Oil Futures has caught attention with its critical analysis of insider trading in oil futures markets.\n\n## Open Source & Hardware\nThe open source community is seeing a resurgence with Agent-harness-kit, an MCP provider-agnostic scaffolding for multi-agent workflows, and SQLite being recognized as a Library of Congress Recommended Storage Format. On the hardware side, Indian matchbox labels are emerging as a unique visual archive, showcasing the country's graphic design history.\n\n## Workplace & Personal Development\nWorkplace productivity strategies take center stage with an insightful article on 'Appearing Productive in the Workplace,' offering practical tips for professionals seeking to enhance their visibility and effectiveness. Meanwhile, LinkedIn is facing scrutiny over its visitor list policies as Noyb advocates for user data ownership rights.\n\n## Miscellaneous\nA variety of other topics cover everything from permacomputing principles and diskless Linux boot configurations using ZFS/iSCSI/PXE, to the adventurous tale of brave individuals who purchased a used rental camper van with over 340k miles. The list also includes an intriguing project titled 'SingleRide' which explores finding the longest route in NYC's subway without repeating stations.\n\nThis compilation highlights the diverse range of discussions on Hacker News, from technological innovations to societal concerns and personal development strategies.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "0/15 titles cited",
+          "273 words",
+          "★ called recall()"
+        ],
+        "composite": 0.65
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9299999999999999,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}
