@@ -53,6 +53,11 @@ import { isSubagentCall } from "./subagent-telemetry.js";
 import { computeArgValidityRate } from "./arg-validity.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
+// ─── Phase pipeline (W23 decomposition) ───
+import { runGuardedPhase } from "./engine/pipeline.js";
+import type { PhaseDeps } from "./engine/runtime-context.js";
+import { audit } from "./engine/phases/audit.js";
+
 // ─── Narrow service types for optional deps ───
 
 type ObsLike = {
@@ -656,6 +661,24 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 )
               : { _tag: "None" as const };
             const ks = ksOpt._tag === "Some" ? ksOpt.value : null;
+
+            // ── PhaseDeps bundle (W23 decomposition) ──
+            // Long-lived dependency bundle threaded through every extracted phase.
+            // Grows as more phases are pulled out; only fields consumed by
+            // already-extracted phases are populated.
+            const deps: PhaseDeps = {
+              config,
+              hooks: hookRegistry,
+              obs,
+              eb,
+              ks: ks as unknown,
+              guardrail: null,
+              behavioral: null,
+              tools: null,
+              state: { cancelledTasks, runningContexts },
+              isNormal,
+              executionStartMs,
+            };
 
             // Wrap entire execution in root observability span
             const executeCore = (): Effect.Effect<TaskResult, RuntimeErrors, any> =>
@@ -3690,25 +3713,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 9: AUDIT (optional) ── H2
-                if (config.enableAudit) {
-                  ctx = yield* guardedPhase(ctx, "audit", (c) =>
-                    Effect.gen(function* () {
-                      if (obs) {
-                        yield* obs.info("Execution audit trail", {
-                          taskId: c.taskId,
-                          agentId: c.agentId,
-                          iterations: c.iteration,
-                          tokensUsed: c.tokensUsed,
-                          cost: c.cost,
-                          strategy: c.selectedStrategy,
-                          duration: Date.now() - c.startedAt.getTime(),
-                          phase: "audit",
-                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3479", tag: errorTag(err) })));
-                      }
-                      return c;
-                    }),
-                  );
-                }
+                // Extracted to engine/phases/audit.ts (W23). Phase's own `skip` predicate
+                // gates on config.enableAudit.
+                ctx = yield* runGuardedPhase(audit, ctx, deps);
 
                 // ── Phase 10: COMPLETE ──
                 ctx = yield* guardedPhase(ctx, "complete", (c) =>

@@ -331,20 +331,26 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 **Sequence:** W23 → W24 → W26 → W27 → W28 (order matters; each wave's gate must pass before the next starts).
 
-#### W23 — Execution-engine decomposition
+#### W23 — Execution-engine decomposition (phase-as-data architecture)
 
-**Goal:** Break `execution-engine.ts` (4,499 LOC) into ≤9 phase modules.
+**Goal:** Decompose `execution-engine.ts` (~4,663 LOC) using a phase-as-data architecture: each phase is a first-class typed value (`Phase`); the engine composes a `phases` array via a `runPipeline` runner. Number of files is incidental; **composability + LOC ceilings** are the gate.
 
 **Scope:**
-- Identify the 9 logical phases currently embedded in execution-engine.ts
-- Extract each to `packages/runtime/src/engine/phase-{name}.ts` (≤400 LOC each)
-- `execution-engine.ts` becomes the orchestrator (≤600 LOC), delegating to phase modules
-- Update all imports; run full test suite
+- Build infrastructure: `engine/phase.ts` (Phase type + PhaseDeps), `engine/pipeline.ts` (runPipeline + runObservablePhase), `engine/runtime-context.ts` (shared state Refs)
+- Extract phases to `engine/phases/{name}.ts` — empirical count: 10 named phases, two (`agent-loop`, `complete`) get sub-folders
+- `execution-engine.ts` becomes thin orchestrator (≤600 LOC) that wires deps and composes the phases array
+- Cross-phase mutable state moves to `PhaseStateRefs` (no closure leakage)
+- Add unit tests where decision logic exists (pipeline composer, tool-classifier, verify, debrief)
 
 **Validation gate:**
-- [ ] `execution-engine.ts` ≤ 600 LOC; every phase module ≤ 400 LOC
-- [ ] All existing tests pass unchanged
+- [ ] `execution-engine.ts` ≤ 600 LOC
+- [ ] Every phase module ≤ 400 LOC
+- [ ] Phase composition is declarative (single `phases` array literal)
+- [ ] All 738+ existing `packages/runtime` tests pass unchanged
 - [ ] Typecheck clean across all packages
+- [ ] New unit tests for ≥3 phases with decision logic
+
+**Tactical plan:** `wiki/Planning/Implementation-Plans/2026-05-07-phase-a-w23-execution-engine-decomposition.md`
 
 #### W24 — Strategy RI-scaffolding helper
 
@@ -403,6 +409,8 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 **Phase A completion gate:**
 - [ ] `builder.ts` ≤ 500 LOC, `execution-engine.ts` ≤ 600 LOC
+- [ ] Every phase module ≤ 400 LOC
+- [ ] Phase composition is declarative (single array literal in `execution-engine.ts`)
 - [ ] All 4,672+ tests pass
 - [ ] Typecheck clean across all packages
 - [ ] N=3 corpus run shows ≤5% variance from current baseline (no behavioral regression)
@@ -749,6 +757,7 @@ Every amendment to this North Star (phase reordering, gate revision, phase addit
 | 2026-05-03 | v1.0 Roadmap created (Phases 0–7) | v0.10.0 release-pending; audit §16 surfaced gaps | tylerjrbuell |
 | 2026-05-04 | Phase 1 complete: 8 KEEP + 5 IMPROVE; Phase 1.5 defined | Improvement-first posture confirmed via TDD spikes | Phase 1 validation evidence |
 | 2026-05-07 | **v4.0** — `07-ROADMAP-v1.0.md` and `Phase 1.5 Improvement Roadmap.md` absorbed; Phase A (W23–W28) established as now-work before Compose API; Snapshot/Replay promoted from Phase 6 → Phase C (v0.11); `04-PROJECT-STATE.md` retained as separate framing doc; public `ROADMAP.md` alignment flagged as Phase C gate requirement | Single source of truth directive — plans were sprawled across 3+ documents; architecture cleanup before Compose API prevents rework | tylerjrbuell |
+| 2026-05-07 | **W23 gate refinement** — module count "9" replaced by composability + LOC ceilings: `execution-engine.ts` ≤ 600 LOC, every phase module ≤ 400 LOC, phase composition declarative (single array literal). Empirical structure has 10 named phases; two (`agent-loop` ~1,950 LOC, `complete` ~787 LOC) need internal sub-modules. Final layout is ~13–17 files via phase-as-data architecture (each phase exports a typed `Phase` value; pipeline runner composes them). This is the substrate Phase B (`.compose()`) builds on. | Decomposition design discovered the empirical phase count exceeds initial estimate; counting files is less meaningful than declarative composition + LOC ceilings. Phase-as-data design also eliminates the closure-breakage cost the advisor flagged and pre-builds the Phase B substrate. | tylerjrbuell + Claude (Opus 4.7) |
 | *(future amendments append here)* | | | |
 
 ---
