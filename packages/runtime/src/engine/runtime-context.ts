@@ -22,7 +22,7 @@ import type {
 } from "../types.js";
 import type { LifecycleHookRegistry } from "../hooks.js";
 import type { HookError } from "../errors.js";
-import type { AgentEvent } from "@reactive-agents/core";
+import type { AgentEvent, Task } from "@reactive-agents/core";
 
 /**
  * Resolved-service value for the lifecycle hook registry. Phases receive this
@@ -88,6 +88,9 @@ export interface PhaseStateRefs {
  * The dependency bundle every phase receives. Grows as phases are extracted.
  */
 export interface PhaseDeps {
+  /** The task being executed — phase modules read `task.input`, `task.type`, etc. */
+  readonly task: Task;
+
   /** Immutable run-scoped config. */
   readonly config: ReactiveAgentsConfig;
 

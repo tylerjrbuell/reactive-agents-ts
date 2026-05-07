@@ -57,6 +57,9 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { runGuardedPhase } from "./engine/pipeline.js";
 import type { PhaseDeps } from "./engine/runtime-context.js";
 import { audit } from "./engine/phases/audit.js";
+import { guardrail } from "./engine/phases/guardrail.js";
+import { costRoute } from "./engine/phases/cost-route.js";
+import { costTrack } from "./engine/phases/cost-track.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -667,6 +670,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // Grows as more phases are pulled out; only fields consumed by
             // already-extracted phases are populated.
             const deps: PhaseDeps = {
+              task,
               config,
               hooks: hookRegistry,
               obs,
@@ -984,102 +988,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 2: GUARDRAIL (optional) ── H2
-                if (config.enableGuardrails) {
-                  ctx = yield* guardedPhase(ctx, "guardrail", (c) =>
-                    Effect.gen(function* () {
-                      const guardrailOpt = yield* Effect.serviceOption(
-                        GuardrailService,
-                      ).pipe(
-                        Effect.catchAll(() =>
-                          Effect.succeed({ _tag: "None" as const }),
-                        ),
-                      );
-
-                      if (guardrailOpt._tag === "Some") {
-                        const inputText = extractTaskText(task.input);
-                        const result = yield* guardrailOpt.value
-                          .check(inputText)
-                          .pipe(
-                            Effect.catchAll(() =>
-                              Effect.succeed({
-                                passed: true,
-                                violations: [],
-                                score: 1,
-                                checkedAt: new Date(),
-                              }),
-                            ),
-                          );
-
-                        if (!result.passed) {
-                          const violationSummary = result.violations
-                            .map((v: any) => `${v.type}: ${v.message}`)
-                            .join("; ");
-                          if (eb) {
-                            yield* eb.publish({
-                              _tag: "GuardrailViolationDetected",
-                              taskId: c.taskId,
-                              violations: result.violations.map((v: any) => `${v.type}: ${v.message}`),
-                              score: result.score,
-                              blocked: true,
-                            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:995", tag: errorTag(err) })));
-                          }
-                          return yield* Effect.fail(
-                            new GuardrailViolationError({
-                              message: `Input guardrail check failed: ${violationSummary}`,
-                              taskId: c.taskId,
-                              violation: violationSummary,
-                            }),
-                          );
-                        }
-
-                        return {
-                          ...c,
-                          metadata: { ...c.metadata, guardrailScore: result.score },
-                        };
-                      }
-
-                      return c;
-                    }),
-                  );
-                }
+                // Extracted to engine/phases/guardrail.ts (W23).
+                ctx = yield* runGuardedPhase(guardrail, ctx, deps);
 
                 // ── Phase 3: COST_ROUTE (optional) ── H2
+                // Extracted to engine/phases/cost-route.ts (W23).
+                ctx = yield* runGuardedPhase(costRoute, ctx, deps);
+
                 if (config.enableCostTracking) {
-                  ctx = yield* guardedPhase(ctx, "cost-route", (c) =>
-                    Effect.gen(function* () {
-                      const costOpt = yield* Effect.serviceOption(CostService).pipe(
-                        Effect.catchAll(() =>
-                          Effect.succeed({ _tag: "None" as const }),
-                        ),
-                      );
-
-                      if (costOpt._tag === "Some") {
-                        const taskDescription = extractTaskText(task.input);
-                        const modelConfig = yield* costOpt.value
-                          .routeToModel(taskDescription)
-                          .pipe(
-                            Effect.catchAll(() =>
-                              Effect.succeed({ model: config.defaultModel }),
-                            ),
-                          );
-                        // The complexity router returns Anthropic model names (e.g. claude-haiku-*).
-                        // Only apply the routed model when actually using Anthropic; for other
-                        // providers (Ollama, OpenAI, etc.) use the configured default model.
-                        const routedModel = (modelConfig as any).model as string | undefined;
-                        const useRoutedModel =
-                          config.provider === "anthropic" && !!routedModel;
-                        return {
-                          ...c,
-                          selectedModel: useRoutedModel
-                            ? routedModel
-                            : config.defaultModel,
-                        };
-                      }
-
-                      return { ...c, selectedModel: config.defaultModel };
-                    }),
-                  );
-
                   // ── Budget pre-flight check: verify budget has room before reasoning ──
                   const budgetCostOpt = yield* Effect.serviceOption(CostService).pipe(
                     Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
@@ -1368,6 +1284,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       .pipe(Effect.catchAll(() => Effect.succeed(null)));
                     if (cached !== null) {
                       cacheHit = true;
+                      // ctx.metadata.cacheHit is already populated below; the
+                      // extracted cost-track phase (W23) reads it from there.
                       ctx = {
                         ...ctx,
                         metadata: {
@@ -3681,36 +3599,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 8: COST_TRACK (optional) ── H2
-                if (config.enableCostTracking) {
-                  ctx = yield* guardedPhase(ctx, "cost-track", (c) =>
-                    Effect.gen(function* () {
-                      const costOpt = yield* Effect.serviceOption(CostService).pipe(
-                        Effect.catchAll(() =>
-                          Effect.succeed({ _tag: "None" as const }),
-                        ),
-                      );
-
-                      if (costOpt._tag === "Some") {
-                        yield* costOpt.value
-                          .recordCost({
-                            agentId: c.agentId,
-                            sessionId: c.sessionId,
-                            model: String(c.selectedModel ?? "unknown"),
-                            tier: "sonnet" as const,
-                            inputTokens: 0,
-                            outputTokens: c.tokensUsed,
-                            cost: c.cost,
-                            cachedHit: cacheHit,
-                            taskType: task.type,
-                            latencyMs: Date.now() - c.startedAt.getTime(),
-                          })
-                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3457", tag: errorTag(err) })));
-                      }
-
-                      return c;
-                    }),
-                  );
-                }
+                // Extracted to engine/phases/cost-track.ts (W23). Reads cacheHit
+                // from ctx.metadata.cacheHit (set in the agent-loop on cache hit).
+                ctx = yield* runGuardedPhase(costTrack, ctx, deps);
 
                 // ── Phase 9: AUDIT (optional) ── H2
                 // Extracted to engine/phases/audit.ts (W23). Phase's own `skip` predicate
