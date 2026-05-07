@@ -150,6 +150,8 @@ export type { KernelMessage, EntropyScoreLike } from "./kernel/state/kernel-stat
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
 export { extractOutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
 export type { TaskIntent, OutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
+export { buildOracleNudge } from "./kernel/capabilities/decide/oracle-nudge.js";
+export type { OracleNudgeContext } from "./kernel/capabilities/decide/oracle-nudge.js";
 
 // ─── Termination Oracle (CHANGE A — Verdict-Override) ───
 export {

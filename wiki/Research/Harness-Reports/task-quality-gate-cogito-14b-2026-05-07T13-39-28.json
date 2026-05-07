@@ -1,0 +1,136 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T13-39-28",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 171,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 2523.409717,
+      "output": "1. **Monday**\n2. **Tuesday**\n3. **Wednesday**\n4. **Thursday**\n5. **Friday**\n6. **Saturday**\n7. **Sunday**",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 11497,
+      "stepsCount": 11,
+      "toolCallCount": 3,
+      "wallMs": 21936.213992,
+      "output": "1. Valve releases Steam Controller CAD files under Creative Commons license (score: 1568)\n2. Appearing productive in the workplace (score: 1353)\n3. SQLite Is a Library of Congress Recommended Storage Format (score: 391)\n4. Grand Theft Oil Futures: Insider traders keep making a killing at our expense (score: 139)\n5. Permacomputing Principles (score: 190)\n6. LinkedIn profile visitor lists belong to the people, says Noyb (score: 89)\n7. Boris Cherny: TI-83 Plus Basic Programming Tutorial (2004) (score: 85)\n8. Diskless Linux boot using ZFS, iSCSI and PXE (score: 129)\n9. Agent-harness-kit scaffolding for multi-agent workflows (MCP, provider-agnostic) (score: 35)\n10. The brave souls who bought a used, 340k-mile rental camper van (score: 35)\n11. SingleRide: Longest route on NYC Subway without visiting the same station twice (score: 49)\n12. RaTeX: KaTeX-compatible LaTeX rendering engine in pure Rust (score: 26)\n13. Chevrolet Performance eCrate package (400v/200hp) (score: 91)\n14. Indian matchbox labels as a visual archive (score: 48)\n15. GovernGPT (YC W24) Is Hiring Engineers to Build Thinking Systems in Montreal (score: 1)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 5032,
+      "stepsCount": 4,
+      "toolCallCount": 1,
+      "wallMs": 10743.820501000002,
+      "output": "1. Vibe coding and agentic engineering are getting closer than I'd like — comments: 744\n2. Appearing productive in the workplace — comments: 539\n3. Google Cloud fraud defense, the next evolution of reCAPTCHA — comments: 357",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8898,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 13005.060404000003,
+      "output": "## Highest Score\n1. Appearing productive in the workplace (1353)\n2. SQLite Is a Library of Congress Recommended Storage Format (391)\n3. Vibe coding and agentic engineering are getting closer than I'd like (658)\n\n## Most Comments\n1. Valves releases Steam Controller CAD files under Creative Commons license (520)\n2. Appearing productive in the workplace (539)\n3. Vibe coding and agentic engineering are getting closer than I'd like (744)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0.6666666666666666,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "4/6 correct titles"
+        ],
+        "composite": 0.8166666666666667
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 10265,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 41187.52272000001,
+      "output": "# Today on Hacker News\n\n## Technology & Innovation\n1. **Valve releases Steam Controller CAD files under Creative Commons license** - The gaming giant has made the technical designs of their popular Steam Controller available for free use, allowing enthusiasts and developers to modify and build upon this iconic peripheral.\n2. **RaTeX: KaTeX-compatible LaTeX rendering engine in pure Rust** - A new tool emerges that brings LaTeX capabilities to Rust programming, enabling mathematical notation within this growing systems language ecosystem.\n3. **SQLite Is a Library of Congress Recommended Storage Format** - The popular lightweight database has received official endorsement from the Library of Congress for its archival and preservation qualities.\n4. **Agent-harness-kit scaffolding for multi-agent workflows (MCP, provider-agnostic)** - A new framework simplifies building complex AI agent systems that can operate independently or in concert across different platforms.\n5. **Permacomputing Principles** - An emerging concept focused on sustainable and long-term computing practices, emphasizing resilience and adaptability in technology infrastructure.\n\n## Business & Economics\n1. **Grand Theft Oil Futures: Insider traders keep making a killing at our expense** - Analysis of market manipulation in the energy sector by influential insiders who exploit information asymmetry for significant profits.\n2. **LinkedIn profile visitor lists belong to the people, says Noyb** - A legal challenge asserting user ownership over their personal data on professional networking platforms like LinkedIn.\n3. **Chevrolet Performance eCrate package (400v/200hp)** - The release of high-performance crate engines for automotive enthusiasts seeking powerful upgrades for classic vehicles.\n\n## Culture & Society\n1. **Indian matchbox labels as a visual archive** - A project preserving the colorful history of Indian matchboxes, showcasing graphic design trends and cultural elements from decades past.\n2. **Boris Cherny: TI-83 Plus Basic Programming Tutorial (2004)** - An archived guide to programming on vintage calculators, providing insight into computational education in earlier eras.\n\n## Urban Exploration & Travel\n1. **SingleRide: Longest route on NYC Subway without visiting the same station twice** - A mathematical exploration of subway networks, finding optimal paths through one of the world's most complex transit systems.\n2. **The brave souls who bought a used, 340k-mile rental camper van** - Tales from adventurers embracing minimalism and outdoor living with heavily traveled vehicles.\n\n## Productivity & Workplace\n1. **Appearing productive in the workplace** - Practical advice on managing perceptions of productivity while balancing actual output in modern office environments.\n\n---\nThis report compiles top stories across various domains, highlighting technological advancements, economic trends, cultural preservation efforts, and innovative approaches to urban exploration and productivity.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.8666666666666667,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "5 category sections",
+          "13/15 titles cited",
+          "417 words",
+          "★ called recall()"
+        ],
+        "composite": 0.9533333333333333
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.9108666666666666,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}
