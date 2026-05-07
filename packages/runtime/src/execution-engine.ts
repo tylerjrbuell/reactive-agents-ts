@@ -57,6 +57,7 @@ import { runGuardedPhase } from "./engine/pipeline.js";
 import type { PhaseDeps } from "./engine/runtime-context.js";
 import { audit } from "./engine/phases/audit.js";
 import { bootstrap } from "./engine/phases/bootstrap.js";
+import { complete } from "./engine/phases/complete.js";
 import { guardrail } from "./engine/phases/guardrail.js";
 import { costRoute } from "./engine/phases/cost-route.js";
 import { costTrack } from "./engine/phases/cost-track.js";
@@ -3278,11 +3279,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 ctx = yield* runGuardedPhase(audit, ctx, deps);
 
                 // ── Phase 10: COMPLETE ──
-                ctx = yield* guardedPhase(ctx, "complete", (c) =>
-                  Effect.gen(function* () {
-                    return { ...c, agentState: "completed" as const };
-                  }),
-                );
+                // Extracted to engine/phases/complete.ts (W23). Post-complete
+                // orchestrator work below (TaskResult assembly, debrief, RunReport
+                // telemetry, calibration/bandit/skill store updates, lifecycle
+                // events) is NOT a phase — it's ctx → TaskResult assembly and
+                // stays inline.
+                ctx = yield* runGuardedPhase(complete, ctx, deps);
 
                 // Build TaskResult — sanitize output to strip internal metadata
                 const rr = ctx.metadata.reasoningResult as {

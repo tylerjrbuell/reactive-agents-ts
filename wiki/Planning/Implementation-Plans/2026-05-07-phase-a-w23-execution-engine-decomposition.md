@@ -230,5 +230,64 @@ If the empirical extraction reveals the architecture needs adjustment (e.g., `ag
 ---
 
 _Author: Claude (Opus 4.7) — 2026-05-07_
-_Status: ACTIVE_
-_Next action: amend North Star §11, then begin extraction #1 (infrastructure files)._
+_Status: ACTIVE — partial completion_
+_Next action: agent-loop extraction (deferred to next session — see Amendments below)._
+
+---
+
+## Amendments
+
+### 2026-05-07 (session 1) — partial completion checkpoint
+
+**Completed in this session (8 commits, 9 phase modules):**
+
+| # | Phase | LOC | Tests added | Notes |
+|---|---|---|---|---|
+| 1 | Infrastructure (phase, pipeline, runtime-context, util) | 511 | — | Foundation, hoisted runPhase/runObservablePhase/checkLifecycle |
+| 2 | audit | 38 | — | Pattern validator |
+| 3 | guardrail | 79 | — | Safety check; fails with GuardrailViolationError |
+| 4 | cost-route | 48 | — | Anthropic-only; falls back to defaultModel |
+| 5 | cost-track | 53 | — | Reads cacheHit from ctx.metadata |
+| 6 | bootstrap | 45 | — | Memory context fetch only; post-bootstrap inline code stays |
+| 7 | memory-flush | 175 | — | Dispatch (trivial/moderate/complex) stays in orchestrator |
+| 8 | strategy-select | 50 | — | StrategySelector service call |
+| 9 | verify | 132 | **5** | TDD RED→GREEN; both call sites use same Phase value |
+| 10 | complete | 25 | — | Trivial agentState transition |
+
+**Result:** `execution-engine.ts` 4,663 → 4,232 LOC (-9.2%). All 738+ existing tests still pass; 5 new verify tests added (743 total).
+
+### Findings during extraction
+
+1. **The original 13-file estimate was over.** Actual count: 14 (10 phases + 4 infra). LOC ceilings (≤ 400 per phase) are met for everything extracted; the only file >175 LOC is `pipeline.ts` (313 LOC, infrastructure not a phase).
+
+2. **`complete` phase split was overestimated.** The original plan called for a 3-way split (orchestrator + debrief + post-run-update). Empirical reality: the COMPLETE phase wrapper is 5 lines (just `agentState: "completed"`). The 700+ LOC of post-complete code is `ExecutionContext → TaskResult` orchestration (debrief synthesis, RunReport build, telemetry, calibration writes, lifecycle events). That's NOT a phase — it's a different shape transformation. It stays in the orchestrator. Future waves may extract it as standalone helper modules (NOT phases).
+
+3. **Memory-flush dispatch (trivial/moderate/complex) stays in orchestrator.** The phase body extracted; the if/else dispatch (skip / forkDaemon / blocking) is execution-mode selection, not phase composition.
+
+4. **Bootstrap post-init stays inline.** Post-bootstrap operations (skill application, experience-tip injection, MemorySnapshot publishing) don't fit the Phase contract cleanly. Future waves may promote them.
+
+5. **Cache-hit forward-compat shim is unverified.** I added `ctx.metadata.cacheHit` write in agent-loop's existing inline code; the cost-track phase reads from there. Grep confirms NO test exercises an actual cache-hit path. **When agent-loop is extracted next session, verify cache-hit behavior preservation.**
+
+### Agent-loop extraction — deferred to next session
+
+**Reason for stop:** The agent-loop is qualitatively different from every phase extracted so far:
+
+- **Not a phase, a sub-engine.** Contains ≥4 distinct concerns (LLM call, tool dispatch, semantic cache, classifier, iteration control). Doesn't fit the Phase contract; needs a sub-pipeline pattern decision.
+- **Hidden-state inventory not done.** Closure variables not yet classified: `entropyLog`, `toolCallLog`, `cachedToolDefs`, `effectiveRequiredTools`, `resolvedCalibration`, `classifiedRelevantTools`, `cacheHit`, etc. Each needs to be classified as config-derived / service / cross-phase state / phase-local.
+- **Risk grows non-linearly.** 1,950 LOC has many more closure-capture sites and a more complex error union than anything extracted so far.
+
+**Next session prerequisites (write before any extraction begins):**
+
+1. **State inventory.** Read agent-loop, list every variable declared in its scope, classify each.
+2. **Sub-pipeline decision.** Either:
+   - (a) `agent-loop/index.ts` exports a single `Phase` whose `run` body internally composes sub-modules (tool-classifier, reasoning-call, iteration-handler, tool-dispatcher); OR
+   - (b) Fan agent-loop out into 3-4 top-level phases that the engine pipeline composes directly. Pros/cons for each before committing.
+3. **Cache-hit test.** Add an integration test that exercises the cache-hit path so the cost-track forward-compat shim is verified before further extraction.
+4. **Update tactical plan** (this file) with the chosen approach.
+5. Then extract.
+
+### W23 partial-completion gate status
+
+The W23 completion gate requires `execution-engine.ts ≤ 600 LOC`. Current: 4,232 LOC. **W23 is not done.** Agent-loop extraction is the largest single remaining reduction (~1,950 LOC at risk of moving). Even after that, post-complete TaskResult assembly will leave the orchestrator at perhaps ~1,000 LOC, requiring a follow-up extraction pass for those helper modules.
+
+This is documented honestly so future sessions don't conclude W23 prematurely.
