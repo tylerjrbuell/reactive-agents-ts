@@ -20,7 +20,13 @@ import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
 import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
-import { ToolService, BUILTIN_TOOL_NAMES } from "@reactive-agents/tools";
+import {
+  ToolService,
+  BUILTIN_TOOL_NAMES,
+  buildFinalAnswerDescription,
+  buildFinalAnswerOutputDescription,
+} from "@reactive-agents/tools";
+import { extractOutputFormat } from "@reactive-agents/reasoning";
 import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
@@ -1467,6 +1473,36 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     );
                     availableToolNames = availableToolSchemas.map((t) => t.name);
                   }
+
+                  // ── Dynamic final-answer description (Path C(d), 2026-05-07) ──
+                  // Multi-signal composition: regex-classified output format
+                  // (task signal) + ModelCalibration fields (model signal).
+                  // The builder only ADDS guidance; it never strips the
+                  // empirically-validated static base. See spec
+                  // wiki/Architecture/Design-Specs/2026-05-06-intelligent-default-builders.md
+                  // for the full pattern.
+                  const taskTextForIntent = extractTaskText(task.input);
+                  const finalAnswerCtx = {
+                    outputFormat: extractOutputFormat(taskTextForIntent).format,
+                    hasRequiredTools: (effectiveRequiredTools?.length ?? 0) > 0,
+                    systemPromptAttention: resolvedCalibration?.systemPromptAttention,
+                    observationHandling: resolvedCalibration?.observationHandling,
+                    toolCallDialect: resolvedCalibration?.toolCallDialect,
+                  };
+                  const dynamicFinalAnswerDescription = buildFinalAnswerDescription(finalAnswerCtx);
+                  const dynamicFinalAnswerOutputDesc = buildFinalAnswerOutputDescription(finalAnswerCtx);
+                  availableToolSchemas = availableToolSchemas.map((ts) => {
+                    if (ts.name !== "final-answer") return ts;
+                    return {
+                      ...ts,
+                      description: dynamicFinalAnswerDescription,
+                      parameters: ts.parameters.map((p: typeof ts.parameters[number]) =>
+                        p.name === "output"
+                          ? { ...p, description: dynamicFinalAnswerOutputDesc }
+                          : p,
+                      ),
+                    };
+                  });
 
                   // ── allowedTools prompt filtering (IC-6) ──
                   // When allowedTools is specified, restrict the schemas shown in the prompt

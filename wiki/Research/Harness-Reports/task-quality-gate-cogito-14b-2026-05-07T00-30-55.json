@@ -1,0 +1,136 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T00-30-55",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 201,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 2673.082237,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5017,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 13013.447968000002,
+      "output": "1. Valve releases Steam Controller CAD files under Creative Commons license (score: 991)\n2. Appearing productive in the workplace (score: 652)\n3. Vibe coding and agentic engineering are getting closer than I'd like (score: 359)\n4. The bottleneck was never the code (score: 490)\n5. Ted Turner has died (score: 210)\n6. DeepSeek V4 Pro at 75% off until 31 May (score: 55)\n7. From Supabase to Clerk to Better Auth (score: 190)\n8. Google Cloud fraud defense, the next evolution of reCAPTCHA (score: 190)\n9. Learning the Integral of a Diffusion Model (score: 83)\n10. Show HN: Tilde.run – Agent sandbox with a transactional, versioned filesystem (score: 124)\n11. Show HN: Hallucinopedia (score: 131)\n12. Community firmware for the Xteink X4 e-paper reader (score: 38)\n13. Inkscape 1.4.4 (score: 192)\n14. Building my own Vi text editor in BASIC (score: 15)\n15. A Theory of Deep Learning (score: 114)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 5263,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 9871.230818999997,
+      "output": "1. Vibe coding and agentic engineering are getting closer than I'd like — comments: 388\n2. The bottleneck was never the code — comments: 320\n3. Appearing productive in the workplace — comments: 256",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": false,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 9005,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 15287.935934000005,
+      "output": "# Highest Score\n1. Valve releases Steam Controller CAD files under Creative Commons license (991)\n2. Appearing productive in the workplace (652)\n3. The bottleneck was never the code (490)\n\n## Most Comments\n1. Vibe coding and agentic engineering are getting closer than I'd like (388)\n2. Appearing productive in the workplace (256)\n3. Valve releases Steam Controller CAD files under Creative Commons license (330)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing Highest Score section",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9249999999999998
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 8598,
+      "stepsCount": 11,
+      "toolCallCount": 4,
+      "wallMs": 18801.522233999996,
+      "output": "# Today on Hacker News\n\n## Technology and Development\nHacker News has been buzzing with several technology stories this week, including the release of Valve's Steam Controller CAD files under a Creative Commons license. This open-source initiative allows developers to customize and improve the controller for their own needs. Additionally, Google announced the next evolution of reCAPTCHA through its Cloud Fraud Defense system, which uses advanced machine learning to enhance security against automated attacks. In the software development space, there's also discussion around Tilde.run, a sandbox environment that introduces transactional filesystem capabilities for agent-based coding.\n\n## Programming and Tools\nThe programming community has been engaged in various discussions about productivity tools and frameworks. A notable post covers \"Appearing productive in the workplace,\" offering insights into balancing efficiency with visibility. On the technical side, there's also a detailed exploration of integrating Supabase with Clerk for better authentication workflows. For those interested in machine learning, a new resource has been published on learning diffusion models, focusing specifically on understanding their integral components.\n\n## Hardware and Open Source\nThe hardware space is seeing activity around open-source firmware development for e-paper readers like the Xteink X4, demonstrating community-driven innovation. Meanwhile, Inkscape 1.4.4's release brings improvements to vector graphics editing capabilities. The creative technology sector also saw interest in DeepSeek V4 Pro, which was offered at a significant discount.\n\n## Other\nA few miscellaneous but noteworthy posts include Ted Turner's passing and an interesting project documenting the creation of a text editor in BASIC. These stories highlight both cultural shifts and technical experiments that keep the community engaged.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "2/15 titles cited",
+          "263 words",
+          "★ called recall()"
+        ],
+        "composite": 0.6966666666666667
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8812,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}

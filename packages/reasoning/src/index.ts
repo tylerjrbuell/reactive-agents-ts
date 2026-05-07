@@ -148,6 +148,8 @@ export { planNextMoveBatches, filterToolsBySuccessRate } from "./kernel/capabili
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
 export type { KernelMessage, EntropyScoreLike } from "./kernel/state/kernel-state.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
+export { extractOutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
+export type { TaskIntent, OutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
 
 // ─── Termination Oracle (CHANGE A — Verdict-Override) ───
 export {

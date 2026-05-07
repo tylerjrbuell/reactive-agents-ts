@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T13-08-09",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 201,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 7895.550257,
+      "output": "1. Monday\n2. Tuesday \n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5143,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 15938.774999000001,
+      "output": "- 1. Valve releases Steam Controller CAD files under Creative Commons license (score: 1538)\n- 2. Agent-harness-kit scaffolding for multi-agent workflows (MCP, provider-agnostic) (score: 33)\n- 3. Indian matchbox labels as a visual archive (score: 35)\n- 4. Boris Cherny: TI-83 Plus Basic Programming Tutorial (2004) (score: 68)\n- 5. Appearing productive in the workplace (score: 1327)\n- 6. Grand Theft Oil Futures: Insider traders keep making a killing at our expense (score: 77)\n- 7. SQLite Is a Library of Congress Recommended Storage Format (score: 371)\n- 8. GovernGPT (YC W24) Is Hiring Engineers to Build Thinking Systems in Montreal (score: 1)\n- 9. ZAYA1-8B: An 8B Moe Model with 760M Active Params Matching DeepSeek-R1 on Math (score: 47)\n- 10. Permacomputing Principles (score: 184)\n- 11. Diskless Linux boot using ZFS, iSCSI and PXE (score: 124)\n- 12. LinkedIn profile visitor lists belong to the people, says Noyb (score: 61)\n- 13. SingleRide: Longest route on NYC Subway without visiting the same station twice (score: 40)\n- 14. Photoshop's challenges with focus, pt. 2 (score: 79)\n- 15. RaTeX: KaTeX-compatible LaTeX rendering engine in pure Rust (score: 9)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0,
+        "faithfulness": 1,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.6499999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 8965,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 12302.005167,
+      "output": "1. Appearing productive in the workplace — comments: 527\n2. Vibe coding and agentic engineering are getting closer than I'd like — comments: 723\n3. Valve releases Steam Controller CAD files under Creative Commons license — comments: 510",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5407,
+      "stepsCount": 8,
+      "toolCallCount": 3,
+      "wallMs": 15346.779857000001,
+      "output": "# ## Highest Score\n1. Valve releases Steam Controller CAD files under Creative Commons license (1538)\n2. Appearing productive in the workplace (1327)\n3. Vibe coding and agentic engineering are getting closer than I'd like (649)\n## Most Comments\n1. Grand Theft Oil Futures: Insider traders keep making a killing at our expense (46)\n2. Valve releases Steam Controller CAD files under Creative Commons license (510)\n3. Vibe coding and agentic engineering are getting closer than I'd like (723)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 8654,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 17081.010677000006,
+      "output": "# Today on Hacker News\n\n## Technology & Open Source\nThe technology sector continues to drive innovation, with several noteworthy developments:\n- **Valve** has released the CAD files for their Steam Controller under a Creative Commons license, enabling enthusiasts and developers to explore or modify the hardware design.\n- A new project called **Agent-harness-kit (AHK)** offers scaffolding for building multi-agent systems that are provider-agnostic, making it easier to develop complex workflows without vendor lock-in.\n- The open-source community celebrated with an 8B-parameter model named **ZAYA1-8B**, which matches DeepSeek-R1's performance on math and coding tasks.\n\n## Business & Workplace Culture\nStories addressing workplace dynamics and productivity took center stage:\n- A thought-provoking article titled *\"Appearing Productive in the Workplace\"* explores strategies for managing perceptions of productivity, highlighting cultural aspects of work environments.\n- **LinkedIn** faced criticism from advocacy group Noyb regarding their handling of profile visitor data privacy, as they reportedly withhold this information from users.\n\n## Data & Infrastructure\nInfrastructure and data management solutions were highlighted:\n- **SQLite**, a popular embedded database, received endorsement from the Library of Congress for its robust storage format capabilities.\n- A comprehensive guide on *\"Permacomputing Principles\"* provides insights into designing sustainable computing systems.\n- An innovative approach to diskless Linux boot using ZFS and iSCSI was presented, showcasing practical solutions for enterprise deployment challenges.\n\n## Miscellaneous & Education\nRounding out the week's topics:\n- A nostalgic deep-dive into **Boris Cherny's TI-83 Plus Basic Programming Tutorial** from 2004 brings back memories of early calculator programming.\n- The preservation of cultural heritage was represented by Indian matchbox labels as a visual archive project, highlighting digital archiving efforts.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.13333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "2/15 titles cited",
+          "271 words"
+        ],
+        "composite": 0.6966666666666667
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8693333333333333,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}

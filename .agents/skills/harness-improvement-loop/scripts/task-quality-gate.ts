@@ -399,6 +399,12 @@ async function runTask(task: TaskDef): Promise<TaskResult> {
     .withMemory()
     .withReasoning();
 
+  // Opt in to model calibration loading. Set TASK_GATE_CALIBRATION=skip to
+  // disable for control-arm probes.
+  if (process.env.TASK_GATE_CALIBRATION !== "skip") {
+    (builder as any).withCalibration("auto");
+  }
+
   if (task.tools.length > 0) {
     builder.withTools({ tools: task.tools });
   }

@@ -1,0 +1,137 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T00-34-00",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 214,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 2428.0149699999997,
+      "output": "Here are the seven days of the week, starting with Monday:\n\n1. Monday  \n2. Tuesday  \n3. Wednesday  \n4. Thursday  \n5. Friday  \n6. Saturday  \n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 5032,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 12824.630978000001,
+      "output": "1. Valve releases Steam Controller CAD files under Creative Commons license (score: 993)\n2. Appearing productive in the workplace (score: 653)\n3. Vibe coding and agentic engineering are getting closer than I'd like (score: 360)\n4. DeepSeek V4 Pro at 75% off until 31 May (score: 60)\n5. From Supabase to Clerk to Better Auth (score: 190)\n6. Google Cloud fraud defense, the next evolution of reCAPTCHA (score: 191)\n7. The bottleneck was never the code (score: 490)\n8. Learning the Integral of a Diffusion Model (score: 83)\n9. Show HN: Hallucinopedia (score: 133)\n10. Show HN: Tilde.run – Agent sandbox with a transactional, versioned filesystem (score: 124)\n11. Community firmware for the Xteink X4 e-paper reader (score: 38)\n12. Inkscape 1.4.4 (score: 192)\n13. Building my own Vi text editor in BASIC (score: 15)\n14. Kash Patel's Personalized Bourbon Stash (score: 31)\n15. A Theory of Deep Learning (score: 114)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 10683,
+      "stepsCount": 11,
+      "toolCallCount": 4,
+      "wallMs": 23904.548925000003,
+      "output": "1. Vibe coding and agentic engineering are getting closer than I'd like — comments: 389\n2. Higher usage limits for Claude and a compute deal with SpaceX — comments: 306\n3. The bottleneck was never the code — comments: 321",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 0.6699999999999999,
+        "callsRecall": true,
+        "notes": [
+          "2/3 correct titles",
+          "2/3 correct comment counts",
+          "★ 1 score-confusion picks",
+          "★ called recall()"
+        ],
+        "composite": 0.7843333333333333
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 8996,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 13906.748994000001,
+      "output": "## Highest Score\n1. Appearing productive in the workplace (653)\n2. Valve releases Steam Controller CAD files under Creative Commons license (993)\n3. The bottleneck was never the code (490)\n\n## Most Comments\n1. Vibe coding and agentic engineering are getting closer than I'd like (389)\n2. Ted Turner has died (179)\n3. Appearing productive in the workplace (256)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 8736,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 25386.620516000003,
+      "output": "# Today on Hacker News\n\n## Gaming & Hardware\nThe hardware section features Valve releasing their Steam Controller CAD files under a Creative Commons license, enabling community modifications and improvements. Additionally, there's news about community firmware development for the Xteink X4 e-paper reader.\n\n## Software Development & Tools\nDevelopers are excited about several new tools: Tilde.run offers an agent sandbox with transactional filesystem features; Supabase and Clerk are being combined to improve authentication systems; and Hallucinopedia is a new show-and-tell project.\n\n## AI/ML & Technology Trends\nA major discussion revolves around the convergence of \"vibe coding\" and agentic engineering, which some developers find concerning. The post about code bottlenecks suggests that human factors often outweigh technical ones in software development. ML researchers are exploring diffusion models with new integral approaches, while a comprehensive theory of deep learning is being developed.\n\n## Productivity & Workplace Culture\nThe popular article \"Appearing productive in the workplace\" explores strategies for effectively managing perceptions of productivity without sacrificing actual output.\n\n## Security & Authentication\nGoogle's Cloud Fraud Defense represents an advanced evolution of reCAPTCHA technology, aimed at protecting against sophisticated fraud attempts.\n\n## Other Highlights\nOther notable stories include a sale on DeepSeek V4 Pro AI hardware, Kash Patel's bourbon collection, a DIY Vi text editor in BASIC, and the latest Inkscape release.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "title ✓",
+          "6 category sections",
+          "1/15 titles cited",
+          "218 words",
+          "★ called recall()"
+        ],
+        "composite": 0.6733333333333333
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8915333333333333,
+    "recallSmellCount": 2,
+    "taskCount": 5
+  }
+}
