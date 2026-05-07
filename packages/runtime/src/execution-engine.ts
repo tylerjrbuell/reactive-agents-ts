@@ -30,7 +30,6 @@ import { extractOutputFormat } from "@reactive-agents/reasoning";
 import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
-import { VerificationService } from "@reactive-agents/verification";
 import { CostService } from "@reactive-agents/cost";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
@@ -63,6 +62,7 @@ import { costRoute } from "./engine/phases/cost-route.js";
 import { costTrack } from "./engine/phases/cost-track.js";
 import { memoryFlush } from "./engine/phases/memory-flush.js";
 import { strategySelect } from "./engine/phases/strategy-select.js";
+import { verify } from "./engine/phases/verify.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -198,71 +198,11 @@ export function buildAutoMaxCallsPerTool(input: {
   return autoMaxCallsPerTool;
 }
 
-const VERIFY_EVIDENCE_MAX_CHARS = 14_000;
-
 // Deduplicates RI telemetry notice across runs within the same process
 let _riTelemetryNoticeEmitted = false;
 
-/**
- * Task text plus compact tool / observation evidence so NLI and overlap checks can ground
- * on retrieved facts, not only the user prompt.
- */
-function buildVerificationInput(
-  taskInput: unknown,
-  ctx: {
-    readonly toolResults: readonly unknown[];
-    readonly metadata: {
-      readonly reasoningSteps?: unknown;
-      readonly reasoningResult?: unknown;
-    };
-  },
-): string {
-  const taskText = extractTaskText(taskInput);
-  const evidenceLines: string[] = [];
-
-  for (const tr of ctx.toolResults) {
-    if (typeof tr !== "object" || tr === null) continue;
-    const r = tr as Record<string, unknown>;
-    const name = typeof r.toolName === "string" ? r.toolName : "?";
-    const raw = r.result;
-    const body = typeof raw === "string" ? raw : JSON.stringify(raw);
-    evidenceLines.push(`[tool:${name}] ${body}`);
-  }
-
-  const rs = ctx.metadata.reasoningSteps;
-  if (Array.isArray(rs)) {
-    for (const step of rs) {
-      if (typeof step !== "object" || step === null) continue;
-      const s = step as Record<string, unknown>;
-      if (s.type === "observation" && typeof s.content === "string" && s.content.length > 0) {
-        evidenceLines.push(`[reasoning:observation] ${s.content}`);
-      }
-    }
-  }
-
-  const rr = ctx.metadata.reasoningResult;
-  if (typeof rr === "object" && rr !== null) {
-    const steps = (rr as Record<string, unknown>).steps;
-    if (Array.isArray(steps)) {
-      for (const step of steps) {
-        if (typeof step !== "object" || step === null) continue;
-        const s = step as Record<string, unknown>;
-        if (s.type === "observation" && typeof s.content === "string" && s.content.length > 0) {
-          evidenceLines.push(`[reasoning:kernel] ${s.content}`);
-        }
-      }
-    }
-  }
-
-  if (evidenceLines.length === 0) return taskText;
-
-  let bundle = evidenceLines.join("\n\n");
-  if (bundle.length > VERIFY_EVIDENCE_MAX_CHARS) {
-    bundle = `${bundle.slice(0, VERIFY_EVIDENCE_MAX_CHARS)}\n\n[... evidence truncated for verification context ...]`;
-  }
-
-  return `${taskText}\n\n--- Tool / observation evidence (for grounding) ---\n${bundle}`;
-}
+// `buildVerificationInput` and VERIFY_EVIDENCE_MAX_CHARS were hoisted to
+// engine/phases/verify.ts (W23). Removing the unused private copies here.
 
 /** Map SkillResolver rows on execution metadata into `brief` skill entries. */
 function briefResolvedSkillsFromMetadata(
@@ -3023,58 +2963,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Phase 6: VERIFY (optional) ── H2
+                // Extracted to engine/phases/verify.ts (W23). Skip predicate
+                // gates on config.enableVerification.
+                ctx = yield* runGuardedPhase(verify, ctx, deps);
                 if (config.enableVerification) {
-                  ctx = yield* guardedPhase(ctx, "verify", (c) =>
-                    Effect.gen(function* () {
-                      const verifyOpt = yield* Effect.serviceOption(
-                        VerificationService,
-                      ).pipe(
-                        Effect.catchAll(() =>
-                          Effect.succeed({ _tag: "None" as const }),
-                        ),
-                      );
-
-                      if (verifyOpt._tag === "Some") {
-                        const response = String(c.metadata.lastResponse ?? "");
-                        const input = buildVerificationInput(task.input, c);
-                        const result = yield* verifyOpt.value
-                          .verify(response, input)
-                          .pipe(
-                            Effect.catchAll(() =>
-                              Effect.succeed({
-                                overallScore: 0.45,
-                                passed: false,
-                                riskLevel: "high" as const,
-                                layerResults: [
-                                  {
-                                    layerName: "verification_runtime",
-                                    score: 0.45,
-                                    passed: false,
-                                    details:
-                                      "Verification pipeline failed internally — output is unverified.",
-                                  },
-                                ],
-                                recommendation: "review" as const,
-                                verifiedAt: new Date(),
-                              }),
-                            ),
-                          );
-
-                        return {
-                          ...c,
-                          agentState: "verifying" as const,
-                          metadata: {
-                            ...c.metadata,
-                            verificationResult: result,
-                            verificationScore: result.overallScore,
-                          },
-                        };
-                      }
-
-                      return c;
-                    }),
-                  );
-
                   // Verification may be fast (heuristics) or involve extra LLM calls when useLLMTier is on;
                   // without this line it looks like verify "did nothing" in normal verbosity.
                   if (obs && isNormal) {
@@ -3329,59 +3221,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       }) as unknown as Effect.Effect<ExecutionContext, never>,
                     );
 
-                    // Re-run verification on the revised response
-                    if (config.enableVerification) {
-                      ctx = yield* guardedPhase(ctx, "verify", (c) =>
-                        Effect.gen(function* () {
-                          const verifyOpt = yield* Effect.serviceOption(
-                            VerificationService,
-                          ).pipe(
-                            Effect.catchAll(() =>
-                              Effect.succeed({ _tag: "None" as const }),
-                            ),
-                          );
-
-                          if (verifyOpt._tag === "Some") {
-                            const response = String(c.metadata.lastResponse ?? "");
-                            const input = buildVerificationInput(task.input, c);
-                            const result = yield* verifyOpt.value
-                              .verify(response, input)
-                              .pipe(
-                                Effect.catchAll(() =>
-                                  Effect.succeed({
-                                    overallScore: 0.45,
-                                    passed: false,
-                                    riskLevel: "high" as const,
-                                    layerResults: [
-                                      {
-                                        layerName: "verification_runtime",
-                                        score: 0.45,
-                                        passed: false,
-                                        details:
-                                          "Verification pipeline failed internally — output is unverified.",
-                                      },
-                                    ],
-                                    recommendation: "review" as const,
-                                    verifiedAt: new Date(),
-                                  }),
-                                ),
-                              );
-
-                            return {
-                              ...c,
-                              agentState: "verifying" as const,
-                              metadata: {
-                                ...c.metadata,
-                                verificationResult: result,
-                                verificationScore: result.overallScore,
-                              },
-                            };
-                          }
-
-                          return c;
-                        }),
-                      );
-                    }
+                    // Re-run verification on the revised response (uses the
+                    // same extracted phase value; W23).
+                    ctx = yield* runGuardedPhase(verify, ctx, deps);
 
                     // If still rejected after retry, log warning and continue
                     const vResultAfterRetry = ctx.metadata.verificationResult as
