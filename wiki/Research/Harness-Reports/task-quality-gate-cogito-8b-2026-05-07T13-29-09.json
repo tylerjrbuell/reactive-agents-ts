@@ -1,0 +1,135 @@
+{
+  "model": "cogito:8b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T13-29-09",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 164,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 1475.4993220000001,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 14178,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 24016.537704000002,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 17035,
+      "stepsCount": 15,
+      "toolCallCount": 3,
+      "wallMs": 12155.086439000002,
+      "output": "1. Appearing productive in the workplace — comments: 535\n2. Valve releases Steam Controller CAD files under Creative Commons license — comments: 516\n3. Vibe coding and agentic engineering are getting closer than I'd like — comments: 741",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 5917,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 8134.090287999999,
+      "output": "## Highest Score\n1. Appearing productive in the workplace (1346)\n2. Vibe coding and agentic engineering are getting closer than I'd like (654)\n3. Valve releases Steam Controller CAD files under Creative Commons license (1554)\n\n## Most Comments\n1. Appearing productive in the workplace (535)\n2. Indian matchbox labels as a visual archive (9)\n3. Permacomputing Principles (93)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 10420,
+      "stepsCount": 12,
+      "toolCallCount": 0,
+      "wallMs": 14640.642457000002,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "0 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.734,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

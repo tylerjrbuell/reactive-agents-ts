@@ -1,0 +1,135 @@
+{
+  "model": "cogito:8b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T13-26-52",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 164,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 4067.421064,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 11687,
+      "stepsCount": 17,
+      "toolCallCount": 0,
+      "wallMs": 15127.832635,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": false,
+      "tokensUsed": 15565,
+      "stepsCount": 14,
+      "toolCallCount": 4,
+      "wallMs": 9914.616495999999,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.3,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/3 correct titles",
+          "0/3 correct comment counts",
+          "no confusion"
+        ],
+        "composite": 0.345
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 11322,
+      "stepsCount": 13,
+      "toolCallCount": 4,
+      "wallMs": 8123.896407,
+      "output": "## Highest Score\n1. Appearing productive in the workplace (1551)\n2. Valve releases Steam Controller CAD files under Creative Commons license (515)\n3. Grand Theft Oil Futures: Insider traders keep making a killing at our expense (79)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.5,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 0.6666666666666666,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "★ missing Most Comments section",
+          "4/6 correct titles"
+        ],
+        "composite": 0.7416666666666666
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": false,
+      "tokensUsed": 16636,
+      "stepsCount": 17,
+      "toolCallCount": 4,
+      "wallMs": 15403.456949,
+      "output": "",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 0.2,
+        "faithfulness": 0,
+        "completeness": 0.2,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "★ missing title",
+          "0 category sections",
+          "0/15 titles cited",
+          "0 words"
+        ],
+        "composite": 0.37
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.5513333333333332,
+    "recallSmellCount": 0,
+    "taskCount": 5
+  }
+}

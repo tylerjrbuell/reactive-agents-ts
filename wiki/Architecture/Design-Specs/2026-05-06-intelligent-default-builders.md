@@ -514,6 +514,42 @@ Final-answer description is no longer demoted — it's a shipped Layer 1 example
 
 Confirmed no regression on uncalibrated path: cogito:14b has no calibration profile in the calibrations directory; the builder falls through to the `"strong" / default` branch returning the full static description. Probe result: 87% avg composite (within the established cogito:14b variance band of 86-94% across this session's runs). T1/T3/T4 at 100%, T5 at 70%, T2 at 65% — all consistent with previously observed bimodal task variance. The pruning has zero behavioral effect on uncalibrated models.
 
+### 8.4.3 Experiment 3 — calibration-driven observation INLINING (rejected)
+
+**Date:** 2026-05-07. Tested after Experiment 2 shipped.
+
+Hypothesis: when `observationHandling === "needs-inline-facts"`, increase the `compression.budget` so tool results are inlined verbatim instead of compressed to a preview-with-recall-key. T5's persistent failure (faithfulness=0%, model fabricates titles) was attributed to the model not seeing actual values — only a compressed preview.
+
+**Wired:** runner.ts compression budget multiplier conditional on calibration field. Tested at 4× and 2× multipliers on cogito:8b (calibrated `needs-inline-facts`).
+
+**Result — high variance, no reliable lift:**
+
+| Configuration | T5 | Avg | Reproducibility |
+|---|---|---|---|
+| Cal-OFF baseline | 37% | 60% | n=stable |
+| Exp 2 alone | 37% | 71% | n=2 reproducible |
+| Exp 3 @ 4× run 1 | 88% | 84% | one-shot win |
+| Exp 3 @ 4× run 2 | 37% | 55% | catastrophic; T5 max_iter at 0 chars |
+| Exp 3 @ 2× run 1 | 37% | 73% | matches Exp 2 baseline |
+
+**Diagnostic reading:**
+
+- 4× multiplier: bimodal. When the model copes with the inflated context, it synthesizes well (T5: 88%, 67% faithfulness — the lift the field was supposed to deliver). When it doesn't, it stalls at max_iter with empty output (T5: 37%, 0 chars). Spread is too wide for a default.
+- 2× multiplier: stable but adds no measurable lift over Exp 2. Pure complexity without value.
+
+**Conclusion:** budget inflation isn't the right mechanism for T5. The empirical signal isn't "model can't see the data" — it's something subtler. Possibilities for future investigation:
+- Mid-synthesis re-grounding (inject a prompt-side "(reminder: cite specific titles from the data above)" right before the model's final-answer turn).
+- Different chunking that preserves all values verbatim while compressing structure (deduplicate schema fields, keep all data points).
+- A pre-final-answer phase where the model is asked to enumerate what it will cite.
+
+**Refined principle (Experiments 2 and 3 combined):**
+
+> Calibration drives **decisions about behavior and structural shape** (when to fire, whether to suppress, how much to remove). It does NOT reliably drive *single-knob amplification of one signal* (e.g., "send 4× more data to needs-inline-facts models"). Multi-mechanism failures need multi-mechanism investigation, not bigger numbers on one knob.
+
+Reverted runner.ts compression budget back to the calibrated baseline (`profile.toolResultMaxChars`, which already inherits `optimalToolResultChars` from calibration). The mechanism stays available for compose-harness consumers who want to override per-task; it's just not auto-applied via `observationHandling` because the empirical signal isn't there.
+
+The T5 problem remains a known unknown — see the divergence debrief.
+
 ---
 
 ## 9. Risks & anti-patterns

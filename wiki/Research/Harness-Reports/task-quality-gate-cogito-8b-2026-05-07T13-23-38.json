@@ -1,0 +1,136 @@
+{
+  "model": "cogito:8b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "timestamp": "2026-05-07T13-23-38",
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 164,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 17864.466338,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": false,
+      "tokensUsed": 13931,
+      "stepsCount": 21,
+      "toolCallCount": 0,
+      "wallMs": 74857.57488,
+      "output": "",
+      "quality": {
+        "toolSuccess": false,
+        "formatAdherence": 0,
+        "faithfulness": 0,
+        "completeness": 0,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "0/15 titles cited",
+          "0/15 scores cited",
+          "0 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.3
+      }
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 18824,
+      "stepsCount": 19,
+      "toolCallCount": 6,
+      "wallMs": 10223.985592000012,
+      "output": "1. Appearing productive in the workplace — comments: 534\n2. Valve releases Steam Controller CAD files under Creative Commons license — comments: 513\n3. Vibe coding and agentic engineering are getting closer than I'd like — comments: 734",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": true,
+        "notes": [
+          "3/3 correct titles",
+          "3/3 correct comment counts",
+          "no confusion",
+          "★ called recall()"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": true,
+      "tokensUsed": 6320,
+      "stepsCount": 6,
+      "toolCallCount": 1,
+      "wallMs": 12444.753175999998,
+      "output": "## Highest Score\n1. Appearing productive in the workplace (1341)\n2. Vibe coding and agentic engineering are getting closer than I'd like (653)\n3. Valve releases Steam Controller CAD files under Creative Commons license (1547)\n\n## Most Comments\n1. Appearing productive in the workplace (534)\n2. Indian matchbox labels as a visual archive (9)\n3. Agent-harness-kit scaffolding for multi-agent workflows (MCP, provider-agnostic) (6)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "6/6 correct titles"
+        ],
+        "composite": 0.9999999999999999
+      }
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 4829,
+      "stepsCount": 4,
+      "toolCallCount": 1,
+      "wallMs": 45790.226720999985,
+      "output": "# Today on Hacker News\n\n## Productivity and Workplace Culture\nThe top story today is \"Appearing productive in the workplace\" which has garnered significant attention with 1,341 points and 534 comments. This thought-provoking piece explores how we can appear more productive while actually being less so, offering insights into modern workplace dynamics.\n\n## Technology and Infrastructure\nIn the realm of technology, several notable stories have emerged. \"Valve releases Steam Controller CAD files under Creative Commons license\" has attracted substantial interest with 1,547 points and 513 comments. This release allows developers to access detailed technical specifications for Valve's Steam Controller. Additionally, \"SQLite Is a Library of Congress Recommended Storage Format\" (379 points) highlights SQLite's growing importance as a recommended storage format by the Library of Congress.\n\n## Hardware and Computing\nThe hardware community is buzzing with news about \"Chevrolet Performance eCrate package (400v/200hp)\" which has received 84 points. This innovative crate engine system offers an impressive power output, while \"Diskless Linux boot using ZFS, iSCSI and PXE\" (127 points) showcases advanced computing solutions for network booting.\n\n## AI and Programming\nIn the realm of programming and AI, \"RaTeX: KaTeX-compatible LaTeX rendering engine in pure Rust\" has generated 15 points. This open-source project demonstrates the growing interest in Rust-based solutions for technical documentation. Meanwhile, \"Permacomputing Principles\" (186 points) explores sustainable computing practices.\n\n## Other Notable Stories\nSeveral other interesting stories have caught attention today. \"Indian matchbox labels as a visual archive\" (42 points) offers an intriguing look at graphic design through the lens of Mumbai's matchbook industry. \"Boris Cherny: TI-83 Plus Basic Programming Tutorial (2004)\" (78 points) provides historical context for programming education, while \"Grand Theft Oil Futures: Insider traders keep making a killing at our expense\" (110 points) delves into market manipulation in oil futures trading.\n\nThis diverse collection of stories reflects the broad range of topics that interest the Hacker News community today.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.6666666666666666,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "5 category sections",
+          "10/15 titles cited",
+          "313 words"
+        ],
+        "composite": 0.8833333333333334
+      }
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8366666666666667,
+    "recallSmellCount": 1,
+    "taskCount": 5
+  }
+}
