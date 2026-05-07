@@ -1,117 +1,103 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-05-04
+updated: 2026-05-07
 ---
 
 # Hot (Recent Context Cache)
 
-**Purpose:** Quick lookup of last 5 session updates. Read this first at session start. Replace with new session context at session end.
+**Purpose:** Quick lookup of last session state. Read this first at session start.
 
 ---
 
-## Latest Session (2026-05-04)
+## Latest Session (2026-05-07)
 
-### Phase 1 Mechanism Validation Complete ✅
-- **All 13 mechanisms spike-validated via TDD discipline**
-- **8 KEEP verdicts** — mechanisms earn their keep with zero regressions
-- **5 IMPROVE verdicts** — concrete Phase 1.5 action items identified
-- **0 REMOVE verdicts** — improvement-first validation confirmed effective
-- Evidence: `wiki/Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04.md`
-- Debriefs: `wiki/Research/Debriefs/M*-*-validation.md` (per-mechanism)
+### North Star v4.0 — Consolidated Forward Plan ✅
 
-**Key Verdicts:**
-| M | Name | Verdict | Finding |
-|---|------|---------|---------|
-| M4 | Healing Pipeline | ✅ KEEP | 86.7% recovery, +80pp accuracy, 10:1 token ROI |
-| M9 | Termination Oracle | ✅ KEEP | Architectural fix validated, 100% path coverage |
-| M12 | Provider Adapters | ✅ KEEP | All 7 hooks wired, 254/254 tests pass |
-| M13 | Guards+Meta-tools | ✅ KEEP | 6 guards functional, 100% accuracy, 0.001ms latency |
-| M3 | Verifier+Retry | 🔄 IMPROVE | Core validated; retry context needs tuning for cogito:14b |
-| M6 | Skill System | 🔄 IMPROVE | Lifecycle works; persistence layer needed |
-| M7 | Calibration | 🔄 IMPROVE | 14 fields defined; only 3 active consumers |
-| M10 | Memory System | 🔄 IMPROVE | Store+recall 66.7% verbose/100% keyed; multi-session scenarios pending |
+**Single source of truth for all future work is now `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v4.0.**
 
-See [[Experiments/Phase 1 Mechanism Validation|Phase 1 Results]] for full details.
+- `07-ROADMAP-v1.0.md` and `Phase 1.5 Improvement Roadmap.md` are superseded and marked accordingly
+- `04-PROJECT-STATE.md` retained as separate cold-session framing doc
+- Public `ROADMAP.md` (root) needs alignment — flagged as Phase C gate requirement
 
-### Documentation Consolidation Complete ✅
-- **Canonical spec docs unified** to uniform NN-NAME.md naming (00–07)
-- **Authority hierarchy codified** in DOCUMENT_INDEX.md
-- **57 tactical plans archived** to `wiki/Planning/Implementation-Plans/Superpowers/archive/`
-- **All internal references updated** across 9 files
-- **AGENTS.md consolidated** (606→501 lines, high-signal only)
-- **CLAUDE.md minimized** (9 lines, pure pointer to AGENTS.md)
+**Phase sequence (canonical — see North Star §6 for full gates):**
 
-See [[Decisions/2026-05-04 Documentation Consolidation|Documentation Consolidation Decision]].
+| Phase | Focus | Status |
+|---|---|---|
+| **A** | Architecture Cleanup: W23–W28 decomposition (`builder.ts` 6,082→≤500 LOC, `execution-engine.ts` 4,499→≤600 LOC) | **Next** |
+| **1.5** | Mechanism Improvements: M3/M6/M7/M8/M10 IMPROVE→KEEP | Parallel with A |
+| **B** | Compose API: Waves A–F, 24 injection points, 6 killswitches | v0.11 prereq |
+| **C** | v0.11 Launch: playground, CLI generator, OTel, skill persistence, Snapshot/Replay | v0.11.0 |
+| **D** | Code-as-Action Strategy: 6th reasoning strategy, local model gap | v0.12 |
+| **E** | Local Model Engineering: calibration consumers, per-provider parser, paging | v0.12 |
+| **F** | Public Benchmark Discipline: τ-bench / BFCL / HAL Princeton | v0.13 |
+| **G** | v1.0 Polish & Release | v1.0 |
 
-### Repository Optimized for Agentic Exploration ✅
-- **QUICK_START.md created** — 5-minute agent onboarding (25 min comprehensive)
-- **NAVIGATION.md created** — Repo structure + 29-package map + quick patterns
-- **Onboarding time reduced** 75% (2-3 hours → 25-45 min)
-- **Code exploration reduced** 50-70% via symptom→file mapping
-- **Token savings** via task-based routing + scoped test runs
+### v0.10.6 Shipped ✅
 
-See [[Decisions/2026-05-04 Agentic Navigation Optimization|Agentic Optimization Decision]].
+- All packages on npm
+- All P1 issues resolved (frozen judge FIX-21, agent.run() confirmed, --help handlers wired, CJS shim)
+- Layer 1 builders shipped: `buildFinalAnswerDescription` (commit 941bcb3a), `buildOracleNudge` (commit e72f50d3)
+- Calibration profiles: cogito:14b, cogito:8b, gemma4:e4b, qwen3:14b all in `packages/llm-provider/src/calibrations/`
 
-### Wiki Vault Initialized ✅
-- **Project brain created** for comprehensive knowledge management
-- **Structure:** MOCs, Concepts, Packages, Architecture, Decisions, Experiments, Failure-Modes, Releases, Team Patterns, Issues
-- **Enabled:** Dataview queries, git sync, full-calendar, excalidraw
-- **Ready for:** Rich querying, cross-session knowledge carry-over, rapid understanding
+### Phase 1 Complete ✅ (8 KEEP + 5 IMPROVE)
+
+All 13 mechanisms spike-validated. IMPROVE mechanisms targeted in Phase 1.5:
+- **M3** Verifier+Retry — tune for cogito:14b (target: ≥50% recovery)
+- **M6** Skill System — SQLite persistence (target: >70% cross-session recall)
+- **M7** Calibration — ≥8 active field consumers (currently ~5)
+- **M8** Sub-agent Delegation — real LLM metrics (target: ≥15% accuracy lift)
+- **M10** Memory System — multi-session scenarios (target: >80% recall)
 
 ---
 
-## Wiki Vault Population Complete ✅ (May 4, 2026 — 3:30pm EDT)
+## What's Next
 
-**All content scaffolding for Phase 1.5 agentic work completed:**
+### Immediate: Phase A — Architecture Cleanup
 
-1. ✅ **Wiki Vault Structure Scaffolded** — 5 MOCs, 3 templates, comprehensive navigation
-2. ✅ **All 13 Mechanism Notes Created** — M1-M13 with verdicts, test results, integration points, Phase 1.5 improvements
-3. ✅ **All 8 Failure Mode Categories** — FM-A through FM-H with manifestation, reproduction, mitigations, evidence
-4. ✅ **Package Documentation Started** — Core, llm-provider, reasoning with detailed architecture notes
-5. ✅ **Cross-links Complete** — Experiments linked to debriefs, FMs to mitigations, packages to mechanisms
+**Start with Phase A W23** — decompose `execution-engine.ts` (4,499 LOC) into ≤9 phase modules.
 
-**Status:** 🟢 Wiki ready for Phase 1.5 agentic work. Sufficient coverage for team to self-serve context lookup and improvement tracking.
+**Why first:** Compose API (Phase B) bolts onto these files. Decomposing first prevents rework and makes every subsequent wave cleaner.
 
-**Remaining (Optional):**
-- Individual package detail pages for all 26 packages (can be generated on-demand)
-- Concept detail pages (currently have MOC; individual pages optional)
-- Historical decision logs (Decision Index covers current phase gates)
+**W23 → W24 → W26 → W27 → W28** (sequential; each gate must pass before next wave).
 
-## What's Next (Phase 2 Preparation)
+Write tactical implementation plan at `wiki/Planning/Implementation-Plans/2026-05-07-phase-a-architecture-cleanup.md` before starting execution.
 
-### Phase 2 Scope (Next Major Work)
-**Orchestration decomposition** — split builder.ts (6,082 LOC) + execution-engine.ts (4,499 LOC) into 3 focused components
+### Parallel: Phase 1.5
 
-See [[Decisions/Phase 2 Orchestration Decomposition|Phase 2 Plan]].
+M3/M6/M7/M8/M10 can run concurrently with Phase A — different files, no conflicts.
 
 ---
 
-## Key Decisions This Session
+## Authoritative Document Hierarchy
 
-1. **Single Source of Truth for Agent Guidance** — AGENTS.md only, no CLAUDE.md redundancy
-2. **Archive Tactical Plans** — 57 phase-specific docs → `archive/`, keep canonical docs only
-3. **Uniform Doc Naming** — NN-NAME.md pattern for spec docs (00–07)
-4. **Agentic Navigation Layer** — QUICK_START.md + NAVIGATION.md as primary entry points
-5. **Wiki as Project Brain** — Comprehensive knowledge management for Phase 2+
+| Order | Doc | What it tells you |
+|---|---|---|
+| 1 | `00-VISION.md` | Eight pillars. Stable anchor — never amended. |
+| 2 | **`05-DESIGN-NORTH-STAR.md` v4.0** | **Architecture + full forward plan (Phases A–G). Read this.** |
+| 3 | `01-RESEARCH-DISCIPLINE.md` | 12 rules for any harness change |
+| 4 | `02-FAILURE-MODES.md` | Failure mode catalog |
+| 5 | `03-IMPROVEMENT-PIPELINE.md` | How discoveries flow into harness changes |
+| 6 | `04-PROJECT-STATE.md` | Cold session framing |
+| — | `2026-05-06-compose-harness-api.md` | Compose API design spec (Phase B detail) |
+| — | `2026-05-06-v0.11-launch-readiness.md` | v0.11 tactical rollout (Phase C detail) |
 
-See [[MOCs/Decisions MOC|All Decisions]].
+---
+
+## Key Decisions (May 7, 2026)
+
+1. **North Star v4.0 is the single forward-planning document** — no more sprawl across roadmap + improvement roadmap + launch checklist
+2. **Phase A (decomposition) before Compose API** — bolting new API onto 6K-line builder creates debt in every subsequent wave
+3. **Snapshot/Replay promoted to v0.11 (Phase C)** — unique auditable-by-demo capability, 1-week build on existing `packages/trace`
+4. **`04-PROJECT-STATE.md` retained** — different framing purpose from §2 of North Star
+5. **Root `ROADMAP.md` alignment is a Phase C gate** — public roadmap must match this plan before v0.11.0 ships
 
 ---
 
 ## How to Update This Note
 
-At the end of each session:
-1. Replace "Latest Session" with new date/key updates
-2. Update "What's Next" with new blockers/discoveries
-3. Add any new decisions to the list
-4. Sync key findings to relevant MOC pages
-5. Update timestamps
+At session end: replace "Latest Session" with new date + key updates, update "What's Next," add decisions. Keep it under 120 lines.
 
-**Read this at every session start. It's your entry point to the project context.**
-
----
-
-**Last Updated:** 2026-05-04 11:45am EDT  
-**Session Count:** Phase 1 completion + optimization pass  
-**Next Review:** Start of Phase 1.5 work
+**Last Updated:** 2026-05-07 1:03pm EDT
+**Current Phase:** A (Architecture Cleanup) — not yet started
+**Next Review:** After Phase A W23 lands

@@ -1,32 +1,36 @@
-# Reactive Agents — Design North Star v3.0
+# Reactive Agents — Design North Star v4.0
 
-**Status:** AUTHORITATIVE for ARCHITECTURE. This document supersedes v2.3 and consolidates all architecture, code-organization, and implementation-plan thinking into one source of truth.
+**Status:** AUTHORITATIVE for ARCHITECTURE + ROADMAP. This document is the single consolidated source of truth for all forward-looking work. It supersedes v3.0, `07-ROADMAP-v1.0.md`, and `Phase 1.5 Improvement Roadmap.md`.
 
-**Date:** 2026-04-26 (architecture); 2026-04-27 (methodology layer added — see companion docs below)
+**Date:** 2026-04-26 (architecture); 2026-04-27 (methodology layer); 2026-05-07 (v4.0 — consolidated forward plan, empirical state updated to v0.10.6, all roadmap phases absorbed)
 **Author:** Tyler Buell + Claude
-**Mandate:** v0.10.0 release is **deferred** until this architecture is in place. No exceptions. The framework's reliability problem is structural, not surface, and shipping more features on a fractured foundation only multiplies the debt.
 
-**Companion documents (added 2026-04-27):**
-- `04-PROJECT-STATE.md` — current empirical state of the project. **Read first at session start.**
-- `01-RESEARCH-DISCIPLINE.md` — the 12 rules governing any harness change. Every architectural change in §6 is subject to spike validation per Rule 1.
-- `02-FAILURE-MODES.md` — catalog of failure modes. The §7 validation discipline operates against this catalog.
+**Companion documents (unchanged — read these, not this doc, for their specific concerns):**
+- `04-PROJECT-STATE.md` — framing for cold session start. **Read first.**
+- `01-RESEARCH-DISCIPLINE.md` — the 12 rules governing any harness change.
+- `02-FAILURE-MODES.md` — failure mode catalog.
 - `03-IMPROVEMENT-PIPELINE.md` — operational rhythm: how discoveries flow into harness changes.
+
+**Referenced design specs (tactical detail — not absorbed here):**
+- `wiki/Architecture/Design-Specs/2026-05-06-compose-harness-api.md` — Compose API injection points, type system, tag catalog.
+- `wiki/Planning/Implementation-Plans/2026-05-06-v0.11-launch-readiness.md` — v0.11 tactical rollout, metrics, timeline.
 
 ---
 
 ## Table of Contents
 
 1. [Mandate & Vision Alignment](#1-mandate--vision-alignment)
-2. [Empirical Foundations](#2-empirical-foundations)
-3. [The Agent Model — 10 Capabilities, 5 Traits](#3-the-agent-model)
+2. [Empirical Foundations — Current State (v0.10.6)](#2-empirical-foundations--current-state-v0106)
+3. [The Agent Model — 10 Capabilities, 5 Traits](#3-the-agent-model--10-capabilities-5-traits)
 4. [The Cognitive Architecture](#4-the-cognitive-architecture)
 5. [Code & Package Organization](#5-code--package-organization)
-6. [Implementation Plan — Sprint by Sprint](#6-implementation-plan)
+6. [Consolidated Forward Plan](#6-consolidated-forward-plan)
 7. [Validation Discipline](#7-validation-discipline)
 8. [Success Criteria](#8-success-criteria)
 9. [What Stays vs What Changes](#9-what-stays-vs-what-changes)
 10. [Glossary](#10-glossary)
-11. [Superseded Documents](#11-superseded-documents)
+11. [Amendment Log](#11-amendment-log)
+12. [Superseded Documents](#12-superseded-documents)
 
 ---
 
@@ -34,85 +38,81 @@
 
 ### What we're building toward
 
-`wiki/Architecture/Specs/00-VISION.md` names four properties:
+`wiki/Architecture/Specs/00-VISION.md` names the mission:
 
-> **Reliability, Control, Security, Performance** — delivered through engineering, not magic.
+> **Built for control, not magic. Reliable, observable, composable agents for any model, any tier.**
 
-This document is how we deliver those four properties as observable, gate-pinned, empirically-validated agent behavior. Not aspiration. **Outcomes you can measure on the failure corpus and the gate scenarios.**
+Three core principles:
+1. Every decision an agent makes should be controllable, observable, and auditable.
+2. The right engineering makes any model production-capable — great agents aren't locked to flagship models.
+3. Great frameworks disappear — the DX should feel like building with superpowers, not fighting configuration.
 
-### The diagnosis (one paragraph)
+Eight vision pillars: **Control · Observability · Flexibility · Scalability · Reliability · Efficiency · Security · Speed.**
 
-After Phase 0 + Phase 1 (Sprints 1–2) shipped 11 commits of structural foundation (typed errors, capability port, ContextCurator, trustLevel), the failure corpus moved from 4/8 → 5/8 correct booleans. CHANGE A (controllerSignalVeto) added a Verdict-Override pattern but still produced 5/8 — because the kernel has **9 termination paths** and CHANGE A wired the oracle into only one of them. The remaining failure modes traced to **mixed concerns within phases** (think.ts conflates Sense + Comprehend + Reason + Decide + Act in one module). The framework has ~70% of the right pieces; the architectural sin is **distributed responsibility for what should be single-owner concerns**.
+### The architecture mandate
 
-### The mandate
+This document is how we deliver those eight pillars as observable, gate-pinned, empirically-validated agent behavior. Not aspiration. **Outcomes you can measure on the failure corpus and the gate scenarios.**
 
-**Stop adding features. Stop refining individual evaluators. Implement the cognitive architecture below. Validate with empirical discipline. Then ship v0.10.0.**
-
----
-
-## 2. Empirical Foundations
-
-This section is the evidence base. All architectural decisions in §3–§9 are anchored here.
-
-### 2.1 Failure corpus baseline (Apr 24)
-
-8-scenario corpus on cogito:14b. Result: **4/8 correct booleans.** All four labeled-failure scenarios returned `success=true`. Entropy AUC = 1.000 (perfect predictor); dispatch AUC = 0.750 (imperfect action). **Detection works. Termination doesn't.**
-
-### 2.2 Post-Phase-1 corpus (Apr 25)
-
-Same corpus, after 11 commits of structural work. Result: **5/8 correct booleans** (+1: failure-contradictory-data correctly returned false). Entropy gap shrunk 0.340 → 0.140 (-59%). **Structural foundation is in but behavioral payoff is partial.**
-
-### 2.3 Post-CHANGE-A corpus (Apr 26)
-
-Same corpus, after CHANGE A added the controllerSignalVeto. Result: **5/8 correct booleans, no improvement in count, composition shifted.** failure-verify-loop went `true→false` (correctly identified) in run 1; success-typescript-paradigm got falsely vetoed; remaining false positives unchanged.
-
-### 2.4 The W4 verdict (proven by trace inspector)
-
-`scratch-trace-inspector.ts` confirmed: **W4 is genuinely closed at the kernel-iteration level.** Peak iter ≤ maxIterations in 7/8 traces (1 inconclusive — agent terminated before any controller event ran). The corpus's "29 iters" reading was a `traceStats().iterations` measurement bug AND an entropy-scored.iter anomaly (separate issue, see §4.2 Provenance concern). **cf-14 is testing the right thing.**
-
-### 2.5 The 9-termination-path finding
-
-```
-$ grep -rn 'status.*"done"' packages/reasoning/src/strategies/kernel/
-  act.ts:436                  ← final-answer TOOL bypasses oracle
-  think.ts:553                ← fast-path bypasses oracle
-  think.ts:696                ← loop-detect bypasses oracle
-  think.ts:910                ← oracle path (where CHANGE A landed)
-  loop-detector.ts:145
-  kernel-runner.ts:637, 675, 761, 823, 877
-```
-
-**Nine code paths transition the kernel to `status: "done"`. The termination oracle is consulted at exactly one.** Three of four labeled-failure corpus scenarios call `final-answer` as a tool, exiting through act.ts:436 — bypassing the veto entirely. **This is the architectural blocker. CHANGE A is a gate at one door of a building with nine doors.**
-
-### 2.6 Run-to-run variance
-
-Same scenario, two consecutive corpus runs:
-
-| Scenario | Run 1 | Run 2 |
-|---|---|---|
-| failure-rate-limit-loop | 9 decisions, peakIter 9 | 2 decisions, peakIter 3 |
-| failure-verify-loop | false ✓ (vetoed) | true ✗ (not vetoed) |
-
-**5× variance in dispatch count between consecutive runs of the same scenario.** Single corpus runs are not reliable signal. Future architectural decisions must be validated against **N=3 medians**, not single runs.
-
-### 2.7 Architectural-gap status (consolidated from scorecard)
-
-| Gap | Status | Evidence |
-|---|---|---|
-| **G-1** num_ctx not derived from capability | ✅ closed | cf-15, cf-16 green; resolveCapability shipped |
-| **G-2** Two ModelTier schemas | ✅ closed | cf-17 referential identity assertion |
-| **G-3** Memory not async | 🟡 unchanged | not addressed in Phases 0–1 |
-| **G-4** 3 compression systems | 🟡 partial | curator IS sole prompt author; deletion deferred |
-| **G-5** Termination scattered | 🟡 partial | cf-14 pins builder; runtime has 9 paths (root cause of corpus failures) |
-| **G-6** ExecutionEngine 4404 LOC | 🟡 unchanged | not addressed |
+Every phase in §6 has a measurable validation gate. No phase ships without its gate passing. No features without a foundation.
 
 ---
 
-## 3. The Agent Model
+## 2. Empirical Foundations — Current State (v0.10.6)
+
+This section replaces the Apr 27 baseline from v3.0. All forward planning in §6 anchors here.
+
+### 2.1 What has shipped (as of 2026-05-07)
+
+**v0.10.6 is released on npm.** All packages published. All P1 issues resolved.
+
+| Item | Status | Evidence |
+|---|---|---|
+| Typed errors, capability port, ContextCurator, trustLevel | ✅ Phase 0–1 | commit history |
+| 9-termination-path consolidation → single `terminate.ts` | ✅ FIX-18 Stage 5 W4 | `kernel/loop/terminate.ts` |
+| Frozen judge isolation (Rule 4) | ✅ FIX-21 W9 (commit a9a7c55f) | `eval-service.ts:189` uses `JudgeLLMService` Tag |
+| 13-mechanism Phase 1 validation sweep | ✅ 8 KEEP + 5 IMPROVE | `.agents/PHASE-1-SYNTHESIS.md` |
+| Gateway chat mode (per-sender SQLite, 40-turn windowing) | ✅ May 1 | `packages/runtime/src/gateway-chat.ts` |
+| Frontier bench 100% (4 models: claude-sonnet-4-6, haiku-4-5, gpt-4o-mini, gemini-2.5-pro) | ✅ W21 Apr 30 | `ra-full` suite |
+| Layer 1 builder: `buildFinalAnswerDescription` (calibration-driven length pruning) | ✅ commit 941bcb3a | `packages/tools/src/skills/final-answer.ts` |
+| Layer 1 builder: `buildOracleNudge` (escalating oracle nudge) | ✅ commit e72f50d3 | `packages/reasoning/src/kernel/capabilities/decide/oracle-nudge.ts` |
+| Calibration profiles: cogito:14b, cogito:8b, gemma4:e4b, qwen3:14b | ✅ 4 models profiled | `packages/llm-provider/src/calibrations/` |
+
+### 2.2 Phase 1 mechanism verdicts (8 KEEP + 5 IMPROVE)
+
+| Mechanism | Verdict | Finding | Phase 1.5 Action |
+|---|---|---|---|
+| M1: RI Dispatcher | ✅ KEEP | Measurement infra in place; architecture sound | — |
+| M2: Strategy Switching | ✅ KEEP | 20 passing tests; switching heuristics validated | Real LLM execution for optimal heuristics |
+| M3: Verifier + Retry | 🔄 IMPROVE | Core validated; retry context ineffective on cogito:14b | Tune retry context (target: ≥50% recovery) |
+| M4: Healing Pipeline | ✅ KEEP | 86.7% recovery, +80% accuracy, 10:1 token ROI | — |
+| M5: Context Curation | ✅ KEEP | 60.7% compression, 38.6% token savings | — |
+| M6: Skill System | 🔄 IMPROVE | Within-session learning works; no cross-session persistence | SQLite persistence (target: >70% cross-session recall) |
+| M7: Calibration | 🔄 IMPROVE | 14 fields defined; ~5 active consumers | Activate ≥8 fields with lift evidence |
+| M8: Sub-agent Delegation | 🔄 IMPROVE | Test harness ready; real LLM metrics unvalidated | Real LLM execution (target: ≥15% accuracy lift) |
+| M9: Termination Oracle | ✅ KEEP | Single-owner `terminate.ts` shipped (FIX-18) | — |
+| M10: Memory System | 🔄 IMPROVE | 100% keyed / 66.7% verbose recall; multi-session unvalidated | Multi-session scenarios (target: >80% recall) |
+| M11: Diagnostic System | ✅ KEEP | 100% TP, 0% FP, 0.02ms latency; production-ready | — |
+| M12: Provider Adapters | ✅ KEEP | All 7 hooks, 254/254 tests, zero cross-provider interference | — |
+| M13: Guards + Meta-tools | ✅ KEEP | 6 guards functional, 100% accuracy, 0.001ms latency | — |
+
+### 2.3 Remaining architectural gaps
+
+| Gap | Description | Phase |
+|---|---|---|
+| **G-3** | Memory not async | Phase E |
+| **G-4** | 3 compression systems (curator is sole author; dual systems deferred) | Phase A (opportunistic) |
+| **G-6** | `builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC | **Phase A** |
+| **G-7** | Calibration: 14 fields defined, ~5 active consumers | Phase 1.5 + Phase E |
+
+Closed gaps: G-1 (num_ctx from capability), G-2 (dual ModelTier schemas), G-5 (9 termination paths).
+
+---
+
+## 3. The Agent Model — 10 Capabilities, 5 Traits
+
+Every agent — biological or artificial — performs the same loop. The harness must guarantee each capability with one clear owner system.
 
 ### 3.1 The 10 Capabilities
-
-Every agent — biological or artificial — performs the same loop. The harness must guarantee each capability with one clear owner system:
 
 ```
 Sense → Attend → Comprehend → Recall → Reason → Decide → Act → Verify → Reflect → Learn
@@ -127,7 +127,7 @@ These are *concerns*, not workflow stages. Some run in parallel, some sequential
 | 3 | **Comprehend** | Parse meaning from task + observations | Misreads task, wrong tools, wrong question |
 | 4 | **Recall** | Retrieve relevant prior knowledge (4 memory layers) | Can't compound learning, repeats mistakes |
 | 5 | **Reason** | Generate candidate next actions | Bad action selection, no plan |
-| 6 | **Decide** | Select exactly ONE action — the Arbitrator | Multiple paths choosing differently (today's bug) |
+| 6 | **Decide** | Select exactly ONE action — the Arbitrator | Multiple paths choosing differently |
 | 7 | **Act** | Execute chosen action (LLM, tool, memory write) | Wrong args, ignores tool errors |
 | 8 | **Verify** | Check whether action succeeded | Declares success when failing |
 | 9 | **Reflect** | Evaluate trajectory, signal trouble | Doesn't notice it's stuck |
@@ -135,19 +135,19 @@ These are *concerns*, not workflow stages. Some run in parallel, some sequential
 
 ### 3.2 The 5 Trait Clusters (mapped to vision)
 
-| Trait | Capabilities | Vision pillar | Today's failure |
+| Trait | Capabilities | Vision pillar | Today's status |
 |---|---|---|---|
-| **Comprehension** | Sense + Attend + Comprehend | Control | Mixed concerns in think.ts; no TaskComprehender service |
-| **Strategic intent** | Reason + Decide | Reliability | 9 termination paths; no escalation ladder |
-| **Effective action** | Act + Verify | Reliability + Security | No first-class Verifier; effectors decide termination |
-| **Self-monitoring** | Reflect | Performance | reactive-observer mixes pure + side effects |
-| **Compounding intelligence** | Recall + Learn | Performance | Learning pipeline scattered across 3 packages |
+| **Comprehension** | Sense + Attend + Comprehend | Control | TaskComprehender service shipped; ContextCurator is sole prompt author |
+| **Strategic intent** | Reason + Decide | Reliability | Single `terminate.ts` owner (FIX-18); Arbitrator at `decide/arbitrator.ts` |
+| **Effective action** | Act + Verify | Reliability + Security | Verifier first-class under `capabilities/verify/` |
+| **Self-monitoring** | Reflect | Performance | `reflect/loop-detector.ts`, `strategy-evaluator.ts`; pure/side-effect split needed |
+| **Compounding intelligence** | Recall + Learn | Performance | M6 persistence (Phase 1.5); M10 multi-session (Phase 1.5); M7 calibration (Phase 1.5) |
 
-**The vision is delivered when each trait is empirically visible in agent runs.** Each gate scenario in §7 pins one trait or sub-component.
+**The vision is delivered when each trait is empirically visible in agent runs.** Each gate scenario pins one trait or sub-component.
 
 ### 3.3 Why these 10 (and not more, not fewer)
 
-Established cognitive architectures (ACT-R, SOAR, ~30-40 years of research) converged on the same shape: working memory + perception + decision + action + learning, with ONE rule firing per cycle. The brain converged on it (basal ganglia for arbitration, prefrontal cortex for inhibitory control, hippocampus for learning). Successful agent frameworks (LangGraph, OpenAI Swarm) converge on minimal primitives doing one thing each.
+Established cognitive architectures (ACT-R, SOAR, ~30–40 years of research) converged on the same shape: working memory + perception + decision + action + learning, with ONE rule firing per cycle. Successful agent frameworks (LangGraph, OpenAI Swarm) converge on minimal primitives doing one thing each.
 
 **We are not inventing cognitive design. We are adopting what already works.**
 
@@ -181,29 +181,26 @@ Established cognitive architectures (ACT-R, SOAR, ~30-40 years of research) conv
 └──────┬──────┘                       ▼                             │
        │                       ┌─────────────┐                      │
        │                       │             │                      │
-       │                       │ ARBITRATOR  │ ◄──── ALL signals    │
-       │                       │             │                      │
-       │                       │ ONE verdict │                      │
-       │                       │ per iter    │                      │
-       │                       │             │                      │
-       │                       │ continue    │                      │
-       │                       │ exit-ok     │                      │
-       │                       │ exit-fail   │                      │
-       │                       │ escalate    │                      │
-       │                       └─────────────┘                      │
-       │                                                            │
-       └────────────────────────────────────────────────────────────┘
-       ▲                                                            │
-       │                                                            ▼
-       │                                                     ┌─────────────┐
-       │                                                     │   LEARN     │
-       │                                                     │             │
-       │                                                     │ Memory      │
-       │                                                     │ Service     │
-       └─────────────────────────────────────────────────────┤             │
-                                                             │ Calibration │
-                                                             │ Experience  │
-                                                             └─────────────┘
+       │                       │ ARBITRATOR  │ ◄──── ALL signals ───┘
+       │                       │             │
+       │                       │ ONE verdict │
+       │                       │ per iter    │
+       │                       │             │
+       │                       │ continue    │
+       │                       │ exit-ok     │
+       │                       │ exit-fail   │
+       │                       │ escalate    │
+       │                       └──────┬──────┘
+       │                              │
+       │                       ┌─────────────┐
+       │                       │   LEARN     │
+       │                       │             │
+       │                       │ Memory      │
+       └───────────────────────┤ Service     │
+                               │             │
+                               │ Calibration │
+                               │ Experience  │
+                               └─────────────┘
 
   Loop Controller orchestrates: Perceive → Reason → Decide → Act → Learn → repeat
                                                        ↑
@@ -216,280 +213,378 @@ Established cognitive architectures (ACT-R, SOAR, ~30-40 years of research) conv
 
 **Integrators** are pure functions `Observation[] → decision-ready data`. No mutation, no decisions.
 
-**Arbitrator** is a pure function `(integrated signals, state) → Verdict`. Returns exactly ONE of: `continue | exit-success | exit-failure | escalate`. The only place termination is decided. The only place strategy switches are decided.
+**Arbitrator** is a pure function `(integrated signals, state) → Verdict`. Returns exactly ONE of: `continue | exit-success | exit-failure | escalate`. The only place termination is decided.
 
 **Effectors** are side-effect functions `(state, Verdict) → Effect<NewState, Error>`. Execute what the Verdict commands. Cannot decide termination, cannot decide strategy.
 
-**Loop Controller** is the only state mutator. Owns the iteration cycle. Sequence is fixed: sense → integrate → arbitrate → act → learn (between iterations) → loop.
+**Loop Controller** is the only state mutator. Owns the iteration cycle. Sequence is fixed: sense → integrate → arbitrate → act → learn → loop.
 
 ### 4.3 The 10 services + 5 cross-cutting concerns
 
-| Service | Capability | Where it lives |
+| Service | Capability | Location |
 |---|---|---|
-| ObservationSensor | Sense | `packages/reasoning/src/kernel/capabilities/sense/` |
-| SalienceCurator | Attend | `packages/reasoning/src/context/` (already exists as ContextCurator) |
-| TaskComprehender | Comprehend | `packages/reasoning/src/kernel/capabilities/comprehend/` |
-| MemoryService | Recall | `packages/memory/` (already cohesive) |
-| ReasoningEngine | Reason | `packages/reasoning/src/kernel/capabilities/reason/` |
-| **Arbitrator** | **Decide** | `packages/reasoning/src/kernel/capabilities/decide/` |
-| EffectorPool | Act | `packages/reasoning/src/kernel/capabilities/act/` |
-| Verifier | Verify | `packages/reasoning/src/kernel/capabilities/verify/` |
-| ReflectionEngine | Reflect | `packages/reasoning/src/kernel/capabilities/reflect/` |
-| LearningPipeline | Learn | `packages/reasoning/src/kernel/capabilities/learn/` (bridge to memory + reactive-intelligence) |
+| ObservationSensor | Sense | `kernel/capabilities/sense/` |
+| SalienceCurator | Attend | `kernel/capabilities/attend/` (ContextCurator) |
+| TaskComprehender | Comprehend | `kernel/capabilities/comprehend/` |
+| MemoryService | Recall | `packages/memory/` |
+| ReasoningEngine | Reason | `kernel/capabilities/reason/` |
+| **Arbitrator** | **Decide** | `kernel/capabilities/decide/` |
+| EffectorPool | Act | `kernel/capabilities/act/` |
+| Verifier | Verify | `kernel/capabilities/verify/` |
+| ReflectionEngine | Reflect | `kernel/capabilities/reflect/` |
+| LearningPipeline | Learn | `kernel/capabilities/learn/` |
 
 | Cross-cutting concern | Where |
 |---|---|
-| State | `packages/reasoning/src/kernel/state/` |
-| Telemetry | `packages/core/event-bus` + `packages/trace` (existing) |
-| Safety | `packages/guardrails` + `packages/cost` + `packages/identity` (existing) |
-| Time | `packages/core` (extract from implicit, make mockable) |
-| Provenance | `ObservationResult.trustLevel` (S2.3, extend to all observations) |
+| State | `kernel/state/` |
+| Telemetry | `packages/core/event-bus` + `packages/trace` |
+| Safety | `packages/guardrails` + `packages/cost` + `packages/identity` |
+| Time | `packages/core` (mockable clock) |
+| Provenance | `ObservationResult.trustLevel` (extends to all observations in Phase A) |
 
 ### 4.4 The unifying principle
 
 > **Every cognitive function in the agent is implemented as a service with: one owner, typed contract, observable events, replaceable strategy, and isolated tests.**
 
-This is the rule. Violating it is the failure mode this architecture exists to prevent.
+Violating this is the failure mode this architecture exists to prevent.
 
 ---
 
 ## 5. Code & Package Organization
 
-### 5.1 Package strategy: don't add new packages
+### 5.1 Package strategy
 
-Today: 27 packages. The chaos is **inside `packages/reasoning/src/strategies/kernel/`**, not in package count. Five mega-files (kernel-runner.ts 63.7K, think.ts 41.0K, act.ts 43.2K, tool-execution.ts 34.0K, kernel-state.ts 29.5K) plus 21 utility files mixed across two folders (`phases/`, `utils/`).
+Today: 27 packages. The chaos is inside `packages/runtime/src/` (builder.ts 6,082 LOC, execution-engine.ts 4,499 LOC) and not in package count.
 
-**The fix is reorganization within the existing reasoning package, plus 5-6 small package consolidations.** Net package count goes DOWN to ~22.
+**The fix is decomposition within existing packages plus 5–6 small consolidations.** Net package count goes DOWN to ~22.
 
-### 5.2 The new kernel internal structure
+**The principle:** Add a package when there's a publish boundary or different consumer profile. Add a folder when there's a clear concern boundary. The 10 cognitive capabilities are *concerns*, not *publish boundaries* — they're folders, not packages.
+
+### 5.2 Kernel internal structure (current — Stage 5 complete)
 
 ```
-packages/reasoning/src/kernel/                  (was: src/strategies/kernel/)
-├── state/                                      (working memory + lifecycle)
-│   ├── kernel-state.ts
-│   ├── kernel-hooks.ts
-│   └── kernel-constants.ts
-├── loop/                                       (the only state mutator)
-│   ├── runner.ts                               (extracted from 63.7K kernel-runner.ts)
-│   └── react-kernel.ts                         (factory)
-├── capabilities/                               (the 10 cognitive functions)
-│   ├── sense/
-│   │   ├── observation-sensor.ts
-│   │   └── step-utils.ts
-│   ├── attend/                                 (or keep ContextCurator in src/context/)
-│   │   ├── context-utils.ts
-│   │   └── tool-formatting.ts
-│   ├── comprehend/
-│   │   ├── task-comprehender.ts
-│   │   └── task-intent.ts
-│   ├── reason/                                 (LLM call only — no decisions)
-│   │   ├── think.ts                            (decomposed from 41K)
-│   │   ├── stream-parser.ts
-│   │   └── think-guards.ts
-│   ├── decide/                                 (the Arbitrator)
-│   │   ├── arbitrator.ts                       (renamed termination-oracle)
-│   │   └── evaluators/
-│   │       ├── controller-signal-veto.ts       (CHANGE A)
-│   │       ├── llm-end-turn.ts
-│   │       ├── final-answer-regex.ts
-│   │       └── ...
-│   ├── act/                                    (effectors only — no decisions)
-│   │   ├── tool-execution.ts
-│   │   ├── tool-gating.ts
-│   │   ├── tool-parsing.ts
-│   │   └── tool-capabilities.ts
-│   ├── verify/                                 (NEW first-class)
-│   │   ├── verifier.ts
-│   │   ├── quality-utils.ts
-│   │   ├── evidence-grounding.ts
-│   │   └── requirement-state.ts
-│   ├── reflect/                                (pure parts of reactive-observer)
-│   │   ├── reflection-engine.ts
-│   │   ├── loop-detector.ts
-│   │   └── strategy-evaluator.ts
-│   └── learn/                                  (bridge to memory + RI packages)
-│       └── learning-bridge.ts
-└── utils/                                      (truly cross-cutting only)
-    ├── ics-coordinator.ts
-    └── lane-controller.ts
+packages/reasoning/src/kernel/
+├── state/                    ← kernel-state.ts, kernel-hooks.ts, kernel-constants.ts
+├── loop/                     ← runner.ts (1,706 LOC), react-kernel.ts, terminate.ts
+├── capabilities/
+│   ├── act/                  ← act.ts, guard.ts, tool-execution.ts, tool-gating.ts, tool-parsing.ts, tool-capabilities.ts
+│   ├── attend/               ← context-utils.ts, tool-formatting.ts
+│   ├── comprehend/           ← task-intent.ts
+│   ├── decide/               ← arbitrator.ts, oracle-nudge.ts
+│   ├── reason/               ← think.ts, stream-parser.ts, think-guards.ts
+│   ├── reflect/              ← loop-detector.ts, reactive-observer.ts, strategy-evaluator.ts
+│   ├── sense/                ← step-utils.ts
+│   └── verify/               ← evidence-grounding.ts, quality-utils.ts, requirement-state.ts, verifier.ts
+└── utils/                    ← diagnostics.ts, ics-coordinator.ts, lane-controller.ts, service-utils.ts
 ```
 
-**Every dev question maps to one folder name:**
+### 5.3 Orchestration debt (Phase A target)
 
-| Question | Folder |
-|---|---|
-| "Where does the agent decide to stop?" | `decide/` |
-| "Where does the prompt get assembled?" | `attend/` (or shared `context/`) |
-| "Where does the LLM call happen?" | `reason/` |
-| "Where do tools execute?" | `act/` |
-| "Where do we check if the task is done?" | `verify/` |
-| "Where does the loop run?" | `loop/` |
-| "Where does state mutate?" | `loop/runner.ts` (and ONLY there) |
+```
+packages/runtime/src/
+├── builder.ts              6,082 LOC → 7 sub-builders ≤400 LOC each + delegator ≤500 LOC
+└── execution-engine.ts     4,499 LOC → 9 phase modules ≤400 LOC each + orchestrator ≤600 LOC
+```
 
-### 5.3 Small package consolidations (opportunistic, ~22 packages target)
+### 5.4 Package consolidations (Phase A, opportunistic)
 
 | Today | Merges into | Why |
 |---|---|---|
-| `packages/verification` | `packages/reasoning/.../capabilities/verify/` | Single owner; verification is a kernel capability |
+| `packages/verification` | `kernel/capabilities/verify/` | Single owner; verification is a kernel capability |
 | `packages/prompts` | `packages/reasoning/src/context/` | Prompts are a curator concern |
 | `packages/interaction` | `packages/runtime` | Interaction patterns are runtime |
 | `packages/benchmarks` + `packages/scenarios` | `packages/testing` | Three test packages → one with submodules |
 | `packages/health` | `packages/observability` | Health is observability |
 
-### 5.4 What stays exactly as-is
+### 5.5 What stays exactly as-is
 
-- `core`, `llm-provider`, `tools`, `memory`, `observability`, `trace` — distinct concerns, one owner each
-- `guardrails`, `cost`, `identity` — safety domain, separate publish boundaries
-- `a2a`, `gateway`, `orchestration` — multi-agent / deployment concerns
-- `reactive-agents` (facade), `runtime`, `reactive-intelligence` — orchestration layers
-- `react`, `vue`, `svelte` — framework adapters (separate npm publish targets)
-- `eval`, `testing` — separate testing concerns
-
-### 5.5 The principle
-
-> **Add a package when there's a publish boundary or different consumer profile. Add a folder when there's a clear concern boundary. Don't confuse the two.**
-
-The 10 cognitive capabilities are *concerns*, not *publish boundaries* — agents don't import "the SalienceCurator" separately. So they're folders, not packages.
+`core`, `llm-provider`, `tools`, `memory`, `observability`, `trace`, `guardrails`, `cost`, `identity`, `a2a`, `gateway`, `orchestration`, `reactive-agents` (facade), `runtime`, `reactive-intelligence`, `react`, `vue`, `svelte`, `eval`, `testing`.
 
 ---
 
-## 6. Implementation Plan
+## 6. Consolidated Forward Plan
 
-### 6.1 Phase structure
+**Single authoritative sequence from today (v0.10.6) to v1.0.** This section replaces `07-ROADMAP-v1.0.md` and `Phase 1.5 Improvement Roadmap.md`.
 
-| Phase | Name | Status | Deliverable |
+Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are written immediately before execution of each phase. No phase ships without its validation gate.
+
+**Pillars served per phase:**
+
+| Phase | Focus | Pillars | Target release |
 |---|---|---|---|
-| **Phase 0** | Foundation | ✅ Shipped | Typed errors, redactor, error-swallow events, P11 dispatches, W4/cf-14 |
-| **Phase 1** | Capability + Curator | ✅ Shipped (Sprints 1-2) | Capability port, ContextCurator, trustLevel, ModelTier unification |
-| **Phase 2** | Cognitive Kernel | 🚧 NOW | Reorganize kernel, promote Verifier, consolidate Arbitrator, close G-5 |
-| **Phase 3** | Validation Harness | Queued | N=3 corpus methodology, multi-run aggregation, statistical gates |
-| **Phase 4** | Package consolidation | Queued | 27 → ~22 packages, opportunistic |
-| **Phase 5** | v0.10.0 release | Blocked on Phases 2-4 | Tag, publish, announce |
+| **A** | Architecture Cleanup (W23–W28) | Control, DX | now-work |
+| **1.5** | Mechanism Improvements (M3/M6/M7/M8/M10) | Reliability, Efficiency | parallel with A |
+| **B** | Compose API (Waves A–F) | Composition, Control | v0.11 prerequisite |
+| **C** | v0.11 Launch | All 8 (credibility signal) | v0.11.0 |
+| **D** | Code-as-Action Strategy | Local-First, Efficiency | v0.12 |
+| **E** | Local Model Engineering | Model-Adaptive, Local-First | v0.12 |
+| **F** | Public Benchmark Discipline | Reliability, Trustworthiness | v0.13 |
+| **G** | v1.0 Polish & Release | All 8 | v1.0 |
 
-### 6.2 Phase 2 — Cognitive Kernel (the now-work)
+---
 
-Five sprints, each ~1 week, each with explicit validation gates.
+### Phase A — Architecture Cleanup (W23–W28)
 
-#### Sprint 3.1 — Kernel Reorganization (~1 week, 1 large mechanical PR + tests)
+**Goal:** Decompose the orchestration monolith into composable units. Close G-6. This is the foundation that makes the Compose API (Phase B) land on clean ground — the alternative is bolting new API onto a 6,082-line file and paying for that choice in every subsequent phase.
 
-**Goal:** Move from `src/strategies/kernel/{phases,utils}/` to `src/kernel/{state,loop,capabilities/*,utils}/`. **No behavior change.**
+**Vision pillars:** Composition (Phase B depends on this), Control, DX.
+
+**Sequence:** W23 → W24 → W26 → W27 → W28 (order matters; each wave's gate must pass before the next starts).
+
+#### W23 — Execution-engine decomposition
+
+**Goal:** Break `execution-engine.ts` (4,499 LOC) into ≤9 phase modules.
 
 **Scope:**
-- Move every file in `strategies/kernel/` to its new home per §5.2
-- Update all imports (mechanical, tooling-assisted)
-- Run full test suite — every test must still pass
-- Add gate scenario `cf-22-kernel-internal-structure` that asserts the folder structure exists (very lightweight: just imports + checks)
+- Identify the 9 logical phases currently embedded in execution-engine.ts
+- Extract each to `packages/runtime/src/engine/phase-{name}.ts` (≤400 LOC each)
+- `execution-engine.ts` becomes the orchestrator (≤600 LOC), delegating to phase modules
+- Update all imports; run full test suite
 
 **Validation gate:**
-- ✅ All 4500+ tests pass with no behavior change
-- ✅ Typecheck clean across all 27 packages
-- ✅ Gate scenarios cf-04 through cf-21 still green
-- ✅ N=3 corpus run shows ≤ 5% variance from current baseline (no regression)
-
-**What we DON'T do in this sprint:** decompose any of the mega-files. That's Sprint 3.3+. This sprint is purely move-and-rename.
-
-#### Sprint 3.2 — Verifier promotion (~1 week)
-
-**Goal:** Promote Verify to a first-class capability with one owner.
-
-**Scope:**
-- Create `kernel/capabilities/verify/verifier.ts` with typed `verify(action, result, context) → VerificationResult` interface
-- Move quality-utils, evidence-grounding, requirement-state under `verify/`
-- Refactor `act.ts` to call `verifier.verify()` after every effector output
-- Add gate scenario `cf-23-verify-runs-after-every-action`
-- Add 15+ unit tests on the Verifier
-
-**Validation gate:**
-- ✅ Verifier emits a structured pass/fail event for every effector call
-- ✅ N=3 corpus shows verifier output present in every iteration trace
-- ✅ Gate scenarios still green
-
-#### Sprint 3.3 — Arbitrator consolidation (CHANGE A.5, closes G-5)  ★ HIGHEST LEVERAGE
-
-**Goal:** All termination decisions flow through one Arbitrator. Close G-5.
-
-**Scope:**
-- Promote `termination-oracle.ts` to `arbitrator.ts` under `decide/`
-- Define `Verdict = continue | exit-success | exit-failure | escalate`
-- Refactor 9 `status:"done"` sites:
-  - act.ts:436 (final-answer-tool path)
-  - think.ts:553, 696, 910
-  - loop-detector.ts:145
-  - kernel-runner.ts:637, 675, 761, 823, 877
-- Each refactored site emits a TerminationIntent; Arbitrator resolves to a Verdict
-- Add gate scenario `cf-24-all-termination-flows-through-arbitrator`
-- Add 25+ unit tests on the Arbitrator
-
-**Validation gate:**
-- ✅ N=3 corpus shows ≥ 7/8 correct booleans (vs today's 5/8)
-- ✅ Run-to-run variance ≤ 2× (vs today's 5×)
-- ✅ Wall time per scenario ≤ 90% of today's median
-- ✅ Gate scenarios still green
-- ✅ A grep for `status.*"done"` outside `kernel/loop/runner.ts` returns ZERO results
-
-**Critical:** if validation gate fails, Sprint 3.4 does not start. We diagnose before continuing.
-
-#### Sprint 3.4 — Reflect / Sense extraction (~1 week)
-
-**Goal:** Split reactive-observer into pure (Reflect) and side-effect (Effector) parts.
-
-**Scope:**
-- Create `kernel/capabilities/reflect/reflection-engine.ts` (pure)
-- Create `kernel/capabilities/sense/observation-sensor.ts` (pure read of state + entropy)
-- Move dispatch side-effects into `act/` effector pool
-- Reflection's output feeds the Arbitrator as one of its signals
-- Add gate scenario `cf-25-reflection-feeds-arbitrator`
-
-**Validation gate:**
-- ✅ N=3 corpus stable
-- ✅ Reflection output traceable independent of side effects
-- ✅ Per-tier reflection thresholds configurable via ContextProfile
-
-#### Sprint 3.5 — TaskComprehender + Provenance + Time (~1 week)
-
-**Goal:** Promote the missing first-class services.
-
-**Scope:**
-- Create `kernel/capabilities/comprehend/task-comprehender.ts` (extends task-intent.ts)
-- Extract Time service into `packages/core` (mockable clock)
-- Extend ObservationResult.trustLevel to ALL observations (not just tool results)
-- Fix entropy-scored.iter to read state.iteration (closes the iter=23/28 anomaly)
-- Add gate scenarios cf-26 (Time mockable), cf-27 (Provenance universal), cf-28 (TaskComprehender output is structured)
-
-**Validation gate:**
-- ✅ N=3 corpus stable or improving
-- ✅ All gate scenarios green
-- ✅ Trace replays show clean per-iteration data flow: sense → integrate → arbitrate → act → verify
-
-### 6.3 Phase 3 — Validation Harness (~1 week)
-
-**Goal:** N=3 corpus methodology becomes the default validation gate for any future change.
-
-**Scope:**
-- Update `failure-corpus.ts` to run each scenario N times (default 3) and report median + range
-- Add `corpus-compare.ts` script: takes two baseline files, reports deltas with statistical significance
-- Make multi-run validation a gate-update prerequisite for any commit affecting kernel
-- Document the methodology in `wiki/Architecture/Specs/16-validation-discipline.md`
-
-### 6.4 Phase 4 — Package Consolidation (~1 week, opportunistic)
-
-**Goal:** 27 → ~22 packages per §5.3.
-
-**Scope:** 5 small PRs, one per consolidation listed in §5.3. Each is mechanical, low-risk.
-
-### 6.5 Phase 5 — v0.10.0 release
-
-**Pre-release checklist (all must hold):**
-- [ ] Failure corpus N=3 median ≥ 7/8 correct booleans
-- [ ] Run-to-run variance ≤ 2×
-- [ ] All gate scenarios cf-04 through cf-28 green
+- [ ] `execution-engine.ts` ≤ 600 LOC; every phase module ≤ 400 LOC
+- [ ] All existing tests pass unchanged
 - [ ] Typecheck clean across all packages
-- [ ] All 4500+ tests pass
-- [ ] No `status:"done"` transitions outside `kernel/loop/runner.ts`
-- [ ] No parallel prompt-author paths outside ContextCurator
-- [ ] CHANGELOG covers Phase 0 + Phase 1 + Phase 2
-- [ ] North Star v3.0 (this doc) is current
-- [ ] Public docs reflect new architecture
+
+#### W24 — Strategy RI-scaffolding helper
+
+**Goal:** Extract `runStrategyRiScan` helper so `plan-execute.ts` and `tree-of-thought.ts` share it.
+
+**Scope:**
+- Create `packages/reasoning/src/strategies/shared/ri-scaffold.ts`
+- Refactor `plan-execute.ts` and `tree-of-thought.ts` to call it
+- Wire reflexion + adaptive strategies to the same helper with one-line call
+
+**Validation gate:**
+- [ ] `plan-execute.ts` and `tree-of-thought.ts` each shrink by ≥75 LOC
+- [ ] New test confirms RI fires on reflexion + adaptive
+- [ ] All strategy tests pass
+
+#### W26 — Sub-builders + thin DX surface
+
+**Goal:** Break `builder.ts` (6,082 LOC) into 7 sub-builders.
+
+**Scope:**
+- Identify 7 builder concern groups (reasoning, tools, memory, providers, gateway, compose, safety)
+- Extract each to `packages/runtime/src/builder/{concern}-builder.ts` (≤400 LOC each)
+- `builder.ts` becomes a thin entry-point delegator (≤500 LOC)
+- `ExecutionEngine.fromConfig()` handles service wiring
+- Codemod updates all existing examples + CLI generator
+
+**Validation gate:**
+- [ ] `builder.ts` ≤ 500 LOC; all 7 sub-builders ≤ 400 LOC each
+- [ ] `ExecutionEngine.fromConfig()` exists; all integration tests pass
+- [ ] Codemod covers all examples in `apps/examples/`
+
+#### W27 — `GatewayAgent` type extraction
+
+**Goal:** Type-level separation between task agents and gateway agents.
+
+**Scope:**
+- Remove `ReactiveAgent.start()` and `ReactiveAgent.stop()`
+- Create `GatewayAgent extends ReactiveAgent` with `start()`/`stop()`
+- `withGateway()` returns `GatewayAgentBuilder` (not `ReactiveAgentBuilder`)
+- Compile-time enforcement: calling `start()` on a non-gateway agent is a type error
+
+**Validation gate:**
+- [ ] Gateway-mode tests pass
+- [ ] Deliberately-wrong usage in CI produces a TS compile error
+
+#### W28 — Phase-typed builder validation (optional)
+
+**Goal:** Enforce builder phase ordering at compile time.
+
+**Scope:**
+- `withTools()` requires prior `withReasoning()` call at the type level
+- Phantom type on builder tracks which phases have been called
+
+**Validation gate:**
+- [ ] One deliberately-broken example in CI produces exactly one TS error
+
+**Phase A completion gate:**
+- [ ] `builder.ts` ≤ 500 LOC, `execution-engine.ts` ≤ 600 LOC
+- [ ] All 4,672+ tests pass
+- [ ] Typecheck clean across all packages
+- [ ] N=3 corpus run shows ≤5% variance from current baseline (no behavioral regression)
+
+---
+
+### Phase 1.5 — Mechanism Improvements
+
+**Goal:** Close the 5 IMPROVE verdicts from Phase 1. These run in parallel with Phase A — different files, no conflicts.
+
+**Detailed scopes:** `wiki/Planning/Phase 1.5 Improvement Roadmap.md` (reference only — superseded here but retained for per-mechanism detail).
+
+| Mech | Action | Target | Effort |
+|---|---|---|---|
+| **M3** Verifier Retry | Tune retry context for cogito:14b (FM-A1, FM-C2 signals; temperature 0.0→0.2) | ≥50% recovery on cogito:14b | 3–5 days |
+| **M6** Skill Persistence | SQLite-backed skill storage; per-agent scope; SKILL.md import/export | >70% recall across 3+ sessions | 5–7 days |
+| **M7** Calibration Consumers | Wire `parallelCallCapability`, `interventionResponseRate`, `tokenEfficiency`, `reasoningDepth`, `knownToolAliases` | ≥8 fields active with measurable lift | 4–6 days |
+| **M8** Sub-agent Delegation | Run 10 delegation scenarios on frontier + qwen3:14b; measure accuracy and token ROI | ≥15% accuracy lift on complex (≥3-step) tasks | 3–5 days |
+| **M10** Memory Multi-session | Design 3 multi-session scenarios; add Tier 2 semantic search for verbose queries | >80% recall across 3+ sessions | 4–6 days |
+
+**Phase 1.5 completion gate:**
+- [ ] All 5 mechanisms at or above their targets
+- [ ] Evidence artifacts in `wiki/Research/Harness-Reports/phase-1.5-<mech>-YYYY-MM-DD.md`
+- [ ] No regressions on existing test suite
+
+---
+
+### Phase B — Compose API (v0.11 Differentiator)
+
+**Goal:** Ship `.compose((harness) => …)` — full harness injection coverage across 24 chokepoints in 5 namespaces (`prompt.*`, `message.*`, `nudge.*`, `tool.*`, `observation.*`). This is the architectural differentiator that separates Reactive Agents from black-box frameworks.
+
+**Depends on:** Phase A W26 complete (sub-builders give Phase B clean injection points).
+
+**Full design spec:** `wiki/Architecture/Design-Specs/2026-05-06-compose-harness-api.md`
+
+**Wave sequence:**
+
+| Wave | Scope | Gate |
+|---|---|---|
+| **Wave A** | `harness-pipeline.ts` registry + resolver; `harness-tag-catalog.generated.ts` (5 initial tags); `TagMap`, `PayloadFor`, `ContextFor` type system; `.compose()` on builder | Type inference works; pipeline registry resolves tags |
+| **Wave B** | 5 chokepoint refactors: `prompt.system`, `nudge.loop-detected`, `nudge.healing-failure`, `message.tool-result`, `observation.verifier-retry` | All 5 injection points fire in traces; zero regressions |
+| **Wave C** | `RunHandle` with pause/resume/stop/terminate; `KernelState.pendingGuidance` plumbing | Handle works end-to-end; `pause()` + `resume()` round-trip |
+| **Wave D** | `packages/compose` with 6 killswitches: `budgetLimit`, `timeoutAfter`, `maxIterations`, `requireApprovalFor`, `watchdog`, `confidenceFloor` | All 6 killswitches pass acceptance tests |
+| **Wave E** | `.withX()` sugar desugars to compose calls + backward-compat tests | Every `.withX()` method desugar test passes |
+| **Wave F** | Docs: `compose-api.mdx`, `harness-tags.mdx`, `composition-recipes.mdx`; `stability.md` update | Docs published; all 24 injection points documented |
+
+**Phase B completion gate:**
+- [ ] All 24 injection points have tags reachable via `.compose(harness)`
+- [ ] Pattern matching (`.*`, `.**`) infers `PayloadFor<Tag>` correctly in TypeScript
+- [ ] 6 killswitches pass acceptance tests
+- [ ] `.withX()` methods desugar correctly (backward compatible; no behavior change)
+- [ ] Zero regressions on 4,672+ tests
+
+---
+
+### Phase C — v0.11 Launch (Show-HN Inflection Point)
+
+**Goal:** Ship v0.11.0 — the "composable, auditable, transparent" alternative to AutoGen/CrewAI/Mastra. Five market-positioning items plus Snapshot/Replay capability, which directly demonstrates the "every decision auditable" vision claim in a live demo.
+
+**Depends on:** Phase B complete.
+
+**Tactical details:** `wiki/Planning/Implementation-Plans/2026-05-06-v0.11-launch-readiness.md`
+
+**Scope summary:**
+
+| Item | Effort | Vision pillar | Why |
+|---|---|---|---|
+| **Skill Persistence** (M6 — if not done Phase 1.5) | 1 week | Compounding intelligence | Skills survive session restarts; tech demo → production capability |
+| **Live Playground** (Stackblitz, 3 scenarios) | 2 days | DX | "Show me" conversion; 10× reader → installer |
+| **`npx create-reactive-agent`** (5 templates) | 3 days | DX | 90 seconds to first running agent |
+| **OpenInference / OTel Exporter** (`@reactive-agents/observe`) | 1 week | Observability | Production credibility; Langfuse/Braintrust integration |
+| **Public Roadmap + Named Users** (GitHub Projects) | 1 day | — | Momentum signal; closes "Is this maintained?" objection |
+| **Snapshot/Replay** (`agent.replay(traceId, overrides)`) | 1 week | Observability, Control | Unique capability; auditable-by-demo; no other framework has this |
+
+**Snapshot/Replay detail:** `agent.replay(traceId, overrides)` replays a recorded run against modified prompts/models with tool results held constant, producing a diff report. Builds on existing `packages/trace` infrastructure. Directly demonstrates "every decision observable and auditable" in a 10-second live demo. Equivalent to Phase 6 in the prior v1.0 roadmap — promoted to v0.11 for Show-HN impact.
+
+**Phase C completion gate (v0.11.0 tag):**
+- [ ] Phase B gate passes (Compose API fully shipped)
+- [ ] Skill Persistence: cross-session recall >70% (or Phase 1.5 M6 already passed)
+- [ ] Playground: 3 Stackblitz scenarios, cold start <3s, edit + re-run works
+- [ ] Generator: 5 templates scaffold in <2s, all run with `npm run dev`
+- [ ] OTel: all 14+ event tags → OpenInference spans; Langfuse integration tested on real instance
+- [ ] Snapshot/Replay: `agent.replay(traceId, overrides)` end-to-end; deterministic on same overrides
+- [ ] Zero regressions on 4,672+ tests
+- [ ] `ROADMAP.md` (root, public-facing) aligned to this document ← **see §6 note below**
+
+> **Public roadmap alignment:** The root `ROADMAP.md` is the user-facing milestone tracker. It must be updated to reflect Phase A–G sequencing once this v4.0 is finalized and before v0.11.0 ships. The Show-HN post should link to a roadmap that matches this plan.
+
+---
+
+### Phase D — Code-as-Action Strategy
+
+**Goal:** Add `CodeAgentStrategy` as the 6th reasoning strategy. The strategy emits code blocks that compose existing tools as function calls — `tool_x(); tool_y(); return final_answer(...)` — closing the local-model agentic gap and reducing LLM round-trips on multi-step tasks.
+
+**Vision pillars:** Local-First (Pillar 8), Flexibility (Pillar 3), Efficiency (Pillar 6).
+
+**Validation gate:**
+- [ ] `CodeAgentStrategy` exists at `packages/reasoning/src/strategies/code-action.ts` and integrates with strategy registry
+- [ ] On 10-task multi-step suite: ≥20% accuracy lift over `reactive` on qwen3:14B
+- [ ] ≥25% token reduction vs `reactive` on same suite
+- [ ] Sandbox safety: no host filesystem access outside sandbox dir; no unwhitelisted network calls; timeout enforced
+- [ ] Frontier parity: does not regress claude-haiku or gemini-flash by >5%
+- [ ] Evidence artifact: `wiki/Research/Harness-Reports/phase-D-code-as-action-YYYY-MM-DD.md`
+
+**Stop-the-line:** if local-tier lift is <20% after implementation, mark `_unstable_*` and ship opt-in only.
+
+---
+
+### Phase E — Local Model Engineering
+
+**Goal:** Close the per-provider FC-parsing gap, activate dormant calibration consumers, and add tool-result paging. Delivers qwen3:14B at ≥30% of frontier on τ-bench retail subset.
+
+**Vision pillars:** Model-Adaptive Intelligence, Local-First.
+
+**Three parallelizable tracks:**
+
+**Track 1 — Per-provider tool-call parser**
+- `ProviderAdapter.parseToolCalls(rawResponse, modelId, runtimeVersion)` resolves qwen3 + Ollama + thinking-mode + tool_calls coexistence (LiteLLM #18922)
+- Regression test: thinking-mode + tool_calls coexist on Ollama qwen3:14B without dropped tool calls
+
+**Track 2 — Calibration consumer activation**
+- Wire `parallelCallCapability` → gate batch tool calls
+- Wire `interventionResponseRate` → gate dispatcher firing on non-compliant models
+- Wire `knownToolAliases` → proactive prompt-injection layer
+- Wire `tokenEfficiency` → cost router model selection
+- Wire `reasoningDepth` → strategy selector
+- Total active consumers: ≥8 (counting Layer 1 builders shipped in v0.10.6)
+
+**Track 3 — Tool-result paging**
+- 50KB per-tool / 200KB per-message caps with disk spill
+- Implement at `kernel/capabilities/attend/context-utils.ts`
+
+**Phase E completion gate:**
+- [ ] qwen3:14B ≥30% of frontier (claude-sonnet) on τ-bench-derived retail subset
+- [ ] thinking-mode + tool_calls coexistence regression test passes
+- [ ] ≥8 calibration fields active with documented lift evidence
+- [ ] Tool-result paging caps observed in production traces (no message exceeds 200KB)
+
+---
+
+### Phase F — Public Benchmark Discipline
+
+**Goal:** Submit to or replicate ≥1 third-party agent benchmark with reproducible methodology. Closes the "self-graded marketing" gap — internal 100% scores are necessary but not sufficient for external credibility.
+
+**Vision pillars:** Reliability, Trustworthiness, Local-First.
+
+**Recommended first benchmark:** τ²-bench retail (clearest reproducibility story; directly validates the local-tier claim from Phase E).
+
+**Phase F completion gate:**
+- [ ] ≥1 benchmark integration in `packages/benchmarks/src/sessions/` with reproducible run command
+- [ ] Published to `wiki/Research/Harness-Reports/public-bench-<name>-YYYY-MM-DD.md` with: model + provider + date pinned, cost reported, ≥3 seed variance (mean ± stdev), raw JSONL traces
+- [ ] `README.md` contains exactly one external benchmark claim with full methodology disclosure
+
+**Stop-the-line:** if the run produces results inconsistent with internal bench (>15% delta), investigate the harness — not the result. Honest reporting wins.
+
+---
+
+### Phase G — v1.0 Polish & Release
+
+**Goal:** Tag v1.0. All phase gates re-run on the integrated codebase. No aspirational claims in docs.
+
+**Phase G completion gate (v1.0 tag):**
+- [ ] Every Phase A–F gate passes on re-run
+- [ ] CHANGELOG comprehensive: every wave, mechanism sunset, new strategy, benchmark publication
+- [ ] `README.md` rewritten: no aspirational claims, only validated state
+- [ ] `ROADMAP.md` (root) rewritten: what shipped, what's deferred, what was killed and why
+- [ ] Vision pillar artifact table complete (each pillar has a concrete file path, bench number, or doc)
+- [ ] `bun test` green across workspace; typecheck clean across all packages
+- [ ] Snapshot/Replay determinism validated: same trace + same overrides → identical bench scores (modulo provider nondeterminism, which is logged)
+
+**Vision pillar artifact checklist (Phase G acceptance criterion):**
+
+| Pillar | Required artifact | Verification |
+|---|---|---|
+| **Control** | Every mechanism has enable/disable + observable events | `grep -L "enable[A-Z]" packages/*/src/index.ts` returns no false negatives |
+| **Observability** | EventBus 15+ event types; replay primitive works | `bun test packages/runtime/tests/replay-determinism.test.ts` passes |
+| **Flexibility** | 6 reasoning strategies; ≥6 providers | `ls packages/reasoning/src/strategies/` ≥ 6 files |
+| **Scalability** | Concurrent execution + persistent gateway + A2A all wired | `bun test packages/orchestration packages/gateway packages/a2a` green |
+| **Reliability** | Frozen judge + reproducible bench + Effect-TS typed errors | Phase F artifact shows ≤±0.5% reproducibility |
+| **Efficiency** | Code-as-Action ≥25% token reduction; semantic cache; paging | Phase D validation artifact |
+| **Security** | Sandboxed code execution; guardrails + identity tested | `bun test packages/guardrails packages/identity` green |
+| **Speed** | Bun-native; AgentStream.toSSE works; parallel tool execution gated by calibration | `bun test packages/runtime/tests/streaming.test.ts` passes |
 
 ---
 
@@ -497,93 +592,126 @@ Five sprints, each ~1 week, each with explicit validation gates.
 
 ### 7.1 The N=3 corpus rule
 
-**Every architectural change is validated by running the failure corpus 3 times and comparing medians to baseline.** Single runs are not evidence.
+**Every architectural change is validated by running the failure corpus 3 times and comparing medians to baseline.** Single runs are not evidence (proven: 5× run-to-run variance observed Apr 26).
 
-### 7.2 The gate scenario growth plan
+### 7.2 Gate scenario growth plan
 
-Phase 0 + Phase 1 shipped cf-04 through cf-21 (11 gate scenarios). Phase 2 adds:
+| Phase | New scenarios | What they pin |
+|---|---|---|
+| A | cf-22..cf-28 | Kernel folder structure; Verifier post-effector; single termination owner; reflection→arbitrator; mockable time; universal provenance; TaskComprehender output |
+| B | cf-29 | All 24 compose injection points reachable |
+| C | cf-30 | Replay determinism |
+| D | cf-31 | Code-as-action sandbox isolation |
+| E | cf-32 | qwen3 thinking-mode + tool_calls coexistence |
 
-| ID | Pins |
-|---|---|
-| cf-22 | Kernel folder structure (sense/, attend/, comprehend/, reason/, decide/, act/, verify/, reflect/, learn/, loop/, state/) |
-| cf-23 | Verifier runs after every effector output |
-| cf-24 | All `status:"done"` transitions flow through Arbitrator |
-| cf-25 | Reflection output feeds Arbitrator as a signal |
-| cf-26 | Time service is mockable (no implicit Date.now() in kernel) |
-| cf-27 | Provenance (trustLevel) on all observations |
-| cf-28 | TaskComprehender output is structured |
+### 7.3 Stop-the-line condition
 
-### 7.3 The empirical gates per phase
+If a phase gate fails, the next phase does not start. Diagnose and fix-forward. No exceptions.
 
-Each sprint has a measurable gate. If the gate doesn't pass, we diagnose before continuing — same discipline as the diagnostic loop that produced this document.
+If three consecutive sub-tasks within a phase fail their TDD gates AND the failure analysis points to a structural reason (the underlying assumption is wrong): abandon the phase, document the structural reason in §11 Amendment Log, rewrite the phase definition before re-attempting.
+
+### 7.4 Per-phase evidence flow
+
+```
+Phase N
+  ├─ Baseline measurement  → wiki/Research/Harness-Reports/phase-N-baseline.json
+  ├─ Implementation (TDD, frequent commits)
+  ├─ Post-impl measurement → wiki/Research/Harness-Reports/phase-N-postimpl.json
+  ├─ Evidence artifact     → wiki/Research/Harness-Reports/phase-N-<focus>-YYYY-MM-DD.md
+  ├─ Validation gate check (baseline → postimpl comparison)
+  └─ Verdict: PASS → next phase | FAIL → stop the line
+```
 
 ---
 
 ## 8. Success Criteria
 
-### 8.1 Architectural (objective)
+### 8.1 Phase A (Architecture Cleanup)
 
-- [ ] Every status:"done" transition flows through `kernel/loop/runner.ts` (grep test)
+- [ ] `builder.ts` ≤ 500 LOC, `execution-engine.ts` ≤ 600 LOC
+- [ ] Every `status:"done"` transition flows through `kernel/loop/terminate.ts` (grep test)
 - [ ] Every prompt assembly flows through ContextCurator (grep test)
-- [ ] Every kernel iteration produces: 1 sensor read + 1 integrator pass + 1 arbitrator verdict + ≤1 effector call (trace assertion)
-- [ ] All 10 capabilities have a folder under `kernel/capabilities/`
-- [ ] All 5 cross-cutting concerns are reachable via service composition
-- [ ] Package count ≤ 22
+- [ ] N=3 corpus: no regression from Phase 1 baseline
 
-### 8.2 Behavioral (empirical)
+### 8.2 Phase 1.5 (Mechanism Improvements)
 
-- [ ] Failure corpus N=3 median: ≥ 7/8 correct booleans (today: 5/8)
-- [ ] Run-to-run variance: ≤ 2× (today: 5×)
-- [ ] Average wall time per scenario: ≤ 90% of today's median
-- [ ] Entropy gap (success vs failure): ≥ 0.30 (today: 0.140)
-- [ ] All gate scenarios cf-04 through cf-28 green
+- [ ] M3: ≥50% cogito:14b retry recovery
+- [ ] M6: >70% skill recall across 3+ sessions
+- [ ] M7: ≥8 calibration fields with measured lift
+- [ ] M8: ≥15% accuracy lift on complex sub-agent tasks (real LLMs)
+- [ ] M10: >80% multi-session memory recall
 
-### 8.3 Vision-aligned (qualitative)
+### 8.3 Phase B (Compose API)
 
-- [ ] **Reliability**: same input → same output for pure functions; no contradictory termination decisions
-- [ ] **Control**: every decision visible at one location; trace replay tells the full story
-- [ ] **Performance**: pure functions cache; effectors parallelize; memory async
-- [ ] **Compounding intelligence**: learning runs at session boundary; calibration accumulates per-(provider, model)
+- [ ] 24 injection points, all reachable via `.compose(harness)`
+- [ ] TypeScript type inference: `PayloadFor<Tag>` infers correctly
+- [ ] 6 killswitches pass acceptance tests
+- [ ] `.withX()` desugars without behavior change
+
+### 8.4 Phase C (v0.11.0)
+
+- [ ] Playground, generator, OTel exporter all live
+- [ ] Snapshot/Replay: deterministic on same overrides
+- [ ] 0 regressions on 4,672+ tests
+- [ ] Root `ROADMAP.md` aligned to this document
+
+### 8.5 Phase D (Code-as-Action)
+
+- [ ] qwen3:14B: ≥20% accuracy lift, ≥25% token reduction vs `reactive` on multi-step suite
+- [ ] Sandbox safety enforced
+
+### 8.6 Phase E (Local Model Engineering)
+
+- [ ] qwen3:14B ≥30% of frontier on τ-bench retail subset
+- [ ] ≥8 calibration fields active with evidence
+
+### 8.7 Phase F (Public Benchmark)
+
+- [ ] ≥1 third-party benchmark with full reproducibility artifact in `wiki/`
+
+### 8.8 Phase G (v1.0)
+
+- [ ] All prior gates pass on re-run
+- [ ] Vision pillar artifact table complete
+- [ ] No aspirational claims in README or docs
 
 ---
 
 ## 9. What Stays vs What Changes
 
-### 9.1 Stays (preserve everything good we shipped)
+### 9.1 Stays (preserve everything good that shipped)
 
-- **Builder API** — `ReactiveAgents.create().with*()` — unchanged
+- **Builder API** — `ReactiveAgents.create().with*()` — unchanged (`.compose()` added in Phase B)
 - **Effect-TS service composition** — services flow through loop controller
 - **EventBus + Trace** — telemetry concern, well-shaped
 - **Memory layers** (working/episodic/semantic/procedural) — already cohesive
-- **5 reasoning strategies** — pluggable Reason implementations
-- **6 LLM providers** — capability port already abstracts them
-- **ContextCurator (S2.5)** — IS the SalienceCurator, just gets named explicitly
-- **Trust labels (S2.3)** — the Provenance concern, just extends to all observations
-- **Capability port (S1.x)** — what every service consumes
+- **5 reasoning strategies** — pluggable Reason implementations (6th added Phase D)
+- **6 LLM providers** — capability port abstracts them
+- **ContextCurator** — IS the SalienceCurator, already the sole prompt author
+- **Trust labels** — the Provenance concern, extended to all observations in Phase A
+- **Capability port** — what every service consumes
 - **Guardrails / cost / identity** — safety domain, well-shaped
 - **Gateway / A2A / orchestration** — multi-agent / deployment, well-shaped
-- **27 → 22 packages** — consolidation only; no removal of capability
+- **Layer 1 builders** — `buildFinalAnswerDescription`, `buildOracleNudge` — already shipped
 
-### 9.2 Changes (refactor, not rewrite)
+### 9.2 Changes (Phase A — decompose, not rewrite)
 
-- **think.ts** decomposes into: `sense/`, `comprehend/`, `reason/think.ts`, calls to `decide/arbitrator.ts`, dispatches to `act/`
-- **act.ts** decomposes into: `act/effector-pool.ts`, calls to `verify/verifier.ts`, no decisions
-- **reactive-observer.ts** decomposes into: `reflect/reflection-engine.ts` (pure) + `act/dispatcher-effector.ts` (side effects)
-- **termination-oracle.ts** promotes to `decide/arbitrator.ts`
-- **9 status:"done" sites** all route through one Arbitrator
-- **3 compression systems** collapse into the Curator (already the right home)
-- **5 small packages** consolidate per §5.3
+- **`builder.ts`** (6,082 LOC) → 7 sub-builders (≤400 LOC each) + thin delegator (≤500 LOC)
+- **`execution-engine.ts`** (4,499 LOC) → 9 phase modules (≤400 LOC each) + orchestrator (≤600 LOC)
+- **`GatewayAgent`** extracts `start()`/`stop()` from `ReactiveAgent` (type-level separation)
 
-### 9.3 Adds (small, focused)
+### 9.3 Adds
 
-- **TaskComprehender** as a first-class service
-- **Verifier** as a first-class service
-- **Time** service (mockable clock) in `packages/core`
-- **N=3 validation harness** in `harness-improvement-loop` skill
+- **Compose API** (Phase B) — `.compose((harness) => …)` with 24 injection points + 6 killswitches
+- **Snapshot/Replay** (Phase C) — `agent.replay(traceId, overrides)` built on `packages/trace`
+- **`@reactive-agents/observe`** (Phase C) — OpenInference / OTel exporter
+- **`packages/create-reactive-agent`** (Phase C) — `npx create-reactive-agent` with 5 templates
+- **`CodeAgentStrategy`** (Phase D) — 6th reasoning strategy at `strategies/code-action.ts`
+- **Per-provider tool-call parser** (Phase E) — resolves qwen3 + Ollama coexistence
 
 ### 9.4 Net LOC change
 
-The refactor SHRINKS total LOC. Decomposition extracts well-defined responsibilities; consolidation removes duplicates. Estimated -10% to -20% net LOC after Phase 2-4 complete.
+Phase A shrinks total LOC by decomposition (-10% to -20% estimated). Subsequent phases add net new capability but onto a smaller surface.
 
 ---
 
@@ -591,43 +719,56 @@ The refactor SHRINKS total LOC. Decomposition extracts well-defined responsibili
 
 | Term | Definition |
 |---|---|
-| **Capability** | One of the 10 cognitive functions every agent must perform (Sense, Attend, etc.) |
-| **Service** | A typed component that owns one capability (one owner, contract, events, replaceable, isolated tests) |
-| **Sensor** | A pure read of state. Returns observations; never mutates. |
-| **Integrator** | A pure synthesis of observations into decision-ready data. Never decides, never mutates. |
-| **Arbitrator** | The single function that produces exactly ONE Verdict per iteration. Owns Decide capability. |
-| **Effector** | A side-effect function that executes what the Verdict commands. Cannot decide. |
-| **Loop Controller** | The only component that mutates state. Owns the iteration cycle. |
+| **Capability** | One of the 10 cognitive functions every agent must perform |
+| **Service** | A typed component owning one capability: one owner, typed contract, observable events, replaceable strategy, isolated tests |
+| **Sensor** | Pure read of state. Returns observations; never mutates. |
+| **Integrator** | Pure synthesis of observations into decision-ready data. Never decides, never mutates. |
+| **Arbitrator** | The single function producing exactly ONE Verdict per iteration. Owns Decide capability. |
+| **Effector** | Side-effect function executing what the Verdict commands. Cannot decide. |
+| **Loop Controller** | Only component that mutates state. Owns the iteration cycle. |
 | **Verdict** | One of: `continue \| exit-success \| exit-failure \| escalate` |
-| **TerminationIntent** | A signal a phase emits indicating it observed something terminal-worthy. The Arbitrator resolves intents into Verdicts. |
-| **Trait** | A cluster of capabilities that delivers a vision pillar (Comprehension, Strategic intent, Effective action, Self-monitoring, Compounding intelligence) |
-| **Cross-cutting concern** | A primitive available to every service: State, Telemetry, Safety, Time, Provenance |
-| **Cognitive Services architecture** | The shape: 10 services + 5 cross-cutting concerns + 1 loop controller + 1 arbitrator pivot |
-| **Verdict-Override pattern** | Higher-priority signal trumps lower-priority signal in decision (e.g., controller veto over agent's success claim) |
-| **Sole Author pattern** | One component owns one concern; no parallel paths (proven by S2.5 ContextCurator) |
-| **Single Source of Truth pattern** | Derived observables read from one state field; no parallel counters (proven needed by entropy.iter anomaly) |
+| **TerminationIntent** | Signal a phase emits indicating terminal observation. Arbitrator resolves intents into Verdicts. |
+| **Trait** | Cluster of capabilities delivering a vision pillar |
+| **Cross-cutting concern** | Primitive available to every service: State, Telemetry, Safety, Time, Provenance |
+| **N=3 validation rule** | Every architectural change validated by running corpus 3 times, comparing medians |
+| **Layer 1 Builder** | Calibration-driven function that sets an intelligent default for a harness parameter (e.g., `buildFinalAnswerDescription`, `buildOracleNudge`) |
+| **HarnessPipeline** | Registry of `.compose()` interceptors keyed by injection-point tag |
+| **Snapshot/Replay** | `agent.replay(traceId, overrides)` — replays a recorded run against modified prompts/models with tool results held constant |
+| **Sole Author pattern** | One component owns one concern; no parallel paths |
+| **Single Source of Truth pattern** | Derived observables read from one state field; no parallel counters |
 | **Per-tier Calibration pattern** | Behavior thresholds parameterized by ContextProfile, not fixed globally |
-| **N=3 validation rule** | Every architectural change validated by running the corpus 3 times and comparing medians |
 
 ---
 
-## 11. Superseded Documents
+## 11. Amendment Log
 
-This North Star v3.0 supersedes and consolidates the following analysis documents. They remain in `wiki/Research/Harness-Reports/` as historical evidence (the diagnostic trail), but are no longer authoritative for forward direction:
+Every amendment to this North Star (phase reordering, gate revision, phase addition/deletion) is logged here. **Never silently drift** — always amend lower-authority docs, never this one.
 
-| Document | Status | What it contributed to v3.0 |
+| Date | Amendment | Reason | Authority |
+|---|---|---|---|
+| 2026-05-03 | v1.0 Roadmap created (Phases 0–7) | v0.10.0 release-pending; audit §16 surfaced gaps | tylerjrbuell |
+| 2026-05-04 | Phase 1 complete: 8 KEEP + 5 IMPROVE; Phase 1.5 defined | Improvement-first posture confirmed via TDD spikes | Phase 1 validation evidence |
+| 2026-05-07 | **v4.0** — `07-ROADMAP-v1.0.md` and `Phase 1.5 Improvement Roadmap.md` absorbed; Phase A (W23–W28) established as now-work before Compose API; Snapshot/Replay promoted from Phase 6 → Phase C (v0.11); `04-PROJECT-STATE.md` retained as separate framing doc; public `ROADMAP.md` alignment flagged as Phase C gate requirement | Single source of truth directive — plans were sprawled across 3+ documents; architecture cleanup before Compose API prevents rework | tylerjrbuell |
+| *(future amendments append here)* | | | |
+
+---
+
+## 12. Superseded Documents
+
+These remain in the repository as historical evidence. They are no longer authoritative for forward direction.
+
+| Document | Status | What it contributed to v4.0 |
 |---|---|---|
-| `wiki/Research/Harness-Reports/north-star-status-audit-20260424.md` | Historical | G-1..G-6 status table → §2.7 |
+| `05-DESIGN-NORTH-STAR.md` v3.0 (this file, Apr 26) | Superseded by v4.0 | Architecture target (§3–§5), validation discipline (§7), N=3 rule |
+| `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` | **Superseded by §6** | 8-phase plan → §6 Phase A–G |
+| `wiki/Planning/Phase 1.5 Improvement Roadmap.md` | **Superseded by §6 Phase 1.5** | M3/M6/M7/M8/M10 action items + per-mechanism detail (retained as reference) |
+| `wiki/Research/Harness-Reports/north-star-status-audit-20260424.md` | Historical | G-1..G-6 status table → §2.3 |
 | `wiki/Research/Harness-Reports/improvement-report-20260424-north-star-1.md` | Historical | Apr 24 corpus baseline → §2.1 |
-| `wiki/Research/Harness-Reports/north-star-closure-scorecard-2026-04-25.md` | Historical | Post-Phase-1 corpus → §2.2 |
-| `wiki/Research/Harness-Reports/north-star-diagnosis-2026-04-25.md` | Historical | W4 verdict via trace inspector → §2.4 |
-| `wiki/Research/Harness-Reports/change-a-empirical-validation-2026-04-26.md` | Historical | 9-termination-paths finding → §2.5 |
-| `wiki/Research/Harness-Reports/cognitive-kernel-architecture-2026-04-26.md` | Superseded | Three-tier shape → §4 |
-| `wiki/Research/Harness-Reports/agent-capability-architecture-2026-04-26.md` | Superseded | 10 capabilities + 5 traits → §3, §4.3 |
-
-The **previous** v2.3 is also superseded by this v3.0.
-
-Going forward, **this document is the single source of truth for architecture decisions.** When in doubt about a kernel concern or a refactor priority, refer here first.
+| `wiki/Research/Harness-Reports/north-star-closure-scorecard-2026-04-25.md` | Historical | Post-Phase-1 corpus → §2.1 |
+| `wiki/Research/Harness-Reports/north-star-diagnosis-2026-04-25.md` | Historical | W4 verdict via trace inspector → §2.1 |
+| `wiki/Research/Harness-Reports/change-a-empirical-validation-2026-04-26.md` | Historical | 9-termination-paths finding → §2.3 |
+| `wiki/Research/Harness-Reports/cognitive-kernel-architecture-2026-04-26.md` | Historical | Three-tier shape → §4 |
+| `wiki/Research/Harness-Reports/agent-capability-architecture-2026-04-26.md` | Historical | 10 capabilities + 5 traits → §3, §4.3 |
 
 ---
 
@@ -637,36 +778,36 @@ Why we are confident this architecture is the right one (not just a plausible on
 
 1. **Empirically derived, not theorized.** The 10 capabilities map 1:1 to failures we measured. The 9-termination-paths root cause was found by trace inspection, not by inspection of intent.
 
-2. **Biologically convergent.** The brain evolved exactly this shape (sensors, integrators, arbitrator, effectors, loop) over 200M+ years. C. elegans (302 neurons) follows this pattern; humans follow this pattern; everything in between follows this pattern.
+2. **Biologically convergent.** The brain evolved exactly this shape (sensors, integrators, arbitrator, effectors, loop) over 200M+ years. C. elegans (302 neurons) follows this pattern; humans follow this pattern.
 
 3. **Independently rediscovered.** ACT-R (Carnegie Mellon, 30 years), SOAR (Newell, 40 years), Global Workspace Theory (Baars, Dehaene), LangGraph (state machine), OpenAI Swarm (minimal primitives), Anthropic Claude Code (single termination contract) — every serious cognitive architecture project converges on a subset of these properties.
 
 4. **Failure-mode-symmetric.** The pattern's prescriptions (one decision per cycle, separate sense from act, etc.) are the *negation* of the failure modes we measured (9 termination paths, mixed phase concerns). Choosing the architecture that fixes the measured failures is the conservative move.
 
-5. **Already 70% present.** ContextCurator, memory layers, capability port, trust labels — the pattern's components already exist in our codebase. We are *naming and consolidating*, not *inventing and adding*.
-
-This is the closest thing to architectural certainty we get to have. It will not be perfect — but it will be observably better than what we have, and we have the validation discipline to catch deviations early.
+5. **Already 70% present.** ContextCurator, memory layers, capability port, trust labels, terminate.ts — the pattern's components already exist in our codebase. We are *naming and consolidating*, not *inventing and adding*.
 
 ---
 
-## Appendix B — Decision Log (the choices baked into v3.0)
+## Appendix B — Decision Log
 
-Documented for future contributors who want to know *why* this and not something else:
+Choices baked into this architecture, with alternatives considered:
 
 | Decision | Alternative considered | Why this won |
 |---|---|---|
+| Phase A before Compose API | Compose API first on existing monolith | Bolting `.compose()` onto 6K-line builder creates structural debt in every subsequent wave |
+| Snapshot/Replay in Phase C (v0.11) | Phase G (v1.0) | Builds on existing `packages/trace`; 1-week implementation; unique Show-HN demo; directly proves "auditable" vision claim |
 | Three-tier (sensors/integrators/effectors) with arbitrator | Two-tier (perceive/act) | Cognitive science decisively prefers separating decide from act |
 | One Arbitrator function | Multiple specialized arbitrators | Proven failure mode: 9 termination paths is what happens when "specialized" decisions don't converge |
-| ContextCurator stays in `src/context/`, others move to `kernel/capabilities/` | Move ContextCurator into `attend/` for symmetry | Curator is shared by multiple kernel paths and tests; moving it is large blast radius for low symmetry gain |
-| Reorganize within `packages/reasoning` | New `packages/cognition` package | User feedback: 27 packages already; structural clarity comes from folders, not packages |
-| Sequential phase plan (3.1 → 3.5) | Single big-bang refactor PR | Diagnostic loop discipline: validate each step's metric before continuing |
+| ContextCurator stays in `src/context/` | Move into `attend/` for symmetry | Curator is shared by multiple kernel paths; moving is large blast radius for low symmetry gain |
+| Reorganize within `packages/reasoning` | New `packages/cognition` package | 27 packages already; structural clarity comes from folders, not packages |
 | N=3 corpus rule | N=1 single runs | Empirically proven: 5× variance between runs invalidates single-run conclusions |
-| Defer v0.10.0 release | Ship v0.10.0 with current state | Vision pillars (reliability, control) demonstrably not delivered; shipping locks in debt |
+| Code-as-Action in Phase D (v0.12) | Phase C (v0.11) | High implementation complexity; rushed delivery risks regressing frontier parity |
+| `04-PROJECT-STATE.md` retained | Absorbed into §2 | Different framing purpose (cold session start); §2 here is the empirical record, not the orientation guide |
 
 ---
 
-_Version: 3.0.0_
+_Version: 4.0.0_
 _Status: AUTHORITATIVE_
-_Date: 2026-04-26_
-_Supersedes: v2.3 + 5 harness-reports analysis docs_
-_Next review: after Phase 2 Sprint 3.3 (Arbitrator consolidation) lands_
+_Date: 2026-05-07_
+_Supersedes: v3.0 + `07-ROADMAP-v1.0.md` + `Phase 1.5 Improvement Roadmap.md`_
+_Next review: after Phase A (W23–W28 decomposition) lands_

@@ -1,5 +1,7 @@
 # Reactive Agents v1.0 Master Roadmap
 
+> ⚠️ **SUPERSEDED — 2026-05-07.** This document has been absorbed into `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v4.0 (§6 Consolidated Forward Plan). All phase definitions, validation gates, and sequencing now live there. This file is retained as historical evidence only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to execute this plan phase-by-phase. Each phase produces its own detailed implementation plan (following superpowers:writing-plans discipline) just before execution. **This master plan defines phases and validation gates; it does not specify bite-sized implementation steps.** That is intentional — strategic plans sequence phases, tactical plans sequence steps.
 >
 > **Companion plans (write as needed before each phase):**

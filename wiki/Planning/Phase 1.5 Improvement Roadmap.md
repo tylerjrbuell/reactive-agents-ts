@@ -2,10 +2,13 @@
 aliases: [Phase 1.5, Improvement Roadmap, Next Steps]
 tags: [planning, phase-gate, roadmap]
 date: 2026-05-04
-status: READY TO START
+status: SUPERSEDED
+superseded_by: wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md v4.0 §6 Phase 1.5
 owner: Architecture Team
 phase: Phase 1.5
 ---
+
+> ⚠️ **SUPERSEDED — 2026-05-07.** Per-mechanism detail (M3/M6/M7/M8/M10 scopes, file paths, effort estimates) is retained here as reference. Phase sequencing and gates now live in `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v4.0 §6 Phase 1.5.
 
 # Phase 1.5: Improvement Roadmap
 

@@ -14,7 +14,99 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 ---
 
-## Current state (May 5, 2026)
+## Current state (May 7, 2026)
+
+### North Star v4.0 — Single Consolidated Forward Plan ✅ (May 7, 2026)
+
+**Canonical planning document:** `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v4.0
+
+All prior roadmap/phase documents are superseded:
+- `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` — SUPERSEDED (marked with ⚠️ header)
+- `wiki/Planning/Phase 1.5 Improvement Roadmap.md` — SUPERSEDED (marked; per-mechanism detail retained as reference)
+- `04-PROJECT-STATE.md` — retained as cold-session framing doc
+
+**Phase sequence (see North Star §6 for full validation gates):**
+
+| Phase | Focus | Status |
+|---|---|---|
+| **A** | Architecture Cleanup — W23–W28: decompose `builder.ts` (6,082→≤500 LOC), `execution-engine.ts` (4,499→≤600 LOC) | **Next — start here** |
+| **1.5** | Mechanism Improvements — M3/M6/M7/M8/M10 IMPROVE→KEEP | Parallel with A |
+| **B** | Compose API — Waves A–F, 24 injection points, 6 killswitches | v0.11 prereq |
+| **C** | v0.11 Launch — playground, CLI generator, OTel, skill persistence, Snapshot/Replay | v0.11.0 |
+| **D** | Code-as-Action Strategy — 6th reasoning strategy, ≥20% local model lift | v0.12 |
+| **E** | Local Model Engineering — calibration consumers (≥8 fields), per-provider parser, paging | v0.12 |
+| **F** | Public Benchmark Discipline — τ-bench / BFCL / HAL Princeton | v0.13 |
+| **G** | v1.0 Polish & Release | v1.0 |
+
+**Why Phase A before Phase B:** Compose API bolts onto `builder.ts`. Decomposing first prevents rework and makes every subsequent wave cleaner.
+
+**New in v4.0:** Snapshot/Replay (`agent.replay(traceId, overrides)`) promoted from Phase G → Phase C (v0.11). Unique auditable-by-demo capability; 1-week build on existing `packages/trace`.
+
+**Root `ROADMAP.md` alignment** flagged as Phase C gate — must match this plan before v0.11.0 ships.
+
+---
+
+### RTK Token Optimization — DOCUMENTED ✅ (May 6, 2026)
+
+**All team members should use RTK (Rust Token Killer) for CLI commands to save 60-90% tokens per operation.**
+
+**Usage:** Prefix supported commands with `rtk`:
+- `rtk git status`, `rtk git log`, `rtk npm list`, `rtk bun test`, `rtk find`, `rtk grep`, etc.
+- RTK filters results to only relevant output before returning (e.g., `git log` streams 50+ commits → RTK returns 2-3 relevant ones)
+- Transparent in Bash tool calls (hook auto-applies RTK prefix)
+
+**Meta commands (use directly, not prefixed):**
+- `rtk gain` — Show token savings for this session
+- `rtk gain --history` — Show cumulative savings over time
+- `rtk discover` — Find commands in history that should have used RTK
+- `rtk proxy <cmd>` — Debug raw command execution (bypass RTK filtering)
+
+**Documentation:** Memory file `feedback_rtk_usage.md` + global `RTK.md`
+
+---
+
+### v0.11 Launch-Readiness Checklist — ABSORBED into North Star v4.0 §6 Phase C (May 7, 2026)
+
+**Comprehensive planning document drafted for market-positioning inflection point.**
+
+**File:** `wiki/Planning/Implementation-Plans/2026-05-06-v0.11-launch-readiness.md` (900+ lines)
+
+**Strategic context:** v0.10 shipped stable core; v0.11 ships *customizability* (compose API) + *credibility signals* (playground, CLI generator, OpenTelemetry, public roadmap). Outcome: v0.11 is Show-HN launch point positioning RA as transparent alternative to AutoGen/CrewAI/Mastra with proven 100% vs 85% benchmark edge.
+
+**Tier 1 (Before Show-HN Launch):** Five parallel initiatives (3 weeks total):
+1. **Skill Persistence (1 week)** — SQLite-backed persistence + portable SKILL.md import/export; closes M6 Phase-1.5 IMPROVE
+2. **Live Playground (2 days)** — Three Stackblitz embeds on homepage (hero scenario, tool integration, reasoning strategy); <3s cold start
+3. **create-reactive-agent CLI generator (3 days)** — Five templates (web-search, chat-with-tools, gateway-cron, sub-agent-orchestrator, local-ollama)
+4. **OpenInference/OpenTelemetry Exporter (1 week)** — `@reactive-agents/observe` package with Langfuse + Braintrust integrations; zero-config auto-export
+5. **Public Roadmap + Named Users (1 day)** — GitHub Projects board (v0.11/v0.12/v0.13 milestones) + "Built with" cards (Cortex, Beacon, Dispatch)
+
+**Prerequisite (parallel):**
+- **Compose API (Waves A-F, 2 weeks)** — harness-pipeline registry, 5 chokepoint refactors, RunHandle pause/resume/stop/terminate, 6 killswitches, backward-compat desugar, comprehensive docs
+
+**Success metrics (Week 1 post-launch):**
+- Show-HN >500 upvotes
+- >1,000 Stackblitz embed clickers
+- >500 new npm installs/week (vs 100 baseline)
+- >100 create-reactive-agent runs
+- >50 GitHub Projects watchers
+
+**Amplified existing capabilities (underplayed assets):**
+- Diagnose package (M11 production-ready, 100% TP/0% FP, 0.02ms latency) — add card + docs + examples
+- Memory system (M10, 66.7% verbose / 100% keyed recall, 0.05ms overhead) — promote from @unstable → @stable + docs
+
+**Tier 2 (post-launch):** Per-tool middleware, cost forecasting, migration guides, Beacon prominence
+
+**Tier 3 (avoid):** Voice/realtime, computer use kernel, visual no-code, multi-agent swarms
+
+**Timeline:** Wave A starts Fri May 10; v0.11.0 release Wed May 29. Critical path: Compose API (if it slips 1 day, everything slips 1 day). All other items parallelizable.
+
+**Risks & mitigations documented:** Skill persistence data corruption, Stackblitz mobile failures, GitHub Projects stale updates, named-user revocation, compose API scope creep.
+
+**Open questions (resolve before Wave A):** Skill git-commit metadata, .withVerification() desugar scope, M10 re-validation with real LLMs, OTel sampling per-environment, roadmap visibility (GitHub Projects vs Discourse).
+
+**Approval gate:** Compose spec sign-off + all five Tier-1 owners confirm estimates + GitHub Projects board created.
+
+---
 
 ### NPM Version Drift Prevention — ADDED ✅ (May 5, 2026 — 8:00pm EDT)
 
@@ -32,34 +124,15 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 
 `.github/workflows/eval.yml` auto-triggers (push/pull_request) removed; only `workflow_dispatch` remains. Was failing consistently and blocking unrelated work. Re-enable when eval suite is stabilized.
 
-### v0.10.2 Post-Release Quality Sweep — COMPLETE ✅ (May 5, 2026)
+### v0.10.2 Post-Release Quality Sweep — ALL RESOLVED ✅ (May 7, 2026 recheck)
 
-**Comprehensive sweep found 5 critical/high issues in SDK, CLI, and build systems**
+All P1 issues from the May 5 sweep are resolved — do not resurface as blockers:
 
-**Critical issues (blocking SDK/CLI use):**
-- **P1-5 (CRITICAL):** SDK `agent.run()` method missing — blocks standard SDK pattern
-- **P1-3 (CRITICAL):** cortex command broken in npm-installed CLI — partially fixed (turbo.json)
-- **P1-1 (HIGH):** CLI --help flags broken in 3 commands (init, create-agent, run) — ready to fix
-
-**Medium priority (UX/ecosystem):**
-- **P1-4 (MEDIUM):** CommonJS require() fails with cryptic error — needs design
-- **P1-2 (MEDIUM):** Vague LLM error messages (no actionable hints)
-- **W1-2 (MEDIUM):** Build system asset caching (fixed in turbo.json)
-
-**Documentation & actionable items:**
-- `.agents/PATCH-ISSUES-v0.11.0.md` — Complete issue catalog with effort estimates
-- `.agents/RELEASE-SWEEP-SUMMARY.md` — Full report with testing methodology, recommendations, verification checklist
-- `release_0_10_2_patch_issues.md` (memory file) — Quick reference for patch roadmap
-
-**Fixes applied:**
-- ✅ Updated turbo.json to include `assets/**` in CLI build outputs (fixes cortex bundling)
-- ✅ Updated apps/cli/package.json build script to run cortex UI before tsup
-- ✅ Improved cortex.ts error messages for dev vs bundled mode
-- ✅ Verified cortex UI assets now present (index.html, favicon.svg, _app/)
-
-**Next steps:** Investigate P1-5 (SDK agent.run), then fix P1-1 (--help), then bundle with P1-2/P1-4 for v0.11.0 patch
-
-**Details:** See `release_0_10_2_patch_issues.md` in personal memory
+- ~~**P1-5:** SDK `agent.run()` missing~~ — FALSE POSITIVE. `ReactiveAgent.run()` exists at `packages/runtime/src/builder.ts:4758`.
+- ~~**P1-3:** cortex broken~~ — Fixed: turbo.json assets, CLI build script, cortex.ts error messages all applied (May 5).
+- ~~**P1-1:** CLI --help broken~~ — Fixed: `init.ts:25`, `create-agent.ts:48`, `run.ts:72` all handle `--help`/`-h`.
+- ~~**P1-4:** CommonJS require fails~~  — Fixed: `cjs-shim.cjs` with helpful ESM-only error, wired via `"require"` export condition in `packages/reactive-agents/package.json`.
+- **P1-2 (MEDIUM):** Vague LLM error messages — still open, low priority, not blocking.
 
 ---
 
@@ -234,7 +307,7 @@ The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
 - **Published on npm:** all packages at `0.9.0`. Version bumps happen via changeset merge (`release-0-10-0.md` covers all 28 packages + umbrella, `@reactive-agents/diagnose` included).
 - **cf-23 gate fixed:** `required-tools-satisfied` was moved from verifier to `runner.ts §8`; scenario now tests `agent-took-action` + positive absence. Baseline regenerated with BASELINE-UPDATE trailer.
 - **Architecture target:** `15-design-north-star.md` v3.0 (10 capabilities + cognitive kernel + 3 ports).
-- **Pending before tag:** (1) Publish `@reactive-agents/diagnose` — confirmed 404 on npm (May 1). Ships via CI changeset workflow. (2) Eval Rule 4 frozen-judge — `packages/eval/src/runtime.ts` still uses same-codepath judge; blocks any published benchmark claim. Then: merge `refactor/overhaul` → `main`, run `changeset version`, publish.
+- **Pending before tag:** (1) Publish `@reactive-agents/diagnose` — confirmed 404 on npm (May 1). Ships via CI changeset workflow. ~~(2) Eval Rule 4 frozen-judge~~ — ✅ RESOLVED W9/FIX-21. Then: merge `refactor/overhaul` → `main`, run `changeset version`, publish.
 - **Gateway chat mode shipped** (May 1): per-sender SQLite session history, 40-turn/8 k-char windowing, episodic context injection, daily compaction, mode-aware routing (`channels.mode: 'chat'|'task'`). Two memory bugs fixed: `priorContext` silently dropped (context-manager.ts) + episodic injection gated behind `enableSelfImprovement` (execution-engine.ts). New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added. Key file: `packages/runtime/src/gateway-chat.ts`.
 - **Frontier bench (W21, Apr 30):** ra-full 100% across 4 frontier models (claude-sonnet-4-6, claude-haiku-4-5, gpt-4o-mini, gemini-2.5-pro). Bare-llm 85%. Gemini W22 fix: walk `candidates[0].content.parts[]` directly; surface non-OK `finishReason` as explicit errors.
 
@@ -420,10 +493,10 @@ Memory descriptions to update or rewrite if you encounter them in personal memor
 
 ## Architecture debt (current top items)
 
-The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top items as of May 1:
+The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top items as of May 7:
 
-1. **`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC** — orchestration SHRINK targets.
-2. **Eval Rule 4 frozen-judge** — `packages/eval/src/runtime.ts` uses same-codepath judge as SUT. Blocks any published benchmark claim. P0 before merge.
+1. **`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC** — **Phase A target (now-work).** See North Star v4.0 §6 Phase A for W23–W28 sequence and validation gates.
+2. ~~**Eval Rule 4 frozen-judge**~~ — ✅ RESOLVED W9/FIX-21 (commit a9a7c55f): `eval-service.ts:189` yields `JudgeLLMService` Tag (isolated from SUT's `LLMService`); benchmarks route through `packages/judge-server/` HTTP process. No benchmark claims blocked.
 3. **ToT outer loop still unhooked** from `dispatcher-early-stop` — each branch is a separate sub-kernel (PER inner loop fixed Apr 19 at `plan-execute.ts:737,762`).
 4. Strategy routing opt-in via `withReasoning({ strategySwitching: { enabled: true } })` — field is optional in `ReactiveInput` at `strategies/reactive.ts:70`; runtime at `runner.ts:749`.
 
