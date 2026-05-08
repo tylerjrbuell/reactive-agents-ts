@@ -69,6 +69,8 @@ import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-regis
 import { classifyTools } from "./engine/phases/agent-loop/setup/classifier.js";
 import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
 import { runInlineThink } from "./engine/phases/agent-loop/inline-think.js";
+import { runInlineAct } from "./engine/phases/agent-loop/inline-act.js";
+import { runInlineObserve } from "./engine/phases/agent-loop/inline-observe.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -1980,166 +1982,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2535", tag: errorTag(err) })));
 
                     // 5b. ACT (if tool calls present) — call real ToolService
+                    // Body extracted to engine/phases/agent-loop/inline-act.ts (W23 step 6a-1a).
                     const pendingCalls =
                       (ctx.metadata.pendingToolCalls as unknown[]) ?? [];
                     if (pendingCalls.length > 0) {
                       ctx = yield* guardedPhase(ctx, "act", (c) =>
-                        Effect.gen(function* () {
-                          const toolServiceOpt =
-                            yield* Effect.serviceOption(ToolService);
-
-                          const toolResults: unknown[] = yield* Effect.all(
-                            pendingCalls.map((call: any) =>
-                              Effect.gen(function* () {
-                                const callId = call.id ?? "unknown";
-                                const toolName =
-                                  call.name ?? call.function?.name ?? "unknown";
-
-                                // ── Behavioral contract: check tool call ──
-                                if (config.enableBehavioralContracts) {
-                                  const bcOpt = yield* Effect.serviceOption(BehavioralContractService)
-                                    .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
-                                  if (bcOpt._tag === "Some") {
-                                    const violation = yield* bcOpt.value
-                                      .checkToolCall(toolName, c.toolResults.length)
-                                      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-                                    if (violation?.severity === "block") {
-                                      return yield* Effect.fail(new BehavioralContractViolationError({
-                                        message: violation.message, taskId: c.taskId,
-                                        rule: violation.rule, violation: violation.message,
-                                      }));
-                                    }
-                                  }
-                                }
-                                const rawArgs =
-                                  call.input ??
-                                  call.arguments ??
-                                  call.function?.arguments ??
-                                  {};
-                                const args: Record<string, unknown> =
-                                  typeof rawArgs === "string"
-                                    ? (() => {
-                                        try {
-                                          return JSON.parse(rawArgs);
-                                        } catch {
-                                          return { input: rawArgs };
-                                        }
-                                      })()
-                                    : (rawArgs as Record<string, unknown>);
-                                // Log tool invocation before execution (direct-LLM path)
-                                if (obs && isNormal) {
-                                  const isAgentDelegateTool =
-                                    toolName === "spawn-agent" ||
-                                    toolName.startsWith("agent-");
-                                  if (isAgentDelegateTool) {
-                                    const taskArg = typeof args.task === "string"
-                                      ? args.task.slice(0, 80)
-                                      : typeof args.input === "string"
-                                        ? args.input.slice(0, 80)
-                                        : "";
-                                    const nameSuffix = typeof args.name === "string" ? ` [${args.name}]` : "";
-                                    yield* obs.info(
-                                      `  ◉ [act]        ↓ ${toolName}${nameSuffix}: "${taskArg}"`,
-                                    ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2598", tag: errorTag(err) })));
-                                  } else {
-                                    const argPreview = Object.entries(args)
-                                      .slice(0, 2)
-                                      .map(([k, v]) => `${k}: ${String(typeof v === "string" ? v : JSON.stringify(v)).slice(0, 40)}`)
-                                      .join(", ");
-                                    yield* obs.info(
-                                      `  ◉ [act]        → ${toolName}(${argPreview})`,
-                                    ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2606", tag: errorTag(err) })));
-                                  }
-                                }
-
-                                const startMs = Date.now();
-
-                                // Phase 0.2: Publish ToolCallStarted
-                                if (eb) {
-                                  yield* eb.publish({
-                                    _tag: "ToolCallStarted",
-                                    taskId: c.taskId,
-                                    toolName,
-                                    callId,
-                                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2619", tag: errorTag(err) })));
-                                }
-
-                                if (toolServiceOpt._tag === "None") {
-                                  const durationMs = Date.now() - startMs;
-                                  if (eb) {
-                                    yield* eb.publish({
-                                      _tag: "ToolCallCompleted",
-                                      taskId: c.taskId,
-                                      toolName,
-                                      callId,
-                                      durationMs,
-                                      success: false,
-                                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2632", tag: errorTag(err) })));
-                                  }
-                                  return {
-                                    toolCallId: callId,
-                                    toolName,
-                                    result: `[ToolService not available — add .withTools() to agent builder]`,
-                                    durationMs,
-                                  };
-                                }
-
-                                const toolResult = yield* toolServiceOpt.value
-                                  .execute({
-                                    toolName,
-                                    arguments: args,
-                                    agentId: c.agentId,
-                                    sessionId: c.sessionId,
-                                  })
-                                  .pipe(
-                                    Effect.map((r) => ({
-                                      toolCallId: callId,
-                                      toolName,
-                                      result: r.result,
-                                      durationMs: Date.now() - startMs,
-                                      success: true,
-                                    })),
-                                    Effect.catchAll((e) =>
-                                      Effect.succeed({
-                                        toolCallId: callId,
-                                        toolName,
-                                        result: `[Tool error: ${e instanceof Error ? e.message : String(e)}]`,
-                                        durationMs: Date.now() - startMs,
-                                        success: false,
-                                      }),
-                                    ),
-                                  );
-
-                                // Log tool execution for progress visibility
-                                yield* progressLogger.logToolExecution(
-                                  toolName,
-                                  toolResult.success ? "success" : "error",
-                                  toolResult.durationMs,
-                                  toolResult.success ? undefined : (toolResult.result as string),
-                                ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2674", tag: errorTag(err) })));
-
-                                // Phase 0.2: Publish ToolCallCompleted
-                                if (eb) {
-                                  yield* eb.publish({
-                                    _tag: "ToolCallCompleted",
-                                    taskId: c.taskId,
-                                    toolName,
-                                    callId,
-                                    durationMs: toolResult.durationMs,
-                                    success: toolResult.success,
-                                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2685", tag: errorTag(err) })));
-                                }
-
-                                return toolResult;
-                              }),
-                            ),
-                            { concurrency: 3 },
-                          );
-
-                          return {
-                            ...c,
-                            toolResults: [...c.toolResults, ...toolResults],
-                          };
+                        runInlineAct(c, {
+                          config,
+                          pendingCalls,
+                          eb,
+                          obs,
+                          isNormal,
+                          progressLogger,
                         }),
                       );
 
@@ -2156,103 +2010,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       }
 
                       // 5c. OBSERVE — H5: also log episodic memories
+                      // Body extracted to engine/phases/agent-loop/inline-observe.ts (W23 step 6a-1b).
                       ctx = yield* guardedPhase(ctx, "observe", (c) =>
-                        Effect.gen(function* () {
-                          const recentResults = c.toolResults.slice(
-                            -pendingCalls.length,
-                          );
-
-                          // H5: Log tool results as episodic memory items
-                          const memOpt = yield* Effect.serviceOption(
-                            Context.GenericTag<{
-                              logEpisode: (episode: unknown) => Effect.Effect<void>;
-                            }>("MemoryService"),
-                          ).pipe(
-                            Effect.catchAll(() =>
-                              Effect.succeed({ _tag: "None" as const }),
-                            ),
-                          );
-
-                          if (memOpt._tag === "Some") {
-                            for (const r of recentResults) {
-                              const episodeNow = new Date();
-                              yield* memOpt.value
-                                .logEpisode({
-                                  id: crypto.randomUUID().replace(/-/g, ""),
-                                  agentId: c.agentId,
-                                  date: episodeNow.toISOString().slice(0, 10),
-                                  content: `Tool ${(r as any).toolName}: ${String((r as any).result).slice(0, 300)}`,
-                                  taskId: c.taskId,
-                                  eventType: "tool-call",
-                                  createdAt: episodeNow,
-                                  metadata: {
-                                    toolName: (r as any).toolName,
-                                    durationMs: (r as any).durationMs ?? 0,
-                                  },
-                                } as any)
-                                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2748", tag: errorTag(err) })));
-                            }
-                          }
-
-                          // Verbose: log tool results
-                          if (obs && isVerbose) {
-                            for (const r of recentResults) {
-                              const rToolName = (r as any).toolName as string;
-                              const rResult = (r as any).result;
-                              const isAgentDelegate =
-                                rToolName === "spawn-agent" ||
-                                rToolName.startsWith("agent-");
-                              if (isAgentDelegate && typeof rResult === "object" && rResult !== null) {
-                                const sub = rResult as { subAgentName?: string; success?: boolean; summary?: string; tokensUsed?: number };
-                                const subIcon = sub.success ? "✓" : "✗";
-                                const subName = sub.subAgentName ?? rToolName;
-                                const subSummary = String(sub.summary ?? "").slice(0, 150);
-                                const subTok = sub.tokensUsed ?? 0;
-                                yield* obs.info(
-                                  `  ◉ [sub-agent: ${subName}] ${subIcon} ${subTok} tok | "${subSummary}"`,
-                                ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2768", tag: errorTag(err) })));
-                              } else {
-                                const resultStr = typeof rResult === "string"
-                                  ? rResult
-                                  : JSON.stringify(rResult);
-                                const preview = resultStr.length > 120 ? resultStr.slice(0, 120) + "..." : resultStr;
-                                const charCount = resultStr.length;
-                                yield* obs.debug(
-                                  `  ┄ [obs]    ${rToolName}: ${preview} [${charCount} chars]`,
-                                ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2777", tag: errorTag(err) })));
-                              }
-                            }
-                          }
-
-                          const toolResultMessages = recentResults.map(
-                            (r: any) => ({
-                              role: "tool" as const,
-                              toolCallId: r.toolCallId,
-                              content:
-                                typeof r.result === "string"
-                                  ? r.result
-                                  : JSON.stringify(r.result),
-                            }),
-                          );
-
-                          // Aggregate sub-agent tokens/cost if present in tool results
-                          let subAgentTokens = 0;
-                          let subAgentCost = 0;
-                          for (const r of recentResults) {
-                            const res = (r as any).result;
-                            if (typeof res === "object" && res !== null) {
-                              subAgentTokens += (res as any).tokensUsed ?? 0;
-                              subAgentCost += (res as any).cost ?? (res as any).estimatedCost ?? 0;
-                            }
-                          }
-
-                          return {
-                            ...c,
-                            messages: [...c.messages, ...toolResultMessages],
-                            tokensUsed: c.tokensUsed + subAgentTokens,
-                            cost: c.cost + subAgentCost,
-                            iteration: c.iteration + 1,
-                          };
+                        runInlineObserve(c, {
+                          pendingCallCount: pendingCalls.length,
+                          obs,
+                          isVerbose,
                         }),
                       );
 
