@@ -356,4 +356,70 @@ Per the calibration-aware sub-agent design (architecture exploration §10), each
 
 This is critical for small-model sub-agents: when a child uses qwen3:14b while the parent uses Sonnet, the child's `setup/calibration.ts` resolves `qwen3-14b.json` and Layer 1 builders use those traits — independent of parent's Sonnet calibration.
 
-### Step 3 next — add `direct` reasoning strategy
+### Step 3 done — `direct` reasoning strategy (commit `25bc2a81`, plus `9aee5ced` to wire into registry)
+
+- `packages/reasoning/src/strategies/direct.ts` (~210 LOC)
+- `DirectInput` accepts `ModelCalibration` for per-sub-agent calibration cascade
+- 5 unit tests cover: strategy:'direct' return, default maxIter:1, maxIter:2 with tool round, clamp at 3, memoryContext threading
+- Registered in `StrategyRegistryLive` so `ReasoningService.execute({strategy: "direct"})` dispatches correctly
+
+### Step 4 done — setup sub-modules (commits `8ea35b51`, `cbb4d60b`)
+
+Three pure-function helpers extracted to `engine/phases/agent-loop/setup/`:
+
+| Module | LOC | Notes |
+|---|---|---|
+| `calibration.ts` | 59 | `resolveCalibration(config)` — auto/skip/explicit modes; per-sub-agent works natively |
+| `tools-registry.ts` | 103 | `fetchToolsRegistry(config, ctx, obs, isNormal)` — single tool-defs fetch + allowedTools warn + strategy summary log |
+| `classifier.ts` | 257 | `classifyTools(params)` — three-branch decision tree (no-classify / low-reliability literal-mention fallback / LLM classify with hallucination demotion + sequential clamp + relevant merge) |
+
+Plus `checkAllowedToolsMismatch` hoisted to `engine/util.ts` (single source; re-exported from execution-engine.ts for backward compat).
+
+5 new unit tests for classifier (deterministic branches; LLMService stub fails-if-invoked confirms zero LLM calls on those paths).
+
+### Step 5 done — cache-check sub-module (commit `563efed5`)
+
+- `engine/phases/agent-loop/cache-check.ts` (~105 LOC)
+- `checkSemanticCache(params)` returns `{ ctx, cacheHit }`
+- Step-1 integration test passed without modification — regression anchor confirmed
+
+### Cumulative session-2 progress (2026-05-07)
+
+**execution-engine.ts: 4663 → 4014 LOC (-649, -13.9%)**
+
+Tests:
+- runtime: 738 → 750 pass (+12 new tests across cache-hit, classifier, verify)
+- reasoning: 1119 → 1124 pass (+5 new direct strategy tests)
+- 1 skip / 0 fail throughout
+
+8 commits committed. All extracted modules under 400 LOC ceiling (largest: classifier at 257 LOC; pipeline.ts at 313 LOC is infra not a phase).
+
+### Step 6 next — kernel-call sub-module (the big one)
+
+The agent-loop has TWO parallel LLM-call paths (per architecture exploration §1):
+- **ReasoningService delegation path** (lines ~1056-1850, ~800 LOC): when `ReasoningService` is wired
+- **Inline LLM-call path** (lines ~2050-2700, ~650 LOC): when `ReasoningService` is NOT wired (test mode / minimal layer / no-reasoning fallback)
+
+The `direct` strategy now exists and is registered. Step 6 has two sub-steps:
+
+**Step 6a — migrate inline path to use `ReasoningService.execute({strategy: "direct"})`.** This requires either:
+- (A) Always-wire `ReasoningService` in default service stack (broader change; affects builder.ts wiring)
+- (B) Conditional fallback: if `ReasoningService` not wired, instantiate a minimal one inline with just the `direct` strategy
+
+Recommend **(B)** for W23 — keeps blast radius small; broader always-wire migration can be a separate follow-up.
+
+**Step 6b — extract the unified path to `engine/phases/agent-loop/kernel-call.ts`.** Once both paths use `ReasoningService.execute()`, the kernel-call sub-module is just:
+1. Build `KernelInput` / `ReasoningInput` from PhaseDeps + ctx state
+2. Call `ReasoningService.execute(...)` with the right strategy
+3. Capture result into ctx.metadata
+
+Estimated: ~400-500 LOC. With the inline path migrated, the duplication is gone; only one branch remains.
+
+**Pre-step-6 prerequisites:**
+1. Decide on (A) vs (B) above
+2. Inventory the inline-path-only behaviors that would need preservation (provider fallback events, episodic memory logging shape, stream callback wiring)
+3. Confirm cache-hit integration test still green (it should be — no path change yet)
+
+**Risk profile:** medium-high. Each sub-step is invasive. Run full test suite + cross-package typecheck after each commit. If a single commit blows >100 LOC over budget or breaks tests, revert and reassess.
+
+Estimated effort: 1-2 focused sessions for steps 6-9.
