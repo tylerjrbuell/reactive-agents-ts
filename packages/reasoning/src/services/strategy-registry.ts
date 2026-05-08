@@ -18,6 +18,7 @@ import { executeReflexion } from "../strategies/reflexion.js";
 import { executePlanExecute } from "../strategies/plan-execute.js";
 import { executeTreeOfThought } from "../strategies/tree-of-thought.js";
 import { executeAdaptive } from "../strategies/adaptive.js";
+import { executeDirect } from "../strategies/direct.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 
 // ─── Strategy function type ───
@@ -125,6 +126,8 @@ export const StrategyRegistryLive = Layer.effect(
         ["plan-execute-reflect", executePlanExecute],
         ["tree-of-thought", executeTreeOfThought],
         ["adaptive", executeAdaptive],
+        /** Single-shot LLM call (W23 step 3 — replaces inline LLM-call path). */
+        ["direct", executeDirect as unknown as StrategyFn],
       ]),
     );
 
