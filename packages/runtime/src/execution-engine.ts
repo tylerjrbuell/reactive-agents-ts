@@ -67,6 +67,7 @@ import { verify } from "./engine/phases/verify.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
 import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-registry.js";
 import { classifyTools } from "./engine/phases/agent-loop/setup/classifier.js";
+import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -980,38 +981,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 });
 
                 // ── Semantic cache check (before reasoning) ──
-                let cacheHit = false;
-                if (config.enableCostTracking) {
-                  const costOpt = yield* Effect.serviceOption(CostService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-                  );
-                  if (costOpt._tag === "Some") {
-                    const taskText = extractTaskText(task.input);
-                    const cached = yield* costOpt.value.checkCache(taskText)
-                      .pipe(Effect.catchAll(() => Effect.succeed(null)));
-                    if (cached !== null) {
-                      cacheHit = true;
-                      // ctx.metadata.cacheHit is already populated below; the
-                      // extracted cost-track phase (W23) reads it from there.
-                      ctx = {
-                        ...ctx,
-                        metadata: {
-                          ...ctx.metadata,
-                          lastResponse: cached,
-                          isComplete: true,
-                          cacheHit: true,
-                          stepsCount: 0,
-                          reasoningSteps: [],
-                          reasoningResult: { output: cached, status: "completed", metadata: { cost: 0, tokensUsed: 0, stepsCount: 0 } },
-                        },
-                      };
-                      if (obs && isNormal) {
-                        yield* obs.info("◉ [cache]      HIT — skipping reasoning")
-                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1300", tag: errorTag(err) })));
-                      }
-                    }
-                  }
-                }
+                // Extracted to engine/phases/agent-loop/cache-check.ts (W23 step 5).
+                // On hit: ctx.metadata is populated with the cached response;
+                // cost-track phase reads ctx.metadata.cacheHit. Behavior locked
+                // in by tests/semantic-cache-hit.test.ts (step 1 regression
+                // anchor).
+                const cacheCheckResult = yield* checkSemanticCache({ config, task, ctx, obs, isNormal });
+                ctx = cacheCheckResult.ctx;
+                let cacheHit = cacheCheckResult.cacheHit;
 
                 const reasoningOpt = yield* Effect.serviceOption(
                   Context.GenericTag<{
