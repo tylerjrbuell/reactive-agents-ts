@@ -78,6 +78,7 @@ import { runReasoningHarnessHooks } from "./engine/phases/agent-loop/reasoning-h
 import { runReasoningThink } from "./engine/phases/agent-loop/reasoning-think.js";
 import { runReasoningPostThink } from "./engine/phases/agent-loop/reasoning-post-think.js";
 import { subscribeReasoningStreamLogger } from "./engine/phases/agent-loop/reasoning-stream-logger.js";
+import { runVerificationQualityGate } from "./engine/phases/agent-loop/verification-quality-gate.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -944,8 +945,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──
                   // Reuse cached tool definitions (fetched once above)
-                  let availableToolNames = cachedToolDefs.map((t: any) => t.name as string);
-                  let availableToolSchemas = cachedToolDefs.map((t: any) => ({
+                  const initialToolSchemas = cachedToolDefs.map((t: any) => ({
                     name: t.name as string,
                     description: t.description as string,
                     parameters: (t.parameters ?? []).map((p: any) => ({
@@ -955,29 +955,28 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       required: Boolean(p.required),
                     })),
                   }));
+                  const initialToolNames = cachedToolDefs.map((t: any) => t.name as string);
 
                   // Snapshot the full unfiltered schemas for the completion guard
-                  const allToolSchemas = [...availableToolSchemas];
+                  const allToolSchemas = [...initialToolSchemas];
 
                   // ── Tool schema preparation: built-ins opt-in + dynamic final-answer
                   // + allowedTools prompt filter + adaptive filter ──
                   // Body extracted to engine/phases/agent-loop/setup/tool-schemas.ts (W23 step 6a-6).
-                  {
-                    const prepared = yield* prepareReasoningToolSchemas({
-                      config,
-                      task,
-                      availableToolSchemas,
-                      availableToolNames,
-                      effectiveAllowedTools,
-                      effectiveRequiredTools,
-                      classifiedRelevantTools,
-                      resolvedCalibration,
-                      obs,
-                      isNormal,
-                    });
-                    availableToolSchemas = prepared.availableToolSchemas;
-                    availableToolNames = prepared.availableToolNames;
-                  }
+                  const prepared = yield* prepareReasoningToolSchemas({
+                    config,
+                    task,
+                    availableToolSchemas: initialToolSchemas,
+                    availableToolNames: initialToolNames,
+                    effectiveAllowedTools,
+                    effectiveRequiredTools,
+                    classifiedRelevantTools,
+                    resolvedCalibration,
+                    obs,
+                    isNormal,
+                  });
+                  const availableToolSchemas = prepared.availableToolSchemas;
+                  const availableToolNames = prepared.availableToolNames;
 
                   // ── Subscribe to reasoning steps for live streaming ──
                   // Body extracted to engine/phases/agent-loop/reasoning-stream-logger.ts (W23 step 6a-7).
@@ -1347,68 +1346,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
 
                 // ── Verification Quality Gate ──
-                // If verification rejected the response, retry the think phase
-                // with feedback so the agent can improve its answer.
-                if (config.enableVerification) {
-                  const vResult = ctx.metadata.verificationResult as
-                    | { passed?: boolean; recommendation?: string; overallScore?: number; layerResults?: unknown[] }
-                    | undefined;
-                  const vRetryCount = (ctx.metadata.verificationRetryCount as number) ?? 0;
-                  const maxVRetries = config.maxVerificationRetries ?? 1;
-
-                  if (
-                    vResult &&
-                    vResult.passed === false &&
-                    vResult.recommendation === "reject" &&
-                    vRetryCount < maxVRetries
-                  ) {
-                    if (obs) {
-                      yield* obs.info(
-                        `⚠ [verify] Response rejected (score: ${vResult.overallScore?.toFixed(2) ?? "?"}) — retrying think phase (attempt ${vRetryCount + 1}/${maxVRetries})`,
-                      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3100", tag: errorTag(err) })));
-                    }
-
-                    // Build verification feedback for the next think iteration
-                    const feedbackParts: string[] = [
-                      `[Verification Feedback] Your previous response was rejected (score: ${vResult.overallScore?.toFixed(2) ?? "unknown"}).`,
-                    ];
-                    if (Array.isArray(vResult.layerResults)) {
-                      for (const lr of vResult.layerResults as Array<{ layerName?: string; passed?: boolean; details?: string }>) {
-                        if (lr.passed === false && lr.details) {
-                          feedbackParts.push(`- ${lr.layerName ?? "check"}: ${lr.details}`);
-                        }
-                      }
-                    }
-                    feedbackParts.push("Please revise your answer to address these issues.");
-
-                    // Inject feedback as a system message and reset completion state
-                    ctx = {
-                      ...ctx,
-                      messages: [
-                        ...ctx.messages,
-                        { role: "user", content: feedbackParts.join("\n") },
-                      ],
-                      metadata: {
-                        ...ctx.metadata,
-                        isComplete: false,
-                        verificationRetryCount: vRetryCount + 1,
-                        verificationFeedback: feedbackParts.join("\n"),
-                      },
-                    };
-
-                    // Re-run the think phase (single retry call).
-                    //
-                    // S3 (AUDIT-overhaul-2026 §16.4): when ReasoningService is wired,
-                    // route the retry through it so it inherits state.steps[],
-                    // entropy scoring, RI dispatcher, healing pipeline, FC tool
-                    // execution, episodic memory bridge, and telemetry hooks. When
-                    // reasoning is NOT wired (test mode / minimal layer), fall back
-                    // to the original inline LLM call. The fallback is preserved
-                    // byte-for-byte to keep verification-quality-gate.test.ts green
-                    // (it pins llmCallCount === 2 and verifyCallCount === 2).
-                    // Retry callback body extracted to engine/phases/agent-loop/verification-think-retry.ts (W23 step 6a-2).
-                    ctx = yield* guardedPhase(ctx, "think", (c) =>
-                      runVerificationThinkRetry(c, {
+                // Body extracted to engine/phases/agent-loop/verification-quality-gate.ts (W23 step 6a-8).
+                ctx = yield* runVerificationQualityGate(ctx, {
+                  config,
+                  obs,
+                  fireGuardedThinkRetry: (c) =>
+                    guardedPhase(c, "think", (cc) =>
+                      runVerificationThinkRetry(cc, {
                         config,
                         task,
                         reasoningOpt,
@@ -1417,25 +1361,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         obs,
                         eb,
                       }),
-                    );
-
-                    // Re-run verification on the revised response (uses the
-                    // same extracted phase value; W23).
-                    ctx = yield* runGuardedPhase(verify, ctx, deps);
-
-                    // If still rejected after retry, log warning and continue
-                    const vResultAfterRetry = ctx.metadata.verificationResult as
-                      | { passed?: boolean; recommendation?: string; overallScore?: number }
-                      | undefined;
-                    if (vResultAfterRetry && vResultAfterRetry.passed === false) {
-                      if (obs) {
-                        yield* obs.info(
-                          `⚠ [verify] Response still rejected after ${vRetryCount + 1} retry(s) (score: ${vResultAfterRetry.overallScore?.toFixed(2) ?? "?"}) — proceeding anyway`,
-                        ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3265", tag: errorTag(err) })));
-                      }
-                    }
-                  }
-                }
+                    ) as Effect.Effect<ExecutionContext, never>,
+                  runVerifyAgain: (c) =>
+                    runGuardedPhase(verify, c, deps) as Effect.Effect<ExecutionContext, never>,
+                });
 
                 // ── Phase 7: MEMORY_FLUSH ── H5
                 // Compute task complexity to determine flush strategy
