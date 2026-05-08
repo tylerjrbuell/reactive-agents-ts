@@ -66,6 +66,7 @@ import { strategySelect } from "./engine/phases/strategy-select.js";
 import { verify } from "./engine/phases/verify.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
 import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-registry.js";
+import { classifyTools } from "./engine/phases/agent-loop/setup/classifier.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -955,146 +956,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const resolvedCalibration: ModelCalibration | undefined = yield* resolveCalibration(config);
 
                 // ── LLM-based tool classification (required + relevant) ──
-                // Single structured-output call replaces both heuristic required-tools
-                // inference and adaptive tool filtering. Semantic understanding > keywords.
-                let effectiveRequiredTools = config.requiredTools?.tools;
-                let effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
-                let classifiedRelevantTools: readonly string[] | undefined;
-                const classifierReliability = resolvedCalibration?.classifierReliability;
-                const wantsClassification =
-                  (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) ||
-                  config.adaptiveToolFiltering;
-                const needsClassification =
-                  classifierReliability !== "low" && classifierReliability !== "skip" &&
-                  wantsClassification;
-
-                // Heuristic fallback when classifier reliability is "low":
-                // extract literal tool-name mentions from the task text instead of
-                // spending an LLM round-trip on a classifier that has a high false-positive rate.
-                if (!needsClassification && classifierReliability === "low" && wantsClassification) {
-                  const taskText = extractTaskText(task.input);
-                  const allToolNames = (cachedToolDefs ?? []).map((t: any) => t.name as string);
-                  const literalMentions = literalMentionRequired(taskText, allToolNames);
-                  if (literalMentions.length > 0) {
-                    effectiveRequiredTools = [...literalMentions];
-                    if (obs && isNormal) {
-                      yield* obs.info(`◉ [classify]   skipped (reliability=low); literal mentions: ${literalMentions.join(", ")}`)
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1204", tag: errorTag(err) })));
-                    }
-                  }
-                }
-
-                if (needsClassification) {
-                  const classifyResult = yield* classifyToolRelevance({
-                    taskDescription: extractTaskText(task.input),
-                    availableTools: cachedToolDefs.map((t: any) => ({
-                      name: t.name as string,
-                      description: (t.description ?? "") as string,
-                      parameters: ((t.parameters ?? []) as any[]).map((p: any) => ({
-                        name: p.name as string,
-                        type: (p.type ?? "string") as string,
-                        description: (p.description ?? "") as string,
-                        required: Boolean(p.required),
-                      })),
-                      // Sprint 3.4 Scaffold 1 — pass cardinality through to the
-                      // classifier so it can respect tool-author declarations
-                      // for batch tools (no minCalls multiplication).
-                      ...(t.cardinality ? { cardinality: t.cardinality } : {}),
-                    })),
-                    systemPrompt: config.systemPrompt,
-                  }).pipe(
-                    // Degrade gracefully if LLM call fails — empty arrays = no filtering
-                    Effect.catchAll(() => Effect.succeed({ required: [] as readonly string[], relevant: [] as readonly string[], requiredToolQuantities: {} as Readonly<Record<string, number>> })),
-                  );
-
-                  // Sanity-check classifier "required" against task text.
-                  // The classifier sometimes hallucinates required tools that
-                  // share no keyword overlap with the task (observed: gpt-oss
-                  // got `required=[web-search, crypto-price, http-get×3]` for
-                  // a Hacker News fetch task — none mentioned in the task).
-                  // Tools the user didn't literally invoke are demoted to
-                  // "relevant" — still visible/usable, but not enforced by
-                  // the dispatcher early-stop. Cross-model failure analysis:
-                  // wiki/Research/Harness-Reports/cross-model-failure-modes-2026-04-26.md.
-                  const taskTextLower = extractTaskText(task.input);
-                  const literalMentions = literalMentionRequired(
-                    taskTextLower,
-                    classifyResult.required,
-                  );
-                  let effectiveRequired = classifyResult.required;
-                  if (
-                    classifyResult.required.length > 1 &&
-                    literalMentions.length < classifyResult.required.length
-                  ) {
-                    // At least one inferred required tool wasn't literally
-                    // mentioned. Demote the unmentioned ones to relevant.
-                    effectiveRequired = literalMentions;
-                    if (obs && isNormal) {
-                      const demoted = classifyResult.required.filter(
-                        (t) => !literalMentions.includes(t),
-                      );
-                      yield* obs
-                        .info(
-                          `◉ [classify]   demoted to relevant (no literal mention): ${demoted.join(", ")}`,
-                        )
-                        .pipe(Effect.catchAll((err) =>
-                          emitErrorSwallowed({
-                            site: "runtime/src/execution-engine.ts:classify-demote",
-                            tag: errorTag(err),
-                          }),
-                        ));
-                    }
-                  }
-
-                  if (effectiveRequired.length > 0 && !config.requiredTools?.tools?.length) {
-                    effectiveRequiredTools = [...effectiveRequired];
-                    effectiveRequiredToolQuantities = Object.fromEntries(
-                      Object.entries(classifyResult.requiredToolQuantities).filter(
-                        ([t]) => effectiveRequired.includes(t),
-                      ),
-                    );
-
-                    // Sequential mode: clamp per-tool quantities to 1.
-                    // The classifier may recommend N calls (e.g. web-search×4 for 4 currencies),
-                    // but in sequential mode the model decides one action at a time and may
-                    // combine queries. Enforcing N>1 creates unsatisfiable deadlocks.
-                    // The clamp ensures the tool is called at least once; act.ts skips the
-                    // aggressive "give FINAL ANSWER" push when all quantities are ≤1, letting
-                    // the model naturally continue researching.
-                    if (config.reasoningOptions?.parallelToolCalls === false && effectiveRequiredToolQuantities) {
-                      const clamped: Record<string, number> = {};
-                      for (const [tool, qty] of Object.entries(effectiveRequiredToolQuantities)) {
-                        clamped[tool] = Math.min(qty, 1);
-                      }
-                      effectiveRequiredToolQuantities = clamped;
-                    }
-
-                    if (obs && isNormal) {
-                      const qHint = Object.entries(effectiveRequiredToolQuantities)
-                        .filter(([, n]) => n > 1)
-                        .map(([t, n]) => `${t}×${n}`)
-                        .join(", ");
-                      yield* obs.info(`◉ [classify]   required: ${effectiveRequired.join(", ")}${qHint ? ` (${qHint})` : ""}`)
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1253", tag: errorTag(err) })));
-                    }
-                  }
-                  // Demoted tools also surface in the relevant set (they're
-                  // visible/usable but not enforced).
-                  const demotedRelevant = classifyResult.required.filter(
-                    (t) => !effectiveRequired.includes(t),
-                  );
-                  const mergedRelevant = [
-                    ...classifyResult.relevant,
-                    ...demotedRelevant.filter((t) => !classifyResult.relevant.includes(t)),
-                  ];
-                  if (mergedRelevant.length > 0) {
-                    classifiedRelevantTools = mergedRelevant;
-                    if (obs && isNormal) {
-                      yield* obs.info(`◉ [classify]   relevant: ${mergedRelevant.join(", ")}`)
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1260", tag: errorTag(err) })));
-                    }
-                  }
-                }
+                // Extracted to engine/phases/agent-loop/setup/classifier.ts (W23 step 4b).
+                // Decision tree: no classification / low-reliability literal-mention
+                // fallback / LLM classify with hallucination demotion + sequential
+                // clamp + relevant set merge.
+                let { effectiveRequiredTools, effectiveRequiredToolQuantities, classifiedRelevantTools } =
+                  yield* classifyTools({
+                    config,
+                    task,
+                    cachedToolDefs,
+                    resolvedCalibration,
+                    obs,
+                    isNormal,
+                  });
 
                 // ── Auto per-tool budget derived from required quantities ──
                 // Parallel mode: use required minCalls as the budget floor so quotas
