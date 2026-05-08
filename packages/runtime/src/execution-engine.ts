@@ -33,21 +33,12 @@ import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { type AgentDebrief } from "./debrief.js";
 import { PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
-import { TelemetryClient as TelemetryClientImpl, classifyTaskCategory as classifyTaskCategoryFn, lookupModel as lookupModelFn, skillFragmentToProceduralEntry, loadObservations } from "@reactive-agents/reactive-intelligence";
+import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry, loadObservations } from "@reactive-agents/reactive-intelligence";
 import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
-import { buildTrajectoryFingerprint, abstractifyToolName, firstConvergenceIteration, peakContextPressure, deriveTaskComplexity, deriveFailurePattern, deriveThoughtToActionRatio, entropyVariance, entropyOscillationCount, finalCompositeEntropy, entropyAreaUnderCurve } from "./telemetry-enrichment.js";
 import { literalMentionRequired } from "./classifier-bypass.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 import { formatTaskContextForChat } from "./chat.js";
-import {
-  persistRunObservation,
-  buildRunObservation,
-  countParallelTurnsFromLog,
-} from "./observers/run-observer.js";
-import { diffClassifierAccuracy } from "./classifier-accuracy.js";
-import { isSubagentCall } from "./subagent-telemetry.js";
-import { computeArgValidityRate } from "./arg-validity.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Phase pipeline (W23 decomposition) ───
@@ -81,6 +72,7 @@ import { runIterationGuards } from "./engine/phases/agent-loop/iteration-guards.
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { synthesizeAndStoreDebrief } from "./engine/finalize/debrief-synthesis.js";
+import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -1326,159 +1318,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3770", tag: errorTag(err) })));
                 }
 
-                // ── Record entropy metrics for dashboard ──
-                if (obs && entropyLog.length > 0) {
-                  for (const pt of entropyLog) {
-                    yield* obs.setGauge("entropy.composite", pt.composite, {
-                      taskId: ctx.taskId,
-                      iteration: String(pt.iteration),
-                      shape: pt.trajectory.shape,
-                      confidence: pt.confidence,
-                    }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3781", tag: errorTag(err) })));
-                  }
-                }
-
-                // ── Telemetry: build RunReport and fire-and-forget ──
-                if (config.enableReactiveIntelligence && entropyLog.length > 0) {
-                  try {
-                    const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
-                    const telemetryCfg = riOpts?.telemetry;
-                    const telemetryEnabled = telemetryCfg === undefined || telemetryCfg === true ||
-                      (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as any).enabled !== false);
-
-                    if (telemetryEnabled) {
-                      const endpoint = typeof telemetryCfg === "object" && telemetryCfg !== null
-                        ? (telemetryCfg as any).endpoint : undefined;
-                      const client = new TelemetryClientImpl(endpoint);
-
-                      const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
-                      const modelEntry = lookupModelFn(modelId, undefined, String(config.provider ?? ""));
-                      const taskText = extractTaskText(task.input);
-                      const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
-                      const strategySwitched = !!(rr?.metadata as any)?.strategyFallback;
-
-                      const outcome: "success" | "partial" | "failure" =
-                        terminatedByRaw === "max_iterations" ? "partial"
-                        : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-                        : "success";
-
-                      // ── Enrichment fields (see telemetry-enrichment.ts for logic + tests) ──
-                      const trajectoryFingerprint = buildTrajectoryFingerprint(entropyLog);
-                      const abstractToolPattern = toolsUsed.map(abstractifyToolName);
-                      const iterationsToFirstConvergence = firstConvergenceIteration(entropyLog);
-                      const contextPressurePeak = peakContextPressure(entropyLog);
-
-                      // Skills: use autoActivateSkills (actually injected at bootstrap), not resolvedSkills (full catalog)
-                      const activeSkills = ((ctx.metadata as any)?.autoActivateSkills ?? []) as Array<{ source: string }>;
-                      const skillsActiveCount = activeSkills.length;
-                      const learnedSkillsContribution = activeSkills.some(s => s.source === "learned");
-
-                      // ctx.iteration starts at 1 and increments AFTER each loop, so N real iterations = ctx.iteration - 1
-                      const realIterations = ctx.iteration - 1;
-                      const taskComplexity = deriveTaskComplexity(realIterations, toolCallLog.length, strategySwitched, contextPressurePeak);
-                      const failurePattern = deriveFailurePattern(outcome, terminatedByRaw, errorsFromLoop, contextPressurePeak);
-
-                      const reasoningStepsForTelemetry = ((ctx.metadata as any)?.reasoningSteps ?? []) as Array<{ type: string }>;
-                      const thoughtToActionRatio = deriveThoughtToActionRatio(reasoningStepsForTelemetry, toolCallLog.length);
-
-                      const classifierAcc = diffClassifierAccuracy(
-                        effectiveRequiredTools ?? [],
-                        toolCallLog.map((e) => e.toolName),
-                      );
-
-                      // Derive subagent invocations from toolCallLog.
-                      // Custom agent tool names come from the builder's agentTools config.
-                      const customAgentToolNames = (config as any).agentToolNames ?? [];
-                      const subagentInvocations = toolCallLog
-                        .filter((e) => isSubagentCall(e.toolName, customAgentToolNames))
-                        .map((e) => ({ delegated: true, succeeded: e.success }));
-
-                      // ToolCallCompleted events don't carry arguments — emit 1.0 as safe default.
-                      // TODO: pipe arguments through ToolCallCompleted event to enable real scoring.
-                      const toolArgValidityRate = computeArgValidityRate(
-                        toolCallLog.map((e) => ({
-                          toolName: e.toolName,
-                          arguments: (e as any).arguments ?? {},
-                        })),
-                      );
-
-                      client.send({
-                        id: ctx.taskId,
-                        installId: client.getInstallId(),
-                        modelId,
-                        modelTier: modelEntry.tier,
-                        provider: String(config.provider ?? "unknown"),
-                        taskCategory: classifyTaskCategoryFn(taskText),
-                        toolCount: toolCallLog.length,
-                        toolsUsed,
-                        strategyUsed: ctx.selectedStrategy ?? "reactive",
-                        strategySwitched,
-                        entropyTrace: entropyLog,
-                        terminatedBy: terminatedByRaw,
-                        outcome,
-                        totalIterations: ctx.iteration,
-                        totalTokens: ctx.tokensUsed,
-                        durationMs: executionDurationMs,
-                        clientVersion: "0.8.0",
-                        trajectoryFingerprint,
-                        abstractToolPattern,
-                        iterationsToFirstConvergence,
-                        contextPressurePeak,
-                        skillsActiveCount,
-                        learnedSkillsContribution,
-                        taskComplexity,
-                        failurePattern,
-                        thoughtToActionRatio,
-                        // Enhanced entropy features (Task 11)
-                        entropyVariance: entropyVariance(entropyLog),
-                        entropyOscillationCount: entropyOscillationCount(entropyLog),
-                        finalCompositeEntropy: finalCompositeEntropy(entropyLog),
-                        entropyAreaUnderCurve: entropyAreaUnderCurve(entropyLog),
-                        // Parallel turn count — uses real kernel iteration from ToolCallCompleted events
-                        parallelTurnCount: countParallelTurnsFromLog(
-                          toolCallLog.map((t) => ({
-                            turn: t.iteration,
-                            toolName: t.toolName,
-                          })),
-                        ),
-                        // Classifier accuracy diff (Task 14)
-                        classifierFalsePositives: classifierAcc.falsePositives,
-                        classifierFalseNegatives: classifierAcc.falseNegatives,
-                        // Subagent invocation outcomes (Task 15)
-                        subagentInvocations,
-                        // Tool argument validity rate (Task 16)
-                        toolArgValidityRate,
-                        // Resolver dialect tier (Task 13)
-                        toolCallDialectObserved: dialectObserved,
-                      });
-
-                      // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
-                      try {
-                        const observation = buildRunObservation({
-                          modelId,
-                          toolCallLog: toolCallLog.map((t) => ({
-                            turn: t.iteration,
-                            toolName: t.toolName,
-                          })),
-                          totalTurns: ctx.iteration,
-                          dialect: dialectObserved,
-                          classifierRequired: effectiveRequiredTools ?? [],
-                          classifierActuallyCalled: toolsUsed,
-                          subagentInvoked: subagentInvocations.length,
-                          subagentSucceeded: subagentInvocations.filter((x) => x.succeeded).length,
-                          argValidityRate: toolArgValidityRate,
-                        });
-                        persistRunObservation(modelId, observation, {
-                          baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-                        });
-                      } catch {
-                        // Observer failure must not affect the run
-                      }
-                    }
-                  } catch {
-                    // Telemetry must never affect agent — silent failure
-                  }
-                }
+                // ── Record entropy metrics for dashboard + Telemetry RunReport ──
+                // Extracted to engine/finalize/telemetry-emit.ts (W24-B step 2).
+                yield* emitTelemetryRunReport({
+                  ctx,
+                  task,
+                  config,
+                  obs,
+                  rr,
+                  terminatedByRaw,
+                  errorsFromLoop,
+                  executionDurationMs,
+                  entropyLog,
+                  toolCallLog,
+                  effectiveRequiredTools,
+                  dialectObserved,
+                });
 
                 // Scoped variable to pass LearningResult from the RI block to the outcome block.
                 // ctx.metadata is observable agent context — never use it as a private scratchpad.
