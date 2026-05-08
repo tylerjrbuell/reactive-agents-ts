@@ -29,6 +29,11 @@ export const ReasoningStrategy = Schema.Literal(
   "tree-of-thought",
   "reflexion",
   "adaptive",
+  /** Single-shot LLM call with optional one-iteration tool dispatch.
+   * Use for chat / streaming / no-reasoning fallback. Replaces the
+   * "inline LLM-call" path that was duplicated inside the engine
+   * agent-loop pre-W23. */
+  "direct",
 );
 export type ReasoningStrategy = typeof ReasoningStrategy.Type;
 

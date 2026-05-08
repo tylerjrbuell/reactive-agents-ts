@@ -98,6 +98,8 @@ export { executePlanExecute } from "./strategies/plan-execute.js";
 export { executeTreeOfThought } from "./strategies/tree-of-thought.js";
 export { executeAdaptive } from "./strategies/adaptive.js";
 export type { StrategyOutcome } from "./strategies/adaptive.js";
+export { executeDirect } from "./strategies/direct.js";
+export type { DirectInput } from "./strategies/direct.js";
 
 // ─── Context Profiles ───
 export {
