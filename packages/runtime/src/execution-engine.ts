@@ -27,7 +27,6 @@ import {
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
 import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer } from "@reactive-agents/observability";
-import type { RunSummary } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
@@ -74,6 +73,7 @@ import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-di
 import { synthesizeAndStoreDebrief } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
 import { runLocalLearning } from "./engine/finalize/local-learning.js";
+import { finalizeRun } from "./engine/finalize/run-finalize.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -1348,101 +1348,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   executionDurationMs,
                 });
 
-                // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
-                if (eb) {
-                  yield* eb.publish({
-                    _tag: "AgentCompleted",
-                    taskId: ctx.taskId,
-                    agentId: config.agentId,
-                    success: executionSucceeded,
-                    totalIterations: ctx.iteration,
-                    totalTokens: ctx.tokensUsed,
-                    durationMs: Date.now() - executionStartMs,
-                    ...(!executionSucceeded && result.error ? { error: result.error } : {}),
-                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4047", tag: errorTag(err) })));
-                  yield* eb.publish({
-                    _tag: "TaskCompleted",
-                    taskId: task.id,
-                    success: executionSucceeded,
-                  }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4052", tag: errorTag(err) })));
-                }
-
-                // Attach entropy trace to result metadata for dashboard consumption
-                if (entropyLog.length > 0) {
-                  (result.metadata as any).entropyTrace = entropyLog;
-                }
-
-                // Emit token and cost metrics for status renderer
-                yield* Effect.serviceOption(ObservableLogger).pipe(
-                  Effect.tap((loggerOpt) => {
-                    if (loggerOpt._tag === "Some") {
-                      return Effect.all([
-                        loggerOpt.value.emit({
-                          _tag: "metric",
-                          name: "tokens_used",
-                          value: result.metadata.tokensUsed ?? 0,
-                          unit: "tokens",
-                          timestamp: new Date(),
-                        }),
-                        loggerOpt.value.emit({
-                          _tag: "metric",
-                          name: "cost_usd",
-                          value: result.metadata.cost ?? 0,
-                          unit: "usd",
-                          timestamp: new Date(),
-                        }),
-                      ], { concurrency: "unbounded" }).pipe(Effect.asVoid);
-                    }
-                    return Effect.void;
-                  }),
-                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4083", tag: errorTag(err) })),
-                );
-
-                // Emit completion event
-                const executionDuration = Date.now() - executionStartMs;
-                yield* Effect.serviceOption(ObservableLogger).pipe(
-                  Effect.tap((loggerOpt) => {
-                    if (loggerOpt._tag === "Some") {
-                      return loggerOpt.value.emit({
-                        _tag: "completion",
-                        success: result.success === true,
-                        summary: `Task ${result.success ? "completed" : "failed"} in ${(executionDuration / 1000).toFixed(1)}s with ${result.metadata.tokensUsed} tokens`,
-                        timestamp: new Date(),
-                      });
-                    }
-                    return Effect.void;
-                  }),
-                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4100", tag: errorTag(err) })),
-                );
-
-                // Handle non-live mode output
-                const loggerConfig = config.logging ?? { live: true };
-                if (!loggerConfig.live) {
-                  yield* Effect.serviceOption(ObservableLogger).pipe(
-                    Effect.tap((loggerOpt) => {
-                      if (loggerOpt._tag === "Some") {
-                        return loggerOpt.value.flush().pipe(
-                          Effect.tap((summary: RunSummary) =>
-                            Effect.gen(function* () {
-                              console.log("\n═══ Run Summary ═══");
-                              console.log(`Status:   ${summary.status}`);
-                              console.log(`Duration: ${(summary.duration / 1000).toFixed(1)}s`);
-                              console.log(`Tokens:   ${summary.totalTokens}`);
-                              if (summary.warnings.length > 0) {
-                                console.log(`Warnings: ${summary.warnings.length}`);
-                              }
-                              if (summary.errors.length > 0) {
-                                console.log(`Errors: ${summary.errors.length}`);
-                              }
-                            }),
-                          ),
-                        );
-                      }
-                      return Effect.void;
-                    }),
-                    Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4128", tag: errorTag(err) })),
-                  );
-                }
+                // ── Run Finalization ──
+                // Extracted to engine/finalize/run-finalize.ts (W24-B step 4).
+                yield* finalizeRun({
+                  ctx,
+                  task,
+                  config,
+                  eb,
+                  result,
+                  executionStartMs,
+                  entropyLog,
+                  executionSucceeded,
+                });
 
                 return result;
               });
