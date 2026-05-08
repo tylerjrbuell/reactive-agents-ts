@@ -77,6 +77,7 @@ import { runVerificationThinkRetry } from "./engine/phases/agent-loop/verificati
 import { runReasoningHarnessHooks } from "./engine/phases/agent-loop/reasoning-harness-hooks.js";
 import { runReasoningThink } from "./engine/phases/agent-loop/reasoning-think.js";
 import { runReasoningPostThink } from "./engine/phases/agent-loop/reasoning-post-think.js";
+import { subscribeReasoningStreamLogger } from "./engine/phases/agent-loop/reasoning-stream-logger.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -979,58 +980,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
 
                   // ── Subscribe to reasoning steps for live streaming ──
-                  let unsubscribeReasoningSteps: (() => void) | null = null;
-                  if (eb && obs && isVerbose) {
-                    const capturedObs = obs;
-                    const capturedLogModelIO = logModelIO;
-                    const capturedIsDebug = isDebug;
-                    unsubscribeReasoningSteps = yield* eb.on(
-                      "ReasoningStepCompleted",
-                      (event) => {
-                        // Prompt trace: log full conversation thread when logModelIO is enabled.
-                        if (event.prompt && capturedLogModelIO) {
-                          const pass = event.kernelPass ?? event.strategy;
-                          const indent = (s: string) => s.replace(/\n/g, "\n    ");
-
-                          // Prefer full FC messages array (role-labelled) over flat text
-                          if (event.messages && event.messages.length > 0) {
-                            const threadLines = event.messages.map((m) =>
-                              `[${m.role.toUpperCase()}] ${m.content}`,
-                            ).join("\n    ────\n    ");
-                            const sysLine = `── system ──\n    ${indent(event.prompt.system)}`;
-                            const rawLine = event.rawResponse
-                              ? `\n    ── raw response ──\n    ${indent(event.rawResponse)}`
-                              : "";
-                            return capturedObs
-                              .debug(`  ┄ [model-io:${pass}]\n    ${sysLine}\n    ── thread (${event.messages.length} msg) ──\n    ${indent(threadLines)}${rawLine}`)
-                              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1467", tag: errorTag(err) })));
-                          }
-
-                          // Fallback: legacy system+user flat format
-                          const sysPreview = event.prompt.system;
-                          const userPreview = event.prompt.user;
-                          return capturedObs
-                            .debug(`  ┄ [model-io:${pass}]\n    ── system ──\n    ${indent(sysPreview)}\n    ── user ──\n    ${indent(userPreview)}`)
-                            .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1475", tag: errorTag(err) })));
-                        }
-                        const rawContent = event.thought ?? event.action ?? event.observation ?? "";
-                        // Skip events with no displayable content (e.g. prompt-only events when logModelIO is off)
-                        if (!rawContent) return Effect.void;
-                        const prefix = event.thought
-                          ? "┄ [thought]"
-                          : event.action
-                            ? "┄ [action] "
-                            : "┄ [obs]    ";
-                        const content =
-                          capturedIsDebug || rawContent.length <= 180
-                            ? rawContent
-                            : rawContent.slice(0, 180) + "...";
-                        return capturedObs
-                          .debug(`  ${prefix}  ${content}`)
-                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1491", tag: errorTag(err) })));
-                      },
-                    );
-                  }
+                  // Body extracted to engine/phases/agent-loop/reasoning-stream-logger.ts (W23 step 6a-7).
+                  const unsubscribeReasoningSteps = yield* subscribeReasoningStreamLogger({
+                    eb, obs, logModelIO, isVerbose, isDebug,
+                  });
 
                   // Body extracted to engine/phases/agent-loop/reasoning-think.ts (W23 step 6a-4).
                   ctx = yield* guardedPhase(ctx, "think", (c) =>
@@ -1054,7 +1007,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // ── Unsubscribe from reasoning step events ──
                   if (unsubscribeReasoningSteps) {
                     unsubscribeReasoningSteps();
-                    unsubscribeReasoningSteps = null;
                   }
 
                   // ── Harness hooks (post-think) ─────────────────────────────────────
