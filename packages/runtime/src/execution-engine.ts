@@ -67,6 +67,7 @@ import { verify } from "./engine/phases/verify.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
 import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-registry.js";
 import { classifyTools } from "./engine/phases/agent-loop/setup/classifier.js";
+import { prepareReasoningToolSchemas } from "./engine/phases/agent-loop/setup/tool-schemas.js";
 import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
 import { runInlineThink } from "./engine/phases/agent-loop/inline-think.js";
 import { runInlineAct } from "./engine/phases/agent-loop/inline-act.js";
@@ -957,117 +958,24 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // Snapshot the full unfiltered schemas for the completion guard
                   const allToolSchemas = [...availableToolSchemas];
 
-                  // ── Built-ins opt-in (2026-05-06) ──
-                  // Built-in tools (file-write, web-search, code-execute, etc.) are
-                  // registered unconditionally in ToolServiceLive so `discover-tools`
-                  // can surface them at runtime, but should NOT appear in the base
-                  // LLM schema unless the consumer explicitly opts in. Without this
-                  // filter, the relevance classifier promotes built-ins like
-                  // file-write on tasks like "write a markdown report" — leading to
-                  // gratuitous filesystem writes and the model returning file paths
-                  // as final answers. Required + relevant + meta-tools are unaffected.
-                  const builtinsOpt = config.builtins;
-                  const optedInBuiltins = new Set<string>();
-                  if (builtinsOpt === true) {
-                    // Opt-in to all built-ins (legacy behavior).
-                    for (const name of BUILTIN_TOOL_NAMES) optedInBuiltins.add(name);
-                  } else if (Array.isArray(builtinsOpt)) {
-                    for (const name of builtinsOpt) optedInBuiltins.add(name);
-                  }
-                  // Always honor explicit allowedTools / requiredTools — those are
-                  // the consumer's intent regardless of the builtins opt-in default.
-                  for (const name of effectiveAllowedTools) optedInBuiltins.add(name);
-                  for (const name of effectiveRequiredTools ?? []) optedInBuiltins.add(name);
-                  if (builtinsOpt !== true) {
-                    availableToolSchemas = availableToolSchemas.filter((ts) =>
-                      !BUILTIN_TOOL_NAMES.has(ts.name) || optedInBuiltins.has(ts.name),
-                    );
-                    availableToolNames = availableToolSchemas.map((t) => t.name);
-                  }
-
-                  // ── Dynamic final-answer description (Path C(d), 2026-05-07) ──
-                  // Multi-signal composition: regex-classified output format
-                  // (task signal) + ModelCalibration fields (model signal).
-                  // The builder only ADDS guidance; it never strips the
-                  // empirically-validated static base. See spec
-                  // wiki/Architecture/Design-Specs/2026-05-06-intelligent-default-builders.md
-                  // for the full pattern.
-                  const taskTextForIntent = extractTaskText(task.input);
-                  const finalAnswerCtx = {
-                    outputFormat: extractOutputFormat(taskTextForIntent).format,
-                    hasRequiredTools: (effectiveRequiredTools?.length ?? 0) > 0,
-                    systemPromptAttention: resolvedCalibration?.systemPromptAttention,
-                    observationHandling: resolvedCalibration?.observationHandling,
-                    toolCallDialect: resolvedCalibration?.toolCallDialect,
-                  };
-                  const dynamicFinalAnswerDescription = buildFinalAnswerDescription(finalAnswerCtx);
-                  const dynamicFinalAnswerOutputDesc = buildFinalAnswerOutputDescription(finalAnswerCtx);
-                  availableToolSchemas = availableToolSchemas.map((ts) => {
-                    if (ts.name !== "final-answer") return ts;
-                    return {
-                      ...ts,
-                      description: dynamicFinalAnswerDescription,
-                      parameters: ts.parameters.map((p: typeof ts.parameters[number]) =>
-                        p.name === "output"
-                          ? { ...p, description: dynamicFinalAnswerOutputDesc }
-                          : p,
-                      ),
-                    };
-                  });
-
-                  // ── allowedTools prompt filtering (IC-6) ──
-                  // When allowedTools is specified, restrict the schemas shown in the prompt
-                  // to only those tools. Without this, ALL registered tools (including meta-tools
-                  // like find/brief/recall) appear in the system prompt even when the caller
-                  // narrowed the allowlist — the model then attempts to call them and receives
-                  // guard rejections, inflating iteration counts.
-                  // allToolSchemas above retains the full set for the completion guard.
-                  if (effectiveAllowedTools.length > 0) {
-                    availableToolSchemas = availableToolSchemas.filter(ts =>
-                      effectiveAllowedTools.includes(ts.name)
-                    );
-                  }
-
-                  // ── Adaptive tool filtering ──
-                  // When LLM classification produced relevant tools, use those.
-                  // Otherwise fall back to heuristic filtering.
-                  // All tools remain callable by name — filtering only affects what's
-                  // shown in the prompt to reduce context noise.
-                  if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
-                    // Always include conductor tools and spawn-agent regardless of relevance filtering
-                    const ALWAYS_INCLUDE = new Set([
-                      "recall", "find", "brief", "pulse",
-                      "spawn-agent",
-                    ]);
-
-                    const requiredSet = new Set(effectiveRequiredTools ?? []);
-                    let filteredSet: Set<string>;
-
-                    if (classifiedRelevantTools && classifiedRelevantTools.length > 0) {
-                      // LLM-classified: use required + relevant from classification
-                      filteredSet = new Set([...classifiedRelevantTools, ...requiredSet]);
-                    } else {
-                      // Fallback: heuristic keyword matching
-                      const taskTextForFilter = extractTaskText(task.input);
-                      const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
-                      filteredSet = new Set(primary.map(t => t.name));
-                    }
-                    for (const name of ALWAYS_INCLUDE) filteredSet.add(name);
-                    for (const name of requiredSet) filteredSet.add(name);
-
-                    // Filter schemas to only those in the filtered set
-                    const filtered = availableToolSchemas.filter(t => filteredSet.has(t.name));
-
-                    // Only apply filtering if it actually reduces the set meaningfully
-                    if (filtered.length < availableToolSchemas.length && filtered.length >= 2) {
-                      const hiddenCount = availableToolSchemas.length - filtered.length;
-                      availableToolSchemas = filtered;
-                      availableToolNames = filtered.map(t => t.name);
-                      if (obs && isNormal) {
-                        yield* obs.info(`◉ [adaptive-tools] showing ${filtered.length} of ${filtered.length + hiddenCount} tools (${hiddenCount} hidden)`)
-                          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1437", tag: errorTag(err) })));
-                      }
-                    }
+                  // ── Tool schema preparation: built-ins opt-in + dynamic final-answer
+                  // + allowedTools prompt filter + adaptive filter ──
+                  // Body extracted to engine/phases/agent-loop/setup/tool-schemas.ts (W23 step 6a-6).
+                  {
+                    const prepared = yield* prepareReasoningToolSchemas({
+                      config,
+                      task,
+                      availableToolSchemas,
+                      availableToolNames,
+                      effectiveAllowedTools,
+                      effectiveRequiredTools,
+                      classifiedRelevantTools,
+                      resolvedCalibration,
+                      obs,
+                      isNormal,
+                    });
+                    availableToolSchemas = prepared.availableToolSchemas;
+                    availableToolNames = prepared.availableToolNames;
                   }
 
                   // ── Subscribe to reasoning steps for live streaming ──
