@@ -5,7 +5,6 @@ import {
   GuardrailViolationError,
   KillSwitchTriggeredError,
   BehavioralContractViolationError,
-  BudgetExceededError,
   MaxIterationsError,
   type RuntimeErrors,
 } from "./errors.js";
@@ -30,7 +29,6 @@ import { extractOutputFormat } from "@reactive-agents/reasoning";
 import { ObservabilityService, createProgressLogger, renderCalibrationProvenance, ObservableLogger, makeObservableLogger, makeStatusRenderer } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { GuardrailService, KillSwitchService, BehavioralContractService } from "@reactive-agents/guardrails";
-import { CostService } from "@reactive-agents/cost";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
 import type { AgentEvent, KernelStateLike } from "@reactive-agents/core";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "./debrief.js";
@@ -67,8 +65,6 @@ import { verify } from "./engine/phases/verify.js";
 import { logVerifySummary } from "./engine/phases/verify-summary-log.js";
 import { dispatchMemoryFlush } from "./engine/phases/memory-flush-dispatch.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
-import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-registry.js";
-import { classifyTools } from "./engine/phases/agent-loop/setup/classifier.js";
 import { prepareReasoningToolSchemas } from "./engine/phases/agent-loop/setup/tool-schemas.js";
 import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
 import { runInlineThink } from "./engine/phases/agent-loop/inline-think.js";
@@ -83,6 +79,7 @@ import { subscribeReasoningStreamLogger } from "./engine/phases/agent-loop/reaso
 import { runVerificationQualityGate } from "./engine/phases/agent-loop/verification-quality-gate.js";
 import { runIterationGuards } from "./engine/phases/agent-loop/iteration-guards.js";
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
+import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -728,85 +725,36 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   bootstrapStartedAt: now,
                 });
 
-                // ── Phase 2: GUARDRAIL (optional) ── H2
-                // Extracted to engine/phases/guardrail.ts (W23).
-                ctx = yield* runGuardedPhase(guardrail, ctx, deps);
-
-                // ── Phase 3: COST_ROUTE (optional) ── H2
-                // Extracted to engine/phases/cost-route.ts (W23).
-                ctx = yield* runGuardedPhase(costRoute, ctx, deps);
-
-                if (config.enableCostTracking) {
-                  // ── Budget pre-flight check: verify budget has room before reasoning ──
-                  const budgetCostOpt = yield* Effect.serviceOption(CostService).pipe(
-                    Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-                  );
-                  if (budgetCostOpt._tag === "Some") {
-                    yield* budgetCostOpt.value
-                      .checkBudget(0, ctx.agentId, ctx.sessionId)
-                      .pipe(
-                        Effect.catchAll((budgetErr) => {
-                          const msg = "message" in budgetErr ? String(budgetErr.message) : "Budget exceeded";
-                          const budgetType = "budgetType" in budgetErr ? String(budgetErr.budgetType) : "unknown";
-                          const limit = "limit" in budgetErr ? Number(budgetErr.limit) : 0;
-                          const current = "current" in budgetErr ? Number(budgetErr.current) : 0;
-                          return Effect.fail(
-                            new BudgetExceededError({
-                              message: msg,
-                              taskId: ctx.taskId,
-                              budgetType,
-                              limit,
-                              current,
-                            }),
-                          );
-                        }),
-                      );
-                  }
-                }
-
-                // ── Phase 4: STRATEGY_SELECT ──
-                // Extracted to engine/phases/strategy-select.ts (W23). Post-phase
-                // work below (tool registry fetch, allowedTools mismatch warn,
-                // log line) is orchestrator-level setup and stays inline.
-                ctx = yield* runGuardedPhase(strategySelect, ctx, deps);
-
-                // ── Tool registry fetch + allowedTools warn + strategy summary ──
-                // Extracted to engine/phases/agent-loop/setup/tools-registry.ts (W23 step 4).
-                const cachedToolDefs = yield* fetchToolsRegistry(config, ctx, obs, isNormal);
-                // Used downstream by built-ins opt-in logic (lines ~1240, ~1286).
-                const effectiveAllowedTools = config.allowedTools ?? [];
-
                 // ── Phase 5: AGENT_LOOP ──
 
                 // Resolve CalibrationMode → ModelCalibration | undefined once.
-                // Placed here (before classifier gate) so classifierReliability is available.
-                // Also shared by all three execute() call sites below.
+                // Placed here (before Phase 2–4 dispatchers) so classifierReliability is
+                // available inside the pre-loop block, and so the same resolved value can
+                // be threaded into all three execute() call sites below.
                 // Extracted to engine/phases/agent-loop/setup/calibration.ts (W23 step 4).
                 const resolvedCalibration: ModelCalibration | undefined = yield* resolveCalibration(config);
 
-                // ── LLM-based tool classification (required + relevant) ──
-                // Extracted to engine/phases/agent-loop/setup/classifier.ts (W23 step 4b).
-                // Decision tree: no classification / low-reliability literal-mention
-                // fallback / LLM classify with hallucination demotion + sequential
-                // clamp + relevant set merge.
-                let { effectiveRequiredTools, effectiveRequiredToolQuantities, classifiedRelevantTools } =
-                  yield* classifyTools({
-                    config,
-                    task,
-                    cachedToolDefs,
-                    resolvedCalibration,
-                    obs,
-                    isNormal,
-                  });
-
-                // ── Auto per-tool budget derived from required quantities ──
-                // Parallel mode: use required minCalls as the budget floor so quotas
-                // are satisfiable. Sequential mode: disable auto per-tool budgets.
-                const autoMaxCallsPerTool = buildAutoMaxCallsPerTool({
-                  parallelToolCallsEnabled: config.reasoningOptions?.parallelToolCalls !== false,
-                  requiredTools: effectiveRequiredTools,
-                  requiredToolQuantities: effectiveRequiredToolQuantities,
+                // ── Phases 2–4 + tool registry + classify + autoMaxCallsPerTool ──
+                // Extracted to engine/phases/agent-loop/setup/pre-loop-dispatch.ts (W24-C step 2).
+                // Semantic cache check stays inline because its result feeds the cacheHit
+                // branch selector immediately below.
+                const preLoop = yield* runPreLoopDispatch({
+                  ctx,
+                  task,
+                  config,
+                  deps,
+                  resolvedCalibration,
+                  obs,
+                  isNormal,
+                  guardrail,
+                  costRoute,
+                  strategySelect,
                 });
+                ctx = preLoop.ctx;
+                const effectiveAllowedTools = preLoop.effectiveAllowedTools;
+                const { effectiveRequiredTools, effectiveRequiredToolQuantities, classifiedRelevantTools } = preLoop;
+                const autoMaxCallsPerTool = preLoop.autoMaxCallsPerTool;
+                const cachedToolDefs = preLoop.cachedToolDefs;
 
                 // ── Semantic cache check (before reasoning) ──
                 // Extracted to engine/phases/agent-loop/cache-check.ts (W23 step 5).
