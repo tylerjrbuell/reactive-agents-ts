@@ -65,6 +65,7 @@ import { memoryFlush } from "./engine/phases/memory-flush.js";
 import { strategySelect } from "./engine/phases/strategy-select.js";
 import { verify } from "./engine/phases/verify.js";
 import { logVerifySummary } from "./engine/phases/verify-summary-log.js";
+import { dispatchMemoryFlush } from "./engine/phases/memory-flush-dispatch.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
 import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-registry.js";
 import { classifyTools } from "./engine/phases/agent-loop/setup/classifier.js";
@@ -229,7 +230,7 @@ let _riTelemetryNoticeEmitted = false;
 
 type TaskComplexity = "trivial" | "moderate" | "complex";
 
-function classifyComplexity(
+export function classifyComplexity(
   iteration: number,
   entropy: { composite: number } | undefined,
   toolCallCount: number,
@@ -1337,32 +1338,14 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 });
 
                 // ── Phase 7: MEMORY_FLUSH ── H5
-                // Compute task complexity to determine flush strategy
-                {
-                  const rrForComplexity = ctx.metadata.reasoningResult as { metadata?: { terminatedBy?: string; llmCalls?: number } } | undefined;
-                  const terminatedByForComplexity = (rrForComplexity?.metadata?.terminatedBy ?? "end_turn") as string;
-                  const latestEntropy = entropyLog.length > 0 ? entropyLog[entropyLog.length - 1] : undefined;
-                  const complexity = classifyComplexity(
-                    ctx.iteration,
-                    latestEntropy,
-                    toolCallLog.length,
-                    terminatedByForComplexity,
-                  );
-                  // Store complexity on ctx metadata for later use in result assembly
-                  ctx = { ...ctx, metadata: { ...ctx.metadata, taskComplexity: complexity } };
-
-                  // Phase body extracted to engine/phases/memory-flush.ts (W23).
-                  // Dispatch mode (trivial/moderate/complex) stays inline because
-                  // it gates whether to skip / fork / run blocking, which is an
-                  // orchestrator concern, not phase composition.
-                  if (complexity === "trivial") {
-                    ctx = { ...ctx, agentState: "flushing" as const };
-                  } else if (complexity === "moderate") {
-                    yield* Effect.forkDaemon(runGuardedPhase(memoryFlush, ctx, deps));
-                  } else {
-                    ctx = yield* runGuardedPhase(memoryFlush, ctx, deps);
-                  }
-                }
+                // Dispatch body extracted to engine/phases/memory-flush-dispatch.ts (W24-A step 2).
+                ctx = yield* dispatchMemoryFlush({
+                  ctx,
+                  entropyLog,
+                  toolCallLog,
+                  runMemoryFlush: (c) =>
+                    runGuardedPhase(memoryFlush, c, deps) as Effect.Effect<ExecutionContext, never>,
+                });
 
                 // ── Phase 8: COST_TRACK (optional) ── H2
                 // Extracted to engine/phases/cost-track.ts (W23). Reads cacheHit
