@@ -73,6 +73,7 @@ import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postproce
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { synthesizeAndStoreDebrief } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
+import { runLocalLearning } from "./engine/finalize/local-learning.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -1335,114 +1336,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   dialectObserved,
                 });
 
-                // Scoped variable to pass LearningResult from the RI block to the outcome block.
-                // ctx.metadata is observable agent context — never use it as a private scratchpad.
-                let lastLearningResult: import("@reactive-agents/reactive-intelligence").LearningResult | undefined;
-
-                // ── Local Learning: update calibration, bandit, and skill store ──
-                if (config.enableReactiveIntelligence && entropyLog.length > 0) {
-                  yield* Effect.serviceOption(
-                    Context.GenericTag<{
-                      onRunCompleted: (data: any) => Effect.Effect<any, never>;
-                    }>("LearningEngineService"),
-                  ).pipe(
-                    Effect.flatMap((opt) => {
-                      if (opt._tag !== "Some") return Effect.void;
-                      return Effect.gen(function* () {
-                        const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
-                        const learningResult = yield* opt.value.onRunCompleted({
-                          modelId,
-                          taskDescription: extractTaskText(task.input),
-                          strategy: ctx.selectedStrategy ?? "reactive",
-                          outcome: terminatedByRaw === "max_iterations" ? "partial"
-                            : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-                            : "success",
-                          entropyHistory: entropyLog,
-                          totalTokens: ctx.tokensUsed,
-                          durationMs: executionDurationMs,
-                          temperature: (config as any).temperature ?? 0.7,
-                          maxIterations: config.maxIterations ?? 10,
-                          provider: String(ctx.provider ?? config.provider ?? "unknown"),
-                          skillsActivated: (ctx.metadata as any)?.resolvedSkills?.filter((s: any) => s.confidence === "expert").map((s: any) => s.name) ?? [],
-                          convergenceIteration: entropyLog.length > 0
-                            ? entropyLog.findIndex((e: any) => e.trajectory?.shape === "converging")
-                            : null,
-                          toolCallSequence: (ctx.metadata as any)?.toolCallSequence ?? [],
-                        });
-
-                        // Pass learning result to the outcome block via a scoped variable.
-                        lastLearningResult = learningResult;
-
-                        // Persist synthesized skill fragment to procedural memory
-                        if (learningResult?.skillSynthesized && learningResult?.skillFragment) {
-                          const entry = skillFragmentToProceduralEntry({
-                            fragment: learningResult.skillFragment,
-                            agentId: config.agentId,
-                            taskCategory: learningResult.taskCategory,
-                            modelId,
-                          });
-                          yield* Effect.serviceOption(ProceduralMemoryService).pipe(
-                            Effect.flatMap((svcOpt) => {
-                              if (svcOpt._tag !== "Some") return Effect.void;
-                              return svcOpt.value.store(entry).pipe(
-                                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3977", tag: errorTag(err) })),
-                              );
-                            }),
-                            Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3980", tag: errorTag(err) })),
-                          );
-                        }
-                      });
-                    }),
-                    Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3985", tag: errorTag(err) })),
-                  );
-                }
-
-                // ── Record outcome for applied skill ──
-                {
-                  const appliedSkillId = (ctx.metadata as any)?.appliedSkillId;
-                  if (appliedSkillId) {
-                    const skillOutcome = terminatedByRaw === "max_iterations" ? "partial"
-                      : errorsFromLoop.length > 0 && terminatedByRaw !== "final_answer_tool" && terminatedByRaw !== "final_answer" ? "failure"
-                      : "success";
-
-                    yield* Effect.serviceOption(ProceduralMemoryService).pipe(
-                      Effect.flatMap((svcOpt) => {
-                        if (svcOpt._tag !== "Some") return Effect.void;
-                        return Effect.gen(function* () {
-                          // Change 2: record outcome (success rate update)
-                          yield* svcOpt.value.recordOutcome(appliedSkillId, skillOutcome !== "failure").pipe(
-                            Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4003", tag: errorTag(err) })),
-                          );
-
-                          // Change 3: re-store improved fragment when entropy improved on a full success
-                          if (config.enableReactiveIntelligence) {
-                            const learningResultRef = lastLearningResult;
-                            const appliedSkillMeanEntropy = (ctx.metadata as any)?.appliedSkillMeanEntropy as number | undefined;
-                            if (
-                              skillOutcome === "success" &&
-                              learningResultRef?.skillSynthesized &&
-                              learningResultRef?.skillFragment != null &&
-                              typeof appliedSkillMeanEntropy === "number" &&
-                              learningResultRef.skillFragment.meanComposite < appliedSkillMeanEntropy
-                            ) {
-                              const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
-                              const entry = skillFragmentToProceduralEntry({
-                                fragment: learningResultRef.skillFragment,
-                                agentId: config.agentId,
-                                taskCategory: learningResultRef.taskCategory,
-                                modelId,
-                              });
-                              yield* svcOpt.value.store(entry).pipe(
-                                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4025", tag: errorTag(err) })),
-                              );
-                            }
-                          }
-                        });
-                      }),
-                      Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:4031", tag: errorTag(err) })),
-                    );
-                  }
-                }
+                // ── Local Learning + Record Outcome ──
+                // Extracted to engine/finalize/local-learning.ts (W24-B step 3).
+                yield* runLocalLearning({
+                  ctx,
+                  task,
+                  config,
+                  terminatedByRaw,
+                  errorsFromLoop,
+                  entropyLog,
+                  executionDurationMs,
+                });
 
                 // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
                 if (eb) {
