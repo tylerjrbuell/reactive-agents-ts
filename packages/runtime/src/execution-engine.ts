@@ -64,6 +64,7 @@ import { costTrack } from "./engine/phases/cost-track.js";
 import { memoryFlush } from "./engine/phases/memory-flush.js";
 import { strategySelect } from "./engine/phases/strategy-select.js";
 import { verify } from "./engine/phases/verify.js";
+import { logVerifySummary } from "./engine/phases/verify-summary-log.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
 import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-registry.js";
 import { classifyTools } from "./engine/phases/agent-loop/setup/classifier.js";
@@ -1312,38 +1313,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Extracted to engine/phases/verify.ts (W23). Skip predicate
                 // gates on config.enableVerification.
                 ctx = yield* runGuardedPhase(verify, ctx, deps);
-                if (config.enableVerification) {
-                  // Verification may be fast (heuristics) or involve extra LLM calls when useLLMTier is on;
-                  // without this line it looks like verify "did nothing" in normal verbosity.
-                  if (obs && isNormal) {
-                    const vr = ctx.metadata.verificationResult as
-                      | {
-                          overallScore?: number;
-                          passed?: boolean;
-                          recommendation?: string;
-                          layerResults?: ReadonlyArray<{ passed?: boolean; layerName?: string }>;
-                        }
-                      | undefined;
-                    if (vr) {
-                      const failedLayers = (vr.layerResults ?? [])
-                        .filter((l) => l.passed === false)
-                        .map((l) => l.layerName ?? "?")
-                        .join(", ");
-                      const failHint = failedLayers.length > 0 ? ` | failed layers: ${failedLayers}` : "";
-                      yield* obs
-                        .info(
-                          `◉ [verify]     score=${(vr.overallScore ?? 0).toFixed(2)} passed=${String(vr.passed)} recommendation=${String(vr.recommendation ?? "?")}${failHint}`,
-                        )
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3070", tag: errorTag(err) })));
-                    } else {
-                      yield* obs
-                        .info(
-                          "◉ [verify]     skipped — VerificationService not in runtime (check createRuntime / .withVerification wiring)",
-                        )
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3076", tag: errorTag(err) })));
-                    }
-                  }
-                }
+                yield* logVerifySummary({ ctx, config, obs, isNormal });
 
                 // ── Verification Quality Gate ──
                 // Body extracted to engine/phases/agent-loop/verification-quality-gate.ts (W23 step 6a-8).
