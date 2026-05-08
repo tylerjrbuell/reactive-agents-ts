@@ -326,3 +326,140 @@ Building on the resolutions:
 ---
 
 _Status: DECISIONS RESOLVED 2026-05-07. Ready for W23 next-session execution._
+
+---
+
+## 10. Calibration-aware sub-agent stability
+
+**Constraint:** Sub-agents may use smaller models (Haiku, Llama-3-8B, qwen3:14b, gemma4:e4b, cogito:8b). The architecture must make small-model sub-agents stable, leveraging the existing `ModelCalibration` system.
+
+### 10.1 Why this matters
+
+Smaller models have well-documented failure modes that the calibration system already encodes:
+
+| Calibration field | What it captures | Sub-agent impact |
+|---|---|---|
+| `systemPromptAttention` | weak/moderate/strong | Sub-agent system prompt must be trimmed/repeated for weak-attention models |
+| `toolCallDialect` | native-fc / fenced-json / pseudo-code / none | Sub-agent tool dispatch uses the right parser per model |
+| `parallelCallCapability` | reliable/unreliable | Sub-agent batch tool calls gated when unreliable |
+| `interventionResponseRate` | high/medium/low | Sub-agent oracle nudge escalation rate tuned per model |
+| `optimalToolResultChars` | int | Sub-agent tool-result paging caps tighter for small-context models |
+| `classifierReliability` | high/medium/low/skip | Sub-agent skips classifier when unreliable; falls back to literal mention |
+| `observationHandling` | uses-recall / inlines-facts / ignores | Sub-agent observation injection strategy adapts |
+
+The Layer 1 builders we shipped (`buildFinalAnswerDescription`, `buildOracleNudge`) already consume these. **The architecture must extend that pattern to sub-agents: each sub-agent run resolves its own calibration based on its own model.**
+
+### 10.2 Design implications
+
+#### `AgentTypeDefinition.defaultModel` triggers per-sub-agent calibration
+
+When an agent type defines a default model, that model's calibration resolves at delegation time — independent of the parent's model. Layer 1 builders consult the sub-agent's calibration, not the parent's.
+
+```typescript
+interface AgentTypeDefinition {
+  // ...
+  readonly defaultModel?: string;           // Calibration resolves from this
+  readonly modelTier?: "small" | "medium" | "large" | "frontier";  // Optional explicit tier
+}
+```
+
+**The DelegateCapability internally:**
+1. Receives `DelegationSpec`
+2. Resolves model: `spec.model` || `agentType.defaultModel` || parent's model
+3. Resolves calibration via existing `resolveModelCalibration(model, ...)`
+4. Constructs child `PhaseDeps` with the child's calibration in `state` refs
+5. Spawns child engine
+
+This means sub-agents automatically benefit from the existing calibration cascade.
+
+#### Stability presets for small-model agent types
+
+Built-in agent types should ship with conservative defaults proven on small models:
+
+```typescript
+// Built-in: read-only research agent, small-model-safe defaults
+const ExploreAgentType: AgentTypeDefinition = {
+  name: "Explore",
+  tools: { profile: "read-only" },
+  defaultModel: "claude-haiku-4-5",        // Or specified per-deployment
+  defaultMaxIterations: 5,                 // Tight cap; small models loop
+  defaultTimeoutMs: 60_000,
+  systemPrompt: /* curated, short, repeats key instructions for weak-attention models */,
+  contextIsolation: "fresh",
+  stabilityPreset: "small-model-strict",   // See §10.3
+};
+```
+
+#### Stability presets — the contract
+
+```typescript
+type StabilityPreset = 
+  | "permissive"             // Frontier-model defaults
+  | "small-model-strict"     // Tight caps, mandatory final-answer, strict verifier
+  | "tiny-model-bounded"     // Single-tool subset, minimal iterations, NLI verification
+  | "custom";                // Use raw fields
+
+interface StabilityPresetEffects {
+  maxIterations: number;                   // Cap
+  mandatoryFinalAnswerTool: boolean;       // Don't trust loose stop signals
+  verifier: "off" | "soft" | "strict";     // Tighter for smaller models
+  toolHealingPolicy: "lenient" | "strict"; // Reject hallucinated tool names harder
+  resultSchemaEnforced: boolean;           // Validate output shape
+  oracleNudgeAggression: "low" | "med" | "high"; // Per calibration interventionResponseRate
+  toolResultMaxChars: number | "auto";     // From calibration optimalToolResultChars
+}
+```
+
+The preset translates a high-level intent into a bundle of calibration-derived runtime settings. Custom users can still override individual fields.
+
+#### Optional model escalation on sub-agent failure
+
+```typescript
+interface DelegationSpec {
+  // ...
+  readonly fallbackOnFailure?: {
+    readonly model: string;                // Larger model
+    readonly maxRetries: number;           // 1 default
+    readonly tokenBudgetCap: number;       // Don't blow budget
+    readonly conditions: readonly ("verifier-fail" | "loop-spiral" | "tool-error-burst")[];
+  };
+}
+```
+
+If the sub-agent fails one of the named conditions, the capability auto-retries with the fallback model. Telemetry captures which model produced the final result. This delivers the "right model for right task, with safety net" promise that motivates small-model sub-agents in the first place.
+
+#### Sub-agent telemetry separated by calibration tier
+
+For Phase E (calibration consumer activation), per-tier metrics are essential:
+- Sub-agent success rate by model tier
+- Tool-call reliability by `toolCallDialect`
+- Termination by `interventionResponseRate`
+
+The `DelegationResult.metadata` should include `modelId` and resolved calibration tier, so observability dashboards can slice by sub-agent characteristics.
+
+### 10.3 Phased delivery — calibration-aware additions
+
+| Phase | Scope | Phase target |
+|---|---|---|
+| **P1** | Action dispatch in act sub-module records sub-agent depth + model + parent traceId in trace. No behavior change. | This refactor (W23) |
+| **P2** | `DelegateCapability` resolves child calibration from `agentType.defaultModel || spec.model`. Layer 1 builders consume child calibration. `StabilityPreset` field on `AgentTypeDefinition` (initially just `permissive` and `small-model-strict`). | v0.12 |
+| **P3** | Optional escalation (`fallbackOnFailure`). `tiny-model-bounded` preset. Per-tier sub-agent telemetry dashboards. | v0.13 |
+
+### 10.4 Failure-mode catalog for small-model sub-agents
+
+To inform stability presets, the small-model failure modes (already in `02-FAILURE-MODES.md` for the parent agent) need to be re-validated for sub-agents:
+
+| FM | Manifestation in sub-agent | Mitigation |
+|---|---|---|
+| FM-A1 | Hallucinated tool calls | Strict toolHealingPolicy + mandatory final-answer |
+| FM-A2 | Tool-call format failures | Per-provider parser (Phase E); calibration `toolCallDialect` |
+| FM-B | Loop spirals | Tight `maxIterations` cap; oracle nudge from `interventionResponseRate` |
+| FM-C | Output drift / unstructured returns | `resultSchemaEnforced` + verifier strict mode |
+| FM-D | Context bloat | Tool-result paging (Phase E); from `optimalToolResultChars` |
+| FM-E | Confident fabrication | Verifier `agent-took-action` gate (already exists; activate per sub-agent) |
+
+P3+ work should ship a sub-agent-specific failure-mode validation harness — run a 10-task suite across {haiku, qwen3:14b, gemma4:e4b, llama3-8b} for each agent type and validate the stability preset holds.
+
+---
+
+_Calibration-aware sub-agent design added 2026-05-07 to support smaller-model sub-agents._
