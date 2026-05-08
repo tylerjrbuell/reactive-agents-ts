@@ -73,6 +73,7 @@ import { runInlineAct } from "./engine/phases/agent-loop/inline-act.js";
 import { runInlineObserve } from "./engine/phases/agent-loop/inline-observe.js";
 import { runInlineHarnessHooks } from "./engine/phases/agent-loop/inline-harness-hooks.js";
 import { runVerificationThinkRetry } from "./engine/phases/agent-loop/verification-think-retry.js";
+import { runReasoningHarnessHooks } from "./engine/phases/agent-loop/reasoning-harness-hooks.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -214,26 +215,7 @@ let _riTelemetryNoticeEmitted = false;
 // `buildVerificationInput` and VERIFY_EVIDENCE_MAX_CHARS were hoisted to
 // engine/phases/verify.ts (W23). Removing the unused private copies here.
 
-/** Map SkillResolver rows on execution metadata into `brief` skill entries. */
-function briefResolvedSkillsFromMetadata(
-  metadata: Record<string, unknown>,
-): readonly { readonly name: string; readonly purpose: string }[] | undefined {
-  const rs = metadata.resolvedSkills;
-  if (!Array.isArray(rs) || rs.length === 0) return undefined;
-  const out: { name: string; purpose: string }[] = [];
-  for (const item of rs) {
-    if (typeof item !== "object" || item === null) continue;
-    const rec = item as Record<string, unknown>;
-    const name = rec.name;
-    if (typeof name !== "string" || name.length === 0) continue;
-    const description = rec.description;
-    out.push({
-      name,
-      purpose: typeof description === "string" ? description : "",
-    });
-  }
-  return out.length > 0 ? out : undefined;
-}
+// briefResolvedSkillsFromMetadata hoisted to engine/util.ts (W23 step 6a-3 prep)
 
 // ExecutionReasoningResult and normalizeReasoningResult hoisted to engine/util.ts (W23 step 6a-2 prep)
 
@@ -255,7 +237,7 @@ function classifyComplexity(
 // ─── allowedTools Mismatch Detection ───
 // Hoisted to engine/util.ts (W23 step 4); re-export for backward compat
 export { checkAllowedToolsMismatch } from "./engine/util.js";
-import { normalizeReasoningResult, type ExecutionReasoningResult } from "./engine/util.js";
+import { normalizeReasoningResult, type ExecutionReasoningResult, briefResolvedSkillsFromMetadata } from "./engine/util.js";
 
 // ─── Live Implementation ───
 
@@ -1350,254 +1332,23 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   }
 
                   // ── Harness hooks (post-think) ─────────────────────────────────────
-                  //
-                  // These run after the think phase when the reasoning service is
-                  // available and the result is in ctx.metadata.lastResponse.
-
-                  // withCustomTermination: re-run reasoning if predicate not satisfied
-                  if (config.customTermination && !cacheHit && reasoningOpt._tag === "Some") {
-                    const MAX_CUSTOM_RETRIES = 3;
-                    let customRetries = 0;
-                    while (customRetries < MAX_CUSTOM_RETRIES) {
-                      const currentOutput = String(ctx.metadata.lastResponse ?? "");
-                      if ((config.customTermination as (s: { output: string }) => boolean)({ output: currentOutput })) break;
-                      customRetries++;
-                      const retryOutcome = yield* Effect.exit(
-                        reasoningOpt.value.execute({
-                          taskDescription: extractTaskText(task.input),
-                          taskType: task.type,
-                          memoryContext: String((ctx.metadata as any)?.semanticContext ?? ""),
-                          availableTools: availableToolNames,
-                          availableToolSchemas,
-                          allToolSchemas,
-                          strategy: ctx.selectedStrategy ?? "reactive",
-                          contextProfile: config.contextProfile,
-                          providerName: String(config.provider ?? ""),
-                          systemPrompt: config.systemPrompt,
-                          taskId: ctx.taskId,
-                          resultCompression: config.resultCompression,
-                          agentId: config.agentId,
-                          sessionId: ctx.taskId,
-                          requiredTools: effectiveRequiredTools,
-                          requiredToolQuantities: effectiveRequiredToolQuantities,
-                          relevantTools: classifiedRelevantTools,
-                          maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
-                          maxRequiredToolRetries: config.requiredTools?.maxRetries,
-                          modelId: String(config.defaultModel ?? ""),
-                          taskCategory,
-                          metaTools: config.metaTools,
-                          briefResolvedSkills: briefResolvedSkillsFromMetadata(
-                            ctx.metadata as Record<string, unknown>,
-                          ),
-                          initialMessages: [
-                            { role: "user" as const, content: extractTaskText(task.input) },
-                            { role: "assistant" as const, content: currentOutput },
-                            { role: "user" as const, content: "Continue working towards the goal." },
-                          ],
-                          synthesisConfig: resolveSynthesisConfigForStrategy(
-                            config.reasoningOptions,
-                            ctx.selectedStrategy ?? "reactive",
-                            config.synthesisConfig,
-                          ),
-                          observationSummary: config.reasoningOptions?.observationSummary,
-                          calibration: resolvedCalibration,
-                        }),
-                      );
-                      if (retryOutcome._tag === "Success") {
-                        const retryResult = normalizeReasoningResult(retryOutcome.value);
-                        if (!retryResult) break;
-                        ctx = {
-                          ...ctx,
-                          cost: ctx.cost + (retryResult.metadata.cost ?? 0),
-                          tokensUsed: ctx.tokensUsed + (retryResult.metadata.tokensUsed ?? 0),
-                          metadata: {
-                            ...ctx.metadata,
-                            lastResponse: String(retryResult.output ?? ""),
-                            reasoningResult: retryResult,
-                          },
-                        };
-                      } else {
-                        break;
-                      }
-                    }
-                  }
-
-                  // withMinIterations: re-run if fewer iterations than required
-                  if (config.minIterations && !cacheHit && reasoningOpt._tag === "Some") {
-                    const iterationsDone = ctx.iteration - 1;
-                    if (iterationsDone < config.minIterations) {
-                      const continuationOutcome = yield* Effect.exit(
-                        reasoningOpt.value.execute({
-                          taskDescription: extractTaskText(task.input),
-                          taskType: task.type,
-                          memoryContext: String((ctx.metadata as any)?.semanticContext ?? ""),
-                          availableTools: availableToolNames,
-                          availableToolSchemas,
-                          allToolSchemas,
-                          strategy: ctx.selectedStrategy ?? "reactive",
-                          contextProfile: config.contextProfile,
-                          providerName: String(config.provider ?? ""),
-                          systemPrompt: config.systemPrompt,
-                          taskId: ctx.taskId,
-                          resultCompression: config.resultCompression,
-                          agentId: config.agentId,
-                          sessionId: ctx.taskId,
-                          requiredTools: effectiveRequiredTools,
-                          requiredToolQuantities: effectiveRequiredToolQuantities,
-                          relevantTools: classifiedRelevantTools,
-                          maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
-                          maxRequiredToolRetries: config.requiredTools?.maxRetries,
-                          modelId: String(config.defaultModel ?? ""),
-                          taskCategory,
-                          metaTools: config.metaTools,
-                          briefResolvedSkills: briefResolvedSkillsFromMetadata(
-                            ctx.metadata as Record<string, unknown>,
-                          ),
-                          initialMessages: [
-                            { role: "user" as const, content: extractTaskText(task.input) },
-                            { role: "assistant" as const, content: String(ctx.metadata.lastResponse ?? "") },
-                            { role: "user" as const, content: "Continue — ensure thoroughness before finalizing." },
-                          ],
-                          synthesisConfig: resolveSynthesisConfigForStrategy(
-                            config.reasoningOptions,
-                            ctx.selectedStrategy ?? "reactive",
-                            config.synthesisConfig,
-                          ),
-                          observationSummary: config.reasoningOptions?.observationSummary,
-                          calibration: resolvedCalibration,
-                        }),
-                      );
-                      if (continuationOutcome._tag === "Success") {
-                        const contResult = normalizeReasoningResult(continuationOutcome.value);
-                        if (contResult) {
-                          ctx = {
-                            ...ctx,
-                            cost: ctx.cost + (contResult.metadata.cost ?? 0),
-                            tokensUsed: ctx.tokensUsed + (contResult.metadata.tokensUsed ?? 0),
-                            metadata: {
-                              ...ctx.metadata,
-                              lastResponse: String(contResult.output ?? ""),
-                              reasoningResult: contResult,
-                            },
-                          };
-                        }
-                      }
-                    }
-                  }
-
-                  // withVerificationStep (reflect mode): one extra LLM call to confirm completeness
-                  // Note: "loop" mode is not yet implemented — configured but silently ignored with a warning.
-                  if (config.verificationStep && config.verificationStep.mode !== "reflect" && obs) {
-                    yield* obs.info(`⚠ withVerificationStep: mode "${config.verificationStep.mode}" is not yet implemented — only "reflect" is supported. Skipping verification.`)
-                      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1832", tag: errorTag(err) })));
-                  }
-                  if (config.verificationStep?.mode === "reflect" && !cacheHit && reasoningOpt._tag === "Some") {
-                    const outputToVerify = String(ctx.metadata.lastResponse ?? "");
-                    if (outputToVerify) {
-                      const verifyPrompt = config.verificationStep.prompt ??
-                        `Review this output against the task: "${extractTaskText(task.input).slice(0, 300)}"\n\nOutput:\n${outputToVerify.slice(0, 1500)}\n\nRespond PASS if the output fully addresses the task, or REVISE: [specific gap] if not.`;
-                      const verifyOutcome = yield* Effect.exit(
-                        reasoningOpt.value.execute({
-                          taskDescription: verifyPrompt,
-                          taskType: "analysis",
-                          memoryContext: "",
-                          availableTools: [],
-                          strategy: "reactive",
-                          contextProfile: config.contextProfile,
-                          providerName: String(config.provider ?? ""),
-                          systemPrompt: undefined,
-                          taskId: ctx.taskId,
-                          agentId: config.agentId,
-                          sessionId: ctx.taskId,
-                          modelId: String(config.defaultModel ?? ""),
-                          taskCategory,
-                          initialMessages: [{ role: "user" as const, content: verifyPrompt }],
-                          synthesisConfig: undefined,
-                        }),
-                      );
-                      if (verifyOutcome._tag === "Success") {
-                        const verifyContent = String(verifyOutcome.value.output ?? "");
-                        const metaUpdate = verifyContent.startsWith("REVISE")
-                          ? { verificationFeedback: verifyContent }
-                          : {};
-                        ctx = {
-                          ...ctx,
-                          cost: ctx.cost + (verifyOutcome.value.metadata.cost ?? 0),
-                          tokensUsed: ctx.tokensUsed + (verifyOutcome.value.metadata.tokensUsed ?? 0),
-                          metadata: { ...ctx.metadata, ...metaUpdate },
-                        };
-                      }
-                    }
-                  }
-
-                  // withOutputValidator: validate output, retry with injected feedback on failure
-                  if (config.outputValidator && !cacheHit && reasoningOpt._tag === "Some") {
-                    const maxRetries = (config.outputValidatorOptions?.maxRetries ?? 2);
-                    let validatorRetries = 0;
-                    while (validatorRetries < maxRetries) {
-                      const currentOutput = String(ctx.metadata.lastResponse ?? "");
-                      const validation = (config.outputValidator as (o: string) => { valid: boolean; feedback?: string })(currentOutput);
-                      if (validation.valid) break;
-                      validatorRetries++;
-                      const feedback = validation.feedback ?? "The previous response did not meet requirements. Please revise.";
-                      const retryOutcome = yield* Effect.exit(
-                        reasoningOpt.value.execute({
-                          taskDescription: extractTaskText(task.input),
-                          taskType: task.type,
-                          memoryContext: String((ctx.metadata as any)?.semanticContext ?? ""),
-                          availableTools: availableToolNames,
-                          availableToolSchemas,
-                          allToolSchemas,
-                          strategy: ctx.selectedStrategy ?? "reactive",
-                          contextProfile: config.contextProfile,
-                          providerName: String(config.provider ?? ""),
-                          systemPrompt: config.systemPrompt,
-                          taskId: ctx.taskId,
-                          resultCompression: config.resultCompression,
-                          agentId: config.agentId,
-                          sessionId: ctx.taskId,
-                          requiredTools: effectiveRequiredTools,
-                          requiredToolQuantities: effectiveRequiredToolQuantities,
-                          relevantTools: classifiedRelevantTools,
-                          maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
-                          maxRequiredToolRetries: config.requiredTools?.maxRetries,
-                          modelId: String(config.defaultModel ?? ""),
-                          taskCategory,
-                          metaTools: config.metaTools,
-                          briefResolvedSkills: briefResolvedSkillsFromMetadata(
-                            ctx.metadata as Record<string, unknown>,
-                          ),
-                          initialMessages: [
-                            { role: "user" as const, content: extractTaskText(task.input) },
-                            { role: "assistant" as const, content: currentOutput },
-                            { role: "user" as const, content: feedback },
-                          ],
-                          synthesisConfig: resolveSynthesisConfigForStrategy(
-                            config.reasoningOptions,
-                            ctx.selectedStrategy ?? "reactive",
-                            config.synthesisConfig,
-                          ),
-                          observationSummary: config.reasoningOptions?.observationSummary,
-                        }),
-                      );
-                      if (retryOutcome._tag === "Success") {
-                        const retryResult = normalizeReasoningResult(retryOutcome.value);
-                        if (!retryResult) break;
-                        ctx = {
-                          ...ctx,
-                          cost: ctx.cost + (retryResult.metadata.cost ?? 0),
-                          tokensUsed: ctx.tokensUsed + (retryResult.metadata.tokensUsed ?? 0),
-                          metadata: {
-                            ...ctx.metadata,
-                            lastResponse: String(retryResult.output ?? ""),
-                            reasoningResult: retryResult,
-                          },
-                        };
-                      } else {
-                        break;
-                      }
-                    }
-                  }
+                  // Body extracted to engine/phases/agent-loop/reasoning-harness-hooks.ts (W23 step 6a-3).
+                  ctx = yield* runReasoningHarnessHooks(ctx, {
+                    config,
+                    task,
+                    cacheHit,
+                    reasoningOpt,
+                    availableToolNames,
+                    availableToolSchemas,
+                    allToolSchemas,
+                    effectiveRequiredTools,
+                    effectiveRequiredToolQuantities,
+                    classifiedRelevantTools,
+                    autoMaxCallsPerTool,
+                    taskCategory,
+                    resolvedCalibration,
+                    obs,
+                  });
 
                   // ── Log think summary ──
                   if (obs && isNormal) {

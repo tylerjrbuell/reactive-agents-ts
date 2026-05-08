@@ -38,6 +38,27 @@ export function checkAllowedToolsMismatch(
   return allowedTools.filter((name) => !registered.has(name.trim()));
 }
 
+/** Map SkillResolver rows on execution metadata into `brief` skill entries. */
+export function briefResolvedSkillsFromMetadata(
+  metadata: Record<string, unknown>,
+): readonly { readonly name: string; readonly purpose: string }[] | undefined {
+  const rs = metadata.resolvedSkills;
+  if (!Array.isArray(rs) || rs.length === 0) return undefined;
+  const out: { name: string; purpose: string }[] = [];
+  for (const item of rs) {
+    if (typeof item !== "object" || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const name = rec.name;
+    if (typeof name !== "string" || name.length === 0) continue;
+    const description = rec.description;
+    out.push({
+      name,
+      purpose: typeof description === "string" ? description : "",
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 /**
  * Normalized shape of a `ReasoningService.execute()` result, after defensive
  * validation. Hoisted from `execution-engine.ts:237` (W23 step 6a-2 prep)
