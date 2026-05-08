@@ -1,0 +1,269 @@
+/**
+ * Reasoning-path THINK phase: assembles memory context (self-improvement
+ * read-back, task-context injection, session resumption from debrief + plan),
+ * builds the strategy execution request, dispatches to ReasoningService, and
+ * normalizes the result with strategy-fallback handling.
+ *
+ * Body of the `guardedPhase(ctx, "think", ...)` callback inside the reasoning
+ * branch of the agent-loop. Extracted from `execution-engine.ts:1126-1325`
+ * (W23 step 6a-4) to shrink the engine module without changing behavior.
+ *
+ * Behavior preserved verbatim — error sites use semantic anchors at the
+ * actual module path for telemetry accuracy.
+ */
+import { Effect } from "effect";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type { Task } from "@reactive-agents/core";
+import type { ModelCalibration } from "@reactive-agents/llm-provider";
+import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
+import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
+import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
+import type { ObsLike } from "../../runtime-context.js";
+import {
+  briefResolvedSkillsFromMetadata,
+  extractTaskText,
+  normalizeReasoningResult,
+  type ExecutionReasoningResult,
+} from "../../util.js";
+
+type ReasoningServiceLike = {
+  execute: (req: Record<string, unknown>) => Effect.Effect<unknown, unknown>;
+};
+
+export interface ReasoningThinkDeps {
+  readonly config: ReactiveAgentsConfig;
+  readonly task: Task;
+  readonly reasoningService: ReasoningServiceLike;
+  readonly availableToolNames: readonly string[];
+  readonly availableToolSchemas: readonly unknown[];
+  readonly allToolSchemas: readonly unknown[];
+  readonly effectiveRequiredTools: readonly string[] | undefined;
+  readonly effectiveRequiredToolQuantities: unknown;
+  readonly classifiedRelevantTools: unknown;
+  readonly autoMaxCallsPerTool: Record<string, number>;
+  readonly taskCategory: string;
+  readonly resolvedCalibration: ModelCalibration | undefined;
+  readonly obs: ObsLike | null;
+}
+
+export const runReasoningThink = (
+  c: ExecutionContext,
+  deps: ReasoningThinkDeps,
+): Effect.Effect<ExecutionContext, never> => {
+  const {
+    config,
+    task,
+    reasoningService,
+    availableToolNames,
+    availableToolSchemas,
+    allToolSchemas,
+    effectiveRequiredTools,
+    effectiveRequiredToolQuantities,
+    classifiedRelevantTools,
+    autoMaxCallsPerTool,
+    taskCategory,
+    resolvedCalibration,
+    obs,
+  } = deps;
+
+  return Effect.gen(function* () {
+    // ── Self-improvement read-back: surface prior strategy outcomes ──
+    let memCtx = String((c.memoryContext as any)?.semanticContext ?? "");
+    const skillCatalogXml = (c.metadata as { skillCatalogXml?: string } | undefined)
+      ?.skillCatalogXml;
+    if (skillCatalogXml && skillCatalogXml.trim().length > 0) {
+      memCtx = `${skillCatalogXml.trim()}\n\n${memCtx}`;
+    }
+    // Episodic rows from bootstrap must reach the LLM — previously only
+    // strategy-outcome/reflexion (with enableSelfImprovement) were injected,
+    // so default logEpisode "task-completed" lines were invisible (e.g. gateway
+    // follow-ups after a Signal heartbeat).
+    {
+      const episodes = (c.memoryContext as any)?.recentEpisodes as
+        | readonly { eventType?: string; content?: string; metadata?: Record<string, unknown> }[]
+        | undefined;
+      if (episodes && episodes.length > 0) {
+        const cap = 15;
+        const maxLine = 600;
+        const lines: string[] = [];
+        for (const e of episodes.slice(0, cap)) {
+          const meta = e.metadata ?? {};
+          const et = e.eventType ?? "episodic";
+          let line: string;
+          if (
+            config.enableSelfImprovement &&
+            (et === "strategy-outcome" || et === "reflexion-critique")
+          ) {
+            const success = meta.success ? "✓" : "✗";
+            const strategy = meta.strategy ?? "unknown";
+            line = `[${success} ${strategy}] ${e.content ?? ""}`;
+          } else {
+            let body = String(e.content ?? "").replace(/\s+/g, " ").trim();
+            if (body.length > maxLine) body = `${body.slice(0, maxLine)}…`;
+            line = `[${et}] ${body}`;
+          }
+          lines.push(line);
+        }
+        if (lines.length > 0) {
+          memCtx = `${memCtx}\n\n--- Recent episodic memory ---\n${lines.join("\n")}`;
+        }
+      }
+    }
+
+    // ── Task context injection ──
+    if (config.taskContext && Object.keys(config.taskContext).length > 0) {
+      const lines = Object.entries(config.taskContext)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n");
+      memCtx = `--- Task Context ---\n${lines}\n\n${memCtx}`;
+    }
+
+    // ── Session resumption: surface prior debrief + active plan ──
+    {
+      const debriefOpt = yield* Effect.serviceOption(DebriefStoreService)
+        .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+      if (debriefOpt._tag === "Some") {
+        const recentDebriefs = yield* debriefOpt.value.listByAgent(config.agentId, 1)
+          .pipe(Effect.catchAll(() => Effect.succeed([])));
+        if (recentDebriefs.length > 0) {
+          const last = recentDebriefs[0];
+          const ageHours = (Date.now() - last.createdAt) / 3_600_000;
+          if (ageHours < 72) {
+            const lines: string[] = [
+              `Last run (${Math.round(ageHours)}h ago): ${last.debrief.outcome}`,
+              last.debrief.summary,
+            ];
+            if (last.debrief.lessonsLearned?.length > 0) {
+              lines.push(`Lessons: ${last.debrief.lessonsLearned.join("; ")}`);
+            }
+            if (last.debrief.errorsEncountered?.length > 0) {
+              lines.push(`Prior errors: ${last.debrief.errorsEncountered.join("; ")}`);
+            }
+            memCtx = `${memCtx}\n\n--- Prior Session ---\n${lines.join("\n")}`;
+          }
+        }
+      }
+
+      const planOpt = yield* Effect.serviceOption(PlanStoreService)
+        .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
+      if (planOpt._tag === "Some") {
+        const recentPlans = yield* planOpt.value.getRecentPlans(config.agentId, 1)
+          .pipe(Effect.catchAll(() => Effect.succeed([])));
+        if (recentPlans.length > 0) {
+          const last = recentPlans[0];
+          if (last.status === "active") {
+            const pending = last.steps.filter(
+              (s) => s.status === "pending" || s.status === "in_progress",
+            );
+            if (pending.length > 0) {
+              const stepsText = pending
+                .map((s) => `  - [${s.status}] ${s.title}`)
+                .join("\n");
+              memCtx = `${memCtx}\n\n--- Incomplete Plan (resume if relevant) ---\nGoal: ${last.goal}\n${stepsText}`;
+            }
+          }
+        }
+      }
+    }
+
+    let result: ExecutionReasoningResult;
+    // Build initial messages — seed the conversation thread with the task
+    const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
+      { role: "user", content: extractTaskText(task.input) },
+    ];
+    const effectiveStrategy = c.selectedStrategy ?? "reactive";
+
+    const strategyEffect = reasoningService.execute({
+      taskDescription: extractTaskText(task.input),
+      taskType: task.type,
+      memoryContext: memCtx,
+      availableTools: availableToolNames,
+      availableToolSchemas,
+      allToolSchemas,
+      strategy: effectiveStrategy,
+      contextProfile: config.contextProfile,
+      providerName: String(config.provider ?? ""),
+      systemPrompt: config.systemPrompt,
+      taskId: c.taskId,
+      resultCompression: config.resultCompression,
+      agentId: config.agentId,
+      sessionId: c.taskId,
+      requiredTools: effectiveRequiredTools,
+      requiredToolQuantities: effectiveRequiredToolQuantities,
+      relevantTools: classifiedRelevantTools,
+      maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
+      maxRequiredToolRetries: config.requiredTools?.maxRetries,
+      strategySwitching: config.strategySwitching,
+      modelId: String(config.defaultModel ?? ""),
+      taskCategory,
+      temperature: config.contextProfile?.temperature as number | undefined,
+      environmentContext: config.environmentContext as Record<string, string> | undefined,
+      metaTools: config.metaTools,
+      briefResolvedSkills: briefResolvedSkillsFromMetadata(
+        c.metadata as Record<string, unknown>,
+      ),
+      initialMessages,
+      synthesisConfig: resolveSynthesisConfigForStrategy(
+        config.reasoningOptions,
+        effectiveStrategy,
+        config.synthesisConfig,
+      ),
+      observationSummary: config.reasoningOptions?.observationSummary,
+      calibration: resolvedCalibration,
+    });
+    const strategyOutcome = yield* Effect.exit(strategyEffect);
+    if (strategyOutcome._tag === "Success") {
+      const normalizedResult = normalizeReasoningResult(strategyOutcome.value);
+      if (!normalizedResult && obs) {
+        yield* obs.info(
+          `[engine] WARN: normalizeReasoningResult returned null — strategyFallback triggered. ` +
+          `classify.required=${effectiveRequiredTools?.join(",") ?? "(none)"}`
+        ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:normalize-null-warn", tag: errorTag(err) })));
+      }
+      result = normalizedResult ?? {
+        output: "Strategy returned an invalid result shape",
+        status: "error",
+        steps: [],
+        metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },
+      };
+    } else {
+      const strategyError = strategyOutcome.cause;
+      if (obs) {
+        yield* obs.info(`⚠ Strategy failed, using fallback: ${String(strategyError)}`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:strategy-failed-info", tag: errorTag(err) })));
+        yield* obs.info(
+          `[engine] WARN: strategy failed — strategyFallback triggered. ` +
+          `classify.required=${effectiveRequiredTools?.join(",") ?? "(none)"}. ` +
+          `error=${String(strategyError)}`
+        ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:strategy-fallback-warn", tag: errorTag(err) })));
+      }
+      result = {
+        output: `Strategy execution failed: ${String(strategyError)}`,
+        status: "error",
+        steps: [],
+        metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },
+      };
+    }
+    // Prefer result.metadata.selectedStrategy (set by adaptive to show actual sub-strategy)
+    // over result.strategy (which stays "adaptive" for API compatibility).
+    const activeStrategy =
+      (result as any).metadata?.selectedStrategy ??
+      result.strategy ??
+      c.selectedStrategy;
+
+    return {
+      ...c,
+      selectedStrategy: activeStrategy,
+      cost: c.cost + (result.metadata.cost ?? 0),
+      tokensUsed:
+        c.tokensUsed + (result.metadata.tokensUsed ?? 0),
+      metadata: {
+        ...c.metadata,
+        lastResponse: String(result.output ?? ""),
+        isComplete: result.status === "completed",
+        reasoningResult: result,
+        stepsCount: result.metadata.stepsCount,
+        reasoningSteps: result.steps ?? [],
+      },
+    };
+  }) as unknown as Effect.Effect<ExecutionContext, never>;
+};
