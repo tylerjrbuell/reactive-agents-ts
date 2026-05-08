@@ -18,3 +18,22 @@ export function extractTaskText(input: unknown): string {
   }
   return JSON.stringify(input);
 }
+
+/**
+ * Returns `allowedTools` names that don't match any registered tool name.
+ *
+ * Used at bootstrap to warn when the caller specified tool names that are not
+ * actually registered (e.g. a typo or an MCP tool name change). Trims each
+ * entry so whitespace typos (" recall") don't produce false positives —
+ * mirrors the ToolService filter layer normalization.
+ *
+ * Hoisted from `execution-engine.ts:298` (W23 step 4); re-exported there for
+ * backward compatibility.
+ */
+export function checkAllowedToolsMismatch(
+  allowedTools: readonly string[],
+  registeredTools: readonly { name: string }[],
+): string[] {
+  const registered = new Set(registeredTools.map((t) => t.name));
+  return allowedTools.filter((name) => !registered.has(name.trim()));
+}

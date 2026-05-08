@@ -64,6 +64,8 @@ import { costTrack } from "./engine/phases/cost-track.js";
 import { memoryFlush } from "./engine/phases/memory-flush.js";
 import { strategySelect } from "./engine/phases/strategy-select.js";
 import { verify } from "./engine/phases/verify.js";
+import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
+import { fetchToolsRegistry } from "./engine/phases/agent-loop/setup/tools-registry.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -287,24 +289,8 @@ function classifyComplexity(
 }
 
 // ─── allowedTools Mismatch Detection ───
-
-/**
- * Returns allowedTools names that don't match any registered tool name.
- *
- * Used at bootstrap to warn when the caller specified tool names that are not
- * actually registered (e.g. a typo or an MCP tool name change).
- */
-export function checkAllowedToolsMismatch(
-  allowedTools: readonly string[],
-  registeredTools: readonly { name: string }[],
-): string[] {
-  const registered = new Set(registeredTools.map((t) => t.name))
-  // Trim each entry before the lookup so whitespace typos (" recall") don't
-  // produce false-positive mismatches. The ToolService filter layer in
-  // runtime.ts normalizes the same way, so what passes the warning here is
-  // exactly what will be accepted at execute() time.
-  return allowedTools.filter((name) => !registered.has(name.trim()))
-}
+// Hoisted to engine/util.ts (W23 step 4); re-export for backward compat
+export { checkAllowedToolsMismatch } from "./engine/util.js";
 
 // ─── Live Implementation ───
 
@@ -954,74 +940,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // log line) is orchestrator-level setup and stays inline.
                 ctx = yield* runGuardedPhase(strategySelect, ctx, deps);
 
-                // ── Single tool registry fetch (reused for logging, classification, and reasoning) ──
-                const cachedToolDefs = yield* Effect.serviceOption(ToolService).pipe(
-                  Effect.flatMap((opt) =>
-                    opt._tag === "Some"
-                      ? opt.value.listTools()
-                      : Effect.succeed([] as readonly any[]),
-                  ),
-                  Effect.catchAll(() => Effect.succeed([] as readonly any[])),
-                );
-
-                // ── Warn on allowedTools names that don't match any registered tool ──
-                const effectiveAllowedTools = config.allowedTools ?? []
-                if (effectiveAllowedTools.length > 0) {
-                  const mismatches = checkAllowedToolsMismatch(effectiveAllowedTools, cachedToolDefs)
-                  if (mismatches.length > 0 && obs && isNormal) {
-                    yield* obs.info(
-                      `[allowedTools] These tools were specified but are NOT registered: ${mismatches.join(", ")}. ` +
-                      `Registered tools: ${cachedToolDefs.map((t: any) => t.name).join(", ")}`
-                    ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1128", tag: errorTag(err) })))
-                  }
-                }
-
-                // ── Log strategy-select summary ──
-                // Only show capability tools — hide framework infrastructure (conductor tools,
-                // final-answer, context-status, etc.) so the list reflects what the agent does,
-                // not how the framework works internally.
-                if (obs && isNormal) {
-                  const FRAMEWORK_TOOLS = new Set([
-                    "final-answer", "task-complete", "context-status",
-                    "brief", "pulse", "find", "recall",
-                    "activate-skill", "get-skill-section", "context-task",
-                  ]);
-                  const toolNames = cachedToolDefs
-                    .map((t: any) => t.name as string)
-                    .filter((n) => !FRAMEWORK_TOOLS.has(n))
-                    .join(", ");
-                  const toolsInfo = toolNames ? ` | tools: ${toolNames}` : "";
-                  yield* obs.info(`◉ [strategy]   ${ctx.selectedStrategy ?? "reactive"}${toolsInfo}`)
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1148", tag: errorTag(err) })));
-                }
+                // ── Tool registry fetch + allowedTools warn + strategy summary ──
+                // Extracted to engine/phases/agent-loop/setup/tools-registry.ts (W23 step 4).
+                const cachedToolDefs = yield* fetchToolsRegistry(config, ctx, obs, isNormal);
+                // Used downstream by built-ins opt-in logic (lines ~1240, ~1286).
+                const effectiveAllowedTools = config.allowedTools ?? [];
 
                 // ── Phase 5: AGENT_LOOP ──
 
                 // Resolve CalibrationMode → ModelCalibration | undefined once.
                 // Placed here (before classifier gate) so classifierReliability is available.
                 // Also shared by all three execute() call sites below.
-                const fetchCommunity = (config.reactiveIntelligenceOptions as any)?.communityCalibration !== false;
-                const resolvedCalibration: ModelCalibration | undefined = yield* (() => {
-                  const cal = config.calibration;
-                  if (!cal || cal === "skip") return Effect.succeed(undefined);
-                  if (cal === "auto") {
-                    return fetchCommunity
-                      ? Effect.tryPromise(() =>
-                          resolveModelCalibrationAsync(String(config.defaultModel ?? ""), {
-                            observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-                            fetchCommunity: true,
-                          }),
-                        ).pipe(Effect.catchAll(() => Effect.succeed(
-                          resolveModelCalibration(String(config.defaultModel ?? ""), {
-                            observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-                          }),
-                        )))
-                      : Effect.succeed(resolveModelCalibration(String(config.defaultModel ?? ""), {
-                          observationsBaseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-                        }));
-                  }
-                  return Effect.succeed(cal as ModelCalibration);
-                })();
+                // Extracted to engine/phases/agent-loop/setup/calibration.ts (W23 step 4).
+                const resolvedCalibration: ModelCalibration | undefined = yield* resolveCalibration(config);
 
                 // ── LLM-based tool classification (required + relevant) ──
                 // Single structured-output call replaces both heuristic required-tools
