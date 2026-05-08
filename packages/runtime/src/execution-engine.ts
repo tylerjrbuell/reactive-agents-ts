@@ -72,6 +72,7 @@ import { runInlineThink } from "./engine/phases/agent-loop/inline-think.js";
 import { runInlineAct } from "./engine/phases/agent-loop/inline-act.js";
 import { runInlineObserve } from "./engine/phases/agent-loop/inline-observe.js";
 import { runInlineHarnessHooks } from "./engine/phases/agent-loop/inline-harness-hooks.js";
+import { runVerificationThinkRetry } from "./engine/phases/agent-loop/verification-think-retry.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -234,50 +235,7 @@ function briefResolvedSkillsFromMetadata(
   return out.length > 0 ? out : undefined;
 }
 
-type ExecutionReasoningResult = {
-  output: unknown;
-  status: string;
-  strategy?: string;
-  steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string };
-};
-
-function normalizeReasoningResult(
-  value: unknown,
-): ExecutionReasoningResult | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const candidate = value as Record<string, unknown>;
-  const metadata = candidate.metadata;
-  if (typeof metadata !== "object" || metadata === null) return undefined;
-  const md = metadata as Record<string, unknown>;
-  if (
-    typeof md.cost !== "number" ||
-    typeof md.tokensUsed !== "number" ||
-    typeof md.stepsCount !== "number"
-  ) {
-    return undefined;
-  }
-
-  return {
-    output: candidate.output,
-    status: typeof candidate.status === "string" ? candidate.status : "error",
-    strategy: typeof candidate.strategy === "string" ? candidate.strategy : undefined,
-    steps: Array.isArray(candidate.steps)
-      ? (candidate.steps as ExecutionReasoningResult["steps"])
-      : undefined,
-    metadata: {
-      cost: md.cost,
-      tokensUsed: md.tokensUsed,
-      stepsCount: md.stepsCount,
-      strategyFallback: typeof md.strategyFallback === "boolean"
-        ? md.strategyFallback
-        : undefined,
-      confidence: typeof md.confidence === "number" ? md.confidence : undefined,
-      llmCalls: typeof md.llmCalls === "number" ? md.llmCalls : undefined,
-      terminatedBy: typeof md.terminatedBy === "string" ? md.terminatedBy : undefined,
-    },
-  };
-}
+// ExecutionReasoningResult and normalizeReasoningResult hoisted to engine/util.ts (W23 step 6a-2 prep)
 
 // ─── Task Complexity Classification ───
 
@@ -297,6 +255,7 @@ function classifyComplexity(
 // ─── allowedTools Mismatch Detection ───
 // Hoisted to engine/util.ts (W23 step 4); re-export for backward compat
 export { checkAllowedToolsMismatch } from "./engine/util.js";
+import { normalizeReasoningResult, type ExecutionReasoningResult } from "./engine/util.js";
 
 // ─── Live Implementation ───
 
@@ -2187,166 +2146,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // to the original inline LLM call. The fallback is preserved
                     // byte-for-byte to keep verification-quality-gate.test.ts green
                     // (it pins llmCallCount === 2 and verifyCallCount === 2).
+                    // Retry callback body extracted to engine/phases/agent-loop/verification-think-retry.ts (W23 step 6a-2).
                     ctx = yield* guardedPhase(ctx, "think", (c) =>
-                      Effect.gen(function* () {
-                        if (reasoningOpt._tag === "Some") {
-                          // ── Kernel-routed retry ──
-                          // availableTools: [] + maxIterations: 1 makes this
-                          // single-shot (no tool execution, no loop re-entry).
-                          // The verifier feedback message is already in
-                          // c.messages (appended above) and flows in via
-                          // initialMessages.
-                          const retryEffect = reasoningOpt.value.execute({
-                            taskDescription: extractTaskText(task.input),
-                            taskType: task.type,
-                            memoryContext: "",
-                            availableTools: [],
-                            availableToolSchemas: [],
-                            allToolSchemas: [],
-                            strategy: c.selectedStrategy ?? "reactive",
-                            contextProfile: {
-                              ...config.contextProfile,
-                              maxIterations: 1,
-                            },
-                            providerName: String(config.provider ?? ""),
-                            systemPrompt: config.systemPrompt,
-                            taskId: c.taskId,
-                            agentId: config.agentId,
-                            sessionId: c.taskId,
-                            modelId: String(config.defaultModel ?? ""),
-                            taskCategory,
-                            temperature: config.contextProfile?.temperature as number | undefined,
-                            environmentContext: config.environmentContext as Record<string, string> | undefined,
-                            initialMessages: c.messages as readonly { readonly role: "user" | "assistant"; readonly content: string }[],
-                            calibration: resolvedCalibration,
-                          });
-                          const retryOutcome = yield* Effect.exit(retryEffect);
-                          if (retryOutcome._tag === "Success") {
-                            const norm = normalizeReasoningResult(retryOutcome.value);
-                            if (norm) {
-                              const retryOutput = String(norm.output ?? "");
-                              return {
-                                ...c,
-                                messages: [
-                                  ...c.messages,
-                                  { role: "assistant", content: retryOutput },
-                                ],
-                                tokensUsed:
-                                  c.tokensUsed + (norm.metadata.tokensUsed ?? 0),
-                                cost: c.cost + (norm.metadata.cost ?? 0),
-                                iteration: c.iteration + 1,
-                                metadata: {
-                                  ...c.metadata,
-                                  lastResponse: retryOutput,
-                                  isComplete: norm.status === "completed",
-                                  reasoningResult: norm,
-                                  stepsCount: norm.metadata.stepsCount,
-                                  reasoningSteps: norm.steps ?? [],
-                                },
-                              };
-                            }
-                            // Reasoning returned an unrecognized shape — surface a
-                            // soft error and let the loop terminate (mirrors the
-                            // strategyFallback pattern at lines ~1707-1712).
-                            if (obs) {
-                              yield* obs.info(
-                                "[engine] WARN: verification retry — reasoning returned invalid shape; terminating with error",
-                              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:invalid-shape", tag: errorTag(err) })));
-                            }
-                            return {
-                              ...c,
-                              metadata: {
-                                ...c.metadata,
-                                lastResponse: "Verification retry failed — reasoning returned an invalid result shape",
-                                isComplete: true,
-                              },
-                            };
-                          }
-                          // Reasoning effect failed — log + terminate.
-                          if (obs) {
-                            yield* obs.info(
-                              `[engine] WARN: verification retry — reasoning failed: ${String(retryOutcome.cause)}`,
-                            ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:reasoning-failed", tag: errorTag(err) })));
-                          }
-                          return {
-                            ...c,
-                            metadata: {
-                              ...c.metadata,
-                              lastResponse: `Verification retry failed: ${String(retryOutcome.cause)}`,
-                              isComplete: true,
-                            },
-                          };
-                        }
-
-                        // ── Fallback: inline LLM call (preserves the no-reasoning
-                        // contract asserted by verification-quality-gate.test.ts) ──
-                        const llm = yield* Context.GenericTag<{
-                          complete: (req: unknown) => Effect.Effect<{
-                            content: string;
-                            toolCalls?: unknown[];
-                            stopReason: string;
-                            usage?: {
-                              totalTokens?: number;
-                              estimatedCost?: number;
-                            };
-                          }>;
-                        }>("LLMService");
-
-                        const defaultPrompt =
-                          config.systemPrompt ?? "You are a helpful AI assistant.";
-                        const messagesToSend = [
-                          { role: "system", content: defaultPrompt },
-                          ...c.messages,
-                        ];
-
-                        const llmRequest = {
-                          messages: messagesToSend,
-                          model: c.selectedModel,
-                          taskId: c.taskId,
-                        } as Parameters<typeof llm.complete>[0] & { taskId: string };
-
-                        const response = yield* llm.complete(llmRequest);
-
-                        const fallbackTransitions = (response as { fallbackTransitions?: Array<{
-                          fromProvider: string;
-                          toProvider: string;
-                          reason: string;
-                          attemptNumber: number;
-                        }> }).fallbackTransitions;
-                        if (eb && fallbackTransitions && fallbackTransitions.length > 0) {
-                          for (const transition of fallbackTransitions) {
-                            yield* eb.publish({
-                              _tag: "ProviderFallbackActivated",
-                              taskId: c.taskId,
-                              fromProvider: transition.fromProvider,
-                              toProvider: transition.toProvider,
-                              reason: transition.reason,
-                              attemptNumber: transition.attemptNumber,
-                            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3176", tag: errorTag(err) })));
-                          }
-                        }
-
-                        const retryDone =
-                          response.stopReason === "end_turn" &&
-                          !response.toolCalls?.length;
-
-                        return {
-                          ...c,
-                          messages: [
-                            ...c.messages,
-                            { role: "assistant", content: response.content },
-                          ],
-                          tokensUsed:
-                            c.tokensUsed + (response.usage?.totalTokens ?? 0),
-                          cost: c.cost + (response.usage?.estimatedCost ?? 0),
-                          iteration: c.iteration + 1,
-                          metadata: {
-                            ...c.metadata,
-                            lastResponse: response.content,
-                            isComplete: retryDone,
-                          },
-                        };
-                      }) as unknown as Effect.Effect<ExecutionContext, never>,
+                      runVerificationThinkRetry(c, {
+                        config,
+                        task,
+                        reasoningOpt,
+                        taskCategory,
+                        resolvedCalibration,
+                        obs,
+                        eb,
+                      }),
                     );
 
                     // Re-run verification on the revised response (uses the
