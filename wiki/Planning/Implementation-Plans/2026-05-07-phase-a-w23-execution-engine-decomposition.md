@@ -291,3 +291,69 @@ _Next action: agent-loop extraction (deferred to next session — see Amendments
 The W23 completion gate requires `execution-engine.ts ≤ 600 LOC`. Current: 4,232 LOC. **W23 is not done.** Agent-loop extraction is the largest single remaining reduction (~1,950 LOC at risk of moving). Even after that, post-complete TaskResult assembly will leave the orchestrator at perhaps ~1,000 LOC, requiring a follow-up extraction pass for those helper modules.
 
 This is documented honestly so future sessions don't conclude W23 prematurely.
+
+---
+
+## Amendments — 2026-05-07 (session 2: agent-loop prep)
+
+### Step 1 done — cache-hit integration test (commit `33f072a3`)
+
+Two tests added in `packages/runtime/tests/semantic-cache-hit.test.ts`:
+- Cache-hit: LLM count stays 0, cost-track records `cachedHit: true`
+- Cache-miss negative control: cost-track records `cachedHit: false`
+
+Both pass on first run. Suite: 745 pass / 1 skip / 0 fail (was 743). **The cache-check sub-module's W23 extraction must keep these tests green.**
+
+### Step 2 done — Cross-phase state inventory
+
+The agent-loop scope (between `// ── Phase 5: AGENT_LOOP ──` and `// ── Phase 6: VERIFY ──`) declares ~50+ variables. Below is the classification per the closure-breakage protocol.
+
+#### Cross-phase state → typed `AgentLoopState`
+
+| Variable | Where set | Where read | Notes |
+|---|---|---|---|
+| `resolvedCalibration` | setup/calibration.ts | classifier, kernel-call, finalize | The Layer 1 builder substrate. **Per-sub-agent: each child run resolves its OWN.** |
+| `cachedToolDefs` | setup/tools-registry.ts | classifier, kernel-call, tool-dispatch, post-kernel | Single fetch; reused everywhere. |
+| `effectiveRequiredTools` | setup/classifier.ts | kernel-call (gate, available-tools filter), telemetry | |
+| `effectiveRequiredToolQuantities` | setup/classifier.ts | setup/budget.ts, kernel-call | |
+| `classifiedRelevantTools` | setup/classifier.ts | kernel-call (filter for available tools) | |
+| `cacheHit` | cache-check.ts | kernel-call (skip), cost-track | **Already on `ctx.metadata.cacheHit` as forward-compat shim. Verified by step-1 tests.** |
+| `entropyLog` | kernel-call (kernel runner emits ScoredEvent) | reflect, complete (debrief), cost-track, cost-route | Engine-level scope (declared above agent-loop), not just agent-loop. |
+| `toolCallLog` | kernel-call (tool dispatch) | reflect, complete (debrief), telemetry | Same — engine-level scope. |
+| `unsubscribeReasoningSteps` | kernel-call (subscribe) | finalize (cleanup) | Teardown handle; explicit cleanup needed. |
+
+#### Phase-local (stays inside the relevant sub-module)
+
+`fetchCommunity`, `cal`, `classifierReliability`, `wantsClassification`, `needsClassification`, `classifyResult`, `effectiveRequired`, `demoted`, `qHint`, `demotedRelevant`, `mergedRelevant`, `literalMentions`, `taskText`, `taskTextLower`, `allToolNames`, `autoMaxCallsPerTool`, `requiredQuantities`, `costOpt`, `cached`, `reasoningOpt`, `availableToolNames`, `availableToolSchemas`, `allToolSchemas`, `builtinsOpt`, `optedInBuiltins`, `taskTextForIntent`, `finalAnswerCtx`, `dynamicFinalAnswerDescription`, `dynamicFinalAnswerOutputDesc`, `requiredSet`, `filteredSet`, `taskTextForFilter`, `filtered`, `hiddenCount`, `capturedObs`, `capturedLogModelIO`, `capturedIsDebug`, `pass`, `indent`, `threadLines`, `sysLine`, `rawLine`, `sysPreview`, `userPreview`, `rawContent`, `prefix`, `content`, `memCtx`, `skillCatalogXml`, `episodes`, `cap`, `maxLine`, `meta`, `et`.
+
+#### Config-derived (read from `deps.config`)
+
+`config.{reactiveIntelligenceOptions, calibration, requiredTools, adaptiveToolFiltering, systemPrompt, allowedTools, parallelToolCalls, defaultModel, provider, contextProfile, builtins, logModelIO, maxIterations, observabilityVerbosity, outputValidator, minIterations, verificationStep, customTermination, ...}`. Immutable run-scoped — never goes on state.
+
+#### Service tags (read via `Effect.serviceOption` lazily)
+
+`CostService`, `ReasoningService`, `ObservableLogger`, `MemoryService`, `MemoryConsolidator`, `MemoryExtractor`, `SkillResolverService`, `ExperienceStore`, `StrategySelector`, `VerificationService`, `GuardrailService`, `KillSwitchService`, `BehavioralContractService`, `LLMService`, `ToolService`. Acquired lazily where used.
+
+#### Decision: `AgentLoopState` shape
+
+```typescript
+// engine/phases/agent-loop/state.ts
+export interface AgentLoopState {
+  readonly resolvedCalibration: Ref.Ref<ModelCalibration | undefined>;
+  readonly cachedToolDefs: Ref.Ref<readonly ToolDefinition[]>;
+  readonly effectiveRequiredTools: Ref.Ref<readonly string[] | undefined>;
+  readonly effectiveRequiredToolQuantities: Ref.Ref<Readonly<Record<string, number>> | undefined>;
+  readonly classifiedRelevantTools: Ref.Ref<readonly string[] | undefined>;
+  readonly unsubscribeReasoningSteps: Ref.Ref<(() => void) | null>;
+}
+```
+
+`entropyLog` and `toolCallLog` stay at engine scope (declared in execution-engine.ts) since they're consumed by phases beyond agent-loop (debrief, telemetry). `cacheHit` stays on `ctx.metadata.cacheHit` (forward-compat shim, verified by step-1 tests).
+
+#### Sub-agent calibration-aware design — confirmed natively supported
+
+Per the calibration-aware sub-agent design (architecture exploration §10), each spawned ExecutionEngine instance has its own `PhaseStateRefs.AgentLoopState`. The parent's `resolvedCalibration` Ref is independent of any child's. **No changes needed to support per-sub-agent calibration** — it works automatically because state is per-engine-instance.
+
+This is critical for small-model sub-agents: when a child uses qwen3:14b while the parent uses Sonnet, the child's `setup/calibration.ts` resolves `qwen3-14b.json` and Layer 1 builders use those traits — independent of parent's Sonnet calibration.
+
+### Step 3 next — add `direct` reasoning strategy
