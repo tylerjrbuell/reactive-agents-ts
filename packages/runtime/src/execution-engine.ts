@@ -81,6 +81,7 @@ import { runReasoningThink } from "./engine/phases/agent-loop/reasoning-think.js
 import { runReasoningPostThink } from "./engine/phases/agent-loop/reasoning-post-think.js";
 import { subscribeReasoningStreamLogger } from "./engine/phases/agent-loop/reasoning-stream-logger.js";
 import { runVerificationQualityGate } from "./engine/phases/agent-loop/verification-quality-gate.js";
+import { runIterationGuards } from "./engine/phases/agent-loop/iteration-guards.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -1101,80 +1102,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   const progressLogger = createProgressLogger(verbosity);
 
                   while (!isComplete && ctx.iteration <= ctx.maxIterations) {
-                    // ── Kill switch check at top of each iteration ──
-                    // This ensures pause/stop/terminate is honored before
-                    // any expensive operations (LLM calls, tool execution).
-                    yield* checkLifecycle(ctx.taskId);
-
-                    // ── Behavioral contract: check iteration limit ──
-                    if (config.enableBehavioralContracts) {
-                      const bcOpt = yield* Effect.serviceOption(BehavioralContractService)
-                        .pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
-                      if (bcOpt._tag === "Some") {
-                        const violation = yield* bcOpt.value.checkIteration(ctx.iteration)
-                          .pipe(Effect.catchAll(() => Effect.succeed(null)));
-                        if (violation?.severity === "block") {
-                          return yield* Effect.fail(new BehavioralContractViolationError({
-                            message: violation.message, taskId: ctx.taskId,
-                            rule: violation.rule, violation: violation.message,
-                          }));
-                        }
+                    // ── Per-iteration guards (lifecycle / behavioral / budget / events / gauge) ──
+                    // Body extracted to engine/phases/agent-loop/iteration-guards.ts (W24-D step 1).
+                    {
+                      const guardResult = yield* runIterationGuards({
+                        ctx,
+                        config,
+                        eb,
+                        obs,
+                        checkLifecycle,
+                      });
+                      ctx = guardResult.ctx;
+                      if (guardResult.shouldBreak) {
+                        isComplete = true;
+                        break;
                       }
-                    }
-
-                    // ── Per-iteration budget check ──
-                    if (config.enableCostTracking) {
-                      const iterBudgetOpt = yield* Effect.serviceOption(CostService).pipe(
-                        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-                      );
-                      if (iterBudgetOpt._tag === "Some") {
-                        // Pass accumulated cost as estimatedCost so the enforcer checks
-                        // whether current session/daily/monthly spend + this execution's
-                        // cost so far exceeds any limit.
-                        const budgetCheck = yield* iterBudgetOpt.value
-                          .checkBudget(ctx.cost, ctx.agentId, ctx.sessionId)
-                          .pipe(
-                            Effect.map(() => true),
-                            Effect.catchAll((budgetErr) => {
-                              if (obs) {
-                                const msg = "message" in budgetErr ? String(budgetErr.message) : "Budget exceeded";
-                                return obs.info(`⚠ [budget] ${msg} — stopping execution`).pipe(
-                                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2218", tag: errorTag(err) })),
-                                  Effect.map(() => false),
-                                );
-                              }
-                              return Effect.succeed(false);
-                            }),
-                          );
-                        if (!budgetCheck) {
-                          // Graceful stop — return what we have so far
-                          ctx = {
-                            ...ctx,
-                            metadata: {
-                              ...ctx.metadata,
-                              budgetExceeded: true,
-                              isComplete: true,
-                              lastResponse: ctx.metadata.lastResponse ?? "Execution stopped: budget limit exceeded.",
-                            },
-                          };
-                          isComplete = true;
-                          break;
-                        }
-                      }
-                    }
-
-                    // Phase 0.2: Publish loop iteration event
-                    if (eb) {
-                      yield* eb.publish({
-                        _tag: "ExecutionLoopIteration",
-                        taskId: ctx.taskId,
-                        iteration: ctx.iteration,
-                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2248", tag: errorTag(err) })));
-                    }
-                    // Phase 0.5: Track iteration gauge
-                    if (obs) {
-                      yield* obs.setGauge("execution.iteration", ctx.iteration, { taskId: ctx.taskId })
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2253", tag: errorTag(err) })));
                     }
 
                     // 5a. THINK
