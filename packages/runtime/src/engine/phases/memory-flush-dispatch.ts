@@ -15,7 +15,7 @@
  */
 import { Effect } from "effect";
 import type { ExecutionContext } from "../../types.js";
-import { classifyComplexity } from "../../execution-engine.js";
+import { classifyComplexity } from "../util.js";
 
 export interface MemoryFlushDispatchArgs {
   readonly ctx: ExecutionContext;

@@ -122,122 +122,23 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
   }
 >() {}
 
-// ─── Output Sanitization (safety net) ───
-
-/**
- * Strip internal agent metadata from output before it reaches the user.
- * This is a safety net — strategies should sanitize their own output, but
- * this catches anything that slips through.
- */
-function sanitizeOutput(text: string): string {
-  if (!text || text.length === 0) return text;
-  let result = text;
-  // Strip <think>...</think> tags, but capture the last block as a fallback
-  // in case the model (e.g. cogito) puts the entire answer inside <think>.
-  const thinkBlocks: string[] = [];
-  result = result.replace(/<think>([\s\S]*?)<\/think>/gi, (_m, inner: string) => {
-    thinkBlocks.push(inner.trim());
-    return "";
-  });
-  // Strip "FINAL ANSWER:" prefix
-  result = result.replace(/^FINAL ANSWER:\s*/i, "");
-  // Strip internal step markers
-  result = result.replace(/^\[(?:STEP \d+\/\d+|EXEC s\d+|SYNTHESIS|REFLECT \d+|SKIP s\d+|PATCH)\]\s*/gim, "");
-  // Strip ReAct protocol prefixes at line start
-  result = result.replace(/^(?:Thought|Action|Action Input|Observation):\s*/gim, "");
-  // Strip tool call echo lines: "tool/name: {json}"
-  result = result.replace(/^[\w\-]+\/[\w\-]+:\s*\{[^}]*\}\s*$/gm, "");
-  // Strip lines that are just raw JSON with internal keys
-  result = result.replace(/^\s*\{\s*"(?:recipient|toolName|callId|stepId|_tag)"[^}]*\}\s*$/gm, "");
-  // Collapse multiple blank lines
-  result = result.replace(/\n{3,}/g, "\n\n");
-  result = result.trim();
-  // Fallback: if stripping <think> blocks left nothing, use the last paragraph
-  // of the last <think> block (models like cogito embed the answer inside thinking).
-  if (!result && thinkBlocks.length > 0) {
-    const lastBlock = thinkBlocks[thinkBlocks.length - 1] ?? "";
-    const paragraphs = lastBlock.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0);
-    result = paragraphs[paragraphs.length - 1] ?? lastBlock;
-  }
-  return result;
-}
-
-/**
- * Extract plain-text task description from task.input.
- * Handles both `{ question: "..." }` objects and raw strings.
- */
-function extractTaskText(input: unknown): string {
-  if (typeof input === "string") return input;
-  if (typeof input === "object" && input !== null) {
-    const q = (input as Record<string, unknown>).question;
-    if (typeof q === "string") return q;
-  }
-  return JSON.stringify(input);
-}
-
-/**
- * Derive per-tool call budgets from required tool quantities.
- *
- * Behavior:
- * - parallel mode (`parallelToolCalls !== false`): each required tool gets a
- *   budget of `minCalls + retryBuffer` where the buffer allows for exploratory
- *   combined searches, failed attempts, and guard-blocked calls that don't
- *   count as successful completions. Without this buffer the agent has zero
- *   room for recovery.
- * - sequential mode (`parallelToolCalls === false`): no auto per-tool budgets;
- *   execution follows the historical one-call-at-a-time loop behavior.
- */
-export function buildAutoMaxCallsPerTool(input: {
-  readonly parallelToolCallsEnabled: boolean;
-  readonly requiredTools?: readonly string[];
-  readonly requiredToolQuantities?: Readonly<Record<string, number>>;
-}): Readonly<Record<string, number>> {
-  if (!input.parallelToolCallsEnabled) {
-    return {};
-  }
-
-  const RETRY_BUFFER = 2;
-  const requiredTools = new Set(input.requiredTools ?? []);
-  const requiredToolQuantities = input.requiredToolQuantities ?? {};
-  const autoMaxCallsPerTool: Record<string, number> = {};
-
-  for (const toolName of requiredTools) {
-    const minCalls = Math.max(1, requiredToolQuantities[toolName] ?? 1);
-    autoMaxCallsPerTool[toolName] = minCalls + RETRY_BUFFER;
-  }
-
-  return autoMaxCallsPerTool;
-}
-
 // Deduplicates RI telemetry notice across runs within the same process
 let _riTelemetryNoticeEmitted = false;
 
-// `buildVerificationInput` and VERIFY_EVIDENCE_MAX_CHARS were hoisted to
-// engine/phases/verify.ts (W23). Removing the unused private copies here.
-
-// briefResolvedSkillsFromMetadata hoisted to engine/util.ts (W23 step 6a-3 prep)
-
-// ExecutionReasoningResult and normalizeReasoningResult hoisted to engine/util.ts (W23 step 6a-2 prep)
-
-// ─── Task Complexity Classification ───
-
-type TaskComplexity = "trivial" | "moderate" | "complex";
-
-export function classifyComplexity(
-  iteration: number,
-  entropy: { composite: number } | undefined,
-  toolCallCount: number,
-  terminatedBy: string,
-): TaskComplexity {
-  if (iteration <= 1 && toolCallCount === 0 && terminatedBy !== "max_iterations") return "trivial";
-  if (toolCallCount <= 2 && iteration <= 3 && (entropy ? entropy.composite < 0.4 : true)) return "moderate";
-  return "complex";
-}
-
-// ─── allowedTools Mismatch Detection ───
-// Hoisted to engine/util.ts (W23 step 4); re-export for backward compat
+// ─── Pure helpers hoisted to engine/util.ts (W24-E step 1) ───
+// Re-exported here for backward compatibility with external importers.
 export { checkAllowedToolsMismatch } from "./engine/util.js";
-import { normalizeReasoningResult, type ExecutionReasoningResult, briefResolvedSkillsFromMetadata } from "./engine/util.js";
+import {
+  sanitizeOutput,
+  extractTaskText,
+  classifyComplexity,
+  buildAutoMaxCallsPerTool,
+  normalizeReasoningResult,
+  type TaskComplexity,
+  type ExecutionReasoningResult,
+  briefResolvedSkillsFromMetadata,
+} from "./engine/util.js";
+export { classifyComplexity, buildAutoMaxCallsPerTool, type TaskComplexity } from "./engine/util.js";
 
 // ─── Live Implementation ───
 

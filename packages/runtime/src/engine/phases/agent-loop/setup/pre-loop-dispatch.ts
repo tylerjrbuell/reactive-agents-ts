@@ -23,7 +23,7 @@ import { runGuardedPhase } from "../../../pipeline.js";
 import type { Phase } from "../../../phase.js";
 import { fetchToolsRegistry } from "./tools-registry.js";
 import { classifyTools } from "./classifier.js";
-import { buildAutoMaxCallsPerTool } from "../../../../execution-engine.js";
+import { buildAutoMaxCallsPerTool } from "../../../util.js";
 
 export interface PreLoopDispatchDeps {
   /** Resolved execution context after BOOTSTRAP + skill post-processing. */
