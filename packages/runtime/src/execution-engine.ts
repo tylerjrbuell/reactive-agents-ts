@@ -75,6 +75,7 @@ import { runInlineHarnessHooks } from "./engine/phases/agent-loop/inline-harness
 import { runVerificationThinkRetry } from "./engine/phases/agent-loop/verification-think-retry.js";
 import { runReasoningHarnessHooks } from "./engine/phases/agent-loop/reasoning-harness-hooks.js";
 import { runReasoningThink } from "./engine/phases/agent-loop/reasoning-think.js";
+import { runReasoningPostThink } from "./engine/phases/agent-loop/reasoning-post-think.js";
 
 // ─── Narrow service types for optional deps ───
 
@@ -1167,190 +1168,21 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     obs,
                   });
 
-                  // ── Log think summary ──
-                  if (obs && isNormal) {
-                    const thinkResult = ctx.metadata.reasoningResult as any;
-                    const stepsCount = ctx.metadata.stepsCount as number ?? 0;
-                    const tokTot = ctx.tokensUsed;
-                    const thinkMs = thinkResult?.metadata?.duration ?? 0;
-                    // Show adaptive sub-strategy: thinkResult.strategy stays "adaptive",
-                    // ctx.selectedStrategy is what actually ran (e.g. "reactive").
-                    const entryStrat = (thinkResult as any)?.strategy as string | undefined;
-                    const activeStrat = ctx.selectedStrategy ?? entryStrat ?? "";
-                    const stratSuffix = (entryStrat === "adaptive" && activeStrat !== "adaptive")
-                      ? ` (adaptive→${activeStrat})`
-                      : "";
-                    yield* obs.info(`◉ [think]      ${stepsCount} steps | ${tokTot.toLocaleString()} tok | ${(thinkMs / 1000).toFixed(1)}s${stratSuffix}`)
-                      .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1953", tag: errorTag(err) })));
-                  }
-
-                  // ── Bridge reasoning path → episodic memory ──
-                  // The direct-LLM path logs via logEpisode() inline, but the reasoning
-                  // path (ReasoningService.execute) handles tools internally and never
-                  // reaches those code paths. Log the task+result here so bootstrap()
-                  // can surface prior runs on the next invocation.
-                  {
-                    const thinkRes = ctx.metadata.reasoningResult as any;
-                    if (thinkRes?.output) {
-                      const memBridge = yield* Effect.serviceOption(
-                        Context.GenericTag<{
-                          logEpisode: (episode: unknown) => Effect.Effect<void>;
-                        }>("MemoryService"),
-                      ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
-                      if (memBridge._tag === "Some") {
-                        const epNow = new Date();
-                        const durationMs = Date.now() - ctx.startedAt.getTime();
-                        const success = thinkRes.status === "completed";
-                        const strategyUsed = thinkRes.strategy ?? ctx.selectedStrategy ?? "unknown";
-
-                        yield* memBridge.value.logEpisode({
-                          id: crypto.randomUUID().replace(/-/g, ""),
-                          agentId: ctx.agentId,
-                          date: epNow.toISOString().slice(0, 10),
-                          content: `Task: ${String(task.input).slice(0, 200)} → ${String(thinkRes.output).slice(0, 300)}`,
-                          taskId: ctx.taskId,
-                          eventType: config.enableSelfImprovement ? "strategy-outcome" : "task-completed",
-                          createdAt: epNow,
-                          metadata: {
-                            steps: ctx.metadata.stepsCount ?? 0,
-                            tokensUsed: ctx.tokensUsed,
-                            strategy: strategyUsed,
-                            success,
-                            durationMs,
-                            ...(config.enableSelfImprovement ? {
-                              selfImprovement: true,
-                              taskDescription: String(task.input).slice(0, 500),
-                              taskType: task.type,
-                            } : {}),
-                          },
-                        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1995", tag: errorTag(err) })));
-
-                        // ── Persist reflexion critiques for cross-run learning ──
-                        const reflexionCritiques = thinkRes.metadata?.reflexionCritiques;
-                        if (Array.isArray(reflexionCritiques) && reflexionCritiques.length > 0) {
-                          yield* memBridge.value.logEpisode({
-                            id: crypto.randomUUID().replace(/-/g, ""),
-                            agentId: ctx.agentId,
-                            date: epNow.toISOString().slice(0, 10),
-                            content: `Reflexion critiques for ${task.type}: ${reflexionCritiques.join(" | ")}`,
-                            taskId: ctx.taskId,
-                            eventType: "reflexion-critique",
-                            createdAt: epNow,
-                            tags: ["reflexion", "critique", task.type],
-                            metadata: {
-                              strategy: strategyUsed,
-                              critiqueCount: reflexionCritiques.length,
-                              taskDescription: String(task.input).slice(0, 500),
-                            },
-                          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2014", tag: errorTag(err) })));
-                        }
-                      }
-                    }
-                  }
-
-                  // ── Record experience for cross-agent learning ──
-                  if (config.enableExperienceLearning) {
-                    const expRecOpt = yield* Effect.serviceOption(
-                      Context.GenericTag<{
-                        record: (entry: unknown) => Effect.Effect<void>;
-                      }>("ExperienceStore"),
-                    ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
-
-                    if (expRecOpt._tag === "Some") {
-                      const reasoningStepsForExp = (ctx.metadata.reasoningSteps ?? []) as Array<{
-                        type: string;
-                        metadata?: { toolUsed?: string };
-                      }>;
-                      const toolsFromSteps = reasoningStepsForExp
-                        .filter(s => s.type === "action")
-                        .map(s => s.metadata?.toolUsed ?? "unknown")
-                        .filter((t, i, arr) => arr.indexOf(t) === i && t !== "unknown"); // unique, drop unknowns
-
-                      yield* expRecOpt.value.record({
-                        agentId: ctx.agentId,
-                        taskDescription: extractTaskText(task.input),
-                        taskType: task.type ?? "general",
-                        toolsUsed: toolsFromSteps,
-                        success: (ctx.metadata.reasoningResult as any)?.status === "completed",
-                        totalSteps: (ctx.metadata.stepsCount as number) ?? 0,
-                        totalTokens: ctx.tokensUsed,
-                        errors: [],
-                        modelTier: config.contextProfile?.tier ?? "mid",
-                      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2048", tag: errorTag(err) })));
-                    }
-                  }
-
-                  // ── Fire "act" + "observe" phases if reasoning used tools ──
-                  // Extract action steps from the reasoning result so hooks
-                  // (e.g. .withHook({ phase: "act" })) have visibility into tool calls.
-                  const reasoningSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{
-                    id: string;
-                    type: string;
-                    content: string;
-                    metadata?: { toolUsed?: string; duration?: number; observationResult?: { success?: boolean } };
-                  }>;
-                  const actionSteps = reasoningSteps.filter((s) => s.type === "action");
-
-                  if (actionSteps.length > 0) {
-                    // Log act phase summary at normal verbosity
-                    if (obs && isNormal) {
-                      const toolsUsed = actionSteps
-                        .map((s) => s.metadata?.toolUsed ?? s.content.split("(")[0]?.trim() ?? "?")
-                        .join(", ");
-                      yield* obs.info(`◉ [act]        ${toolsUsed} (${actionSteps.length} tools)`)
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2070", tag: errorTag(err) })));
-                    }
-
-                    const syntheticToolResults = actionSteps.map((s) => {
-                      const actionIdx = reasoningSteps.indexOf(s);
-                      const nextStep = actionIdx >= 0 ? reasoningSteps[actionIdx + 1] : undefined;
-                      const success = nextStep?.type === "observation"
-                        ? (nextStep.metadata?.observationResult?.success ?? true)
-                        : true;
-                      return {
-                        toolName: s.metadata?.toolUsed ?? s.content.split("(")[0]?.trim() ?? "unknown",
-                        toolCallId: s.id,
-                        result: s.content,
-                        durationMs: s.metadata?.duration ?? 0,
-                        success,
-                      };
-                    });
-
-                    ctx = { ...ctx, toolResults: syntheticToolResults };
-
-                    // Tool metrics are now recorded via KernelHooks.onObservation → ToolCallCompleted
-                    // EventBus events. MetricsCollector auto-subscribes to these events.
-                    // (Previously duplicated here via obs.recordHistogram — removed to fix double counting.)
-
-                    ctx = yield* guardedPhase(ctx, "act", (c) =>
-                      Effect.succeed(c),
-                    );
-                    ctx = yield* guardedPhase(ctx, "observe", (c) =>
-                      Effect.succeed(c),
-                    );
-                  }
-
-                  // Update iteration to reflect actual reasoning steps
-                  ctx = {
-                    ...ctx,
-                    iteration: (ctx.metadata.stepsCount as number | undefined) ?? 1,
-                  };
-
-                  // ── Semantic cache store (after successful reasoning) ──
-                  if (config.enableCostTracking && ctx.metadata.lastResponse) {
-                    const costOpt2 = yield* Effect.serviceOption(CostService).pipe(
-                      Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-                    );
-                    if (costOpt2._tag === "Some") {
-                      yield* costOpt2.value
-                        .cacheResponse(
-                          extractTaskText(task.input),
-                          String(ctx.metadata.lastResponse),
-                          String(ctx.selectedModel ?? "unknown"),
-                        )
-                        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2120", tag: errorTag(err) })));
-                    }
-                  }
+                  // ── Post-think bookkeeping (log summary, episodic bridge, experience,
+                  // synthetic act/observe hooks, iteration update, semantic cache store) ──
+                  // Body extracted to engine/phases/agent-loop/reasoning-post-think.ts (W23 step 6a-5).
+                  ctx = yield* runReasoningPostThink(ctx, {
+                    config,
+                    task,
+                    obs,
+                    isNormal,
+                    fireActObserveHooks: (c) =>
+                      Effect.gen(function* () {
+                        let cc = yield* guardedPhase(c, "act", (cx) => Effect.succeed(cx));
+                        cc = yield* guardedPhase(cc, "observe", (cx) => Effect.succeed(cx));
+                        return cc;
+                      }) as Effect.Effect<ExecutionContext, never>,
+                  });
                 } else if (!cacheHit) {
                   // ── Minimal direct-LLM loop ──
                   // Seed messages with the user's prompt before the first LLM call
