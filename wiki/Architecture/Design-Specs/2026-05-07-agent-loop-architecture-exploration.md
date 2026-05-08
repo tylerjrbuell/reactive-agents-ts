@@ -251,3 +251,78 @@ These decisions inform the W23 next-session tactical plan.
 
 _Status: DRAFT — pending user feedback on §7 decision points._
 _Authored: 2026-05-07 by Claude (Opus 4.7) at Tyler's request to explore agent-loop architecture before extraction._
+
+---
+
+## 8. Decisions resolved (2026-05-07)
+
+### 8.1 Dual LLM-call path unification → "direct" reasoning strategy
+
+**Decision:** Add a `direct` strategy to `packages/reasoning/src/strategies/direct.ts` that performs single-shot LLM call with optional one-round tool dispatch. Engine ALWAYS goes through `ReasoningService.execute(strategyId)`. The current inline LLM-call path is removed.
+
+**Rationale:**
+- Single uniform engine code path
+- Strategy abstraction becomes complete — any LLM-driven flow is a strategy
+- Streaming still works (kernel already supports it via callbacks)
+- Cortex chat / runStream / no-reasoning use cases get `direct` strategy with `streamingEnabled: true, maxIterations: 1`
+- Eliminates the ~600 LOC inline duplication
+
+**Implementation note:** `direct` strategy can early-return after the single LLM call to skip kernel runner's full options-validation overhead. The strategy module is probably ~150-200 LOC.
+
+**Consequences:**
+- Engine's `agent-loop/kernel-call.ts` becomes simpler — no `if (reasoningOpt._tag === "Some")` branch
+- The "no-reasoning fallback" in execution-engine becomes "use `direct` strategy"
+- Strategy registry now has 6 strategies (5 existing + `direct`); 7 after Phase D ships `code-action`
+
+### 8.2 Sub-agents as first-class capability — design inspired by Claude Code
+
+**Decision:** Promote sub-agents from `spawn-agent` tool to first-class `DelegateCapability`. Inspired by Claude Code's `Agent` tool model (typed personalities, tool scoping per type, isolation modes, background execution, parallelization).
+
+**Three new constructs:**
+
+1. **`AgentTypeDefinition`** — registered, reusable personality with curated tool subset, system prompt, default model. Registered via `.withAgentType({ name, tools, systemPrompt, ... })`. Examples: `Explore` (read-only research), `Plan` (architect), `Reviewer` (code review).
+
+2. **`DelegateCapability`** — Effect service with `delegate()`, `delegateBackground()`, `delegateAll()` methods. Returns typed `DelegationResult` with raw `output`, `summary`, `traceId`, and metadata.
+
+3. **Typed `Action` sum type in agent-loop's act sub-module** — `{kind: "tool" | "delegate" | "delegate-parallel" | "final-answer"}`. Dispatched explicitly rather than via implicit tool-name matching.
+
+**From the LLM's perspective**, sub-agents still appear as tool calls (familiar pattern) — but internal dispatch goes through `DelegateCapability`, giving raw result passthrough, enforced tool scoping, recorded parent depth, and replay-safe traceIds.
+
+**Phased implementation:**
+
+| Phase | Scope | Phase target |
+|---|---|---|
+| **P1** | act sub-module dispatches typed `Action`; sub-agents still use `spawn-agent` tool (no break); traces mark sub-agent depth + parent traceId | This refactor (W23) |
+| **P2** | `DelegateCapability` service; `.withAgentType()` builder API; `spawn-agent` tool migrated to use the capability internally; result passthrough + tool scoping live | v0.12 (Phase E parallel) |
+| **P3** | Background delegation handles, parallel delegation, filesystem isolation (worktree/tmpdir), per-call model override, ship multiple agent types (`Explore`, `Plan`, `Reviewer`) | v0.13 |
+
+**For W23 (this refactor):** the agent-loop's act sub-module must dispatch a typed `Action`, not raw tool calls. Tracing must capture sub-agent depth and parent traceId. That's the only structural change W23 needs to enable P2/P3. Everything else is additive.
+
+**Future enhancements P3+ may include:**
+- Continuation via persistent agent IDs (Claude Code's `SendMessage` pattern) — resume a previously-spawned sub-agent
+- Per-agent-type recursion limits (currently hardcoded depth 3)
+- Sub-agent telemetry separation (`noTelemetry` option for sensitive contexts)
+- Sub-agent budget escrow (parent reserves tokens for child)
+
+---
+
+## 9. Updated W23 next-session plan
+
+Building on the resolutions:
+
+1. **Cache-hit integration test** (~50 LOC) — locks in current behavior before refactor
+2. **Cross-phase state inventory** — read agent-loop body, classify every closure variable
+3. **Add `direct` strategy to reasoning package** — extracted from inline LLM-call path; ~150-200 LOC
+4. **Extract setup sub-modules** — calibration, classifier, budget, tools-registry (with TDD on classifier — has decision logic)
+5. **Extract cache-check** — explicit short-circuit
+6. **Extract kernel-call** — now simpler, only one path (always via ReasoningService)
+7. **Refactor act sub-module to dispatch typed `Action`** — sub-agents still go through `spawn-agent` tool (no break) but dispatch is now type-discriminated; sub-agent traces capture depth + parent traceId
+8. **Extract post-kernel + finalize**
+9. **Wire `agent-loop/index.ts` Phase value**
+10. Full validation: tests, cross-package typecheck, N=3 corpus
+
+**Estimated effort:** 3-4 focused sessions (vs original 2-3 estimate; the `direct` strategy + typed Action additions add scope but pay rent for v0.12+).
+
+---
+
+_Status: DECISIONS RESOLVED 2026-05-07. Ready for W23 next-session execution._
