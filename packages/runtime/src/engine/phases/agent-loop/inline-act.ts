@@ -98,7 +98,7 @@ export const runInlineAct = (
               const nameSuffix = typeof args.name === "string" ? ` [${args.name}]` : "";
               yield* obs.info(
                 `  ◉ [act]        ↓ ${toolName}${nameSuffix}: "${taskArg}"`,
-              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2598", tag: errorTag(err) })));
+              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:log-agent-delegate", tag: errorTag(err) })));
             } else {
               const argPreview = Object.entries(args)
                 .slice(0, 2)
@@ -106,7 +106,7 @@ export const runInlineAct = (
                 .join(", ");
               yield* obs.info(
                 `  ◉ [act]        → ${toolName}(${argPreview})`,
-              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2606", tag: errorTag(err) })));
+              ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:log-tool-invocation", tag: errorTag(err) })));
             }
           }
 
@@ -119,7 +119,7 @@ export const runInlineAct = (
               taskId: c.taskId,
               toolName,
               callId,
-            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2619", tag: errorTag(err) })));
+            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-tool-call-started", tag: errorTag(err) })));
           }
 
           if (toolServiceOpt._tag === "None") {
@@ -132,7 +132,7 @@ export const runInlineAct = (
                 callId,
                 durationMs,
                 success: false,
-              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2632", tag: errorTag(err) })));
+              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-tool-call-completed-no-service", tag: errorTag(err) })));
             }
             return {
               toolCallId: callId,
@@ -174,7 +174,7 @@ export const runInlineAct = (
             toolResult.success ? "success" : "error",
             toolResult.durationMs,
             toolResult.success ? undefined : (toolResult.result as string),
-          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2674", tag: errorTag(err) })));
+          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:log-tool-execution", tag: errorTag(err) })));
 
           // Phase 0.2: Publish ToolCallCompleted
           if (eb) {
@@ -185,7 +185,7 @@ export const runInlineAct = (
               callId,
               durationMs: toolResult.durationMs,
               success: toolResult.success,
-            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2685", tag: errorTag(err) })));
+            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-tool-call-completed", tag: errorTag(err) })));
           }
 
           return toolResult;

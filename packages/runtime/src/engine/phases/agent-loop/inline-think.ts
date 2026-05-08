@@ -136,7 +136,7 @@ export const runInlineThink = (
         model: String(c.selectedModel ?? "unknown"),
         provider: String(c.provider ?? "unknown"),
         contextSize: messagesToSend.length,
-      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2345", tag: errorTag(err) })));
+      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:emit-llm-request-started", tag: errorTag(err) })));
     }
 
     const llmCallStart = performance.now();
@@ -153,7 +153,7 @@ export const runInlineThink = (
         Effect.gen(function* () {
           if (event.type === "text_delta" && event.text) {
             content += event.text;
-            yield* streamCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2362", tag: errorTag(err) })));
+            yield* streamCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:stream-text-callback", tag: errorTag(err) })));
           } else if (event.type === "content_complete") {
             if (event.content) content = event.content;
             if (event.stopReason) stopReason = event.stopReason;
@@ -162,7 +162,7 @@ export const runInlineThink = (
             usage = { totalTokens: event.usage?.totalTokens, estimatedCost: event.usage?.estimatedCost };
           }
         }),
-      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2371", tag: errorTag(err) })));
+      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:stream-runforeach", tag: errorTag(err) })));
       response = { content, stopReason, ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}) };
     } else {
       response = yield* llm.complete(llmRequest);
@@ -184,7 +184,7 @@ export const runInlineThink = (
           toProvider: transition.toProvider,
           reason: transition.reason,
           attemptNumber: transition.attemptNumber,
-        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2393", tag: errorTag(err) })));
+        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:emit-provider-fallback", tag: errorTag(err) })));
       }
     }
 
@@ -205,7 +205,7 @@ export const runInlineThink = (
         durationMs: llmDurationMs,
         tokensUsed: response.usage?.totalTokens ?? 0,
         estimatedCost: response.usage?.estimatedCost ?? 0,
-      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2414", tag: errorTag(err) })));
+      }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:emit-llm-request-completed", tag: errorTag(err) })));
     }
 
     // Phase 0.5: Record LLM timing histogram
@@ -214,7 +214,7 @@ export const runInlineThink = (
         "llm.request.duration_ms",
         llmDurationMs,
         { model: String(c.selectedModel ?? "unknown") },
-      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2423", tag: errorTag(err) })));
+      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:record-llm-duration", tag: errorTag(err) })));
     }
 
     // Verbose: log LLM call details
@@ -224,11 +224,11 @@ export const runInlineThink = (
       const stopReason = response.stopReason ?? "?";
       yield* obs.debug(
         `  ┄ [llm]    ${modelName} | ${toks.toLocaleString()} tok | ${stopReason} | ${(llmDurationMs / 1000).toFixed(1)}s`,
-      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2433", tag: errorTag(err) })));
+      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:log-verbose-llm", tag: errorTag(err) })));
       const ctxSize = messagesToSend.length;
       yield* obs.debug(
         `  ┄ [ctx]    ${ctxSize} msgs | ~${toks.toLocaleString()} tok used`,
-      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2437", tag: errorTag(err) })));
+      ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:log-verbose-ctx", tag: errorTag(err) })));
     }
 
     // Phase 1.3: Log LLM interaction as episodic memory
@@ -259,7 +259,7 @@ export const runInlineThink = (
             durationMs: llmDurationMs,
           },
         } as any)
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2468", tag: errorTag(err) })));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:log-llm-episode", tag: errorTag(err) })));
     }
 
     // When the response includes tool calls, store them as

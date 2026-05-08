@@ -181,7 +181,7 @@ export const runReasoningHarnessHooks = (
     // Note: "loop" mode is not yet implemented — configured but silently ignored with a warning.
     if (config.verificationStep && config.verificationStep.mode !== "reflect" && obs) {
       yield* obs.info(`⚠ withVerificationStep: mode "${config.verificationStep.mode}" is not yet implemented — only "reflect" is supported. Skipping verification.`)
-        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:1832", tag: errorTag(err) })));
+        .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-harness-hooks.ts:verification-mode-warning", tag: errorTag(err) })));
     }
     if (config.verificationStep?.mode === "reflect" && !cacheHit && reasoningOpt._tag === "Some") {
       const outputToVerify = String(ctx.metadata.lastResponse ?? "");

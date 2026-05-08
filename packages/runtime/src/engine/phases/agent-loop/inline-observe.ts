@@ -58,7 +58,7 @@ export const runInlineObserve = (
               durationMs: (r as any).durationMs ?? 0,
             },
           } as any)
-          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2748", tag: errorTag(err) })));
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-observe.ts:log-tool-episode", tag: errorTag(err) })));
       }
     }
 
@@ -78,7 +78,7 @@ export const runInlineObserve = (
           const subTok = sub.tokensUsed ?? 0;
           yield* obs.info(
             `  ◉ [sub-agent: ${subName}] ${subIcon} ${subTok} tok | "${subSummary}"`,
-          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2768", tag: errorTag(err) })));
+          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-observe.ts:log-sub-agent-verbose", tag: errorTag(err) })));
         } else {
           const resultStr = typeof rResult === "string"
             ? rResult
@@ -87,7 +87,7 @@ export const runInlineObserve = (
           const charCount = resultStr.length;
           yield* obs.debug(
             `  ┄ [obs]    ${rToolName}: ${preview} [${charCount} chars]`,
-          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2777", tag: errorTag(err) })));
+          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-observe.ts:log-tool-result-verbose", tag: errorTag(err) })));
         }
       }
     }

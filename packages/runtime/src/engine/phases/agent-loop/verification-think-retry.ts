@@ -126,7 +126,7 @@ export const runVerificationThinkRetry = (
         if (obs) {
           yield* obs.info(
             "[engine] WARN: verification retry — reasoning returned invalid shape; terminating with error",
-          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:invalid-shape", tag: errorTag(err) })));
+          ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/verification-think-retry.ts:invalid-shape", tag: errorTag(err) })));
         }
         return {
           ...c,
@@ -141,7 +141,7 @@ export const runVerificationThinkRetry = (
       if (obs) {
         yield* obs.info(
           `[engine] WARN: verification retry — reasoning failed: ${String(retryOutcome.cause)}`,
-        ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:reasoning-failed", tag: errorTag(err) })));
+        ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/verification-think-retry.ts:reasoning-failed", tag: errorTag(err) })));
       }
       return {
         ...c,
@@ -197,7 +197,7 @@ export const runVerificationThinkRetry = (
           toProvider: transition.toProvider,
           reason: transition.reason,
           attemptNumber: transition.attemptNumber,
-        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:3176", tag: errorTag(err) })));
+        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/verification-think-retry.ts:emit-provider-fallback", tag: errorTag(err) })));
       }
     }
 
