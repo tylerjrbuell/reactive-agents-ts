@@ -19,7 +19,7 @@ import { StreamingTextCallback } from "@reactive-agents/core";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance } from "@reactive-agents/reasoning";
+import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance, ReasoningService } from "@reactive-agents/reasoning";
 import {
   ToolService,
   BUILTIN_TOOL_NAMES,
@@ -990,68 +990,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 ctx = cacheCheckResult.ctx;
                 let cacheHit = cacheCheckResult.cacheHit;
 
-                const reasoningOpt = yield* Effect.serviceOption(
-                  Context.GenericTag<{
-                    execute: (params: {
-                      taskDescription: string;
-                      taskType: string;
-                      memoryContext: string;
-                      availableTools: readonly string[];
-                      availableToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
-                      allToolSchemas?: readonly { name: string; description: string; parameters: readonly { name: string; type: string; description: string; required: boolean }[] }[];
-                      strategy?: string;
-                      contextProfile?: Partial<ContextProfile>;
-                      providerName?: string;
-                      systemPrompt?: string;
-                      taskId?: string;
-                      resultCompression?: { budget?: number; previewItems?: number; autoStore?: boolean; codeTransform?: boolean };
-                      agentId?: string;
-                      sessionId?: string;
-                      requiredTools?: readonly string[];
-                      requiredToolQuantities?: Readonly<Record<string, number>>;
-                      relevantTools?: readonly string[];
-                      maxCallsPerTool?: Readonly<Record<string, number>>;
-                      maxRequiredToolRetries?: number;
-                      strategySwitching?: { enabled: boolean; maxSwitches?: number; fallbackStrategy?: string };
-                      modelId?: string;
-                      taskCategory?: string;
-                      temperature?: number;
-                      environmentContext?: Readonly<Record<string, string>>;
-                      metaTools?: {
-                        brief?: boolean;
-                        find?: boolean;
-                        pulse?: boolean;
-                        recall?: boolean;
-                        staticBriefInfo?: {
-                          indexedDocuments: readonly { source: string; chunkCount: number; format: string }[];
-                          availableSkills: readonly { name: string; purpose: string }[];
-                          memoryBootstrap: { semanticLines: number; episodicEntries: number };
-                        };
-                        harnessContent?: string;
-                      };
-                      briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
-                      initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
-                      synthesisConfig?: import("@reactive-agents/reasoning").SynthesisConfig;
-                      observationSummary?: boolean | "auto";
-                      calibration?: ModelCalibration;
-                    }) => Effect.Effect<{
-                      output: unknown;
-                      status: string;
-                      /** Individual reasoning steps (thought/action/observation) */
-                      steps?: readonly {
-                        id: string;
-                        type: string;
-                        content: string;
-                        metadata?: { toolUsed?: string; duration?: number };
-                      }[];
-                      metadata: {
-                        cost: number;
-                        tokensUsed: number;
-                        stepsCount: number;
-                      };
-                    }>;
-                  }>("ReasoningService"),
-                );
+                const reasoningOpt = yield* Effect.serviceOption(ReasoningService);
 
                 if (reasoningOpt._tag === "Some" && !cacheHit) {
                   // ── Full reasoning path ──

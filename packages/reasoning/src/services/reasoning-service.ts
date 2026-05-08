@@ -57,6 +57,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly requiredTools?: readonly string[];
       /** Minimum call counts per required tool — from tool classifier */
       readonly requiredToolQuantities?: Readonly<Record<string, number>>;
+      /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */
+      readonly relevantTools?: readonly string[];
+      /** Per-tool call budget enforced by the gate */
+      readonly maxCallsPerTool?: Readonly<Record<string, number>>;
       /** Max redirects when required tools are missing (default: 2) */
       readonly maxRequiredToolRetries?: number;
       /** Dynamic strategy switching configuration */

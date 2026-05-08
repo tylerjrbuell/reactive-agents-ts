@@ -394,6 +394,15 @@ Tests:
 
 8 commits committed. All extracted modules under 400 LOC ceiling (largest: classifier at 257 LOC; pipeline.ts at 313 LOC is infra not a phase).
 
+### Step 6 prep (2026-05-07 11:13pm) — typed `ReasoningService` import
+
+Two prep changes to pave the way for Step 6a:
+
+1. **Added `relevantTools?` and `maxCallsPerTool?` to `ReasoningService.execute` params** in `packages/reasoning/src/services/reasoning-service.ts`. The strategy fn at `strategy-registry.ts:47-50` already accepts them; this just makes the typed contract match. Required for swapping execution-engine's inline string-tag declaration to the proper Tag without losing fields.
+2. **Replaced inline `Context.GenericTag<{...}>("ReasoningService")` (~60 LOC) in `execution-engine.ts:993-1054` with `import { ReasoningService } from "@reactive-agents/reasoning"`.** Same string identity (both Tags use `"ReasoningService"`), runtime-equivalent. Pure refactor — no behavior change.
+
+**Result:** execution-engine.ts: 4014 → 3953 LOC (-61). Tests: runtime 750 / reasoning 1124 / 0 fail. The inline LLM-call path (lines ~2050-2700) is now the only ReasoningService-shape duplication left in the engine; once the conditional fallback lands in 6a, that path also collapses to `reasoningOpt.value.execute(...)`.
+
 ### Step 6 next — kernel-call sub-module (the big one)
 
 The agent-loop has TWO parallel LLM-call paths (per architecture exploration §1):
@@ -402,11 +411,13 @@ The agent-loop has TWO parallel LLM-call paths (per architecture exploration §1
 
 The `direct` strategy now exists and is registered. Step 6 has two sub-steps:
 
-**Step 6a — migrate inline path to use `ReasoningService.execute({strategy: "direct"})`.** This requires either:
+**Step 6a — migrate inline path to use `ReasoningService.execute({strategy: "reactive"})`.** This requires either:
 - (A) Always-wire `ReasoningService` in default service stack (broader change; affects builder.ts wiring)
-- (B) Conditional fallback: if `ReasoningService` not wired, instantiate a minimal one inline with just the `direct` strategy
+- (B) Conditional fallback: if `ReasoningService` not wired, instantiate a minimal one inline with the `reactive` strategy registered
 
 Recommend **(B)** for W23 — keeps blast radius small; broader always-wire migration can be a separate follow-up.
+
+> **Strategy choice corrected (2026-05-07 11:13pm):** Original plan said `direct`. Inspection showed `direct.ts:122` clamps `maxIterations` to `Math.min(Math.max(requestedMax, 1), 3)` (hard cap of 3), but the inline LLM-call path at `execution-engine.ts:1931` runs `while (!isComplete && ctx.iteration <= ctx.maxIterations)` where `config.maxIterations` is typically 10+. Using `direct` would silently truncate multi-iteration tasks. **`reactive` is the multi-iteration workhorse and is the correct fallback strategy.** `direct` stays right for chat/streaming UX (1-iteration use cases).
 
 **Step 6b — extract the unified path to `engine/phases/agent-loop/kernel-call.ts`.** Once both paths use `ReasoningService.execute()`, the kernel-call sub-module is just:
 1. Build `KernelInput` / `ReasoningInput` from PhaseDeps + ctx state
