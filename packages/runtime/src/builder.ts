@@ -20,7 +20,7 @@ import {
 
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
 export { deriveGoalAchieved } from './builder/helpers.js'
-import { builderToConfig } from './agent-config.js'
+import { serializeBuilder } from './builder/to-config.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
 import type {
@@ -1889,76 +1889,7 @@ export class ReactiveAgentBuilder {
      * ```
      */
     toConfig(): import('./agent-config.js').AgentConfig {
-        return builderToConfig({
-            _name: this._name,
-            _provider: this._provider,
-            _model: this._model,
-            _thinking: this._thinking,
-            _temperature: this._temperature,
-            _maxTokens: this._maxTokens,
-            _systemPrompt: this._systemPrompt,
-            _persona: this._persona as Record<string, unknown> | undefined,
-            _enableReasoning: this._enableReasoning,
-            _reasoningOptions: this._reasoningOptions as
-                | Record<string, unknown>
-                | undefined,
-            _enableTools: this._enableTools,
-            _toolsOptions: this._toolsOptions as
-                | Record<string, unknown>
-                | undefined,
-            _enableGuardrails: this._enableGuardrails,
-            _guardrailsOptions: this._guardrailsOptions as
-                | Record<string, unknown>
-                | undefined,
-            _enableMemory: this._enableMemory,
-            _memoryTier: this._memoryTier,
-            _memoryOptions: this._memoryOptions as
-                | Record<string, unknown>
-                | undefined,
-            _enableExperienceLearning: this._enableExperienceLearning,
-            _enableMemoryConsolidation: this._enableMemoryConsolidation,
-            _enableObservability: this._enableObservability,
-            _observabilityOptions: this._observabilityOptions as
-                | Record<string, unknown>
-                | undefined,
-            _enableCostTracking: this._enableCostTracking,
-            _costTrackingOptions: this._costTrackingOptions as
-                | Record<string, unknown>
-                | undefined,
-            _enableVerification: this._enableVerification,
-            _verificationOptions: this._verificationOptions as
-                | Record<string, unknown>
-                | undefined,
-            _maxIterations: this._maxIterations,
-            _executionTimeoutMs: this._executionTimeoutMs,
-            _retryPolicy: this._retryPolicy,
-            _cacheTimeoutMs: this._cacheTimeoutMs,
-            _strictValidation: this._strictValidation,
-            _gatewayOptions: this._gatewayOptions as
-                | Record<string, unknown>
-                | undefined,
-            _mcpServers: this._mcpServers,
-            _enableReactiveIntelligence: this._enableReactiveIntelligence,
-            _reactiveIntelligenceOptions: this._reactiveIntelligenceOptions as
-                | Record<string, unknown>
-                | undefined,
-            _loggingConfig: this._loggingConfig as
-                | Record<string, unknown>
-                | undefined,
-            _fallbackConfig: this._fallbackConfig as
-                | Record<string, unknown>
-                | undefined,
-            _enableIdentity: this._enableIdentity,
-            _enableInteraction: this._enableInteraction,
-            _enablePrompts: this._enablePrompts,
-            _enableOrchestration: this._enableOrchestration,
-            _enableKillSwitch: this._enableKillSwitch,
-            _enableAudit: this._enableAudit,
-            _enableSelfImprovement: this._enableSelfImprovement,
-            _enableHealthCheck: this._enableHealthCheck,
-            _streamDensity: this._streamDensity,
-            _pricingRegistry: this._pricingRegistry,
-        })
+        return serializeBuilder(this as unknown as import('./builder/to-config.js').BuilderStateForSerialization)
     }
 
     // ─── Build ───
