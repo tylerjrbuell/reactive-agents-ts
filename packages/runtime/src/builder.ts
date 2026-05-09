@@ -40,6 +40,10 @@ import { bootstrapGateway } from './agent/gateway-bootstrap.js'
 import { makeExecuteEvent } from './agent/execute-event.js'
 import { makeGatewayTick } from './agent/gateway-tick.js'
 import {
+    subscribeChannelHandler,
+    buildGatewayHandle,
+} from './agent/gateway-driver.js'
+import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
 } from './builder/build-effect/runtime-construction.js'
@@ -3872,111 +3876,24 @@ export class ReactiveAgent {
             })
 
             // Subscribe to channel messages from MCP servers for push-based messaging
-            // Dedup guard: track recently processed messages to prevent feedback loops
-            // (e.g., agent reply echo arriving as syncMessage before MCP-level filter)
-            const recentMessageHashes = new Set<string>()
-            const MESSAGE_DEDUP_TTL = 30_000 // 30s window
-
-            if (eb) {
-                try {
-                    const unsub = await self.runtime.runPromise(
-                        eb.on('ChannelMessageReceived', (event: any) =>
-                            Effect.gen(function* () {
-                                if (stopped) return
-
-                                // Dedup: skip if we've seen this exact sender+message recently
-                                const msgHash = `${event.sender}:${event.message}`
-                                if (recentMessageHashes.has(msgHash)) {
-                                    glog(
-                                        'debug',
-                                        `channel → dedup skip from ${event.sender}`
-                                    )
-                                    return
-                                }
-                                recentMessageHashes.add(msgHash)
-                                setTimeout(
-                                    () => recentMessageHashes.delete(msgHash),
-                                    MESSAGE_DEDUP_TTL
-                                )
-
-                                const gwEvent = {
-                                    id: `ch-${Date.now()}-${Math.random()
-                                        .toString(36)
-                                        .slice(2, 8)}`,
-                                    source: 'channel' as const,
-                                    timestamp: new Date(event.timestamp),
-                                    agentId: self.agentId ?? 'unknown',
-                                    payload: {
-                                        sender: event.sender,
-                                        message: event.message,
-                                    },
-                                    priority: 'normal' as const,
-                                    metadata: {
-                                        platform: event.platform,
-                                        sender: event.sender,
-                                        groupId: event.groupId,
-                                        mcpServer: event.mcpServer,
-                                    },
-                                }
-
-                                const channelDecision: any =
-                                    yield* gw.processEvent(gwEvent)
-
-                                if (channelDecision.action === 'execute') {
-                                    glog(
-                                        'info',
-                                        `channel → ${event.platform} message from ${event.sender}`,
-                                        {
-                                            message: event.message.slice(0, 80),
-                                            mode: channelMode,
-                                        }
-                                    )
-                                    if (channelMode === 'task') {
-                                        const mcpServer = String(event.mcpServer ?? '').trim()
-                                        const instruction =
-                                            `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". ` +
-                                            channelOutboundToolGuidance({
-                                                mcpServer,
-                                                sender: String(event.sender ?? ''),
-                                            })
-                                        yield* Effect.promise(() =>
-                                            executeEvent(
-                                                gwEvent,
-                                                'channel',
-                                                instruction
-                                            )
-                                        )
-                                    } else {
-                                        yield* Effect.promise(() =>
-                                            chatManager.handleMessage(
-                                                event.sender,
-                                                event.message,
-                                                event.platform ?? 'unknown',
-                                                String(event.mcpServer ?? '').trim(),
-                                                gwEvent
-                                            )
-                                        )
-                                        chatTurns++
-                                    }
-                                } else {
-                                    glog(
-                                        'debug',
-                                        `channel → ${channelDecision.action} from ${event.sender}`,
-                                        { reason: channelDecision.reason }
-                                    )
-                                }
-                            })
-                        )
-                    )
-                    unsubChannel = () => {
-                        try {
-                            ;(unsub as () => void)()
-                        } catch {}
-                    }
-                } catch {
-                    /* EventBus subscription failed — no channel routing */
-                }
-            }
+            unsubChannel = await subscribeChannelHandler({
+                eb,
+                gw,
+                glog,
+                channelMode,
+                channelOutboundToolGuidance,
+                executeEvent,
+                chatManager,
+                runtime: self.runtime as ManagedRuntime.ManagedRuntime<
+                    any,
+                    never
+                >,
+                agentId: self.agentId ?? 'unknown',
+                getStopped: () => stopped,
+                incrementChatTurns: () => {
+                    chatTurns++
+                },
+            })
 
             timer = setInterval(tick, self._gatewayIntervalMs)
 
@@ -3991,23 +3908,24 @@ export class ReactiveAgent {
         // If loopPromise rejects (gateway not configured), propagate
         loopPromise.catch(() => {})
 
-        return {
-            stop: async () => {
-                stopped = true
-                if (timer) clearInterval(timer)
-                unsubChannel?.()
-                await channelAdaptersCleanup?.()
-                if (chatManagerRef) await chatManagerRef.dispose()
-                const summary: GatewaySummary = {
-                    heartbeatsFired,
-                    totalRuns,
-                    cronChecks,
-                    chatTurns,
-                }
-                resolveStop?.(summary)
-                return summary
+        return buildGatewayHandle({
+            setStopped: (v) => {
+                stopped = v
             },
-            done: stopPromise,
-        }
+            getTimer: () => timer,
+            getUnsubChannel: () => unsubChannel,
+            getChannelAdaptersCleanup: () => channelAdaptersCleanup,
+            getChatManager: () => chatManagerRef,
+            resolveStop: (s) => {
+                resolveStop?.(s)
+            },
+            stopPromise,
+            getCounters: () => ({
+                heartbeatsFired,
+                totalRuns,
+                cronChecks,
+                chatTurns,
+            }),
+        })
     }
 }
