@@ -37,6 +37,7 @@ import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
 import { wireRiHooks } from './builder/ri-wiring.js'
 import { bootstrapGateway } from './agent/gateway-bootstrap.js'
+import { makeExecuteEvent } from './agent/execute-event.js'
 import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
@@ -3813,107 +3814,22 @@ export class ReactiveAgent {
             // Guarded by `isExecuting` to prevent overlapping agent runs.
             // Each execution uses a unique agentId suffix so it bootstraps with empty
             // memory — gateway runs are stateless and don't carry context from prior runs.
-            const executeEvent = async (
-                event: any,
-                source: string,
-                instruction: string
-            ): Promise<string | undefined> => {
-                if (isExecuting) {
-                    glog(
-                        'debug',
-                        `${source} → skipped (another execution in progress)`
-                    )
-                    return
-                }
-                isExecuting = true
-                await publish({
-                    _tag: 'ProactiveActionInitiated',
-                    agentId: self.agentId ?? 'unknown',
-                    source,
-                    taskDescription: instruction,
-                    timestamp: Date.now(),
-                })
-                const runStart = Date.now()
-                try {
-                    // Default: unique agentId per gateway execution (no cross-tick memory).
-                    // With persistMemoryAcrossRuns, reuse stable id so memory spans heartbeats/crons.
-                    const runAgentId = self._gatewayPersistMemory
-                        ? self.agentId
-                        : `${self.agentId}-${source}-${Date.now()}`
-                    const task: Task = {
-                        id: generateTaskId(),
-                        agentId: Schema.decodeSync(AgentId)(runAgentId),
-                        type: 'query' as const,
-                        input: { question: instruction },
-                        priority: 'medium' as const,
-                        status: 'pending' as const,
-                        metadata: { tags: [] },
-                        createdAt: new Date(),
-                    }
-                    const taskResult: TaskResult =
-                        await self.runtime.runPromise(
-                            self.engine
-                                .execute(task)
-                                .pipe(
-                                    Effect.mapError(
-                                        (e: any) =>
-                                            new Error(
-                                                'message' in e
-                                                    ? e.message
-                                                    : String(e)
-                                            )
-                                    )
-                                ) as Effect.Effect<TaskResult, Error>
-                        )
-                    const result = {
-                        output: String(taskResult.output ?? ''),
-                        success: taskResult.success,
-                        metadata: taskResult.metadata as AgentResultMetadata,
-                    }
+            const executeEvent = makeExecuteEvent({
+                publish,
+                glog,
+                engine: self.engine,
+                runtime: self.runtime,
+                gw,
+                agentId: self.agentId ?? 'unknown',
+                persistMemory: self._gatewayPersistMemory ?? false,
+                getIsExecuting: () => isExecuting,
+                setIsExecuting: (v) => {
+                    isExecuting = v
+                },
+                incrementTotalRuns: () => {
                     totalRuns++
-                    const tokensUsed = result.metadata?.tokensUsed ?? 0
-                    const durationMs = Date.now() - runStart
-                    if (tokensUsed) {
-                        await self.runtime.runPromise(
-                            gw.updateTokensUsed(tokensUsed)
-                        )
-                    }
-                    glog(
-                        'info',
-                        `${source} completed (${durationMs}ms, ${tokensUsed} tokens)`
-                    )
-                    await publish({
-                        _tag: 'ProactiveActionCompleted',
-                        agentId: self.agentId ?? 'unknown',
-                        source,
-                        success: true,
-                        tokensUsed,
-                        durationMs,
-                        timestamp: Date.now(),
-                    })
-                    return result.output
-                } catch (err) {
-                    const durationMs = Date.now() - runStart
-                    glog(
-                        'warn',
-                        `${source} failed (${durationMs}ms): ${
-                            err instanceof Error ? err.message : String(err)
-                        }`
-                    )
-                    await publish({
-                        _tag: 'ProactiveActionCompleted',
-                        agentId: self.agentId ?? 'unknown',
-                        source,
-                        success: false,
-                        tokensUsed: 0,
-                        durationMs,
-                        timestamp: Date.now(),
-                    })
-                    return undefined
-                } finally {
-                    isExecuting = false
-                }
-            }
+                },
+            })
 
             // ─── Gateway chat mode ────────────────────────────────────────
             const gwOpts = (self as any)._gatewayOptions as
