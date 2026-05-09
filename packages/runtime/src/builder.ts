@@ -95,8 +95,8 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
   GatewayChatManager,
   channelOutboundToolGuidance,
-  type GatewayChatManagerDeps,
 } from "./gateway-chat.js";
+import { createChatManager } from "./agent/chat-manager-factory.js";
 import type { ChannelsConfig } from "@reactive-agents/channels";
 
 // ─── Public Option/Result Types (W25-A: lifted to ./builder/types.ts) ────────
@@ -3839,92 +3839,15 @@ export class ReactiveAgent {
             const sessionTtlDays: number =
                 gwOpts?.accessControl?.sessionTtlDays ?? 30
 
-            const chatDeps: GatewayChatManagerDeps = {
+            const chatManager = createChatManager({
                 agentId: self.agentId ?? 'gateway',
-                sessionTtlDays,
-                executeEvent: (event, source, instruction) =>
-                    executeEvent(event as any, source, instruction),
-                logEpisode: async (entry) => {
-                    await self.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const memMod = yield* Effect.promise(
-                                () => import('@reactive-agents/memory')
-                            )
-                            const svcOpt = yield* Effect.serviceOption(
-                                memMod.EpisodicMemoryService
-                            )
-                            if (svcOpt._tag !== 'Some') return
-                            yield* svcOpt.value.log(entry as any)
-                        }).pipe(Effect.catchAll(() => Effect.void))
-                    )
-                },
-                saveSession: async (input) => {
-                    await self.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const memMod = yield* Effect.promise(
-                                () => import('@reactive-agents/memory')
-                            )
-                            const storeOpt = yield* Effect.serviceOption(
-                                memMod.SessionStoreService
-                            )
-                            if (storeOpt._tag !== 'Some') return
-                            yield* storeOpt.value.save(input as any)
-                        }).pipe(Effect.catchAll(() => Effect.void))
-                    )
-                },
-                findById: async (sessionId) => {
-                    return self.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const memMod = yield* Effect.promise(
-                                () => import('@reactive-agents/memory')
-                            )
-                            const storeOpt = yield* Effect.serviceOption(
-                                memMod.SessionStoreService
-                            )
-                            if (storeOpt._tag !== 'Some') return null
-                            const record = yield* storeOpt.value.findById(
-                                sessionId
-                            )
-                            return record
-                                ? { messages: record.messages as any }
-                                : null
-                        }).pipe(Effect.catchAll(() => Effect.succeed(null)))
-                    )
-                },
-                getRecentEpisodes: async (agentId, limit) => {
-                    return self.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const memMod = yield* Effect.promise(
-                                () => import('@reactive-agents/memory')
-                            )
-                            const episodicOpt = yield* Effect.serviceOption(
-                                memMod.EpisodicMemoryService
-                            )
-                            if (episodicOpt._tag !== 'Some') return []
-                            return yield* episodicOpt.value.getRecent(
-                                agentId,
-                                limit
-                            )
-                        }).pipe(Effect.catchAll(() => Effect.succeed([])))
-                    )
-                },
-                cleanup: async (ttlDays) => {
-                    return self.runtime.runPromise(
-                        Effect.gen(function* () {
-                            const memMod = yield* Effect.promise(
-                                () => import('@reactive-agents/memory')
-                            )
-                            const storeOpt = yield* Effect.serviceOption(
-                                memMod.SessionStoreService
-                            )
-                            if (storeOpt._tag !== 'Some') return 0
-                            return yield* storeOpt.value.cleanup(ttlDays)
-                        }).pipe(Effect.catchAll(() => Effect.succeed(0)))
-                    )
-                },
-            }
-
-            const chatManager = new GatewayChatManager(chatDeps)
+                gatewayOptions: gwOpts,
+                runtime: self.runtime as ManagedRuntime.ManagedRuntime<
+                    unknown,
+                    unknown
+                >,
+                executeEvent,
+            })
             chatManagerRef = chatManager
 
             const tick = async () => {
