@@ -10,6 +10,7 @@ import {
   type ReasoningOptionsEncoded,
 } from "./reasoning-options-schema.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
+import type { TaskComplexity } from "./telemetry-enrichment.js";
 
 /**
  * Calibration mode for `.withCalibration()`:
@@ -179,7 +180,119 @@ export const ExecutionContextSchema = Schema.Struct({
   /** Trace ID for correlating logs across phases */
   traceId: Schema.optional(Schema.String),
 });
-export type ExecutionContext = typeof ExecutionContextSchema.Type;
+
+/**
+ * Well-known fields written to / read from `ExecutionContext.metadata` by the
+ * execution engine and its phase modules. The index signature `[key: string]:
+ * unknown` preserves backward-compat for hooks and extensions that attach
+ * arbitrary values.
+ */
+export interface ExecutionContextMetadata {
+  // ── Reasoning path ─────────────────────────────────────────────────────
+  /** Normalized result from ReasoningService.execute() (reasoning path only) */
+  reasoningResult?: {
+    output: unknown;
+    status: string;
+    strategy?: string;
+    steps?: readonly {
+      id: string;
+      type: string;
+      content: string;
+      metadata?: {
+        toolUsed?: string;
+        duration?: number;
+        observationResult?: { success?: boolean; toolName?: string };
+      };
+    }[];
+    metadata: {
+      cost: number;
+      tokensUsed: number;
+      stepsCount: number;
+      duration?: number;
+      strategyFallback?: boolean;
+      confidence?: number;
+      llmCalls?: number;
+      terminatedBy?: string;
+      reflexionCritiques?: string[];
+      finalAnswerCapture?: unknown;
+    };
+  };
+  /** Flattened step array written after reasoning completes */
+  reasoningSteps?: readonly {
+    id: string;
+    type: string;
+    content: string;
+    metadata?: {
+      toolUsed?: string;
+      duration?: number;
+      observationResult?: { success?: boolean; toolName?: string };
+    };
+  }[];
+  /** Total number of reasoning steps taken */
+  stepsCount?: number;
+
+  // ── Direct-LLM path ─────────────────────────────────────────────────────
+  /** Final text response from the direct-LLM path */
+  lastResponse?: string;
+  /** Tool calls accumulated but not yet executed (direct-LLM path) */
+  pendingToolCalls?: readonly unknown[];
+  /** Whether the direct-LLM path has reached a terminal state */
+  isComplete?: boolean;
+  /** Number of LLM calls made on the direct-LLM path */
+  llmCalls?: number;
+
+  // ── Verification ────────────────────────────────────────────────────────
+  /** Result written by the verify phase (runtime VerificationService shape) */
+  verificationResult?: {
+    passed?: boolean;
+    overallScore?: number;
+    recommendation?: string;
+    layerResults?: readonly { passed?: boolean; layerName?: string; details?: string }[];
+  };
+  /** How many verification retries have been attempted this run */
+  verificationRetryCount?: number;
+  /** Feedback string from the most-recent failed verification */
+  verificationFeedback?: string;
+  /** Guardrail score recorded by the guardrail phase */
+  guardrailScore?: number;
+  /** Verification score (alias of verificationResult.overallScore, written by verify phase) */
+  verificationScore?: number;
+
+  // ── Skill / learning ────────────────────────────────────────────────────
+  /** Serialized skill catalog XML injected into the system prompt */
+  skillCatalogXml?: string;
+  /** Skills resolved for this task */
+  resolvedSkills?: readonly { name?: string; description?: string }[];
+  /** ID of the skill that was applied this run */
+  appliedSkillId?: string;
+  /** Mean entropy of the applied skill */
+  appliedSkillMeanEntropy?: number;
+
+  // ── Cache ────────────────────────────────────────────────────────────────
+  /** Set to true by cache-check phase when a semantic cache hit is returned */
+  cacheHit?: boolean;
+
+  // ── Complexity / budget ──────────────────────────────────────────────────
+  /** Complexity classification written by memory-flush-dispatch */
+  taskComplexity?: TaskComplexity;
+  /** Set when the token/cost budget is exceeded */
+  budgetExceeded?: boolean;
+
+  // ── Free-form for hooks / extensions ────────────────────────────────────
+  [key: string]: unknown;
+}
+
+/**
+ * Execution context passed between lifecycle phases.
+ *
+ * The `metadata` field is typed as {@link ExecutionContextMetadata} at the
+ * TypeScript level while remaining `Record<string, unknown>` at the Effect
+ * Schema / runtime level. The Omit & intersection pattern avoids touching the
+ * Schema definition so encoding/decoding is unaffected.
+ */
+export type ExecutionContext = Omit<typeof ExecutionContextSchema.Type, "metadata"> & {
+  metadata: ExecutionContextMetadata;
+};
 
 /**
  * Result from a single tool call — captured and stored in execution context.

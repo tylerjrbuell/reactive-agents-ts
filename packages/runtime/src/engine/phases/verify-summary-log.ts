@@ -24,14 +24,7 @@ export const logVerifySummary = (
   const { ctx, config, obs, isNormal } = args;
   return Effect.gen(function* () {
     if (!config.enableVerification || !obs || !isNormal) return;
-    const vr = ctx.metadata.verificationResult as
-      | {
-          overallScore?: number;
-          passed?: boolean;
-          recommendation?: string;
-          layerResults?: ReadonlyArray<{ passed?: boolean; layerName?: string }>;
-        }
-      | undefined;
+    const vr = ctx.metadata.verificationResult;
     if (vr) {
       const failedLayers = (vr.layerResults ?? [])
         .filter((l) => l.passed === false)

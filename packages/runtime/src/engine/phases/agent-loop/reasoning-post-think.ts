@@ -52,13 +52,13 @@ export const runReasoningPostThink = (
 
     // ── Log think summary ──
     if (obs && isNormal) {
-      const thinkResult = ctx.metadata.reasoningResult as any;
-      const stepsCount = ctx.metadata.stepsCount as number ?? 0;
+      const thinkResult = ctx.metadata.reasoningResult;
+      const stepsCount = ctx.metadata.stepsCount ?? 0;
       const tokTot = ctx.tokensUsed;
       const thinkMs = thinkResult?.metadata?.duration ?? 0;
       // Show adaptive sub-strategy: thinkResult.strategy stays "adaptive",
       // ctx.selectedStrategy is what actually ran (e.g. "reactive").
-      const entryStrat = (thinkResult as any)?.strategy as string | undefined;
+      const entryStrat = thinkResult?.strategy;
       const activeStrat = ctx.selectedStrategy ?? entryStrat ?? "";
       const stratSuffix = (entryStrat === "adaptive" && activeStrat !== "adaptive")
         ? ` (adaptive→${activeStrat})`
@@ -73,7 +73,7 @@ export const runReasoningPostThink = (
     // reaches those code paths. Log the task+result here so bootstrap()
     // can surface prior runs on the next invocation.
     {
-      const thinkRes = ctx.metadata.reasoningResult as any;
+      const thinkRes = ctx.metadata.reasoningResult;
       if (thinkRes?.output) {
         const memBridge = yield* Effect.serviceOption(
           Context.GenericTag<{
@@ -140,10 +140,7 @@ export const runReasoningPostThink = (
       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
       if (expRecOpt._tag === "Some") {
-        const reasoningStepsForExp = (ctx.metadata.reasoningSteps ?? []) as Array<{
-          type: string;
-          metadata?: { toolUsed?: string };
-        }>;
+        const reasoningStepsForExp = ctx.metadata.reasoningSteps ?? [];
         const toolsFromSteps = reasoningStepsForExp
           .filter(s => s.type === "action")
           .map(s => s.metadata?.toolUsed ?? "unknown")
@@ -154,8 +151,8 @@ export const runReasoningPostThink = (
           taskDescription: extractTaskText(task.input),
           taskType: task.type ?? "general",
           toolsUsed: toolsFromSteps,
-          success: (ctx.metadata.reasoningResult as any)?.status === "completed",
-          totalSteps: (ctx.metadata.stepsCount as number) ?? 0,
+          success: ctx.metadata.reasoningResult?.status === "completed",
+          totalSteps: ctx.metadata.stepsCount ?? 0,
           totalTokens: ctx.tokensUsed,
           errors: [],
           modelTier: config.contextProfile?.tier ?? "mid",
@@ -166,12 +163,7 @@ export const runReasoningPostThink = (
     // ── Fire "act" + "observe" phases if reasoning used tools ──
     // Extract action steps from the reasoning result so hooks
     // (e.g. .withHook({ phase: "act" })) have visibility into tool calls.
-    const reasoningSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{
-      id: string;
-      type: string;
-      content: string;
-      metadata?: { toolUsed?: string; duration?: number; observationResult?: { success?: boolean } };
-    }>;
+    const reasoningSteps = ctx.metadata.reasoningSteps ?? [];
     const actionSteps = reasoningSteps.filter((s) => s.type === "action");
 
     if (actionSteps.length > 0) {
@@ -211,7 +203,7 @@ export const runReasoningPostThink = (
     // Update iteration to reflect actual reasoning steps
     ctx = {
       ...ctx,
-      iteration: (ctx.metadata.stepsCount as number | undefined) ?? 1,
+      iteration: ctx.metadata.stepsCount ?? 1,
     };
 
     // ── Semantic cache store (after successful reasoning) ──

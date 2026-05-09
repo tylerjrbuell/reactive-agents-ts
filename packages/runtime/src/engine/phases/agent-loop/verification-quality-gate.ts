@@ -37,10 +37,8 @@ export const runVerificationQualityGate = (
     let ctx = initialCtx;
     if (!config.enableVerification) return ctx;
 
-    const vResult = ctx.metadata.verificationResult as
-      | { passed?: boolean; recommendation?: string; overallScore?: number; layerResults?: unknown[] }
-      | undefined;
-    const vRetryCount = (ctx.metadata.verificationRetryCount as number) ?? 0;
+    const vResult = ctx.metadata.verificationResult;
+    const vRetryCount = ctx.metadata.verificationRetryCount ?? 0;
     const maxVRetries = config.maxVerificationRetries ?? 1;
 
     if (
@@ -63,7 +61,7 @@ export const runVerificationQualityGate = (
       `[Verification Feedback] Your previous response was rejected (score: ${vResult.overallScore?.toFixed(2) ?? "unknown"}).`,
     ];
     if (Array.isArray(vResult.layerResults)) {
-      for (const lr of vResult.layerResults as Array<{ layerName?: string; passed?: boolean; details?: string }>) {
+      for (const lr of vResult.layerResults) {
         if (lr.passed === false && lr.details) {
           feedbackParts.push(`- ${lr.layerName ?? "check"}: ${lr.details}`);
         }

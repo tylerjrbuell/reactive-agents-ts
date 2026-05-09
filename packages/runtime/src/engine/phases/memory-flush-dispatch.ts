@@ -30,7 +30,7 @@ export const dispatchMemoryFlush = (
   const { entropyLog, toolCallLog, runMemoryFlush } = args;
   return Effect.gen(function* () {
     let ctx = args.ctx;
-    const rrForComplexity = ctx.metadata.reasoningResult as { metadata?: { terminatedBy?: string; llmCalls?: number } } | undefined;
+    const rrForComplexity = ctx.metadata.reasoningResult;
     const terminatedByForComplexity = (rrForComplexity?.metadata?.terminatedBy ?? "end_turn") as string;
     const latestEntropy = entropyLog.length > 0 ? entropyLog[entropyLog.length - 1] : undefined;
     const complexity = classifyComplexity(

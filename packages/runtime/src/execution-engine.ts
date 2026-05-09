@@ -859,13 +859,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       iteration: ctx.iteration,
                       maxIterations: ctx.maxIterations,
                       phase: "thought",
-                      content: ctx.metadata.lastResponse as string,
+                      content: ctx.metadata.lastResponse ?? "",
                     }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2535", tag: errorTag(err) })));
 
                     // 5b. ACT (if tool calls present) — call real ToolService
                     // Body extracted to engine/phases/agent-loop/inline-act.ts (W23 step 6a-1a).
                     const pendingCalls =
-                      (ctx.metadata.pendingToolCalls as unknown[]) ?? [];
+                      ctx.metadata.pendingToolCalls ?? [];
                     if (pendingCalls.length > 0) {
                       ctx = yield* guardedPhase(ctx, "act", (c) =>
                         runInlineAct(c, {
@@ -1026,16 +1026,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 ctx = yield* runGuardedPhase(complete, ctx, deps);
 
                 // Build TaskResult — sanitize output to strip internal metadata
-                const rr = ctx.metadata.reasoningResult as {
-                  output?: unknown;
-                  status?: string;
-                  steps?: ReadonlyArray<{
-                    type?: string;
-                    content?: string;
-                    metadata?: { observationResult?: { success?: boolean; toolName?: string } };
-                  }>;
-                  metadata?: { confidence?: number; strategyFallback?: boolean; terminatedBy?: string; finalAnswerCapture?: unknown; llmCalls?: number };
-                } | undefined;
+                const rr = ctx.metadata.reasoningResult;
                 let rawOutput: unknown = ctx.metadata.lastResponse ?? null;
                 if (
                   (rawOutput === null || rawOutput === "") &&
@@ -1124,11 +1115,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     cost: ctx.cost,
                     tokensUsed: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
-                    stepsCount: (ctx.metadata.stepsCount as number | undefined) ?? ctx.iteration,
+                    stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
                     iterations: ctx.iteration,
                     // Forward reasoning steps so chat() can access tool results and analysis.
                     // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
-                    ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as any : {}),
+                    ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as Record<string, unknown> : {}),
                     ...(rr?.metadata?.confidence !== undefined ? {
                       confidence: (rr.metadata.confidence >= 0.7
                         ? "high"
@@ -1138,14 +1129,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     } : {}),
                     ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
                     ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
-                    complexity: (ctx.metadata.taskComplexity as TaskComplexity | undefined) ?? classifyComplexity(
+                    // TODO(T11-followup): TaskResult.metadata type is missing 'complexity' — add it to the schema
+                    ...({ complexity: ctx.metadata.taskComplexity ?? classifyComplexity(
                       ctx.iteration,
                       entropyLog.length > 0 ? entropyLog[entropyLog.length - 1] : undefined,
                       toolCallLog.length,
                       terminatedByRaw,
-                    ),
-                    // rr.metadata has llmCalls from reasoning path; ctx.metadata from direct-LLM path
-                    llmCalls: rr?.metadata?.llmCalls ?? (ctx.metadata.llmCalls as number | undefined) ?? 0,
+                    ) } as Record<string, unknown>),
+                    // TODO(T11-followup): TaskResult.metadata type is missing 'llmCalls' — add it to the schema
+                    ...({ llmCalls: rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0 } as Record<string, unknown>),
                   },
                   completedAt: new Date(),
                   format: "text",

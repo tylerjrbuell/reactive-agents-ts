@@ -120,7 +120,7 @@ export const synthesizeAndStoreDebrief = (
     for (const tc of toolCallLog) {
       if (!tc.success) errorsFromLoop.push(`Tool ${tc.toolName} failed`);
     }
-    const rrSteps = (ctx.metadata.reasoningSteps ?? []) as Array<{ type: string; content?: string }>;
+    const rrSteps = ctx.metadata.reasoningSteps ?? [];
     for (const step of rrSteps) {
       if (step.type === "observation") {
         const content = step.content ?? "";
