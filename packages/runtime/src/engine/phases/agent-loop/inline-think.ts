@@ -18,6 +18,7 @@ import { Context, Effect, FiberRef, Stream as EStream } from "effect";
 import { StreamingTextCallback, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { formatTaskContextForChat } from "../../../chat.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
+import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
 
 type ContextManagerLike = {
@@ -233,9 +234,7 @@ export const runInlineThink = (
 
     // Phase 1.3: Log LLM interaction as episodic memory
     const memOpt = yield* Effect.serviceOption(
-      Context.GenericTag<{
-        logEpisode: (episode: unknown) => Effect.Effect<void>;
-      }>("MemoryService"),
+      MemoryServiceLogEpisodeTag,
     ).pipe(
       Effect.catchAll(() =>
         Effect.succeed({ _tag: "None" as const }),

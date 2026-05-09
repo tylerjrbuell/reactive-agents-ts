@@ -26,6 +26,7 @@ import { CostService } from "@reactive-agents/cost";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
 import { extractTaskText } from "../../util.js";
+import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
 
 export interface ReasoningPostThinkDeps {
   readonly config: ReactiveAgentsConfig;
@@ -76,9 +77,7 @@ export const runReasoningPostThink = (
       const thinkRes = ctx.metadata.reasoningResult;
       if (thinkRes?.output) {
         const memBridge = yield* Effect.serviceOption(
-          Context.GenericTag<{
-            logEpisode: (episode: unknown) => Effect.Effect<void>;
-          }>("MemoryService"),
+          MemoryServiceLogEpisodeTag,
         ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
         if (memBridge._tag === "Some") {
           const epNow = new Date();

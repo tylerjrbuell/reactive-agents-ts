@@ -11,10 +11,11 @@
  * are intentionally retained for log/diagnostic compatibility with the inline-path
  * test files.
  */
-import { Context, Effect } from "effect";
+import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ExecutionContext } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
+import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
 
 export interface InlineObserveDeps {
   readonly pendingCallCount: number;
@@ -32,9 +33,7 @@ export const runInlineObserve = (
 
     // H5: Log tool results as episodic memory items
     const memOpt = yield* Effect.serviceOption(
-      Context.GenericTag<{
-        logEpisode: (episode: unknown) => Effect.Effect<void>;
-      }>("MemoryService"),
+      MemoryServiceLogEpisodeTag,
     ).pipe(
       Effect.catchAll(() =>
         Effect.succeed({ _tag: "None" as const }),
