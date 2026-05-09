@@ -16,7 +16,7 @@
         "sourceMap": true,
         "types": ["bun-types"],
         "noImplicitReturns": true,
-        "ignoreDeprecations": "6.0",
+        "ignoreDeprecations": "5.0",
         "paths": {
             "@reactive-agents/*": ["./packages/*/src/index.ts"]
         }
