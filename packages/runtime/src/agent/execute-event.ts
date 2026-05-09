@@ -25,9 +25,8 @@ import type { GLog } from './gateway-bootstrap.js'
  * Minimal slice of ExecutionEngine used by executeEvent.
  *
  * Mirrors the structural shape of `ReactiveAgent`'s private engine field
- * (declared inline in the constructor at builder.ts:2466) so DTS emit
- * stays portable — using the `ExecutionEngine` Tag class here triggers
- * unresolvable type-id references in the dts build.
+ * so DTS emit stays portable — using the `ExecutionEngine` Tag class
+ * here triggers unresolvable type-id references in the dts build.
  */
 export interface ExecuteEventEngine {
     readonly execute: (

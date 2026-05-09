@@ -29,7 +29,7 @@ All prior roadmap/phase documents are superseded:
 
 | Phase | Focus | Status |
 |---|---|---|
-| **A** | Architecture Cleanup — W23–W28: decompose `builder.ts` (6,082→≤500 LOC), `execution-engine.ts` (4,499→≤600 LOC) | **Next — start here** |
+| **A** | Architecture Cleanup — W23–W25 ✅: `execution-engine.ts` (4,499→1,539 LOC) + `builder.ts` (6,232→2,407 LOC, -61%). Structural decomposition done; absolute LOC targets traded for clean module boundaries. | **Complete — Phase B (Compose API) unblocked** |
 | **1.5** | Mechanism Improvements — M3/M6/M7/M8/M10 IMPROVE→KEEP | Parallel with A |
 | **B** | Compose API — Waves A–F, 24 injection points, 6 killswitches | v0.11 prereq |
 | **C** | v0.11 Launch — playground, CLI generator, OTel, skill persistence, Snapshot/Replay | v0.11.0 |
