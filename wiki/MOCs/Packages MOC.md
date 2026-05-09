@@ -154,10 +154,10 @@ High-level facades that expose the framework to users.
 
 ### Runtime
 - [[Packages/runtime|runtime]] — ExecutionEngine, ReactiveAgentBuilder, orchestration
-  - Key files: `execution-engine.ts`, `builder.ts`, `gateway-chat.ts`
+  - Key files: `execution-engine.ts` (1,539 LOC), `builder.ts` (2,407 LOC), `reactive-agent.ts` (1,535 LOC), `gateway-chat.ts`. Internals under `engine/`, `builder/`, `builder/build-effect/`, `agent/`.
   - Owner: Runtime team
-  - Status: ✅ v0.10.0 release-ready
-  - Debt: builder.ts 6,082 LOC + execution-engine.ts 4,499 LOC need decomposition (Phase 2)
+  - Status: ✅ v0.10.0 release-ready; W23/W24/W25 decomposition complete (May 2026)
+  - ~~Debt: builder.ts 6,082 LOC + execution-engine.ts 4,499 LOC need decomposition~~ ✅ Closed (May 9, 2026): builder.ts -61%, execution-engine.ts -66% via 39 new submodules
 
 ### Reactive Agents (Umbrella)
 - [[Packages/reactive-agents|reactive-agents]] — Facade, re-exports, public API

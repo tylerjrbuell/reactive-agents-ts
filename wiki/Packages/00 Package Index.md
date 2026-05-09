@@ -49,7 +49,7 @@ tags: [packages, architecture, index]
 - **Tests:** 287 tests, 100% pass
 - **Owner:** Reasoning team
 - **Validation:** ✅ M1, M2, M9 validation complete
-- **Debt:** builder.ts 6,082 LOC needs decomposition (Phase 2)
+- **Debt:** None (cross-package builder.ts and execution-engine.ts decomposition completed in W23/W24/W25, May 2026)
 - **Status:** ✅ Stable (v0.10.0)
 
 ### 5. tools
@@ -74,7 +74,7 @@ tags: [packages, architecture, index]
 - **Key Files:** `workflows.ts`, `coordinator.ts`, `lane-controller.ts`
 - **Tests:** 87 tests, 100% pass
 - **Owner:** Orchestration team
-- **Debt:** Phase 2 decomposition of execution-engine.ts (4,499 LOC)
+- **Debt:** None (execution-engine.ts decomposition completed W23/W24, May 2026)
 - **Status:** ✅ Stable (v0.10.0)
 
 ### 8. skills
@@ -183,10 +183,10 @@ tags: [packages, architecture, index]
 
 ### 20. runtime
 - **Purpose:** ExecutionEngine, ReactiveAgentBuilder, session management, orchestration facade
-- **Key Files:** `execution-engine.ts` (4,499 LOC), `builder.ts` (6,082 LOC), `gateway-chat.ts`
+- **Key Files:** `execution-engine.ts` (1,539 LOC), `builder.ts` (2,407 LOC), `reactive-agent.ts` (1,535 LOC), `gateway-chat.ts`. Internals under `engine/`, `engine/finalize/`, `engine/bootstrap/`, `builder/`, `builder/build-effect/`, `agent/` (39 submodules).
 - **Tests:** 156 tests, 100% pass
 - **Owner:** Runtime team
-- **Debt:** Orchestration decomposition into 3 focused components (Phase 2)
+- **Debt:** ✅ W23/W24/W25 decomposition complete (May 2026): builder.ts -61%, execution-engine.ts -66%. Optional W27 (`GatewayAgent` type extraction) and W28 (phase-typed builder validation) still ahead.
 - **Status:** ✅ Stable (v0.10.0)
 
 ### 21. reactive-agents

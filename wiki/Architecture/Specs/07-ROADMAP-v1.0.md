@@ -136,6 +136,8 @@ Per superpowers:code-reviewer: at the end of each phase, a code-review subagent 
 
 ### Phase 2 — Orchestration Decomposition (Stage 7 W23–W28)
 
+> ✅ **Core complete (2026-05-09):** W23 (execution-engine.ts agent-loop), W24 (execution-engine.ts finalize/bootstrap), and W25 (builder.ts) all shipped. `builder.ts` 6,232 → 2,407 LOC; `execution-engine.ts` 4,499 → 1,539 LOC. W27 (`GatewayAgent` type extraction) and W28 (phase-typed builder validation) remain as optional refinements. See `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` §6 Phase A for current status.
+
 - **Goal:** Decompose the orchestration trio (`builder.ts` 6,082 LOC, `execution-engine.ts` 4,499 LOC, `runner.ts` 1,706 LOC) into composable units per `06-AUDIT-v0.10.0.md` §16.2.
 - **Vision pillars:** Composition (Pillar 6), Control, DX.
 - **Validation gate (per Stage 7 wave):**

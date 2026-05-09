@@ -507,6 +507,7 @@ Canonical project skills live in `.agents/skills/`:
 | Dead production code | `context-utils.ts` | Now imported by `think.ts:20` AND `context-manager.ts:24` | Low | Medium | Fixed (Apr 2026) |
 | Barrel leak | `kernel/index.ts` | `export *` from 13 modules leaks internal utils like `tool-execution.ts`, `tool-formatting.ts` as public API | Medium | Medium | Open |
 | Loop vs switch | `loop-detector.ts`, `kernel-runner.ts` | Loop streak logic can mask duplicate-tool patterns so `strategySwitching` may never trigger (see `.agents/MEMORY.md` W8) | Medium | Medium | Open |
+| Orchestration monoliths | `runtime/src/builder.ts`, `runtime/src/execution-engine.ts` | Both decomposed in W23/W24/W25: builder.ts 6,232 → 2,407 LOC (-61%); execution-engine.ts 4,499 → 1,539 LOC (-66%). 39 submodules now under `engine/`, `builder/`, `agent/` subdirs. `reactive-agent.ts` extracted as separate file. | High | High | Fixed (May 2026) |
 
 ---
 

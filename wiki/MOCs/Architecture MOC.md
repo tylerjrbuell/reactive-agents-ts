@@ -123,7 +123,7 @@ See [[Packages/00 Package Index|Package Index]] for full details.
 ## Architectural Debt & Future
 
 ### Known Debt
-- `builder.ts` (6,082 LOC) + `execution-engine.ts` (4,499 LOC) need decomposition → Phase 2
+- ✅ `builder.ts` (6,232 → 2,407 LOC, -61%) + `execution-engine.ts` (4,499 → 1,539 LOC, -66%) decomposed in W23/W24/W25 (May 2026). Now organized under `engine/`, `builder/`, `agent/` subdirs. See `wiki/Planning/Implementation-Plans/2026-05-09-builder-decomposition.md`.
 - ToT outer loop doesn't honor dispatcher early-stop → Phase 2
 - Strategy routing still opt-in (default disabled) → Phase 2
 

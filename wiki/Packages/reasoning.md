@@ -4,7 +4,7 @@ tags: [package, composition, kernel]
 layer: Composition
 owner: Reasoning Team
 status: Stable (v0.10.0)
-debt: builder.ts (6082 LOC) + execution-engine.ts (4499 LOC) need decomposition
+debt: see Architectural Debt section below — package-internal items only
 ---
 
 # Package: reasoning
@@ -97,15 +97,12 @@ packages/reasoning/src/strategies/
 
 ## Architectural Debt
 
-**Phase 2 Decomposition Target:**
+**Cross-package context (resolved May 2026):** `runtime/src/builder.ts` (6,232 → 2,407 LOC) and `runtime/src/execution-engine.ts` (4,499 → 1,539 LOC) — both decomposed under W23/W24/W25. These were external to the reasoning package but mentioned here historically because they orchestrate the kernel; they no longer represent debt.
 
-- `builder.ts` — 6,082 LOC (strategy selection, config wiring)
-- `execution-engine.ts` — 4,499 LOC (not in reasoning; in runtime)
-
-Both need splitting into 3 focused components:
-1. Strategy selector
-2. Kernel coordinator
-3. State machine
+**Package-internal items still open:**
+- ToT outer loop doesn't honor `dispatcher-early-stop` (per inner loop fixed Apr 2026; outer loop still unhooked — each ToT branch is a separate sub-kernel)
+- Strategy routing opt-in via `withReasoning({ strategySwitching: { enabled: true } })` — disabled by default
+- cogito:14b historically inconsistent on reactive strategy — revalidate before any local-tier benchmark claim
 
 ---
 

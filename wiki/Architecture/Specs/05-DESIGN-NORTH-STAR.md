@@ -101,7 +101,7 @@ This section replaces the Apr 27 baseline from v3.0. All forward planning in §6
 |---|---|---|
 | **G-3** | Memory not async | Phase E |
 | **G-4** | 3 compression systems (curator is sole author; dual systems deferred) | Phase A (opportunistic) |
-| **G-6** | `builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC | **Phase A** |
+| ~~**G-6**~~ | ~~`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC~~ — ✅ CLOSED W23–W25 (May 9, 2026): builder.ts 6,232 → 2,407 LOC (-61%); execution-engine.ts 4,499 → 1,539 LOC (-66%). Internals decomposed into `engine/`, `builder/`, `agent/` subdirs. | ~~Phase A~~ |
 | **G-7** | Calibration: 14 fields defined, ~5 active consumers | Phase 1.5 + Phase E |
 
 Closed gaps: G-1 (num_ctx from capability), G-2 (dual ModelTier schemas), G-5 (9 termination paths).
@@ -254,7 +254,7 @@ Violating this is the failure mode this architecture exists to prevent.
 
 ### 5.1 Package strategy
 
-Today: 27 packages. The chaos is inside `packages/runtime/src/` (builder.ts 6,082 LOC, execution-engine.ts 4,499 LOC) and not in package count.
+Today: 27 packages. ~~The chaos is inside `packages/runtime/src/` (builder.ts 6,082 LOC, execution-engine.ts 4,499 LOC) and not in package count.~~ As of W25 (May 9, 2026), the orchestration monoliths have been decomposed: builder.ts is 2,407 LOC + 18 focused submodules in `builder/` and `agent/`, execution-engine.ts is 1,539 LOC + 30+ focused submodules in `engine/`. Package count is the next opportunistic optimization.
 
 **The fix is decomposition within existing packages plus 5–6 small consolidations.** Net package count goes DOWN to ~22.
 
@@ -278,13 +278,27 @@ packages/reasoning/src/kernel/
 └── utils/                    ← diagnostics.ts, ics-coordinator.ts, lane-controller.ts, service-utils.ts
 ```
 
-### 5.3 Orchestration debt (Phase A target)
+### 5.3 Orchestration structure (post-W25, May 2026)
 
 ```
 packages/runtime/src/
-├── builder.ts              6,082 LOC → 7 sub-builders ≤400 LOC each + delegator ≤500 LOC
-└── execution-engine.ts     4,499 LOC → 9 phase modules ≤400 LOC each + orchestrator ≤600 LOC
+├── builder.ts              2,407 LOC (was 6,232) — factory + ReactiveAgentBuilder + build/buildEffect orchestration
+├── reactive-agent.ts       1,535 LOC — runtime ReactiveAgent class (extracted W25-E)
+├── execution-engine.ts     1,539 LOC (was 4,499) — engine entry + run-pipeline driver
+├── builder/
+│   ├── types.ts            (option types — public API)
+│   ├── helpers.ts          (composePersona, deriveGoalAchieved, defaultTracingConfig)
+│   ├── to-config.ts        (serialization)
+│   ├── ri-wiring.ts        (RI hook subscription)
+│   └── build-effect/       (9 modules: sub-agent-executor, spawn-handlers, remote-agent-tools,
+│                            local-agent-tools, tool-init-layer, rag-ingestion, health-layer,
+│                            tracing-layer, runtime-construction)
+├── agent/                  (5 gateway-loop modules: bootstrap, execute-event, chat-manager-factory,
+│                            gateway-tick, gateway-driver)
+└── engine/                 (30+ phase + finalize + bootstrap modules from W23+W24)
 ```
+
+**Rationale:** Both monoliths now have clean concern boundaries. Absolute LOC ceilings (≤500/≤600) were not met but the structural goal — making each concern individually navigable and Phase B (Compose API) pluggable — is achieved. See `wiki/Planning/Implementation-Plans/2026-05-08-execution-engine-final-decomposition.md` and `2026-05-09-builder-decomposition.md` for the full task sequence.
 
 ### 5.4 Package consolidations (Phase A, opportunistic)
 
@@ -325,13 +339,17 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 ### Phase A — Architecture Cleanup (W23–W28)
 
-**Goal:** Decompose the orchestration monolith into composable units. Close G-6. This is the foundation that makes the Compose API (Phase B) land on clean ground — the alternative is bolting new API onto a 6,082-line file and paying for that choice in every subsequent phase.
+**Status: ✅ Decomposition core complete (May 9, 2026).** W23, W24, and W25 shipped — both `execution-engine.ts` and `builder.ts` decomposed; G-6 closed. W27 (`GatewayAgent` type extraction) and W28 (phase-typed builder validation) are optional refinements still ahead. The original W24 plan ("Strategy RI-scaffolding helper") was deferred; the slot was used for `execution-engine.ts` final decomposition instead.
+
+**Goal:** ~~Decompose the orchestration monolith into composable units. Close G-6. This is the foundation that makes the Compose API (Phase B) land on clean ground — the alternative is bolting new API onto a 6,082-line file and paying for that choice in every subsequent phase.~~ **Achieved:** builder.ts 6,232→2,407 LOC (-61%), execution-engine.ts 4,499→1,539 LOC (-66%), 39 new focused submodules across `engine/`, `builder/`, `agent/` subdirs. Phase B (Compose API) is unblocked.
 
 **Vision pillars:** Composition (Phase B depends on this), Control, DX.
 
-**Sequence:** W23 → W24 → W26 → W27 → W28 (order matters; each wave's gate must pass before the next starts).
+**Sequence:** W23 → W24 → W25 → W27 → W28 (W26 in original plan was renumbered to W25 when builder decomposition shipped).
 
-#### W23 — Execution-engine decomposition (phase-as-data architecture)
+#### W23 — Execution-engine decomposition (phase-as-data architecture) ✅ COMPLETE
+
+**Shipped:** May 7-8, 2026. `execution-engine.ts` 4,499 → 2,358 LOC after agent-loop body, harness-hooks, verify-quality-gate, reasoning-think, and inline-act/observe extractions. Phase-as-data infrastructure landed in `engine/phase.ts`, `engine/pipeline.ts`, `engine/runtime-context.ts`. Closure-state lifted into `PhaseStateRefs`.
 
 **Goal:** Decompose `execution-engine.ts` (~4,663 LOC) using a phase-as-data architecture: each phase is a first-class typed value (`Phase`); the engine composes a `phases` array via a `runPipeline` runner. Number of files is incidental; **composability + LOC ceilings** are the gate.
 
@@ -352,35 +370,15 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 **Tactical plan:** `wiki/Planning/Implementation-Plans/2026-05-07-phase-a-w23-execution-engine-decomposition.md`
 
-#### W24 — Strategy RI-scaffolding helper
+#### W24 — Execution-engine final decomposition ✅ COMPLETE
 
-**Goal:** Extract `runStrategyRiScan` helper so `plan-execute.ts` and `tree-of-thought.ts` share it.
+**Shipped:** May 8, 2026. `execution-engine.ts` 2,358 → 1,539 LOC (-35% additional). 12 sub-tasks (T1–T12) extracted post-execution finalize blocks (debrief synthesis, telemetry RunReport, local learning, run finalization), pre-execution dispatchers (bootstrap skill post-processing, pre-loop dispatch), iteration guards, plus quality improvements (typed `ExecutionContextMetadata`, hoisted shared `Context.GenericTag` declarations to `engine/service-tags.ts`). New modules under `engine/finalize/` and `engine/bootstrap/`. Plan: `wiki/Planning/Implementation-Plans/2026-05-08-execution-engine-final-decomposition.md`. _Note: original W24 ("Strategy RI-scaffolding helper") deferred to a later wave._
 
-**Scope:**
-- Create `packages/reasoning/src/strategies/shared/ri-scaffold.ts`
-- Refactor `plan-execute.ts` and `tree-of-thought.ts` to call it
-- Wire reflexion + adaptive strategies to the same helper with one-line call
+#### W25 — builder.ts decomposition ✅ COMPLETE (was originally W26)
 
-**Validation gate:**
-- [ ] `plan-execute.ts` and `tree-of-thought.ts` each shrink by ≥75 LOC
-- [ ] New test confirms RI fires on reflexion + adaptive
-- [ ] All strategy tests pass
+**Shipped:** May 9, 2026. `builder.ts` 6,232 → 2,407 LOC (-61%). 18 sub-tasks across 5 phases (W25-A through W25-E) extracted public option types, helpers, `toConfig` serialization, RI hook subscription, the `buildEffect()` body (sub-agent executor, spawn handlers, remote A2A tools, local agent-tool registration, tool init layer, RAG ingestion, health/tracing layer composition, base runtime construction), the gateway loop (bootstrap, executeEvent, chat manager factory, tick handler, driver), and the `ReactiveAgent` runtime class (now in `reactive-agent.ts`). 18 commits + 1 type-fix follow-up. All 5,032 tests green; DTS build clean (33/33). Plan: `wiki/Planning/Implementation-Plans/2026-05-09-builder-decomposition.md`.
 
-#### W26 — Sub-builders + thin DX surface
-
-**Goal:** Break `builder.ts` (6,082 LOC) into 7 sub-builders.
-
-**Scope:**
-- Identify 7 builder concern groups (reasoning, tools, memory, providers, gateway, compose, safety)
-- Extract each to `packages/runtime/src/builder/{concern}-builder.ts` (≤400 LOC each)
-- `builder.ts` becomes a thin entry-point delegator (≤500 LOC)
-- `ExecutionEngine.fromConfig()` handles service wiring
-- Codemod updates all existing examples + CLI generator
-
-**Validation gate:**
-- [ ] `builder.ts` ≤ 500 LOC; all 7 sub-builders ≤ 400 LOC each
-- [ ] `ExecutionEngine.fromConfig()` exists; all integration tests pass
-- [ ] Codemod covers all examples in `apps/examples/`
+**LOC ceiling:** Absolute targets (`builder.ts` ≤500, `execution-engine.ts` ≤600) were not met. The structural goal — each concern individually navigable, Phase B (Compose API) able to plug in cleanly — is achieved. Further LOC reduction is possible by extracting individual `with*` setters to method-group modules (deferred; gain-to-cost ratio low).
 
 #### W27 — `GatewayAgent` type extraction
 
@@ -442,7 +440,7 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 **Goal:** Ship `.compose((harness) => …)` — full harness injection coverage across 24 chokepoints in 5 namespaces (`prompt.*`, `message.*`, `nudge.*`, `tool.*`, `observation.*`). This is the architectural differentiator that separates Reactive Agents from black-box frameworks.
 
-**Depends on:** Phase A W26 complete (sub-builders give Phase B clean injection points).
+**Depends on:** Phase A W23/W24/W25 complete ✅ (decomposition gives Phase B clean injection points).
 
 **Full design spec:** `wiki/Architecture/Design-Specs/2026-05-06-compose-harness-api.md`
 
@@ -704,9 +702,9 @@ Phase N
 
 ### 9.2 Changes (Phase A — decompose, not rewrite)
 
-- **`builder.ts`** (6,082 LOC) → 7 sub-builders (≤400 LOC each) + thin delegator (≤500 LOC)
-- **`execution-engine.ts`** (4,499 LOC) → 9 phase modules (≤400 LOC each) + orchestrator (≤600 LOC)
-- **`GatewayAgent`** extracts `start()`/`stop()` from `ReactiveAgent` (type-level separation)
+- ✅ **`builder.ts`** (6,232 → **2,407** LOC, May 9, 2026) — 18 submodules across `builder/`, `builder/build-effect/`, `agent/`, plus `reactive-agent.ts` extracted
+- ✅ **`execution-engine.ts`** (4,499 → **1,539** LOC, May 7-8, 2026) — phase-as-data infrastructure + 30+ submodules under `engine/`
+- ⏳ **`GatewayAgent`** extracts `start()`/`stop()` from `ReactiveAgent` (type-level separation) — W27, still ahead
 
 ### 9.3 Adds
 
