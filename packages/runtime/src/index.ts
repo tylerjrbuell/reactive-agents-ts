@@ -63,9 +63,9 @@ export type { ReasoningOptionsEncoded } from "./reasoning-options-schema.js";
 export {
   ReactiveAgents,
   ReactiveAgentBuilder,
-  ReactiveAgent,
   deriveGoalAchieved,
 } from "./builder.js";
+export { ReactiveAgent } from "./reactive-agent.js";
 export type {
   AgentResult,
   AgentResultMetadata,
