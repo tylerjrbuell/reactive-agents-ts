@@ -36,6 +36,7 @@ import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
 import { wireRiHooks } from './builder/ri-wiring.js'
+import { bootstrapGateway } from './agent/gateway-bootstrap.js'
 import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
@@ -3769,169 +3770,34 @@ export class ReactiveAgent {
 
         // Start the loop asynchronously
         const loopPromise = (async () => {
-            let gw: any
-            let sched: any
-            let eb: any = null
-            let obs: any = null
-            try {
-                const services = await self.runtime.runPromise(
-                    Effect.gen(function* () {
-                        const gwMod = yield* Effect.promise(
-                            () => import('@reactive-agents/gateway')
-                        )
-                        const g = yield* gwMod.GatewayService as any
-                        const s = yield* gwMod.SchedulerService as any
-                        return { gw: g, sched: s }
-                    }) as Effect.Effect<any>
-                )
-                gw = services.gw
-                sched = services.sched
-            } catch (err) {
+            const channelsCfg = self._channelsConfig
+            const bootstrap = await bootstrapGateway({
+                runtime: self.runtime,
+                channelsConfig: channelsCfg,
+                gatewayIntervalMs: self._gatewayIntervalMs,
+                createSession: (sessionId) =>
+                    self.session({
+                        id: sessionId,
+                        persist: self._sessionPersist,
+                    }),
+            })
+
+            if (!bootstrap.ok) {
                 const summary: GatewaySummary = {
                     heartbeatsFired,
                     totalRuns,
                     cronChecks,
                     chatTurns,
-                    error: 'Gateway not configured. Call .withGateway() before .start()',
+                    error: bootstrap.error.message,
                 }
                 ;(resolveStop as ((s: GatewaySummary) => void) | null)?.(
                     summary
                 )
-                throw new Error(
-                    'Gateway not configured. Call .withGateway() before .start()'
-                )
+                throw bootstrap.error
             }
 
-            // Resolve EventBus for observability (optional)
-            try {
-                eb = await self.runtime.runPromise(
-                    Effect.gen(function* () {
-                        const coreMod = yield* Effect.promise(
-                            () => import('@reactive-agents/core')
-                        )
-                        return yield* coreMod.EventBus as any
-                    }) as Effect.Effect<any>
-                )
-            } catch {
-                /* EventBus not in runtime — no observability */
-            }
-
-            // Resolve ObservabilityService for structured logging (optional)
-            try {
-                obs = await self.runtime.runPromise(
-                    Effect.gen(function* () {
-                        const obsMod = yield* Effect.promise(
-                            () => import('@reactive-agents/observability')
-                        )
-                        return yield* obsMod.ObservabilityService as any
-                    }) as Effect.Effect<any>
-                )
-            } catch {
-                /* ObservabilityService not in runtime — no logging */
-            }
-
-            // Gateway log helper — routes through ObservabilityService when available
-            const glog = (
-                level: string,
-                message: string,
-                metadata?: Record<string, unknown>
-            ) => {
-                if (!obs) return
-                self.runtime
-                    .runPromise(
-                        obs.log(level, `◉ [gateway] ${message}`, metadata ?? {})
-                    )
-                    .catch(() => {})
-            }
-
-            glog('info', `started (interval=${self._gatewayIntervalMs}ms)`)
-
-            const channelsCfg = self._channelsConfig
-            if (channelsCfg?.adapters && channelsCfg.adapters.length > 0) {
-                try {
-                    const chMod = await import('@reactive-agents/channels')
-                    const triggers = new chMod.TriggerRegistry()
-                    for (const t of channelsCfg.triggers ?? []) {
-                        triggers.register(t)
-                    }
-                    if (channelsCfg.defaultAgent) {
-                        triggers.setDefaultAgent(channelsCfg.defaultAgent)
-                    }
-                    const sessions = new chMod.SessionBridge({
-                        agentFactory: async (agentConfig, sessionId) => {
-                            const session = self.session({
-                                id: sessionId,
-                                persist: self._sessionPersist,
-                            })
-                            const prefixParts: string[] = []
-                            if (agentConfig?.systemPrompt) {
-                                prefixParts.push(agentConfig.systemPrompt)
-                            }
-                            if (agentConfig?.persona?.instructions) {
-                                prefixParts.push(agentConfig.persona.instructions)
-                            }
-                            const prefix =
-                                prefixParts.length > 0
-                                    ? `${prefixParts.join('\n\n')}\n\n---\n\n`
-                                    : ''
-                            return {
-                                chat: async (message: string) => {
-                                    const r = await session.chat(
-                                        `${prefix}${message}`
-                                    )
-                                    return {
-                                        message: r.message,
-                                        tokens: r.tokens,
-                                    }
-                                },
-                            }
-                        },
-                    })
-                    const channelSvc = new chMod.ChannelService({
-                        triggers,
-                        sessions,
-                        evaluatePolicy: (event) => gw.processEvent(event),
-                        taskId: () => generateTaskId(),
-                        eventBus:
-                            eb !== null
-                                ? {
-                                      publish: (e: AgentEvent) =>
-                                          eb.publish(e) as Effect.Effect<
-                                              void,
-                                              never
-                                          >,
-                                  }
-                                : undefined,
-                    })
-                    for (const adapter of channelsCfg.adapters) {
-                        await Effect.runPromise(
-                            channelSvc.registerAdapter(adapter)
-                        )
-                    }
-                    glog(
-                        'info',
-                        `channels: started ${channelsCfg.adapters.length} adapter(s)`
-                    )
-                    channelAdaptersCleanup = async () => {
-                        for (const adapter of channelsCfg.adapters) {
-                            try {
-                                await Effect.runPromise(adapter.disconnect())
-                            } catch {
-                                /* ignore */
-                            }
-                        }
-                    }
-                } catch (err) {
-                    glog(
-                        'error',
-                        `channels: failed to start — ${
-                            err instanceof Error
-                                ? err.message
-                                : String(err)
-                        }`
-                    )
-                }
-            }
+            const { gw, sched, eb, glog } = bootstrap
+            channelAdaptersCleanup = bootstrap.channelAdaptersCleanup
 
             // Helper to publish events safely
             const publish = async (event: any) => {
