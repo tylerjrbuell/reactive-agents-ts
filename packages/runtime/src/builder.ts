@@ -31,6 +31,7 @@ import {
     createDynamicSpawnRegistrations,
 } from './builder/build-effect/local-agent-tools.js'
 import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
+import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
 import type {
@@ -2603,63 +2604,15 @@ export class ReactiveAgentBuilder {
                 )
             }
 
-            // Resolve the shared RAG store for runtime ingestion support.
-            // The ragMemoryStore is a module-level Map shared with the rag-search handler.
-            // We eagerly resolve it when tools are enabled so agent.ingest() works at runtime.
-            let ragStore:
-                | import('@reactive-agents/tools').RagMemoryStore
-                | undefined
-            if (
-                documents.length > 0 ||
-                toolsOptions ||
-                agentTools.length > 0 ||
-                allowDynamicSubAgents ||
-                mcpServers.length > 0
-            ) {
-                const { ragMemoryStore: sharedStore } = yield* Effect.promise(
-                    () => import('@reactive-agents/tools')
-                )
-                ragStore = sharedStore
-
-                // Pre-populate RAG store with documents provided via .withDocuments()
-                if (documents.length > 0) {
-                    const { ingestDocuments } = yield* Effect.promise(
-                        () => import('./context-ingestion.js')
-                    )
-                    yield* ingestDocuments(documents, sharedStore)
-                }
-
-                // Back-fill meta-tools staticBriefInfo with actual document index
-                if (kernelMetaTools?.staticBriefInfo && ragStore) {
-                    const indexedDocuments = [
-                        ...(ragStore as Map<string, unknown[]>).entries(),
-                    ].map(([source, chunks]) => ({
-                        source,
-                        chunkCount: chunks.length,
-                        format:
-                            (chunks[0] as { metadata?: { format?: string } })
-                                ?.metadata?.format ?? 'text',
-                    }))
-                    type StaticBriefBackfill = {
-                        indexedDocuments: Array<{
-                            source: string
-                            chunkCount: number
-                            format: string
-                        }>
-                        readonly availableSkills: readonly {
-                            readonly name: string
-                            readonly purpose: string
-                        }[]
-                        readonly memoryBootstrap: {
-                            readonly semanticLines: number
-                            readonly episodicEntries: number
-                        }
-                    }
-                    ;(
-                        kernelMetaTools.staticBriefInfo as StaticBriefBackfill
-                    ).indexedDocuments = indexedDocuments
-                }
-            }
+            // RAG ingestion + meta-tool back-fill — extracted to ./builder/build-effect/rag-ingestion.ts (W25-B step 4)
+            const ragStore = yield* ingestRagDocuments({
+                documents,
+                toolsOptions,
+                agentTools,
+                allowDynamicSubAgents,
+                mcpServers,
+                kernelMetaTools,
+            })
 
             // Wire health layer when enabled
             if (enableHealthCheck) {
