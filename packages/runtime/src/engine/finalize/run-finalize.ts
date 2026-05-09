@@ -10,16 +10,10 @@
 import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task, TaskResult } from "@reactive-agents/core";
-import type { AgentEvent } from "@reactive-agents/core";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type EbLike = {
-  publish: (event: AgentEvent) => Effect.Effect<void, never>;
-};
+import type { EbLike } from "../runtime-context.js";
 
 // ─── Deps interface ───────────────────────────────────────────────────────────
 

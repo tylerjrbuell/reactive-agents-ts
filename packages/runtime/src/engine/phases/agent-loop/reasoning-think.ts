@@ -25,10 +25,7 @@ import {
   normalizeReasoningResult,
   type ExecutionReasoningResult,
 } from "../../util.js";
-
-type ReasoningServiceLike = {
-  execute: (req: Record<string, unknown>) => Effect.Effect<unknown, unknown>;
-};
+import type { ReasoningServiceLike } from "../../types-reasoning.js";
 
 export interface ReasoningThinkDeps {
   readonly config: ReactiveAgentsConfig;

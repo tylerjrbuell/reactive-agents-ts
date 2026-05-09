@@ -21,30 +21,7 @@ import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
 import { extractTaskText, normalizeReasoningResult } from "../../util.js";
-
-type ReasoningServiceLike = {
-  execute: (req: {
-    taskDescription: string;
-    taskType?: string;
-    memoryContext: string;
-    availableTools: readonly unknown[];
-    availableToolSchemas: readonly unknown[];
-    allToolSchemas: readonly unknown[];
-    strategy: string;
-    contextProfile: Record<string, unknown>;
-    providerName: string;
-    systemPrompt?: string;
-    taskId: string;
-    agentId?: string;
-    sessionId: string;
-    modelId: string;
-    taskCategory: string;
-    temperature?: number;
-    environmentContext?: Record<string, string>;
-    initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
-    calibration?: ModelCalibration;
-  }) => Effect.Effect<unknown, unknown>;
-};
+import type { ReasoningServiceLike } from "../../types-reasoning.js";
 
 export interface VerificationThinkRetryDeps {
   readonly config: ReactiveAgentsConfig;

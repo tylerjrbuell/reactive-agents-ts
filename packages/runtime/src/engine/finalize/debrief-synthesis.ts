@@ -20,15 +20,7 @@ import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "../../d
 import { DebriefStoreService } from "@reactive-agents/memory";
 import type { AgentDebriefShape } from "@reactive-agents/memory";
 import { extractTaskText } from "../util.js";
-
-// ─── Narrow service types (mirrors execution-engine.ts) ───
-
-type EbLike = {
-  publish: (event: {
-    _tag: string;
-    [key: string]: unknown;
-  }) => Effect.Effect<void, never>;
-};
+import type { EbLike } from "../runtime-context.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
