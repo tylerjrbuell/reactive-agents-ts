@@ -35,6 +35,7 @@ import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
+import { wireRiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
@@ -1976,65 +1977,9 @@ export class ReactiveAgentBuilder {
             throw unwrapError(e)
         })
 
-        // Wire _riHooks to EventBus events so they fire during runs
+        // RI hook subscription — extracted to ./builder/ri-wiring.ts (W25-C step 1)
         if (this._riHooks) {
-            const hooks = this._riHooks
-            if (hooks.onEntropyScored) {
-                await agent.subscribe('EntropyScored', (event) =>
-                    hooks.onEntropyScored!(event, event.iteration)
-                )
-            }
-            if (hooks.onControllerDecision) {
-                await agent.subscribe('ReactiveDecision', (event) =>
-                    hooks.onControllerDecision!(event, {
-                        iteration: event.iteration,
-                        entropyBefore: event.entropyBefore,
-                    })
-                )
-            }
-            if (hooks.onMidRunAdjustment) {
-                await agent.subscribe('InterventionDispatched', (event) =>
-                    hooks.onMidRunAdjustment!(
-                        'intervention',
-                        { decisionType: event.decisionType },
-                        { patchKind: event.patchKind }
-                    )
-                )
-            }
-            // Skill lifecycle hooks (W2 FIX-6) — events defined at
-            // core/services/event-bus.ts:986-990; subscribers added here so the
-            // 3 advertised hooks (onSkillActivated/onSkillRefined/onSkillConflict)
-            // actually fire instead of silently storing dead callbacks.
-            if (hooks.onSkillActivated) {
-                await agent.subscribe('SkillActivated', (event) =>
-                    hooks.onSkillActivated!(
-                        {
-                            name: event.skillName,
-                            version: event.version,
-                            confidence: event.confidence,
-                            iteration: event.iteration,
-                        },
-                        event.trigger
-                    )
-                )
-            }
-            if (hooks.onSkillRefined) {
-                await agent.subscribe('SkillRefined', (event) =>
-                    hooks.onSkillRefined!(
-                        {
-                            name: event.skillName,
-                            version: event.newVersion,
-                            taskCategory: event.taskCategory,
-                        },
-                        event.previousVersion
-                    )
-                )
-            }
-            if (hooks.onSkillConflict) {
-                await agent.subscribe('SkillConflictDetected', (event) =>
-                    hooks.onSkillConflict!(event.skillA, event.skillB)
-                )
-            }
+            await wireRiHooks(agent, this._riHooks)
         }
 
         return agent
