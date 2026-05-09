@@ -31,6 +31,8 @@ import {
     createDynamicSpawnRegistrations,
 } from './builder/build-effect/local-agent-tools.js'
 import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
+import { composeHealthLayer } from './builder/build-effect/health-layer.js'
+import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
@@ -85,7 +87,6 @@ import {
 import type { AgentDebrief } from './debrief.js'
 import type { DocumentSpec } from './context-ingestion.js'
 import { Health } from '@reactive-agents/health'
-import { makeHealthService } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
   GatewayChatManager,
@@ -2614,42 +2615,22 @@ export class ReactiveAgentBuilder {
                 kernelMetaTools,
             })
 
-            // Wire health layer when enabled
-            if (enableHealthCheck) {
-                const healthServiceLayer = Layer.effect(
-                    Health,
-                    makeHealthService({ port: 0, agentName: agentIdCapture })
-                ).pipe(
-                    Layer.provide(fullRuntime as unknown as Layer.Layer<any>)
-                )
+            // Wire health layer when enabled — extracted to ./builder/build-effect/health-layer.ts (W25-B step 5)
+            fullRuntime = composeHealthLayer(
+                fullRuntime as unknown as Layer.Layer<unknown>,
+                {
+                    enableHealthCheck,
+                    agentName: agentIdCapture,
+                }
+            ) as unknown as Layer.Layer<unknown, unknown>
 
-                fullRuntime = Layer.merge(
-                    fullRuntime as unknown as Layer.Layer<any>,
-                    healthServiceLayer
-                )
-            }
-
-            // Wire tracing layers when .withTracing() was called
-            if (self._tracingConfig !== null) {
-                const { TraceRecorderServiceLive, TraceBridgeLayer } =
-                    yield* Effect.promise(
-                        () => import('@reactive-agents/trace')
-                    )
-                const recorderLayer = TraceRecorderServiceLive({
-                    dir: self._tracingConfig.dir,
-                })
-                const bridgeLayer = TraceBridgeLayer.pipe(
-                    Layer.provide(recorderLayer),
-                    Layer.provide(fullRuntime as unknown as Layer.Layer<any>)
-                )
-                fullRuntime = Layer.merge(
-                    Layer.merge(
-                        fullRuntime as unknown as Layer.Layer<any>,
-                        recorderLayer as unknown as Layer.Layer<any>
-                    ),
-                    bridgeLayer as unknown as Layer.Layer<any>
-                )
-            }
+            // Wire tracing layers when .withTracing() was called — extracted to ./builder/build-effect/tracing-layer.ts (W25-B step 6)
+            fullRuntime = (yield* composeTracingLayer(
+                fullRuntime as unknown as Layer.Layer<unknown>,
+                {
+                    tracingConfig: self._tracingConfig,
+                }
+            )) as unknown as Layer.Layer<unknown, unknown>
 
             // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
             // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
