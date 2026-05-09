@@ -10,7 +10,8 @@ import {
     Queue,
     Option,
 } from 'effect'
-import { createRuntime, createLightRuntime } from './runtime.js'
+// createRuntime usage extracted to ./builder/build-effect/runtime-construction.ts (W25-B step 7)
+// createLightRuntime is no longer used directly from builder.ts.
 import type { MCPServerConfig } from './runtime.js'
 import {
     defaultTracingConfig,
@@ -34,6 +35,10 @@ import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
+import {
+    buildBaseRuntimeAndEngine,
+    type BuilderRuntimeStateView,
+} from './builder/build-effect/runtime-construction.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
 import type {
@@ -44,11 +49,7 @@ import type {
 } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapError } from './errors.js'
-import type {
-    ReasoningConfig,
-    ContextProfile,
-    KernelMetaToolsConfig,
-} from '@reactive-agents/reasoning'
+import type { ContextProfile } from '@reactive-agents/reasoning'
 import type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 import type { CalibrationMode } from './types.js'
 import type {
@@ -2135,185 +2136,14 @@ export class ReactiveAgentBuilder {
                     : personaPrompt
             }
 
-            // Meta-tools are on by default when tools are enabled.
-            // Only skip if explicitly disabled via .withMetaTools(false) (which sets _metaTools to false).
-            const effectiveMetaTools:
-                | import('./types.js').MetaToolsConfig
-                | false
-                | undefined =
-                self._metaTools !== undefined
-                    ? self._metaTools // explicit config or false
-                    : self._enableTools
-                    ? {
-                          brief: true,
-                          find: true,
-                          pulse: true,
-                          recall: true,
-                          harnessSkill: true,
-                      }
-                    : undefined // no tools enabled — no meta-tools either
-
-            // Resolve meta-tools configuration before building the runtime
-            let kernelMetaTools: KernelMetaToolsConfig | undefined
-            if (effectiveMetaTools) {
-                const mt = effectiveMetaTools
-
-                // Determine model tier for harness skill selection
-                const tier: 'frontier' | 'local' =
-                    self._provider === 'ollama' || self._provider === 'litellm'
-                        ? 'local'
-                        : 'frontier'
-
-                // Resolve harness content (filesystem or inline string)
-                let harnessContent: string | undefined
-                if (mt.harnessSkill !== false) {
-                    const { resolveHarnessSkill } = yield* Effect.promise(
-                        () => import('./harness-resolver.js')
-                    )
-                    const resolved = yield* Effect.promise(() =>
-                        resolveHarnessSkill(mt.harnessSkill ?? true, tier)
-                    )
-                    if (resolved) harnessContent = resolved
-                }
-
-                kernelMetaTools = {
-                    brief: mt.brief,
-                    find: mt.find,
-                    pulse: mt.pulse,
-                    recall: mt.recall,
-                    staticBriefInfo: {
-                        indexedDocuments: [],
-                        availableSkills: [],
-                        memoryBootstrap: {
-                            semanticLines: 0,
-                            episodicEntries: 0,
-                        },
-                    },
-                    harnessContent,
-                }
-            }
-
-            const composedExtraLayers = self._extraLayers
-            /** Merged after `ExecutionEngine` is resolved so init does not run under transient `provide` scope (see CortexReporterLive). */
-            let cortexReporterLayer: Layer.Layer<unknown> | null = null
-            if (self._cortexUrl !== null) {
-                const { RuntimeCortexReporterLive } = yield* Effect.promise(
-                    () => import('./cortex-reporter.js')
-                )
-                cortexReporterLayer = RuntimeCortexReporterLive(
-                    self._cortexUrl
-                ) as Layer.Layer<unknown>
-            }
-
-            const baseRuntime = createRuntime({
-                agentId,
-                provider: self._provider,
-                model: self._model,
-                thinking: self._thinking,
-                temperature: self._temperature,
-                maxTokens: self._maxTokens,
-                memoryTier: self._memoryTier,
-                maxIterations: self._maxIterations,
-                enableGuardrails: self._enableGuardrails,
-                enableVerification: self._enableVerification,
-                enableCostTracking: self._enableCostTracking,
-                enableAudit: self._enableAudit,
-                enableReasoning: self._enableReasoning,
-                enableTools: self._enableTools,
-                enableIdentity: self._enableIdentity,
-                enableObservability: self._enableObservability,
-                observabilityOptions: self._observabilityOptions,
-                enableInteraction: self._enableInteraction,
-                enablePrompts: self._enablePrompts,
-                enableOrchestration: self._enableOrchestration,
-                enableKillSwitch: self._enableKillSwitch,
-                enableBehavioralContracts: self._enableBehavioralContracts,
-                behavioralContract: self._behavioralContract,
-                enableSelfImprovement: self._enableSelfImprovement,
-                testScenario: self._testScenario,
-                extraLayers: composedExtraLayers,
-                systemPrompt: composedSystemPrompt,
-                environmentContext: self._environmentContext,
-                mcpServers:
-                    self._mcpServers.length > 0 ? self._mcpServers : undefined,
-                reasoningOptions: self._reasoningOptions,
-                enableA2A: !!self._a2aOptions,
-                a2aPort: self._a2aOptions?.port,
-                a2aBasePath: self._a2aOptions?.basePath,
-                enableGateway: !!self._gatewayOptions,
-                gatewayOptions: self._gatewayOptions,
-                contextProfile: self._contextProfile,
-                resultCompression: self._resultCompression,
-                telemetryConfig: self._telemetryConfig,
-                memoryOptions: self._memoryOptions,
-                guardrailsOptions: self._guardrailsOptions,
-                verificationOptions: self._verificationOptions,
-                costTrackingOptions: self._costTrackingOptions,
-                circuitBreakerConfig: self._circuitBreakerConfig,
-                rateLimiterConfig: self._rateLimiterConfig,
-                // Auto-enable adaptive required tools when reasoning + tools are both active
-                // and the user hasn't explicitly configured required tools. This ensures the
-                // kernel's completion guard can enforce that task-critical tools are called.
-                requiredTools:
-                    self._requiredToolsConfig ??
-                    (self._enableReasoning && self._enableTools
-                        ? { adaptive: true }
-                        : undefined),
-                allowedTools: self._toolsOptions?.allowedTools,
-                adaptiveToolFiltering: self._toolsOptions?.adaptive,
-                builtins: self._toolsOptions?.builtins,
-                enableMemory: self._enableMemory,
-                enableExperienceLearning: self._enableExperienceLearning,
-                enableMemoryConsolidation: self._enableMemoryConsolidation,
-                consolidationConfig: self._consolidationConfig,
-                executionTimeoutMs: self._executionTimeoutMs,
-                retryPolicy: self._retryPolicy,
-                cacheTimeoutMs: self._cacheTimeoutMs,
-                sessionPersist: self._sessionPersist,
-                sessionMaxAgeDays: self._sessionMaxAgeDays,
-                loggingConfig: self._loggingConfig as
-                    | import('@reactive-agents/observability').LoggingConfig
-                    | undefined,
-                enableHealthCheck: self._enableHealthCheck,
-                minIterations: self._minIterations,
-                taskContext: self._taskContext,
-                progressCheckpoint: self._progressCheckpoint,
-                verificationStep: self._verificationStep,
-                outputValidator: self._outputValidator,
-                outputValidatorOptions: self._outputValidatorOptions,
-                customTermination: self._customTermination,
-                enableReactiveIntelligence: self._enableReactiveIntelligence,
-                reactiveIntelligenceOptions: self._reactiveIntelligenceOptions,
-                ...(self._skillsConfig?.paths?.length
-                    ? {
-                          skills: {
-                              paths: [...self._skillsConfig.paths],
-                              ...(self._skillsConfig.evolution
-                                  ? {
-                                        evolution: {
-                                            ...self._skillsConfig.evolution,
-                                        },
-                                    }
-                                  : {}),
-                          },
-                      }
-                    : {}),
-                fallbackConfig: self._fallbackConfig,
-                pricingRegistry:
-                    Object.keys(self._pricingRegistry).length > 0
-                        ? self._pricingRegistry
-                        : undefined,
-                metaTools: kernelMetaTools,
-                // Auto-enable calibration when reasoning is active and user hasn't explicitly skipped.
-                // This ensures per-model adaptation (steering channel, parallel capability, classifier
-                // reliability) works by default — users only need .withCalibration("skip") to opt out.
-                calibration:
-                    self._calibration !== 'skip'
-                        ? self._calibration
-                        : self._enableReasoning
-                        ? 'auto'
-                        : undefined,
-            })
+            // Base runtime + cortex + meta-tools + engine resolution — extracted to
+            // ./builder/build-effect/runtime-construction.ts (W25-B step 7).
+            const { baseRuntime, runtimeWithCortex, engine, kernelMetaTools } =
+                yield* buildBaseRuntimeAndEngine({
+                    agentId,
+                    composedSystemPrompt,
+                    state: self as unknown as BuilderRuntimeStateView,
+                })
 
             const hooks = [...self._hooks]
             const mcpServers = [...self._mcpServers]
@@ -2342,23 +2172,6 @@ export class ReactiveAgentBuilder {
             const parentObservabilityOptions = self._observabilityOptions
             const parentContextProfile = self._contextProfile
             const parentEnableCostTracking = self._enableCostTracking
-
-            const engine = yield* ExecutionEngine.pipe(
-                Effect.provide(baseRuntime)
-            )
-
-            const runtimeWithCortex: Layer.Layer<any, any> = cortexReporterLayer
-                ? (Layer.merge(
-                      baseRuntime as unknown as Layer.Layer<any>,
-                      (cortexReporterLayer as unknown as Layer.Layer<any>).pipe(
-                          // Layer.merge does not auto-feed sibling outputs into sibling requirements.
-                          // Explicitly provide baseRuntime so reporter can resolve EventBus.
-                          Layer.provide(
-                              baseRuntime as unknown as Layer.Layer<any>
-                          )
-                      )
-                  ) as Layer.Layer<any, any>)
-                : (baseRuntime as Layer.Layer<any, any>)
 
             for (const hook of hooks) {
                 yield* engine.registerHook(hook)

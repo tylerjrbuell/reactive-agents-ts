@@ -1,0 +1,390 @@
+/**
+ * Base runtime + cortex layer + meta-tools + ExecutionEngine resolution.
+ *
+ * Owns the four-step initialization that produces the foundational
+ * runtime layer used by the rest of buildEffect():
+ *
+ *  1. Resolve `kernelMetaTools` (with harness-skill content) from
+ *     the builder's `_metaTools` config.
+ *  2. Resolve the optional `cortexReporterLayer` if .withCortex() is set.
+ *  3. Call `createRuntime(...)` with ~60 builder-state fields to
+ *     produce `baseRuntime`.
+ *  4. Resolve `ExecutionEngine` against the base runtime, then
+ *     conditionally merge the cortex reporter into `runtimeWithCortex`.
+ *
+ * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
+ */
+
+import { Effect, Layer } from "effect";
+import type { Context } from "effect";
+import { createRuntime } from "../../runtime.js";
+import type { MCPServerConfig } from "../../runtime.js";
+import { ExecutionEngine } from "../../execution-engine.js";
+import type {
+  ContextProfile,
+  KernelMetaToolsConfig,
+} from "@reactive-agents/reasoning";
+import type { ReasoningOptions, CalibrationMode } from "../../types.js";
+import type { TestTurn } from "@reactive-agents/llm-provider";
+import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import type { TelemetryConfig } from "@reactive-agents/observability";
+import type {
+  ProviderName,
+  ToolsOptions,
+  MemoryOptions,
+  CostTrackingOptions,
+  GuardrailsOptions,
+  VerificationOptions,
+  ObservabilityOptions,
+  A2AOptions,
+  GatewayOptions,
+} from "../types.js";
+
+/**
+ * Structural view over the builder state fields read by
+ * {@link buildBaseRuntimeAndEngine}. The `ReactiveAgentBuilder` class
+ * structurally satisfies this interface — call sites cast via
+ * `self as unknown as BuilderRuntimeStateView`.
+ *
+ * Keep field types in sync with the corresponding `_*` declarations on
+ * `ReactiveAgentBuilder` in `builder.ts`.
+ */
+export interface BuilderRuntimeStateView {
+  readonly _provider: ProviderName;
+  readonly _model?: string;
+  readonly _thinking?: boolean;
+  readonly _temperature?: number;
+  readonly _maxTokens?: number;
+  readonly _memoryTier: "1" | "2";
+  readonly _maxIterations: number | undefined;
+  readonly _enableGuardrails: boolean;
+  readonly _enableVerification: boolean;
+  readonly _enableCostTracking: boolean;
+  readonly _enableAudit: boolean;
+  readonly _enableReasoning: boolean;
+  readonly _enableTools: boolean;
+  readonly _enableIdentity: boolean;
+  readonly _enableObservability: boolean;
+  readonly _observabilityOptions: ObservabilityOptions;
+  readonly _enableInteraction: boolean;
+  readonly _enablePrompts: boolean;
+  readonly _enableOrchestration: boolean;
+  readonly _enableKillSwitch: boolean;
+  readonly _enableBehavioralContracts: boolean;
+  readonly _behavioralContract?: import("@reactive-agents/guardrails").BehavioralContract;
+  readonly _enableSelfImprovement: boolean;
+  readonly _testScenario?: TestTurn[];
+  readonly _extraLayers?: Layer.Layer<any, any, any>;
+  readonly _environmentContext?: Record<string, string>;
+  readonly _mcpServers: MCPServerConfig[];
+  readonly _reasoningOptions?: ReasoningOptions;
+  readonly _a2aOptions?: A2AOptions;
+  readonly _gatewayOptions?: GatewayOptions;
+  readonly _contextProfile?: Partial<ContextProfile>;
+  readonly _resultCompression?: ResultCompressionConfig;
+  readonly _telemetryConfig?: TelemetryConfig;
+  readonly _memoryOptions?: MemoryOptions;
+  readonly _guardrailsOptions?: GuardrailsOptions;
+  readonly _verificationOptions?: VerificationOptions;
+  readonly _costTrackingOptions?: CostTrackingOptions;
+  readonly _circuitBreakerConfig?: Partial<
+    import("@reactive-agents/llm-provider").CircuitBreakerConfig
+  >;
+  readonly _rateLimiterConfig?: import("@reactive-agents/llm-provider").RateLimiterConfig;
+  readonly _requiredToolsConfig?: {
+    tools?: readonly string[];
+    adaptive?: boolean;
+    maxRetries?: number;
+  };
+  readonly _toolsOptions?: ToolsOptions;
+  readonly _enableMemory: boolean;
+  readonly _enableExperienceLearning: boolean;
+  readonly _enableMemoryConsolidation: boolean;
+  readonly _consolidationConfig?: {
+    threshold?: number;
+    decayFactor?: number;
+    pruneThreshold?: number;
+  };
+  readonly _executionTimeoutMs?: number;
+  readonly _retryPolicy?: { maxRetries: number; backoffMs: number };
+  readonly _cacheTimeoutMs?: number;
+  readonly _sessionPersist: boolean;
+  readonly _sessionMaxAgeDays?: number;
+  readonly _loggingConfig?: {
+    level?: string;
+    format?: string;
+    output?: string | WritableStream;
+  };
+  readonly _enableHealthCheck: boolean;
+  readonly _minIterations?: number;
+  readonly _taskContext?: Record<string, string>;
+  readonly _progressCheckpoint?: { every: number; autoResume?: boolean };
+  readonly _verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+  readonly _outputValidator?: (output: string) => {
+    valid: boolean;
+    feedback?: string;
+  };
+  readonly _outputValidatorOptions?: { maxRetries?: number };
+  readonly _customTermination?: (state: { output: string }) => boolean;
+  readonly _enableReactiveIntelligence: boolean;
+  readonly _reactiveIntelligenceOptions?: Partial<
+    import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig
+  >;
+  readonly _skillsConfig?: {
+    paths?: string[];
+    packages?: string[];
+    evolution?: {
+      mode?: string;
+      refinementThreshold?: number;
+      rollbackOnRegression?: boolean;
+    };
+    overrides?: Record<string, { evolutionMode?: string }>;
+  };
+  readonly _fallbackConfig?: {
+    providers?: string[];
+    models?: string[];
+    errorThreshold?: number;
+  };
+  readonly _pricingRegistry: Record<
+    string,
+    { readonly input: number; readonly output: number }
+  >;
+  readonly _calibration: CalibrationMode;
+  readonly _metaTools?: import("../../types.js").MetaToolsConfig | false;
+  readonly _cortexUrl: string | null;
+}
+
+/** Result bundle returned to the caller of {@link buildBaseRuntimeAndEngine}. */
+export interface BuildBaseRuntimeResult {
+  readonly baseRuntime: Layer.Layer<any, any, any>;
+  readonly runtimeWithCortex: Layer.Layer<any, any>;
+  readonly engine: Context.Tag.Service<typeof ExecutionEngine>;
+  readonly kernelMetaTools: KernelMetaToolsConfig | undefined;
+}
+
+/** Inputs needed to build the base runtime + engine bundle. */
+export interface BuildBaseRuntimeDeps {
+  readonly agentId: string;
+  readonly composedSystemPrompt: string | undefined;
+  readonly state: BuilderRuntimeStateView;
+}
+
+/**
+ * Resolve meta-tools, build the cortex reporter layer, call `createRuntime`,
+ * resolve `ExecutionEngine`, and conditionally merge the cortex reporter
+ * into `runtimeWithCortex`. Returns the bundle expected by the rest of
+ * `buildEffect()`.
+ *
+ * Pure refactor — body is verbatim from the four pre-W25-T10 sub-blocks
+ * (lines 2138–2316 + 2346–2361 in the 4,641-LOC builder.ts checkpoint).
+ */
+export const buildBaseRuntimeAndEngine = (
+  deps: BuildBaseRuntimeDeps,
+): Effect.Effect<BuildBaseRuntimeResult> => {
+  const { agentId, composedSystemPrompt, state } = deps;
+
+  return Effect.gen(function* () {
+    // Meta-tools are on by default when tools are enabled.
+    // Only skip if explicitly disabled via .withMetaTools(false) (which sets _metaTools to false).
+    const effectiveMetaTools:
+      | import("../../types.js").MetaToolsConfig
+      | false
+      | undefined =
+      state._metaTools !== undefined
+        ? state._metaTools // explicit config or false
+        : state._enableTools
+        ? {
+            brief: true,
+            find: true,
+            pulse: true,
+            recall: true,
+            harnessSkill: true,
+          }
+        : undefined; // no tools enabled — no meta-tools either
+
+    // Resolve meta-tools configuration before building the runtime
+    let kernelMetaTools: KernelMetaToolsConfig | undefined;
+    if (effectiveMetaTools) {
+      const mt = effectiveMetaTools;
+
+      // Determine model tier for harness skill selection
+      const tier: "frontier" | "local" =
+        state._provider === "ollama" || state._provider === "litellm"
+          ? "local"
+          : "frontier";
+
+      // Resolve harness content (filesystem or inline string)
+      let harnessContent: string | undefined;
+      if (mt.harnessSkill !== false) {
+        const { resolveHarnessSkill } = yield* Effect.promise(
+          () => import("../../harness-resolver.js"),
+        );
+        const resolved = yield* Effect.promise(() =>
+          resolveHarnessSkill(mt.harnessSkill ?? true, tier),
+        );
+        if (resolved) harnessContent = resolved;
+      }
+
+      kernelMetaTools = {
+        brief: mt.brief,
+        find: mt.find,
+        pulse: mt.pulse,
+        recall: mt.recall,
+        staticBriefInfo: {
+          indexedDocuments: [],
+          availableSkills: [],
+          memoryBootstrap: {
+            semanticLines: 0,
+            episodicEntries: 0,
+          },
+        },
+        harnessContent,
+      };
+    }
+
+    const composedExtraLayers = state._extraLayers;
+    /** Merged after `ExecutionEngine` is resolved so init does not run under transient `provide` scope (see CortexReporterLive). */
+    let cortexReporterLayer: Layer.Layer<unknown> | null = null;
+    if (state._cortexUrl !== null) {
+      const { RuntimeCortexReporterLive } = yield* Effect.promise(
+        () => import("../../cortex-reporter.js"),
+      );
+      cortexReporterLayer = RuntimeCortexReporterLive(
+        state._cortexUrl,
+      ) as Layer.Layer<unknown>;
+    }
+
+    const baseRuntime = createRuntime({
+      agentId,
+      provider: state._provider,
+      model: state._model,
+      thinking: state._thinking,
+      temperature: state._temperature,
+      maxTokens: state._maxTokens,
+      memoryTier: state._memoryTier,
+      maxIterations: state._maxIterations,
+      enableGuardrails: state._enableGuardrails,
+      enableVerification: state._enableVerification,
+      enableCostTracking: state._enableCostTracking,
+      enableAudit: state._enableAudit,
+      enableReasoning: state._enableReasoning,
+      enableTools: state._enableTools,
+      enableIdentity: state._enableIdentity,
+      enableObservability: state._enableObservability,
+      observabilityOptions: state._observabilityOptions,
+      enableInteraction: state._enableInteraction,
+      enablePrompts: state._enablePrompts,
+      enableOrchestration: state._enableOrchestration,
+      enableKillSwitch: state._enableKillSwitch,
+      enableBehavioralContracts: state._enableBehavioralContracts,
+      behavioralContract: state._behavioralContract,
+      enableSelfImprovement: state._enableSelfImprovement,
+      testScenario: state._testScenario,
+      extraLayers: composedExtraLayers,
+      systemPrompt: composedSystemPrompt,
+      environmentContext: state._environmentContext,
+      mcpServers:
+        state._mcpServers.length > 0 ? state._mcpServers : undefined,
+      reasoningOptions: state._reasoningOptions,
+      enableA2A: !!state._a2aOptions,
+      a2aPort: state._a2aOptions?.port,
+      a2aBasePath: state._a2aOptions?.basePath,
+      enableGateway: !!state._gatewayOptions,
+      gatewayOptions: state._gatewayOptions,
+      contextProfile: state._contextProfile,
+      resultCompression: state._resultCompression,
+      telemetryConfig: state._telemetryConfig,
+      memoryOptions: state._memoryOptions,
+      guardrailsOptions: state._guardrailsOptions,
+      verificationOptions: state._verificationOptions,
+      costTrackingOptions: state._costTrackingOptions,
+      circuitBreakerConfig: state._circuitBreakerConfig,
+      rateLimiterConfig: state._rateLimiterConfig,
+      // Auto-enable adaptive required tools when reasoning + tools are both active
+      // and the user hasn't explicitly configured required tools. This ensures the
+      // kernel's completion guard can enforce that task-critical tools are called.
+      requiredTools:
+        state._requiredToolsConfig ??
+        (state._enableReasoning && state._enableTools
+          ? { adaptive: true }
+          : undefined),
+      allowedTools: state._toolsOptions?.allowedTools,
+      adaptiveToolFiltering: state._toolsOptions?.adaptive,
+      builtins: state._toolsOptions?.builtins,
+      enableMemory: state._enableMemory,
+      enableExperienceLearning: state._enableExperienceLearning,
+      enableMemoryConsolidation: state._enableMemoryConsolidation,
+      consolidationConfig: state._consolidationConfig,
+      executionTimeoutMs: state._executionTimeoutMs,
+      retryPolicy: state._retryPolicy,
+      cacheTimeoutMs: state._cacheTimeoutMs,
+      sessionPersist: state._sessionPersist,
+      sessionMaxAgeDays: state._sessionMaxAgeDays,
+      loggingConfig: state._loggingConfig as
+        | import("@reactive-agents/observability").LoggingConfig
+        | undefined,
+      enableHealthCheck: state._enableHealthCheck,
+      minIterations: state._minIterations,
+      taskContext: state._taskContext,
+      progressCheckpoint: state._progressCheckpoint,
+      verificationStep: state._verificationStep,
+      outputValidator: state._outputValidator,
+      outputValidatorOptions: state._outputValidatorOptions,
+      customTermination: state._customTermination,
+      enableReactiveIntelligence: state._enableReactiveIntelligence,
+      reactiveIntelligenceOptions: state._reactiveIntelligenceOptions,
+      ...(state._skillsConfig?.paths?.length
+        ? {
+            skills: {
+              paths: [...state._skillsConfig.paths],
+              ...(state._skillsConfig.evolution
+                ? {
+                    evolution: {
+                      ...state._skillsConfig.evolution,
+                    },
+                  }
+                : {}),
+            },
+          }
+        : {}),
+      fallbackConfig: state._fallbackConfig,
+      pricingRegistry:
+        Object.keys(state._pricingRegistry).length > 0
+          ? state._pricingRegistry
+          : undefined,
+      metaTools: kernelMetaTools,
+      // Auto-enable calibration when reasoning is active and user hasn't explicitly skipped.
+      // This ensures per-model adaptation (steering channel, parallel capability, classifier
+      // reliability) works by default — users only need .withCalibration("skip") to opt out.
+      calibration:
+        state._calibration !== "skip"
+          ? state._calibration
+          : state._enableReasoning
+          ? "auto"
+          : undefined,
+    });
+
+    const engine = yield* ExecutionEngine.pipe(
+      Effect.provide(baseRuntime),
+    );
+
+    const runtimeWithCortex: Layer.Layer<any, any> = cortexReporterLayer
+      ? (Layer.merge(
+          baseRuntime as unknown as Layer.Layer<any>,
+          (cortexReporterLayer as unknown as Layer.Layer<any>).pipe(
+            // Layer.merge does not auto-feed sibling outputs into sibling requirements.
+            // Explicitly provide baseRuntime so reporter can resolve EventBus.
+            Layer.provide(baseRuntime as unknown as Layer.Layer<any>),
+          ),
+        ) as Layer.Layer<any, any>)
+      : (baseRuntime as Layer.Layer<any, any>);
+
+    return {
+      baseRuntime: baseRuntime as Layer.Layer<any, any, any>,
+      runtimeWithCortex,
+      engine,
+      kernelMetaTools,
+    };
+  });
+};
+
