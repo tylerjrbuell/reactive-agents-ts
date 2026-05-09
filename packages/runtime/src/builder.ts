@@ -25,8 +25,11 @@ import {
     buildSubAgentTask,
     type SubAgentTaskArgs as ExtractedSubAgentTaskArgs,
 } from './builder/build-effect/sub-agent-executor.js'
-import { makeSpawnHandlers } from './builder/build-effect/spawn-handlers.js'
 import { createRemoteAgentToolRegistration } from './builder/build-effect/remote-agent-tools.js'
+import {
+    createLocalAgentToolRegistration,
+    createDynamicSpawnRegistrations,
+} from './builder/build-effect/local-agent-tools.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
 import type {
@@ -2485,141 +2488,17 @@ export class ReactiveAgentBuilder {
                             )
                         )
                     } else if (agentTool.agent) {
-                        // Local agent tool — real sub-agent delegation
-                        const agentConfig: import('@reactive-agents/core').AgentDefinition =
-                            {
-                                name: agentTool.agent.name,
-                                description:
-                                    agentTool.agent.description ??
-                                    `Agent: ${agentTool.agent.name}`,
-                                capabilities: [],
-                            }
-                        const toolDef = createAgentTool(
-                            agentTool.name,
-                            agentConfig
-                        )
-
-                        const subAgentExec = toolsMod.createSubAgentExecutor(
-                            {
-                                name: agentTool.agent!.name,
-                                description: agentTool.agent!.description,
-                                provider: agentTool.agent!.provider,
-                                model: agentTool.agent!.model,
-                                tools: agentTool.agent!.tools,
-                                maxIterations: agentTool.agent!.maxIterations,
-                                systemPrompt: agentTool.agent!.systemPrompt,
-                                persona: agentTool.agent!.persona,
-                            },
-                            async (opts) => {
-                                const _subLabel = agentTool.agent!.name
-                                const _taskPreview =
-                                    opts.task.length > 80
-                                        ? opts.task.slice(0, 80) + '…'
-                                        : opts.task
-                                process.stdout.write(
-                                    `\n  \x1b[36m┌─ [sub-agent: ${_subLabel}]\x1b[0m → "${_taskPreview}"\n`
-                                )
-                                const _subStart = Date.now()
-
-                                // Compose persona with system prompt
-                                let composedSystemPrompt = opts.systemPrompt
-                                if (opts.persona) {
-                                    const personaPrompt =
-                                        composePersonaToSystemPrompt(
-                                            opts.persona,
-                                            opts.name
-                                        )
-                                    composedSystemPrompt = composedSystemPrompt
-                                        ? `${personaPrompt}\n\n${composedSystemPrompt}`
-                                        : personaPrompt
-                                }
-
-                                // When allowedTools is specified, those tools become required
-                                const staticAllowed = opts.allowedTools
-                                const staticRequired =
-                                    staticAllowed && staticAllowed.length > 0
-                                        ? {
-                                              tools: [...staticAllowed],
-                                              adaptive: false,
-                                              maxRetries: 2,
-                                          }
-                                        : undefined
-                                const subRuntime = createLightRuntime({
-                                    agentId: opts.agentId,
-                                    provider: (opts.provider ??
-                                        'test') as ProviderName,
-                                    model: opts.model,
-                                    maxIterations: opts.maxIterations,
-                                    systemPrompt: composedSystemPrompt,
-                                    enableReasoning: opts.enableReasoning,
-                                    enableTools: opts.enableTools,
-                                    allowedTools: staticAllowed,
-                                    requiredTools: staticRequired,
-                                })
-                                const subEngine = await Effect.runPromise(
-                                    ExecutionEngine.pipe(
-                                        Effect.provide(subRuntime)
-                                    )
-                                )
-                                const taskObj: Task = {
-                                    id: generateTaskId(),
-                                    agentId: Schema.decodeSync(AgentId)(
-                                        opts.agentId
-                                    ),
-                                    type: 'query' as const,
-                                    input: { question: opts.task },
-                                    priority: 'medium' as const,
-                                    status: 'pending' as const,
-                                    metadata: {
-                                        tags: [],
-                                        context: { parentAgentId: agentId },
-                                    },
-                                    createdAt: new Date(),
-                                }
-                                const result: TaskResult =
-                                    await Effect.runPromise(
-                                        subEngine
-                                            .execute(taskObj)
-                                            .pipe(
-                                                Effect.provide(
-                                                    subRuntime as unknown as Layer.Layer<never>
-                                                )
-                                            )
-                                    )
-                                const _subElapsed = (
-                                    (Date.now() - _subStart) /
-                                    1000
-                                ).toFixed(1)
-                                const _subIcon = result.success
-                                    ? '\x1b[32m✓\x1b[0m'
-                                    : '\x1b[31m✗\x1b[0m'
-                                process.stdout.write(
-                                    `  \x1b[36m└─ [sub-agent: ${_subLabel}]\x1b[0m ${_subIcon} done | ${result.metadata.tokensUsed} tok | ${_subElapsed}s\n\n`
-                                )
-                                return {
-                                    output: String(result.output ?? ''),
-                                    success: result.success,
-                                    tokensUsed: result.metadata.tokensUsed,
-                                }
-                            },
-                            0,
-                            getParentContext
-                        )
-
-                        const handler = (args: Record<string, unknown>) =>
-                            Effect.tryPromise({
-                                try: () => {
-                                    const task =
-                                        typeof args.input === 'string'
-                                            ? args.input
-                                            : typeof args.message === 'string'
-                                            ? args.message
-                                            : JSON.stringify(args)
-                                    return subAgentExec(task)
+                        registrations.push(
+                            createLocalAgentToolRegistration(agentTool, {
+                                toolsMod: {
+                                    createAgentTool,
+                                    createSubAgentExecutor:
+                                        toolsMod.createSubAgentExecutor,
                                 },
-                                catch: (e) => new Error(String(e)),
+                                agentId,
+                                getParentContext,
                             })
-                        registrations.push({ def: toolDef, handler })
+                        )
                     }
                 }
 
@@ -2642,7 +2521,6 @@ export class ReactiveAgentBuilder {
                 // The handler captures parentProvider/parentModel so spawned agents inherit
                 // the parent's LLM config without any extra wiring required.
                 if (allowDynamicSubAgents) {
-                    const spawnToolDef = toolsMod.createSpawnAgentTool()
                     const defaultMaxIter =
                         dynamicSubAgentOptions?.maxIterations ?? 4
 
@@ -2684,21 +2562,16 @@ export class ReactiveAgentBuilder {
                             }
                         )
 
-                    const { spawnHandler, spawnAgentsHandler } =
-                        makeSpawnHandlers({
-                            buildSubAgentTask: buildSingleSubAgentTask,
-                        })
-
-                    registrations.push({
-                        def: spawnToolDef,
-                        handler: spawnHandler,
-                    })
-
-                    const spawnAgentsToolDef = toolsMod.createSpawnAgentsTool()
-                    registrations.push({
-                        def: spawnAgentsToolDef,
-                        handler: spawnAgentsHandler,
-                    })
+                    for (const reg of createDynamicSpawnRegistrations({
+                        toolsMod: {
+                            createSpawnAgentTool: toolsMod.createSpawnAgentTool,
+                            createSpawnAgentsTool:
+                                toolsMod.createSpawnAgentsTool,
+                        },
+                        buildSubAgentTask: buildSingleSubAgentTask,
+                    })) {
+                        registrations.push(reg)
+                    }
                 }
 
                 // Build an init effect that connects MCP servers, registers custom tools,
