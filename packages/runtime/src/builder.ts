@@ -30,6 +30,7 @@ import {
     createLocalAgentToolRegistration,
     createDynamicSpawnRegistrations,
 } from './builder/build-effect/local-agent-tools.js'
+import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
 import type {
@@ -2574,73 +2575,31 @@ export class ReactiveAgentBuilder {
                     }
                 }
 
-                // Build an init effect that connects MCP servers, registers custom tools,
-                // and registers agent tools — all into the ToolService found in the
-                // execution environment. No Effect.provide() here — the ToolService comes
-                // from the layer environment at evaluation time (same instance as the engine).
-                const agentToolInitEffect = Effect.gen(function* () {
-                    const ts =
-                        yield* toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                            any,
-                            any
-                        >
-                    // Connect MCP servers inside the managed runtime scope so the engine's
-                    // ToolService and the MCP-connected ToolService are the same instance.
-                    for (const mcp of mcpServers) {
-                        yield* (ts as any).connectMCPServer(mcp)
+                // agentToolInitEffect body extracted to ./builder/build-effect/tool-init-layer.ts (W25-B step 3c)
+                const toolInitLayer = buildToolInitLayer(
+                    runtimeWithCortex as unknown as Layer.Layer<unknown>,
+                    {
+                        toolsMod: {
+                            ToolService:
+                                toolsMod.ToolService as unknown as import('effect').Context.Tag<
+                                    unknown,
+                                    unknown
+                                >,
+                        },
+                        mcpServers,
+                        toolsOptions,
+                        registrations,
+                        shellExecuteTool,
+                        shellExecuteHandler,
+                        onToolServiceResolved: (ts) => {
+                            parentToolServiceRef = ts
+                        },
                     }
-                    // Register custom tools
-                    if (toolsOptions?.tools) {
-                        for (const tool of toolsOptions.tools) {
-                            yield* (ts as any).register(
-                                tool.definition,
-                                tool.handler
-                            )
-                        }
-                    }
-                    // Register terminal tool if enabled
-                    const terminalOptions = (toolsOptions as any)?.terminal as
-                        | boolean
-                        | ShellExecuteConfig
-                        | undefined
-                    const hasCustomShellExecute = (
-                        toolsOptions?.tools ?? []
-                    ).some(
-                        (tool) => tool.definition.name === shellExecuteTool.name
-                    )
-                    if (terminalOptions && !hasCustomShellExecute) {
-                        const terminalConfig =
-                            terminalOptions === true
-                                ? undefined
-                                : terminalOptions
-                        yield* (ts as any).register(
-                            shellExecuteTool,
-                            shellExecuteHandler(terminalConfig)
-                        )
-                    }
-                    // Capture parent ToolService ref so spawn-agent can proxy MCP tools
-                    parentToolServiceRef = ts
-                    // Register agent tools
-                    for (const { def, handler } of registrations) {
-                        yield* (ts as any).register(def, handler)
-                    }
-                })
-
-                // Layer.effectDiscard wraps the init as a side-effect layer (no service output).
-                // Layer.provide(baseRuntime) satisfies the ToolService requirement.
-                // Layer.merge combines baseRuntime + initLayer: Effect memoizes baseRuntime by
-                // reference so both the engine and the init effect share the same ToolService.
-                const agentToolInitLayer = Layer.effectDiscard(
-                    agentToolInitEffect as Effect.Effect<unknown, never, never>
-                ).pipe(
-                    Layer.provide(
-                        runtimeWithCortex as unknown as Layer.Layer<any>
-                    )
                 )
 
                 fullRuntime = Layer.merge(
                     runtimeWithCortex as unknown as Layer.Layer<any>,
-                    agentToolInitLayer
+                    toolInitLayer as unknown as Layer.Layer<any>
                 )
             }
 
