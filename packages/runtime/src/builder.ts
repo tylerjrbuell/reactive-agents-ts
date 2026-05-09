@@ -26,6 +26,7 @@ import {
     type SubAgentTaskArgs as ExtractedSubAgentTaskArgs,
 } from './builder/build-effect/sub-agent-executor.js'
 import { makeSpawnHandlers } from './builder/build-effect/spawn-handlers.js'
+import { createRemoteAgentToolRegistration } from './builder/build-effect/remote-agent-tools.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
 import { ExecutionEngine } from './execution-engine.js'
 import type {
@@ -2471,94 +2472,18 @@ export class ReactiveAgentBuilder {
 
                 for (const agentTool of agentTools) {
                     if (agentTool.remoteUrl) {
-                        // Remote A2A agent tool
-                        const toolDef = createRemoteAgentTool(
-                            agentTool.name,
-                            `${agentTool.remoteUrl}/.well-known/agent.json`,
-                            agentTool.remoteUrl
+                        registrations.push(
+                            createRemoteAgentToolRegistration(
+                                {
+                                    name: agentTool.name,
+                                    remoteUrl: agentTool.remoteUrl,
+                                },
+                                {
+                                    createRemoteAgentTool,
+                                    executeRemoteAgentTool,
+                                }
+                            )
                         )
-                        const remoteUrl = agentTool.remoteUrl
-                        const remoteClient: RemoteAgentClient = {
-                            sendMessage: (params: {
-                                message: { role: string; content: string }
-                                agentCardUrl: string
-                            }) =>
-                                Effect.tryPromise({
-                                    try: () =>
-                                        fetch(remoteUrl, {
-                                            method: 'POST',
-                                            headers: {
-                                                'Content-Type':
-                                                    'application/json',
-                                            },
-                                            body: JSON.stringify({
-                                                jsonrpc: '2.0',
-                                                method: 'message/send',
-                                                params: {
-                                                    message: {
-                                                        role: params.message
-                                                            .role,
-                                                        parts: [
-                                                            {
-                                                                kind: 'text',
-                                                                text: params
-                                                                    .message
-                                                                    .content,
-                                                            },
-                                                        ],
-                                                    },
-                                                },
-                                                id: crypto.randomUUID(),
-                                            }),
-                                        })
-                                            .then((r) => r.json())
-                                            .then(
-                                                (d: Record<string, unknown>) =>
-                                                    d.result as {
-                                                        taskId: string
-                                                    }
-                                            ),
-                                    catch: (e) => new Error(String(e)),
-                                }),
-                            getTask: (params: { id: string }) =>
-                                Effect.tryPromise({
-                                    try: () =>
-                                        fetch(remoteUrl, {
-                                            method: 'POST',
-                                            headers: {
-                                                'Content-Type':
-                                                    'application/json',
-                                            },
-                                            body: JSON.stringify({
-                                                jsonrpc: '2.0',
-                                                method: 'tasks/get',
-                                                params: { id: params.id },
-                                                id: crypto.randomUUID(),
-                                            }),
-                                        })
-                                            .then((r) => r.json())
-                                            .then(
-                                                (d: Record<string, unknown>) =>
-                                                    d.result as {
-                                                        status: string
-                                                        result: unknown
-                                                    }
-                                            ),
-                                    catch: (e) => new Error(String(e)),
-                                }),
-                        }
-                        const handler = (args: Record<string, unknown>) =>
-                            Effect.tryPromise({
-                                try: () =>
-                                    executeRemoteAgentTool(
-                                        toolDef,
-                                        args,
-                                        remoteClient,
-                                        `${remoteUrl}/.well-known/agent.json`
-                                    ),
-                                catch: (e) => new Error(String(e)),
-                            })
-                        registrations.push({ def: toolDef, handler })
                     } else if (agentTool.agent) {
                         // Local agent tool — real sub-agent delegation
                         const agentConfig: import('@reactive-agents/core').AgentDefinition =
