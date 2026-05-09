@@ -38,6 +38,7 @@ import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
 import { wireRiHooks } from './builder/ri-wiring.js'
 import { bootstrapGateway } from './agent/gateway-bootstrap.js'
 import { makeExecuteEvent } from './agent/execute-event.js'
+import { makeGatewayTick } from './agent/gateway-tick.js'
 import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
@@ -3850,117 +3851,25 @@ export class ReactiveAgent {
             })
             chatManagerRef = chatManager
 
-            const tick = async () => {
-                if (stopped) return
-                try {
-                    // 1. Emit heartbeat and check policy — only run agent if a custom instruction was configured
-                    const hbEvent: any = await self.runtime.runPromise(
-                        sched.emitHeartbeat()
-                    )
-                    const decision: any = await self.runtime.runPromise(
-                        gw.processEvent(hbEvent)
-                    )
-                    heartbeatsFired++
-
-                    if (!self._hasCustomHeartbeatInstruction) {
-                        glog(
-                            'debug',
-                            `heartbeat #${heartbeatsFired} → idle (no instruction configured)`
-                        )
-                    } else if (decision.action === 'execute') {
-                        const instruction =
-                            hbEvent.metadata?.instruction ?? 'Check for work'
-                        glog(
-                            'info',
-                            `heartbeat #${heartbeatsFired} → execute`,
-                            {
-                                instruction: instruction.slice(0, 80),
-                            }
-                        )
-                        await executeEvent(hbEvent, 'heartbeat', instruction)
-                    } else {
-                        glog(
-                            'debug',
-                            `heartbeat #${heartbeatsFired} → ${decision.action}`,
-                            { reason: decision.reason }
-                        )
-                    }
-
-                    // 2. Check crons
-                    const cronEvents: any[] = (await self.runtime.runPromise(
-                        sched.checkCrons(new Date())
-                    )) as any
-                    cronChecks++
-                    if (cronEvents.length > 0) {
-                        glog(
-                            'info',
-                            `cron check #${cronChecks} → ${cronEvents.length} cron(s) due`
-                        )
-                    }
-                    for (const cronEvent of cronEvents) {
-                        if (stopped) break
-                        const cronDecision: any = await self.runtime.runPromise(
-                            gw.processEvent(cronEvent)
-                        )
-                        if (cronDecision.action === 'execute') {
-                            const cronInstruction =
-                                cronEvent.metadata?.instruction ?? 'Cron task'
-                            glog('info', `cron → execute`, {
-                                instruction: cronInstruction.slice(0, 80),
-                            })
-                            await executeEvent(
-                                cronEvent,
-                                'cron',
-                                cronInstruction
-                            )
-                        } else {
-                            glog('debug', `cron → ${cronDecision.action}`, {
-                                reason: cronDecision.reason,
-                            })
-                        }
-                    }
-
-                    // 3. Daily housekeeping: prune stale chat sessions
-                    await chatManager.pruneStaleSessions()
-
-                    // 4. Daily housekeeping: memory compaction + episodic prune
-                    if (Date.now() - lastCompactionAt > 86_400_000) {
-                        lastCompactionAt = Date.now()
-                        await self.runtime.runPromise(
-                            Effect.gen(function* () {
-                                const memMod = yield* Effect.promise(
-                                    () => import('@reactive-agents/memory')
-                                )
-                                const compactionOpt = yield* Effect.serviceOption(
-                                    memMod.CompactionService
-                                )
-                                if (compactionOpt._tag !== 'Some') return
-                                const gAgentId = self.agentId ?? 'gateway'
-                                yield* compactionOpt.value.compactProgressive(
-                                    gAgentId,
-                                    {
-                                        strategy: 'progressive' as const,
-                                        maxEntries: 1000,
-                                        intervalMs: 30 * 86_400_000,
-                                        decayFactor: 0.05,
-                                    }
-                                )
-                                yield* compactionOpt.value.pruneEpisodicLog(
-                                    gAgentId,
-                                    sessionTtlDays
-                                )
-                            }).pipe(Effect.catchAll(() => Effect.void))
-                        )
-                    }
-                } catch (err) {
-                    glog(
-                        'error',
-                        `tick error: ${
-                            err instanceof Error ? err.message : String(err)
-                        }`
-                    )
-                }
-            }
+            const tick = makeGatewayTick({
+                runtime: self.runtime,
+                agentId: self.agentId ?? 'gateway',
+                hasCustomHeartbeatInstruction:
+                    self._hasCustomHeartbeatInstruction ?? false,
+                sessionTtlDays,
+                gw,
+                sched,
+                glog,
+                executeEvent,
+                chatManager,
+                getStopped: () => stopped,
+                incrementHeartbeats: () => ++heartbeatsFired,
+                incrementCronChecks: () => ++cronChecks,
+                getLastCompactionAt: () => lastCompactionAt,
+                setLastCompactionAt: (v) => {
+                    lastCompactionAt = v
+                },
+            })
 
             // Subscribe to channel messages from MCP servers for push-based messaging
             // Dedup guard: track recently processed messages to prevent feedback loops
