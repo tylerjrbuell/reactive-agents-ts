@@ -9,6 +9,7 @@ import { realWorldFullSession } from "./sessions/real-world-full.js"
 import { competitorComparisonSession } from "./sessions/competitor-comparison.js"
 import { localModelsSession } from "./sessions/local-models.js"
 import { frontierSpotCheckSession } from "./sessions/frontier-spot-check.js"
+import { m3AblationSession } from "./sessions/m3-ablation.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
 import type { BenchmarkSession, SessionReport } from "./types.js"
 
@@ -118,6 +119,7 @@ const SESSIONS: Record<string, BenchmarkSession> = {
   "competitor-comparison": competitorComparisonSession,
   "local-models":          localModelsSession,
   "frontier-spot-check":   frontierSpotCheckSession,
+  "m3-ablation":           m3AblationSession,
 }
 
 export interface CliArgs {
