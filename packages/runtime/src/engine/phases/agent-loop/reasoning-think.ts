@@ -27,16 +27,19 @@ import {
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 
+type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
+type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
+
 export interface ReasoningThinkDeps {
   readonly config: ReactiveAgentsConfig;
   readonly task: Task;
   readonly reasoningService: ReasoningServiceLike;
   readonly availableToolNames: readonly string[];
-  readonly availableToolSchemas: readonly unknown[];
-  readonly allToolSchemas: readonly unknown[];
+  readonly availableToolSchemas: readonly ToolSchemaShape[];
+  readonly allToolSchemas: readonly ToolSchemaShape[];
   readonly effectiveRequiredTools: readonly string[] | undefined;
-  readonly effectiveRequiredToolQuantities: unknown;
-  readonly classifiedRelevantTools: unknown;
+  readonly effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
+  readonly classifiedRelevantTools: readonly string[] | undefined;
   readonly autoMaxCallsPerTool: Record<string, number>;
   readonly taskCategory: string;
   readonly resolvedCalibration: ModelCalibration | undefined;
@@ -168,9 +171,11 @@ export const runReasoningThink = (
     const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
       { role: "user", content: extractTaskText(task.input) },
     ];
-    const effectiveStrategy = c.selectedStrategy ?? "reactive";
+    const effectiveStrategyName = c.selectedStrategy ?? "reactive";
+    const effectiveStrategy =
+      effectiveStrategyName as NonNullable<ReasoningExecuteRequest["strategy"]>;
 
-    const strategyEffect = reasoningService.execute({
+    const executeRequest = {
       taskDescription: extractTaskText(task.input),
       taskType: task.type,
       memoryContext: memCtx,
@@ -202,12 +207,14 @@ export const runReasoningThink = (
       initialMessages,
       synthesisConfig: resolveSynthesisConfigForStrategy(
         config.reasoningOptions,
-        effectiveStrategy,
+        effectiveStrategyName,
         config.synthesisConfig,
       ),
       observationSummary: config.reasoningOptions?.observationSummary,
       calibration: resolvedCalibration,
-    });
+    } as unknown as ReasoningExecuteRequest;
+
+    const strategyEffect = reasoningService.execute(executeRequest);
     const strategyOutcome = yield* Effect.exit(strategyEffect);
     if (strategyOutcome._tag === "Success") {
       const normalizedResult = normalizeReasoningResult(strategyOutcome.value);

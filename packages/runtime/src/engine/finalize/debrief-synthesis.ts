@@ -12,10 +12,11 @@
  *
  * Lifted from execution-engine.ts post-W23-6a-8 (2358-LOC checkpoint).
  */
-import { Effect, Context } from "effect";
+import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { LLMService } from "@reactive-agents/llm-provider";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "../../debrief.js";
 import { DebriefStoreService } from "@reactive-agents/memory";
 import type { AgentDebriefShape } from "@reactive-agents/memory";
@@ -77,11 +78,13 @@ export const synthesizeAndStoreDebrief = (
     // Publish FinalAnswerProduced event when final-answer tool is called
     if (terminatedByRaw === "final_answer_tool" && eb) {
       const capture = rr?.metadata?.finalAnswerCapture as { output?: unknown } | undefined;
+      const rawAnswer = capture?.output ?? sanitizedOutput ?? "";
+      const answer = typeof rawAnswer === "string" ? rawAnswer : String(rawAnswer);
       yield* eb.publish({
         _tag: "FinalAnswerProduced",
         taskId: ctx.taskId,
         strategy: ctx.selectedStrategy ?? "unknown",
-        answer: capture?.output ?? sanitizedOutput ?? "",
+        answer,
         iteration: ctx.iteration,
         totalTokens: ctx.tokensUsed,
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/debrief-synthesis.ts:final-answer-produced-publish", tag: errorTag(err) })));
@@ -147,12 +150,12 @@ export const synthesizeAndStoreDebrief = (
     // Also requires LLMService to be available in context — use serviceOption to check.
     // Proportional: skip debrief for trivial and moderate tasks (only run for complex).
     const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory
-      ? Effect.serviceOption(
-          Context.GenericTag<{ complete: (req: unknown) => Effect.Effect<unknown> }>("LLMService"),
-        ).pipe(
+      ? Effect.serviceOption(LLMService).pipe(
           Effect.flatMap((llmOpt) => {
             if (llmOpt._tag !== "Some") return Effect.succeed(undefined as AgentDebrief | undefined);
+            // Provide the resolved LLMService back so synthesizeDebrief's R is discharged here.
             return synthesizeDebrief(debriefInput).pipe(
+              Effect.provideService(LLMService, llmOpt.value),
               Effect.flatMap((d) => {
                 const debrief = d as AgentDebrief;
                 if (!eb) {

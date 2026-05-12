@@ -22,9 +22,18 @@ export type ModelTier = CapabilityModelTier;
 
 export const ContextProfileSchema = Schema.Struct({
   tier: ModelTier,
-  /** Maximum characters shown per tool result in compressed previews. */
+  /**
+   * Tier default for max characters per compressed tool result. Used as the
+   * fallback for `KernelInput.resultCompression.budget` (the per-input override).
+   * Resolution order: input.resultCompression.budget → profile.toolResultMaxChars
+   * → hard-coded 800. See runner.ts:509 + tool-execution.ts:571.
+   */
   toolResultMaxChars: Schema.Number,
-  /** Number of preview items (lines, array rows) shown in compressed tool results. */
+  /**
+   * Tier default for preview-item count in compressed tool results. Fallback for
+   * `KernelInput.resultCompression.previewItems` (per-input override). Resolution
+   * order mirrors `toolResultMaxChars`.
+   */
   toolResultPreviewItems: Schema.Number,
   /** Tool schema verbosity in the system prompt. */
   toolSchemaDetail: Schema.Literal("names-only", "names-and-types", "full"),

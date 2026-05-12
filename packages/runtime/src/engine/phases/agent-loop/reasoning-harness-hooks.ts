@@ -29,6 +29,11 @@ import {
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 
+/** Parameter shape accepted by ReasoningService.execute(). */
+type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
+
+type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
+
 export interface ReasoningHarnessHooksDeps {
   readonly config: ReactiveAgentsConfig;
   readonly task: Task;
@@ -37,11 +42,11 @@ export interface ReasoningHarnessHooksDeps {
     | { readonly _tag: "Some"; readonly value: ReasoningServiceLike }
     | { readonly _tag: "None" };
   readonly availableToolNames: readonly string[];
-  readonly availableToolSchemas: readonly unknown[];
-  readonly allToolSchemas: readonly unknown[];
-  readonly effectiveRequiredTools: unknown;
-  readonly effectiveRequiredToolQuantities: unknown;
-  readonly classifiedRelevantTools: unknown;
+  readonly availableToolSchemas: readonly ToolSchemaShape[];
+  readonly allToolSchemas: readonly ToolSchemaShape[];
+  readonly effectiveRequiredTools: readonly string[] | undefined;
+  readonly effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
+  readonly classifiedRelevantTools: readonly string[] | undefined;
   readonly autoMaxCallsPerTool: Record<string, number>;
   readonly taskCategory: string;
   readonly resolvedCalibration: ModelCalibration | undefined;
@@ -75,14 +80,15 @@ export const runReasoningHarnessHooks = (
     // Common request builder for the three "continue working" style hooks.
     const buildExecuteRequest = (
       initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[],
-    ): Record<string, unknown> => ({
+    ): ReasoningExecuteRequest => {
+      const request = {
       taskDescription: extractTaskText(task.input),
       taskType: task.type,
-      memoryContext: String((ctx.metadata as any)?.semanticContext ?? ""),
+      memoryContext: String((ctx.metadata as Record<string, unknown>)?.semanticContext ?? ""),
       availableTools: availableToolNames,
       availableToolSchemas,
       allToolSchemas,
-      strategy: ctx.selectedStrategy ?? "reactive",
+      strategy: (ctx.selectedStrategy ?? "reactive") as ReasoningExecuteRequest["strategy"],
       contextProfile: config.contextProfile,
       providerName: String(config.provider ?? ""),
       systemPrompt: config.systemPrompt,
@@ -109,7 +115,9 @@ export const runReasoningHarnessHooks = (
       ),
       observationSummary: config.reasoningOptions?.observationSummary,
       calibration: resolvedCalibration,
-    });
+      };
+      return request as unknown as ReasoningExecuteRequest;
+    };
 
     // withCustomTermination: re-run reasoning if predicate not satisfied
     if (config.customTermination && !cacheHit && reasoningOpt._tag === "Some") {

@@ -16,10 +16,17 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect, type ManagedRuntime } from 'effect'
-import type { GatewayChatManager } from '../gateway-chat.js'
+import { Effect, type Context, type ManagedRuntime } from 'effect'
+import type {
+    GatewayService as GatewayServiceTag,
+    SchedulerService as SchedulerServiceTag,
+} from '@reactive-agents/gateway'
+import type { GatewayChatManager } from '../gateway-context-formatting.js'
 import type { GLog } from './gateway-bootstrap.js'
 import type { makeExecuteEvent } from './execute-event.js'
+
+type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
+type SchedulerService = Context.Tag.Service<typeof SchedulerServiceTag>
 
 export interface GatewayTickDeps {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,8 +34,8 @@ export interface GatewayTickDeps {
     readonly agentId: string
     readonly hasCustomHeartbeatInstruction: boolean
     readonly sessionTtlDays: number
-    readonly gw: unknown
-    readonly sched: unknown
+    readonly gw: GatewayService
+    readonly sched: SchedulerService
     readonly glog: GLog
     readonly executeEvent: ReturnType<typeof makeExecuteEvent>
     readonly chatManager: GatewayChatManager
@@ -63,23 +70,12 @@ export const makeGatewayTick = (
         setLastCompactionAt,
     } = deps
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const schedAny = sched as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const gwAny = gw as any
-
     return async () => {
         if (getStopped()) return
         try {
             // 1. Emit heartbeat and check policy — only run agent if a custom instruction was configured
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const hbEvent: any = await runtime.runPromise(
-                schedAny.emitHeartbeat()
-            )
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const decision: any = await runtime.runPromise(
-                gwAny.processEvent(hbEvent)
-            )
+            const hbEvent = await runtime.runPromise(sched.emitHeartbeat())
+            const decision = await runtime.runPromise(gw.processEvent(hbEvent))
             const heartbeatCount = incrementHeartbeats()
 
             if (!hasCustomHeartbeatInstruction) {
@@ -88,8 +84,11 @@ export const makeGatewayTick = (
                     `heartbeat #${heartbeatCount} → idle (no instruction configured)`
                 )
             } else if (decision.action === 'execute') {
+                const instructionRaw = hbEvent.metadata?.instruction
                 const instruction =
-                    hbEvent.metadata?.instruction ?? 'Check for work'
+                    typeof instructionRaw === 'string'
+                        ? instructionRaw
+                        : 'Check for work'
                 glog(
                     'info',
                     `heartbeat #${heartbeatCount} → execute`,
@@ -102,16 +101,14 @@ export const makeGatewayTick = (
                 glog(
                     'debug',
                     `heartbeat #${heartbeatCount} → ${decision.action}`,
-                    { reason: decision.reason }
+                    { reason: 'reason' in decision ? decision.reason : undefined }
                 )
             }
 
             // 2. Check crons
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const cronEvents: any[] = (await runtime.runPromise(
-                schedAny.checkCrons(new Date())
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            )) as any
+            const cronEvents = await runtime.runPromise(
+                sched.checkCrons(new Date())
+            )
             const cronCheckCount = incrementCronChecks()
             if (cronEvents.length > 0) {
                 glog(
@@ -121,13 +118,15 @@ export const makeGatewayTick = (
             }
             for (const cronEvent of cronEvents) {
                 if (getStopped()) break
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const cronDecision: any = await runtime.runPromise(
-                    gwAny.processEvent(cronEvent)
+                const cronDecision = await runtime.runPromise(
+                    gw.processEvent(cronEvent)
                 )
                 if (cronDecision.action === 'execute') {
+                    const cronInstructionRaw = cronEvent.metadata?.instruction
                     const cronInstruction =
-                        cronEvent.metadata?.instruction ?? 'Cron task'
+                        typeof cronInstructionRaw === 'string'
+                            ? cronInstructionRaw
+                            : 'Cron task'
                     glog('info', `cron → execute`, {
                         instruction: cronInstruction.slice(0, 80),
                     })
@@ -138,7 +137,10 @@ export const makeGatewayTick = (
                     )
                 } else {
                     glog('debug', `cron → ${cronDecision.action}`, {
-                        reason: cronDecision.reason,
+                        reason:
+                            'reason' in cronDecision
+                                ? cronDecision.reason
+                                : undefined,
                     })
                 }
             }

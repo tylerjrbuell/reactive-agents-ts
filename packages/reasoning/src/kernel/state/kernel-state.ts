@@ -367,8 +367,12 @@ export interface KernelInput {
    */
   readonly initialMessages?: readonly KernelMessage[];
   /**
-   * Context synthesis (ICS) — from .withReasoning({ synthesis: ... }).
-   * Omitted defaults to `{ mode: "auto" }` in kernel-runner.
+   * Output-synthesis configuration — consumed by the terminal output assembly
+   * phase in `kernel/loop/runner.ts` (output-synthesis.ts), NOT by ICS guidance.
+   * Despite the historical name, this configures how the final answer is
+   * synthesized from kernel state at termination, not the iteration-level
+   * Intelligent Context Synthesis. Surfaced from `.withReasoning({ synthesis: ... })`.
+   * Omitted defaults to `{ mode: "auto" }` in the runner.
    */
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */

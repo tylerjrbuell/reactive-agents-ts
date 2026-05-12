@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { GatewayChatManager } from "../src/gateway-chat.js";
+import { GatewayChatManager } from "../src/gateway-context-formatting.js";
 import type { ChatMessage } from "../src/chat.js";
 
 describe("GatewayChatManager multi-turn history", () => {

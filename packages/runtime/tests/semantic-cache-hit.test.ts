@@ -111,6 +111,9 @@ const makeCachingCostServiceLayer = (
         cacheHits: 1,
         cacheMisses: 0,
         cacheHitRate: 1,
+        savings: 0,
+        costByTier: {},
+        costByAgent: {},
         avgCostPerRequest: 0,
         avgLatencyMs: 0,
       }),
@@ -152,6 +155,9 @@ const makeNoCacheCostServiceLayer = (
         cacheHits: 0,
         cacheMisses: 1,
         cacheHitRate: 0,
+        savings: 0,
+        costByTier: {},
+        costByAgent: {},
         avgCostPerRequest: 0,
         avgLatencyMs: 0,
       }),
@@ -199,7 +205,9 @@ const buildLayers = async (
 describe("Semantic cache hit — agent-loop short-circuit (W23 prep)", () => {
   it("cache-hit propagates cachedHit:true to cost-track and skips LLM call", async () => {
     const cachedResponse = "The answer is 4. (from cache)";
-    const capture = { current: { cachedHits: [], recordedCosts: [] } };
+    const capture: { current: CostCallCapture } = {
+      current: { cachedHits: [], recordedCosts: [] },
+    };
     const llmCallCount = { current: 0 };
 
     const testLayer = await buildLayers(
@@ -229,7 +237,9 @@ describe("Semantic cache hit — agent-loop short-circuit (W23 prep)", () => {
   });
 
   it("cache-miss path records cachedHit:false (negative control)", async () => {
-    const capture = { current: { cachedHits: [], recordedCosts: [] } };
+    const capture: { current: CostCallCapture } = {
+      current: { cachedHits: [], recordedCosts: [] },
+    };
     const llmCallCount = { current: 0 };
 
     const testLayer = await buildLayers(

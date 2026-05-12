@@ -14,14 +14,30 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect, type ManagedRuntime } from 'effect'
-import type { AgentEvent } from '@reactive-agents/core'
+import { Effect, type Context, type ManagedRuntime } from 'effect'
+import type { AgentEvent, EventBus } from '@reactive-agents/core'
 import { generateTaskId } from '@reactive-agents/core'
+import type {
+    GatewayService as GatewayServiceTag,
+    SchedulerService as SchedulerServiceTag,
+} from '@reactive-agents/gateway'
+import type { ObservabilityService as ObservabilityServiceTag } from '@reactive-agents/observability'
 import type { ChannelsConfig } from '@reactive-agents/channels'
 import type { ChatReply } from '../chat.js'
+import { yieldService } from '../builder/helpers.js'
+
+/** Resolved service interface aliases for Gateway/Scheduler/EventBus/Observability. */
+type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
+type SchedulerService = Context.Tag.Service<typeof SchedulerServiceTag>
+type EventBusService = Context.Tag.Service<typeof EventBus>
+type ObservabilityServiceImpl = Context.Tag.Service<
+    typeof ObservabilityServiceTag
+>
+
+type GatewayLogLevel = "error" | "debug" | "info" | "warn"
 
 export type GLog = (
-    level: string,
+    level: GatewayLogLevel,
     message: string,
     metadata?: Record<string, unknown>
 ) => void
@@ -54,14 +70,10 @@ export interface BootstrapDeps {
 
 export interface GatewayBootstrapSuccess {
     readonly ok: true
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly gw: any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly sched: any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly eb: any | null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly obs: any | null
+    readonly gw: GatewayService
+    readonly sched: SchedulerService
+    readonly eb: EventBusService | null
+    readonly obs: ObservabilityServiceImpl | null
     readonly glog: GLog
     readonly channelAdaptersCleanup: (() => Promise<void>) | null
 }
@@ -86,14 +98,10 @@ export const bootstrapGateway = async (
 ): Promise<GatewayBootstrapResult> => {
     const { runtime, channelsConfig, gatewayIntervalMs, createSession } = deps
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let gw: any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let sched: any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let eb: any = null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let obs: any = null
+    let gw: GatewayService
+    let sched: SchedulerService
+    let eb: EventBusService | null = null
+    let obs: ObservabilityServiceImpl | null = null
 
     try {
         const services = await runtime.runPromise(
@@ -101,13 +109,13 @@ export const bootstrapGateway = async (
                 const gwMod = yield* Effect.promise(
                     () => import('@reactive-agents/gateway')
                 )
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const g = yield* gwMod.GatewayService as any
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const s = yield* gwMod.SchedulerService as any
+                const g = yield* yieldService(gwMod.GatewayService)
+                const s = yield* yieldService(gwMod.SchedulerService)
                 return { gw: g, sched: s }
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            }) as Effect.Effect<any>
+            }) as Effect.Effect<{
+                gw: GatewayService
+                sched: SchedulerService
+            }>
         )
         gw = services.gw
         sched = services.sched
@@ -127,10 +135,8 @@ export const bootstrapGateway = async (
                 const coreMod = yield* Effect.promise(
                     () => import('@reactive-agents/core')
                 )
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                return yield* coreMod.EventBus as any
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            }) as Effect.Effect<any>
+                return yield* yieldService(coreMod.EventBus)
+            }) as Effect.Effect<EventBusService>
         )
     } catch {
         /* EventBus not in runtime — no observability */
@@ -143,10 +149,8 @@ export const bootstrapGateway = async (
                 const obsMod = yield* Effect.promise(
                     () => import('@reactive-agents/observability')
                 )
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                return yield* obsMod.ObservabilityService as any
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            }) as Effect.Effect<any>
+                return yield* yieldService(obsMod.ObservabilityService)
+            }) as Effect.Effect<ObservabilityServiceImpl>
         )
     } catch {
         /* ObservabilityService not in runtime — no logging */

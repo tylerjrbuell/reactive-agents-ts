@@ -5,7 +5,7 @@ import {
   formatEpisodicContext,
   buildEnrichedInstruction,
   channelOutboundToolGuidance,
-} from "../src/gateway-chat.js";
+} from "../src/gateway-context-formatting.js";
 import type { ChatMessage } from "../src/chat.js";
 
 const msg = (role: "user" | "assistant", content: string, timestamp = 0): ChatMessage =>
@@ -144,7 +144,7 @@ describe("buildEnrichedInstruction", () => {
   });
 });
 
-import { GatewayChatManager } from "../src/gateway-chat.js";
+import { GatewayChatManager } from "../src/gateway-context-formatting.js";
 
 // ─── Stub deps ────────────────────────────────────────────────────────────────
 

@@ -8,8 +8,32 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { Effect, type Context } from 'effect'
 import type { TerminatedBy } from '@reactive-agents/core'
 import type { AgentPersona } from './types.js'
+
+/**
+ * Resolve a Context.Tag from the surrounding Effect runtime, returning the
+ * service typed as its declared interface (rather than `unknown`).
+ *
+ * Use at gateway/builder boundary call sites that previously did
+ * `yield* SomeService as any` because the dep interface only knows the
+ * service as `unknown`. The returned Effect requires the service in its R
+ * channel exactly the same way `yield* tag` does, so type erasure is local
+ * to the consumer — the surrounding runtime contract is unchanged.
+ *
+ * @example
+ * ```ts
+ * const gw = yield* yieldService(GatewayService)
+ * yield* gw.processEvent(event) // typed
+ * ```
+ */
+export const yieldService = <I, S>(
+    tag: Context.Tag<I, S>
+): Effect.Effect<S, never, I> =>
+    Effect.gen(function* () {
+        return yield* tag
+    })
 
 /**
  * Resolve the default tracing config (Sprint 3.6).

@@ -23,6 +23,8 @@ import type { ObsLike, EbLike } from "../../runtime-context.js";
 import { extractTaskText, normalizeReasoningResult } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 
+type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
+
 export interface VerificationThinkRetryDeps {
   readonly config: ReactiveAgentsConfig;
   readonly task: Task;
@@ -55,7 +57,8 @@ export const runVerificationThinkRetry = (
         availableTools: [],
         availableToolSchemas: [],
         allToolSchemas: [],
-        strategy: c.selectedStrategy ?? "reactive",
+        strategy:
+          (c.selectedStrategy ?? "reactive") as ReasoningExecuteRequest["strategy"],
         contextProfile: {
           ...config.contextProfile,
           maxIterations: 1,

@@ -2307,11 +2307,7 @@ export class ReactiveAgentBuilder {
                     runtimeWithCortex as unknown as Layer.Layer<unknown>,
                     {
                         toolsMod: {
-                            ToolService:
-                                toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                                    unknown,
-                                    unknown
-                                >,
+                            ToolService: toolsMod.ToolService,
                         },
                         mcpServers,
                         toolsOptions,
@@ -2404,4 +2400,3 @@ export class ReactiveAgentBuilder {
         }) as Effect.Effect<ReactiveAgent, Error>
     }
 }
-

@@ -13,8 +13,10 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect, type ManagedRuntime } from 'effect'
-import type { GatewayChatManager } from '../gateway-chat.js'
+import { Effect, type Context, type ManagedRuntime } from 'effect'
+import type { EventBus } from '@reactive-agents/core'
+import type { GatewayService as GatewayServiceTag } from '@reactive-agents/gateway'
+import type { GatewayChatManager } from '../gateway-context-formatting.js'
 import type {
     GatewayHandle,
     GatewaySummary,
@@ -22,12 +24,15 @@ import type {
 import type { GLog } from './gateway-bootstrap.js'
 import type { makeExecuteEvent } from './execute-event.js'
 
+type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
+type EventBusService = Context.Tag.Service<typeof EventBus>
+
 /**
  * Dependencies for the channel-message subscription.
  */
 export interface SubscribeChannelHandlerDeps {
-    readonly eb: unknown | null
-    readonly gw: unknown
+    readonly eb: EventBusService | null
+    readonly gw: GatewayService
     readonly glog: GLog
     readonly channelMode: 'chat' | 'task'
     readonly channelOutboundToolGuidance: (args: {
@@ -72,14 +77,9 @@ export const subscribeChannelHandler = async (
     const recentMessageHashes = new Set<string>()
     const MESSAGE_DEDUP_TTL = 30_000 // 30s window
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ebAny = eb as any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const gwAny = gw as any
-
     try {
         const unsub = await runtime.runPromise(
-            ebAny.on('ChannelMessageReceived', (event: any) =>
+            eb.on('ChannelMessageReceived', (event) =>
                 Effect.gen(function* () {
                     if (getStopped()) return
 
@@ -118,10 +118,7 @@ export const subscribeChannelHandler = async (
                         },
                     }
 
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const channelDecision: any = yield* gwAny.processEvent(
-                        gwEvent
-                    )
+                    const channelDecision = yield* gw.processEvent(gwEvent)
 
                     if (channelDecision.action === 'execute') {
                         glog(
@@ -165,7 +162,12 @@ export const subscribeChannelHandler = async (
                         glog(
                             'debug',
                             `channel → ${channelDecision.action} from ${event.sender}`,
-                            { reason: channelDecision.reason }
+                            {
+                                reason:
+                                    'reason' in channelDecision
+                                        ? channelDecision.reason
+                                        : undefined,
+                            }
                         )
                     }
                 })
@@ -173,7 +175,7 @@ export const subscribeChannelHandler = async (
         )
         return () => {
             try {
-                ;(unsub as () => void)()
+                unsub()
             } catch {}
         }
     } catch {

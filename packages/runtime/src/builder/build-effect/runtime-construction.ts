@@ -364,9 +364,9 @@ export const buildBaseRuntimeAndEngine = (
           : undefined,
     });
 
-    const engine = yield* ExecutionEngine.pipe(
+    const engine = yield* (ExecutionEngine.pipe(
       Effect.provide(baseRuntime),
-    );
+    ) as Effect.Effect<Context.Tag.Service<typeof ExecutionEngine>, never>);
 
     const runtimeWithCortex: Layer.Layer<any, any> = cortexReporterLayer
       ? (Layer.merge(
@@ -387,4 +387,3 @@ export const buildBaseRuntimeAndEngine = (
     };
   });
 };
-

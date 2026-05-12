@@ -59,7 +59,7 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import {
   GatewayChatManager,
   channelOutboundToolGuidance,
-} from "./gateway-chat.js";
+} from "./gateway-context-formatting.js";
 import { createChatManager } from "./agent/chat-manager-factory.js";
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import type {

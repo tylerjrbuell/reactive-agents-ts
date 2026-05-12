@@ -13,7 +13,7 @@ import { Effect, type ManagedRuntime } from 'effect'
 import {
     GatewayChatManager,
     type GatewayChatManagerDeps,
-} from '../gateway-chat.js'
+} from '../gateway-context-formatting.js'
 import type { makeExecuteEvent } from './execute-event.js'
 
 export interface ChatManagerFactoryDeps {

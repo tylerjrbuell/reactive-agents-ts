@@ -13,13 +13,16 @@
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
 
-import { Effect, Schema, type ManagedRuntime } from 'effect'
+import { Effect, Schema, type Context, type ManagedRuntime } from 'effect'
 import type { AgentEvent, Task, TaskResult } from '@reactive-agents/core'
 import { generateTaskId, AgentId } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
+import type { GatewayService as GatewayServiceTag } from '@reactive-agents/gateway'
 import type { RuntimeErrors } from '../errors.js'
 import type { AgentResultMetadata } from '../builder/types.js'
 import type { GLog } from './gateway-bootstrap.js'
+
+type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
 
 /**
  * Minimal slice of ExecutionEngine used by executeEvent.
@@ -40,7 +43,7 @@ export interface ExecuteEventDeps {
     readonly engine: ExecuteEventEngine
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     readonly runtime: ManagedRuntime.ManagedRuntime<any, never>
-    readonly gw: unknown
+    readonly gw: GatewayService
     readonly agentId: string
     readonly persistMemory: boolean
     readonly getIsExecuting: () => boolean
@@ -126,11 +129,7 @@ export const makeExecuteEvent = (
             const durationMs = Date.now() - runStart
             if (tokensUsed) {
                 await deps.runtime.runPromise(
-                    (deps.gw as {
-                        updateTokensUsed: (
-                            n: number
-                        ) => Effect.Effect<void>
-                    }).updateTokensUsed(tokensUsed)
+                    deps.gw.updateTokensUsed(tokensUsed)
                 )
             }
             deps.glog(
