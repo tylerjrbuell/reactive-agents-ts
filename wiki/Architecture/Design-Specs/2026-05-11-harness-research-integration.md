@@ -71,7 +71,7 @@ Four independent workstreams. WS1–WS3 can execute in parallel. WS4 (Hot.md) ex
 
 #### §1 Amendment — Header
 Change version line to: `**North Star v5.0** — Harness Research Integration (2026-05-11)` and update the status line:
-> Added: Pruning Principle, M14 Self-Evolution, M3 ablation-gated, M8 Tier-1 elevation. All changes grounded in three verified March 2026 papers (see Design-Specs/2026-05-11-harness-research-integration.md).
+> Added: Pruning Principle, M14 Self-Evolution, M3 ablation-gated (roadmap posture only — no code change), M8 elevated priority. All changes grounded in three verified March 2026 papers and cross-checked for fit with reactive-agents-ts architecture. (see Design-Specs/2026-05-11-harness-research-integration.md).
 
 #### §2.2 Amendment — Mechanism Verdicts Table
 
@@ -79,20 +79,12 @@ Update three rows and add one:
 
 | Mech | Old verdict | New verdict |
 |---|---|---|
-| **M3** Verifier+Retry | `🔄 IMPROVE — tune retry context (target: ≥50% recovery on cogito:14b)` | `🔄 IMPROVE (ablation-gated) — ablate before tuning. Disable verifier entirely; if ablation shows net-positive on gate corpus, then tune. Research (NLAH arXiv:2603.25723) shows LLM-as-judge gates are net-negative in isolation. Verifier now opt-in by default in code.` |
-| **M8** Sub-agent Delegation | `🔄 IMPROVE — real LLM metrics (target: ≥15% accuracy lift)` | `🔄 TIER-1 — primary delegation pattern. Research (NLAH arXiv:2603.25723) shows 90% of compute flows through child agents in production harnesses. Target: ≥20% accuracy lift on complex (≥3-step) tasks; full Compose API integration for delegation traces.` |
+| **M3** Verifier+Retry | `🔄 IMPROVE — tune retry context (target: ≥50% recovery on cogito:14b)` | `🔄 IMPROVE (ablation-gated) — ablate before tuning. Run gate corpus with verifier disabled; tune only if ablation shows net-positive delta. Note: NLAH (arXiv:2603.25723) tested an LLM-as-judge gate; our defaultVerifier is a heuristic guard — direct applicability is unconfirmed. Ablation uses our own corpus.` |
+| **M8** Sub-agent Delegation | `🔄 IMPROVE — real LLM metrics (target: ≥15% accuracy lift)` | `🔄 IMPROVE (elevated priority) — NLAH (arXiv:2603.25723) shows 90% of compute flowing through child agents in the TRAE coding system. Context-specific finding, but signals delegation as high-leverage. Target raised from ≥15% to ≥20% accuracy lift. Compose API integration for delegation traces added to scope.` |
 | **M14** Self-Evolution | (new row) | `🔄 IMPROVE — new mechanism. Acceptance-gated attempt loop: stay narrow until failure signals justify broadening. Implemented as Compose API hooks (lifecycle.failure + control.strategy-evaluated), not kernel code. Target: ≥3pp lift on SWE gate scenario set. Research basis: NLAH (arXiv:2603.25723) +4.8pp SWE / +2.7pp OSWorld.` |
 
 Also add a footnote after the table:
 > **File-backed state validation:** The existing per-sender SQLite session history (gateway-chat, shipped May 1) corresponds to the NLAH "file-backed state" module, which was also positive on both benchmarks (+1.6pp SWE, +5.5pp OSWorld). This is a research confirmation of an already-correct decision.
-
-#### §2.3 Amendment — Architectural Gaps
-
-Add new gap:
-
-| Gap | Description | Phase |
-|---|---|---|
-| **G-8** | M3 verifier runs by default; research shows this is net-negative for most tasks | Phase 1.5 (code: make opt-in); Phase B (compose hook exposes control) |
 
 #### §6 Phase 1.5 Amendment — Mechanism Table
 
@@ -101,7 +93,7 @@ Replace the M3 and M8 rows:
 | Mech | Action | Target | Effort |
 |---|---|---|---|
 | **M3** Verifier+Retry | **Step 1:** Ablation — disable verifier, run gate corpus, measure net delta. **Step 2 (if and only if ablation shows net-positive):** Tune retry context (temperature 0.0→0.2). If ablation shows net-negative, M3 is demoted to opt-in-only; no further tuning. | Step 1: ablation result with p-value on gate corpus. Step 2 (conditional): ≥50% recovery on cogito:14b. | Step 1: 1 day. Step 2: 3–5 days (conditional). |
-| **M8** Sub-agent Delegation | Run 10 delegation scenarios on frontier + qwen3:14b. Wire delegation traces through compose pipeline (`control.strategy-evaluated` hook). Measure accuracy, token ROI, and trace completeness. | ≥20% accuracy lift on complex tasks (≥3-step); delegation events visible in trace. | 3–5 days |
+| **M8** Sub-agent Delegation | Run 10 delegation scenarios on frontier + qwen3:14b. Wire delegation traces through `control.strategy-evaluated` compose hook (after Phase B Wave A). Measure accuracy lift, token ROI, and trace completeness. | ≥20% accuracy lift on complex tasks (≥3-step); delegation events visible in trace via compose hook. | 3–5 days (after Phase B Wave A) |
 | **M14** Self-Evolution | Implement `composeNarrowRetry(maxBroadenAfter)` helper using `lifecycle.failure` + `control.strategy-evaluated` Compose hooks. Validate on 3 gate scenarios where agents currently loop. | ≥3pp lift on looping gate scenarios; no regression on non-looping scenarios. | 4–6 days (after Compose API Wave A ships the hooks) |
 
 Add M14 row to the Phase 1.5 completion gate:
@@ -133,41 +125,17 @@ Add new section at the end of §9:
 ```
 | v5.0 | 2026-05-11 | Harness research integration. Added: Pruning Principle (§9),
 |      |            | M14 Self-Evolution (§2.2 + §6 Phase 1.5), M3 ablation-gated
-|      |            | (§2.2 + §6 Phase 1.5), M8 Tier-1 elevation (§2.2 + §6 Phase 1.5),
-|      |            | G-8 gap (§2.3), Phase B Wave A/B tag catalog expansion (§6).
-|      |            | Research basis: arXiv 2603.25723, 2603.28052, 2603.03329, 2503.18666.
+|      |            | (roadmap posture only — §2.2 + §6 Phase 1.5), M8 elevated priority
+|      |            | (§2.2 + §6 Phase 1.5), Phase B Wave A/B tag catalog expansion (§6).
+|      |            | Research verified against primary sources; WS2 (heuristic verifier
+|      |            | opt-in) dropped — NLAH paper tested LLM-as-judge, not heuristic guards.
+|      |            | Research basis: arXiv 2603.25723, 2603.28052.
 |      |            | See Design-Specs/2026-05-11-harness-research-integration.md. |
 ```
 
 ---
 
-### WS2 — M3 Opt-In Code Change
-
-**Goal:** Verifier runs only when explicitly configured. Default: disabled.
-
-**Files to examine first:**
-- `packages/reasoning/src/kernel/capabilities/verify/verifier.ts`
-- `packages/reasoning/src/kernel/loop/runner.ts` — find where verify phase is invoked
-- `packages/runtime/src/builder.ts` — find `withVerifier` or equivalent builder method
-
-**Change logic:**
-
-1. In the builder options type (likely `packages/runtime/src/builder/types.ts`), find the verification config field. If absent, add a boolean or make it clear that presence of a verifier config implies opt-in.
-
-2. In the kernel loop (likely `runner.ts` or an `engine/phases/` module), find where `verifier.ts` is called. Gate it: if no verifier config is present in the agent's built config, skip the verify phase entirely.
-
-3. The gate condition: `if (!config.verification) return // skip verify phase` — exact field names to be confirmed by reading current code.
-
-**Backward compatibility:** No change for agents that already call `.withVerifier(config)` or equivalent. Passing a verifier config is the opt-in signal. Agents that currently receive verification by default will no longer get it — this is intentional and the desired behavior change.
-
-**Test requirements:**
-- Existing verifier tests continue to pass (they configure a verifier explicitly)
-- Add one test: agent with no verifier config — verify phase is not invoked (spy/mock on verifier.ts entry point)
-- Typecheck clean
-
----
-
-### WS3 — Compose API Spec: Self-Evolution Hooks
+### WS2 — Compose API Spec: Self-Evolution Hooks
 
 **File:** `wiki/Architecture/Design-Specs/2026-05-06-compose-harness-api.md`
 **Type:** Additive only. No changes to existing content.
@@ -301,7 +269,7 @@ Keep the existing "What's Next" block content but prepend:
 ```markdown
 ### Immediate: Phase 1.5 M3 Ablation (unblocked)
 
-Run the M3 ablation before starting Compose API Wave A — it's a 1-day task that validates whether the verify phase can be removed from the default path. Result determines whether G-8 closes in Phase 1.5 or Phase B.
+Run the M3 ablation before starting Compose API Wave A — it's a 1-day task that uses our own gate corpus to determine whether the verifier is net-positive or net-negative for reactive-agents-ts specifically. Result informs M3 Phase 1.5 direction.
 ```
 
 ---
@@ -311,11 +279,12 @@ Run the M3 ablation before starting Compose API Wave A — it's a 1-day task tha
 | Order | Workstream | Dependencies | Assignable to subagent? |
 |---|---|---|---|
 | Parallel | WS1 — North Star v5.0 | None | Yes |
-| Parallel | WS2 — M3 opt-in code | None | Yes — reads kernel code, makes surgical change |
-| Parallel | WS3 — Compose API spec | None | Yes — doc edit only |
-| After WS1 | WS4 — Hot.md | WS1 complete | Yes |
+| Parallel | WS2 — Compose API spec | None | Yes — doc edit only |
+| After WS1 | WS3 — Hot.md | WS1 complete | Yes |
 
-WS1, WS2, WS3 touch different files entirely — no merge conflicts possible.
+WS1 and WS2 touch different files entirely — no merge conflicts possible.
+
+**Not included (dropped):** M3 opt-in code change. The NLAH paper tested an LLM-as-judge gate; our `defaultVerifier` is a heuristic guard. The research finding does not directly apply. M3 direction is deferred to the ablation result from our own gate corpus.
 
 ---
 
@@ -323,10 +292,9 @@ WS1, WS2, WS3 touch different files entirely — no merge conflicts possible.
 
 | WS | Gate |
 |---|---|
-| WS1 | North Star version header reads v5.0; all four amendment sections present; amendment log entry appended |
-| WS2 | `bun typecheck` clean; existing verifier tests pass; new test: no-verifier-config agent skips verify phase |
-| WS3 | Both new tags appear in tag catalog; `composeNarrowRetry` helper defined with correct TypeScript types; Wave A tag count updated to 7 |
-| WS4 | Hot.md Latest Session block dated 2026-05-11; all 6 findings present in table; Pruning Principle noted |
+| WS1 | North Star version header reads v5.0; M3 ablation-gated, M8 elevated, M14 added, Pruning Principle present; amendment log entry appended |
+| WS2 | Both new tags appear in tag catalog; `composeNarrowRetry` helper defined with correct TypeScript types; Wave A tag count updated to 7 |
+| WS3 | Hot.md Latest Session block dated 2026-05-11; all 6 findings present in table; M3 ablation listed as pre-Phase-B gate |
 
 ---
 

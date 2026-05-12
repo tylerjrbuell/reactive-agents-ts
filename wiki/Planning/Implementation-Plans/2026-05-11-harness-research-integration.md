@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Integrate verified harness engineering research findings into the reactive-agents-ts codebase: promote North Star to v5.0, update the Compose API spec with self-evolution hooks, make the kernel-level verifier opt-in by default, and update Hot.md with the session findings.
+**Goal:** Integrate verified harness engineering research findings into the reactive-agents-ts canonical docs: promote North Star to v5.0, update the Compose API spec with self-evolution hooks, and update Hot.md with the session findings. No production code changes — the M3 verifier opt-in was dropped because the NLAH paper tested an LLM-as-judge gate, not reactive-agents-ts's heuristic defaultVerifier.
 
-**Architecture:** Four independent workstreams (WS1–WS4) with no shared file conflicts. WS1 (North Star v5.0), WS2 (M3 opt-in code), and WS3 (Compose API spec) execute in parallel. WS4 (Hot.md) executes after WS1 completes. The code change in WS2 threads `enableVerification` from the runtime config layer through `ReasoningService.execute()` → `KernelInput` → `runner.ts`, replacing the unconditional `defaultVerifier` fallback with `noopVerifier` when the flag is absent.
+**Architecture:** Three independent workstreams (WS1–WS3), all doc-only. WS1 (North Star v5.0) and WS2 (Compose API spec) execute in parallel. WS3 (Hot.md) executes after WS1 completes.
 
-**Tech Stack:** TypeScript, Effect-TS, Bun (test runner), packages/reasoning, packages/runtime
+**Tech Stack:** Markdown (wiki edits only)
 
 **Spec:** `wiki/Architecture/Design-Specs/2026-05-11-harness-research-integration.md`
 
@@ -34,7 +34,7 @@ Replace with:
 
 Find the existing status/date block near the top (the block with `**Status:** AUTHORITATIVE...` and `**Date:** 2026-04-26`) and append to it:
 ```markdown
-**v5.0 amendments (2026-05-11):** Pruning Principle added (§9); M14 Self-Evolution added to Phase 1.5 (§2.2, §6); M3 changed to ablation-gated (§2.2, §6); M8 elevated to Tier-1 (§2.2, §6); G-8 gap added (§2.3); Phase B Wave A/B tag catalog expanded to 7 tags (§6). All changes grounded in verified research (arXiv 2603.25723, 2603.28052). See `Architecture/Design-Specs/2026-05-11-harness-research-integration.md`.
+**v5.0 amendments (2026-05-11):** Pruning Principle added (§9); M14 Self-Evolution added to Phase 1.5 (§2.2, §6); M3 changed to ablation-gated (§2.2, §6); M8 elevated to elevated-priority IMPROVE (§2.2, §6); Phase B Wave A/B tag catalog expanded to 7 tags (§6). All changes grounded in verified research (arXiv 2603.25723, 2603.28052). See `Architecture/Design-Specs/2026-05-11-harness-research-integration.md`.
 ```
 
 ### Task 2: Update §2.2 mechanism verdicts table
@@ -47,7 +47,7 @@ Find the existing status/date block near the top (the block with `**Status:** AU
 
 Replace with:
 ```markdown
-| M3: Verifier + Retry | 🔄 IMPROVE (ablation-gated) | Research (arXiv:2603.25723) shows LLM-as-judge verifier gates are net-negative in isolation (-0.8pp SWE, -8.4pp OSWorld). Kernel-level defaultVerifier now opt-in via `enableVerification`. | **Step 1:** ablate (disable verifier, run gate corpus, measure delta). **Step 2 (only if net-positive):** tune retry context for cogito:14b. |
+| M3: Verifier + Retry | 🔄 IMPROVE (ablation-gated) | Research (arXiv:2603.25723) shows LLM-as-judge verifier gates are net-negative in isolation (-0.8pp SWE, -8.4pp OSWorld). Note: that paper tested LLM-as-judge; our defaultVerifier is a heuristic guard — applicability unconfirmed until our own ablation. | **Step 1:** ablate on our gate corpus (disable verifier, measure delta). **Step 2 (only if net-positive):** tune retry context for cogito:14b. |
 ```
 
 - [ ] **Find the M8 row**. It currently reads:
@@ -58,7 +58,7 @@ Replace with:
 
 Replace with:
 ```markdown
-| M8: Sub-agent Delegation | 🔄 TIER-1 | Research (arXiv:2603.25723) shows 90% of compute flows through delegated child agents in production harnesses — this is the primary pattern, not a side feature. | Real LLM execution on 10 scenarios; compose pipeline integration; target: ≥20% accuracy lift on complex (≥3-step) tasks. |
+| M8: Sub-agent Delegation | 🔄 IMPROVE (elevated priority) | NLAH (arXiv:2603.25723) shows 90% of compute flowing through child agents in the TRAE coding system — context-specific finding, but signals delegation as high-leverage. | Real LLM execution on 10 scenarios; compose pipeline integration; target raised to ≥20% accuracy lift on complex (≥3-step) tasks. |
 ```
 
 - [ ] **Add M14 row** directly after the M13 row:
@@ -73,21 +73,13 @@ Replace with:
 > **File-backed state confirmed:** The per-sender SQLite session history (gateway-chat, shipped May 1) corresponds to the NLAH "file-backed state" module, which was also robustly positive (+1.6pp SWE, +5.5pp OSWorld). This is a research confirmation of an already-correct decision.
 ```
 
-### Task 3: Add G-8 to §2.3 architectural gaps
-
-- [ ] **Find §2.3** (the architectural gaps table). Add a new row to the table:
-
-```markdown
-| **G-8** | Kernel-level `defaultVerifier` ran unconditionally even when `enableVerification: false`. Research shows verifier gates hurt most tasks. Fixed: `noopVerifier` is now the default; `defaultVerifier` only runs when `enableVerification: true` is threaded through to `KernelInput`. | Phase 1.5 (code shipped); Phase B (compose hook exposes control) |
-```
-
-### Task 4: Update Phase 1.5 table in §6
+### Task 3: Update Phase 1.5 table in §6
 
 - [ ] **Find the Phase 1.5 mechanism table** in §6. Replace the M3 and M8 rows and add M14:
 
 Replace M3 row:
 ```markdown
-| **M3** Verifier Retry | **Step 1 (ablation):** Disable verifier (`enableVerification: false`), run gate corpus (minimum 20 tasks), measure accuracy delta vs. baseline. **Step 2 (conditional):** Only if Step 1 shows net-positive signal — tune retry context (temperature 0.0→0.2, retry prompt variants). If Step 1 shows net-negative, close M3 as opt-in-only. | Step 1: ablation result with delta on gate corpus. Step 2 (conditional): ≥50% recovery on cogito:14b with verified net-positive. | Step 1: 1 day. Step 2: 3–5 days (conditional). |
+| **M3** Verifier Retry | **Step 1 (ablation):** Run gate corpus (minimum 20 tasks) with verifier disabled, measure accuracy delta vs. baseline. **Step 2 (conditional):** Only if Step 1 shows net-positive signal — tune retry context (temperature 0.0→0.2, retry prompt variants). If Step 1 shows net-negative, M3 is closed as context-specific; no further tuning. | Step 1: ablation result with delta on our gate corpus. Step 2 (conditional): ≥50% recovery on cogito:14b with verified net-positive. | Step 1: 1 day. Step 2: 3–5 days (conditional). |
 ```
 
 Replace M8 row:
@@ -105,7 +97,7 @@ Update the Phase 1.5 completion gate — add:
 - [ ] M14 self-evolution: ≥3pp lift on looping gate scenarios; evidence artifact in `wiki/Research/Harness-Reports/phase-1.5-m14-YYYY-MM-DD.md`
 ```
 
-### Task 5: Update Phase B Wave A tag count in §6
+### Task 4: Update Phase B Wave A tag count in §6
 
 - [ ] **Find the Wave A row** in the Phase B wave sequence table. It currently says "5 initial tags". Change to:
 
@@ -120,7 +112,7 @@ Update the Phase 1.5 completion gate — add:
 - `control.strategy-evaluated` — fires from `kernel/capabilities/reflect/strategy-evaluator.ts`; payload: `{ currentStrategy, score, failureStreak, recommendedAction, availableStrategies }`
 ```
 
-### Task 6: Add Pruning Principle to §9
+### Task 5: Add Pruning Principle to §9
 
 - [ ] **Find §9** ("What Stays vs What Changes"). Add a new subsection at the end:
 
@@ -134,15 +126,15 @@ Harness components encode assumptions about what the model cannot do alone. Thos
 **Operational rule:** Before adding any new harness mechanism, identify and document the model-capability assumption it encodes. During each major version review, test whether that assumption still holds on current frontier models. Mechanisms whose assumptions have expired are removal candidates, not improvement candidates.
 ```
 
-### Task 7: Append amendment log entry
+### Task 6: Append amendment log entry
 
 - [ ] **Find the amendment log** (near the end of the file, `## 11. Amendment Log` or similar). Append:
 
 ```markdown
-| v5.0 | 2026-05-11 | Pruning Principle (§9); M14 Self-Evolution (§2.2 + §6 Phase 1.5); M3 ablation-gated (§2.2 + §6 Phase 1.5); M8 Tier-1 elevation (§2.2 + §6 Phase 1.5); G-8 gap (§2.3); Phase B Wave A/B tag catalog expanded to 7 (§6). Research basis: arXiv 2603.25723, 2603.28052. Design spec: `Architecture/Design-Specs/2026-05-11-harness-research-integration.md`. |
+| v5.0 | 2026-05-11 | Pruning Principle (§9); M14 Self-Evolution (§2.2 + §6 Phase 1.5); M3 ablation-gated (§2.2 + §6 Phase 1.5); M8 elevated-priority IMPROVE (§2.2 + §6 Phase 1.5); Phase B Wave A/B tag catalog expanded to 7 (§6). Research basis: arXiv 2603.25723, 2603.28052. Design spec: `Architecture/Design-Specs/2026-05-11-harness-research-integration.md`. |
 ```
 
-### Task 8: Commit WS1
+### Task 7: Commit WS1
 
 - [ ] **Commit**
 
@@ -150,312 +142,18 @@ Harness components encode assumptions about what the model cannot do alone. Thos
 git add wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md
 git commit -m "docs(wiki): promote North Star to v5.0 — harness research integration
 
-M3 ablation-gated, M8 Tier-1, M14 self-evolution added, Pruning Principle.
+M3 ablation-gated, M8 elevated-priority IMPROVE, M14 self-evolution added, Pruning Principle.
 Research basis: arXiv 2603.25723 (Tsinghua NLAH) + 2603.28052 (Stanford Meta-Harness)."
 ```
 
 ---
 
-## WS2 — M3 Opt-In Code Change
-
-**Files:**
-- Modify: `packages/reasoning/src/kernel/capabilities/verify/verifier.ts`
-- Modify: `packages/reasoning/src/index.ts` (add `noopVerifier` to public exports)
-- Modify: `packages/reasoning/src/kernel/state/kernel-state.ts`
-- Modify: `packages/reasoning/src/kernel/loop/runner.ts`
-- Modify: `packages/reasoning/src/strategies/reactive.ts`
-- Modify: `packages/reasoning/src/strategies/direct.ts`
-- Modify: `packages/reasoning/src/services/reasoning-service.ts`
-- Modify: `packages/runtime/src/engine/phases/agent-loop/reasoning-harness-hooks.ts`
-- Create: `packages/runtime/tests/verifier-opt-in-default.test.ts`
-
-**Context:** `runner.ts:568` currently does `const verifier = effectiveInput.verifier ?? defaultVerifier` — this runs the heuristic verifier gate on every agent run regardless of whether `withVerification()` was called on the builder. The `enableVerification` flag already exists at the runtime config layer and is already respected by `engine/phases/verify.ts:90` (the LLM-based verify phase) and `engine/phases/agent-loop/verification-quality-gate.ts:38`. The gap is the kernel-level `defaultVerifier` in runner.ts which has no equivalent gate. This change closes that gap.
-
-### Task 9: Export `noopVerifier` from verifier.ts
-
-- [ ] **Read `packages/reasoning/src/kernel/capabilities/verify/verifier.ts`** around line 135–145 to find the `Verifier` interface and `VerificationResult` shape.
-
-- [ ] **Write a failing test first**
-
-Create `packages/runtime/tests/verifier-opt-in-default.test.ts`:
-
-```typescript
-import { describe, it, expect } from "bun:test";
-import { noopVerifier } from "@reactive-agents/reasoning";
-
-describe("noopVerifier", () => {
-  it("always returns verified: true", () => {
-    const result = noopVerifier.verify({
-      action: "final-answer",
-      content: "some output",
-      actionSuccess: true,
-      task: "do something",
-      priorSteps: [],
-      requiredTools: [],
-      toolsUsed: [],
-      availableUserTools: [],
-      terminal: true,
-      terminatedBy: "final-answer",
-    });
-    expect(result.verified).toBe(true);
-    expect(result.checks).toEqual([]);
-  });
-
-  it("preserves action from context", () => {
-    const result = noopVerifier.verify({
-      action: "tool-call",
-      content: "irrelevant",
-      actionSuccess: true,
-      task: "do something",
-      priorSteps: [],
-      requiredTools: [],
-      toolsUsed: [],
-      availableUserTools: [],
-      terminal: false,
-      terminatedBy: "in-loop",
-    });
-    expect(result.action).toBe("tool-call");
-  });
-});
-```
-
-- [ ] **Run the test to confirm it fails**
-
-```bash
-cd packages/runtime && bun test tests/verifier-opt-in-default.test.ts
-```
-
-Expected: import error (`noopVerifier` not exported from `@reactive-agents/reasoning` yet).
-
-- [ ] **Add `noopVerifier` to `verifier.ts`**
-
-Read the file, find the `Verifier` interface definition (around line 139). Add after the interface closing `}`:
-
-```typescript
-/** Pass-through verifier. Used when enableVerification is false (the default). Always passes. */
-export const noopVerifier: Verifier = {
-  verify: (ctx) => ({
-    verified: true,
-    checks: [],
-    summary: "verification disabled",
-    action: ctx.action,
-  }),
-};
-```
-
-- [ ] **Export `noopVerifier` from `packages/reasoning/src/index.ts`**
-
-Find the existing `defaultVerifier` export block (around line 186):
-```typescript
-defaultVerifier,
-```
-Add `noopVerifier` to the same export block so it reads:
-```typescript
-defaultVerifier,
-noopVerifier,
-```
-
-- [ ] **Run the test to confirm it passes**
-
-```bash
-cd packages/runtime && bun test tests/verifier-opt-in-default.test.ts
-```
-
-Expected: PASS (2 tests).
-
-### Task 10: Add `enableVerification` to `KernelInput`
-
-- [ ] **Read `packages/reasoning/src/kernel/state/kernel-state.ts`** around line 340–365. Find the `verifier?` and `verifierRetryPolicy?` fields in the `KernelInput` interface.
-
-- [ ] **Add the field** after `verifierRetryPolicy`:
-
-```typescript
-  /**
-   * When false (default), runner.ts uses noopVerifier — all verifier gates
-   * are bypassed. Set to true only when the builder's withVerification() was
-   * called. Matches the flag at the runtime config layer.
-   */
-  readonly enableVerification?: boolean;
-```
-
-### Task 11: Update `runner.ts` to gate on `enableVerification`
-
-- [ ] **Find the import line in runner.ts** (around line 60):
-
-```typescript
-import { defaultVerifier, defaultVerifierRetryPolicy } from "../../kernel/capabilities/verify/verifier.js";
-```
-
-Replace with:
-
-```typescript
-import { defaultVerifier, defaultVerifierRetryPolicy, noopVerifier } from "../../kernel/capabilities/verify/verifier.js";
-```
-
-- [ ] **Find line 568 in runner.ts**:
-
-```typescript
-const verifier = effectiveInput.verifier ?? defaultVerifier;
-```
-
-Replace with:
-
-```typescript
-const verifier = effectiveInput.enableVerification
-  ? (effectiveInput.verifier ?? defaultVerifier)
-  : noopVerifier;
-```
-
-### Task 12: Thread `enableVerification` through strategies
-
-- [ ] **In `packages/reasoning/src/strategies/reactive.ts`**, find the `kernelInput: KernelInput = {` block (around line 168). Add after the last field (after `calibration: input.calibration,`):
-
-```typescript
-      enableVerification: input.enableVerification,
-```
-
-- [ ] **In `packages/reasoning/src/strategies/direct.ts`**, find its equivalent `kernelInput: KernelInput = {` block (around line 147). Add the same field after the last existing field:
-
-```typescript
-      enableVerification: input.enableVerification,
-```
-
-### Task 13: Add `enableVerification` to `ReasoningService.execute()` params
-
-- [ ] **Read `packages/reasoning/src/services/reasoning-service.ts`** around lines 27–115. Find the execute parameter object — it has fields like `taskDescription`, `availableTools`, `calibration`, etc.
-
-- [ ] **Add the field** after the last existing field in the execute params object (find the closing `}>` of the execute type and add before it):
-
-```typescript
-      /** When false (default), kernel-level verifier gates are bypassed (noopVerifier). */
-      readonly enableVerification?: boolean;
-```
-
-### Task 14: Thread through `reasoning-harness-hooks.ts`
-
-- [ ] **Read `packages/runtime/src/engine/phases/agent-loop/reasoning-harness-hooks.ts`** around lines 81–120. Find the `buildExecuteRequest` function, specifically the `request` object literal.
-
-- [ ] **Add after `calibration: resolvedCalibration,`** (the last field before the closing `}`):
-
-```typescript
-      enableVerification: config.enableVerification,
-```
-
-### Task 15: Write verifier selection unit tests
-
-- [ ] **Add a second describe block** to `packages/runtime/tests/verifier-opt-in-default.test.ts` that directly tests the selection logic from runner.ts:
-
-```typescript
-import { describe, it, expect } from "bun:test";
-import { defaultVerifier, noopVerifier } from "@reactive-agents/reasoning";
-
-// These tests mirror the exact ternary in runner.ts:568:
-//   const verifier = effectiveInput.enableVerification
-//     ? (effectiveInput.verifier ?? defaultVerifier)
-//     : noopVerifier;
-// They verify the selection contract without needing to run the full kernel.
-
-describe("runner.ts verifier selection (mirrors runner.ts:568)", () => {
-  function selectVerifier(
-    enableVerification: boolean | undefined,
-    customVerifier?: typeof defaultVerifier,
-  ) {
-    return enableVerification
-      ? (customVerifier ?? defaultVerifier)
-      : noopVerifier;
-  }
-
-  it("selects noopVerifier when enableVerification is false", () => {
-    expect(selectVerifier(false)).toBe(noopVerifier);
-  });
-
-  it("selects noopVerifier when enableVerification is undefined (the default)", () => {
-    expect(selectVerifier(undefined)).toBe(noopVerifier);
-  });
-
-  it("selects defaultVerifier when enableVerification is true and no custom verifier", () => {
-    expect(selectVerifier(true)).toBe(defaultVerifier);
-  });
-
-  it("selects custom verifier when enableVerification is true and custom verifier provided", () => {
-    const customVerifier = { verify: () => ({ verified: true, checks: [], summary: "custom", action: "pass" }) };
-    expect(selectVerifier(true, customVerifier as typeof defaultVerifier)).toBe(customVerifier);
-  });
-
-  it("ignores custom verifier when enableVerification is false", () => {
-    // Even if a verifier object is passed in KernelInput, it is not used when
-    // enableVerification is false. noopVerifier is always selected.
-    const customVerifier = { verify: () => ({ verified: false, checks: [], summary: "fail", action: "reject" }) };
-    expect(selectVerifier(false, customVerifier as typeof defaultVerifier)).toBe(noopVerifier);
-  });
-});
-```
-
-- [ ] **Run all tests in the file**
-
-```bash
-cd packages/runtime && bun test tests/verifier-opt-in-default.test.ts
-```
-
-Expected: PASS (7 tests — 2 from Task 9 + 5 from Task 15).
-
-### Task 16: Run the full test suite
-
-- [ ] **Typecheck the affected packages**
-
-```bash
-cd packages/reasoning && bun run typecheck
-cd packages/runtime && bun run typecheck
-```
-
-Expected: clean (0 errors). If errors appear, they will be in the `kernelInput` construction sites or the `ReasoningService.execute()` callers — fix any `Type '... | undefined' is not assignable to type 'boolean'` errors by ensuring the field is `?: boolean` (optional) everywhere.
-
-- [ ] **Run the reasoning package tests**
-
-```bash
-cd packages/reasoning && bun test
-```
-
-Expected: all existing tests pass.
-
-- [ ] **Run the runtime package tests**
-
-```bash
-cd packages/runtime && bun test
-```
-
-Expected: all existing tests pass plus the 2 new `noopVerifier` unit tests.
-
-### Task 17: Commit WS2
-
-- [ ] **Commit**
-
-```bash
-git add \
-  packages/reasoning/src/kernel/capabilities/verify/verifier.ts \
-  packages/reasoning/src/kernel/state/kernel-state.ts \
-  packages/reasoning/src/kernel/loop/runner.ts \
-  packages/reasoning/src/strategies/reactive.ts \
-  packages/reasoning/src/strategies/direct.ts \
-  packages/reasoning/src/services/reasoning-service.ts \
-  packages/runtime/src/engine/phases/agent-loop/reasoning-harness-hooks.ts \
-  packages/runtime/tests/verifier-opt-in-default.test.ts
-git commit -m "feat(reasoning): make kernel-level verifier opt-in by default
-
-defaultVerifier now only runs when enableVerification: true is threaded
-through ReasoningService.execute() -> KernelInput -> runner.ts.
-noopVerifier (always-pass) is the new default. Research basis: NLAH
-arXiv:2603.25723 shows verifier gates are net-negative in isolation."
-```
-
----
-
-## WS3 — Compose API Spec: Self-Evolution Hooks
+## WS2 — Compose API Spec: Self-Evolution Hooks
 
 **Files:**
 - Modify: `wiki/Architecture/Design-Specs/2026-05-06-compose-harness-api.md`
 
-### Task 18: Add two new tags to the tag catalog
+### Task 8: Add two new tags to the tag catalog
 
 - [ ] **Read the file** to find the existing tag catalog table. It will have columns like `| Tag | Namespace | Fires from | Payload type |` or similar. Find where existing tags are listed (look for `prompt.system`, `nudge.loop-detected`, etc.).
 
@@ -466,7 +164,7 @@ arXiv:2603.25723 shows verifier gates are net-negative in isolation."
 | `control.strategy-evaluated` | `control.*` | `kernel/capabilities/reflect/strategy-evaluator.ts` | `ControlStrategyEvaluatedPayload` |
 ```
 
-### Task 19: Add self-evolution hooks section
+### Task 9: Add self-evolution hooks section
 
 - [ ] **Find a logical insertion point** after the existing tag catalog section (before the Wave implementation notes or at the end of the design sections).
 
@@ -546,11 +244,11 @@ const agent = buildAgent()
 ```
 ````
 
-### Task 20: Update Wave A tag count
+### Task 10: Update Wave A tag count
 
 - [ ] **Find the Wave A description** in the wave sequence table or section. It currently says "5 initial tags". Change every occurrence to "7 initial tags (includes `lifecycle.failure` + `control.strategy-evaluated` for M14 self-evolution)".
 
-### Task 21: Commit WS3
+### Task 11: Commit WS2
 
 - [ ] **Commit**
 
@@ -564,14 +262,14 @@ composeNarrowRetry helper designed. Research basis: NLAH arXiv:2603.25723."
 
 ---
 
-## WS4 — Hot.md Update
+## WS3 — Hot.md Update
 
 **Depends on:** WS1 complete (North Star v5.0 must be promoted before Hot.md references it)
 
 **Files:**
 - Modify: `wiki/Hot.md`
 
-### Task 22: Replace Latest Session block
+### Task 12: Replace Latest Session block
 
 - [ ] **Find `## Latest Session (2026-05-10)`** in `wiki/Hot.md`. Replace the entire block (from that heading down to the `---` separator before `## What's Next`) with:
 
@@ -584,7 +282,7 @@ Four March 2026 papers reviewed; all quantitative claims verified against primar
 
 | Finding | Source | Impact |
 |---|---|---|
-| Verifier gates net-negative: -0.8pp SWE, -8.4pp OSWorld | Tsinghua NLAH (arXiv:2603.25723) | M3 ablation-gated; kernel-level `defaultVerifier` now opt-in (G-8 closed) |
+| Verifier gates net-negative: -0.8pp SWE, -8.4pp OSWorld | Tsinghua NLAH (arXiv:2603.25723) | M3 ablation-gated in Phase 1.5 roadmap; kernel heuristic verifier already correct (finding applies to LLM-as-judge, not our guard) |
 | Self-evolution most consistent positive module: +4.8pp SWE, +2.7pp OSWorld | Same | M14 added to Phase 1.5 as Compose API hook |
 | File-backed state also positive: +1.6pp SWE, +5.5pp OSWorld | Same | Confirms SQLite session history (gateway-chat) was correct |
 | Adding full harness costs 13.6× tokens and is 0.8pp *worse* | Same | Pruning Principle added to North Star §9 |
@@ -601,18 +299,18 @@ Design spec: `wiki/Architecture/Design-Specs/2026-05-11-harness-research-integra
 All packages on npm. All P1 issues resolved.
 ```
 
-### Task 23: Update What's Next
+### Task 13: Update What's Next
 
 - [ ] **Find `## What's Next`** and prepend a new section before the existing "Immediate: Phase B" block:
 
 ```markdown
 ### Pre-Phase-B Gate: M3 Ablation (1 day)
 
-Run the M3 ablation before starting Compose API Wave A. Disable `enableVerification` (now the default), run gate corpus (20+ tasks), measure accuracy delta. Result determines whether G-8 is fully closed in Phase 1.5 or requires Phase B compose control.
+Run the M3 ablation before starting Compose API Wave A. Temporarily pass a `noopVerifier` via `KernelInput.verifier` in a dev test harness, run gate corpus (20+ tasks), measure accuracy delta. Note: the NLAH finding is for LLM-as-judge gates; our `defaultVerifier` is a heuristic guard — ablation determines whether the same pattern holds here. Result informs Phase 1.5 M3 priority.
 
 ```
 
-### Task 24: Update the footer metadata
+### Task 14: Update the footer metadata
 
 - [ ] **Find the bottom of Hot.md** — the `**Last Updated:**`, `**Current Phase:**`, and `**Next Review:**` lines. Update:
 
@@ -622,7 +320,7 @@ Run the M3 ablation before starting Compose API Wave A. Disable `enableVerificat
 **Next Review:** After M3 ablation result + Compose API Wave A lands
 ```
 
-### Task 25: Commit WS4
+### Task 15: Commit WS3
 
 - [ ] **Commit**
 
@@ -633,22 +331,18 @@ git commit -m "docs(wiki): update Hot.md — harness research integration sessio
 
 ---
 
-## Final: Full Test Run
+## Final: Validate Wiki Consistency
 
-After all four workstreams commit:
+After all three workstreams commit:
 
-- [ ] **Run the full test suite from root**
+- [ ] **Cross-check the tag count** — confirm `05-DESIGN-NORTH-STAR.md` §6 Phase B Wave A now says "7 initial tags" and `2026-05-06-compose-harness-api.md` Wave A section also says "7 initial tags". The two docs must agree.
 
-```bash
-bun test
-```
+- [ ] **Verify Hot.md links are live** — the design spec path (`wiki/Architecture/Design-Specs/2026-05-11-harness-research-integration.md`) must exist on disk.
 
-Expected: all tests pass (no regressions). Note the pre-existing 18 TypeScript errors in `packages/runtime` are tracked separately and are not introduced by this change.
-
-- [ ] **Typecheck all packages**
+- [ ] **Grep for any remaining WS2 code-change references** — ensure no task still references `noopVerifier`, `KernelInput.enableVerification`, or the dropped G-8 gap.
 
 ```bash
-bun run typecheck
+grep -n "noopVerifier\|enableVerification\|G-8" wiki/Planning/Implementation-Plans/2026-05-11-harness-research-integration.md
 ```
 
-Expected: same error count as baseline (the 18 pre-existing errors). No new errors.
+Expected: no matches (all dropped-WS2 references removed).

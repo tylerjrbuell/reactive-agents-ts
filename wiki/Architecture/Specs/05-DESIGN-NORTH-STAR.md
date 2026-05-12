@@ -832,8 +832,8 @@ Choices baked into this architecture, with alternatives considered:
 
 ---
 
-_Version: 5.0.0_
-_Status: AUTHORITATIVE_
-_Date: 2026-05-11_
-_Supersedes: v3.0 + `07-ROADMAP-v1.0.md` + `Phase 1.5 Improvement Roadmap.md`_
-_Next review: after Phase B Wave A ships_
+*Version: 5.0.0*
+*Status: AUTHORITATIVE*
+*Date: 2026-05-11*
+*Supersedes: v3.0 + `07-ROADMAP-v1.0.md` + `Phase 1.5 Improvement Roadmap.md`*
+*Next review: after Phase B Wave A ships*
