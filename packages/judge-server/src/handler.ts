@@ -31,7 +31,10 @@ export const parseJudgmentText = (text: string): {
   layerResults: JudgeLayerResult[];
 } => {
   try {
-    const parsed: unknown = JSON.parse(text);
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    const jsonStr = start !== -1 && end > start ? text.slice(start, end + 1) : text;
+    const parsed: unknown = JSON.parse(jsonStr);
     if (
       typeof parsed === "object" && parsed !== null &&
       "passed" in parsed && typeof (parsed as { passed: unknown }).passed === "boolean" &&
