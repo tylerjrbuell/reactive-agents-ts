@@ -10,61 +10,37 @@ updated: 2026-05-10
 
 ---
 
-## Latest Session (2026-05-10)
+## Latest Session (2026-05-11)
 
-### Outsider Audit Guidance — v0.11 Differentiation
+### Harness Research Integration — Three Papers Verified ✅
 
-Brief codebase audit conclusion: Reactive Agents is most differentiated when it sells **typed, observable, replayable harness control without forking internals**. Phase B should make that obvious from the API and traces.
+Four March 2026 papers reviewed; all quantitative claims verified against primary sources before any changes were made.
 
-Agent guidance:
-- Avoid broadening public surface while building Phase B.
-- Resolve naming conflict: current `runtime/src/compose.ts` (`agentFn`/`pipe`/`parallel`/`race`) is not the same product as planned `.compose((harness) => ...)`.
-- Prefer 5 polished injection points with great type inference + trace visibility over 24 thin hooks.
-- Keep `any` cleanup focused on public hooks, lifecycle boundaries, compose payloads, metadata, and provider adapter seams.
-- `GatewayAgent` extraction remains a high-signal DX/type-safety follow-up: regular task agents should not advertise gateway-only methods.
-
-Public promise to preserve: **"Intercept, replace, observe, and replay every important harness decision."**
-
-### North Star v4.0 — Consolidated Forward Plan ✅
-
-**Single source of truth for all future work is `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v4.0.**
-
-- `07-ROADMAP-v1.0.md` and `Phase 1.5 Improvement Roadmap.md` are superseded and marked accordingly
-- `04-PROJECT-STATE.md` retained as separate cold-session framing doc
-- Public `ROADMAP.md` (root) needs alignment — flagged as Phase C gate requirement
-
-**Phase sequence (canonical — see North Star §6 for full gates):**
-
-| Phase | Focus | Status |
+| Finding | Source | Impact |
 |---|---|---|
-| **A** | Architecture Cleanup: W23–W25 core decomposition (`builder.ts` 6,232→2,407 LOC; `execution-engine.ts` 4,499→1,539 LOC) | **Core complete — Phase B unblocked** |
-| **1.5** | Mechanism Improvements: M3/M6/M7/M8/M10 IMPROVE→KEEP | Parallel with A |
-| **B** | Compose API: Waves A–F, 24 injection points, 6 killswitches | **Next v0.11 prereq** |
-| **C** | v0.11 Launch: playground, CLI generator, OTel, skill persistence, Snapshot/Replay | v0.11.0 |
-| **D** | Code-as-Action Strategy: 6th reasoning strategy, local model gap | v0.12 |
-| **E** | Local Model Engineering: calibration consumers, per-provider parser, paging | v0.12 |
-| **F** | Public Benchmark Discipline: τ-bench / BFCL / HAL Princeton | v0.13 |
-| **G** | v1.0 Polish & Release | v1.0 |
+| Verifier gates net-negative: -0.8pp SWE, -8.4pp OSWorld | Tsinghua NLAH (arXiv:2603.25723) | M3 ablation-gated in Phase 1.5 roadmap; kernel heuristic verifier already correct (finding applies to LLM-as-judge, not our guard) |
+| Self-evolution most consistent positive module: +4.8pp SWE, +2.7pp OSWorld | Same | M14 added to Phase 1.5 as Compose API hook |
+| File-backed state also positive: +1.6pp SWE, +5.5pp OSWorld | Same | Confirms SQLite session history (gateway-chat) was correct |
+| Adding full harness costs 13.6× tokens and is 0.8pp *worse* | Same | Pruning Principle added to North Star §9 |
+| Raw traces essential: 50% → 34.6% accuracy without them | Stanford Meta-Harness (arXiv:2603.28052) | `@reactive-agents/trace` + Snapshot/Replay are critical path |
+| Harness transfers across 5 models (+4.7pp avg) | Same | Strengthens M7 calibration consumer priority |
+
+### North Star v5.0 Promoted ✅
+
+Canonical doc: `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`
+Design spec: `wiki/Architecture/Design-Specs/2026-05-11-harness-research-integration.md`
 
 ### v0.10.6 Shipped ✅
 
-- All packages on npm
-- All P1 issues resolved (frozen judge FIX-21, agent.run() confirmed, --help handlers wired, CJS shim)
-- Layer 1 builders shipped: `buildFinalAnswerDescription` (commit 941bcb3a), `buildOracleNudge` (commit e72f50d3)
-- Calibration profiles: cogito:14b, cogito:8b, gemma4:e4b, qwen3:14b all in `packages/llm-provider/src/calibrations/`
-
-### Phase 1 Complete ✅ (8 KEEP + 5 IMPROVE)
-
-All 13 mechanisms spike-validated. IMPROVE mechanisms targeted in Phase 1.5:
-- **M3** Verifier+Retry — tune for cogito:14b (target: ≥50% recovery)
-- **M6** Skill System — SQLite persistence (target: >70% cross-session recall)
-- **M7** Calibration — ≥8 active field consumers (currently ~5)
-- **M8** Sub-agent Delegation — real LLM metrics (target: ≥15% accuracy lift)
-- **M10** Memory System — multi-session scenarios (target: >80% recall)
+All packages on npm. All P1 issues resolved.
 
 ---
 
 ## What's Next
+
+### Pre-Phase-B Gate: M3 Ablation (1 day)
+
+Run the M3 ablation before starting Compose API Wave A. Temporarily pass a `noopVerifier` via `KernelInput.verifier` in a dev test harness, run gate corpus (20+ tasks), measure accuracy delta. Note: the NLAH finding is for LLM-as-judge gates; our `defaultVerifier` is a heuristic guard — ablation determines whether the same pattern holds here. Result informs Phase 1.5 M3 priority.
 
 ### Immediate: Phase B — Compose API Wave A
 
@@ -109,6 +85,6 @@ M3/M6/M7/M8/M10 can run concurrently with Phase A — different files, no confli
 
 At session end: replace "Latest Session" with new date + key updates, update "What's Next," add decisions. Keep it under 120 lines.
 
-**Last Updated:** 2026-05-10
-**Current Phase:** B (Compose API) — Wave A next
-**Next Review:** After Compose API Wave A lands
+**Last Updated:** 2026-05-11
+**Current Phase:** B (Compose API) — Wave A next; M3 ablation gate first
+**Next Review:** After M3 ablation result + Compose API Wave A lands
