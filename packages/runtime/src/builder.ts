@@ -28,7 +28,7 @@ import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
-import { wireRiHooks } from './builder/ri-wiring.js'
+import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
     type BuilderRuntimeStateView,
@@ -236,7 +236,7 @@ export class ReactiveAgentBuilder {
         maxRetries?: number
     }
     private _enableIdentity: boolean = false
-    private _enableObservability: boolean = true
+    private _enableObservability: boolean = false
     private _observabilityOptions: ObservabilityOptions = {
         verbosity: 'minimal',
     }
@@ -342,21 +342,7 @@ export class ReactiveAgentBuilder {
         }
         overrides?: Record<string, { evolutionMode?: string }>
     }
-    private _riHooks?: {
-        onEntropyScored?: (score: any, iteration: number) => void
-        onControllerDecision?: (
-            decision: any,
-            context: any
-        ) => 'accept' | 'reject' | any
-        onSkillActivated?: (skill: any, trigger: string) => void
-        onSkillRefined?: (skill: any, previousVersion: any) => void
-        onSkillConflict?: (a: any, b: any) => 'merge' | 'surface' | 'ignore'
-        onMidRunAdjustment?: (
-            type: string,
-            before: unknown,
-            after: unknown
-        ) => void
-    }
+    private _riHooks?: RiHooks
     private _riConstraints?: {
         allowedStrategySwitch?: string[]
         maxTemperatureAdjustment?: number
@@ -1076,6 +1062,18 @@ export class ReactiveAgentBuilder {
     }
 
     /**
+     * Disable observability layer wiring and console exporters.
+     *
+     * Use for CI, scripted smoke tests, or hosts that should not print the
+     * metrics dashboard on completion. Tracing remains governed separately by
+     * `.withTracing()` / `.withoutTracing()` and `REACTIVE_AGENTS_TRACE`.
+     */
+    withoutObservability(): this {
+        this._enableObservability = false
+        return this
+    }
+
+    /**
      * Enable Cortex event reporting.
      *
      * URL resolution order:
@@ -1638,30 +1636,18 @@ export class ReactiveAgentBuilder {
     withReactiveIntelligence(
         options?: Partial<
             import('@reactive-agents/reactive-intelligence').ReactiveIntelligenceConfig
-        > & {
-            onEntropyScored?: (score: any, iteration: number) => void
-            onControllerDecision?: (
-                decision: any,
-                context: any
-            ) => 'accept' | 'reject' | any
-            onSkillActivated?: (skill: any, trigger: string) => void
-            onSkillRefined?: (skill: any, previousVersion: any) => void
-            onSkillConflict?: (a: any, b: any) => 'merge' | 'surface' | 'ignore'
-            onMidRunAdjustment?: (
-                type: string,
-                before: unknown,
-                after: unknown
-            ) => void
-            constraints?: {
-                allowedStrategySwitch?: string[]
-                maxTemperatureAdjustment?: number
-                neverEarlyStop?: boolean
-                neverHumanEscalate?: boolean
-                protectedSkills?: string[]
-                lockedSkills?: string[]
+        > &
+            RiHooks & {
+                constraints?: {
+                    allowedStrategySwitch?: string[]
+                    maxTemperatureAdjustment?: number
+                    neverEarlyStop?: boolean
+                    neverHumanEscalate?: boolean
+                    protectedSkills?: string[]
+                    lockedSkills?: string[]
+                }
+                autonomy?: 'full' | 'suggest' | 'observe'
             }
-            autonomy?: 'full' | 'suggest' | 'observe'
-        }
     ): this
     withReactiveIntelligence(
         arg?:
