@@ -15,6 +15,7 @@ import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
+import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
@@ -92,6 +93,13 @@ interface ReactiveInput {
   readonly observationSummary?: boolean | "auto";
   /** Pre-resolved model calibration — drives steering channel selection in ContextManager. */
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  /**
+   * Optional Verifier override — when set, replaces `defaultVerifier` at the
+   * terminal verification gate inside the kernel runner. Primary use is M3
+   * ablation instrumentation (`noopVerifier`); production agents should leave
+   * this undefined to use the default checks.
+   */
+  readonly verifier?: Verifier;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -194,6 +202,7 @@ export const executeReactive = (
       observationSummary: input.observationSummary,
       modelId: input.modelId,
       calibration: input.calibration,
+      verifier: input.verifier,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {
