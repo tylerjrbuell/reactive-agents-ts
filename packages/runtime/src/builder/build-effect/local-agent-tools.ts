@@ -29,7 +29,7 @@ import type {
 } from "@reactive-agents/tools";
 import { createLightRuntime } from "../../runtime.js";
 import { ExecutionEngine } from "../../execution-engine.js";
-import { composePersonaToSystemPrompt } from "../helpers.js";
+import { buildSubAgentSystemPrompt } from "../helpers.js";
 import type { AgentToolOptions, ProviderName } from "../types.js";
 import {
   makeSpawnHandlers,
@@ -111,16 +111,11 @@ export const createLocalAgentToolRegistration = (
       const _subStart = Date.now();
 
       // Compose persona with system prompt
-      let composedSystemPrompt = opts.systemPrompt;
-      if (opts.persona) {
-        const personaPrompt = composePersonaToSystemPrompt(
-          opts.persona,
-          opts.name,
-        );
-        composedSystemPrompt = composedSystemPrompt
-          ? `${personaPrompt}\n\n${composedSystemPrompt}`
-          : personaPrompt;
-      }
+      const composedSystemPrompt = buildSubAgentSystemPrompt(
+        opts.persona,
+        opts.systemPrompt,
+        opts.name,
+      );
 
       // When allowedTools is specified, those tools become required
       const staticAllowed = opts.allowedTools;

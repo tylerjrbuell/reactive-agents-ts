@@ -9,7 +9,7 @@ import type { MCPServerConfig } from './runtime.js'
 import {
     defaultTracingConfig,
     deriveGoalAchieved,
-    composePersonaToSystemPrompt,
+    buildSubAgentSystemPrompt,
 } from './builder/helpers.js'
 
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
@@ -2037,16 +2037,11 @@ export class ReactiveAgentBuilder {
             const agentId = self._stableAgentId ?? `${self._name}-${Date.now()}`
 
             // Compose persona into system prompt if provided
-            let composedSystemPrompt = self._systemPrompt
-            if (self._persona) {
-                const personaPrompt = composePersonaToSystemPrompt(
-                    self._persona,
-                    self._name
-                )
-                composedSystemPrompt = composedSystemPrompt
-                    ? `${personaPrompt}\n\n${composedSystemPrompt}`
-                    : personaPrompt
-            }
+            const composedSystemPrompt = buildSubAgentSystemPrompt(
+                self._persona,
+                self._systemPrompt,
+                self._name
+            )
 
             // Base runtime + cortex + meta-tools + engine resolution — extracted to
             // ./builder/build-effect/runtime-construction.ts (W25-B step 7).

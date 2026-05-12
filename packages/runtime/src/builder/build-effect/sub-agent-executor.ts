@@ -21,7 +21,7 @@ import type {
 import { createLightRuntime } from "../../runtime.js";
 import type { MCPServerConfig } from "../../runtime.js";
 import { ExecutionEngine } from "../../execution-engine.js";
-import { composePersonaToSystemPrompt } from "../helpers.js";
+import { buildSubAgentSystemPrompt } from "../helpers.js";
 import type {
   ReasoningOptions,
 } from "../../types.js";
@@ -162,16 +162,11 @@ export const buildSubAgentTask = async (
       const _subStart = Date.now();
 
       // Compose persona with system prompt
-      let composedSystemPrompt = opts.systemPrompt;
-      if (opts.persona) {
-        const personaPrompt = composePersonaToSystemPrompt(
-          opts.persona as AgentPersona,
-          opts.name,
-        );
-        composedSystemPrompt = composedSystemPrompt
-          ? `${personaPrompt}\n\n${composedSystemPrompt}`
-          : personaPrompt;
-      }
+      const composedSystemPrompt = buildSubAgentSystemPrompt(
+        opts.persona as AgentPersona | undefined,
+        opts.systemPrompt,
+        opts.name,
+      );
 
       // ── Collect parent's MCP tool definitions for proxy ──
       // Instead of spawning duplicate Docker containers, we list

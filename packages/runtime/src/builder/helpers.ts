@@ -114,3 +114,33 @@ export function composePersonaToSystemPrompt(
 
     return sections.join('\n\n')
 }
+
+/**
+ * Compose a final sub-agent system prompt by merging an optional persona
+ * with an optional explicit `systemPrompt`.
+ *
+ * Wraps the duplicated pattern previously inlined at:
+ *   - `builder.ts` (root agent factory)
+ *   - `builder/build-effect/local-agent-tools.ts` (local sub-agent registration)
+ *   - `builder/build-effect/sub-agent-executor.ts` (dynamic sub-agent executor)
+ *
+ * Semantics (preserved exactly from the 3 prior call sites):
+ *   - No persona → return `systemPrompt` unchanged (may be `undefined`).
+ *   - Persona + systemPrompt → `${personaPrompt}\n\n${systemPrompt}`.
+ *   - Persona only → return the composed persona prompt alone.
+ *
+ * @param persona - Optional persona to compose; if absent, the system prompt is returned as-is.
+ * @param systemPrompt - Optional explicit system prompt to append after the persona section.
+ * @param agentName - Agent name forwarded to `composePersonaToSystemPrompt` (for logging/reference).
+ */
+export function buildSubAgentSystemPrompt(
+    persona: AgentPersona | undefined,
+    systemPrompt: string | undefined,
+    agentName: string
+): string | undefined {
+    if (!persona) return systemPrompt
+    const personaPrompt = composePersonaToSystemPrompt(persona, agentName)
+    return systemPrompt
+        ? `${personaPrompt}\n\n${systemPrompt}`
+        : personaPrompt
+}
