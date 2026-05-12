@@ -210,6 +210,14 @@ export interface HarnessConfig {
   readonly memory?: boolean;
   readonly guardrails?: boolean;
   readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "adaptive";
+  /**
+   * Verifier override for ablation runs. `"noop"` swaps the terminal §9.0
+   * verifier gate inside the kernel for `noopVerifier`, which approves every
+   * response unconditionally. Used by the M3 ablation to measure the
+   * verifier's contribution to end-task accuracy. Undefined (default) preserves
+   * production behavior (defaultVerifier).
+   */
+  readonly verifier?: "default" | "noop";
 }
 
 export interface InternalVariant {
