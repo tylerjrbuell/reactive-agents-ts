@@ -10,7 +10,7 @@
     "declaration": true,
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM"],
-    "ignoreDeprecations": "5.0"
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"]
 }
