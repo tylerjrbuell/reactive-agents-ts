@@ -154,7 +154,19 @@ Every harness emission lives in one of five namespaces. Hierarchical (`prompt.sy
 | `observation.fact-extraction` | `tool-execution.ts:786-868` deterministic+LLM fact extract | #24 |
 | `observation.harness-signal` | `runner.ts:1240-1257` HarnessSignalInjected | #7, #19 |
 
-### 4.6 Bonus namespace: `decision.*` — structured choice points (not text-shaped, but still composable)
+### 4.6 `lifecycle.*` — agent-level failure and state transition events
+
+| Tag | Default source | Payload type |
+|---|---|---|
+| `lifecycle.failure` | `kernel/capabilities/act/tool-execution.ts` (tool errors), `kernel/capabilities/reason/think.ts` (LLM refusals), `kernel/capabilities/verify/verifier.ts` (rejections) | `LifecycleFailurePayload` |
+
+### 4.7 `control.*` — strategy and trajectory control decisions
+
+| Tag | Default source | Payload type |
+|---|---|---|
+| `control.strategy-evaluated` | `kernel/capabilities/reflect/strategy-evaluator.ts` | `ControlStrategyEvaluatedPayload` |
+
+### 4.8 Bonus namespace: `decision.*` — structured choice points (not text-shaped, but still composable)
 
 | Tag | Payload | Audit ref |
 |---|---|---|
@@ -165,7 +177,7 @@ Every harness emission lives in one of five namespaces. Hierarchical (`prompt.sy
 
 These are **structured payloads**, not strings. `harness.on('decision.cost-route', (pick, ctx) => betterPick)` lets you replace the routing pick. Marked tier-2 priority (after string-shaped tags ship in v0.11).
 
-### 4.7 Lifecycle (not a namespace; orthogonal axis)
+### 4.9 Lifecycle hooks (not a namespace; orthogonal axis)
 
 `harness.before/after/onError(phase, fn)` covers the 12 phases independently of emission tags. Phase enum: `bootstrap | guardrail | cost-route | strategy-select | think | act | observe | verify | memory-flush | cost-track | audit | complete`.
 
@@ -698,7 +710,7 @@ apps/docs/src/content/docs/
 
 Wave A (1–2 days):
 - `harness-pipeline.ts` (registry, resolver, tap mechanism)
-- `harness-tag-catalog.generated.ts` (initial 5 tags)
+- `harness-tag-catalog.generated.ts` (7 initial tags (includes `lifecycle.failure` + `control.strategy-evaluated` for M14 self-evolution))
 - Builder `.compose()` method
 - Type system (`TagMap`, `PayloadFor`, `ContextFor`, pattern inference)
 
@@ -866,6 +878,78 @@ A v0.11 release is shippable when:
 - **Deprecating `.with*()` sugar APIs** — they stay forever (sugar continues to be useful for one-off cases). Compose is additive, not replacement.
 - **Internal log/diagnostic emissions (audit point #22 — auto-checkpoint warnings)** — these stay on the event bus (`emitLog` warnings, structured diagnostics). They aren't model-bound content, so they don't belong in compose. Subscribers wanting them use `eventBus.subscribe('log.*', fn)` as today.
 - **Mutation of compose registrations from inside compose** — `harness.on(...)` from inside another transformer is undefined behavior. Compositions are declarative-at-build-time; runtime intent goes through `emit`/`pause`/`stop`/`terminate`.
+
+---
+
+## Self-Evolution Hooks (v5.0 addition)
+
+Two new tags added to support M14 (Self-Evolution). Research basis: NLAH arXiv:2603.25723 — acceptance-gated attempt narrowing is the most consistently positive harness module (+4.8pp SWE-bench Verified, +2.7pp OSWorld).
+
+### `lifecycle.failure`
+
+Fires after: tool execution error, LLM refusal, or verifier rejection.
+
+```typescript
+type LifecycleFailurePayload = {
+  reason: 'tool-error' | 'llm-refusal' | 'verifier-rejection';
+  errorMessage: string;
+  attemptNumber: number;    // total attempts on current task
+  failureStreak: number;    // consecutive failures without a successful step
+  currentStrategy: string;  // name of active reasoning strategy
+};
+
+// Handler return values:
+// undefined                    → continue with default behavior
+// { narrowTo: string }         → switch to named sub-strategy before next attempt
+// { abandon: true }            → escalate to parent / exit-failure immediately
+```
+
+### `control.strategy-evaluated`
+
+Fires after `strategy-evaluator.ts` completes a trajectory score.
+
+```typescript
+type ControlStrategyEvaluatedPayload = {
+  currentStrategy: string;
+  score: number;                  // 0–1 confidence in current trajectory
+  failureStreak: number;
+  recommendedAction: 'continue' | 'switch' | 'escalate';
+  availableStrategies: string[];
+};
+
+// Handler return values:
+// undefined                                     → accept recommendedAction
+// { override: 'continue' | 'switch' | 'escalate' } → override recommendation
+// { switchTo: string }                          → switch to specific named strategy
+```
+
+### Built-in helper: `composeNarrowRetry`
+
+```typescript
+import { composeNarrowRetry } from '@reactive-agents/runtime/compose';
+
+/**
+ * Acceptance-gated attempt loop.
+ * Stays on current (narrow) strategy until maxBroadenAfter consecutive failures,
+ * then allows strategy-evaluator to broaden. Implements NLAH self-evolution pattern.
+ */
+export function composeNarrowRetry(maxBroadenAfter: number = 3) {
+  return (harness: Harness) => {
+    harness.on('control.strategy-evaluated', (payload) => {
+      if (payload.failureStreak < maxBroadenAfter) {
+        return { override: 'continue' }; // stay narrow
+      }
+      return undefined; // allow broadening after threshold
+    });
+  };
+}
+
+// Usage:
+const agent = buildAgent()
+  .withReasoning(...)
+  .compose(composeNarrowRetry(3))
+  .build();
+```
 
 ---
 
