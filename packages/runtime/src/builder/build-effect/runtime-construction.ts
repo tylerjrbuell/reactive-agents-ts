@@ -154,10 +154,21 @@ export interface BuilderRuntimeStateView {
   readonly _cortexUrl: string | null;
 }
 
-/** Result bundle returned to the caller of {@link buildBaseRuntimeAndEngine}. */
+/** Result bundle returned to the caller of {@link buildBaseRuntimeAndEngine}.
+ *
+ * The Layer triples are erased to `unknown` because `createRuntime()` is
+ * dynamically composed (conditional merges across ~15 optional layers) and
+ * currently relies on internal `as any` to flatten the service union —
+ * tightening the `ROut/E/RIn` channels to concrete unions is out of scope
+ * for W2-A and would require typing `createRuntime` end-to-end first. Using
+ * `unknown` (not `any`) keeps consumers honest: every service resolution
+ * has to go through an explicit `Effect.provide(...)` or
+ * `ManagedRuntime.make(...)` boundary, where the runtime materialises the
+ * actual services.
+ */
 export interface BuildBaseRuntimeResult {
-  readonly baseRuntime: Layer.Layer<any, any, any>;
-  readonly runtimeWithCortex: Layer.Layer<any, any>;
+  readonly baseRuntime: Layer.Layer<unknown, unknown, unknown>;
+  readonly runtimeWithCortex: Layer.Layer<unknown, unknown, unknown>;
   readonly engine: Context.Tag.Service<typeof ExecutionEngine>;
   readonly kernelMetaTools: KernelMetaToolsConfig | undefined;
 }
@@ -368,19 +379,31 @@ export const buildBaseRuntimeAndEngine = (
       Effect.provide(baseRuntime),
     ) as Effect.Effect<Context.Tag.Service<typeof ExecutionEngine>, never>);
 
-    const runtimeWithCortex: Layer.Layer<any, any> = cortexReporterLayer
-      ? (Layer.merge(
-          baseRuntime as unknown as Layer.Layer<any>,
-          (cortexReporterLayer as unknown as Layer.Layer<any>).pipe(
-            // Layer.merge does not auto-feed sibling outputs into sibling requirements.
-            // Explicitly provide baseRuntime so reporter can resolve EventBus.
-            Layer.provide(baseRuntime as unknown as Layer.Layer<any>),
-          ),
-        ) as Layer.Layer<any, any>)
-      : (baseRuntime as Layer.Layer<any, any>);
+    // `createRuntime` returns an inferred Layer whose R/E channels leak `any`
+    // due to internal `as any` casts in runtime.ts; widen to a local
+    // `Layer.Layer<unknown, unknown, unknown>` view at this boundary so the
+    // rest of buildEffect (and {@link BuildBaseRuntimeResult}) can consume it
+    // without `any`.
+    const baseRuntimeView = baseRuntime as unknown as Layer.Layer<
+      unknown,
+      unknown,
+      unknown
+    >;
+
+    const runtimeWithCortex: Layer.Layer<unknown, unknown, unknown> =
+      cortexReporterLayer
+        ? Layer.merge(
+            baseRuntimeView,
+            cortexReporterLayer.pipe(
+              // Layer.merge does not auto-feed sibling outputs into sibling requirements.
+              // Explicitly provide baseRuntime so reporter can resolve EventBus.
+              Layer.provide(baseRuntimeView),
+            ),
+          )
+        : baseRuntimeView;
 
     return {
-      baseRuntime: baseRuntime as Layer.Layer<any, any, any>,
+      baseRuntime: baseRuntimeView,
       runtimeWithCortex,
       engine,
       kernelMetaTools,

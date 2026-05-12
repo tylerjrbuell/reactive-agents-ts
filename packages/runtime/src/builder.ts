@@ -2173,7 +2173,8 @@ export class ReactiveAgentBuilder {
             // ManagedRuntime scope. Because Layer.merge uses reference-identity memoization,
             // the same ToolService instance (from baseRuntime) receives all registrations
             // AND serves the engine — MCP tools are visible to the LLM.
-            let fullRuntime: Layer.Layer<any, any> = runtimeWithCortex
+            let fullRuntime: Layer.Layer<unknown, unknown, unknown> =
+                runtimeWithCortex
 
             if (
                 agentTools.length > 0 ||
@@ -2304,7 +2305,7 @@ export class ReactiveAgentBuilder {
 
                 // agentToolInitEffect body extracted to ./builder/build-effect/tool-init-layer.ts (W25-B step 3c)
                 const toolInitLayer = buildToolInitLayer(
-                    runtimeWithCortex as unknown as Layer.Layer<unknown>,
+                    runtimeWithCortex,
                     {
                         toolsMod: {
                             ToolService: toolsMod.ToolService,
@@ -2320,10 +2321,7 @@ export class ReactiveAgentBuilder {
                     }
                 )
 
-                fullRuntime = Layer.merge(
-                    runtimeWithCortex as unknown as Layer.Layer<any>,
-                    toolInitLayer as unknown as Layer.Layer<any>
-                )
+                fullRuntime = Layer.merge(runtimeWithCortex, toolInitLayer)
             }
 
             // RAG ingestion + meta-tool back-fill — extracted to ./builder/build-effect/rag-ingestion.ts (W25-B step 4)
@@ -2337,26 +2335,36 @@ export class ReactiveAgentBuilder {
             })
 
             // Wire health layer when enabled — extracted to ./builder/build-effect/health-layer.ts (W25-B step 5)
-            fullRuntime = composeHealthLayer(
-                fullRuntime as unknown as Layer.Layer<unknown>,
-                {
-                    enableHealthCheck,
-                    agentName: agentIdCapture,
-                }
-            ) as unknown as Layer.Layer<unknown, unknown>
+            fullRuntime = composeHealthLayer(fullRuntime, {
+                enableHealthCheck,
+                agentName: agentIdCapture,
+            })
 
             // Wire tracing layers when .withTracing() was called — extracted to ./builder/build-effect/tracing-layer.ts (W25-B step 6)
-            fullRuntime = (yield* composeTracingLayer(
-                fullRuntime as unknown as Layer.Layer<unknown>,
-                {
-                    tracingConfig: self._tracingConfig,
-                }
-            )) as unknown as Layer.Layer<unknown, unknown>
+            fullRuntime = yield* composeTracingLayer(fullRuntime, {
+                tracingConfig: self._tracingConfig,
+            })
 
             // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
-            // share the same layer scope and the same service instances (EventBus, KillSwitch, etc.).
+            // share the same layer scope and the same service instances
+            // (EventBus, KillSwitch, etc.).
+            //
+            // The cast to `Layer<any, never, never>` collapses three boundary
+            // facts that TS can't see through the `unknown` triple:
+            //   • RIn = never — every dynamically-merged sub-layer in
+            //     createRuntime has had its requirements satisfied internally
+            //     (see runtime.ts), so the composed layer has no unprovided
+            //     deps.
+            //   • E   = never — layer construction is total at this point;
+            //     init failures throw, not flow through E.
+            //   • ROut = any — the materialised service union is opaque (15+
+            //     conditional optional services). ReactiveAgent stores it as
+            //     `ManagedRuntime<any, never>` and resolves services
+            //     on-demand at the `runPromise` boundary.
+            // This single cast replaces the 6× `Layer<any, any>` casts that
+            // previously papered over the same boundary mismatch.
             const managedRuntime = ManagedRuntime.make(
-                fullRuntime as unknown as Layer.Layer<any>
+                fullRuntime as unknown as Layer.Layer<any, never, never>,
             )
             return new ReactiveAgent(
                 engine,

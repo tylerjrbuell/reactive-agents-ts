@@ -22,9 +22,9 @@ export interface TracingLayerDeps {
  * bridge layers atop the input runtime.
  */
 export const composeTracingLayer = (
-  baseRuntime: Layer.Layer<unknown>,
+  baseRuntime: Layer.Layer<unknown, unknown, unknown>,
   deps: TracingLayerDeps,
-): Effect.Effect<Layer.Layer<unknown>, never> =>
+): Effect.Effect<Layer.Layer<unknown, unknown, unknown>, never> =>
   Effect.gen(function* () {
     if (deps.tracingConfig === null) {
       return baseRuntime;
@@ -37,13 +37,10 @@ export const composeTracingLayer = (
     });
     const bridgeLayer = TraceBridgeLayer.pipe(
       Layer.provide(recorderLayer),
-      Layer.provide(baseRuntime as unknown as Layer.Layer<any>),
+      Layer.provide(baseRuntime),
     );
     return Layer.merge(
-      Layer.merge(
-        baseRuntime as unknown as Layer.Layer<any>,
-        recorderLayer as unknown as Layer.Layer<any>,
-      ),
-      bridgeLayer as unknown as Layer.Layer<any>,
-    ) as unknown as Layer.Layer<unknown>;
+      Layer.merge(baseRuntime, recorderLayer),
+      bridgeLayer,
+    );
   });

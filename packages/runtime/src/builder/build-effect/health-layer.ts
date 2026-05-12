@@ -22,19 +22,16 @@ export interface HealthLayerDeps {
  * Returns `baseRuntime` unchanged when `enableHealthCheck` is false.
  */
 export const composeHealthLayer = (
-  baseRuntime: Layer.Layer<unknown>,
+  baseRuntime: Layer.Layer<unknown, unknown, unknown>,
   deps: HealthLayerDeps,
-): Layer.Layer<unknown> => {
+): Layer.Layer<unknown, unknown, unknown> => {
   if (!deps.enableHealthCheck) {
     return baseRuntime;
   }
   const healthServiceLayer = Layer.effect(
     Health,
     makeHealthService({ port: 0, agentName: deps.agentName }),
-  ).pipe(Layer.provide(baseRuntime as unknown as Layer.Layer<any>));
+  ).pipe(Layer.provide(baseRuntime));
 
-  return Layer.merge(
-    baseRuntime as unknown as Layer.Layer<any>,
-    healthServiceLayer,
-  ) as unknown as Layer.Layer<unknown>;
+  return Layer.merge(baseRuntime, healthServiceLayer);
 };
