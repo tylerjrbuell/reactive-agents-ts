@@ -27,6 +27,13 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
     type: "internal", id: "ra-full", label: "RA Full Harness",
     config: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true },
   },
+
+  // Tier 3 (ablation): RA Full with verifier gate replaced by noopVerifier.
+  // M3 isolation — measure the verifier's contribution to end-task accuracy.
+  {
+    type: "internal", id: "ra-full-noop-verifier", label: "RA Full (No Verifier)",
+    config: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true, verifier: "noop" },
+  },
 ]
 
 // ── Session utilities ─────────────────────────────────────────────────────────
