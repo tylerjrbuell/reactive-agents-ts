@@ -15,7 +15,7 @@ const buildJudgeMessages = (req: JudgeRequest): LLMMessage[] => {
     `Task input: ${JSON.stringify(req.taskInput)}`,
     `SUT response: ${req.sutResponse}`,
     req.taskCriteria ? `Criteria: ${req.taskCriteria}` : "",
-    "Return a JSON object with shape: {passed: boolean, overallScore: number 0-1, recommendation: 'accept'|'review'|'reject', layerResults: Array<{layerName, score, passed, details?}>}",
+    "Return ONLY a raw JSON object — no markdown, no prose, no code fences. Shape: {passed: boolean, overallScore: number 0-1, recommendation: 'accept'|'review'|'reject', layerResults: Array<{layerName, score, passed, details?}>}",
   ].filter(Boolean).join("\n");
   return [{ role: "user", content: promptText }];
 };
@@ -81,7 +81,13 @@ export const handleJudgeRequest = (
   Effect.gen(function* () {
     const judge = yield* JudgeLLMService;
     const messages = buildJudgeMessages(req);
-    const llmResult = yield* judge.complete({ messages });
+    const llmResult = yield* judge.complete({
+      messages,
+      systemPrompt:
+        "You are a JSON evaluation API. Your entire response MUST be a single valid JSON object. " +
+        "Do not include markdown, code fences, prose, or any text outside the JSON object. " +
+        "Begin your response with { and end with }.",
+    });
     const verdict = parseJudgmentText(llmResult.content);
     return {
       taskId: req.taskId,
