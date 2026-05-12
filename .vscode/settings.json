@@ -4,6 +4,7 @@
         "cloudrun",
         "litellm",
         "ollama",
+        "Reflexion",
         "tylerjrbuell"
     ],
     "chat.tools.terminal.autoApprove": {
@@ -13,5 +14,6 @@
     },
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "js/ts.tsdk.path": "node_modules/typescript/lib"
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true
 }
