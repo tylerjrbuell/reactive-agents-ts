@@ -119,3 +119,39 @@ describe("live mode log collection", () => {
     expect(messages).toContain("live-msg2");
   });
 });
+
+describe("builder observability opt-out", () => {
+  test("observability stays disabled until withObservability()", async () => {
+    const builder = ReactiveAgents.create();
+    expect((builder as any)._enableObservability).toBe(false);
+  });
+
+  test("withoutObservability() disables observability wiring", async () => {
+    const builder = ReactiveAgents.create()
+      .withObservability({ verbosity: "normal" })
+      .withoutObservability();
+    expect((builder as any)._enableObservability).toBe(false);
+  });
+
+  test("flush() at minimal verbosity does not print the metrics dashboard", async () => {
+    const output: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      output.push(args.map(String).join(" "));
+    };
+
+    try {
+      const layer = ObservabilityServiceLive({ verbosity: "minimal" });
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const obs = yield* ObservabilityService;
+          yield* obs.incrementCounter("execution.steps", 1);
+          yield* obs.flush();
+        }).pipe(Effect.provide(layer)),
+      );
+      expect(output.join("\n")).not.toContain("Metrics Summary");
+    } finally {
+      console.log = origLog;
+    }
+  });
+});

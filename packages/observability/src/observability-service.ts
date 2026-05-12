@@ -16,13 +16,13 @@ import type { Redactor } from "./redaction/index.js";
  * Logging verbosity level for observability output.
  *
  * @remarks
- * - `minimal`: No structured logs, only final metrics
+ * - `minimal`: Instrumentation only; no console logs, spans, or metrics dashboard on flush
  * - `normal`: Standard logs with phase boundaries and tool calls
  * - `verbose`: Detailed logs including thought traces and LLM requests
  * - `debug`: Full debug output with all internal state changes
  */
 export type VerbosityLevel =
-  /** No structured logs, only final metrics dashboard. */
+  /** Instrumentation only; no console output on flush. */
   | "minimal"
   /** Standard logs with phase boundaries and tool calls. */
   | "normal"
@@ -542,7 +542,7 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
               metrics.getMetrics(),
             ]);
 
-            if (consoleExp) {
+            if (consoleExp && verbosityLevel !== "minimal") {
               consoleExp.exportLogs(logs);
               consoleExp.exportSpans(spans);
               consoleExp.exportMetrics(allMetrics, metrics);
