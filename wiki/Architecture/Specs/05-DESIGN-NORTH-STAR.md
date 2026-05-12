@@ -1,9 +1,10 @@
-# Reactive Agents — Design North Star v4.0
+# Reactive Agents — Design North Star v5.0
 
 **Status:** AUTHORITATIVE for ARCHITECTURE + ROADMAP. This document is the single consolidated source of truth for all forward-looking work. It supersedes v3.0, `07-ROADMAP-v1.0.md`, and `Phase 1.5 Improvement Roadmap.md`.
 
 **Date:** 2026-04-26 (architecture); 2026-04-27 (methodology layer); 2026-05-07 (v4.0 — consolidated forward plan, empirical state updated to v0.10.6, all roadmap phases absorbed)
 **Author:** Tyler Buell + Claude
+**v5.0 amendments (2026-05-11):** Pruning Principle added (§9); M14 Self-Evolution added to Phase 1.5 (§2.2, §6); M3 changed to ablation-gated (§2.2, §6); M8 elevated to elevated-priority IMPROVE (§2.2, §6); Phase B Wave A/B tag catalog expanded to 7 tags (§6). All changes grounded in verified research (arXiv 2603.25723, 2603.28052). See `Architecture/Design-Specs/2026-05-11-harness-research-integration.md`.
 
 **Companion documents (unchanged — read these, not this doc, for their specific concerns):**
 - `04-PROJECT-STATE.md` — framing for cold session start. **Read first.**
@@ -83,17 +84,20 @@ This section replaces the Apr 27 baseline from v3.0. All forward planning in §6
 |---|---|---|---|
 | M1: RI Dispatcher | ✅ KEEP | Measurement infra in place; architecture sound | — |
 | M2: Strategy Switching | ✅ KEEP | 20 passing tests; switching heuristics validated | Real LLM execution for optimal heuristics |
-| M3: Verifier + Retry | 🔄 IMPROVE | Core validated; retry context ineffective on cogito:14b | Tune retry context (target: ≥50% recovery) |
+| M3: Verifier + Retry | 🔄 IMPROVE (ablation-gated) | Research (arXiv:2603.25723) shows LLM-as-judge verifier gates are net-negative in isolation (-0.8pp SWE, -8.4pp OSWorld). Note: that paper tested LLM-as-judge; our defaultVerifier is a heuristic guard — applicability unconfirmed until our own ablation. | **Step 1:** ablate on our gate corpus (disable verifier, measure delta). **Step 2 (only if net-positive):** tune retry context for cogito:14b. |
 | M4: Healing Pipeline | ✅ KEEP | 86.7% recovery, +80% accuracy, 10:1 token ROI | — |
 | M5: Context Curation | ✅ KEEP | 60.7% compression, 38.6% token savings | — |
 | M6: Skill System | 🔄 IMPROVE | Within-session learning works; no cross-session persistence | SQLite persistence (target: >70% cross-session recall) |
 | M7: Calibration | 🔄 IMPROVE | 14 fields defined; ~5 active consumers | Activate ≥8 fields with lift evidence |
-| M8: Sub-agent Delegation | 🔄 IMPROVE | Test harness ready; real LLM metrics unvalidated | Real LLM execution (target: ≥15% accuracy lift) |
+| M8: Sub-agent Delegation | 🔄 IMPROVE (elevated priority) | NLAH (arXiv:2603.25723) shows 90% of compute flowing through child agents in the TRAE coding system — context-specific finding, but signals delegation as high-leverage. | Real LLM execution on 10 scenarios; compose pipeline integration; target raised to ≥20% accuracy lift on complex (≥3-step) tasks. |
 | M9: Termination Oracle | ✅ KEEP | Single-owner `terminate.ts` shipped (FIX-18) | — |
 | M10: Memory System | 🔄 IMPROVE | 100% keyed / 66.7% verbose recall; multi-session unvalidated | Multi-session scenarios (target: >80% recall) |
 | M11: Diagnostic System | ✅ KEEP | 100% TP, 0% FP, 0.02ms latency; production-ready | — |
 | M12: Provider Adapters | ✅ KEEP | All 7 hooks, 254/254 tests, zero cross-provider interference | — |
 | M13: Guards + Meta-tools | ✅ KEEP | 6 guards functional, 100% accuracy, 0.001ms latency | — |
+| M14: Self-Evolution | 🔄 IMPROVE (new) | Not yet implemented. Research (arXiv:2603.25723) shows acceptance-gated attempt narrowing is the most consistently positive module (+4.8pp SWE, +2.7pp OSWorld). | Implement as Compose API hooks (`lifecycle.failure` + `control.strategy-evaluated`) after Phase B Wave A ships. Target: ≥3pp lift on looping gate scenarios; no regression on non-looping scenarios. |
+
+> **File-backed state confirmed:** The per-sender SQLite session history (gateway-chat, shipped May 1) corresponds to the NLAH "file-backed state" module, which was also robustly positive (+1.6pp SWE, +5.5pp OSWorld). This is a research confirmation of an already-correct decision.
 
 ### 2.3 Remaining architectural gaps
 
@@ -423,16 +427,18 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 | Mech | Action | Target | Effort |
 |---|---|---|---|
-| **M3** Verifier Retry | Tune retry context for cogito:14b (FM-A1, FM-C2 signals; temperature 0.0→0.2) | ≥50% recovery on cogito:14b | 3–5 days |
+| **M3** Verifier Retry | **Step 1 (ablation):** Run gate corpus (minimum 20 tasks) with verifier disabled, measure accuracy delta vs. baseline. **Step 2 (conditional):** Only if Step 1 shows net-positive signal — tune retry context (temperature 0.0→0.2, retry prompt variants). If Step 1 shows net-negative, M3 is closed as context-specific; no further tuning. | Step 1: ablation result with delta on our gate corpus. Step 2 (conditional): ≥50% recovery on cogito:14b with verified net-positive. | Step 1: 1 day. Step 2: 3–5 days (conditional). |
 | **M6** Skill Persistence | SQLite-backed skill storage; per-agent scope; SKILL.md import/export | >70% recall across 3+ sessions | 5–7 days |
 | **M7** Calibration Consumers | Wire `parallelCallCapability`, `interventionResponseRate`, `tokenEfficiency`, `reasoningDepth`, `knownToolAliases` | ≥8 fields active with measurable lift | 4–6 days |
-| **M8** Sub-agent Delegation | Run 10 delegation scenarios on frontier + qwen3:14b; measure accuracy and token ROI | ≥15% accuracy lift on complex (≥3-step) tasks | 3–5 days |
+| **M8** Sub-agent Delegation | Run 10 delegation scenarios on frontier + qwen3:14b. Wire delegation traces through `control.strategy-evaluated` compose hook (Phase B Wave A prereq). Measure accuracy lift, token ROI, and trace completeness. | ≥20% accuracy lift on complex tasks (≥3-step); delegation events visible in trace via compose hook. | 3–5 days (after Phase B Wave A). |
 | **M10** Memory Multi-session | Design 3 multi-session scenarios; add Tier 2 semantic search for verbose queries | >80% recall across 3+ sessions | 4–6 days |
+| **M14** Self-Evolution | Implement `composeNarrowRetry(maxBroadenAfter)` helper using `lifecycle.failure` + `control.strategy-evaluated` compose hooks. Validate on 3 gate scenarios where agents currently loop. | ≥3pp lift on looping gate scenarios vs. baseline; no regression on non-looping scenarios. | 4–6 days (after Phase B Wave A). |
 
 **Phase 1.5 completion gate:**
 - [ ] All 5 mechanisms at or above their targets
 - [ ] Evidence artifacts in `wiki/Research/Harness-Reports/phase-1.5-<mech>-YYYY-MM-DD.md`
 - [ ] No regressions on existing test suite
+- [ ] M14 self-evolution: ≥3pp lift on looping gate scenarios; evidence artifact in `wiki/Research/Harness-Reports/phase-1.5-m14-YYYY-MM-DD.md`
 
 ---
 
@@ -448,12 +454,16 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 | Wave | Scope | Gate |
 |---|---|---|
-| **Wave A** | `harness-pipeline.ts` registry + resolver; `harness-tag-catalog.generated.ts` (5 initial tags); `TagMap`, `PayloadFor`, `ContextFor` type system; `.compose()` on builder | Type inference works; pipeline registry resolves tags |
+| **Wave A** | `harness-pipeline.ts` registry + resolver; `harness-tag-catalog.generated.ts` (**7 initial tags**) (5 original + `lifecycle.failure` + `control.strategy-evaluated` for M14 self-evolution); `TagMap`, `PayloadFor`, `ContextFor` type system; `.compose()` on builder | Type inference works; pipeline registry resolves tags |
 | **Wave B** | 5 chokepoint refactors: `prompt.system`, `nudge.loop-detected`, `nudge.healing-failure`, `message.tool-result`, `observation.verifier-retry` | All 5 injection points fire in traces; zero regressions |
 | **Wave C** | `RunHandle` with pause/resume/stop/terminate; `KernelState.pendingGuidance` plumbing | Handle works end-to-end; `pause()` + `resume()` round-trip |
 | **Wave D** | `packages/compose` with 6 killswitches: `budgetLimit`, `timeoutAfter`, `maxIterations`, `requireApprovalFor`, `watchdog`, `confidenceFloor` | All 6 killswitches pass acceptance tests |
 | **Wave E** | `.withX()` sugar desugars to compose calls + backward-compat tests | Every `.withX()` method desugar test passes |
 | **Wave F** | Docs: `compose-api.mdx`, `harness-tags.mdx`, `composition-recipes.mdx`; `stability.md` update | Docs published; all 24 injection points documented |
+
+**New tags added in v5.0 (Wave A/B catalog):**
+- `lifecycle.failure` — fires from `kernel/capabilities/act/tool-execution.ts` (tool errors) and `kernel/capabilities/verify/verifier.ts` (rejections); payload: `{ reason, errorMessage, attemptNumber, failureStreak, currentStrategy }`
+- `control.strategy-evaluated` — fires from `kernel/capabilities/reflect/strategy-evaluator.ts`; payload: `{ currentStrategy, score, failureStreak, recommendedAction, availableStrategies }`
 
 **Phase B completion gate:**
 - [ ] All 24 injection points have tags reachable via `.compose(harness)`
@@ -719,6 +729,14 @@ Phase N
 
 Phase A shrinks total LOC by decomposition (-10% to -20% estimated). Subsequent phases add net new capability but onto a smaller surface.
 
+### The Pruning Principle (v5.0)
+
+Harness components encode assumptions about what the model cannot do alone. Those assumptions expire as model capability improves.
+
+**Empirical basis:** Full harness skill set costs ~13.6× the tokens and produces outcomes 0.8pp *worse* than a lighter configuration (NLAH arXiv:2603.25723, Table 1). Adding structure actively degrades outcomes while consuming resources.
+
+**Operational rule:** Before adding any new harness mechanism, identify and document the model-capability assumption it encodes. During each major version review, test whether that assumption still holds on current frontier models. Mechanisms whose assumptions have expired are removal candidates, not improvement candidates.
+
 ---
 
 ## 10. Glossary
@@ -756,6 +774,7 @@ Every amendment to this North Star (phase reordering, gate revision, phase addit
 | 2026-05-04 | Phase 1 complete: 8 KEEP + 5 IMPROVE; Phase 1.5 defined | Improvement-first posture confirmed via TDD spikes | Phase 1 validation evidence |
 | 2026-05-07 | **v4.0** — `07-ROADMAP-v1.0.md` and `Phase 1.5 Improvement Roadmap.md` absorbed; Phase A (W23–W28) established as now-work before Compose API; Snapshot/Replay promoted from Phase 6 → Phase C (v0.11); `04-PROJECT-STATE.md` retained as separate framing doc; public `ROADMAP.md` alignment flagged as Phase C gate requirement | Single source of truth directive — plans were sprawled across 3+ documents; architecture cleanup before Compose API prevents rework | tylerjrbuell |
 | 2026-05-07 | **W23 gate refinement** — module count "9" replaced by composability + LOC ceilings: `execution-engine.ts` ≤ 600 LOC, every phase module ≤ 400 LOC, phase composition declarative (single array literal). Empirical structure has 10 named phases; two (`agent-loop` ~1,950 LOC, `complete` ~787 LOC) need internal sub-modules. Final layout is ~13–17 files via phase-as-data architecture (each phase exports a typed `Phase` value; pipeline runner composes them). This is the substrate Phase B (`.compose()`) builds on. | Decomposition design discovered the empirical phase count exceeds initial estimate; counting files is less meaningful than declarative composition + LOC ceilings. Phase-as-data design also eliminates the closure-breakage cost the advisor flagged and pre-builds the Phase B substrate. | tylerjrbuell + Claude (Opus 4.7) |
+| v5.0 | 2026-05-11 | Pruning Principle (§9); M14 Self-Evolution (§2.2 + §6 Phase 1.5); M3 ablation-gated (§2.2 + §6 Phase 1.5); M8 elevated-priority IMPROVE (§2.2 + §6 Phase 1.5); Phase B Wave A/B tag catalog expanded to 7 (§6). Research basis: arXiv 2603.25723, 2603.28052. Design spec: `Architecture/Design-Specs/2026-05-11-harness-research-integration.md`. | tylerjrbuell |
 | *(future amendments append here)* | | | |
 
 ---
@@ -813,8 +832,8 @@ Choices baked into this architecture, with alternatives considered:
 
 ---
 
-_Version: 4.0.0_
+_Version: 5.0.0_
 _Status: AUTHORITATIVE_
-_Date: 2026-05-07_
+_Date: 2026-05-11_
 _Supersedes: v3.0 + `07-ROADMAP-v1.0.md` + `Phase 1.5 Improvement Roadmap.md`_
-_Next review: after Phase A (W23–W28 decomposition) lands_
+_Next review: after Phase B Wave A ships_
