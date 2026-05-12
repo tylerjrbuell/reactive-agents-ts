@@ -107,7 +107,7 @@ Quick reference for tracing issues to specific kernel phases/services:
 | Symptom | Start here |
 | --- | --- |
 | Tools not called | `packages/reasoning/src/strategies/kernel/phases/think.ts` → `phases/act.ts` |
-| Context missing | `phases/context-builder.ts` → `context/message-window.ts` |
+| Context missing | `context/context-manager.ts` (`ContextManager.build`) → `context/message-window.ts` |
 | Tool results lost | `utils/tool-execution.ts` → `utils/tool-utils.ts:compressToolResult` |
 | EventBus silent | `packages/core/src/services/event-bus.ts` (check shared ManagedRuntime) |
 | LLM call fails | `packages/llm-provider/src/runtime.ts` → provider-specific in `src/providers/` |
@@ -491,12 +491,12 @@ Canonical project skills live in `.agents/skills/`:
 |------|------|---------|--------|--------|--------|
 | Dead code | `context-engine.ts` | `buildDynamicContext`, `scoreContextItem`, `allocateContextBudget` unused (~50% of file vestigial) | Medium | Medium | Fixed (Apr 13) |
 | Dead config | `context-profile.ts` | `promptVerbosity`, `rulesComplexity`, `fewShotExampleCount`, `compactAfterSteps`, `fullDetailSteps` inert | Medium | Medium | Fixed (Apr 13) |
-| Dead config | `kernel-state.ts` | `synthesisConfig` consumed by output synthesis in `kernel-runner.ts`, not by ICS — naming is misleading | Low | Low | Open |
+| Dead config | `kernel-state.ts` | `synthesisConfig` consumed by output synthesis in `kernel-runner.ts`, not by ICS — naming is misleading | Low | Low | Fixed (May 2026) — docstring clarified at field declaration; rename declined to avoid >10-site ripple. |
 | Dead API | `message-window.ts` | `applyMessageWindow` + `contextBudgetPercent` unused; only `applyMessageWindowWithCompact` is live | Low | Low | Fixed (Apr 13) |
 | Parallel systems | `think.ts` / `tool-execution.ts` / `tool-formatting.ts` / `act.ts` | Two overlapping result presentations remain: FC tool_result compression and extractObservationFacts | High | High | Partially addressed (auto-forward fully removed Apr 13; `tool-utils.ts` split Apr 2026) |
-| Config duplication | `kernel-runner.ts` / `context-profile.ts` | `toolResultMaxChars`/`toolResultPreviewItems` duplicate `resultCompression.budget`/`previewItems` as profile defaults | Low | Low | Open |
+| Config duplication | `kernel-runner.ts` / `context-profile.ts` | `toolResultMaxChars`/`toolResultPreviewItems` duplicate `resultCompression.budget`/`previewItems` as profile defaults | Low | Low | Fixed (May 2026) — `context-profile.ts` now documents resolution order and fallback chain so both names remain readable with explicit intent. |
 | Stale docs | `context-engine.ts` | File header says "unified scoring, budgeting, and rendering" | Low | Low | Fixed (Apr 13) |
-| Stale docs | `context-builder.ts` | Header overstates scope — system prompt with guidance/ICS/progress is assembled in `think.ts` | Low | Low | Open |
+| Stale docs | `context-builder.ts` | File deleted in Apr 2026 — `context-manager.ts` (`ContextManager.build`) is the canonical assembler invoked from `think.ts:391`. Header in context-manager.ts now accurately reflects scope. | Low | Low | Fixed (May 2026) |
 | Parallel context | `context-manager.ts` / `context-builder.ts` | `ContextManager.build()` is now the sole live path — `think.ts:208` calls it; see note at `phases/think.ts:182` | Medium | High | Fixed (Apr 2026) — context-manager.ts is canonical |
 | Type duplication | `kernel-state.ts` | `ReActKernelInput` duplicates ~25 fields from `KernelInput` — zero `as ReActKernelInput` casts remain in `packages/reasoning/src` | Medium | High | Fixed (Apr 2026) |
 | Untyped meta | `kernel-state.ts` | `state.meta: Record<string, unknown>` accessed via `as any` casts — now only 4 occurrences in 2 files (`reactive-observer.ts`, `think.ts`) | Medium | High | Partially fixed (Apr 2026) |
@@ -505,17 +505,17 @@ Canonical project skills live in `.agents/skills/`:
 | Dead production code | `context-manager.ts` | Now actively used — `ContextManager.build()` called from `think.ts:208` | Medium | Medium | Fixed (Apr 2026) |
 | Dead production code | `evidence-grounding.ts` | Moved to `packages/reasoning/src/strategies/kernel/utils/evidence-grounding.ts`, imported by `think-guards.ts:28` | Low | Low | Fixed (Apr 2026) |
 | Dead production code | `context-utils.ts` | Now imported by `think.ts:20` AND `context-manager.ts:24` | Low | Medium | Fixed (Apr 2026) |
-| Barrel leak | `kernel/index.ts` | `export *` from 13 modules leaks internal utils like `tool-execution.ts`, `tool-formatting.ts` as public API | Medium | Medium | Open |
+| Barrel leak | `kernel/index.ts` | `export *` from 13 modules leaks internal utils like `tool-execution.ts`, `tool-formatting.ts` as public API | Medium | Medium | Fixed (May 2026) — stale audit finding; `kernel/index.ts` does not exist. The package's curated re-export barrel is `packages/reasoning/src/index.ts` (lines 148-210), already named-exports-only. |
 | Loop vs switch | `loop-detector.ts`, `kernel-runner.ts` | Loop streak logic can mask duplicate-tool patterns so `strategySwitching` may never trigger (see `.agents/MEMORY.md` W8) | Medium | Medium | Open |
 | Orchestration monoliths | `runtime/src/builder.ts`, `runtime/src/execution-engine.ts` | Both decomposed in W23/W24/W25: builder.ts 6,232 → 2,407 LOC (-61%); execution-engine.ts 4,499 → 1,539 LOC (-66%). 39 submodules now under `engine/`, `builder/`, `agent/` subdirs. `reactive-agent.ts` extracted as separate file. | High | High | Fixed (May 2026) |
 | Layer typing | `builder.ts` `buildEffect()` | 6× `Layer.Layer<any, any>` casts at every layer-merge reassignment. Root cause: structural `BuilderRuntimeStateView` interface needs casts to satisfy Effect's Layer typing. Fixing requires narrowing the view to actually-consumed fields then dropping casts. Found by W25 audit (May 2026). | Medium | Medium | Open |
-| Service typing | `agent/{gateway-bootstrap,gateway-tick,gateway-driver}.ts`, `builder/build-effect/tool-init-layer.ts` | 6× `(svc as any).method()` and `yield* Service as any` patterns. Gateway/Scheduler/EventBus/ToolService typed `unknown` in deps interfaces. A shared `yieldService<T>(tag): T` helper would eliminate boilerplate. | Medium | Medium | Open |
+| Service typing | `agent/{gateway-bootstrap,gateway-tick,gateway-driver}.ts`, `builder/build-effect/tool-init-layer.ts` | 6× `(svc as any).method()` and `yield* Service as any` patterns. Gateway/Scheduler/EventBus/ToolService typed `unknown` in deps interfaces. A shared `yieldService<T>(tag): T` helper would eliminate boilerplate. | Medium | Medium | Fixed (May 2026) — `yieldService<I,S>(tag)` helper added to `builder/helpers.ts`; all 6+ cast patterns removed; Deps interfaces now use `Context.Tag.Service<typeof ...>`. |
 | Persona composition | `builder.ts:2042`, `builder/build-effect/local-agent-tools.ts:116`, `builder/build-effect/sub-agent-executor.ts:167` | 3 sites duplicate `composePersonaToSystemPrompt(persona, systemPrompt)` then `${personaPrompt}\n\n${composedSystemPrompt}` concat. A `buildSubAgentSystemPrompt()` wrapper in `builder/helpers.ts` would centralize. | Low | Low | Open |
 | Sub-agent path duplication | `builder/build-effect/local-agent-tools.ts`, `builder/build-effect/spawn-handlers.ts` | `.withAgentTool(name, agent)` (fixed-config) and `.withDynamicSubAgents()` (dynamic spawn) create overlapping registrations. Dynamic path is a strict superset of fixed; fixed could become a `singletonAgentMode` of dynamic with ~60 LOC saved. | Medium | Medium | Open |
 | Strategy duplication | `packages/reasoning/src/strategies/direct.ts`, `reactive.ts` | Both delegate to `runKernel(reactKernel, ...)`; only difference is `maxIterations` (1-3 vs unbounded). Could merge as `coreReactive(maxIterations?)` with backward-compat aliases. ~494 LOC affected. | Medium | Medium | Open |
 | Config view bloat | `builder/build-effect/runtime-construction.ts` | `BuilderRuntimeStateView` declares ~155 fields mirroring builder 1:1, but only ~98 are actively read in this module. Narrowing to `Pick<ReactiveAgentBuilder, '_provider' \| '_model' \| ...>` (or a manual `KernelInputBuildDeps` of ~40 fields) would clarify intent and unblock the Layer-cast fix. | Low | High | Open |
 | RiHooks duplication | `builder.ts` (private `_riHooks` field at ~L378, `withReactiveIntelligence` overload at ~L1670), `builder/ri-wiring.ts` (exported `RiHooks`) | 3 declarations of the same 6-hook shape, all with `any` payloads. Unifying via a single import from `ri-wiring.ts` would remove ~25 LOC. | Low | Low | Open |
-| Naming clarity | `runtime/src/gateway-chat.ts` | Module is *utility formatting* for gateway-specific history/episodic context, not parallel chat handling. Rename to `gateway-context-formatting.ts` would clarify scope. Public re-exports preserve API. | Low | Low | Open |
+| Naming clarity | `runtime/src/gateway-chat.ts` | Module is *utility formatting* for gateway-specific history/episodic context, not parallel chat handling. Rename to `gateway-context-formatting.ts` would clarify scope. Public re-exports preserve API. | Low | Low | Fixed (May 2026) — renamed to `gateway-context-formatting.ts`; importers updated; the `gateway-chat-${agentId}-${senderId}` session-key prefix preserved (persistence identifier, not import path). |
 | Coupling hotspot | `runtime/src/types.ts`, `runtime/src/builder/types.ts` | God-modules with 360+ inbound imports across 17+ packages. Acceptable centrality for core config + event types, but `ProviderName` and `OutputFormat` could move to `@reactive-agents/core` to reduce builder/types as a hub. Document or refactor in next sprint. | Low | Medium | Open |
 
 ---
@@ -523,7 +523,7 @@ Canonical project skills live in `.agents/skills/`:
 ## Common Pitfalls
 
 1. **`serviceOption` returns `Option`** — use `Option.isSome()` + `.value`, not direct access
-2. **`ContextWindowManager.truncate()`** not `buildContext()` — for kernel FC context, use `message-window.ts` (`applyMessageWindowWithCompact`) + `context-builder.ts`
+2. **`ContextWindowManager.truncate()`** not `buildContext()` — for kernel FC context, use `message-window.ts` (`applyMessageWindowWithCompact`) + `context-manager.ts` (`ContextManager.build`)
 3. **Gemini SDK is `@google/genai`** not `@google/generative-ai`
 4. **`mock.module()` in Bun** only intercepts ES `import()`, not CJS `require()`
 5. **ReasoningService.execute** takes single params object, not positional args
