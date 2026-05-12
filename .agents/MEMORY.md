@@ -6,15 +6,30 @@
 
 Before doing any work in this repo:
 
-1. **`docs/spec/docs/PROJECT-STATE.md`** — current empirical state of the framework.
-2. **`docs/spec/docs/AUDIT-overhaul-2026.md`** — the v0.10.0 overhaul plan. 28 packages + 13 mechanisms + 44-item FIX backlog + W0-W13 execution sequencing. **This is the single source of truth for what's broken, deferred, fixed, or shipping.** If anything in this memory file conflicts with the audit, the audit wins.
-3. **`docs/spec/docs/00-RESEARCH-DISCIPLINE.md`** — 12 rules. Every harness change requires prior spike validation. No exceptions.
+1. **`wiki/Architecture/Specs/04-PROJECT-STATE.md`** — current empirical state of the framework.
+2. **`wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`** — authoritative architecture + forward plan. If this memory file conflicts with North Star, North Star wins.
+3. **`wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md`** — 12 rules. Every harness change requires prior spike validation. No exceptions.
+4. **`wiki/Hot.md`** — recent-context cache; check for the latest session handoff.
 
-The full canonical doc set is listed in `docs/spec/docs/DOCUMENT_INDEX.md`.
+The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.md`.
 
 ---
 
 ## Current state (May 7, 2026)
+
+### Outsider Architecture Feedback — keep v0.11 differentiated (May 10, 2026)
+
+Brief read-only audit found the project is strongest when it promises: **typed, observable, replayable harness control without forking internals**. Keep that as the v0.11 north star.
+
+Priority guidance for agents working on Phase B:
+- **Do not let "Compose" mean two products.** `packages/runtime/src/compose.ts` already exports `agentFn`/`pipe`/`parallel`/`race`; Phase B `.compose((harness) => ...)` is a different API. Rename/reposition the existing functional composition surface or make naming explicit before marketing/docs harden.
+- **Prefer 5 excellent injection points over 24 thin ones.** First tags should prove trace visibility, type inference (`PayloadFor<Tag>`, `ContextFor<Tag>`), and real control over prompts/messages/nudges/tools/observations.
+- **Lock down public surface.** `packages/reasoning/src/index.ts` exports deep kernel internals; avoid widening this. Move future internals behind explicit `unstable` or internal modules.
+- **Reduce type erasure at seams.** Concentrate `any` cleanup on public hooks, lifecycle boundaries, compose payloads, metadata, and provider adapter contracts rather than chasing every SDK cast.
+- **Separate gateway agents from task agents.** `ReactiveAgent.start()`/`stop()` only make sense with `.withGateway()`; W27 `GatewayAgent` extraction remains a high-signal DX/type-safety refinement.
+- **Public promise:** "Intercept, replace, observe, and replay every important harness decision." Features that do not support this should be deferred behind Compose API, Snapshot/Replay, and tracing clarity.
+
+Immediate hygiene: keep `wiki/Hot.md` and this memory aligned with North Star; stale starter docs create bad agent trajectories.
 
 ### North Star v4.0 — Single Consolidated Forward Plan ✅ (May 7, 2026)
 
@@ -343,6 +358,7 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
 - **Workspace runs from `src/` under Bun.** Every `packages/*` declares `"bun": "./src/index.ts"` first in `exports`. Edits picked up at next `bun run`, no rebuild needed. Rebuild only for: (a) npm-publish validation, (b) Node-runtime consumers, (c) `.d.ts` refresh.
 - **Control pillar — every harness primitive must be developer-overridable.** Vision Pillar 1. New behaviors ship with: `defaultFoo` preserving prior behavior, `KernelInput.foo?: FooHookType` injection field, public type export. Hardcoded harness logic = black box = anti-pattern.
 - **Research discipline — spike-validated harness changes only.** Read `00-RESEARCH-DISCIPLINE.md` for the 12 rules. Notable: spike validates ONE mechanism × ONE failure-mode × ≤2 models × ONE task (Rule 11); single-spike findings shape the next spike, not harness-level decisions.
+- **Trust `bunx turbo run build` over `tsc --noEmit` for `ignoreDeprecations`.** TS 6.0.3's tsc reports `error TS5103: Invalid value` on `"ignoreDeprecations": "6.0"` (false positive), but tsup's DTS step (same TS version) requires `"6.0"` to silence the baseUrl deprecation. Keep `"6.0"` everywhere (root + leaf tsconfigs); the lone tsc error in `bun run typecheck` output is expected noise. Confirmed 2026-05-11: all 33 turbo build tasks pass with `"6.0"`.
 
 ---
 
