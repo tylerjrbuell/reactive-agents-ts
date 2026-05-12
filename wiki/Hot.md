@@ -10,7 +10,34 @@ updated: 2026-05-10
 
 ---
 
-## Latest Session (2026-05-11)
+## Latest Session (2026-05-12)
+
+### M3 Verifier Ablation — Complete ✅
+
+**Verdict: 🔄 REWORK** — disable terminal retry loop; retain heuristic gate.
+
+| Model | ra-full acc | noop acc | Δ | ra-full tokens | noop tokens |
+|---|---|---|---|---|---|
+| qwen3:14b | 10% | 11% | noop +1pp | 101,795 | 96,596 |
+| cogito:14b | 17% | 18% | noop +1pp | 112,962 | 120,215 |
+| gpt-4o-mini | 8% | 7% | ra-full +1pp | 162,955 | 176,675 |
+| **All** | **12%** | **12%** | **0pp** | | |
+
+Pre-stated REWORK rule fires (≥2/3 models noop ≥ ra-full). Token overhead absent or negative. Retry loop is not converting guard detections into accuracy improvements. Evidence: `wiki/Research/Harness-Reports/phase-1.5-m3-ablation-2026-05-12.md`.
+
+**Caveat:** 84% judge parse failure rate — margins are within noise. Verdict provisional until judge upgraded to structured output (JSON schema via tool-use).
+
+**Next M3 action:** Disable retry at `runner.ts:568` (0.5 day). Separate: cogito FM-A1 retry prompt tuning (Issue #3) is unrelated — still open.
+
+### Other fixes shipped (2026-05-12)
+- `fix(judge-server): extract JSON from LLM response before parsing` (`989bee1a`)
+- Strategy switching now **on by default** (`enableStrategySwitching !== false`)
+- Issues log updated: #1/#2 closed, #5 split, #7 (Pruning Principle gap) added
+- `test.ts` moved to `examples/spot-test.ts`
+
+---
+
+## Previous Session (2026-05-11)
 
 ### Harness Research Integration — Three Papers Verified ✅
 

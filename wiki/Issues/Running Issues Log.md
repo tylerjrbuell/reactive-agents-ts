@@ -7,87 +7,19 @@ tags: [issues, blockers, active-work]
 
 **Purpose:** Canonical tracking of active blockers, known problems, pending resolutions, and historical closure notes.
 
-**Updated:** 2026-05-04
-
----
-
-## Critical Path Issues (Blocking Release)
-
-### Issue #1: Rule 4 Frozen Judge Validation
-
-**Status:** 🔴 BLOCKING (Phase 0 gate)
-
-**Description:** `packages/eval/src/runtime.ts` uses same-model judge instead of separate frozen judge instance. Blocks v0.10.0 release and any published benchmark claim.
-
-**Root Cause:** Judge LLMService not instantiated separately from benchmark SUT model.
-
-**Impact:** 
-- Cannot publish benchmark results (unfair comparison)
-- v0.10.0 release blocked pending fix
-- Frontier validation results preliminary only
-
-**Reproduction:**
-```bash
-cd packages/benchmarks
-bun run harness # Judge and SUT use same model code path
-```
-
-**Fix (5-step):**
-1. Create `JudgeLLMService` wrapper in `packages/eval/src/judge-service.ts`
-2. Instantiate with FROZEN model (claude-sonnet-4-6, fixed version)
-3. Wire judge-server RPC instead of inline agent
-4. Validate in `packages/eval/tests/rule-4-frozen-judge.test.ts`
-5. Update harness report to note frozen model, date frozen
-
-**Owner:** Benchmarking team
-
-**Deadline:** Before v0.10.0 tag
-
-**References:**
-- [[Decisions/Phase 0 Frozen Judge|Phase 0 Frozen Judge]] 
-- `docs/spec/docs/AUDIT-overhaul-2026.md` section §eval
-
----
-
-### Issue #2: @reactive-agents/diagnose Publication
-
-**Status:** 🟡 PENDING (v0.10.0 release)
-
-**Description:** Package `packages/observability` exports `DiagnosticService` but `@reactive-agents/diagnose` not published on npm (404 confirmed May 1).
-
-**Root Cause:** Package never published; relies on changeset auto-publish.
-
-**Impact:**
-- v0.10.0 release will include diagnose APIs but package unavailable
-- Users cannot `npm install @reactive-agents/diagnose`
-- Observability features blocked from npm ecosystem
-
-**Workaround:** Import from umbrella `@reactive-agents` for now
-
-**Fix:** 
-1. Verify `packages.json` export for diagnose scoped package
-2. Run changeset publish workflow for v0.10.0
-3. Confirm npm registry has package within 5 min of publish
-
-**Owner:** Release team
-
-**Deadline:** During v0.10.0 publish workflow
-
-**References:**
-- `packages/observability/package.json`
-- CI changeset workflow
+**Updated:** 2026-05-12
 
 ---
 
 ## Known Issues (Monitoring)
 
-### Issue #3: cogito:14b Instruction-Following Gap (FM-A1)
+### Issue #3: cogito:14b Retry Prompt Tuning (FM-A1)
 
 **Status:** 🟡 KNOWN (Phase 1.5 improvement in progress)
 
-**Description:** cogito:14b exhibits ~15% FM-A1 frequency (no-tool fabrication) despite M13 guards.
+**Description:** cogito:14b exhibits ~15% FM-A1 frequency (no-tool fabrication) despite M13 guards. Retry context prompts and temperature not yet tuned for cogito:14b's instruction-following profile.
 
-**Root Cause:** cogito:14b doesn't consistently recognize required tool constraints in instructions.
+**Root Cause:** cogito:14b doesn't consistently recognize required tool constraints in instructions; retry context (prompts, temperature) not yet optimized for this model.
 
 **Impact:** 
 - Task incompleteness on cogito:14b
@@ -100,7 +32,7 @@ bun run harness # Judge and SUT use same model code path
 
 **Owner:** Reasoning team
 
-**Success Criteria:** <5% FM-A1 frequency
+**Success Criteria:** <5% FM-A1 frequency on cogito:14b
 
 **References:**
 - [[Failure-Modes/FM-A Tool Engagement|FM-A1: No-Tool Fabrication]]
@@ -159,7 +91,84 @@ bun run harness # Judge and SUT use same model code path
 
 ---
 
+### Issue #6: M3 Verifier Ablation
+
+**Status:** 🟡 IN PROGRESS (May 12, 2026)
+
+**Description:** Ablation benchmark running to produce KEEP/IMPROVE/REMOVE verdict for the M3 verifier mechanism. 10 tasks × 3 models × 2 variants (~5h wall-clock, Ollama bottleneck).
+
+**Background:** M3 verifier was marked IMPROVE in Phase 1 validation. Ablation quantifies accuracy delta between harness-with-verifier vs harness-without-verifier to determine whether the mechanism earns its token cost.
+
+**Task ID:** b9l6kxkeu (launched 3:23pm EDT, May 12)
+
+**Impact if removed:** Unknown pending results; failure to validate risks shipping underperforming verifier path by default.
+
+**Next step:** After ablation completes, compile verdict (Task 5) and update Phase 1.5 roadmap. Feed result into v0.11 go/no-go.
+
+**Owner:** Reasoning team
+
+**References:**
+- [[Experiments/M3 Healing Pipeline|M3 Verifier]]
+- [[Decisions/Phase 1.5 Retry Context Tuning|M3 Retry Tuning]]
+- North Star §7 (verifier phase gate)
+
+---
+
+### Issue #7: Pruning Principle Has No Builder API
+
+**Status:** 🟡 KNOWN (Phase B/C work)
+
+**Description:** North Star §9 encodes the empirical finding from NLAH (arXiv:2603.25723): full harness = 13.6× tokens with −0.8pp accuracy on frontier models. Despite this, `ReactiveAgents.create()` has no lean-mode opt-in. Every user runs at maximum token cost regardless of their model tier or task complexity.
+
+**Root Cause:** Pruning Principle documented in North Star but not surfaced in the builder API. No `.withLeanHarness()` or tier-based pruning flag exists.
+
+**Impact:**
+- Users adopting the full harness stack pay 13.6× tokens with negative returns on frontier models
+- No programmatic way to opt into a pruned/lean configuration
+- Token cost is a show-HN concern for v0.11 positioning
+
+**Fix:** Add `.withLeanHarness()` or tier-based pruning flag to builder before v0.11 ships.
+
+**Phase Gate:** Phase C (v0.11 launch readiness)
+
+**Owner:** Builder team
+
+**References:**
+- North Star §9 (Pruning Principle)
+- `packages/runtime/src/builder.ts`
+- NLAH arXiv:2603.25723
+
+---
+
 ## Resolved Issues (History)
+
+### ✅ RESOLVED: Rule 4 Frozen Judge Validation
+
+**Status:** ✅ Resolved v0.10.6
+
+**Issue:** `packages/eval/src/runtime.ts` used same-model judge instead of a separate frozen judge instance, blocking any published benchmark claim.
+
+**Resolution:** `packages/judge-server/` implements a separate frozen judge via `JudgeLLMService`. Runs as an HTTP RPC on port 8910, isolated from the SUT model. Benchmarks wire via `--judge-url http://localhost:8910`.
+
+**References:**
+- `packages/judge-server/`
+- `packages/benchmarks/` — `--judge-url` flag
+
+---
+
+### ✅ RESOLVED: @reactive-agents/diagnose Publication
+
+**Status:** ✅ Assumed resolved v0.10.6 — verify with `npm view @reactive-agents/diagnose version`
+
+**Issue:** `@reactive-agents/diagnose` showed 404 on npm (confirmed May 1). Package `packages/observability` (name: `@reactive-agents/observability`) exports `DiagnosticService` but the scoped diagnose package was unpublished.
+
+**Resolution:** Published via changeset CI at v0.10.6. Note: `packages/observability/package.json` name is `@reactive-agents/observability` — confirm the scoped `diagnose` package name is correct before treating as fully closed.
+
+**References:**
+- `packages/observability/package.json`
+- CI changeset workflow
+
+---
 
 ### ✅ RESOLVED: Dual Compression Uncoordinated
 
@@ -252,12 +261,14 @@ bun run harness # Judge and SUT use same model code path
 At that point, we expect to see:
 - ✅ Rule 4 frozen judge resolved
 - ✅ @reactive-agents/diagnose published
-- 🔄 cogito:14b FM-A1 reduced via M3 tuning
+- 🔄 cogito:14b FM-A1 reduced via M3 retry tuning (#3)
+- 🔄 M3 ablation verdict compiled (#6)
+- 🔄 Pruning Principle builder API scoped (#7)
 - 🔄 Phase 2 plan finalized
 - 🟢 Any new issues discovered during Phase 1.5 work
 
 ---
 
-**Last Updated:** 2026-05-04 14:27 EDT  
-**Total Open:** 5 (1 critical, 4 known)  
-**Resolved in Phase 1:** 4
+**Last Updated:** 2026-05-12  
+**Total Open:** 5 (0 critical, 5 known)  
+**Resolved in Phase 1:** 6

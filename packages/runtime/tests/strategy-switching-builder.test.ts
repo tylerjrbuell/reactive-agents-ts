@@ -23,7 +23,7 @@ describe("withReasoning strategy switching options", () => {
     expect(builder).toBeDefined();
   });
 
-  it("enableStrategySwitching defaults to false when not specified", () => {
+  it("enableStrategySwitching defaults to true when not specified", () => {
     const builder = ReactiveAgents.create()
       .withProvider("test")
       .withReasoning();

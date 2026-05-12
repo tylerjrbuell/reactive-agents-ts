@@ -883,11 +883,11 @@ export const createRuntime = (options: RuntimeOptions) => {
           maxAgeDays: options.sessionMaxAgeDays,
         }
       : undefined,
-    strategySwitching: options.reasoningOptions?.enableStrategySwitching
+    strategySwitching: options.reasoningOptions?.enableStrategySwitching !== false
       ? {
           enabled: true,
-          maxSwitches: options.reasoningOptions.maxStrategySwitches,
-          fallbackStrategy: options.reasoningOptions.fallbackStrategy,
+          maxSwitches: options.reasoningOptions?.maxStrategySwitches,
+          fallbackStrategy: options.reasoningOptions?.fallbackStrategy,
         }
       : undefined,
     enableReactiveIntelligence: options.enableReactiveIntelligence,
