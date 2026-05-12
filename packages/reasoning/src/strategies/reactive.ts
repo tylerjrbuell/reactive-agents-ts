@@ -16,6 +16,7 @@ import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
+import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
@@ -202,7 +203,15 @@ export const executeReactive = (
       observationSummary: input.observationSummary,
       modelId: input.modelId,
       calibration: input.calibration,
-      verifier: input.verifier,
+      // M3 ablation hook: `REACTIVE_AGENTS_NOOP_VERIFIER=1` short-circuits the
+      // terminal §9.0 verifier gate by substituting `noopVerifier` when no
+      // explicit verifier was passed on the strategy input. The benchmark
+      // harness sets this around `agent.run()` for the `ra-full-noop-verifier`
+      // variant; production callers see `undefined → defaultVerifier` in
+      // kernel/loop/runner.ts:568. Never set this in production.
+      verifier:
+        input.verifier ??
+        (process.env.REACTIVE_AGENTS_NOOP_VERIFIER === "1" ? noopVerifier : undefined),
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

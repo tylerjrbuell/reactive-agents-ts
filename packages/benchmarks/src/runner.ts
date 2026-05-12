@@ -596,6 +596,17 @@ async function runInternal(
     const agent = await builder.build()
     console.log = _log
 
+    // M3 ablation: when the variant config requests the noop verifier, set the
+    // env-var signal consumed by strategies/reactive.ts. The strategy swaps
+    // `defaultVerifier` for `noopVerifier` only when no explicit verifier was
+    // already supplied on its input. Restore the prior value on exit so
+    // concurrent dispatches (and Bun test pools) aren't polluted.
+    const VERIFIER_ENV = "REACTIVE_AGENTS_NOOP_VERIFIER";
+    const prevVerifierEnv = process.env[VERIFIER_ENV];
+    if (config.verifier === "noop") {
+      process.env[VERIFIER_ENV] = "1";
+    }
+
     try {
       const prompt = task.fixtures?.length
         ? `Working directory for this task: ${tmpDir}\n\nAll task files (e.g. ${task.fixtures.map(f => f.path).join(", ")}) are located in that directory. Use the full path when reading files.\n\n${task.prompt}`
@@ -611,6 +622,10 @@ async function runInternal(
       }
     } finally {
       await agent.dispose()
+      if (config.verifier === "noop") {
+        if (prevVerifierEnv === undefined) delete process.env[VERIFIER_ENV];
+        else process.env[VERIFIER_ENV] = prevVerifierEnv;
+      }
     }
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e)
