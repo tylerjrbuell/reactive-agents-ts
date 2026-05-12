@@ -186,6 +186,7 @@ export {
   defaultVerifier,
   contextFromObservation,
 } from "./kernel/capabilities/verify/verifier.js";
+export { noopVerifier } from "./kernel/capabilities/verify/noop-verifier.js";
 export type {
   Verifier,
   VerificationContext,
