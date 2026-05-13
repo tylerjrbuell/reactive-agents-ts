@@ -15,7 +15,60 @@ The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.
 
 ---
 
-## Current state (May 7, 2026)
+## Token Optimization Session (May 12, 2026) — Complete ✅
+
+**Comprehensive session delivered:** 1,190 tokens freed immediately, $11.58/month potential with behavioral adoption.  
+**Details:** See `OPTIMIZATION-SESSION-SUMMARY.md` and `TOKEN-OPTIMIZATION-DASHBOARD.md` in project memory.  
+**Quick wins completed:** Phase 1 archive (650t), resolved decisions archive (480t), stale path fixes (80t), test count updated.
+
+---
+
+## Session Optimization Checklist (Token Cost Reduction)
+
+**Use these before every dev session to 60-90% token savings:**
+
+- [ ] **RTK prefix on all CLI commands** — `rtk git log`, `rtk find .`, `rtk grep`, `rtk bun test` (saves ~200 tokens per command)
+- [ ] **Smart-search for symbol queries** — `claude-mem:smart-search "FunctionName"` instead of grep chains (saves 71% vs read+grep loops; ~820 tokens per lookup)
+- [ ] **Check wiki first** — `wiki:query "what do you know about X"` before deep dives (cached answers, 200-400 tokens saved per query)
+- [ ] **Batch independent queries** — 3+ parallel tool calls instead of sequential (reduces round-trip overhead)
+
+**This month's target:** 45% RTK adoption (was 18% May 3), 30%+ smart-search adoption; `rtk gain --history` tracks cumulative savings.
+
+**Detailed report:** See project memory dashboard for May 12 session (1,190 tokens freed, $11.58/month potential).
+
+---
+
+## Current state (May 12, 2026)
+
+### M3 Ablation Running — Decision Traceability Inquiry (May 12, 2026)
+
+External user email: "What do you have agents record so another agent, or future you, can understand why a change happened?"
+
+**Context:** User reviewed Cortex Studio run details and AI-generated debrief. The inquiry surfaced a genuine product differentiator.
+
+**What we already have:**
+- Comprehensive trace JSONL via `@reactive-agents/trace` with 20+ event types
+- Each decision carries `reason: string` + `confidence: number`
+- Full LLM exchanges, entropy scores, kernel state snapshots, guard verdicts, verifier results
+- CLI tools: `rax:replay`, `rax:grep`, `rax:list`, `rax:diff`
+
+**What's planned (decision-rationale-traceability plan, 2026-05-12):**
+- Rationale type: `{why, refs, alternatives, confidence}` structured shape
+- Optional rationale fields on tool-call, termination, strategy-switch events
+- Assumption detection in think phase
+- Curator decision events (why content was kept/dropped/compressed)
+- **`rax:diagnose debrief` command** — renders readable markdown timeline vs raw JSONL
+
+**Key research finding:** Stanford Meta-Harness showed traces are essential (50% → 34.6% accuracy without them). Raw execution paths are the knowledge artifact another agent needs.
+
+**Positioning for v0.11:** Decision-rationale plan stages implementation into v1 (Tasks 1–4, 6, 9: 2 weeks) and v1.5 (Tasks 5,7,8,10,11: deferred). Task 9 (debrief command) can ship with v0.11 or as v0.11.1 depending on Compose API timeline. **Decision needed by May 13 after M3 ablation gate.**
+
+**Artifacts:**
+- Draft email response: `wiki/Research/Email-Responses/2026-05-12-decision-traceability-inquiry.md`
+- Rollout planning: `wiki/Planning/2026-05-12-debrief-rollout-plan.md`
+- Implementation plan: `wiki/Planning/Implementation-Plans/2026-05-12-decision-rationale-traceability.md`
+
+---
 
 ### Outsider Architecture Feedback — keep v0.11 differentiated (May 10, 2026)
 
@@ -30,6 +83,14 @@ Priority guidance for agents working on Phase B:
 - **Public promise:** "Intercept, replace, observe, and replay every important harness decision." Features that do not support this should be deferred behind Compose API, Snapshot/Replay, and tracing clarity.
 
 Immediate hygiene: keep `wiki/Hot.md` and this memory aligned with North Star; stale starter docs create bad agent trajectories.
+
+### Phase 1 Mechanism Validation Archive (May 4–12, 2026)
+
+Historical validation (8 KEEP verdicts, 5 IMPROVE verdicts) now archived to reduce loaded context.  
+**Reference:** [MEMORY-ARCHIVE-PHASE1.md](MEMORY-ARCHIVE-PHASE1.md) for mechanism tables and key learnings.  
+**Live status:** `wiki/Research/Harness-Reports/` and `wiki/Experiments/M*.md` files.
+
+---
 
 ### North Star v4.0 — Single Consolidated Forward Plan ✅ (May 7, 2026)
 
@@ -281,7 +342,7 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
   - Test coverage: 26 spike tests (52 expectations), 100% pass rate. 254/254 llm-provider tests pass (no regressions).
   - Evidence: `packages/llm-provider/tests/m12-provider-adapter-hooks.test.ts` (TDD: RED → GREEN complete).
   - Verdict: **✅ KEEP** — hooks earn their keep, zero blockers.
-  - Debrief: `docs/superpowers/debriefs/M12-provider-adapter-hooks-validation.md`.
+  - Evidence: `wiki/Experiments/M12 Provider Adapters.md`.
   - Commit: `14c34a15`.
   - Next: Activate hooks in `llm-service.ts` and provider-specific code (Phase 1 deployment).
 
@@ -298,7 +359,7 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
   - **Cost Analysis:** Avg 1.27 actions per case, +3.3% token overhead (75 → 77 chars avg input/output)
   - Evidence: `packages/tools/tests/m4-healing-pipeline.test.ts`, `packages/tools/tests/m4-healing-measurement.test.ts`
   - **Verdict: ✅ KEEP** — Healing pipeline earns its keep with massive accuracy lift, negligible overhead, strong cross-model performance.
-  - Debrief: `docs/superpowers/debriefs/M4-healing-pipeline-validation.md`
+  - Evidence: `wiki/Experiments/M4 Healing Pipeline.md`
   - Commit: `4cf1baea`
   - Ready for v0.10.0 ship. Phase 1.5+ adds hybrid (healing + reprompt fallback), Phase 2+ adds adaptive alias learning.
 
@@ -312,8 +373,8 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
   - Debrief: `docs/superpowers/debriefs/M10-memory-system-validation.md`.
   - Audit update: Mark FM-F2 as **validated → mitigated** in `AUDIT-overhaul-2026.md §10` (was "unvalidated theoretical").
 
-- **External channels phase 1 (branch `feat/channels-package`, merge pending):** package `@reactive-agents/channels`, runtime `.withChannels()`, gateway config rename `channels` → `accessControl`, webhook adapter + tests. Debrief: `docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md`. **Mainline docs** (`apps/docs`, Starlight gateway pages) still describe `GatewayConfig.channels` until the branch merges.
-- **Test runner snapshot (main workspace):** `bun test` → 4,701+ pass (verify after M10 commit); 23 skip across **536** files / **4,731+** tests (May 4); resolve failures before treating green as release truth.
+- **External channels phase 1 (branch `feat/channels-package`, merge pending):** package `@reactive-agents/channels`, runtime `.withChannels()`, gateway config rename `channels` → `accessControl`, webhook adapter + tests. Evidence: `wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`. **Mainline docs** (`apps/docs`, Starlight gateway pages) still describe `GatewayConfig.channels` until the branch merges.
+- **Test runner snapshot (current, May 12):** `bun test` → **5043 pass**, 26 skip, 0 fail across **563** files / **5069 tests**; all green. (Prior May 4 snapshot: 4,701+ pass was pre-M3/M11/M12 commits).
 
 ### Earlier context (May 1, 2026)
 
@@ -516,10 +577,7 @@ The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top items as of
 3. **ToT outer loop still unhooked** from `dispatcher-early-stop` — each branch is a separate sub-kernel (PER inner loop fixed Apr 19 at `plan-execute.ts:737,762`).
 4. Strategy routing opt-in via `withReasoning({ strategySwitching: { enabled: true } })` — field is optional in `ReactiveInput` at `strategies/reactive.ts:70`; runtime at `runner.ts:749`.
 
-**Resolved in prior work (keep as reference — do not resurface):**
-- `_riHooks` **6/6 wired** (W2 FIX-6) at `builder.ts:2673-2731` — all 6 event subscribers wired. Events at `core/services/event-bus.ts:1001-1005`.
-- RI budget counters **live** (W3 FIX-23): `reactive-observer.ts:283-321` accumulates `riBudget`. "Dead-zeroed" claim was stale.
-- qwen3 thinking OPT-IN (W7 FIX-3): `resolveThinking()` at `packages/llm-provider/src/providers/local.ts:226`.
+**Resolved in prior work:** [MEMORY-ARCHIVE-RESOLVED.md](MEMORY-ARCHIVE-RESOLVED.md) — 8 fixed items (hooks, dispatcher, calibration, etc.) kept as reference only. Do not resurface as blockers.
 
 ---
 

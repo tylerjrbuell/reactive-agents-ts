@@ -11,13 +11,25 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); [ -z \"$cmd\" ] && exit 0; echo \"$cmd\" | grep -q '^grep' || exit 0; term=$(echo \"$cmd\" | sed -n 's/.*grep[^\"]*\"\\([^\"]*\\)\".*/\\1/p'); [ -z \"$term\" ] && term=$(echo \"$cmd\" | awk '{for(i=1;i<=NF;i++) if($i !~ /^-/ && $i != \"grep\") {print $i; break}}'); [ -z \"$term\" ] && exit 0; echo \"$cmd\" | grep -qE '(ERROR|error|WARN|warn|DEBUG|debug)' && exit 0; echo \"$cmd\" | grep -q '\\-r' || exit 0; echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreToolUse\\\",\\\"additionalContext\\\":\\\"Smart-search: smart-search \\\\\\\"$term\\\\\\\" saves 71% tokens (820t/lookup). Use for CamelCase symbols.\\\",\\\"permissionDecision\\\":\\\"allow\\\"}}\"",
+            "statusMessage": "Checking for smart-search opportunity..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "cmd=\"$CLAUDE_CODE_COMMAND\"; if echo \"$cmd\" | grep -qE '^(grep|cat|find|git log|ls -la)\\s'; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Use rtk for 60-75% savings (e.g., rtk grep, rtk read). 1.2M tokens saveable from unpreixed commands.\"}}'; fi || true",
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"' 2>/dev/null); [ -z \"$cmd\" ] && exit 0; base=$(echo \"$cmd\" | awk '{print $1}'); echo \"$base\" | grep -q '^rtk' && exit 0; case \"$base\" in grep) msg='grep → rtk grep (614K tokens/yr)' ;; git) msg='git → rtk git (175K tokens/yr)' ;; find) msg='find → rtk find (308K tokens/yr)' ;; tail) msg='tail → rtk tail (120K tokens/yr)' ;; ls) msg='ls → rtk ls (60K tokens/yr)' ;; cat) msg='cat → rtk read (71% savings)' ;; *) exit 0 ;; esac; echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PostToolUse\\\",\\\"additionalContext\\\":\\\"RTK: $msg (60-90% token savings)\\\"}}\"",
             "statusMessage": "Checking RTK usage..."
           }
         ]
