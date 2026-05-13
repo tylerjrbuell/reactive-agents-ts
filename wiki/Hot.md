@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-05-10
+updated: 2026-05-13
 ---
 
 # Hot (Recent Context Cache)
@@ -10,7 +10,29 @@ updated: 2026-05-10
 
 ---
 
-## Latest Session (2026-05-12, evening)
+## Latest Session (2026-05-13, morning)
+
+### Compose API Wave B — COMPLETE ✅
+
+Commits `d8cec216` → `72bc3727` (Parts 1–4). All tests pass (102 runtime, 12 core/reasoning).
+
+**What shipped:**
+- `HarnessPipeline` plumbed through `RuntimeOptions` → `ReactiveAgentsConfig` → `ReactiveAgentBuilder`
+- `_harnessRegistrations` compiled to `HarnessPipeline` in `runtime-construction.ts`
+- `harnessPipeline` threaded through reasoning type chain: `ReasoningExecuteRequest` → `StrategyRegistryInput` → `ReactiveInput`/`DirectInput` → `KernelInput`
+- `prompt.system` chokepoint wired in **both** execution paths:
+  - Reasoning path: `packages/reasoning/src/kernel/capabilities/reason/think.ts`
+  - Inline path: `packages/runtime/src/engine/phases/agent-loop/inline-think.ts`
+- Example: `apps/examples/src/advanced/20-compose-harness.ts` (PASSES)
+
+**Root cause found during debug:** inline path (`runInlineThink`) never went through the reasoning kernel, so the `think.ts` chokepoint in `packages/reasoning` was unreachable for agents without `.withReasoning()`. Fixed by adding the chokepoint directly in `inline-think.ts`.
+
+**v0.12 deferred chokepoints** (registrations compile but transforms are pass-through):
+- `nudge.loop-detected`, `nudge.healing-failure`, `message.tool-result`, `observation.tool-result`
+
+---
+
+## Previous Session (2026-05-12, evening)
 
 ### M3 REWORK Implemented ✅
 
