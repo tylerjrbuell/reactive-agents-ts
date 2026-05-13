@@ -12,7 +12,7 @@ import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
-import { StreamingTextCallback } from "@reactive-agents/core";
+import { StreamingTextCallback, RunControllerRef } from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -117,7 +117,7 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
 
     readonly executeStream: (
       task: Task,
-      options?: { density?: StreamDensity },
+      options?: { density?: StreamDensity; runController?: import("@reactive-agents/core").RunControllerLike },
     ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
   }
 >() {}
@@ -1469,6 +1469,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               );
 
             yield* FiberRef.set(StreamingTextCallback, streamCallback).pipe(
+              Effect.andThen(FiberRef.set(RunControllerRef, options?.runController ?? null)),
               Effect.andThen(execute(task)),
               Effect.tap((taskResult) => {
                 const debriefToolsUsed = (taskResult as any).debrief?.toolsUsed as Array<{ name: string; calls: number; successRate: number }> | undefined;

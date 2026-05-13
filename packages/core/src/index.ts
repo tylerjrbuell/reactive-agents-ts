@@ -142,7 +142,8 @@ export type {
 } from "./services/harness-types.js";
 
 // ─── Streaming ───
-export { StreamingTextCallback } from "./streaming.js";
+export { StreamingTextCallback, RunControllerRef } from "./streaming.js";
+export type { RunControllerLike } from "./streaming.js";
 
 // ─── AgentMemory port (NS §3.1 — FIX-34) ───
 // Narrow port the kernel resolves so it does NOT depend on

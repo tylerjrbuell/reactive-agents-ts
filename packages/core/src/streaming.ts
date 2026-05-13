@@ -30,3 +30,17 @@ import { FiberRef, Effect } from "effect";
 export const StreamingTextCallback = FiberRef.unsafeMake<
   ((text: string) => Effect.Effect<void, never>) | null
 >(null);
+
+/** Minimal interface accessed by runner.ts for pause/stop control. */
+export interface RunControllerLike {
+  checkpoint(): Promise<{ stop: true } | undefined>;
+}
+
+/**
+ * FiberRef carrying the per-call RunController for runStream() executions.
+ *
+ * Set by ExecutionEngine.executeStream() before execute(task) runs.
+ * Read by runner.ts at each iteration boundary to implement pause/stop verbs.
+ * Null for run() calls (no control plane needed).
+ */
+export const RunControllerRef = FiberRef.unsafeMake<RunControllerLike | null>(null);

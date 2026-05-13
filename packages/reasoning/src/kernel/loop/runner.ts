@@ -12,7 +12,7 @@
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
  *   6. Terminal hooks: onDone / onError
  */
-import { Effect } from "effect";
+import { Effect, FiberRef } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
@@ -74,7 +74,7 @@ import {
 } from "./output-synthesis.js";
 
 import { META_TOOLS as RUNNER_META_TOOLS } from "../../kernel/state/kernel-constants.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, RunControllerRef } from "@reactive-agents/core";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
 const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
@@ -619,6 +619,16 @@ export function runKernel(
       state.iteration < currentOptions.maxIterations &&
       (state.llmCalls ?? 0) < currentOptions.maxIterations
     ) {
+      // Pause/stop checkpoint: awaits resume() if paused, returns { stop: true } on stop().
+      const _runCtl = yield* FiberRef.get(RunControllerRef);
+      if (_runCtl) {
+        const ctl = yield* Effect.promise(() => _runCtl.checkpoint());
+        if (ctl?.stop) {
+          state = transitionState(state, { status: "done", output: state.output ?? "" });
+          break;
+        }
+      }
+
       const prevTokens = state.tokens;
 
       yield* emitLog({

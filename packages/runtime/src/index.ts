@@ -91,6 +91,8 @@ export type { ChannelsConfig } from "@reactive-agents/channels";
 // ─── Streaming ───
 export type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
 export { AgentStream } from "./agent-stream.js";
+export { RunController } from "./run-controller.js";
+export type { RunHandle, RunStatus, RunControllerLike } from "./run-controller.js";
 
 // ─── Deployment ───
 export { createSigtermHandler, registerShutdownHandlers } from "./sigterm.js";

@@ -42,6 +42,8 @@ import type {
 import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
+import { RunController } from './run-controller.js'
+import type { RunHandle } from './run-controller.js'
 import {
     AgentSession,
     directChat,
@@ -741,9 +743,48 @@ export class ReactiveAgent {
      * // Cancel from outside: ctrl.abort();
      * ```
      */
-    async *runStream(
+    /**
+     * Execute a task and return a RunHandle — an AsyncGenerator extended with
+     * runtime control verbs (pause/resume/stop/terminate/status).
+     *
+     * Fully backward-compatible: `for await (const ev of agent.runStream(...))` and
+     * `handle.next()` both work unchanged. The added verbs give callers control over
+     * the run without a separate AbortController.
+     *
+     * terminate() — hard abort (StreamCancelled), same as passing an AbortSignal.
+     * stop()      — graceful: runs synthesis, emits StreamCompleted.
+     * pause()     — freeze at next iteration boundary; await resume().
+     * resume()    — continue from paused state.
+     * status()    — current RunStatus.
+     */
+    runStream(
         input: string,
         options?: { density?: StreamDensity; signal?: AbortSignal }
+    ): RunHandle {
+        const internalAbort = new AbortController();
+        const userSignal = options?.signal;
+        if (userSignal) {
+            if (userSignal.aborted) {
+                internalAbort.abort();
+            } else {
+                userSignal.addEventListener('abort', () => internalAbort.abort(), { once: true });
+            }
+        }
+        const controller = new RunController(internalAbort);
+        const gen = this._runStreamImpl(input, { ...options, signal: controller.signal }, controller);
+        return Object.assign(gen, {
+            pause: () => controller.pause(),
+            resume: () => controller.resume(),
+            stop: (_opts?: { reason?: string }) => controller.stop(),
+            terminate: (_opts?: { reason?: string }) => controller.terminate(),
+            status: () => controller.status(),
+        }) as RunHandle;
+    }
+
+    private async *_runStreamImpl(
+        input: string,
+        options: { density?: StreamDensity; signal?: AbortSignal },
+        controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
 
@@ -777,7 +818,7 @@ export class ReactiveAgent {
         // Post-runPromise guard: re-check signal after async acquisition so that
         // abort() fired during the await is not silently missed.
         const stream = await this.runtime.runPromise(
-            this.engine.executeStream(task, { density })
+            this.engine.executeStream(task, { density, runController: controller })
         )
         if (signal?.aborted) {
             yield {
@@ -888,6 +929,7 @@ export class ReactiveAgent {
             signal?.removeEventListener('abort', onAbort)
             // Ensure the fiber is interrupted on generator early exit (break/throw/return).
             Effect.runFork(Fiber.interrupt(fiber))
+            controller.markCompleted()
         }
     }
 
