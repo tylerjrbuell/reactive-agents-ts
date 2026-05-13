@@ -67,7 +67,7 @@ const task =
 console.log(`\nProvider: ${provider}${model ? ` (${model})` : ""}`);
 console.log(`Task: ${task}`);
 console.log(`Comparing: ${strategyA} vs ${strategyB}\n`);
-console.log("Running both strategies in sequence...\n");
+console.log("Running both strategies in parallel...\n");
 
 type RunResult = { strategy: Strategy; output: string; steps: number; tokens: number; durationMs: number };
 
