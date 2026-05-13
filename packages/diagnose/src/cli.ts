@@ -17,6 +17,7 @@ import { listCommand } from "./commands/list.js";
 import { replayCommand } from "./commands/replay.js";
 import { grepCommand } from "./commands/grep.js";
 import { diffCommand } from "./commands/diff.js";
+import { debriefCommand } from "./commands/debrief.js";
 
 interface ParsedArgs {
   readonly command: string;
@@ -52,6 +53,7 @@ Commands:
   replay <runId> [--raw|--json]   Pretty-print timeline; --only=k1,k2 to filter
   grep <runId> "<expr>"           Filter events with a JS predicate (e is the event)
   diff <runIdA> <runIdB>          Structural diff between two runs
+  debrief <runId> [--json]        Decision timeline with rationale (why this path)
 
 Run IDs:
   - bare ULID resolves under ~/.reactive-agents/traces/
@@ -104,6 +106,13 @@ async function main(): Promise<void> {
         const b = args.positional[1];
         if (!a || !b) throw new Error("diff requires two runIds");
         await diffCommand(a, b);
+        return;
+      }
+      case "debrief": {
+        const id = args.positional[0];
+        if (!id) throw new Error("debrief requires a runId. Try: rax-diagnose debrief latest");
+        const json = Boolean(args.flags.get("json"));
+        await debriefCommand(id, { json });
         return;
       }
       case "help":
