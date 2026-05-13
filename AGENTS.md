@@ -416,6 +416,16 @@ Root `ROADMAP.md` is the authoritative forward-looking plan. Update when:
 
 ---
 
+## Stackblitz Examples Guard
+
+`apps/stackblitz/` contains standalone npm projects for browser demos. Never add `workspace:*` deps to any `package.json` under `apps/stackblitz/` — these projects must resolve from the npm registry. Verify:
+
+```bash
+grep -r "workspace:" apps/stackblitz/ && echo FAIL || echo PASS
+```
+
+---
+
 ## Release Workflow (Changesets)
 
 **Every PR touching user-facing behavior:** `bun run changeset` → creates `.changeset/<name>.md` → commit with code
