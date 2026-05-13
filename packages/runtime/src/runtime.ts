@@ -27,7 +27,7 @@ import {
   createReasoningLayer,
   defaultReasoningConfig,
 } from "@reactive-agents/reasoning";
-import type { ReasoningConfig, KernelMetaToolsConfig } from "@reactive-agents/reasoning";
+import type { ReasoningConfig, KernelMetaToolsConfig, Verifier } from "@reactive-agents/reasoning";
 import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ObservabilityOptions } from "./builder.js";
@@ -783,7 +783,27 @@ export interface RuntimeOptions {
    * object bypasses lookup entirely.
    */
   calibration?: import("./types.js").CalibrationMode;
+
+  /**
+   * Enable lean harness mode (Pruning Principle, NLAH arXiv:2603.25723 §9).
+   *
+   * Bypasses the terminal verifier gate (substitutes a no-op verifier) and
+   * disables strategy switching. On frontier models these two mechanisms cost
+   * ~13.6× tokens while producing outcomes 0.8 pp worse than lean config.
+   *
+   * Default: `false`
+   */
+  leanHarness?: boolean;
 }
+
+const leanModeVerifier: Verifier = {
+  verify: (ctx) => ({
+    verified: true,
+    checks: [{ name: "noop", passed: true }],
+    summary: `${ctx.action}: noop (lean harness)`,
+    action: ctx.action,
+  }),
+};
 
 /**
  * Create the full Reactive Agents runtime layer.
@@ -883,13 +903,14 @@ export const createRuntime = (options: RuntimeOptions) => {
           maxAgeDays: options.sessionMaxAgeDays,
         }
       : undefined,
-    strategySwitching: options.reasoningOptions?.enableStrategySwitching !== false
-      ? {
+    strategySwitching: options.leanHarness || options.reasoningOptions?.enableStrategySwitching === false
+      ? undefined
+      : {
           enabled: true,
           maxSwitches: options.reasoningOptions?.maxStrategySwitches,
           fallbackStrategy: options.reasoningOptions?.fallbackStrategy,
-        }
-      : undefined,
+        },
+    verifier: options.leanHarness ? leanModeVerifier : undefined,
     enableReactiveIntelligence: options.enableReactiveIntelligence,
     reactiveIntelligenceOptions: options.reactiveIntelligenceOptions,
     reasoningOptions: options.reasoningOptions,

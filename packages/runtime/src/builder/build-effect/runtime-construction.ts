@@ -152,6 +152,7 @@ export interface BuilderRuntimeStateView {
   readonly _calibration: CalibrationMode;
   readonly _metaTools?: import("../../types.js").MetaToolsConfig | false;
   readonly _cortexUrl: string | null;
+  readonly _leanHarness: boolean;
 }
 
 /** Result bundle returned to the caller of {@link buildBaseRuntimeAndEngine}.
@@ -373,6 +374,7 @@ export const buildBaseRuntimeAndEngine = (
           : state._enableReasoning
           ? "auto"
           : undefined,
+      leanHarness: state._leanHarness || undefined,
     });
 
     const engine = yield* (ExecutionEngine.pipe(

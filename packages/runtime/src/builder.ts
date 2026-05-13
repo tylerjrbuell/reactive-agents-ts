@@ -354,6 +354,7 @@ export class ReactiveAgentBuilder {
     private _riAutonomy?: 'full' | 'suggest' | 'observe'
     private _metaTools?: import('./types.js').MetaToolsConfig | false
     private _calibration: CalibrationMode = 'skip'
+    private _leanHarness: boolean = false
 
     // ─── Calibration ───
 
@@ -895,6 +896,22 @@ export class ReactiveAgentBuilder {
         if (options) this._reasoningOptions = options
         if (options?.maxIterations !== undefined)
             this._maxIterations = options.maxIterations
+        return this
+    }
+
+    /**
+     * Enable lean harness mode (Pruning Principle, NLAH arXiv:2603.25723 §9).
+     *
+     * Bypasses the terminal verifier gate (substitutes a no-op verifier) and
+     * disables strategy switching. On frontier models these two mechanisms cost
+     * ~13.6× tokens while producing outcomes 0.8 pp worse than the lean config.
+     * Use for latency-sensitive or cost-sensitive production workloads where
+     * the task does not require grounding or synthesis validation.
+     *
+     * @returns `this` for chaining
+     */
+    withLeanHarness(): this {
+        this._leanHarness = true
         return this
     }
 

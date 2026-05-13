@@ -591,6 +591,12 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
   readonly synthesisConfig?: SynthesisConfigJson & { readonly synthesisStrategy?: SynthesisStrategy };
   /** User-defined predicate called after each reasoning result. If it returns false, the agent re-runs. */
   readonly customTermination?: (state: { output: string }) => boolean;
+  /**
+   * Custom verifier injected at the terminal §9.0 gate. When set, replaces
+   * `defaultVerifier` for both in-loop retry and final-answer verification.
+   * Set to `noopVerifier` by lean harness mode to bypass the gate entirely.
+   */
+  readonly verifier?: import("@reactive-agents/reasoning").Verifier;
   /** Validate the final output before accepting. On failure, feedback is injected and the agent retries. */
   readonly outputValidator?: (output: string) => { valid: boolean; feedback?: string };
   /** Options for `outputValidator` — controls retry count. */

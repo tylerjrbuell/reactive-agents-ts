@@ -88,6 +88,12 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly observationSummary?: boolean | "auto";
       /** Pre-resolved model calibration — drives steering channel and context tuning in the kernel. */
       readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+      /**
+       * Custom verifier injected at the terminal §9.0 gate. When set, replaces
+       * `defaultVerifier` for both in-loop retry and final-answer verification.
+       * Pass `noopVerifier` to bypass the gate entirely (lean harness mode).
+       */
+      readonly verifier?: import("../kernel/capabilities/verify/verifier.js").Verifier;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

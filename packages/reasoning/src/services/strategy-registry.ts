@@ -73,6 +73,12 @@ export type StrategyFn = (input: {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
   readonly observationSummary?: boolean | "auto";
+  /**
+   * Custom verifier injected at the terminal §9.0 gate. When set, replaces
+   * `defaultVerifier` for both in-loop retry and final-answer verification.
+   * Pass `noopVerifier` to bypass the gate entirely (lean harness mode).
+   */
+  readonly verifier?: import("../kernel/capabilities/verify/verifier.js").Verifier;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
