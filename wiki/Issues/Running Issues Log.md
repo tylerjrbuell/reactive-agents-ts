@@ -13,30 +13,23 @@ tags: [issues, blockers, active-work]
 
 ## Known Issues (Monitoring)
 
-### Issue #3: cogito:14b Retry Prompt Tuning (FM-A1)
+### Issue #3: cogito:14b FM-A1 Retry Tuning — Re-scoped
 
-**Status:** 🟡 KNOWN (Phase 1.5 improvement in progress)
+**Status:** ⚪ RE-SCOPED (2026-05-12)
 
-**Description:** cogito:14b exhibits ~15% FM-A1 frequency (no-tool fabrication) despite M13 guards. Retry context prompts and temperature not yet tuned for cogito:14b's instruction-following profile.
+**Original:** cogito:14b ~15% FM-A1 frequency; tune M3 terminal retry context (prompts, temperature) to <5%.
 
-**Root Cause:** cogito:14b doesn't consistently recognize required tool constraints in instructions; retry context (prompts, temperature) not yet optimized for this model.
+**Re-scope reason:** M3 REWORK commit `051c22be` removed the terminal verifier retry loop. The surface this issue targeted no longer exists. `retry-context.ts`, `defaultVerifierRetryPolicy`, and `improvedVerifierRetryPolicy` remain as exported API but are no longer called by the kernel.
 
-**Impact:** 
-- Task incompleteness on cogito:14b
-- Guards catch errors but require costly retry loop
-- cogito:14b not recommended for safety-critical tasks
+**Active FM-A1 mitigation:** `oracle-nudge.ts` (Pivot B, 2026-05-07) — "describe vs emit" example pair lifts cogito:14b T4 from 30% → 100% synthesized output.
 
-**Workaround:** Use frontier model or add extra instruction emphasis in prompts
-
-**Phase 1.5 Action:** Tune M3 retry context (prompts, temperature) for cogito:14b
+**Before v0.11 cleanup needed:** Remove orphaned `KernelInput.verifierRetryPolicy` field, `retry-context.ts`, and dead exports (`defaultVerifierRetryPolicy`, `improvedVerifierRetryPolicy`, `VerifierRetryPolicy`, `VerifierRetryPolicyContext`) from public index. Delete `m3-verifier-retry.test.ts`. This is a breaking change — semver bump or v0.11 deprecation cycle.
 
 **Owner:** Reasoning team
 
-**Success Criteria:** <5% FM-A1 frequency on cogito:14b
-
 **References:**
 - [[Failure-Modes/FM-A Tool Engagement|FM-A1: No-Tool Fabrication]]
-- [[Decisions/Phase 1.5 Retry Context Tuning|M3 Retry Tuning]]
+- [[Decisions/2026-05-12-m3-terminal-verifier-rework|M3 REWORK Decision]]
 
 ---
 
@@ -261,5 +254,5 @@ At that point, we expect to see:
 ---
 
 **Last Updated:** 2026-05-12  
-**Total Open:** 4 (#3, #4, #6, #7 — 0 critical, 4 known)  
+**Total Open:** 3 (#4, #6, #7 — 0 critical, 3 known; #3 re-scoped pending v0.11 cleanup)  
 **Resolved in Phase 1:** 7

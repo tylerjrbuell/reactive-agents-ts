@@ -548,21 +548,9 @@ export function runKernel(
     const maxRequiredToolRetries = effectiveInput.maxRequiredToolRetries ?? 2;
     let requiredToolRedirects = 0;
 
-    // Verifier-driven retry budget (Sprint 3.5 Stage 2) — converts honest
-    // verifier rejections into recovery attempts. When the model ships a
-    // candidate final-answer that fails verification (e.g., agent-took-action
-    // because no data tool was invoked, or synthesis-grounded because the
-    // output fabricates content), we inject the verdict reason as a feedback
-    // step and let the kernel try once more with that guidance.
-    //
-    // Cap is intentionally low (1) — the architectural mechanism is one
-    // chance to recover from a rejection. If the model ignores even specific
-    // verifier feedback, the failure mode is compliance, not chance to retry.
-    //
-    // Both the verifier and the retry policy are developer-injectable
-    // (Sprint 3.5 Stage 2.5 — control pillar): swap `defaultVerifier` for a
-    // domain-specific check, swap `defaultVerifierRetryPolicy` to suppress
-    // retry on known-regressing task shapes (e.g., long-form synthesis).
+    // M3 REWORK (2026-05-12): retry loop removed per ablation verdict (0pp
+    // accuracy delta across 3 models). The verifier still fires as a terminal
+    // pass/fail gate at §9.0 below. Developer-injectable via KernelInput.verifier.
     const verifier = effectiveInput.verifier ?? defaultVerifier;
 
     // Unified nudge budget — caps the total number of "missing required tool"
