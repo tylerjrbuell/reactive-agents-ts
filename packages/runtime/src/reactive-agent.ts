@@ -38,6 +38,7 @@ import type {
     AgentEvent,
     OutputFormat,
     TerminatedBy,
+    RunControllerLike,
 } from '@reactive-agents/core'
 import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
@@ -80,7 +81,7 @@ export class ReactiveAgent {
             ) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>
             executeStream: (
                 task: Task,
-                options?: { density?: StreamDensity }
+                options?: { density?: StreamDensity; runController?: RunControllerLike }
             ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>
             cancel: (taskId: string) => Effect.Effect<void, RuntimeErrors>
             getContext: (
