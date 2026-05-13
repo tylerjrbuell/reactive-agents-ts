@@ -10,7 +10,43 @@ updated: 2026-05-10
 
 ---
 
-## Latest Session (2026-05-12)
+## Latest Session (2026-05-12, evening)
+
+### M3 REWORK Implemented ✅
+
+Commit `051c22be` — 1126/1126 tests pass.
+
+- Removed terminal retry loop (runner.ts sites 1 + 2)
+- Retained post-loop pass/fail gate (site 3, ~runner.ts:1547)
+- Removed dead vars: `verifierRetries`, `maxVerifierRetries`, `verifierRetryPolicy`, `defaultVerifierRetryPolicy`
+- Removed `DEBUG_VERIFIER` env-var logging (superseded by trace events)
+- Updated Pivot A test to assert no-retry behavior
+- Decision doc: `wiki/Decisions/2026-05-12-m3-terminal-verifier-rework.md`
+- Issue #5 (strategy switching) closed; Issue #6 updated to REWORK IN PROGRESS
+
+### Issue #7 Implemented ✅
+
+Commit `4c3cdd1c` — `.withLeanHarness()` added to `ReactiveAgentBuilder`.
+- Injects no-op verifier (always passes terminal gate) + disables strategy switching
+- Wired through `runtime.ts` → `RuntimeOptions.leanHarness` → `KernelInput.verifier`
+- All 1126+753 tests pass
+- Empirical basis: NLAH §3 — full harness 13.6× tokens, −0.8pp on frontier models
+
+### Issue #3 Re-scoped ✅
+
+Commit `latest` — terminal retry surface removed by M3 REWORK; no tuning possible.
+- `retry-context.ts`, `defaultVerifierRetryPolicy`, `improvedVerifierRetryPolicy` are orphaned public API
+- Active FM-A1 mitigation: `oracle-nudge.ts` (Pivot B, already shipped)
+- Before v0.11: clean up orphaned exports + `KernelInput.verifierRetryPolicy` (semver consideration)
+- Stale verifier retry-budget comment in runner.ts removed
+
+### Quick ablation re-run in progress (task b36gfxia2)
+
+5 tasks × 3 models × 2 variants = 30 dispatches. Fixed judge (system prompt + JSON extraction). At 19/30 at last check (~8:45pm). Results pending — will confirm or tighten provisional REWORK verdict.
+
+---
+
+## Previous Session (2026-05-12, afternoon)
 
 ### M3 Verifier Ablation — Complete ✅
 
