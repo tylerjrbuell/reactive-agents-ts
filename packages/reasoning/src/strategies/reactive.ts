@@ -101,6 +101,7 @@ interface ReactiveInput {
    * this undefined to use the default checks.
    */
   readonly verifier?: Verifier;
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -212,6 +213,7 @@ export const executeReactive = (
       verifier:
         input.verifier ??
         (process.env.REACTIVE_AGENTS_NOOP_VERIFIER === "1" ? noopVerifier : undefined),
+      harnessPipeline: input.harnessPipeline,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

@@ -79,6 +79,7 @@ export type StrategyFn = (input: {
    * Pass `noopVerifier` to bypass the gate entirely (lean harness mode).
    */
   readonly verifier?: import("../kernel/capabilities/verify/verifier.js").Verifier;
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,
