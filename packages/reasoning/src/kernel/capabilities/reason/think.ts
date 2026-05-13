@@ -373,7 +373,7 @@ export function handleThinking(
     // Read pending guidance signals, clear from state before LLM call.
     const pending = state.pendingGuidance;
     state = transitionState(state, { pendingGuidance: undefined });
-    const guidance: GuidanceContext = {
+    let guidance: GuidanceContext = {
       requiredToolsPending: pending?.requiredToolsPending ?? [],
       loopDetected: pending?.loopDetected ?? false,
       icsGuidance: pending?.icsGuidance,
@@ -383,6 +383,20 @@ export function handleThinking(
       qualityGateHint: pending?.qualityGateHint,
       evidenceGap: pending?.evidenceGap,
     };
+    if (guidance.loopDetected && pipeline) {
+      const defaultNudge = "Loop detected: you are repeating the same tool calls. Try a different approach or synthesize what you have.";
+      const nudgeResult = yield* Effect.promise(() =>
+        pipeline.transform('nudge.loop-detected', defaultNudge, {
+          iteration: state.iteration,
+          phase: 'think',
+          state,
+          strategy,
+          trigger: 'loop-detector',
+          severity: 'warn',
+        })
+      );
+      guidance = { ...guidance, loopDetectedMessage: nudgeResult ?? defaultNudge };
+    }
 
     // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
     // When the required-tools gate has blocked a tool, narrow the FC tools

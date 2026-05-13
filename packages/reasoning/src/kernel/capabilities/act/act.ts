@@ -54,7 +54,7 @@ import {
 } from "../verify/requirement-state.js";
 import { checkToolCall, defaultGuards } from "./guard.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
 
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
@@ -1019,7 +1019,36 @@ export function handleActing(
         return { messages: baseMessages, actReminder: undefined, errorRecovery: undefined, completionNudgeSent: false };
       })();
 
-      const newConversationHistory = conversationAssembly.messages;
+      let newConversationHistory = conversationAssembly.messages;
+      const pipeline = input.harnessPipeline;
+      if (pipeline) {
+        const transformed: KernelMessage[] = [];
+        for (const msg of newConversationHistory) {
+          if (msg.role === 'tool_result') {
+            const result = yield* Effect.promise(() =>
+              pipeline.transform('message.tool-result', msg as KernelMessageLike, {
+                iteration: state.iteration,
+                phase: 'act',
+                state,
+                strategy: state.strategy,
+                toolName: msg.toolName,
+                callId: msg.toolCallId,
+                healed: false,
+                durationMs: 0,
+              })
+            );
+            // Merge onto original to preserve storedKey and other KernelMessage-specific fields
+            transformed.push(
+              result != null && result.role === 'tool_result'
+                ? { ...msg, content: result.content }
+                : msg
+            );
+          } else {
+            transformed.push(msg);
+          }
+        }
+        newConversationHistory = transformed;
+      }
       const actGuidance: { actReminder?: string; errorRecovery?: string } = {};
       if (conversationAssembly.actReminder) actGuidance.actReminder = conversationAssembly.actReminder;
       if (conversationAssembly.errorRecovery) actGuidance.errorRecovery = conversationAssembly.errorRecovery;

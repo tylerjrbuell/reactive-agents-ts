@@ -39,6 +39,8 @@ export interface GuidanceContext {
   readonly requiredToolsPending: readonly string[];
   /** True when the loop-detection oracle fired on this iteration. */
   readonly loopDetected: boolean;
+  /** Custom nudge text produced by a harness nudge.loop-detected transform. Overrides the default when set. */
+  readonly loopDetectedMessage?: string;
   /** Guidance from the Intelligent Context Synthesis (ICS) system. */
   readonly icsGuidance?: string;
   /** Guidance from the oracle / quality gate. */
@@ -395,6 +397,7 @@ export function buildGuidanceSection(guidance: GuidanceContext): string {
 
   if (guidance.loopDetected) {
     signals.push(
+      guidance.loopDetectedMessage ??
       "Loop detected: you are repeating the same tool calls. Try a different approach or synthesize what you have.",
     );
   }
