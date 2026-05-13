@@ -24,6 +24,7 @@ tags: [decisions, index, trade-offs]
 - **Impact:** Confirmed improvement-first posture effective
 
 ### Phase 1.5: Improvement Work (Active 🟡)
+- [[Decisions/2026-05-12-m3-terminal-verifier-rework|M3 Terminal Verifier REWORK]] — Disable retry loop; retain heuristic pass/fail gate. 0pp ablation delta, premature-termination signal. **Provisional** pending judge structured output fix.
 - [[Decisions/Phase 1.5 Retry Context Tuning|M3 Retry Tuning]] — cogito:14b instruction-following
 - [[Decisions/Phase 1.5 Skill Persistence|M6 Persistence]] — SQLite/filesystem skill storage
 - [[Decisions/Phase 1.5 Calibration Activation|M7 Activation]] — 8+ fields with consumers
@@ -235,6 +236,6 @@ tags: [decisions, index, trade-offs]
 
 **See also:** [[MOCs/Decisions MOC|Decisions MOC]] (comprehensive decision hub)
 
-**Last Updated:** 2026-05-04  
-**Phase:** v0.10.0 release preparation  
+**Last Updated:** 2026-05-12  
+**Phase:** Phase 1.5 active  
 **Next Review:** Phase 1.5 checkpoint (May 15, 2026)

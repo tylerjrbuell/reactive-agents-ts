@@ -66,36 +66,12 @@ tags: [issues, blockers, active-work]
 
 ---
 
-### Issue #5: Strategy Routing Opt-In (Default Disabled)
-
-**Status:** 🟡 KNOWN (Phase 2 default-enabling)
-
-**Description:** Strategy switching (M2) requires explicit opt-in via `withReasoning({ strategySwitching: { enabled: true } })`. Disabled by default.
-
-**Root Cause:** Feature delivered as opt-in during Phase 1 to manage risk.
-
-**Impact:**
-- Users don't get strategy selection benefits by default
-- Requires boilerplate configuration
-- No token savings for first-time users
-
-**Workaround:** Explicitly enable in builder config
-
-**Phase 2 Action:** Enable strategy switching by default for multi-step tasks
-
-**Owner:** Reasoning team
-
-**References:**
-- `packages/reasoning/src/strategies/reactive.ts:70`
-- `packages/runtime/src/builder.ts:749`
-
----
 
 ### Issue #6: M3 Verifier Ablation
 
-**Status:** 🟡 IN PROGRESS (May 12, 2026)
+**Status:** 🟡 REWORK IN PROGRESS (May 12, 2026)
 
-**Description:** Ablation benchmark running to produce KEEP/IMPROVE/REMOVE verdict for the M3 verifier mechanism. 10 tasks × 3 models × 2 variants (~5h wall-clock, Ollama bottleneck).
+**Description:** Ablation benchmark ran to produce verdict for the M3 verifier mechanism. 10 tasks × 3 models × 2 variants. Verdict filed 2026-05-12. Terminal retry loop being removed (runner.ts). See `wiki/Research/Harness-Reports/phase-1.5-m3-ablation-2026-05-12.md`.
 
 **Background:** M3 verifier was marked IMPROVE in Phase 1 validation. Ablation quantifies accuracy delta between harness-with-verifier vs harness-without-verifier to determine whether the mechanism earns its token cost.
 
@@ -103,7 +79,7 @@ tags: [issues, blockers, active-work]
 
 **Impact if removed:** Unknown pending results; failure to validate risks shipping underperforming verifier path by default.
 
-**Next step:** After ablation completes, compile verdict (Task 5) and update Phase 1.5 roadmap. Feed result into v0.11 go/no-go.
+**Next step:** Remove terminal retry loop from runner.ts per REWORK verdict. Feed result into v0.11 go/no-go.
 
 **Owner:** Reasoning team
 
@@ -111,6 +87,7 @@ tags: [issues, blockers, active-work]
 - [[Experiments/M3 Healing Pipeline|M3 Verifier]]
 - [[Decisions/Phase 1.5 Retry Context Tuning|M3 Retry Tuning]]
 - North Star §7 (verifier phase gate)
+- `wiki/Research/Harness-Reports/phase-1.5-m3-ablation-2026-05-12.md`
 
 ---
 
@@ -141,6 +118,19 @@ tags: [issues, blockers, active-work]
 ---
 
 ## Resolved Issues (History)
+
+### ✅ RESOLVED: Strategy Routing Opt-In (Issue #5)
+
+**Status:** ✅ Resolved 2026-05-12
+
+**Issue:** Strategy switching (M2) required explicit opt-in via `withReasoning({ strategySwitching: { enabled: true } })`. Disabled by default.
+
+**Resolution:** Gate flipped to `!== false` in `packages/runtime/src/runtime.ts` — strategy switching is now opt-OUT (enabled by default). Test updated to match.
+
+**References:**
+- `packages/runtime/src/runtime.ts`
+
+---
 
 ### ✅ RESOLVED: Rule 4 Frozen Judge Validation
 
@@ -261,8 +251,9 @@ tags: [issues, blockers, active-work]
 At that point, we expect to see:
 - ✅ Rule 4 frozen judge resolved
 - ✅ @reactive-agents/diagnose published
+- ✅ Strategy routing opt-in flipped to default-on (#5)
 - 🔄 cogito:14b FM-A1 reduced via M3 retry tuning (#3)
-- 🔄 M3 ablation verdict compiled (#6)
+- 🔄 M3 REWORK implementation complete — terminal retry loop removed (#6)
 - 🔄 Pruning Principle builder API scoped (#7)
 - 🔄 Phase 2 plan finalized
 - 🟢 Any new issues discovered during Phase 1.5 work
@@ -270,5 +261,5 @@ At that point, we expect to see:
 ---
 
 **Last Updated:** 2026-05-12  
-**Total Open:** 5 (0 critical, 5 known)  
-**Resolved in Phase 1:** 6
+**Total Open:** 4 (#3, #4, #6, #7 — 0 critical, 4 known)  
+**Resolved in Phase 1:** 7

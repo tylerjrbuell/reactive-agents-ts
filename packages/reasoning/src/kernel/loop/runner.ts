@@ -57,7 +57,7 @@ import {
   shouldInjectOracleNudge,
 } from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { defaultVerifier, defaultVerifierRetryPolicy } from "../../kernel/capabilities/verify/verifier.js";
+import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
 import {
   emitKernelStateSnapshot,
   emitVerifierVerdict,
@@ -563,11 +563,7 @@ export function runKernel(
     // (Sprint 3.5 Stage 2.5 — control pillar): swap `defaultVerifier` for a
     // domain-specific check, swap `defaultVerifierRetryPolicy` to suppress
     // retry on known-regressing task shapes (e.g., long-form synthesis).
-    let verifierRetries = 0;
-    const maxVerifierRetries = effectiveInput.maxVerifierRetries ?? 1;
     const verifier = effectiveInput.verifier ?? defaultVerifier;
-    const verifierRetryPolicy =
-      effectiveInput.verifierRetryPolicy ?? defaultVerifierRetryPolicy;
 
     // Unified nudge budget — caps the total number of "missing required tool"
     // nudges injected by stall detection and loop detection paths combined.
@@ -1003,43 +999,10 @@ export function runKernel(
             summary: fallbackVerdict.summary,
             checks: fallbackVerdict.checks,
           });
-          if (
-            !fallbackVerdict.verified &&
-            verifierRetries < maxVerifierRetries &&
-            state.iteration < currentOptions.maxIterations - 1
-          ) {
-            verifierRetries++;
-            const decision = verifierRetryPolicy({
-              verdict: fallbackVerdict,
-              iteration: state.iteration,
-              retriesUsed: verifierRetries - 1,
-              maxRetries: maxVerifierRetries,
-              stepCount: state.steps.length,
-              toolsUsed: state.toolsUsed,
-            });
-            if (decision.retry) {
-              const failedCheck = fallbackVerdict.checks.find((c) => !c.passed);
-              const fallbackText =
-                `[verifier] Harness was about to ship fallback output assembled from ${totalArtifacts} tool artifacts because you stalled without producing a synthesized answer. ` +
-                `Rejected at "${failedCheck?.name ?? "verification"}": ${failedCheck?.reason ?? fallbackVerdict.summary}\n` +
-                `You have all the data you need in the prior tool results. Synthesize a real answer to the task and call final-answer now. (retry ${verifierRetries}/${maxVerifierRetries})`;
-              const signalText = decision.signalText ?? fallbackText;
-              const signalStep = makeStep("observation", signalText);
-              yield* emitHarnessSignalInjected({
-                taskId: currentOptions.taskId ?? state.taskId,
-                iteration: state.iteration,
-                signalKind: "redirect",
-                content: signalText,
-                origin: `runner.ts:harness-deliverable-retry${decision.reason ? ` (${decision.reason})` : ""}`,
-              });
-              state = transitionState(state, {
-                status: "thinking",
-                steps: [...state.steps, signalStep],
-              });
-              continue;
-            }
-          }
-          // Retry not available (or policy declined): proceed with original
+          // M3 REWORK (2026-05-12): retry loop removed per ablation verdict.
+          // Verifier gate still fires (emitted above); rejection falls through
+          // to the §9.0 post-loop outer gate which marks the run failed.
+          // Proceed with original
           // harness fallback. terminate() preserves the single-owner invariant.
           yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`, timestamp: new Date() });
           state = terminate(state, {
@@ -1435,89 +1398,6 @@ export function runKernel(
         }
       }
 
-      // ── Verifier-driven retry (in-loop, Sprint 3.5 Stage 2) ──────────────
-      // When the kernel declares "done" with a candidate final-answer but the
-      // verifier rejects it (agent-took-action, synthesis-grounded, etc.),
-      // give the model one more iteration with the verdict reason injected
-      // as a feedback step. This converts the verifier from a pure terminal
-      // gate (fail on rejection) into a guided retry — the highest-leverage
-      // move for raising actual task success rates without changing the
-      // verifier's strict pass/fail semantics.
-      //
-      // Cap is intentionally tight (default 1). If the model ignores even
-      // verifier-specific feedback, the failure mode is compliance, not
-      // chance to retry — and the next §9.0 outer gate will fail the run
-      // definitively after this redirect's iter.
-      if (
-        state.status === "done" &&
-        state.output &&
-        verifierRetries < maxVerifierRetries &&
-        state.iteration < currentOptions.maxIterations - 1
-      ) {
-        const availableUserTools = (currentInput.availableToolSchemas ?? []).map(
-          (t) => t.name,
-        );
-        const verdict = verifier.verify({
-          action: "final-answer",
-          content: state.output,
-          actionSuccess: true,
-          task: currentInput.task,
-          priorSteps: state.steps,
-          requiredTools: currentInput.requiredTools,
-          relevantTools: currentInput.relevantTools,
-          toolsUsed: state.toolsUsed,
-          availableUserTools,
-          terminal: true,
-          terminatedBy: state.meta.terminatedBy,
-        });
-        if (!verdict.verified) {
-          // Emit only on rejection — §9.0 outer gate handles the success
-          // case, so without this branch every run would record 2 identical
-          // verdict events for the same output.
-          yield* emitVerifierVerdict({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            action: verdict.action,
-            terminal: true,
-            verified: verdict.verified,
-            summary: verdict.summary,
-            checks: verdict.checks,
-          });
-          // Consult the (possibly developer-overridden) retry policy. The
-          // policy can suppress retry for known-regressing task shapes,
-          // customize the harness signal, or surface a reason for audit.
-          const decision = verifierRetryPolicy({
-            verdict,
-            iteration: state.iteration,
-            retriesUsed: verifierRetries,
-            maxRetries: maxVerifierRetries,
-            stepCount: state.steps.length,
-            toolsUsed: state.toolsUsed,
-          });
-          if (decision.retry) {
-            verifierRetries++;
-            const failedCheck = verdict.checks.find((c) => !c.passed);
-            const fallbackText =
-              `[verifier] Your draft answer was rejected at "${failedCheck?.name ?? "verification"}": ${failedCheck?.reason ?? verdict.summary}\n` +
-              `Address this specific gap and try again. (retry ${verifierRetries}/${maxVerifierRetries})`;
-            const signalText = decision.signalText ?? fallbackText;
-            const signalStep = makeStep("observation", signalText);
-            yield* emitHarnessSignalInjected({
-              taskId: currentOptions.taskId ?? state.taskId,
-              iteration: state.iteration,
-              signalKind: "redirect",
-              content: signalText,
-              origin: `runner.ts:verifier-retry${decision.reason ? ` (${decision.reason})` : ""}`,
-            });
-            state = transitionState(state, {
-              status: "thinking",
-              output: null,
-              steps: [...state.steps, signalStep],
-            });
-          }
-        }
-      }
-
       // ── Post-iteration snapshot ──────────────────────────────────────────
       // Capture state AFTER kernel() ran and post-processing finalized.
       // Without this, traces only show iter-start (steps=0) and the verifier
@@ -1665,9 +1545,6 @@ export function runKernel(
     });
 
     if (state.status === "done" && state.output) {
-      if (process.env.DEBUG_VERIFIER === "1") {
-        console.error(`[VERIFIER] required=${JSON.stringify(effectiveInput.requiredTools)} relevant=${JSON.stringify(effectiveInput.relevantTools)} used=${JSON.stringify([...state.toolsUsed])} output.head=${state.output.slice(0, 80)}`);
-      }
       // availableUserTools — pass through the user-registered tool list
       // so the verifier can run classifier-independent "agent-took-action"
       // checks (rejects parrots / hallucinated answers / meta-tool dumps
@@ -1687,7 +1564,6 @@ export function runKernel(
         availableUserTools,
         terminal: true,
       });
-      // Emit structured verdict to trace stream (replaces DEBUG_VERIFIER console).
       yield* emitVerifierVerdict({
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
@@ -1697,10 +1573,6 @@ export function runKernel(
         summary: verdict.summary,
         checks: verdict.checks,
       });
-      if (process.env.DEBUG_VERIFIER === "1") {
-        console.error(`[VERIFIER] verdict=${verdict.verified} summary=${verdict.summary}`);
-        for (const c of verdict.checks) console.error(`  - ${c.name}: ${c.passed} ${c.reason ?? ''}`);
-      }
       if (!verdict.verified) {
         yield* emitLog({
           _tag: "warning",
