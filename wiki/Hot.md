@@ -12,6 +12,21 @@ updated: 2026-05-13
 
 ## Latest Session (2026-05-13, late afternoon)
 
+### Wave F — Compose API Documentation — COMPLETE ✅
+
+Committed. Docs site builds successfully with all internal links valid.
+
+**What shipped:**
+- `compose-api.mdx` — Full API reference covering `.compose()`, harness transforms (`.on()`, `.tap()`), phase hooks (`.before()`, `.after()`, `.onError()`), pattern matching (wildcard, predicate), transform semantics, 12-phase pipeline, context fields, killswitches
+- `harness-tags.mdx` — Complete 7-tag catalog (Wave A–D): `prompt.system`, `nudge.loop-detected`, `nudge.healing-failure`, `message.tool-result`, `observation.tool-result`, `lifecycle.failure`, `control.strategy-evaluated` with payloads, contexts, and usage examples
+- `composition-recipes.mdx` — 9 production-ready patterns: compliance/PII redaction, localization, multi-tenant context, A/B testing, bare-LLM ablation, custom termination, healing transparency, cost-aware routing, OpenTelemetry export
+- `stability.md` updated: `.compose()` and all harness methods marked `@stable`
+- `index.mdx` updated: new "Compose API" section with links to all three docs + killswitches introduction
+
+**Key milestone:** Phase B (Compose API) complete. Phase C (v0.11 launch readiness) unblocked.
+
+---
+
 ### Wave E — Builder Sugar Desugaring — COMPLETE ✅
 
 Committed. All tests pass (685/685 runtime, no regressions).
