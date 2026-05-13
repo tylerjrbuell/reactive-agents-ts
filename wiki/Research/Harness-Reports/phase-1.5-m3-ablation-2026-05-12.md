@@ -168,3 +168,84 @@ The verifier's non-zero signal on loop-intelligence (+2pp) and tool-mastery (+2p
 - **Session config:** `packages/benchmarks/src/sessions/m3-ablation.ts`
 - **Instrumentation commits:** `fa47b430` → `05fbba52` → `7435f559` → `04df2597` → `854a6642` → `989bee1a`
 - **Related:** [[Research/Harness-Reports/phase-1-mechanism-validation-2026-05-04|Phase 1 M3 section]]
+
+---
+
+## Clean Re-Run Results (Task b36gfxia2, 2026-05-12 evening)
+
+**Purpose:** Confirm or tighten the provisional REWORK verdict with a fixed judge (system prompt + JSON extraction). 5 tasks × 3 models × 2 variants = 30 dispatches.
+
+### Per-Model Per-Task Accuracy
+
+**qwen3:14b** (ra-full / noop):
+
+| Task | ra-full | noop |
+|---|---|---|
+| rw-1 | 65% | 65% |
+| rw-3 | 35% | 45% |
+| rw-5 | 0% (timeout) | 0% (timeout) |
+| rw-9 | 0% | 0% |
+| rw-10 | 20% | 0% |
+| **avg** | **24%** | **22%** |
+
+**cogito:14b**:
+
+| Task | ra-full | noop |
+|---|---|---|
+| rw-1 | 0% | 25% |
+| rw-3 | 65% | 65% |
+| rw-5 | 25% | 15% |
+| rw-9 | 0% | 0% |
+| rw-10 | 0% | 0% |
+| **avg** | **18%** | **21%** |
+
+**gpt-4o-mini**:
+
+| Task | ra-full | noop |
+|---|---|---|
+| rw-1 | 45% | 65% |
+| rw-3 | 0% | 0% |
+| rw-5 | 15% | 35% |
+| rw-9 | 100% | 33% |
+| rw-10 | 20% | 20% |
+| **avg** | **36%** | **31%** |
+
+### Token Totals (5-task subset)
+
+| Model | ra-full tokens | noop tokens | Δ |
+|---|---|---|---|
+| qwen3:14b | 45,831 | 25,630 | ra-full +79% |
+| cogito:14b | 75,187 | 100,845 | noop +34% |
+| gpt-4o-mini | 74,164 | 64,567 | ra-full +15% |
+
+### Dimension Scores (aggregate, all runs)
+
+| Dimension | ra-full | noop |
+|---|---|---|
+| accuracy | 26% | 25% |
+| reasoning | 29% | 36% |
+| honest-uncertainty | 13% | 13% |
+| reliability | 100% | 100% |
+| scope-discipline | 24% | 22% |
+| memory-fidelity | 6% | 7% |
+| resilience | 4% | 4% |
+| tool-mastery | 3% | 5% |
+
+### Verdict Analysis
+
+Applying the pre-stated decision rule:
+
+- **qwen3:14b** — ra-full +2pp accuracy, but ra-full uses +79% more tokens → fails "not token-dominated" criterion → does NOT satisfy KEEP
+- **cogito:14b** — noop +3pp accuracy → satisfies REWORK criterion for cogito
+- **gpt-4o-mini** — ra-full +5pp accuracy, ra-full uses +15% more tokens (below 30% threshold) → satisfies KEEP for gpt-4o-mini
+- **Overall:** 1/3 KEEP (gpt-4o-mini), 1/3 REWORK (cogito), 1/3 neither (qwen3) → no pre-stated rule fires at the ≥2/3 threshold
+
+### Conclusion: INCONCLUSIVE
+
+No rule fires at the ≥2/3 model threshold. The clean re-run does not trigger a reversion to KEEP nor a stronger REMOVE signal.
+
+**REWORK stands** — commit `051c22be` (terminal retry loop disabled, pass/fail gate retained) is not reverted. The REWORK was based on the provisional verdict; the clean re-run provides no evidence to reverse it.
+
+**Notable signal:** gpt-4o-mini shows ra-full +5pp with only +15% token overhead — the one model pairing that meets KEEP criteria. Worth monitoring as gpt-4o-mini usage grows post-v0.11.
+
+**Issue #6 closed** — ablation complete; REWORK implemented and standing.

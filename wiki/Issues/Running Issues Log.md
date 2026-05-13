@@ -62,25 +62,22 @@ tags: [issues, blockers, active-work]
 
 ### Issue #6: M3 Verifier Ablation
 
-**Status:** 🟡 REWORK IN PROGRESS (May 12, 2026)
+**Status:** ✅ CLOSED (2026-05-12)
 
-**Description:** Ablation benchmark ran to produce verdict for the M3 verifier mechanism. 10 tasks × 3 models × 2 variants. Verdict filed 2026-05-12. Terminal retry loop being removed (runner.ts). See `wiki/Research/Harness-Reports/phase-1.5-m3-ablation-2026-05-12.md`.
+**Description:** Ablation benchmark ran to produce verdict for the M3 verifier mechanism. 10 tasks × 3 models × 2 variants (initial run) + clean re-run (task b36gfxia2, 5 tasks × 3 models × 2 variants, fixed judge). Verdict filed 2026-05-12. REWORK implemented in commit `051c22be` (terminal retry loop disabled, pass/fail gate retained).
 
-**Background:** M3 verifier was marked IMPROVE in Phase 1 validation. Ablation quantifies accuracy delta between harness-with-verifier vs harness-without-verifier to determine whether the mechanism earns its token cost.
-
-**Task ID:** b9l6kxkeu (launched 3:23pm EDT, May 12)
-
-**Impact if removed:** Unknown pending results; failure to validate risks shipping underperforming verifier path by default.
-
-**Next step:** Remove terminal retry loop from runner.ts per REWORK verdict. Feed result into v0.11 go/no-go.
+**Closure summary:**
+- Clean re-run (b36gfxia2) verdict: **INCONCLUSIVE** — no pre-stated rule fires at ≥2/3 model threshold
+- REWORK implemented in `051c22be` and **stands** — no reversion triggered by INCONCLUSIVE result
+- gpt-4o-mini showed ra-full +5pp with only +15% token overhead — meets KEEP criteria for that model; worth monitoring post-v0.11
+- Issue #3 re-scoped (terminal retry surface removed by REWORK; FM-A1 mitigation via `oracle-nudge.ts` already shipped)
 
 **Owner:** Reasoning team
 
 **References:**
 - [[Experiments/M3 Healing Pipeline|M3 Verifier]]
-- [[Decisions/Phase 1.5 Retry Context Tuning|M3 Retry Tuning]]
-- North Star §7 (verifier phase gate)
-- `wiki/Research/Harness-Reports/phase-1.5-m3-ablation-2026-05-12.md`
+- [[Decisions/2026-05-12-m3-terminal-verifier-rework|M3 REWORK Decision]]
+- `wiki/Research/Harness-Reports/phase-1.5-m3-ablation-2026-05-12.md` (includes clean re-run section)
 
 ---
 
@@ -254,5 +251,5 @@ At that point, we expect to see:
 ---
 
 **Last Updated:** 2026-05-12  
-**Total Open:** 3 (#4, #6, #7 — 0 critical, 3 known; #3 re-scoped pending v0.11 cleanup)  
+**Total Open:** 2 (#4, #7 — 0 critical, 2 known; #3 re-scoped pending v0.11 cleanup, #6 closed)  
 **Resolved in Phase 1:** 7

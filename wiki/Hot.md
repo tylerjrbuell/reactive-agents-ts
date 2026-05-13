@@ -40,9 +40,9 @@ Commit `latest` — terminal retry surface removed by M3 REWORK; no tuning possi
 - Before v0.11: clean up orphaned exports + `KernelInput.verifierRetryPolicy` (semver consideration)
 - Stale verifier retry-budget comment in runner.ts removed
 
-### Quick ablation re-run in progress (task b36gfxia2)
+### Clean ablation re-run complete (task b36gfxia2) ✅
 
-5 tasks × 3 models × 2 variants = 30 dispatches. Fixed judge (system prompt + JSON extraction). At 19/30 at last check (~8:45pm). Results pending — will confirm or tighten provisional REWORK verdict.
+5 tasks × 3 models × 2 variants = 30 dispatches. Fixed judge (system prompt + JSON extraction). Verdict: **INCONCLUSIVE** — no pre-stated rule fires at ≥2/3 model threshold. REWORK stands (no reversion warranted). gpt-4o-mini reversal (+5pp ra-full, +15% tokens) is the one KEEP-qualifying signal — worth monitoring post-v0.11. **Issue #6 closed.**
 
 ---
 
@@ -148,6 +148,6 @@ M3/M6/M7/M8/M10 can run concurrently with Phase A — different files, no confli
 
 At session end: replace "Latest Session" with new date + key updates, update "What's Next," add decisions. Keep it under 120 lines.
 
-**Last Updated:** 2026-05-11
-**Current Phase:** B (Compose API) — Wave A next; M3 ablation gate first
-**Next Review:** After M3 ablation result + Compose API Wave A lands
+**Last Updated:** 2026-05-12
+**Current Phase:** B (Compose API) — Wave A next; M3 ablation gate cleared
+**Next Review:** After Compose API Wave A lands
