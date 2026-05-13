@@ -331,6 +331,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             // iteration and carries `event.step` — we read it via a mutable counter.
             let _currentKernelIteration = 0;
             const toolCallLog: { toolName: string; durationMs: number; success: boolean; iteration: number }[] = [];
+            const rationaleLog: {
+              iteration: number;
+              decision: string;
+              toolName?: string;
+              rationale: { why: string; refs?: readonly string[]; confidence?: number };
+            }[] = [];
             if (eb) {
               yield* eb.on("ReasoningStepCompleted", (event) =>
                 Effect.sync(() => { _currentKernelIteration = event.step ?? _currentKernelIteration; }),
@@ -338,6 +344,24 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               yield* eb.on("ToolCallCompleted", (event) =>
                 Effect.sync(() => { toolCallLog.push({ toolName: event.toolName, durationMs: event.durationMs, success: event.success, iteration: _currentKernelIteration }); }),
               );
+              // Collect rationale from ToolCallStarted events
+              yield* eb.on("ToolCallStarted", (event) => {
+                if (event.rationale) {
+                  return Effect.sync(() => {
+                    rationaleLog.push({
+                      iteration: _currentKernelIteration,
+                      decision: "tool-selection",
+                      toolName: event.toolName,
+                      rationale: {
+                        why: event.rationale!.why,
+                        refs: event.rationale!.refs,
+                        confidence: event.rationale!.confidence,
+                      },
+                    });
+                  });
+                }
+                return Effect.void;
+              });
             }
 
             // ── Collect EntropyScored events for telemetry + dashboard ──
@@ -1089,6 +1113,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   outputForSuccess,
                   hasSubstantiveOutput,
                   toolCallLog,
+                  rationaleLog,
                 });
 
                 const result: TaskResult & {

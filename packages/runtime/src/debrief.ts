@@ -48,6 +48,13 @@ export interface DebriefInput {
    * no summary.
    */
   readonly finalOutputText?: string;
+  /** Decision rationale events collected during execution (why agent made key choices) */
+  readonly rationale?: readonly {
+    readonly iteration: number;
+    readonly decision: string;
+    readonly toolName?: string;
+    readonly rationale: { readonly why: string; readonly refs?: readonly string[]; readonly confidence?: number };
+  }[];
 }
 
 /** Max characters of combined final output included in the debrief user prompt (token safety). */
@@ -167,6 +174,18 @@ export function synthesizeDebrief(
             ? "No final-answer tool metadata; user-facing output is in the Final output section below."
             : "No self-report or final output was recorded.";
 
+    const rationaleSection =
+      input.rationale && input.rationale.length > 0
+        ? `Decision rationale (why the agent made key choices):\n${input.rationale
+            .map(
+              (r) =>
+                `- Iteration ${r.iteration}: ${r.decision}${r.toolName ? ` (${r.toolName})` : ""}\n  Why: ${r.rationale.why}${
+                  r.rationale.confidence !== undefined ? ` (confidence: ${(r.rationale.confidence * 100).toFixed(0)}%)` : ""
+                }`
+            )
+            .join("\n")}`
+        : "";
+
     const userPrompt = [
       `Task: ${input.taskPrompt}`,
       `Agent self-report (from final-answer metadata when present): ${agentSelfReport}`,
@@ -174,9 +193,12 @@ export function synthesizeDebrief(
       `Terminated by: ${input.terminatedBy}`,
       `Tools used:\n${toolSummary}`,
       `Errors from loop: ${input.errorsFromLoop.join("; ") || "none"}`,
+      rationaleSection,
       `Total iterations: ${input.metrics.iterations}`,
       `Total tokens: ${input.metrics.tokens}`,
-    ].join("\n\n");
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
     const llmResponse = yield* llm
       .complete({
