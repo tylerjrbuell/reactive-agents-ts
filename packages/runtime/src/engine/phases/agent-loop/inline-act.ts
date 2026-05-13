@@ -114,11 +114,13 @@ export const runInlineAct = (
 
           // Phase 0.2: Publish ToolCallStarted
           if (eb) {
+            const rationale = (call as { rationale?: import("@reactive-agents/core").Rationale }).rationale;
             yield* eb.publish({
               _tag: "ToolCallStarted",
               taskId: c.taskId,
               toolName,
               callId,
+              ...(rationale ? { rationale } : {}),
             }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-tool-call-started", tag: errorTag(err) })));
           }
 

@@ -3,6 +3,7 @@ export type { Agent, AgentDefinition, Capability } from "./types/agent.js";
 export type { Task, TaskConfig, TaskMetadata } from "./types/task.js";
 export type { TaskResult, ResultMetadata, ReasoningStep } from "./types/result.js";
 export type { Message } from "./types/message.js";
+export type { Rationale } from "./types/rationale.js";
 export type {
   RuntimeConfig,
   TelemetryConfig,

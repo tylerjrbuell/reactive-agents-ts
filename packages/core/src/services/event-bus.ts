@@ -213,6 +213,12 @@ export type AgentEvent =
       readonly toolName: string;
       /** Unique tool call identifier for correlating start/completed pair */
       readonly callId: string;
+      /** Iteration index (-1 before first iteration). Defaults to -1 when omitted. */
+      readonly iteration?: number;
+      /** Wall-clock timestamp (ms). Defaults to Date.now() when omitted. */
+      readonly timestamp?: number;
+      /** Optional rationale (v0.11.x) — model's "why" for choosing this tool. */
+      readonly rationale?: import("../types/rationale.js").Rationale;
     }
   | {
       /**
@@ -960,6 +966,8 @@ export type AgentEvent =
       readonly terminatedBy: string | undefined;
       readonly pendingGuidance: Record<string, unknown> | undefined;
       readonly timestamp: number;
+      /** Set iff terminatedBy is set; structured rationale (v0.11.x). */
+      readonly terminationRationale?: import("../types/rationale.js").Rationale;
     }
   | {
       readonly _tag: "VerifierVerdictEmitted";

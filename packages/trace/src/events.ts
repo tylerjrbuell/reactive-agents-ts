@@ -1,5 +1,7 @@
 // packages/trace/src/events.ts
 
+import type { Rationale } from "./rationale.js"
+
 // NOTE: LifecyclePhase lives in @reactive-agents/runtime, not @reactive-agents/core.
 // To avoid a circular dependency (runtime → trace → runtime), we use string here.
 // The literal union is: "bootstrap" | "guardrail" | "cost-route" | "strategy-select"
@@ -26,6 +28,10 @@ export type TraceEvent =
   | GuardFiredEvent
   | LLMExchangeEvent
   | HarnessSignalInjectedEvent
+  // ─── Decision rationale events (v0.11.x — observable "why") ───
+  | AssumptionRecordedEvent
+  | AlternativesConsideredEvent
+  | CuratorDecisionEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -80,6 +86,8 @@ export interface DecisionEvaluatedEvent extends TraceEventBase {
   readonly decisionType: string        // ControllerDecision["type"]
   readonly confidence: number
   readonly reason: string
+  /** Optional structured rationale (v0.11.x); free-text `reason` remains source of truth. */
+  readonly rationale?: Rationale
 }
 
 export interface InterventionDispatchedEvent extends TraceEventBase {
@@ -111,6 +119,8 @@ export interface ToolCallEvent extends TraceEventBase {
   readonly durationMs?: number
   readonly ok?: boolean
   readonly error?: string
+  /** Optional rationale (v0.11.x). Only set on "tool-call-start". */
+  readonly rationale?: Rationale
 }
 
 export interface MessageAppendedEvent extends TraceEventBase {
@@ -124,6 +134,8 @@ export interface StrategySwitchedEvent extends TraceEventBase {
   readonly from: string
   readonly to: string
   readonly reason: string
+  /** Optional structured rationale (v0.11.x); free-text `reason` remains source of truth. */
+  readonly rationale?: Rationale
 }
 
 // ─── Diagnostic events (Sprint 3.6) ───────────────────────────────────────────
@@ -165,6 +177,8 @@ export interface KernelStateSnapshotEvent extends TraceEventBase {
   readonly llmCalls: number
   readonly terminatedBy: string | undefined
   readonly pendingGuidance: Record<string, unknown> | undefined
+  /** Set iff terminatedBy is set; structured rationale for the termination. */
+  readonly terminationRationale?: Rationale
 }
 
 /**
@@ -256,6 +270,42 @@ export interface HarnessSignalInjectedEvent extends TraceEventBase {
   readonly contentPreview: string           // first 240 chars
   readonly contentLen: number
   readonly metadata?: Record<string, unknown>
+}
+
+/**
+ * Assumption the model made during reasoning (e.g. "user means USD because no
+ * currency given"). Emitted by the think-phase assumption detector. Surfaced
+ * by `rax diagnose debrief` so reviewers see what the model filled in.
+ */
+export interface AssumptionRecordedEvent extends TraceEventBase {
+  readonly kind: "assumption-recorded"
+  readonly assumption: string
+  readonly rationale: Rationale
+}
+
+/**
+ * Alternatives considered at a decision point (chose A, rejected B and C).
+ * Captures the counterfactuals the model weighed.
+ */
+export interface AlternativesConsideredEvent extends TraceEventBase {
+  readonly kind: "alternatives-considered"
+  readonly chosen: string
+  readonly alternatives: readonly {
+    readonly option: string
+    readonly rejectedBecause: string
+  }[]
+}
+
+/**
+ * Context curator action — what was kept, dropped, compressed, or flagged as
+ * untrusted, and why. Pairs the curator's existing trustLevel/justification
+ * with a structured rationale.
+ */
+export interface CuratorDecisionEvent extends TraceEventBase {
+  readonly kind: "curator-decision"
+  readonly action: "kept" | "dropped" | "compressed" | "marked-untrusted"
+  readonly targetRef: string                  // observation / scratchpad key
+  readonly rationale: Rationale
 }
 
 /** Type-narrowing helper. */

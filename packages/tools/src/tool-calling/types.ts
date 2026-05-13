@@ -1,10 +1,17 @@
 import { Effect } from "effect";
+import type { Rationale } from "@reactive-agents/core";
 
 /** A structured tool call extracted from an LLM response */
 export interface ToolCallSpec {
   readonly id: string;
   readonly name: string;
   readonly arguments: Record<string, unknown>;
+  /**
+   * Optional rationale emitted by the model alongside the call (v0.11.x).
+   * When present, the act phase forwards it onto `ToolCallEvent` (tool-call-start)
+   * so post-hoc debriefs can show *why* the tool was chosen.
+   */
+  readonly rationale?: Rationale;
 }
 
 /** Result of resolving an LLM response into actionable intent */

@@ -69,6 +69,8 @@ export type AgentStreamEvent =
       readonly _tag: "ToolCallStarted";
       readonly toolName: string;
       readonly callId: string;
+      /** Optional rationale (v0.11.x). */
+      readonly rationale?: import("@reactive-agents/core").Rationale;
     }
   | {
       /** A tool call completed. Only emitted when density is "full". */

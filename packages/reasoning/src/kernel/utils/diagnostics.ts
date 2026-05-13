@@ -61,6 +61,7 @@ export function emitKernelStateSnapshot(args: {
       stepsByType[s.type] = (stepsByType[s.type] ?? 0) + 1;
     }
 
+    const terminationRationale = state.meta.terminationRationale;
     yield* busOpt.value
       .publish({
         _tag: "KernelStateSnapshotEmitted",
@@ -80,6 +81,7 @@ export function emitKernelStateSnapshot(args: {
         terminatedBy: state.meta.terminatedBy as string | undefined,
         pendingGuidance: state.pendingGuidance as Record<string, unknown> | undefined,
         timestamp: Date.now(),
+        ...(terminationRationale ? { terminationRationale } : {}),
       })
       .pipe(
         Effect.catchAll((err) =>

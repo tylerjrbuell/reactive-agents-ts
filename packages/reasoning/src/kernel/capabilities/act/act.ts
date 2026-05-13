@@ -289,6 +289,7 @@ export function handleActing(
         id: `text-parse-${state.iteration}-${i}`,
         name: e.name,
         arguments: e.arguments,
+        ...(e.rationale ? { rationale: e.rationale } : {}),
       }));
       // Fall back to pendingNativeToolCalls when text extraction yields nothing —
       // this handles cases where think.ts populated native calls (e.g. via resolver)

@@ -17,6 +17,7 @@
 // CI lint at `scripts/check-termination-paths.sh` fails if a new direct
 // `status: "done"` transition appears outside this helper or the Arbitrator.
 
+import type { Rationale } from "@reactive-agents/core";
 import type { KernelMeta, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
 
@@ -39,6 +40,13 @@ export type TerminateOptions = {
    * — that's set from `reason`.
    */
   readonly extraMeta?: Partial<KernelMeta>;
+  /**
+   * Optional structured rationale for the termination (v0.11.x).
+   * When provided, surfaces on `KernelStateSnapshotEvent.terminationRationale`.
+   * Use when `reason` is opaque (e.g. "quality_threshold") and the rationale
+   * carries the threshold/score context that makes the choice auditable.
+   */
+  readonly rationale?: Rationale;
 };
 
 /**
@@ -55,6 +63,7 @@ export const terminate = (state: KernelState, opts: TerminateOptions): KernelSta
     meta: {
       ...state.meta,
       terminatedBy: opts.reason,
+      ...(opts.rationale ? { terminationRationale: opts.rationale } : {}),
       ...(opts.extraMeta ?? {}),
     },
   });

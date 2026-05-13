@@ -105,6 +105,8 @@ export interface KernelMeta {
   readonly terminatedBy?: string;
   /** Prior terminatedBy value when the post-loop harness-deliverable promotion overrides it. */
   readonly previousTerminatedBy?: string;
+  /** Optional structured rationale for the termination (v0.11.x). Surfaced via KernelStateSnapshotEvent.terminationRationale. */
+  readonly terminationRationale?: import("@reactive-agents/core").Rationale;
   readonly redirectCount?: number;
   /** Temperature override dispatched by the intervention dispatcher — kernel-runner applies on next iteration. */
   readonly dispatchedTemperature?: number;

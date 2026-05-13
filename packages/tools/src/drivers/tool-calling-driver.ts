@@ -1,3 +1,4 @@
+import type { Rationale } from "@reactive-agents/core"
 import type { ToolCallSpec } from "../tool-calling/types.js"
 
 // ── ToolSchema (inline — tools does not depend on @reactive-agents/reasoning) ─
@@ -28,6 +29,12 @@ export interface ExtractedCall {
   readonly arguments: Record<string, unknown>
   readonly parseMode: ParseMode
   readonly confidence: number
+  /**
+   * Optional rationale emitted by the model in the same JSON object as the
+   * tool call (v0.11.x). Captured by tier-2/tier-3 parsers when present;
+   * tier-1 captures it from a `rationale: { ... }` JSON line.
+   */
+  readonly rationale?: Rationale
 }
 
 export interface HealingAction {

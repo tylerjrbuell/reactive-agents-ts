@@ -1,4 +1,33 @@
+import type { Rationale } from "@reactive-agents/core"
 import type { ExtractedCall, ToolCallingDriver, ToolSchema } from "./tool-calling-driver.js"
+
+/**
+ * Best-effort extraction of a Rationale from a model-emitted JSON object.
+ * Returns undefined when the shape is malformed — never throws.
+ */
+const extractRationale = (obj: Record<string, unknown>): Rationale | undefined => {
+  const r = obj["rationale"]
+  if (typeof r !== "object" || r === null) return undefined
+  const rec = r as Record<string, unknown>
+  if (typeof rec.why !== "string" || rec.why.length === 0 || rec.why.length > 280) return undefined
+  const out: Record<string, unknown> = { why: rec.why }
+  if (Array.isArray(rec.refs) && rec.refs.every((s) => typeof s === "string")) out.refs = rec.refs
+  if (Array.isArray(rec.alternatives)) {
+    const alts: { option: string; rejectedBecause: string }[] = []
+    for (const alt of rec.alternatives) {
+      if (typeof alt !== "object" || alt === null) continue
+      const a = alt as Record<string, unknown>
+      if (typeof a.option === "string" && typeof a.rejectedBecause === "string" && a.rejectedBecause.length <= 160) {
+        alts.push({ option: a.option, rejectedBecause: a.rejectedBecause })
+      }
+    }
+    if (alts.length > 0) out.alternatives = alts
+  }
+  if (typeof rec.confidence === "number" && rec.confidence >= 0 && rec.confidence <= 1) {
+    out.confidence = rec.confidence
+  }
+  return out as Rationale
+}
 
 export class TextParseDriver implements ToolCallingDriver {
   readonly mode = "text-parse" as const
@@ -79,8 +108,15 @@ export class TextParseDriver implements ToolCallingDriver {
         const obj = JSON.parse(match[0]) as Record<string, unknown>
         const name = (obj["tool"] ?? obj["name"]) as string | undefined
         if (typeof name !== "string") continue
-        const { tool: _t, name: _n, ...rest } = obj
-        calls.push({ name, arguments: rest, parseMode: "tier-2", confidence: 0.75 })
+        const rationale = extractRationale(obj)
+        const { tool: _t, name: _n, rationale: _r, ...rest } = obj
+        calls.push({
+          name,
+          arguments: rest,
+          parseMode: "tier-2",
+          confidence: 0.75,
+          ...(rationale ? { rationale } : {}),
+        })
       } catch {
         /* skip malformed */
       }
@@ -89,11 +125,12 @@ export class TextParseDriver implements ToolCallingDriver {
   }
 
   private parseTier3(text: string): ExtractedCall[] {
-    const arrayRe = /\[[\s\S]*?\]/g
-    let match: RegExpExecArray | null
-    while ((match = arrayRe.exec(text)) !== null) {
+    // Balanced bracket scan — handles nested arrays/objects inside the FC array
+    // (e.g. `rationale.alternatives: [...]`). Returns each top-level [...] candidate.
+    const candidates = findBalancedArrays(text)
+    for (const candidate of candidates) {
       try {
-        const arr = JSON.parse(match[0]) as unknown[]
+        const arr = JSON.parse(candidate) as unknown[]
         if (!Array.isArray(arr)) continue
         const calls: ExtractedCall[] = []
         for (const item of arr) {
@@ -105,7 +142,14 @@ export class TextParseDriver implements ToolCallingDriver {
             string,
             unknown
           >
-          calls.push({ name, arguments: args, parseMode: "tier-3", confidence: 0.55 })
+          const rationale = extractRationale(obj)
+          calls.push({
+            name,
+            arguments: args,
+            parseMode: "tier-3",
+            confidence: 0.55,
+            ...(rationale ? { rationale } : {}),
+          })
         }
         if (calls.length > 0) return calls
       } catch {
@@ -119,4 +163,45 @@ export class TextParseDriver implements ToolCallingDriver {
     const content = typeof result === "string" ? result : JSON.stringify(result, null, 2)
     return isError ? `[${toolName} error] ${content}` : `[${toolName} result]\n${content}`
   }
+}
+
+/**
+ * Scan `text` for top-level `[...]` substrings using balanced bracket counting.
+ * String literals are respected so brackets inside quoted text don't perturb depth.
+ */
+function findBalancedArrays(text: string): string[] {
+  const out: string[] = []
+  let i = 0
+  while (i < text.length) {
+    if (text[i] !== "[") {
+      i++
+      continue
+    }
+    const start = i
+    let depth = 0
+    let inStr = false
+    let strCh = ""
+    let esc = false
+    for (; i < text.length; i++) {
+      const ch = text[i]!
+      if (inStr) {
+        if (esc) { esc = false; continue }
+        if (ch === "\\") { esc = true; continue }
+        if (ch === strCh) { inStr = false }
+        continue
+      }
+      if (ch === '"' || ch === "'") { inStr = true; strCh = ch; continue }
+      if (ch === "[") depth++
+      else if (ch === "]") {
+        depth--
+        if (depth === 0) {
+          out.push(text.slice(start, i + 1))
+          i++
+          break
+        }
+      }
+    }
+    if (depth !== 0) break  // unterminated — give up
+  }
+  return out
 }

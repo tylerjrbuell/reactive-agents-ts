@@ -17,6 +17,7 @@ import type {
   GuardFiredEvent,
   LLMExchangeEvent,
   HarnessSignalInjectedEvent,
+  ToolCallEvent,
 } from "./events.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -162,6 +163,7 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
         llmCalls: raw.llmCalls,
         terminatedBy: raw.terminatedBy,
         pendingGuidance: raw.pendingGuidance,
+        ...(raw.terminationRationale ? { terminationRationale: raw.terminationRationale } : {}),
       }
       return ev
     }
@@ -214,6 +216,33 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
         temperature: raw.temperature,
         maxTokens: raw.maxTokens,
         response: raw.response,
+      }
+      return ev
+    }
+
+    case "ToolCallStarted": {
+      const ev: ToolCallEvent = {
+        kind: "tool-call-start",
+        runId: raw.taskId,
+        timestamp: raw.timestamp ?? Date.now(),
+        iter: raw.iteration ?? -1,
+        seq: nextSeq(),
+        toolName: raw.toolName,
+        ...(raw.rationale ? { rationale: raw.rationale } : {}),
+      }
+      return ev
+    }
+
+    case "ToolCallCompleted": {
+      const ev: ToolCallEvent = {
+        kind: "tool-call-end",
+        runId: raw.taskId,
+        timestamp: Date.now(),
+        iter: -1,
+        seq: nextSeq(),
+        toolName: raw.toolName,
+        durationMs: raw.durationMs,
+        ok: raw.success,
       }
       return ev
     }
