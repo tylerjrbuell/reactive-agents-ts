@@ -405,6 +405,20 @@ export class ReactiveAgentBuilder {
         return this
     }
 
+    /**
+     * Compose a harness configuration block into this agent.
+     *
+     * Alias for `.withHarness()`. Preferred for Wave D+ killswitch and composition patterns:
+     * ```ts
+     * agent.compose(budgetLimit({ maxTokens: 50_000 }))
+     * agent.compose(timeoutAfter({ wallClock: '60s' }))
+     * agent.compose(h => h.tap('observation.tool-result', logFn))
+     * ```
+     */
+    compose(fn: (harness: import('@reactive-agents/core').Harness) => void): this {
+        return this.withHarness(fn)
+    }
+
     // ─── Identity ───
 
     /**
@@ -477,7 +491,8 @@ export class ReactiveAgentBuilder {
      */
     withSystemPrompt(prompt: string): this {
         this._systemPrompt = prompt
-        return this
+        // Also register as harness transform for Wave B+ pipeline integration
+        return this.withHarness((h) => h.on('prompt.system', () => prompt))
     }
 
     // ─── Environment Context ──────────────────────────────────────────────────
@@ -770,7 +785,31 @@ export class ReactiveAgentBuilder {
      */
     withHook(hook: LifecycleHook): this {
         this._hooks.push(hook)
-        return this
+        // Also register as harness phase hook for compose-side observability
+        if (hook.timing === 'on-error') {
+            return this.withHarness((h) => {
+                h.onError(hook.phase as import('@reactive-agents/core').Phase, async (err, ctx) => {
+                    // Fire original handler as side-effect, ignore Effect return/errors
+                    try {
+                        await Promise.resolve(hook.handler({ phase: ctx.phase, iteration: ctx.iteration } as any)).catch(() => undefined)
+                    } catch {
+                        // Silently ignore handler errors
+                    }
+                })
+            })
+        }
+        // For 'before' and 'after' timings
+        const kind = hook.timing === 'before' ? 'before' : 'after'
+        return this.withHarness((h) => {
+            h[kind](hook.phase as import('@reactive-agents/core').Phase, async (ctx) => {
+                // Fire original handler as side-effect, ignore Effect return/errors
+                try {
+                    await Promise.resolve(hook.handler({ phase: ctx.phase, iteration: ctx.iteration } as any)).catch(() => undefined)
+                } catch {
+                    // Silently ignore handler errors
+                }
+            })
+        })
     }
 
     // ─── Optional Features ───
@@ -1502,7 +1541,16 @@ export class ReactiveAgentBuilder {
         ) => void
     ): this {
         this._errorHandler = handler
-        return this
+        // Also register as harness onError hook for Wave D+ error handling pipeline
+        return this.withHarness((h) => {
+            h.onError('*', (err, ctx) => {
+                handler(err as RuntimeErrors | Error, {
+                    taskId: '', // taskId not available in harness ctx
+                    phase: ctx.phase as string,
+                    iteration: ctx.iteration,
+                })
+            })
+        })
     }
 
     /**
