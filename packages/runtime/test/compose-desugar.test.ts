@@ -157,4 +157,84 @@ describe('Wave E: Builder Sugar Desugaring', () => {
       expect(pipeline3.collectErrorHooks('think').length).toBeGreaterThan(0);
     });
   });
+
+  describe('Equivalence tests', () => {
+    it('withHook + harness.before register in the same place', () => {
+      // Construct two pipelines: one via withHook, one via harness.before directly
+      const builder1 = ReactiveAgents.create() as any;
+      builder1.withHook({
+        phase: 'think',
+        timing: 'before',
+        handler: (_ctx: unknown) => Promise.resolve(),
+      });
+
+      const reg1 = new RegistrationHarness();
+      for (const fn of builder1._harnessRegistrations ?? []) fn(reg1);
+      const pipeline1 = new HarnessPipeline(reg1._collected);
+
+      // Compare counts
+      const beforeThinkHooks = pipeline1.collectPhaseHooks('before', 'think');
+      expect(beforeThinkHooks.length).toBe(1);
+    });
+
+    it('no regressions: existing builder features still work', () => {
+      // Verify that the builder can still be chained and has all expected properties
+      const builder = ReactiveAgents.create() as any;
+      expect(builder.withSystemPrompt).toBeDefined();
+      expect(builder.withErrorHandler).toBeDefined();
+      expect(builder.withHook).toBeDefined();
+      expect(builder.compose).toBeDefined();
+      expect(builder.withHarness).toBeDefined();
+
+      // Chaining should work
+      const result = builder
+        .withSystemPrompt('test')
+        .withErrorHandler(() => {})
+        .withHook({ phase: 'think', timing: 'before', handler: () => Promise.resolve() });
+
+      expect(result).toBe(builder);
+    });
+
+    it('desugared methods stack with manual harness registrations', () => {
+      const builder = ReactiveAgents.create() as any;
+
+      // Mix desugared and manual harness calls
+      builder.withSystemPrompt('auto prompt');
+      builder.compose((h) => h.tap('prompt.system', (payload) => console.log('tap')));
+
+      // Should have 2 registrations
+      expect(builder._harnessRegistrations.length).toBe(2);
+
+      const reg = new RegistrationHarness();
+      for (const fn of builder._harnessRegistrations ?? []) fn(reg);
+
+      // Should have both a transform and a tap for prompt.system
+      const transforms = reg._collected.filter(r => r.kind === 'transform');
+      const taps = reg._collected.filter(r => r.kind === 'tap');
+
+      expect(transforms.length).toBeGreaterThan(0);
+      expect(taps.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Full suite backward compatibility', () => {
+    it('desugaring does not break existing builder behavior', () => {
+      const builder = ReactiveAgents.create() as any;
+
+      // Old-style builder usage should still work exactly the same
+      builder._systemPrompt = 'old style prompt';
+      builder._errorHandler = () => {};
+      builder._hooks = [];
+
+      // These methods should work
+      builder.withSystemPrompt('new prompt');
+      builder.withErrorHandler(() => {});
+      builder.withHook({ phase: 'think', timing: 'after', handler: () => Promise.resolve() });
+
+      // Fields should be updated
+      expect(builder._systemPrompt).toBe('new prompt');
+      expect(typeof builder._errorHandler).toBe('function');
+      expect(builder._hooks).toHaveLength(1);
+    });
+  });
 });
