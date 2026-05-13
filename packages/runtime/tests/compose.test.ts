@@ -100,7 +100,7 @@ describe("pipe", () => {
     );
     const pipeline = pipe(a, b2);
     const result = await pipeline("start");
-    expect((result.metadata as any).compositionType).toBe("pipe");
+    expect(result.metadata.compositionType).toBe("pipe");
     expect((result.metadata as any).stages).toBe(2);
     await pipeline.dispose();
   });
@@ -218,7 +218,7 @@ describe("race", () => {
     );
     const racer = race(a, b2);
     const result = await racer("go");
-    expect((result.metadata as any).compositionType).toBe("race");
+    expect(result.metadata.compositionType).toBe("race");
     expect((result.metadata as any).candidates).toBe(2);
     await racer.dispose();
   });

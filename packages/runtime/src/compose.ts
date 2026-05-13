@@ -131,7 +131,7 @@ export function pipe(...fns: AgentFn[]): AgentFn {
         ...lastResult!.metadata,
         compositionType: "pipe",
         stages: fns.length,
-      } as AgentResult["metadata"] & Record<string, unknown>,
+      },
     };
   };
 
@@ -197,7 +197,7 @@ export function parallel(...fns: AgentFn[]): AgentFn {
           success: r.success,
           agentId: r.agentId,
         })),
-      } as AgentResult["metadata"] & Record<string, unknown>,
+      },
     };
   };
 
@@ -246,7 +246,7 @@ export function race(...fns: AgentFn[]): AgentFn {
         ...result.metadata,
         compositionType: "race",
         candidates: fns.length,
-      } as AgentResult["metadata"] & Record<string, unknown>,
+      },
     };
   };
 

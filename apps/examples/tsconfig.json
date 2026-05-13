@@ -2,8 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "types": ["bun-types"],
-    "paths": {}
+    "types": ["bun-types"]
   },
   "include": ["src/**/*"]
 }

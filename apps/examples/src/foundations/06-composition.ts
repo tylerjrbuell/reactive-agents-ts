@@ -11,7 +11,7 @@
  *   bun run apps/examples/src/foundations/06-composition.ts
  */
 
-import { agentFn, pipe, parallel, race } from "reactive-agents";
+import { agentFn, pipe, parallel, race } from "@reactive-agents/runtime";
 
 export interface ExampleResult {
   passed: boolean;
@@ -45,10 +45,7 @@ export async function run(): Promise<ExampleResult> {
   const pipeline = pipe(extractor, summarizer);
   const pipeResult = await pipeline("Raw research data...");
   console.log("Pipeline output:", pipeResult.output);
-  console.log(
-    "Composition:",
-    (pipeResult.metadata as Record<string, unknown>)?.compositionType,
-  );
+  console.log("Composition:", pipeResult.metadata.compositionType);
   console.log();
 
   // ─── parallel: concurrent fan-out ────────────────────────────────

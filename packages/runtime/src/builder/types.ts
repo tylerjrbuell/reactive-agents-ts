@@ -620,6 +620,21 @@ export interface AgentResultMetadata {
         readonly arguments?: unknown
         readonly id?: string
     }>
+    /**
+     * When this result was produced by the composition API (`pipe`, `parallel`, or `race`).
+     */
+    readonly compositionType?: 'pipe' | 'parallel' | 'race'
+    /** `pipe()` only — number of chained agent stages. */
+    readonly stages?: number
+    /** `parallel()` only — per-branch results. */
+    readonly results?: ReadonlyArray<{
+        readonly name: string
+        readonly output: string
+        readonly success: boolean
+        readonly agentId: string
+    }>
+    /** `race()` only — how many agents competed. */
+    readonly candidates?: number
 }
 
 /**

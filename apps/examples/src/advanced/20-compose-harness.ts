@@ -45,10 +45,9 @@ export async function run(): Promise<ExampleResult> {
   }
 
   // ─── Agent with harness ───────────────────────────────────────────────────
-  const agentBuilder = ReactiveAgents.create({
-    name: "harness-demo",
-    provider: "test",
-  })
+  const agentBuilder = ReactiveAgents.create()
+    .withName("harness-demo")
+    .withProvider("test")
     .withTestScenario([
       { match: "quarterly", text: "Task complete. Security scan passed." },
     ])
@@ -103,8 +102,8 @@ export async function run(): Promise<ExampleResult> {
   return {
     passed,
     output: result.output,
-    steps: result.steps?.length ?? 0,
-    tokens: result.tokens ?? 0,
+    steps: result.metadata.stepsCount ?? 0,
+    tokens: result.metadata.tokensUsed ?? 0,
     durationMs: Date.now() - start,
   };
 }

@@ -15,7 +15,7 @@ import {
   ReactiveAgents,
   agentConfigToJSON,
   agentConfigFromJSON,
-  type AgentConfig,
+  type RuntimeAgentConfig,
 } from "reactive-agents";
 
 export interface ExampleResult {
@@ -73,7 +73,7 @@ export async function run(): Promise<ExampleResult> {
   await agent.dispose();
 
   // 6. Create from a minimal config object directly
-  const minimalConfig: AgentConfig = {
+  const minimalConfig: RuntimeAgentConfig = {
     name: "minimal-agent",
     provider: "test",
   };
