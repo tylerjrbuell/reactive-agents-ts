@@ -213,6 +213,7 @@ export const runReasoningThink = (
       observationSummary: config.reasoningOptions?.observationSummary,
       calibration: resolvedCalibration,
       verifier: config.verifier,
+      harnessPipeline: config.harnessPipeline,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

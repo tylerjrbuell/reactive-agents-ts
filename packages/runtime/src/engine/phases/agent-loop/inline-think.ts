@@ -71,6 +71,31 @@ export const runInlineThink = (
       config.systemPrompt ??
       "You are a helpful AI assistant.";
 
+    // Apply prompt.system harness transform (Wave B chokepoint)
+    const _hPipeline = config.harnessPipeline;
+    const effectivePrompt = _hPipeline
+      ? (yield* Effect.promise(() =>
+          _hPipeline.transform('prompt.system', defaultPrompt, {
+            iteration: c.iteration,
+            phase: 'think',
+            state: {
+              taskId: c.taskId,
+              strategy: String((c as any).selectedStrategy ?? "reactive"),
+              kernelType: "inline",
+              steps: [],
+              toolsUsed: new Set<string>(),
+              iteration: c.iteration,
+              tokens: c.tokensUsed,
+              status: "running",
+              output: null,
+              error: null,
+              meta: {},
+            },
+            strategy: String((c as any).selectedStrategy ?? "reactive"),
+          })
+        )) ?? defaultPrompt
+      : defaultPrompt;
+
     // Match agent.chat() direct-LLM path: static taskContext must reach the model
     // even when ReasoningService is off (Cortex run-tab chat, streaming runStream, etc.).
     const taskCtxBlock = formatTaskContextForChat(
@@ -89,7 +114,7 @@ export const runInlineThink = (
     if (contextManagerOpt._tag === "Some") {
       messagesToSend = yield* contextManagerOpt.value
         .buildContext({
-          systemPrompt: defaultPrompt,
+          systemPrompt: effectivePrompt,
           messages: c.messages,
           memoryContext: directLlmMemoryContext,
           maxTokens: 100_000,
@@ -103,8 +128,8 @@ export const runInlineThink = (
     } else {
       // Fallback: simple system prompt prepend
       const systemPrompt = directLlmMemoryContext
-        ? `${directLlmMemoryContext}\n\n${defaultPrompt}`
-        : defaultPrompt;
+        ? `${directLlmMemoryContext}\n\n${effectivePrompt}`
+        : effectivePrompt;
       messagesToSend = [
         { role: "system", content: systemPrompt },
         ...c.messages,
