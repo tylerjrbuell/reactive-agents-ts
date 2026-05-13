@@ -4,13 +4,13 @@
   "type": "module",
   "description": "Reactive Agents strategy-demo — reactive vs plan-execute-reflect side-by-side",
   "scripts": {
-    "start": "npx tsx src/agent.ts"
+    "start": "bun run src/agent.ts"
   },
   "dependencies": {
     "reactive-agents": "latest"
   },
   "devDependencies": {
-    "tsx": "^4",
+    "@types/bun": "^1.3.0",
     "typescript": "^5"
   }
 }

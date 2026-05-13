@@ -1,4 +1,4 @@
 {
-  "startCommand": "npm install && npm start",
+  "startCommand": "bun install && bun start",
   "openFile": "src/agent.ts"
 }

@@ -4,13 +4,13 @@
   "type": "module",
   "description": "Reactive Agents tool-integration demo — scratchpad + code-execute built-in tools",
   "scripts": {
-    "start": "npx tsx src/agent.ts"
+    "start": "bun run src/agent.ts"
   },
   "dependencies": {
     "reactive-agents": "latest"
   },
   "devDependencies": {
-    "tsx": "^4",
+    "@types/bun": "^1.3.0",
     "typescript": "^5"
   }
 }
