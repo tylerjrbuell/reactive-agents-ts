@@ -67,3 +67,7 @@ wiki/.obsidian/cache
 wiki/.obsidian/plugins/*/data.json
 wiki/.trash/
 wiki/.obsidian/graph.json
+
+# Test artifacts (harness reports from gate runner)
+wiki/Research/Harness-Reports/gate-traces/
+wiki/Research/Harness-Reports/integration-control-flow-scenario-health.json
