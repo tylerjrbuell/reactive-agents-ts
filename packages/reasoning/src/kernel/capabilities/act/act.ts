@@ -1021,6 +1021,20 @@ export function handleActing(
 
       let newConversationHistory = conversationAssembly.messages;
       const pipeline = input.harnessPipeline;
+
+      // 'before act' hooks — may abort iteration
+      if (pipeline) {
+        const beforeActHooks = pipeline.collectPhaseHooks('before', 'act');
+        for (const hook of beforeActHooks) {
+          const result = yield* Effect.promise(() =>
+            hook({ phase: 'act', iteration: state.iteration, state })
+          );
+          if (result && typeof result === 'object' && 'abort' in result) {
+            return { ...state, status: result.abort === 'terminate' ? 'failed' : 'done' };
+          }
+        }
+      }
+
       if (pipeline) {
         const transformed: KernelMessage[] = [];
         for (const msg of newConversationHistory) {
@@ -1053,6 +1067,19 @@ export function handleActing(
       if (conversationAssembly.actReminder) actGuidance.actReminder = conversationAssembly.actReminder;
       if (conversationAssembly.errorRecovery) actGuidance.errorRecovery = conversationAssembly.errorRecovery;
       const hasActGuidance = actGuidance.actReminder !== undefined || actGuidance.errorRecovery !== undefined;
+
+      // 'after act' hooks
+      if (pipeline) {
+        const afterActHooks = pipeline.collectPhaseHooks('after', 'act');
+        for (const hook of afterActHooks) {
+          const result = yield* Effect.promise(() =>
+            hook({ phase: 'act', iteration: state.iteration, state })
+          );
+          if (result && typeof result === 'object' && 'abort' in result) {
+            return { ...state, status: result.abort === 'terminate' ? 'failed' : 'done' };
+          }
+        }
+      }
 
       // All native tool calls executed — transition back to thinking.
       // Any harness signals raised this round flow via pendingGuidance — think.ts

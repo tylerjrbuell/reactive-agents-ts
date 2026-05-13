@@ -15,6 +15,7 @@
 import { Effect, FiberRef } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
+import type { HarnessPipeline, Phase } from "@reactive-agents/core";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
 import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
@@ -167,7 +168,7 @@ function getDeliverableObservationContent(
 
   const raw = (step.content ?? "").trim();
   if (raw.length === 0) return null;
-  if (raw.startsWith("\u26A0\uFE0F") || raw.includes("[Already done")) return null;
+  if (raw.startsWith("⚠️") || raw.includes("[Already done")) return null;
 
   const observationResult = step.metadata?.observationResult as
     | { success?: boolean; toolName?: string }
@@ -430,6 +431,30 @@ function getToolFailureRecovery(
   };
 }
 
+// ── Phase hooks helper ─────────────────────────────────────────────────────────
+
+/**
+ * Runs before/after phase hooks; returns abort signal if any hook requests it.
+ * Hooks are collected from the harness pipeline and executed in registration order.
+ */
+async function runPhaseHooks(
+  pipeline: HarnessPipeline | undefined,
+  kind: 'before' | 'after',
+  phase: Phase,
+  iteration: number,
+  state: Readonly<KernelState>,
+): Promise<{ abort: 'stop' | 'terminate'; reason?: string } | undefined> {
+  if (!pipeline) return undefined;
+  const hooks = pipeline.collectPhaseHooks(kind, phase);
+  for (const hook of hooks) {
+    const result = await hook({ phase, iteration, state });
+    if (result && typeof result === 'object' && 'abort' in result) {
+      return result as { abort: 'stop' | 'terminate'; reason?: string };
+    }
+  }
+  return undefined;
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
@@ -613,6 +638,20 @@ export function runKernel(
         )
       );
 
+    // Fire 'bootstrap' phase hooks once before the loop starts.
+    {
+      const harnessPipeline = effectiveInput.harnessPipeline;
+      const bootstrapAbort = yield* Effect.promise(() =>
+        runPhaseHooks(harnessPipeline, 'before', 'bootstrap', 0, state)
+      );
+      if (bootstrapAbort) {
+        state = transitionState(state, {
+          status: bootstrapAbort.abort === 'terminate' ? 'failed' : 'done',
+          output: state.output ?? '',
+        });
+      }
+    }
+
     while (
       state.status !== "done" &&
       state.status !== "failed" &&
@@ -648,7 +687,26 @@ export function runKernel(
 
       const kernelPhaseStart = Date.now();
       yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
+
+      // 'before think' hooks — may abort iteration
+      const beforeThinkAbort = yield* Effect.promise(() =>
+        runPhaseHooks(effectiveInput.harnessPipeline, 'before', 'think', state.iteration, state)
+      );
+      if (beforeThinkAbort) {
+        state = transitionState(state, {
+          status: beforeThinkAbort.abort === 'terminate' ? 'failed' : 'done',
+          output: state.output ?? '',
+        });
+        break;
+      }
+
       state = yield* kernel(state, currentContext);
+
+      // 'after think' hooks
+      yield* Effect.promise(() =>
+        runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'think', state.iteration, state)
+      );
+
       yield* emitLog({
         _tag: "phase_complete",
         phase: "think",
@@ -1408,6 +1466,11 @@ export function runKernel(
         iteration: state.iteration,
       });
     }
+
+    // Fire 'complete' phase hooks once after loop exits normally.
+    yield* Effect.promise(() =>
+      runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'complete', state.iteration, state)
+    );
 
     // ── 8. Post-loop required tools check ───────────────────────────────────
     // Final safety net: if the loop exited without failure but required quotas
