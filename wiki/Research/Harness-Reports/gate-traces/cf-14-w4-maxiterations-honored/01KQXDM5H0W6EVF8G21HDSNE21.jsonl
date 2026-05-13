@@ -1,2 +1,0 @@
-{"kind":"run-started","runId":"01KQXDM5H0W6EVF8G21HDSNE21","timestamp":1778030089766,"iter":-1,"seq":689,"task":"","model":"test-model","provider":"test","config":{}}
-{"kind":"run-completed","runId":"01KQXDM5H0W6EVF8G21HDSNE21","timestamp":1778030089786,"iter":-1,"seq":690,"status":"success","totalTokens":2,"totalCostUsd":0,"durationMs":19}
