@@ -10,7 +10,23 @@ updated: 2026-05-13
 
 ---
 
-## Latest Session (2026-05-13, afternoon)
+## Latest Session (2026-05-13, late afternoon)
+
+### Wave E — Builder Sugar Desugaring — COMPLETE ✅
+
+Committed. All tests pass (685/685 runtime, no regressions).
+
+**What shipped:**
+- `.compose()` method: exact alias for `.withHarness()` (line 407–415 builder.ts)
+- `.withSystemPrompt()` desugared: now registers `h.on('prompt.system', () => prompt)` alongside `_systemPrompt` field
+- `.withErrorHandler()` desugared: now registers `h.onError('*', ...)` handler alongside `_errorHandler` field
+- `.withHook()` adapted: now registers as harness phase hook (`before`/`after`/`onError`) alongside Effect-based `_hooks` array
+- **Backward compatible**: all old fields (`_systemPrompt`, `_errorHandler`, `_hooks`) continue to work; desugaring is purely additive
+- Test coverage: 13 tests in `compose-desugar.test.ts` (equivalence + regression + backward compat)
+
+**Key insight:** Wave E desugars the old builder API *through* the Wave A–C harness infrastructure without breaking existing code. No new public types, no builder-field removal. Desugar scope limited to methods with live harness infrastructure (`prompt.system`, `onError` hooks, phase hooks); skipped methods without TagMap entries (`withCustomTermination`, `withProgressCheckpoint`, `withVerificationStep`).
+
+---
 
 ### RunHandle / RunController — COMPLETE ✅
 
@@ -190,5 +206,5 @@ M3/M6/M7/M8/M10 can run concurrently with Phase A — different files, no confli
 At session end: replace "Latest Session" with new date + key updates, update "What's Next," add decisions. Keep it under 120 lines.
 
 **Last Updated:** 2026-05-13
-**Current Phase:** B (Compose API) — Waves B + C complete; 3/5 chokepoints live
-**Next Review:** After skill persistence (M6) begins
+**Current Phase:** B (Compose API) — Waves B + C + E complete; 5/5 Wave A–E tasks done; builder desugaring complete
+**Next Review:** After v0.11 launch readiness validation
