@@ -1,0 +1,4 @@
+{
+  "startCommand": "npm install && npm start",
+  "openFile": "src/agent.ts"
+}

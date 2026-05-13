@@ -1,0 +1,112 @@
+---
+title: Interactive Playground
+description: Run Reactive Agents in your browser — no install needed. Powered by StackBlitz WebContainers.
+sidebar:
+  order: 2
+  badge:
+    text: New
+    variant: tip
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
+
+Run a real agent in your browser — no local install, no cloning, no CLI setup. Powered by [StackBlitz WebContainers](https://stackblitz.com), which runs Node.js entirely in-browser.
+
+## Quick setup
+
+Add your API key in the Stackblitz **Secrets** panel (⚙️ in the sidebar):
+
+| Provider | Free tier? | Secret name |
+|----------|-----------|-------------|
+| **Google Gemini** ← recommended | ✅ Yes — generous free tier | `GOOGLE_API_KEY` |
+| Anthropic Claude | ❌ Pay-as-you-go | `ANTHROPIC_API_KEY` |
+| OpenAI | ❌ Pay-as-you-go | `OPENAI_API_KEY` |
+| Local Ollama | ✅ Free | `PROVIDER=ollama` + `OLLAMA_ENDPOINT` |
+
+Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credit card required.
+
+<Aside type="tip">
+**Secrets stay local.** Stackblitz Secrets are stored in your browser session only. They are never sent to our servers.
+</Aside>
+
+---
+
+## Scenarios
+
+<Tabs>
+  <TabItem label="Hello Agent">
+
+    **The simplest possible agent.** One question, one answer. Start here to see the core API in action.
+
+    Set `QUESTION` in Secrets to ask anything you like.
+
+    <iframe
+      src="https://stackblitz.com/github/tylerjrbuell/reactive-agents-ts/tree/main/apps/stackblitz/01-hello-agent?embed=1&file=src%2Fagent.ts&terminal=start&theme=dark&view=editor"
+      style="width:100%;height:600px;border:0;border-radius:8px"
+      loading="lazy"
+      title="Hello Agent — Reactive Agents playground"
+    />
+
+  </TabItem>
+  <TabItem label="Tool Integration">
+
+    **Agent with built-in tools.** The agent uses `code-execute` and `scratchpad-write` — tools that run inside the WebContainer sandbox. No extra API keys needed.
+
+    Set `TASK` in Secrets to give the agent a custom challenge.
+
+    <iframe
+      src="https://stackblitz.com/github/tylerjrbuell/reactive-agents-ts/tree/main/apps/stackblitz/02-tool-integration?embed=1&file=src%2Fagent.ts&terminal=start&theme=dark&view=editor"
+      style="width:100%;height:600px;border:0;border-radius:8px"
+      loading="lazy"
+      title="Tool Integration — Reactive Agents playground"
+    />
+
+  </TabItem>
+  <TabItem label="Strategy Demo">
+
+    **Two strategies, same task.** See how `reactive` and `plan-execute-reflect` differ in steps, tokens, and style. Set `STRATEGY_B` to try `tree-of-thought`, `reflexion`, or `adaptive`.
+
+    <iframe
+      src="https://stackblitz.com/github/tylerjrbuell/reactive-agents-ts/tree/main/apps/stackblitz/03-strategy-demo?embed=1&file=src%2Fagent.ts&terminal=start&theme=dark&view=editor"
+      style="width:100%;height:600px;border:0;border-radius:8px"
+      loading="lazy"
+      title="Strategy Demo — Reactive Agents playground"
+    />
+
+  </TabItem>
+</Tabs>
+
+---
+
+## Using local Ollama
+
+<Aside type="caution">
+Local Ollama requires Chrome 94+ (loopback exception). Does not work in Firefox or Safari.
+</Aside>
+
+<Steps>
+1. Start Ollama with CORS enabled:
+
+   **Mac/Linux:**
+   ```bash
+   OLLAMA_ORIGINS=* ollama serve
+   ```
+   **Windows:**
+   ```cmd
+   set OLLAMA_ORIGINS=* && ollama serve
+   ```
+
+2. Pull a model if you haven't already:
+   ```bash
+   ollama pull llama3.2
+   ```
+
+3. In Stackblitz Secrets (⚙️), add:
+   ```
+   PROVIDER        = ollama
+   OLLAMA_ENDPOINT = http://localhost:11434
+   MODEL           = llama3.2
+   ```
+
+4. Click the terminal **restart** button (↺) to re-run with the new env vars.
+</Steps>

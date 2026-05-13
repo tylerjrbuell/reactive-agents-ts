@@ -59,6 +59,12 @@ export interface DebriefSynthesisDeps {
   readonly outputForSuccess: string;
   readonly hasSubstantiveOutput: boolean;
   readonly toolCallLog: readonly ToolCallEntry[];
+  readonly rationaleLog?: readonly {
+    readonly iteration: number;
+    readonly decision: string;
+    readonly toolName?: string;
+    readonly rationale: { readonly why: string; readonly refs?: readonly string[]; readonly confidence?: number };
+  }[];
 }
 
 export interface DebriefSynthesisResult {
@@ -72,7 +78,7 @@ export interface DebriefSynthesisResult {
 export const synthesizeAndStoreDebrief = (
   deps: DebriefSynthesisDeps,
 ): Effect.Effect<DebriefSynthesisResult, never> => {
-  const { ctx, task, config, eb, rr, terminatedByRaw, sanitizedOutput, outputForSuccess, hasSubstantiveOutput, toolCallLog } = deps;
+  const { ctx, task, config, eb, rr, terminatedByRaw, sanitizedOutput, outputForSuccess, hasSubstantiveOutput, toolCallLog, rationaleLog } = deps;
 
   return Effect.gen(function* () {
     // Publish FinalAnswerProduced event when final-answer tool is called
@@ -141,6 +147,7 @@ export const synthesizeAndStoreDebrief = (
         iterations: ctx.iteration,
         cost: ctx.cost,
       },
+      rationale: rationaleLog,
     };
 
     // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
