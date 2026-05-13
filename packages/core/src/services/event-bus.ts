@@ -970,6 +970,48 @@ export type AgentEvent =
       readonly terminationRationale?: import("../types/rationale.js").Rationale;
     }
   | {
+      /**
+       * Model self-reported an assumption (v0.11.x). Emitted by the think-phase
+       * assumption detector when phrases like "I assume X because Y" appear in
+       * the model's reasoning.
+       */
+      readonly _tag: "AssumptionRecordedEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly assumption: string;
+      readonly rationale: import("../types/rationale.js").Rationale;
+    }
+  | {
+      /**
+       * Curator decided to keep / drop / compress / mark-untrusted an observation
+       * or scratchpad entry (v0.11.x). Pairs the curator's trustLevel work with
+       * a structured rationale for post-hoc debriefs.
+       */
+      readonly _tag: "CuratorDecisionEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly action: "kept" | "dropped" | "compressed" | "marked-untrusted";
+      readonly targetRef: string;
+      readonly rationale: import("../types/rationale.js").Rationale;
+    }
+  | {
+      /**
+       * Decision point where multiple candidates were considered and one chosen
+       * (v0.11.x). Surfaces the counterfactuals the model weighed.
+       */
+      readonly _tag: "AlternativesConsideredEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly chosen: string;
+      readonly alternatives: readonly {
+        readonly option: string;
+        readonly rejectedBecause: string;
+      }[];
+    }
+  | {
       readonly _tag: "VerifierVerdictEmitted";
       readonly taskId: string;
       readonly iteration: number;

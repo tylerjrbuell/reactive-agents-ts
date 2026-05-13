@@ -18,6 +18,9 @@ import type {
   LLMExchangeEvent,
   HarnessSignalInjectedEvent,
   ToolCallEvent,
+  AssumptionRecordedEvent,
+  CuratorDecisionEvent,
+  AlternativesConsideredEvent,
 } from "./events.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -243,6 +246,46 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
         toolName: raw.toolName,
         durationMs: raw.durationMs,
         ok: raw.success,
+      }
+      return ev
+    }
+
+    case "AssumptionRecordedEmitted": {
+      const ev: AssumptionRecordedEvent = {
+        kind: "assumption-recorded",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        assumption: raw.assumption,
+        rationale: raw.rationale,
+      }
+      return ev
+    }
+
+    case "CuratorDecisionEmitted": {
+      const ev: CuratorDecisionEvent = {
+        kind: "curator-decision",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        action: raw.action,
+        targetRef: raw.targetRef,
+        rationale: raw.rationale,
+      }
+      return ev
+    }
+
+    case "AlternativesConsideredEmitted": {
+      const ev: AlternativesConsideredEvent = {
+        kind: "alternatives-considered",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq: nextSeq(),
+        chosen: raw.chosen,
+        alternatives: raw.alternatives,
       }
       return ev
     }

@@ -18,6 +18,7 @@
 
 import { Effect } from "effect";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type { Rationale } from "@reactive-agents/core";
 import type { KernelState } from "../state/kernel-state.js";
 
 // ── Truncation budgets ───────────────────────────────────────────────────────
@@ -87,6 +88,97 @@ export function emitKernelStateSnapshot(args: {
         Effect.catchAll((err) =>
           emitErrorSwallowed({
             site: "reasoning/src/kernel/utils/diagnostics.ts:emitKernelStateSnapshot",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
+// ── Rationale-bearing events (v0.11.x) ──────────────────────────────────────
+
+export function emitAssumptionRecorded(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly assumption: string;
+  readonly rationale: Rationale;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "AssumptionRecordedEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        assumption: args.assumption,
+        rationale: args.rationale,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitAssumptionRecorded",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
+export function emitCuratorDecision(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly action: "kept" | "dropped" | "compressed" | "marked-untrusted";
+  readonly targetRef: string;
+  readonly rationale: Rationale;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "CuratorDecisionEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        action: args.action,
+        targetRef: args.targetRef,
+        rationale: args.rationale,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitCuratorDecision",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
+export function emitAlternativesConsidered(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly chosen: string;
+  readonly alternatives: readonly { readonly option: string; readonly rejectedBecause: string }[];
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "AlternativesConsideredEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        chosen: args.chosen,
+        alternatives: args.alternatives,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitAlternativesConsidered",
             tag: errorTag(err),
           }),
         ),
