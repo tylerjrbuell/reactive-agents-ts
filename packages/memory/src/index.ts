@@ -155,3 +155,8 @@ export {
 } from "./services/session-store.js";
 
 export { SkillStoreService, SkillStoreServiceLive } from "./services/skill-store.js";
+export {
+  exportSkillToMarkdown,
+  importSkillFromMarkdown,
+  type SkillImportOverrides,
+} from "./services/index.js";

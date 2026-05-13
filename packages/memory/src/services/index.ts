@@ -37,3 +37,8 @@ export type {
 
 export { SkillStoreService, SkillStoreServiceLive } from "./skill-store.js";
 export { SkillEvolutionService, makeSkillEvolutionService } from "./skill-evolution.js";
+export {
+  exportSkillToMarkdown,
+  importSkillFromMarkdown,
+  type ImportOverrides as SkillImportOverrides,
+} from "./skill-portability.js";
