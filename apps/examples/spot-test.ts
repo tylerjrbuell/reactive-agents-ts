@@ -1,11 +1,21 @@
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
+    .withName('github-research-agent')
+    .withAgentId('github-research-agent')
+    .withPersona({
+        role: 'GitHub Research Agent',
+        background:
+            'You are a GitHub research agent that can fetch information from GitHub',
+        instructions:
+            'Use the github-mcp-server to fetch information from GitHub and perform research on GitHub repositories',
+        tone: 'friendly, technical, developer-to-developer',
+    })
     .withProvider('ollama')
-    .withModel('cogito:14b')
+    .withModel('llama3.1')
     .withReasoning({
         defaultStrategy: 'adaptive',
-        enableStrategySwitching: true,
+        enableStrategySwitching: false,
     })
     .withTools()
     .withMCP({
@@ -30,7 +40,7 @@ const agent = await ReactiveAgents.create()
     .build()
 
 const result = await agent.run(
-    'Fetch the last 10 commits of tylerjrbuell/reactive-agents-ts and summarize them, then synthesize the summary into a single paragraph'
+    'Fetch the last 10 commits of tylerjrbuell/reactive-agents-ts and summarize them, then synthesize the summary into a markdown report, then write the summary to a local file called ra-summary.md using the file-write tool only'
 )
 
 console.log(result)
