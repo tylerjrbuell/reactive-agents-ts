@@ -345,10 +345,21 @@ export function handleThinking(
       input.task.length >= 80 ||
       (input.requiredTools?.length ?? 0) > 0 ||
       (input.metaTools?.staticBriefInfo?.indexedDocuments.length ?? 0) > 0;
-    const effectiveSystemPrompt =
+    const rawSystemPrompt =
       harnessContent && isNonTrivial && (input.metaTools?.brief || input.metaTools?.pulse)
         ? `${harnessContent}\n\n${input.systemPrompt ?? ""}`
         : input.systemPrompt;
+    const pipeline = input.harnessPipeline;
+    const effectiveSystemPrompt = pipeline
+      ? (yield* Effect.promise(() =>
+          pipeline.transform('prompt.system', rawSystemPrompt ?? "", {
+            iteration: state.iteration,
+            phase: 'think',
+            state,
+            strategy,
+          })
+        )) ?? rawSystemPrompt
+      : rawSystemPrompt;
 
     // ── Context assembly: ContextManager.build() is the sole path ────────────
     // All sections (identity + adapter patch, static context, tool guidance,
