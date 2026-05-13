@@ -1,0 +1,207 @@
+---
+title: Compose API
+description: Reference for .compose(), harness transforms, phase hooks, and pattern matching
+sidebar:
+  order: 10
+---
+
+import { Tabs, TabItem, Code } from '@astrojs/starlight/components';
+
+The Compose API lets you intercept and reshape any signal the agent kernel emits — from system prompts to tool results to nudges — using a declarative composition model.
+
+## Quick start
+
+```ts
+import { ReactiveAgents } from 'reactive-agents';
+import { maxIterations, budgetLimit } from 'reactive-agents/compose/killswitches';
+
+const agent = await ReactiveAgents.create()
+  .withProvider('anthropic')
+  .compose(budgetLimit({ maxTokens: 50_000 }))
+  .compose(maxIterations(20))
+  .compose((harness) => {
+    harness.tap('observation.tool-result', (result, ctx) => {
+      console.log(`[iter ${ctx.iteration}] tool result:`, result.content);
+    });
+  })
+  .build();
+```
+
+## `.compose(fn)`
+
+**Signature:** `compose(fn: (harness: Harness) => void): this`
+
+Registers a composition block. Multiple `.compose()` calls accumulate in registration order.
+
+`fn` receives a `Harness` instance with methods to register transforms, taps, and phase hooks. All registrations are compiled once at `.build()` time.
+
+`.compose()` is the canonical entry point. `.withHarness()` is an identical alias.
+
+## `harness.on(pattern, fn)` — Transform
+
+Intercept and replace an emission's payload.
+
+**Signature:**
+```ts
+harness.on(
+  pattern: TagPattern | TagPattern[],
+  fn: (payload: PayloadFor<P>, ctx: ContextFor<P>) =>
+    | PayloadFor<P>          // replace payload
+    | undefined              // keep current payload
+    | null                   // suppress emission
+    | Promise<...>
+): Harness
+```
+
+**Pattern types:**
+
+| Pattern | Matches |
+|---|---|
+| `'prompt.system'` | Exact tag |
+| `'prompt.*'` | All single-segment `prompt.X` tags |
+| `'nudge.**'` | All `nudge.X` and `nudge.X.Y` tags (multi-segment) |
+| `'**'` | Every tag |
+| `(tag) => boolean` | Custom predicate |
+
+**Transform semantics:**
+
+- Return a value → **replaces** current payload
+- Return `undefined` → **keeps** current payload (pass-through)
+- Return `null` → **suppresses** the emission (removed from pipeline)
+- Multiple transforms on same tag chain in order: broadest pattern first, most-specific last
+
+**Example — suppress all nudges in a bare-LLM ablation:**
+```ts
+harness.on('nudge.*', () => null)
+```
+
+**Example — localize system prompt:**
+```ts
+harness.on('prompt.system', (text, ctx) => `[locale: fr]\n${text}`)
+```
+
+## `harness.tap(pattern, fn)` — Side Effect
+
+Observe an emission without changing it. Runs after all transforms.
+
+**Signature:**
+```ts
+harness.tap(
+  pattern: TagPattern | TagPattern[],
+  fn: (payload: PayloadFor<P>, ctx: ContextFor<P>) => void | Promise<void>
+): Harness
+```
+
+Taps run in registration order, after transforms are finalized. A tap that throws is a bug — they run unconditionally with the final value.
+
+**Example — telemetry:**
+```ts
+harness.tap('**', (payload, ctx) => {
+  otel.record(ctx.phase, ctx.iteration, payload);
+});
+```
+
+## `harness.before(phase, fn)` — Phase Pre-Hook
+
+Run before a kernel phase. Can abort or skip the iteration.
+
+**Signature:**
+```ts
+harness.before(
+  phase: Phase,
+  fn: (ctx: { phase: Phase; iteration: number; state: KernelStateLike }) =>
+    | void
+    | Promise<void>
+    | { readonly abort: 'stop' | 'terminate'; readonly reason?: string }
+    | { readonly skip: true }
+): Harness
+```
+
+**Return values:**
+
+| Return | Effect |
+|---|---|
+| `void` / `undefined` | Continue normally |
+| `{ abort: 'stop' }` | End loop gracefully (status: done) |
+| `{ abort: 'terminate' }` | End loop as failure (status: failed) |
+| `{ skip: true }` | Skip this iteration, continue loop |
+
+**Example — custom iteration limit:**
+```ts
+harness.before('think', (ctx) => {
+  if (ctx.iteration >= 15) return { abort: 'stop', reason: 'custom-limit' };
+});
+```
+
+## `harness.after(phase, fn)` — Phase Post-Hook
+
+Run after a kernel phase completes. Same signature as `.before()` but fires after.
+
+## `harness.onError(phase, fn)` — Error Hook
+
+Run when a phase throws. Can optionally recover by returning a replacement state.
+
+**Signature:**
+```ts
+harness.onError(
+  phase: Phase | '*',
+  fn: (error: unknown, ctx: { phase: Phase | '*'; iteration: number }) =>
+    | void
+    | Promise<void>
+    | { readonly recover: KernelStateLike }
+): Harness
+```
+
+Use `'*'` to catch errors from any phase. Return `{ recover: newState }` to inject a replacement state and continue the loop.
+
+## `harness.emit(tag, payload)` — Inject at Build Time
+
+Inject a payload directly at build time. Use for initial seeding.
+
+## `harness.use(fn)` — Sub-composition
+
+Nest a composition block. Useful for reusable plugin patterns.
+
+```ts
+harness.use((h) => {
+  h.tap('observation.tool-result', logFn);
+  h.before('act', approvalFn);
+});
+```
+
+## Available Phases
+
+```
+bootstrap → guardrail → cost-route → strategy-select → think → act
+→ observe → verify → memory-flush → cost-track → audit → complete
+```
+
+Phase hooks fire in this order per iteration. `bootstrap` and `complete` fire once per run.
+
+## Context Fields
+
+All hook/transform callbacks receive a `ctx` with at minimum:
+
+```ts
+{
+  iteration: number;   // 0-indexed
+  phase: Phase;        // current phase name
+  state: KernelStateLike;  // current kernel state snapshot
+  strategy: string;    // active reasoning strategy ('reactive', 'tot', etc.)
+}
+```
+
+Some tags carry richer contexts — see [Harness Tag Reference](/reference/harness-tags).
+
+## Killswitches
+
+Prebuilt compositions from `reactive-agents/compose/killswitches`:
+
+```ts
+import {
+  budgetLimit, timeoutAfter, maxIterations,
+  requireApprovalFor, watchdog, confidenceFloor
+} from 'reactive-agents/compose/killswitches';
+```
+
+See [Composition Recipes](/cookbook/composition-recipes) for usage examples.

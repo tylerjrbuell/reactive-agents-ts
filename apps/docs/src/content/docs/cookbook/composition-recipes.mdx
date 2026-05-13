@@ -1,0 +1,187 @@
+---
+title: Composition Recipes
+description: Nine production-ready patterns for the Compose API, from compliance to telemetry
+sidebar:
+  order: 1
+---
+
+Each recipe is a complete, runnable `.compose()` block. Copy-paste and adapt.
+
+## 1. Compliance / PII Redaction
+
+Scrub sensitive data from tool results before the LLM sees them. Log everything to an audit trail.
+
+```ts
+import { ReactiveAgents } from 'reactive-agents';
+import { redact } from './your-pii-redactor';
+import { auditLog } from './your-audit-logger';
+
+const agent = await ReactiveAgents.create()
+  .withProvider('anthropic')
+  .compose((harness) => {
+    harness.on('observation.tool-result', (obs) => ({
+      ...obs,
+      content: obs.content ? redact(obs.content) : obs.content,
+    }));
+    harness.tap('**', (payload, ctx) => {
+      auditLog({ tag: ctx.phase, iteration: ctx.iteration, payload });
+    });
+  })
+  .build();
+```
+
+---
+
+## 2. Localization
+
+Translate nudges and system prompts for non-English deployments.
+
+```ts
+.compose((harness) => {
+  harness.on('nudge.*', async (msg) => await translate(msg, 'fr'));
+  harness.on('prompt.system', async (text) => await localize(text, { locale: 'fr-FR' }));
+})
+```
+
+---
+
+## 3. Multi-Tenant Context Injection
+
+Inject tenant-specific headers into every system prompt.
+
+```ts
+.compose((harness) => {
+  harness.on('prompt.system', (text, ctx) =>
+    `[tenant: ${ctx.strategy}]\n[env: ${process.env.ENV}]\n\n${text}`
+  );
+})
+```
+
+---
+
+## 4. A/B Variant Testing
+
+Route 50% of runs to a prompt variant for controlled research.
+
+```ts
+let variant = 'control';
+
+.compose((harness) => {
+  harness.on('prompt.system', (text) =>
+    Math.random() < 0.5 ? variantAPrompt(text) : text
+  );
+})
+```
+
+---
+
+## 5. Bare-LLM Ablation
+
+Disable every harness signal. Returns to pure ReAct baseline — useful for benchmarking harness overhead.
+
+```ts
+// This single line is the framework's own ablation mode
+.compose((harness) => harness.on('nudge.*', () => null))
+```
+
+All nudges return `null` (suppressed). System prompts, tool results, and lifecycle events are unaffected.
+
+---
+
+## 6. Custom Termination Logic
+
+Replace the default termination predicate with domain-specific criteria.
+
+```ts
+.compose((harness) => {
+  harness.before('complete', (ctx) => {
+    const output = (ctx.state as { output?: string }).output ?? '';
+    if (!output.includes('REPORT_GENERATED')) {
+      // Not done yet — prevent completion, loop continues
+      return { abort: 'stop', reason: 'missing-report-sentinel' };
+    }
+  });
+})
+```
+
+---
+
+## 7. Healing Transparency
+
+Surface auto-healing events to users and annotate healed results.
+
+```ts
+.compose((harness) => {
+  harness.tap('nudge.healing-failure', (msg, ctx) => {
+    console.warn(`[iter ${ctx.iteration}] Healing failed: ${ctx.trigger}`);
+  });
+
+  harness.on('observation.tool-result', (obs, ctx) => {
+    if (ctx.healed) {
+      return { ...obs, metadata: { ...obs.metadata, healed: true } };
+    }
+    return obs;
+  });
+})
+```
+
+---
+
+## 8. Cost-Aware Routing
+
+Track cumulative token spend and trigger budget alerts.
+
+```ts
+import { budgetLimit } from 'reactive-agents/compose/killswitches';
+
+const agent = await ReactiveAgents.create()
+  .withProvider('anthropic')
+  .compose(budgetLimit({ maxTokens: 50_000, maxCostUSD: 0.50 }))
+  .compose((harness) => {
+    harness.tap('control.strategy-evaluated', (eval) => {
+      costTracker.record(eval.currentStrategy, eval.score);
+    });
+  })
+  .build();
+```
+
+---
+
+## 9. Full Telemetry Export (OpenTelemetry)
+
+Single line: every internal agent signal forwarded to OTel.
+
+```ts
+import { trace } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('reactive-agents');
+
+.compose((harness) => {
+  harness.tap('**', (payload, ctx) => {
+    const span = tracer.startSpan(`agent.${ctx.phase}`);
+    span.setAttributes({
+      'iteration': ctx.iteration,
+      'strategy': ctx.strategy,
+    });
+    span.end();
+  });
+})
+```
+
+Pattern #9 is the foundation for the `@reactive-agents/otel` package planned for v0.12.
+
+---
+
+## Stacking Killswitches
+
+Killswitches compose cleanly. First trigger wins, each records its source:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider('anthropic')
+  .compose(budgetLimit({ maxCostUSD: 1.0 }))
+  .compose(timeoutAfter({ wallClock: '5m' }))
+  .compose(requireApprovalFor({ tools: ['send_email'], approver: uiApprove }))
+  .compose(watchdog({ noProgressFor: '60s' }))
+  .build();
+```

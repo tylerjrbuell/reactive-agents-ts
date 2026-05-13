@@ -1,0 +1,184 @@
+---
+title: Harness Tag Reference
+description: Complete catalog of harness emission tags, payloads, and contexts (Wave A–D)
+sidebar:
+  order: 11
+---
+
+Harness tags are the interception points that `.compose()` blocks can observe and reshape. Each tag has a typed payload and a typed context.
+
+> **Note:** This catalog covers the Wave A–D tag set (7 tags). The full v0.12 catalog will expand to 24+ tags via build-time codegen.
+
+## Tag Catalog
+
+### `prompt.system`
+
+Emitted when the kernel assembles the system prompt for an LLM call.
+
+**Payload:** `string` — the full system prompt text  
+**Context:** `BaseCtx`  
+**Phase:** `think`
+
+```ts
+harness.on('prompt.system', (text, ctx) => {
+  return `[tenant: ${ctx.strategy}]\n${text}`;
+});
+```
+
+---
+
+### `nudge.loop-detected`
+
+Emitted when the loop detector identifies a repetitive pattern.
+
+**Payload:** `string` — the nudge message injected into context  
+**Context:** `NudgeCtx` — includes `trigger: string`, `severity: 'info' | 'warn' | 'critical'`  
+**Phase:** `think`
+
+```ts
+harness.on('nudge.loop-detected', (msg, ctx) => {
+  console.warn(`Loop at iter ${ctx.iteration} [${ctx.severity}]: ${ctx.trigger}`);
+  return msg;  // pass through unchanged
+});
+```
+
+---
+
+### `nudge.healing-failure`
+
+Emitted when tool call healing fails after all recovery stages.
+
+**Payload:** `string` — the healing failure nudge message  
+**Context:** `NudgeCtx` — includes `trigger: string`, `severity`  
+**Phase:** `act`
+
+---
+
+### `message.tool-result`
+
+Emitted when a tool result is added to the conversation thread (what the LLM sees).
+
+**Payload:** `KernelMessageLike` — the message object:
+```ts
+type KernelMessageLike =
+  | { role: 'assistant'; content: string; toolCalls?: unknown[] }
+  | { role: 'tool_result'; toolCallId: string; toolName: string; content: string; isError?: boolean }
+  | { role: 'user'; content: string }
+```
+**Context:** `ToolResultCtx` — includes `toolName`, `callId`, `healed: boolean`, `durationMs`  
+**Phase:** `act`
+
+```ts
+// Redact PII from tool results before LLM sees them
+harness.on('message.tool-result', (msg) => {
+  if (msg.role === 'tool_result') {
+    return { ...msg, content: redact(msg.content) };
+  }
+  return msg;
+});
+```
+
+---
+
+### `observation.tool-result`
+
+Emitted when a tool result is recorded as an observation step (what systems observe).
+
+**Payload:** `ObservationStepLike`:
+```ts
+type ObservationStepLike = {
+  type: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+}
+```
+**Context:** `ToolResultCtx`  
+**Phase:** `act`
+
+```ts
+harness.tap('observation.tool-result', (obs, ctx) => {
+  metrics.record('tool.duration', ctx.durationMs, { tool: ctx.toolName });
+});
+```
+
+---
+
+### `lifecycle.failure`
+
+Emitted when the agent enters a failure state.
+
+**Payload:** `LifecycleFailurePayload`:
+```ts
+type LifecycleFailurePayload = {
+  reason: 'tool-error' | 'llm-refusal' | 'verifier-rejection';
+  errorMessage: string;
+  attemptNumber: number;
+  failureStreak: number;
+  currentStrategy: string;
+}
+```
+**Context:** `BaseCtx`
+
+```ts
+harness.tap('lifecycle.failure', (failure) => {
+  alerting.trigger({ reason: failure.reason, streak: failure.failureStreak });
+});
+```
+
+---
+
+### `control.strategy-evaluated`
+
+Emitted when the strategy evaluator scores the current strategy.
+
+**Payload:** `ControlStrategyEvaluatedPayload`:
+```ts
+type ControlStrategyEvaluatedPayload = {
+  currentStrategy: string;
+  score: number;
+  failureStreak: number;
+  recommendedAction: 'continue' | 'switch' | 'escalate';
+  availableStrategies: string[];
+}
+```
+**Context:** `BaseCtx`
+
+```ts
+harness.tap('control.strategy-evaluated', (eval) => {
+  if (eval.recommendedAction === 'escalate') {
+    notify.ops(`Strategy escalation: ${eval.currentStrategy} (score: ${eval.score})`);
+  }
+});
+```
+
+---
+
+## Context Types
+
+### `BaseCtx`
+```ts
+{
+  iteration: number;
+  phase: Phase;
+  state: Readonly<KernelStateLike>;
+  strategy: string;
+}
+```
+
+### `NudgeCtx` (extends BaseCtx)
+```ts
+{
+  trigger: string;   // what triggered the nudge
+  severity: 'info' | 'warn' | 'critical';
+}
+```
+
+### `ToolResultCtx` (extends BaseCtx)
+```ts
+{
+  toolName: string;
+  callId: string;
+  healed: boolean;    // true if tool call was auto-healed
+  durationMs: number; // wall-clock tool execution time
+}
+```
