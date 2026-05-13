@@ -12,6 +12,47 @@ updated: 2026-05-13
 
 ## Latest Session (2026-05-13, late afternoon)
 
+### Wave D — Killswitches Implementation — COMPLETE ✅
+
+Committed. All tests pass (5128/5128 total, 1150+/1150+ reasoning, 24/24 compose).
+
+**What shipped:**
+- **Task 0 (BLOCKER)**: Wired `HarnessPipeline.collectPhaseHooks()` into kernel execution:
+  - `runner.ts:616`: Added bootstrap hooks (fire once before loop)
+  - `runner.ts:649–657`: Added before/after 'think' hooks (per-iteration)
+  - `runner.ts:1410`: Added 'complete' hooks (fire once after loop exits)
+  - `act.ts:1023+`: Added before/after 'act' hooks (per-tool-batch)
+  - Helper function `runPhaseHooks()` handles abort signals properly
+
+- **packages/compose**: New package with 6 prebuilt killswitches:
+  - `maxIterations`: Stop/terminate after N iterations (number or options)
+  - `budgetLimit`: Stop/terminate when token budget exceeded (maxTokens or maxCostUSD)
+  - `timeoutAfter`: Stop/terminate after wall-clock time ('60s', '5m', milliseconds)
+  - `watchdog`: Stop/terminate on no progress for duration (resets on tool-result)
+  - `requireApprovalFor`: Gate specific tool calls with synchronous approver
+  - `confidenceFloor`: Early exit when verifier confidence >= threshold
+
+- **Test coverage**: 24 comprehensive tests for killswitches covering:
+  - Normal abort paths (stop vs terminate)
+  - Below-threshold paths
+  - Options variants (custom onTrigger, custom onDeny)
+  - Timer cleanup, progress reset, threshold checks
+  - Registry completeness
+
+**Architecture:**
+- Killswitches are pure `(harness: Harness) => void` factories
+- All use phase hooks (no new TagMap entries needed)
+- Watchdog uses `.tap('observation.tool-result')` to reset progress timer
+- Timeout uses `.before('bootstrap')` / `.after('complete')` for lifecycle
+- All return `undefined` when condition not met (hook continuation)
+- All return `{ abort: 'stop'|'terminate', reason: string }` when trigger
+
+**Key insight:** Phase hooks unblock composition patterns. Before Wave D, hooks were registered but never called (zero call sites). Now killswitches can implement real guardrails on top of the core execution loop.
+
+**Next:** Wave E (sugar desugaring) and Wave F (docs) previously shipped. Phase B (Compose API) complete. Phase C (v0.11 launch readiness) unblocked.
+
+---
+
 ### Wave F — Compose API Documentation — COMPLETE ✅
 
 Committed. Docs site builds successfully with all internal links valid.
