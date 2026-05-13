@@ -12,23 +12,23 @@ updated: 2026-05-13
 
 ## Latest Session (2026-05-13, morning)
 
-### Compose API Wave B — COMPLETE ✅
+### Compose API Wave C — COMPLETE ✅
 
-Commits `d8cec216` → `72bc3727` (Parts 1–4). All tests pass (102 runtime, 12 core/reasoning).
+Commits `3ee63af7` → `16fa1ab4`. All tests pass (1879/1879).
 
 **What shipped:**
-- `HarnessPipeline` plumbed through `RuntimeOptions` → `ReactiveAgentsConfig` → `ReactiveAgentBuilder`
-- `_harnessRegistrations` compiled to `HarnessPipeline` in `runtime-construction.ts`
-- `harnessPipeline` threaded through reasoning type chain: `ReasoningExecuteRequest` → `StrategyRegistryInput` → `ReactiveInput`/`DirectInput` → `KernelInput`
-- `prompt.system` chokepoint wired in **both** execution paths:
-  - Reasoning path: `packages/reasoning/src/kernel/capabilities/reason/think.ts`
-  - Inline path: `packages/runtime/src/engine/phases/agent-loop/inline-think.ts`
-- Example: `apps/examples/src/advanced/20-compose-harness.ts` (PASSES)
-
-**Root cause found during debug:** inline path (`runInlineThink`) never went through the reasoning kernel, so the `think.ts` chokepoint in `packages/reasoning` was unreachable for agents without `.withReasoning()`. Fixed by adding the chokepoint directly in `inline-think.ts`.
+- `fix(workspace)`: all 24 packages' `@reactive-agents/*` deps changed from pinned `"0.10.6"` to `"workspace:*"`. Shadow `node_modules/@reactive-agents/` dirs deleted. TS2322 DTS failure cannot recur. `bun.lock` updated.
+- `fix(runtime)`: compose metadata types (`compositionType`/`stages`/`results`/`candidates`) added to `AgentResultMetadata`; all `as any` casts removed from compose.ts + tests.
+- `feat(compose) Wave C`: two new live chokepoints:
+  - `nudge.loop-detected` — `think.ts` calls `pipeline.transform()` when loop detected; result stored as `loopDetectedMessage` on `GuidanceContext`; `buildGuidanceSection` uses it when set.
+  - `message.tool-result` — `act.ts` post-IIFE loop transforms each `tool_result` `KernelMessage`; merges result onto original to preserve `storedKey`.
 
 **v0.12 deferred chokepoints** (registrations compile but transforms are pass-through):
-- `nudge.loop-detected`, `nudge.healing-failure`, `message.tool-result`, `observation.tool-result`
+- `nudge.healing-failure`, `observation.tool-result`
+
+### Compose API Wave B — COMPLETE ✅ (earlier this session)
+
+Commits `d8cec216` → `72bc3727`. `prompt.system` chokepoint live in both inline and reasoning paths. Example `apps/examples/src/advanced/20-compose-harness.ts` PASSES.
 
 ---
 
@@ -170,6 +170,6 @@ M3/M6/M7/M8/M10 can run concurrently with Phase A — different files, no confli
 
 At session end: replace "Latest Session" with new date + key updates, update "What's Next," add decisions. Keep it under 120 lines.
 
-**Last Updated:** 2026-05-12
-**Current Phase:** B (Compose API) — Wave A next; M3 ablation gate cleared
-**Next Review:** After Compose API Wave A lands
+**Last Updated:** 2026-05-13
+**Current Phase:** B (Compose API) — Waves B + C complete; 3/5 chokepoints live
+**Next Review:** After skill persistence (M6) begins

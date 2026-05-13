@@ -10,10 +10,9 @@
  *   - harness.before('think', ...) / harness.after('think', ...) — phase hooks
  *   - harness.use(...) — compose reusable sub-harnesses
  *
- * Wave B status (v0.11): `prompt.system` chokepoint is live. The remaining
- * four tags (nudge.loop-detected, nudge.healing-failure, message.tool-result,
- * observation.tool-result) land in v0.12 — registrations compile fine today
- * but transforms for those tags are pass-through until v0.12 wires them.
+ * v0.11 live chokepoints: `prompt.system`, `nudge.loop-detected`, `message.tool-result`.
+ * Deferred to v0.12: `nudge.healing-failure`, `observation.tool-result` — registrations
+ * compile today but transforms are pass-through until v0.12 wires them.
  *
  * Usage:
  *   bun run apps/examples/src/advanced/20-compose-harness.ts
