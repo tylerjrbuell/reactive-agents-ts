@@ -115,6 +115,7 @@ export const runReasoningHarnessHooks = (
       ),
       observationSummary: config.reasoningOptions?.observationSummary,
       calibration: resolvedCalibration,
+      harnessPipeline: config.harnessPipeline,
       };
       return request as unknown as ReasoningExecuteRequest;
     };

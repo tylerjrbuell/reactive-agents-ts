@@ -19,6 +19,7 @@ import { Effect, Layer } from "effect";
 import type { Context } from "effect";
 import { createRuntime } from "../../runtime.js";
 import type { MCPServerConfig } from "../../runtime.js";
+import { RegistrationHarness, HarnessPipeline } from "@reactive-agents/core";
 import { ExecutionEngine } from "../../execution-engine.js";
 import type {
   ContextProfile,
@@ -153,6 +154,8 @@ export interface BuilderRuntimeStateView {
   readonly _metaTools?: import("../../types.js").MetaToolsConfig | false;
   readonly _cortexUrl: string | null;
   readonly _leanHarness: boolean;
+  /** Registrations collected by `.withHarness()` calls — compiled into a HarnessPipeline. */
+  readonly _harnessRegistrations: ReadonlyArray<(harness: import("@reactive-agents/core").Harness) => void>;
 }
 
 /** Result bundle returned to the caller of {@link buildBaseRuntimeAndEngine}.
@@ -266,6 +269,16 @@ export const buildBaseRuntimeAndEngine = (
       ) as Layer.Layer<unknown>;
     }
 
+    // Compile harness registrations into a HarnessPipeline when `.withHarness()` was called.
+    const harnessPipeline: HarnessPipeline | undefined =
+      state._harnessRegistrations.length > 0
+        ? (() => {
+            const reg = new RegistrationHarness();
+            for (const fn of state._harnessRegistrations) fn(reg);
+            return new HarnessPipeline(reg._collected);
+          })()
+        : undefined;
+
     const baseRuntime = createRuntime({
       agentId,
       provider: state._provider,
@@ -375,6 +388,7 @@ export const buildBaseRuntimeAndEngine = (
           ? "auto"
           : undefined,
       leanHarness: state._leanHarness || undefined,
+      harnessPipeline,
     });
 
     const engine = yield* (ExecutionEngine.pipe(

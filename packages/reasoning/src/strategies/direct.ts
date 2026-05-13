@@ -62,6 +62,7 @@ export interface DirectInput {
    *  Layer 1 builder length pruning, oracle nudge aggression. Critical for
    *  small-model sub-agents per architecture exploration §10. */
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
 }
 
 // ── executeDirect ─────────────────────────────────────────────────────────────
@@ -167,6 +168,7 @@ export const executeDirect = (
       initialMessages: input.initialMessages,
       modelId: input.modelId,
       calibration: input.calibration,
+      harnessPipeline: input.harnessPipeline,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

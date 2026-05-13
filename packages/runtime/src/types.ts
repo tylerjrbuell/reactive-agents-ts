@@ -619,6 +619,13 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
    */
   readonly calibration?: CalibrationMode;
   /**
+   * Compiled harness pipeline forwarded from `.withHarness()` builder registrations.
+   * Wave B kernel chokepoints call `pipeline.transform(tag, defaultValue, ctx)` at
+   * system-prompt, loop-detected, healing-failure, tool-result, and observation sites.
+   * Absent when no `.withHarness()` calls were made (pass-through mode).
+   */
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  /**
    * Logging configuration for execution observability
    */
   readonly logging?: {
