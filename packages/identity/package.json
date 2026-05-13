@@ -11,7 +11,7 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.6",
+    "@reactive-agents/core": "workspace:*",
     "@noble/ed25519": "^2.0.0"
   },
   "devDependencies": {

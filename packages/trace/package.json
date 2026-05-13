@@ -10,7 +10,7 @@
     "test": "bun test --reporter=dots"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.6",
+    "@reactive-agents/core": "workspace:*",
     "effect": "^3.10.0"
   },
   "devDependencies": {

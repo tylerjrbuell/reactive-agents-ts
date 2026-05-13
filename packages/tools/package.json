@@ -11,8 +11,8 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.6",
-    "@reactive-agents/llm-provider": "0.10.6",
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.28.0"
   },
   "devDependencies": {

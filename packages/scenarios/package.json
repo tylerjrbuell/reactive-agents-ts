@@ -18,8 +18,8 @@
     "test": "bun test --reporter=dots"
   },
   "dependencies": {
-    "@reactive-agents/trace": "0.10.6",
-    "@reactive-agents/testing": "0.10.6"
+    "@reactive-agents/trace": "workspace:*",
+    "@reactive-agents/testing": "workspace:*"
   },
   "devDependencies": {
     "tsup": "*",

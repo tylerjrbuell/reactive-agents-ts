@@ -58,14 +58,14 @@
   "dependencies": {
     "elysia": "^1.1.0",
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.10.6",
-    "@reactive-agents/memory": "0.10.6",
-    "@reactive-agents/runtime": "0.10.6",
-    "@reactive-agents/observability": "0.10.6",
-    "@reactive-agents/gateway": "0.10.6",
-    "@reactive-agents/llm-provider": "0.10.6",
-    "@reactive-agents/tools": "0.10.6",
-    "@reactive-agents/reactive-intelligence": "0.10.6"
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/memory": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/observability": "workspace:*",
+    "@reactive-agents/gateway": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/tools": "workspace:*",
+    "@reactive-agents/reactive-intelligence": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

@@ -28,19 +28,19 @@
   ],
   "dependencies": {
     "effect": "^3.10.0",
-    "@reactive-agents/core": "0.10.6",
-    "@reactive-agents/runtime": "0.10.6",
-    "@reactive-agents/eval": "0.10.6",
-    "@reactive-agents/llm-provider": "0.10.6",
-    "@reactive-agents/a2a": "0.10.6",
-    "@reactive-agents/trace": "0.10.6",
-    "@reactive-agents/tools": "0.10.6",
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/eval": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/a2a": "workspace:*",
+    "@reactive-agents/trace": "workspace:*",
+    "@reactive-agents/tools": "workspace:*",
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "boxen": "^8.0.1"
   },
   "peerDependencies": {
-    "@reactive-agents/cortex": "0.10.6"
+    "@reactive-agents/cortex": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@reactive-agents/cortex": {

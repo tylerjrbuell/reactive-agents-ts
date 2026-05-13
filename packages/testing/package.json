@@ -11,11 +11,11 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.10.6",
-    "@reactive-agents/llm-provider": "0.10.6",
-    "@reactive-agents/runtime": "0.10.6",
-    "@reactive-agents/tools": "0.10.6",
-    "@reactive-agents/trace": "0.10.6"
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/tools": "workspace:*",
+    "@reactive-agents/trace": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
