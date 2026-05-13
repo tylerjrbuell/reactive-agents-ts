@@ -1,0 +1,6 @@
+# Stackblitz projects resolve from npm registry — local installs are dev-only
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lock

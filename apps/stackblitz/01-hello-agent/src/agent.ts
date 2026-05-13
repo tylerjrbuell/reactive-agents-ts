@@ -81,5 +81,5 @@ console.log("\n─── Stats ───");
 console.log(`Steps:    ${result.metadata.stepsCount}`);
 console.log(`Tokens:   ${result.metadata.tokensUsed}`);
 console.log(`Cost:     $${result.metadata.cost.toFixed(6)}`);
-console.log(`Duration: ${result.metadata.durationMs}ms`);
+console.log(`Duration: ${result.metadata.duration}ms`);
 console.log(`\nDone. Try changing QUESTION in Secrets to ask anything!`);
