@@ -794,6 +794,13 @@ export interface RuntimeOptions {
    * Default: `false`
    */
   leanHarness?: boolean;
+
+  /**
+   * Compiled harness pipeline for Wave B chokepoints.
+   * Produced by `new HarnessPipeline(registrationHarness._collected)` in
+   * `runtime-construction.ts` when `.withHarness()` registrations are present.
+   */
+  harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
 }
 
 const leanModeVerifier: Verifier = {
@@ -911,6 +918,7 @@ export const createRuntime = (options: RuntimeOptions) => {
           fallbackStrategy: options.reasoningOptions?.fallbackStrategy,
         },
     verifier: options.leanHarness ? leanModeVerifier : undefined,
+    harnessPipeline: options.harnessPipeline,
     enableReactiveIntelligence: options.enableReactiveIntelligence,
     reactiveIntelligenceOptions: options.reactiveIntelligenceOptions,
     reasoningOptions: options.reasoningOptions,
