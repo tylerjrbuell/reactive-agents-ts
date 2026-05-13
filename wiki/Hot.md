@@ -10,7 +10,26 @@ updated: 2026-05-13
 
 ---
 
-## Latest Session (2026-05-13, morning)
+## Latest Session (2026-05-13, afternoon)
+
+### RunHandle / RunController — COMPLETE ✅
+
+Commit `10349187`. All tests pass (672/672 runtime, 1126/1126 reasoning).
+
+**What shipped:**
+- `RunController`: state machine (pause/resume/stop/terminate/markCompleted) with `checkpoint()` awaited at top of kernel while-loop in `runner.ts`
+- `RunControllerRef`: `FiberRef<RunControllerLike|null>` in `@reactive-agents/core` (same pattern as `StreamingTextCallback`; set inside `forkDaemon` chain in `executeStream`)
+- `RunHandle`: `AsyncGenerator<AgentStreamEvent> & { pause/resume/stop/terminate/status }` — fully backward-compatible
+- `terminate()` fires existing `AbortController` → `StreamCancelled` path
+- `stop()` sets flag; `checkpoint()` returns `{stop:true}` → kernel breaks loop → synthesis → `StreamCompleted`
+- 21 tests: 14 RunController unit + 7 RunHandle integration
+- Key FiberRef fix: `RunControllerRef.set` chained inside same `.pipe()` as `StreamingTextCallback.set` + `execute(task)`, so daemon inherits it
+
+**Exported from `@reactive-agents/runtime`:** `RunHandle`, `RunStatus`, `RunController`, `RunControllerLike`
+
+---
+
+## Previous Session (2026-05-13, morning)
 
 ### Compose API Wave C — COMPLETE ✅
 
