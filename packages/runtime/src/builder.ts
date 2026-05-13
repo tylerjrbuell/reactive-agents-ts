@@ -355,6 +355,7 @@ export class ReactiveAgentBuilder {
     private _metaTools?: import('./types.js').MetaToolsConfig | false
     private _calibration: CalibrationMode = 'skip'
     private _leanHarness: boolean = false
+    private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
 
     // ─── Calibration ───
 
@@ -377,6 +378,30 @@ export class ReactiveAgentBuilder {
      */
     withCalibration(mode: CalibrationMode): this {
         this._calibration = mode
+        return this
+    }
+
+    // ─── Harness ───
+
+    /**
+     * Register a harness composition function that shapes how the agent's kernel
+     * emits content — system prompts, nudges, tool results, lifecycle events, etc.
+     *
+     * Multiple `.withHarness()` calls register additively in declaration order.
+     * At `.build()` time all registrations are compiled into a `HarnessPipeline`
+     * and attached to the agent's kernel input. Wave B wires the pipeline into
+     * kernel chokepoints; Wave A makes the infrastructure available.
+     *
+     * @example
+     * ```typescript
+     * builder.withHarness((harness) => {
+     *   harness.on('prompt.system', (prompt, ctx) => `${prompt}\n\n[iteration ${ctx.iteration}]`)
+     *   harness.tap('lifecycle.failure', (payload) => console.error('failure:', payload))
+     * })
+     * ```
+     */
+    withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this {
+        this._harnessRegistrations = [...this._harnessRegistrations, fn]
         return this
     }
 

@@ -20,6 +20,7 @@ import type {
   ToolElaborationInjectionConfig,
   NextMovesPlanningConfig,
 } from "../../kernel/capabilities/act/tool-gating.js";
+import type { HarnessPipeline } from "@reactive-agents/core";
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
@@ -421,6 +422,12 @@ export interface KernelInput {
   readonly exitOnAllToolsCalled?: boolean;
   /** Pre-built ToolCallResolver instance — injected by the kernel runner when FC is active */
   readonly toolCallResolver?: ToolCallResolver;
+  /**
+   * Compiled harness pipeline for this run. Wave B kernel chokepoints call
+   * `pipeline.transform(tag, defaultValue, ctx)` to apply user-registered transforms.
+   * Absent when no `.withHarness()` calls were made on the builder (pass-through).
+   */
+  readonly harnessPipeline?: HarnessPipeline;
 }
 
 // ── Narrow service types ─────────────────────────────────────────────────────

@@ -115,6 +115,32 @@ export { generateAgentId, generateTaskId, generateMessageId } from "./id.js";
 // ─── Runtime ───
 export { CoreServicesLive } from "./runtime.js";
 
+// ─── Harness API (Wave A) ───
+export { HarnessPipeline, RegistrationHarness, ALL_TAGS } from "./services/harness-pipeline.js";
+export type { Harness } from "./services/harness-pipeline.js";
+export type {
+  Tag,
+  TagMap,
+  TagPattern,
+  Phase,
+  PayloadFor,
+  ContextFor,
+  TransformFor,
+  TapFor,
+  TransformFn,
+  TapFn,
+  PhaseHookFn,
+  ErrorHookFn,
+  Registration,
+  BaseCtx,
+  NudgeCtx,
+  ToolResultCtx,
+  KernelMessageLike,
+  ObservationStepLike,
+  LifecycleFailurePayload,
+  ControlStrategyEvaluatedPayload,
+} from "./services/harness-types.js";
+
 // ─── Streaming ───
 export { StreamingTextCallback } from "./streaming.js";
 
