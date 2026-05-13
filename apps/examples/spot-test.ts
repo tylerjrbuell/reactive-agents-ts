@@ -12,12 +12,14 @@ const agent = await ReactiveAgents.create()
         tone: 'friendly, technical, developer-to-developer',
     })
     .withProvider('ollama')
-    .withModel('llama3.1')
+    .withModel('qwen3:4b')
     .withReasoning({
         defaultStrategy: 'adaptive',
         enableStrategySwitching: false,
     })
-    .withTools()
+    .withTools({
+        allowedTools: ['file-write', 'github/list_commits'],
+    })
     .withMCP({
         name: 'github',
         transport: 'stdio',
