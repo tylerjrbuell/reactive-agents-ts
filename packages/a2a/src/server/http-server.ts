@@ -12,6 +12,8 @@ import type {
 } from "../types.js";
 import { A2AError } from "../errors.js";
 import { Effect, Context, Layer, Ref } from "effect";
+import { serve } from "@reactive-agents/runtime-shim";
+import type { ServerLike } from "@reactive-agents/runtime-shim";
 import { A2AServer } from "./a2a-server.js";
 import { createTaskHandler, type TaskExecutor } from "./task-handler.js";
 import { formatSSEEvent, type StreamEvent } from "./streaming.js";
@@ -43,8 +45,8 @@ export const createA2AHttpServer = (port: number = 3000, executor?: TaskExecutor
       const store = yield* Ref.make<{ tasks: Map<string, A2ATask> }>({ tasks: new Map() });
       const taskHandler = createTaskHandler(store, executor);
 
-      // Mutable reference to the Bun server instance
-      let bunServer: { stop: () => void } | null = null;
+      // Mutable reference to the server instance
+      let bunServer: ServerLike | null = null;
 
       const handleMessageSend = (params: unknown) =>
         Effect.gen(function* () {
@@ -167,7 +169,7 @@ export const createA2AHttpServer = (port: number = 3000, executor?: TaskExecutor
           Effect.gen(function* () {
             const agentCard = yield* server.getAgentCard();
 
-            bunServer = Bun.serve({
+            bunServer = yield* Effect.promise(() => serve({
               port,
               fetch: async (req) => {
                 const url = new URL(req.url);
@@ -246,7 +248,7 @@ export const createA2AHttpServer = (port: number = 3000, executor?: TaskExecutor
 
                 return new Response("Not Found", { status: 404 });
               },
-            });
+            }));
           }),
 
         stop: () =>

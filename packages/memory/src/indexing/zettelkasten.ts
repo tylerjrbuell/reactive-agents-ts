@@ -138,10 +138,9 @@ export const ZettelkastenServiceLive = Layer.effect(
           )
           .pipe(Effect.asVoid),
 
-      // Text-based auto-linking via FTS5 search
+      // Text-based auto-linking via FTS5 search (or LIKE fallback)
       autoLinkText: (memoryId, content, agentId, threshold = 0.85) =>
         Effect.gen(function* () {
-          // Use simplified text similarity via FTS5 rank as proxy
           const searchTerms = content
             .split(/\s+/)
             .filter((w) => w.length > 3)
@@ -150,26 +149,41 @@ export const ZettelkastenServiceLive = Layer.effect(
 
           if (searchTerms.length === 0) return [];
 
-          const similar = yield* db.query<{
-            id: string;
-            rank: number;
-          }>(
-            `SELECT sm.id, semantic_fts.rank
-             FROM semantic_memory sm
-             JOIN semantic_fts ON semantic_fts.id = sm.id
-             WHERE semantic_fts MATCH ?
-               AND sm.agent_id = ?
-               AND sm.id != ?
-             ORDER BY rank
-             LIMIT 5`,
-            [searchTerms, agentId, memoryId],
-          );
+          // FTS5 path: ranked BM25 similarity
+          // LIKE fallback: fixed 0.5 strength (no ranking available)
+          const similar = yield* db.hasFTS5
+            ? db.query<{ id: string; rank: number }>(
+                `SELECT sm.id, semantic_fts.rank
+                 FROM semantic_memory sm
+                 JOIN semantic_fts ON semantic_fts.id = sm.id
+                 WHERE semantic_fts MATCH ?
+                   AND sm.agent_id = ?
+                   AND sm.id != ?
+                 ORDER BY rank
+                 LIMIT 5`,
+                [searchTerms, agentId, memoryId],
+              )
+            : db.query<{ id: string; rank: number }>(
+                `SELECT id, -0.5 AS rank
+                 FROM semantic_memory
+                 WHERE content LIKE ?
+                   AND agent_id = ?
+                   AND id != ?
+                 ORDER BY created_at DESC
+                 LIMIT 5`,
+                [
+                  `%${content.split(/\s+/).filter((w) => w.length > 3).slice(0, 3).join("%")}%`,
+                  agentId,
+                  memoryId,
+                ],
+              );
 
           const now = new Date();
           const links: ZettelLink[] = [];
 
           for (const row of similar) {
-            // Convert FTS rank to 0-1 strength (rank is negative BM25 score)
+            // FTS5: convert negative BM25 rank to 0-1 strength.
+            // LIKE fallback: rank is fixed -0.5 → strength 0.5 (below default threshold 0.85, so no links are auto-created unless caller lowers threshold).
             const strength = Math.min(1, Math.max(0, 1 + row.rank / 10));
             if (strength < threshold) continue;
 

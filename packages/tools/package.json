@@ -11,9 +11,10 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.28.0"
+    "@reactive-agents/runtime-shim": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

@@ -55,14 +55,23 @@ export const MemorySearchServiceLive = Layer.effect(
             access_count: number;
             last_accessed_at: string;
           }>(
-            `SELECT sm.*
-             FROM semantic_memory sm
-             JOIN semantic_fts ON semantic_fts.id = sm.id
-             WHERE semantic_fts MATCH ?
-               AND sm.agent_id = ?
-             ORDER BY rank
-             LIMIT ?`,
-            [options.query, options.agentId, limit],
+            db.hasFTS5
+              ? `SELECT sm.*
+                 FROM semantic_memory sm
+                 JOIN semantic_fts ON semantic_fts.id = sm.id
+                 WHERE semantic_fts MATCH ?
+                   AND sm.agent_id = ?
+                 ORDER BY rank
+                 LIMIT ?`
+              : `SELECT *
+                 FROM semantic_memory
+                 WHERE content LIKE ?
+                   AND agent_id = ?
+                 ORDER BY created_at DESC
+                 LIMIT ?`,
+            db.hasFTS5
+              ? [options.query, options.agentId, limit]
+              : [`%${options.query}%`, options.agentId, limit],
           );
 
           return rows.map((r) => ({
@@ -95,14 +104,23 @@ export const MemorySearchServiceLive = Layer.effect(
             metadata: string;
             created_at: string;
           }>(
-            `SELECT el.*
-             FROM episodic_log el
-             JOIN episodic_fts ON episodic_fts.id = el.id
-             WHERE episodic_fts MATCH ?
-               AND el.agent_id = ?
-             ORDER BY rank
-             LIMIT ?`,
-            [options.query, options.agentId, limit],
+            db.hasFTS5
+              ? `SELECT el.*
+                 FROM episodic_log el
+                 JOIN episodic_fts ON episodic_fts.id = el.id
+                 WHERE episodic_fts MATCH ?
+                   AND el.agent_id = ?
+                 ORDER BY rank
+                 LIMIT ?`
+              : `SELECT *
+                 FROM episodic_log
+                 WHERE content LIKE ?
+                   AND agent_id = ?
+                 ORDER BY created_at DESC
+                 LIMIT ?`,
+            db.hasFTS5
+              ? [options.query, options.agentId, limit]
+              : [`%${options.query}%`, options.agentId, limit],
           );
 
           return rows.map((r) => ({

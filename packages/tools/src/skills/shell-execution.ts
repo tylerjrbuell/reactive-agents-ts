@@ -3,6 +3,7 @@ import { mkdirSync, existsSync } from "node:fs";
 import { join, resolve, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { spawn } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
@@ -772,7 +773,7 @@ export function shellExecuteHandler(
           }
         }
 
-        const proc = Bun.spawn(["sh", "-c", command], {
+        const proc = spawn(["sh", "-c", command], {
           stdout: "pipe",
           stderr: "pipe",
           cwd: sandboxDir,

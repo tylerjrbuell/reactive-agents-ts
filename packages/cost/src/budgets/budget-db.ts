@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Database } from "bun:sqlite";
+import { Database } from "@reactive-agents/runtime-shim";
 
 /**
  * Lightweight SQLite persistence for budget spend tracking.
@@ -18,8 +18,8 @@ export interface BudgetDb {
 export const makeBudgetDb = (dbPath: string): Effect.Effect<BudgetDb, never> =>
   Effect.sync(() => {
     const db = new Database(dbPath, { create: true });
-    db.run("PRAGMA journal_mode = WAL");
-    db.run(`
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec(`
       CREATE TABLE IF NOT EXISTS budget_spend (
         agent_id TEXT NOT NULL,
         period   TEXT NOT NULL,
@@ -28,7 +28,7 @@ export const makeBudgetDb = (dbPath: string): Effect.Effect<BudgetDb, never> =>
       )
     `);
 
-    const loadStmt = db.prepare<{ spend: number }, [string, string]>(
+    const loadStmt = db.prepare(
       "SELECT spend FROM budget_spend WHERE agent_id = ? AND period = ?",
     );
     const upsertStmt = db.prepare(
@@ -41,7 +41,11 @@ export const makeBudgetDb = (dbPath: string): Effect.Effect<BudgetDb, never> =>
       loadSpend: (agentId, period) =>
         Effect.sync(() => {
           const row = loadStmt.get(agentId, period);
-          return row?.spend ?? 0;
+          if (row !== null && typeof row === "object" && "spend" in row) {
+            const spend = (row as { spend: unknown }).spend;
+            return typeof spend === "number" ? spend : 0;
+          }
+          return 0;
         }),
 
       addSpend: (agentId, period, cost) =>

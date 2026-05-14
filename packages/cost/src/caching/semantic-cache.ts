@@ -1,4 +1,5 @@
 import { Effect, Ref } from "effect";
+import { hash } from "@reactive-agents/runtime-shim";
 import type { CacheEntry } from "../types.js";
 import { CacheError } from "../errors.js";
 
@@ -13,7 +14,7 @@ type ExtendedCacheEntry = CacheEntry & { readonly embedding?: readonly number[] 
 export type EmbedFn = (texts: readonly string[]) => Effect.Effect<readonly (readonly number[])[], any>;
 
 function hashString(str: string): string {
-  return Bun.hash(str).toString(36);
+  return hash(str).toString(36);
 }
 
 function cosineSimilarity(a: readonly number[], b: readonly number[]): number {

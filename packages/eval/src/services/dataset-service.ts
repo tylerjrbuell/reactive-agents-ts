@@ -1,4 +1,5 @@
 import { Context, Effect, Layer, Schema } from "effect";
+import { readFile, glob } from "@reactive-agents/runtime-shim";
 import { EvalSuiteSchema, type EvalSuite } from "../types/eval-case.js";
 import { DatasetError } from "../errors/errors.js";
 
@@ -43,7 +44,7 @@ export const DatasetServiceLive = Layer.succeed(
     loadSuite: (path) =>
       Effect.tryPromise({
         try: async () => {
-          const content = await Bun.file(path).text();
+          const content = await readFile(path);
           return JSON.parse(content) as unknown;
         },
         catch: (err) =>
@@ -57,9 +58,9 @@ export const DatasetServiceLive = Layer.succeed(
     loadSuitesFromDir: (dirPath) =>
       Effect.tryPromise({
         try: async () => {
-          const glob = new Bun.Glob("*.json");
+          const globber = glob("*.json");
           const files: string[] = [];
-          for await (const file of glob.scan(dirPath)) {
+          for await (const file of globber.scan({ cwd: dirPath })) {
             files.push(`${dirPath}/${file}`);
           }
           return files;
@@ -75,7 +76,7 @@ export const DatasetServiceLive = Layer.succeed(
           Effect.all(
             files.map((f) =>
               Effect.tryPromise({
-                try: async () => JSON.parse(await Bun.file(f).text()) as unknown,
+                try: async () => JSON.parse(await readFile(f)) as unknown,
                 catch: (err) =>
                   new DatasetError({ message: `Failed to read ${f}: ${String(err)}`, path: f, cause: err }),
               }).pipe(Effect.flatMap((json) => parseSuiteJson(json, f))),
