@@ -396,22 +396,27 @@ git commit -m "feat(replay): pure tool-table builder with stable argsHash"
 Run: `rtk grep -rn 'kind: "tool-call-end"\|kind:"tool-call-end"' packages/reasoning/src/ packages/runtime/src/`
 Expected: 1–3 emission sites. Note the file:line for each.
 
-- [ ] **Step 2: Add `result` field to `ToolCallEvent` interface**
+- [ ] **Step 2: Add `result` field to `ToolCallEvent` interface (with truncation guard)**
 
-In `packages/trace/src/events.ts:115-124`, add:
+Tool results can be MB-scale (file reads, web fetches). Truncate to 8KB stringified at the emission site, with a flag. Mirror the `LLMExchangeEvent` truncation pattern (`events.ts:226-245`).
+
+In `packages/trace/src/events.ts:115-124`:
 
 ```typescript
 export interface ToolCallEvent extends TraceEventBase {
   readonly kind: "tool-call-start" | "tool-call-end"
   readonly toolName: string
   readonly args?: unknown
-  readonly result?: unknown        // ← NEW, only set on tool-call-end
+  readonly result?: unknown            // ← NEW, only set on tool-call-end (may be truncated)
+  readonly resultTruncated?: boolean   // ← true if `result` was clipped
   readonly durationMs?: number
   readonly ok?: boolean
   readonly error?: string
   readonly rationale?: Rationale
 }
 ```
+
+Replay strict mode errors when a recorded result was truncated (the live tool would need full payload to be deterministic). Documented in `replay.mdx`.
 
 - [ ] **Step 3: Update each emission site to include `result`**
 
@@ -648,9 +653,7 @@ git commit -m "feat(replay): ReplayController dispenses recorded tool results in
 - Create: `packages/replay/src/replay-tool-layer.ts`
 - Test: `packages/replay/tests/replay-tool-layer.test.ts`
 
-**Pre-step research:**
-Run: `rtk grep -n "ToolService\s*=\|class ToolService\|invoke:" packages/tools/src/tool-service.ts | head -20`
-Expected output gives the exact ToolService Tag declaration and the `invoke` method signature. The layer must match the signature precisely.
+**Verified ToolService shape (May 14 grep):** the Tag is `class ToolService extends Context.Tag("ToolService")<ToolService, {...}>` (`packages/tools/src/tool-service.ts:47`). Methods: `execute`, `register`, `connectMCPServer`, `disconnectMCPServer`, `listTools`, `getTool`, `toFunctionCallingFormat`, `listMCPServers`, `unregisterTool`. **The primary method is `execute(input: ToolInput): Effect<ToolOutput, ...>`, NOT `invoke`.** Replay overrides `execute`; all other methods `Effect.die("not-available-in-replay")` to surface coverage gaps loudly.
 
 - [ ] **Step 1: Write failing test**
 
@@ -664,7 +667,7 @@ import { makeReplayController } from "../src/replay-controller.js";
 import { computeArgsHash } from "../src/tool-table.js";
 
 describe("ReplayToolLayer", () => {
-  test("invoke returns recorded result without calling live tool", async () => {
+  test("execute returns recorded result without calling live tool", async () => {
     const h = computeArgsHash({ q: "x" });
     const table = new Map([[`search::${h}`, [
       { toolName: "search", argsHash: h, args: { q: "x" }, result: "recorded-output", ok: true, durationMs: 0, iter: 0, seq: 0 },
@@ -673,10 +676,10 @@ describe("ReplayToolLayer", () => {
     const layer = makeReplayToolLayer(ctrl, "strict");
     const program = Effect.gen(function* () {
       const ts = yield* ToolService;
-      return yield* ts.invoke("search", { q: "x" });
+      return yield* ts.execute({ toolName: "search", arguments: { q: "x" }, agentId: "a", sessionId: "s" } as any);
     });
     const result = await Effect.runPromise(Effect.provide(program, layer) as any);
-    expect((result as { output: unknown }).output).toBe("recorded-output");
+    expect((result as { result: unknown }).result).toBe("recorded-output");
   });
 
   test("strict mode errors on unrecorded tool call", async () => {
@@ -684,7 +687,7 @@ describe("ReplayToolLayer", () => {
     const layer = makeReplayToolLayer(ctrl, "strict");
     const program = Effect.gen(function* () {
       const ts = yield* ToolService;
-      return yield* ts.invoke("unknown", {});
+      return yield* ts.execute({ toolName: "unknown", arguments: {}, agentId: "a", sessionId: "s" } as any);
     });
     await expect(Effect.runPromise(Effect.provide(program, layer) as any)).rejects.toThrow(/unrecorded/i);
   });
@@ -708,33 +711,41 @@ export function makeReplayToolLayer(
   provider: ReplayResultProvider,
   mode: "strict" | "lenient",
 ) {
+  const die = (m: string) => Effect.die(new Error(`replay: ${m} not supported during replay`));
   return Layer.succeed(
     ToolService,
     ToolService.of({
-      // Match all methods on the real ToolService — copy the shape from
-      // packages/tools/src/tool-service.ts. The critical override is `invoke`.
-      invoke: (toolName: string, args: unknown) =>
-        Effect.sync(() => {
-          const hit = provider.next(toolName, args);
-          if (!hit.hit) {
-            if (mode === "strict") {
-              throw new Error(`replay: unrecorded tool call ${toolName} (strict mode)`);
+      execute: (input: any) =>
+        Effect.try({
+          try: () => {
+            const hit = provider.next(input.toolName, input.arguments);
+            if (!hit.hit) {
+              if (mode === "strict") {
+                throw new Error(`replay: unrecorded tool call ${input.toolName} (strict mode)`);
+              }
+              return { toolName: input.toolName, success: false, error: "no-recording", executionTimeMs: 0 } as any;
             }
-            return { output: undefined, ok: false, error: "no-recording" };
-          }
-          if (!hit.ok) {
-            return { output: undefined, ok: false, error: hit.error ?? "recorded-error" };
-          }
-          return { output: hit.result, ok: true };
-        }),
-      // Stub out remaining ToolService methods as no-ops or pass through.
-      // The exact list comes from `packages/tools/src/tool-service.ts`.
+            if (!hit.ok) {
+              return { toolName: input.toolName, success: false, error: hit.error ?? "recorded-error", executionTimeMs: 0 } as any;
+            }
+            return { toolName: input.toolName, success: true, result: hit.result, executionTimeMs: 0 } as any;
+          },
+          catch: (e) => e as never,
+        }) as any,
+      register: () => die("register"),
+      unregisterTool: () => die("unregisterTool"),
+      connectMCPServer: () => die("connectMCPServer"),
+      disconnectMCPServer: () => die("disconnectMCPServer"),
+      listTools: () => Effect.succeed([] as const) as any,
+      getTool: () => die("getTool"),
+      toFunctionCallingFormat: () => Effect.succeed([] as const) as any,
+      listMCPServers: () => Effect.succeed([] as const) as any,
     } as any),
   );
 }
 ```
 
-**Note:** the `as any` is required because ToolService likely has more methods (list, schemas, init) that we mock. The plan deliberately delegates to research-step output for exact shape. Replace `as any` once the full method list is known. If a method is called during replay that this layer doesn't handle, the replay errors loudly — that is desired.
+**Note:** `execute` is the live method (not `invoke`); `register`/`getTool`/MCP methods `die` to surface coverage gaps loudly during replay. `listTools` / `toFunctionCallingFormat` / `listMCPServers` return empty — the replay agent doesn't need to introspect the tool registry since recordings drive its behavior. `as any` casts at boundaries are pragmatic; tighten if the type checker permits.
 
 - [ ] **Step 4: Run, expect PASS**
 
@@ -1141,7 +1152,7 @@ import { describe, test, expect } from "bun:test";
 import { join } from "node:path";
 import { loadRecordedRun, replay, makeReplayToolLayer, makeReplayController } from "../src/index.js";
 // Use the runtime mock provider — see packages/runtime/tests/utils for the canonical mock.
-import { mockLlmProvider } from "@reactive-agents/runtime/test-utils";
+import { TestLLMServiceLayer } from "@reactive-agents/llm-provider/testing";
 import { ReactiveAgentBuilder } from "@reactive-agents/runtime";
 
 describe("replay integration — determinism gate", () => {
@@ -1153,7 +1164,7 @@ describe("replay integration — determinism gate", () => {
       const ctrl = makeReplayController(run.toolTable);
       const layer = makeReplayToolLayer(ctrl, ctx.overrides.onMissingToolResult ?? "strict");
       return new ReactiveAgentBuilder()
-        .withLlmProvider(mockLlmProvider({ scriptedReply: "hello" }))
+        .withLlmServiceLayer(TestLLMServiceLayer([{ text: "hello" }]))
         .withReplayLayer(layer)
         .build();
     });
@@ -1429,6 +1440,7 @@ git commit -m "chore: changelog + hot cache for snapshot/replay landing"
 - **HTML report generation** for diff visualization. Stretch.
 - **Stripe-style snapshot store** (git-tracked golden traces for regression testing). Separate spec.
 - **Replay with `temperature`/`seed` enforcement on providers that support neither**. Logged as caveat in docs.
+- **Determinism gate against a real provider at `temperature: 0`**. v0.11 gate uses `TestLLMServiceLayer` only. Real-provider drift detection deferred to Phase F (Public Benchmark Discipline).
 
 ---
 
