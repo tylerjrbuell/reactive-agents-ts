@@ -21,24 +21,6 @@ export type NextMovesPlanningConfig = {
   readonly allowParallelBatching?: boolean;
 };
 
-/**
- * M7-G: Filter tools by success rate from calibration.
- * Removes consistently-failing tools from consideration when context is tight.
- *
- * @param tools Tool schemas to filter
- * @param successRates Per-tool success rates from calibration
- * @param threshold Minimum success rate (default 0.3)
- * @returns Filtered tool list excluding tools below threshold
- */
-export function filterToolsBySuccessRate<T extends { readonly name: string }>(
-  tools: readonly T[],
-  successRates?: Readonly<Record<string, number>>,
-  threshold: number = 0.3,
-): readonly T[] {
-  if (!successRates) return tools;
-  return tools.filter((t) => (successRates[t.name] ?? 1.0) > threshold);
-}
-
 export type QuotaBudgetConflict = {
   readonly toolName: string;
   readonly requiredMinCalls: number;

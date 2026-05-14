@@ -70,8 +70,6 @@ export const ModelCalibrationSchema = Schema.Struct({
     Schema.Literal("native-fc", "text-parse", "none"),
     { exact: true, default: () => "none" as const },
   ),
-  fcCapabilityScore: Schema.optionalWith(Schema.Number, { exact: true }),
-  fcCapabilityProbedAt: Schema.optionalWith(Schema.String, { exact: true }),
 
   // ── Learned alias maps (populated after N≥3 observations) ──
   knownToolAliases: Schema.optionalWith(
@@ -82,23 +80,6 @@ export const ModelCalibrationSchema = Schema.Struct({
     Schema.Record({
       key: Schema.String,
       value: Schema.Record({ key: Schema.String, value: Schema.String }),
-    }),
-    { exact: true },
-  ),
-  toolSuccessRateByName: Schema.optionalWith(
-    Schema.Record({ key: Schema.String, value: Schema.Number }),
-    { exact: true },
-  ),
-
-  // ── Intervention responsiveness (min 5 samples before influencing routing) ──
-  interventionResponseRate: Schema.optionalWith(Schema.Number, { exact: true }),
-  interventionResponseSamples: Schema.optionalWith(Schema.Number, { exact: true }),
-
-  // ── Harness harm tracking per task type ──
-  harnessHarmByTaskType: Schema.optionalWith(
-    Schema.Record({
-      key: Schema.String,
-      value: Schema.Literal("suspected", "confirmed", "cleared"),
     }),
     { exact: true },
   ),

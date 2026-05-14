@@ -18,18 +18,12 @@ describe("ModelCalibrationSchema new fields", () => {
     const result = Schema.decodeUnknownSync(ModelCalibrationSchema)({
       ...base,
       toolCallDialect: "native-fc",
-      fcCapabilityScore: 0.92,
       knownToolAliases: { "typescript/compile": "code-execute" },
       knownParamAliases: { "file-read": { input: "path" } },
-      toolSuccessRateByName: { "file-read": 0.85 },
-      interventionResponseRate: 1.5,
-      interventionResponseSamples: 7,
     })
     expect(result.toolCallDialect).toBe("native-fc")
-    expect(result.fcCapabilityScore).toBe(0.92)
     expect(result.knownToolAliases?.["typescript/compile"]).toBe("code-execute")
     expect(result.knownParamAliases?.["file-read"]?.["input"]).toBe("path")
-    expect(result.interventionResponseRate).toBe(1.5)
   })
 
   it("defaults toolCallDialect to none when absent", () => {

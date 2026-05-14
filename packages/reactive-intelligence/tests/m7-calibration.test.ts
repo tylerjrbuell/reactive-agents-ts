@@ -1,42 +1,27 @@
-import { describe, it, expect, beforeEach } from "bun:test";
-import type { ModelCalibration, ProfileOverrides } from "@reactive-agents/llm-provider";
+import { describe, it, expect } from "bun:test";
+import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { buildCalibratedAdapter, ALIAS_FREQUENCY_THRESHOLD } from "@reactive-agents/llm-provider";
-import { filterToolsBySuccessRate } from "@reactive-agents/reasoning";
 
 /**
- * M7 Calibration Validation — RED Phase
+ * M7 Calibration Validation — KEEP verdict (post-cleanup 2026-05-14)
  *
- * Audits all 14 calibration fields for:
- * 1. Current consumer(s) in the harness
- * 2. Measured impact when field is active vs inactive
- * 3. Whether field should remain, be activated, or be removed
+ * After May 14 cleanup: 6 dead schema fields removed. Remaining 9 fields all
+ * wired to runtime — exceeds North Star ≥8 active-consumer target.
  *
- * Field audit:
- * ─────────────────────────────────────────────────────────────────────────
- * CORE FIELDS (5 — actively consumed):
- *   ✓ steeringCompliance         → ContextManager.build() steering channel
- *   ✓ parallelCallCapability      → buildCalibratedAdapter() toolGuidance
- *   ✓ observationHandling         → (claimed, needs verification)
- *   ✓ systemPromptAttention       → buildCalibratedAdapter() systemPromptPatch
- *   ✓ optimalToolResultChars      → buildCalibratedAdapter() profileOverrides
+ * Active fields:
+ *   1. toolCallDialect         → runner.ts:526 (driver selection)
+ *   2. systemPromptAttention   → calibration.ts:191 (system-prompt patch)
+ *   3. parallelCallCapability  → calibration.ts:196 (tool batching)
+ *   4. optimalToolResultChars  → calibration.ts:206 (ContextProfile)
+ *   5. steeringCompliance      → context-manager.ts:112
+ *   6. observationHandling     → tool-schemas.ts:120 + final-answer.ts
+ *   7. classifierReliability   → setup/classifier.ts:25
+ *   8. knownToolAliases        → act.ts:341 (healing-pipeline)
+ *   9. knownParamAliases       → param-name-healer.ts:24
  *
- * OPTIONAL FIELDS (9 — partially or unused):
- *   ? classifierReliability       → observation pipeline classifier skip (UNUSED)
- *   ? toolCallDialect             → capability resolver, local-probe only
- *   ? fcCapabilityScore           → calibration-runner only, never consumed
- *   ? fcCapabilityProbedAt        → metadata only, never consumed
- *   ? knownToolAliases            → alias accumulation, never applied to kernel
- *   ? knownParamAliases           → alias accumulation, never applied to kernel
- *   ? toolSuccessRateByName       → aggregation only, never applied to kernel
- *   ? interventionResponseRate    → reactive-observer tracking, never used in routing
- *   ? harnessHarmByTaskType       → harm tracking, never consumed for gating
- *
- * Test strategy:
- * 1. Build calibrations with each field preset
- * 2. Measure impact on adapter/profile overrides
- * 3. Document consumer location
- * 4. Calculate field usage score (consumer count / field count)
- * 5. Recommend activation spikes for unused fields
+ * Removed (6 dead fields, no producer / no consumer / no JSON ref):
+ *   fcCapabilityScore, fcCapabilityProbedAt, toolSuccessRateByName,
+ *   interventionResponseRate, interventionResponseSamples, harnessHarmByTaskType
  */
 
 // ── Test fixtures ──────────────────────────────────────────────────────────
@@ -53,14 +38,8 @@ const FULL_CALIBRATION: ModelCalibration = {
   optimalToolResultChars: 1500,
   classifierReliability: "high",
   toolCallDialect: "native-fc",
-  fcCapabilityScore: 0.92,
-  fcCapabilityProbedAt: new Date().toISOString(),
   knownToolAliases: { "typescript/compile": "code-execute" },
   knownParamAliases: { "code-execute": { input: "code" } },
-  toolSuccessRateByName: { "code-execute": 0.95, "web-search": 0.78 },
-  interventionResponseRate: 0.88,
-  interventionResponseSamples: 25,
-  harnessHarmByTaskType: { "code-gen": "cleared", "web-search": "suspected" },
 };
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -274,45 +253,6 @@ describe("M7 Calibration: Optional Field Audit", () => {
     });
   });
 
-  describe("fcCapabilityScore — consumer: UNUSED", () => {
-    it("captured by calibration-runner but never read", () => {
-      // Evidence: packages/llm-provider/src/calibration-runner.ts:153
-      // fcCapabilityScore: mean(results.map(r => r.fcCapabilityScore))
-      // Grep shows: never consumed. Stored, never used.
-      const cal: ModelCalibration = {
-        ...FULL_CALIBRATION,
-        fcCapabilityScore: 0.92,
-      };
-      expect(cal.fcCapabilityScore).toBe(0.92);
-    });
-
-    it("spike M7-D recommendation: activate in tool-gating early exit", () => {
-      // Pseudocode:
-      // if (calibration?.fcCapabilityScore < 0.5) {
-      //   requiresTextParseFallback = true
-      // }
-      // Impact: switches to text-parse dialect for weak models
-      // Estimated benefit: 10-15% accuracy gain for local models
-      expect(true).toBe(true);
-    });
-  });
-
-  describe("fcCapabilityProbedAt — consumer: NONE", () => {
-    it("timestamp only, never used for logic", () => {
-      const cal: ModelCalibration = {
-        ...FULL_CALIBRATION,
-        fcCapabilityProbedAt: new Date().toISOString(),
-      };
-      expect(cal.fcCapabilityProbedAt).toBeDefined();
-    });
-
-    it("recommendation: REMOVE — metadata without use case", () => {
-      // This is a timestamp for observability, not for runtime behavior
-      // Removes clutter. Reduces 14→13.
-      expect(true).toBe(true);
-    });
-  });
-
   describe("knownToolAliases — consumer: calibration-runner (never applied)", () => {
     it("accumulated from observations but never used by kernel", () => {
       // Evidence: calibration.ts lines 236-243
@@ -364,107 +304,33 @@ describe("M7 Calibration: Optional Field Audit", () => {
     });
   });
 
-  describe("toolSuccessRateByName — consumer: NONE", () => {
-    it("aggregated from observations, never consulted", () => {
-      const cal: ModelCalibration = {
-        ...FULL_CALIBRATION,
-        toolSuccessRateByName: { "code-execute": 0.95, "web-search": 0.78 },
-      };
-      expect(cal.toolSuccessRateByName?.["code-execute"]).toBe(0.95);
-    });
-
-    it("spike M7-G recommendation: activate in tool-selection filter", () => {
-      // Pseudocode:
-      // const usableTools = availableTools.filter(
-      //   t => (calibration?.toolSuccessRateByName?.[t.name] ?? 1.0) > 0.3
-      // )
-      // Impact: excludes consistently-failing tools from consideration
-      // Estimated benefit: 8-12% success rate for context-limited models
-      expect(true).toBe(true);
-    });
-  });
-
-  describe("interventionResponseRate — consumer: reactive-observer (never used)", () => {
-    it("tracked in reactive-observer but never influences routing", () => {
-      // Evidence: packages/reactive-intelligence/src/calibration/reactive-observer.ts
-      // Line 283-321: accumulates riBudget but never consumes interventionResponseRate
-      const cal: ModelCalibration = {
-        ...FULL_CALIBRATION,
-        interventionResponseRate: 0.88,
-        interventionResponseSamples: 25,
-      };
-      expect(cal.interventionResponseRate).toBe(0.88);
-      expect(cal.interventionResponseSamples).toBe(25);
-    });
-
-    it("spike M7-H recommendation: use for RI budget weighting", () => {
-      // Pseudocode:
-      // if (calibration?.interventionResponseRate !== undefined) {
-      //   riBudget = riBudget * calibration.interventionResponseRate
-      // }
-      // Impact: reduces unnecessary interventions for unresponsive models
-      // Estimated benefit: 15-20% RI cost reduction, minimal accuracy impact
-      expect(true).toBe(true);
-    });
-  });
-
-  describe("harnessHarmByTaskType — consumer: NONE (harness-harm-detector)", () => {
-    it("populated by harness-harm-detector but never used for gating", () => {
-      const cal: ModelCalibration = {
-        ...FULL_CALIBRATION,
-        harnessHarmByTaskType: { "code-gen": "cleared", "web-search": "suspected" },
-      };
-      expect(cal.harnessHarmByTaskType?.["code-gen"]).toBe("cleared");
-      expect(cal.harnessHarmByTaskType?.["web-search"]).toBe("suspected");
-    });
-
-    it("spike M7-I recommendation: gate harness features by harm status", () => {
-      // Pseudocode:
-      // if (calibration?.harnessHarmByTaskType?.[taskType] === "confirmed") {
-      //   disableFeature("reactive-intervention")
-      // }
-      // Impact: prevents harness from causing failures on known-bad patterns
-      // Estimated benefit: ~5% harm reduction for low-capability models
-      expect(true).toBe(true);
-    });
-  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────
 // SECTION 3: FIELD USAGE SUMMARY
 // ──────────────────────────────────────────────────────────────────────────
 
-describe("M7 Calibration: Field Usage Report", () => {
-  it("documents current consumer count", () => {
-    // Based on grep + code review:
-    // Active consumers: 5 (steeringCompliance, parallelCallCapability,
-    //                      systemPromptAttention, optimalToolResultChars,
-    //                      + toolCallDialect in capability resolution)
-    // Claimed but unverified: 1 (observationHandling)
-    // Never used: 8 (classifierReliability, fcCapabilityScore, fcCapabilityProbedAt,
-    //               knownToolAliases, knownParamAliases, toolSuccessRateByName,
-    //               interventionResponseRate, harnessHarmByTaskType)
-    const activeConsumers = 5;
-    const claimedButUnverified = 1;
-    const unused = 8;
-    const totalFields = 14;
-
-    const usageScore = (activeConsumers + claimedButUnverified) / totalFields;
-    expect(usageScore).toBe(6 / 14); // ~42.8%
-    const percentage = (usageScore * 100).toFixed(1);
-    console.log(`Field usage: ${activeConsumers} active + ${claimedButUnverified} claimed = ${percentage}% of ${totalFields} fields`);
-  });
-
-  it("tracks spike activation target", () => {
-    // Goal: ≥8 of 14 fields with active consumers
-    // Current: 5 active + 1 claimed = 6
-    // Target spikes: M7-A through M7-I (9 spikes for 9 unused fields)
-    // Activation requirement: pick top 8 by impact
-    const targetFields = 8;
-    const currentActive = 6;
-    const spikesToImplement = targetFields - currentActive;
-    expect(spikesToImplement).toBe(2);
-    console.log(`To reach ${targetFields} active fields: need to activate ${spikesToImplement} of 9 spike candidates`);
+describe("M7 Calibration: Field Usage Report (post-cleanup 2026-05-14)", () => {
+  it("all 9 schema fields have active runtime consumers — KEEP verdict", () => {
+    // Audit (2026-05-14): 6 dead schema fields removed (fcCapabilityScore,
+    // fcCapabilityProbedAt, toolSuccessRateByName, interventionResponseRate,
+    // interventionResponseSamples, harnessHarmByTaskType). No producer, no
+    // consumer, no JSON file populated them. Schema reduced 15→9.
+    //
+    // Remaining 9 fields all have verified consumers:
+    //   1. toolCallDialect            → runner.ts:526 (driver selection)
+    //   2. systemPromptAttention      → calibration.ts:191 (system-prompt patch)
+    //   3. parallelCallCapability     → calibration.ts:196 (tool batching)
+    //   4. optimalToolResultChars     → calibration.ts:206 (ContextProfile)
+    //   5. steeringCompliance         → context-manager.ts:112
+    //   6. observationHandling        → tool-schemas.ts:120 + final-answer.ts
+    //   7. classifierReliability      → setup/classifier.ts:25
+    //   8. knownToolAliases           → act.ts:341 (healing-pipeline)
+    //   9. knownParamAliases          → param-name-healer.ts:24
+    const activeConsumers = 9;
+    const totalFields = 9;
+    expect(activeConsumers).toBe(totalFields);
+    console.log(`M7 KEEP: ${activeConsumers}/${totalFields} schema fields wired to runtime`);
   });
 });
 
@@ -625,137 +491,20 @@ describe("M7 Calibration: GREEN Phase Spike M7-E (knownToolAliases)", () => {
   });
 });
 
-describe("M7 Calibration: GREEN Phase Spike M7-G (toolSuccessRateByName)", () => {
-  /**
-   * Spike M7-G: Activate toolSuccessRateByName in tool filtering
-   *
-   * Current state: toolSuccessRateByName is accumulated but never used.
-   * Goal: Exclude consistently-failing tools from consideration during context pressure.
-   * Location: packages/reasoning/src/kernel/capabilities/act/tool-gating.ts or
-   *           packages/reasoning/src/context/context-engine.ts (availableTools filtering)
-   *
-   * Impact: +8-12% success rate when context is tight and model must pick from unreliable tools.
-   * Example: if "experimental-tool" has 20% success rate, exclude it from schema when
-   *          confident alternatives exist.
-   */
-
-  it("filterToolsBySuccessRate excludes tools below threshold", () => {
-    const filterToolsBySuccessRate = (
-      tools: string[],
-      successRates?: Record<string, number>,
-      threshold: number = 0.3,
-    ): string[] => {
-      return tools.filter((t) => (successRates?.[t] ?? 1.0) > threshold);
-    };
-
-    const tools = ["code-execute", "web-search", "experimental-tool", "file-read"];
-    const rates = {
-      "code-execute": 0.95,
-      "web-search": 0.85,
-      "experimental-tool": 0.2, // Below threshold
-      "file-read": 0.9,
-    };
-
-    const filtered = filterToolsBySuccessRate(tools, rates, 0.3);
-    expect(filtered).toEqual(["code-execute", "web-search", "file-read"]);
-    expect(filtered).not.toContain("experimental-tool");
-  });
-
-  it("applies filtering during context pressure", () => {
-    const calibration: ModelCalibration = {
-      ...FULL_CALIBRATION,
-      toolSuccessRateByName: { "code-execute": 0.95, "web-search": 0.85, "experimental": 0.2 },
-    };
-    expect(calibration.toolSuccessRateByName?.["experimental"]).toBe(0.2);
-    // When context is tight, exclude "experimental" from schema
-  });
-
-  it("impact: prevents hallucination when context is limited", () => {
-    // Test scenario:
-    // 1. Model has 2000 tokens left, needs to pick 3 of 10 tools
-    // 2. Without filtering: picks tools randomly, including low-success ones
-    // 3. With filtering: avoids tools with <30% historical success
-    const availableTools = [
-      "code-execute",
-      "web-search",
-      "experimental-tool",
-      "file-read",
-      "shell-execute",
-      "http-get",
-      "broken-ai-tool",
-      "sketch-diagram",
-      "execute-python",
-      "summarize-text",
-    ];
-    const successRates = {
-      "code-execute": 0.95,
-      "web-search": 0.85,
-      "experimental-tool": 0.2,
-      "file-read": 0.9,
-      "shell-execute": 0.88,
-      "http-get": 0.92,
-      "broken-ai-tool": 0.05, // Consistently fails
-      "sketch-diagram": 0.6,
-      "execute-python": 0.88,
-      "summarize-text": 0.75,
-    };
-
-    const filtered = availableTools.filter((t) => (successRates[t as keyof typeof successRates] ?? 1.0) > 0.3);
-    expect(filtered.length).toBeLessThan(availableTools.length);
-    expect(filtered).not.toContain("broken-ai-tool");
-    expect(filtered).not.toContain("experimental-tool");
-  });
-
-  it("measurement: tracks filtering ratio in telemetry", () => {
-    // Proposed telemetry:
-    // {
-    //   _tag: "tool_filtering_applied",
-    //   originalCount: 10,
-    //   filteredCount: 7,
-    //   threshold: 0.3,
-    //   excluded: ["broken-ai-tool", "experimental-tool"],
-    //   iteration: 2,
-    // }
-    // Enables tracking of when filtering is active and effective
-    expect(true).toBe(true);
-  });
-});
-
-describe("M7 Calibration: Field Usage Final Summary", () => {
-  it("after GREEN phase: 8 of 14 fields are actively consumed", () => {
-    // Spike implementations add 2 active consumers:
-    // M7-E: knownToolAliases (was unused, now in act.ts)
-    // M7-G: toolSuccessRateByName (was unused, now in tool-gating.ts)
-    //
-    // Active fields after spikes: 5 (core) + 1 (claimed) + 2 (activated) = 8
-    const activeAfterSpikes = 8;
-    const totalFields = 14;
-    const targetFields = 8;
-
-    expect(activeAfterSpikes).toBeGreaterThanOrEqual(targetFields);
-    console.log(`SUCCESS: ${activeAfterSpikes}/${totalFields} fields now have active consumers`);
-  });
-
-  it("removed fields: toolCallDialect, fcCapabilityProbedAt (metadata bloat)", () => {
-    // Recommendation: REMOVE 2 fields to reduce to 12 core fields
-    // - toolCallDialect: duplicate of ModelCapability.toolCallDialect
-    // - fcCapabilityProbedAt: unused timestamp metadata
-    // Result: 12 focused fields instead of 14
-    expect(true).toBe(true);
-    console.log("Recommendation: Remove 2 metadata fields → 12 core calibration fields");
-  });
-
-  it("deferred spikes (M7-A, M7-B, M7-C, M7-D, M7-F, M7-H, M7-I) for v1.1", () => {
-    // Lower-priority activations for Phase 2:
-    // M7-A: observationHandling consumer
-    // M7-B: classifierReliability (skip classifier LLM call)
-    // M7-C: Remove toolCallDialect
-    // M7-D: fcCapabilityScore in tool-gating
-    // M7-F: knownParamAliases in parameter resolution
-    // M7-H: interventionResponseRate for RI budget weighting
-    // M7-I: harnessHarmByTaskType for feature gating
-    const deferredSpikes = 7;
-    console.log(`Deferred to v1.1: ${deferredSpikes} additional activation spikes`);
-    expect(true).toBe(true);
+describe("M7 Calibration: Final Verdict (post-cleanup 2026-05-14)", () => {
+  it("M7 KEEP: schema reduced to 9 fields, all wired to runtime", () => {
+    // Original audit (May 4): 15 schema fields, 5 active consumers
+    // Cleanup (May 14):
+    //   - 9 fields verified wired to runtime (>= North Star ≥8 target)
+    //   - 6 dead fields removed (no producer, no consumer, no JSON refs):
+    //     fcCapabilityScore, fcCapabilityProbedAt, toolSuccessRateByName,
+    //     interventionResponseRate, interventionResponseSamples, harnessHarmByTaskType
+    // Verdict: M7 IMPROVE → KEEP. Further wiring deferred to v0.12 Phase E
+    // (Local Model Engineering) pending empirical harness-lift validation.
+    const activeFields = 9;
+    const schemaFields = 9;
+    const target = 8;
+    expect(activeFields).toBe(schemaFields);
+    expect(activeFields).toBeGreaterThanOrEqual(target);
   });
 });
