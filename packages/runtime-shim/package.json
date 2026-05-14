@@ -1,0 +1,43 @@
+{
+  "name": "@reactive-agents/runtime-shim",
+  "version": "0.11.0",
+  "type": "module",
+  "description": "Cross-runtime adapter — unified API for Bun and Node.js fast paths",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types.js",
+      "types": "./dist/types.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --reporter=dots",
+    "test:node": "node --experimental-strip-types --test tests/node.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest",
+    "@types/node": "^22.10.0"
+  },
+  "engines": {
+    "node": ">=22.5.0 || >=20.0.0",
+    "bun": ">=1.1.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/runtime-shim"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
