@@ -350,8 +350,8 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
     <Card title="Type-Safe from End to End" icon="seti:typescript">
         **Zero `any`** in framework code. Every agent, tool, memory entry, and
         LLM call is validated by Effect-TS schemas. Failures are typed tagged
-        errors, not exceptions. **5,028 tests** keep every service boundary
-        honest on every PR.
+        errors, not exceptions. **{metrics.tests.toLocaleString()} tests** keep
+        every service boundary honest on every PR.
     </Card>
     <Card title="Composable Layer Architecture" icon="puzzle">
         **30 packages, 13 capability layers.** Each is an independent Effect
@@ -438,7 +438,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         and A2A (JSON-RPC + SSE) ready when you actually need fan-out.
     </Card>
     <Card title="vs. Building From Scratch" icon="document">
-        **30 production-ready packages, 5,028 tests, 12-phase engine.** Memory,
+        **{metrics.grandTotal} production-ready packages, {metrics.tests.toLocaleString()} tests, {metrics.phases}-phase engine.** Memory,
         reasoning, tools, A2A, gateway, reactive intelligence, safety, cost,
         identity, orchestration — all composable, all opt-in. Focus on your
         agent's logic, not infrastructure.

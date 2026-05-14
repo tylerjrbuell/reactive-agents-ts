@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import metrics from '../../../data/metrics.json';
 
 <Aside type="tip" title="Subscribe">
 Get release highlights as an RSS feed: [`/rss.xml`](/rss.xml). Drop into NetNewsWire, Inoreader, or any feed reader.
@@ -57,7 +58,7 @@ The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four 
 - **`@reactive-agents/cortex`** — Cortex Studio is now installable from npm: `bunx @reactive-agents/cortex` or `rax cortex` launches the live agent canvas, debrief UI, and visual builder. See [Cortex](/features/cortex/).
 - **Gateway chat mode** — Per-sender SQLite session history, episodic context injection, daily compaction. Set `channels.mode: 'chat'` for conversational webhooks; keep `'task'` for one-shot triggers. See [Gateway](/features/gateway/) and [Messaging Channels](/guides/messaging-channels/).
 - **Composable kernel architecture** — Internal `kernel/` reorganized by capability (`act/` · `attend/` · `comprehend/` · `decide/` · `reason/` · `reflect/` · `sense/` · `verify/` + `loop/` + `state/`). Doesn't change the public API; makes contributing to the framework easier. See [Composable Kernel](/concepts/composable-kernel/).
-- **5,028 tests** across 556 files (5,002 pass / 26 skip / 0 fail in ~65 s) — verified by `bun test` on every PR.
+- **{metrics.tests.toLocaleString()} tests** across {metrics.testFiles} files — verified by `bun test` on every PR.
 
 ### Patch releases
 
