@@ -27,6 +27,13 @@ export interface MemoryDatabaseService {
 
   /** Close the database connection. */
   readonly close: () => Effect.Effect<void, never>;
+
+  /**
+   * Whether FTS5 virtual tables are available.
+   * False on Node's built-in sqlite (no FTS5 extension).
+   * When false, search falls back to LIKE queries.
+   */
+  readonly hasFTS5: boolean;
 }
 
 // ─── Service Tag ───
@@ -38,7 +45,8 @@ export class MemoryDatabase extends Context.Tag("MemoryDatabase")<
 
 // ─── Schema SQL ───
 
-const SCHEMA_SQL = `
+/** Core tables and indexes (always executed, no FTS5 dependency). */
+const SCHEMA_CORE_SQL = `
   PRAGMA journal_mode = WAL;
   PRAGMA synchronous = NORMAL;
   PRAGMA foreign_keys = ON;
@@ -105,64 +113,6 @@ const SCHEMA_SQL = `
     created_at  TEXT NOT NULL,
     PRIMARY KEY (source_id, target_id)
   );
-
-  -- FTS5 virtual table for full-text search (Tier 1 semantic search)
-  CREATE VIRTUAL TABLE IF NOT EXISTS semantic_fts USING fts5(
-    id UNINDEXED,
-    content,
-    tags,
-    content='semantic_memory',
-    content_rowid='rowid'
-  );
-
-  -- FTS5 for episodic log
-  CREATE VIRTUAL TABLE IF NOT EXISTS episodic_fts USING fts5(
-    id UNINDEXED,
-    content,
-    content='episodic_log',
-    content_rowid='rowid'
-  );
-
-  -- Triggers to keep FTS5 in sync
-  CREATE TRIGGER IF NOT EXISTS semantic_fts_insert
-    AFTER INSERT ON semantic_memory BEGIN
-      INSERT INTO semantic_fts(rowid, id, content, tags)
-      VALUES (new.rowid, new.id, new.content, new.tags);
-    END;
-
-  CREATE TRIGGER IF NOT EXISTS semantic_fts_delete
-    AFTER DELETE ON semantic_memory BEGIN
-      INSERT INTO semantic_fts(semantic_fts, rowid, id, content, tags)
-      VALUES ('delete', old.rowid, old.id, old.content, old.tags);
-    END;
-
-  CREATE TRIGGER IF NOT EXISTS semantic_fts_update
-    AFTER UPDATE ON semantic_memory BEGIN
-      INSERT INTO semantic_fts(semantic_fts, rowid, id, content, tags)
-      VALUES ('delete', old.rowid, old.id, old.content, old.tags);
-      INSERT INTO semantic_fts(rowid, id, content, tags)
-      VALUES (new.rowid, new.id, new.content, new.tags);
-    END;
-
-  CREATE TRIGGER IF NOT EXISTS episodic_fts_insert
-    AFTER INSERT ON episodic_log BEGIN
-      INSERT INTO episodic_fts(rowid, id, content)
-      VALUES (new.rowid, new.id, new.content);
-    END;
-
-  CREATE TRIGGER IF NOT EXISTS episodic_fts_delete
-    AFTER DELETE ON episodic_log BEGIN
-      INSERT INTO episodic_fts(episodic_fts, rowid, id, content)
-      VALUES ('delete', old.rowid, old.id, old.content);
-    END;
-
-  CREATE TRIGGER IF NOT EXISTS episodic_fts_update
-    AFTER UPDATE ON episodic_log BEGIN
-      INSERT INTO episodic_fts(episodic_fts, rowid, id, content)
-      VALUES ('delete', old.rowid, old.id, old.content);
-      INSERT INTO episodic_fts(rowid, id, content)
-      VALUES (new.rowid, new.id, new.content);
-    END;
 
   -- Plan persistence tables
   CREATE TABLE IF NOT EXISTS plans (
@@ -251,6 +201,71 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_skill_versions_skill ON skill_versions(skill_id);
 `;
 
+/**
+ * FTS5 virtual tables and sync triggers.
+ * Executed separately so failures can be caught without aborting core migration.
+ * Not available on Node's built-in sqlite (no FTS5 extension).
+ */
+const SCHEMA_FTS5_SQL = `
+  -- FTS5 virtual table for full-text search (Tier 1 semantic search)
+  CREATE VIRTUAL TABLE IF NOT EXISTS semantic_fts USING fts5(
+    id UNINDEXED,
+    content,
+    tags,
+    content='semantic_memory',
+    content_rowid='rowid'
+  );
+
+  -- FTS5 for episodic log
+  CREATE VIRTUAL TABLE IF NOT EXISTS episodic_fts USING fts5(
+    id UNINDEXED,
+    content,
+    content='episodic_log',
+    content_rowid='rowid'
+  );
+
+  -- Triggers to keep FTS5 in sync
+  CREATE TRIGGER IF NOT EXISTS semantic_fts_insert
+    AFTER INSERT ON semantic_memory BEGIN
+      INSERT INTO semantic_fts(rowid, id, content, tags)
+      VALUES (new.rowid, new.id, new.content, new.tags);
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS semantic_fts_delete
+    AFTER DELETE ON semantic_memory BEGIN
+      INSERT INTO semantic_fts(semantic_fts, rowid, id, content, tags)
+      VALUES ('delete', old.rowid, old.id, old.content, old.tags);
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS semantic_fts_update
+    AFTER UPDATE ON semantic_memory BEGIN
+      INSERT INTO semantic_fts(semantic_fts, rowid, id, content, tags)
+      VALUES ('delete', old.rowid, old.id, old.content, old.tags);
+      INSERT INTO semantic_fts(rowid, id, content, tags)
+      VALUES (new.rowid, new.id, new.content, new.tags);
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS episodic_fts_insert
+    AFTER INSERT ON episodic_log BEGIN
+      INSERT INTO episodic_fts(rowid, id, content)
+      VALUES (new.rowid, new.id, new.content);
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS episodic_fts_delete
+    AFTER DELETE ON episodic_log BEGIN
+      INSERT INTO episodic_fts(episodic_fts, rowid, id, content)
+      VALUES ('delete', old.rowid, old.id, old.content);
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS episodic_fts_update
+    AFTER UPDATE ON episodic_log BEGIN
+      INSERT INTO episodic_fts(episodic_fts, rowid, id, content)
+      VALUES ('delete', old.rowid, old.id, old.content);
+      INSERT INTO episodic_fts(rowid, id, content)
+      VALUES (new.rowid, new.id, new.content);
+    END;
+`;
+
 // ─── Live Implementation ───
 
 export const MemoryDatabaseLive = (config: MemoryConfig) =>
@@ -276,15 +291,32 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
           }),
       });
 
-      // Run schema migrations
+      // Run core schema migrations (always required)
       yield* Effect.try({
-        try: () => db.exec(SCHEMA_SQL),
+        try: () => db.exec(SCHEMA_CORE_SQL),
         catch: (e) =>
           new DatabaseError({
             message: `Schema migration failed: ${e}`,
             operation: "migrate",
             cause: e,
           }),
+      });
+
+      // Attempt FTS5 virtual tables + triggers (optional — unavailable on node:sqlite)
+      const fts5Available = yield* Effect.sync(() => {
+        try {
+          db.exec(SCHEMA_FTS5_SQL);
+          return true;
+        } catch (err) {
+          if (String(err).includes("fts5")) {
+            console.warn(
+              "[memory] FTS5 unavailable (node:sqlite lacks the fts5 extension). " +
+                "Falling back to LIKE-based search. Full-text ranking and triggers disabled.",
+            );
+            return false;
+          }
+          throw err;
+        }
       });
 
       // Register finalizer to close DB cleanly
@@ -299,6 +331,8 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
       );
 
       const service: MemoryDatabaseService = {
+        hasFTS5: fts5Available,
+
         query: <T>(sql: string, params: readonly unknown[] = []) =>
           Effect.try({
             try: () => {
