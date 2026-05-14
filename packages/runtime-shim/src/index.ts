@@ -15,5 +15,6 @@ export { spawn } from "./spawn.js";
 export { writeFile, readFile } from "./fs.js";
 export { hash } from "./hash.js";
 export { serve } from "./serve.js";
+export { glob } from "./glob.js";
 
 // Other primitive exports will be added in subsequent tasks.
