@@ -10,4 +10,6 @@ export type {
   GlobLike,
 } from "./types.js";
 
+export { Database } from "./database.js";
+
 // Other primitive exports will be added in subsequent tasks.
