@@ -4,6 +4,7 @@ import skills from "astro-skills";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightImageZoom from "starlight-image-zoom";
+import { newPageIndicator } from "./src/plugins/new-page-indicator.ts";
 
 export default defineConfig({
   // Docs now deploy to a custom domain at the root path.
@@ -11,6 +12,7 @@ export default defineConfig({
   base: "/",
   integrations: [
     skills(),
+    newPageIndicator({ withinDays: 30 }),
     starlight({
       title: "Reactive Agents",
       description:
@@ -99,7 +101,19 @@ export default defineConfig({
             src: "/umami-deep.js",
           },
         },
+        // Marks sidebar links for pages flagged "new" (frontmatter or git date).
+        // Reads the inline window.__ra_new_pages_data__ injected by new-page-indicator.
+        {
+          tag: "script",
+          attrs: {
+            defer: true,
+            src: "/new-page-indicator.js",
+          },
+        },
       ],
+      components: {
+        PageTitle: "./src/components/PageTitle.astro",
+      },
       sidebar: [
         {
           label: "Rax CLI",

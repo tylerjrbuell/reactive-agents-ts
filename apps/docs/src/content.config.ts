@@ -19,7 +19,12 @@ const skillsSchema = z.object({
 export const collections = {
   docs: defineCollection({
     loader: docsLoader(),
-    schema: docsSchema(),
+    schema: docsSchema({
+      extend: z.object({
+        isNew: z.boolean().optional(),
+        newUntil: z.string().optional(),
+      }),
+    }),
   }),
   skills: defineCollection({
     loader: starlightSafeSkillsLoader({ base: "./skills" }),

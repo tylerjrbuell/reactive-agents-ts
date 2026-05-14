@@ -1,0 +1,44 @@
+---
+import type { Props } from "@astrojs/starlight/props";
+
+const { entry } = Astro.props;
+const data = entry?.data ?? {};
+const now = Date.now();
+const newUntilMs =
+  typeof data.newUntil === "string" ? new Date(data.newUntil).getTime() : NaN;
+const isExplicitlyNew =
+  data.isNew === true || (!isNaN(newUntilMs) && newUntilMs > now);
+
+// Server-side cannot know git date here without a generated manifest;
+// rely on injected client script (window.__ra_new_pages_data__) to add the dot
+// when isExplicitlyNew is false. We render a placeholder element the script
+// can flip on if the current page slug is in the new-pages list.
+const id = entry?.id ?? "";
+---
+
+<h1
+  id="_top"
+  class:list={["ra-page-title", { "ra-page-title--is-new": isExplicitlyNew }]}
+  data-page-id={id}
+>
+  {data.title}
+  <span class="ra-new-dot" aria-label="Recently added" title="Recently added" />
+</h1>
+
+<script is:inline>
+  (function () {
+    var data = window.__ra_new_pages_data__;
+    if (!Array.isArray(data) || data.length === 0) return;
+    var h = document.querySelector("h1.ra-page-title");
+    if (!h) return;
+    if (h.classList.contains("ra-page-title--is-new")) return;
+    var path = window.location.pathname.replace(/\/$/, "") || "/";
+    for (var i = 0; i < data.length; i++) {
+      var slug = String(data[i]).replace(/\/$/, "") || "/";
+      if (slug === path) {
+        h.classList.add("ra-page-title--is-new");
+        return;
+      }
+    }
+  })();
+</script>
