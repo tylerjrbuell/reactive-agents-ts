@@ -11,5 +11,6 @@ export type {
 } from "./types.js";
 
 export { Database } from "./database.js";
+export { spawn } from "./spawn.js";
 
 // Other primitive exports will be added in subsequent tasks.
