@@ -291,6 +291,6 @@ M3/M6/M7/M8/M10 can run concurrently with Phase A — different files, no confli
 
 At session end: replace "Latest Session" with new date + key updates, update "What's Next," add decisions. Keep it under 120 lines.
 
-**Last Updated:** 2026-05-13
-**Current Phase:** B (Compose API) — Waves B + C + E complete; 5/5 Wave A–E tasks done; builder desugaring complete
-**Next Review:** After v0.11 launch readiness validation
+**Last Updated:** 2026-05-14
+**Current Phase:** C (v0.11 Launch) — Compose API + Snapshot/Replay + Skill Persistence shipped; remaining: Playground, `create-reactive-agent` CLI, `@reactive-agents/observe` OTel, GH Projects board
+**Next Review:** After v0.11.0 ships

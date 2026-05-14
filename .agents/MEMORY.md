@@ -86,29 +86,29 @@ Immediate hygiene: keep `wiki/Hot.md` and this memory aligned with North Star; s
 
 ### Phase 1 Mechanism Validation Archive (May 4–12, 2026)
 
-Historical validation (8 KEEP verdicts, 5 IMPROVE verdicts) now archived to reduce loaded context.  
-**Reference:** [MEMORY-ARCHIVE-PHASE1.md](MEMORY-ARCHIVE-PHASE1.md) for mechanism tables and key learnings.  
-**Live status:** `wiki/Research/Harness-Reports/` and `wiki/Experiments/M*.md` files.
+Historical validation (8 KEEP verdicts, 5 IMPROVE verdicts).  
+**Live status:** `wiki/Research/Harness-Reports/` and `wiki/Experiments/M*.md` files.  
+**Per-mechanism detail:** retained in this file's Phase 1 section below; the prior planned `MEMORY-ARCHIVE-PHASE1.md` extraction was not produced.
 
 ---
 
-### North Star v4.0 — Single Consolidated Forward Plan ✅ (May 7, 2026)
+### North Star v5.0 — Single Consolidated Forward Plan (current, May 11, 2026)
 
-**Canonical planning document:** `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v4.0
+**Canonical planning document:** `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` v5.0 (March 2026 harness-research integration: NLAH Pruning Principle, Stanford Meta-Harness raw-trace finding, self-evolution +4.8pp).
 
 All prior roadmap/phase documents are superseded:
-- `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` — SUPERSEDED (marked with ⚠️ header)
-- `wiki/Planning/Phase 1.5 Improvement Roadmap.md` — SUPERSEDED (marked; per-mechanism detail retained as reference)
+- `wiki/Architecture/Specs/07-ROADMAP-v1.0.md` — SUPERSEDED
+- `wiki/Planning/Phase 1.5 Improvement Roadmap.md` — SUPERSEDED (per-mechanism detail retained)
 - `04-PROJECT-STATE.md` — retained as cold-session framing doc
 
 **Phase sequence (see North Star §6 for full validation gates):**
 
 | Phase | Focus | Status |
 |---|---|---|
-| **A** | Architecture Cleanup — W23–W25 ✅: `execution-engine.ts` (4,499→1,539 LOC) + `builder.ts` (6,232→2,407 LOC, -61%). Structural decomposition done; absolute LOC targets traded for clean module boundaries. | **Complete — Phase B (Compose API) unblocked** |
-| **1.5** | Mechanism Improvements — M3/M6/M7/M8/M10 IMPROVE→KEEP | Parallel with A |
-| **B** | Compose API — Waves A–F, 24 injection points, 6 killswitches | v0.11 prereq |
-| **C** | v0.11 Launch — playground, CLI generator, OTel, skill persistence, Snapshot/Replay | v0.11.0 |
+| **A** | Architecture Cleanup — W23–W25: `execution-engine.ts` 4,499→1,637 LOC (W24) + `builder.ts` 6,232→2,481 LOC (W25). | ✅ **Complete** |
+| **B** | Compose API — Waves A–F, 5+ chokepoints live, 6 killswitches, RunHandle. | ✅ **Complete** (May 13) |
+| **C** | v0.11 Launch — skill persistence ✅, Snapshot/Replay ✅; **remaining:** playground, `create-reactive-agent` CLI, OTel exporter, GH Projects board. | ⏳ in flight |
+| **1.5** | Mechanism Improvements — M3 REWORK ✅ shipped; M6 persistence ✅; M7/M8/M10 IMPROVE pending | Parallel with C |
 | **D** | Code-as-Action Strategy — 6th reasoning strategy, ≥20% local model lift | v0.12 |
 | **E** | Local Model Engineering — calibration consumers (≥8 fields), per-provider parser, paging | v0.12 |
 | **F** | Public Benchmark Discipline — τ-bench / BFCL / HAL Princeton | v0.13 |
@@ -141,7 +141,7 @@ All prior roadmap/phase documents are superseded:
 
 ---
 
-### v0.11 Launch-Readiness Checklist — ABSORBED into North Star v4.0 §6 Phase C (May 7, 2026)
+### v0.11 Launch-Readiness Checklist — ABSORBED into North Star v5.0 §6 Phase C (May 7, 2026)
 
 **Comprehensive planning document drafted for market-positioning inflection point.**
 
@@ -374,7 +374,7 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
   - Audit update: Mark FM-F2 as **validated → mitigated** in `AUDIT-overhaul-2026.md §10` (was "unvalidated theoretical").
 
 - **External channels phase 1 (branch `feat/channels-package`, merge pending):** package `@reactive-agents/channels`, runtime `.withChannels()`, gateway config rename `channels` → `accessControl`, webhook adapter + tests. Evidence: `wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`. **Mainline docs** (`apps/docs`, Starlight gateway pages) still describe `GatewayConfig.channels` until the branch merges.
-- **Test runner snapshot (current, May 12):** `bun test` → **5043 pass**, 26 skip, 0 fail across **563** files / **5069 tests**; all green. (Prior May 4 snapshot: 4,701+ pass was pre-M3/M11/M12 commits).
+- **Test runner snapshot (May 13):** `bun test` → **5128/5128 pass** (per `wiki/Hot.md`; 1150+/1150+ reasoning, 24/24 compose, 24/24 replay). Re-run before any release claim.
 
 ### Earlier context (May 1, 2026)
 
@@ -460,7 +460,7 @@ Executed parallel TDD spike validations for all 13 harness mechanisms (M1–M13)
 
 2. **M6: Skill System** — Lifecycle + RI hooks work. Learning transfers within agent instance (100% on follow-up tasks). **Limitation:** Ephemeral — doesn't survive across sessions. **Phase 1.5 action:** Add skill persistence layer (SQLite/filesystem) for cross-session learning.
 
-3. **M7: Calibration** — Audit: 14 fields, only 3 active consumers. **Phase 1.5 action:** Design activation spikes for high-value fields (tool aliasing, cost prediction, model tuning). Target ≥8 of 14 fields with real consumers.
+3. ~~**M7: Calibration**~~ — ✅ RESOLVED May 14, 2026: re-audit found 9 fields wired (steeringCompliance, parallelCallCapability, observationHandling, systemPromptAttention, optimalToolResultChars, classifierReliability, toolCallDialect, knownToolAliases, knownParamAliases) — exceeds ≥8 target. **Cleanup:** dropped 6 dead schema fields (fcCapabilityScore, fcCapabilityProbedAt, toolSuccessRateByName, interventionResponseRate, interventionResponseSamples, harnessHarmByTaskType) and orphaned `filterToolsBySuccessRate` export. Schema: 15→9 fields. Verdict flipped IMPROVE → KEEP.
 
 4. **M8: Sub-agent Delegation** — TDD test harness ready (10-task multi-step suite). Effectiveness metrics pending. **Phase 1.5 action:** Full execution with real LLMs to measure when delegation beats inline.
 
@@ -545,7 +545,7 @@ Memory descriptions to update or rewrite if you encounter them in personal memor
 
 **Kernel lives at `packages/reasoning/src/kernel/`** — reorganized in Stage 5 from `strategies/kernel/` to capability-grouped subdirs:
 - `capabilities/` — 8 subdirs: act, attend, comprehend, decide (arbitrator.ts), reason (think.ts), reflect (loop-detector.ts, reactive-observer.ts), sense, verify
-- `loop/` — runner.ts (1,706 LOC), react-kernel.ts, terminate.ts (single-owner termination helper), auto-checkpoint.ts, output-assembly.ts, output-synthesis.ts
+- `loop/` — runner.ts (1,739 LOC), react-kernel.ts, terminate.ts (single-owner termination helper), auto-checkpoint.ts, output-assembly.ts, output-synthesis.ts
 - `state/` — kernel-state.ts, kernel-hooks.ts, kernel-constants.ts
 - `utils/` — diagnostics.ts, ics-coordinator.ts, lane-controller.ts, service-utils.ts
 
@@ -570,14 +570,14 @@ Memory descriptions to update or rewrite if you encounter them in personal memor
 
 ## Architecture debt (current top items)
 
-The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top items as of May 7:
+The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top items as of May 14:
 
-1. **`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC** — **Phase A target (now-work).** See North Star v4.0 §6 Phase A for W23–W28 sequence and validation gates.
-2. ~~**Eval Rule 4 frozen-judge**~~ — ✅ RESOLVED W9/FIX-21 (commit a9a7c55f): `eval-service.ts:189` yields `JudgeLLMService` Tag (isolated from SUT's `LLMService`); benchmarks route through `packages/judge-server/` HTTP process. No benchmark claims blocked.
-3. **ToT outer loop still unhooked** from `dispatcher-early-stop` — each branch is a separate sub-kernel (PER inner loop fixed Apr 19 at `plan-execute.ts:737,762`).
-4. Strategy routing opt-in via `withReasoning({ strategySwitching: { enabled: true } })` — field is optional in `ReactiveInput` at `strategies/reactive.ts:70`; runtime at `runner.ts:749`.
+1. ~~`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC~~ — ✅ RESOLVED Phase A (May 8–9): `execution-engine.ts` 4,499→1,637 LOC (W24); `builder.ts` 6,232→2,481 LOC (W25). Both decomposed into capability-grouped modules.
+2. ~~**Eval Rule 4 frozen-judge**~~ — ✅ RESOLVED W9/FIX-21 (commit a9a7c55f): `eval-service.ts:189` yields `JudgeLLMService` Tag; benchmarks route through `packages/judge-server/` HTTP process.
+3. **ToT outer loop still unhooked** from `dispatcher-early-stop` — each branch is a separate sub-kernel (PER inner loop fixed Apr 19 at `plan-execute.ts:781,806`).
+4. ~~Strategy routing opt-in~~ — ✅ RESOLVED May 12: enabled by default (`enableStrategySwitching !== false`); runtime read at `runner.ts:811,1174`; field type still optional at `strategies/reactive.ts:72`.
 
-**Resolved in prior work:** [MEMORY-ARCHIVE-RESOLVED.md](MEMORY-ARCHIVE-RESOLVED.md) — 8 fixed items (hooks, dispatcher, calibration, etc.) kept as reference only. Do not resurface as blockers.
+**Resolved in prior work:** kept inline; the planned `MEMORY-ARCHIVE-RESOLVED.md` extraction was not produced. Resolved P0s listed below.
 
 ---
 
