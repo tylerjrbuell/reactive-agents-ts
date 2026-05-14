@@ -1,0 +1,47 @@
+{
+  "name": "@reactive-agents/replay",
+  "version": "0.11.0",
+  "description": "Deterministic re-run of recorded reactive-agent traces with prompt/model overrides",
+  "type": "module",
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --reporter=dots",
+    "test:watch": "bun test --watch"
+  },
+  "dependencies": {
+    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/trace": "workspace:*",
+    "@reactive-agents/tools": "workspace:*",
+    "effect": "^3.10.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/replay"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "homepage": "https://docs.reactiveagents.dev/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  }
+}
