@@ -7,6 +7,7 @@
  * Designed to be: free (local models), fast (<30s), deterministic (temp=0), minimal deps.
  */
 import type { ModelCalibration } from "./calibration.js";
+import { isMain } from "@reactive-agents/runtime-shim";
 
 const OLLAMA_BASE = process.env.OLLAMA_BASE ?? "http://localhost:11434";
 const PROBE_VERSION = 1;
@@ -350,7 +351,7 @@ async function main() {
   }
 }
 
-if (import.meta.main) {
+if (isMain(import.meta.url)) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

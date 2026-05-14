@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/memory": "workspace:*"
+    "@reactive-agents/memory": "workspace:*",
+    "@reactive-agents/runtime-shim": "workspace:*"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
