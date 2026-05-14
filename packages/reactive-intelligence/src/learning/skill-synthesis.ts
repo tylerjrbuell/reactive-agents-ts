@@ -1,5 +1,6 @@
 import type { ProceduralEntry, MemoryId } from "@reactive-agents/memory";
 import type { SkillFragment } from "../telemetry/types.js";
+import type { SkillRecord } from "@reactive-agents/core";
 
 type EntropyEntry = {
   readonly composite: number;
@@ -93,6 +94,81 @@ export function extractSkillFragment(
     convergenceIteration: convergenceIdx >= 0 ? convergenceIdx : null,
     finalComposite: composites[composites.length - 1] ?? 0,
     meanComposite: mean,
+  };
+}
+
+type SkillFragmentToSkillRecordParams = {
+  readonly fragment: SkillFragment;
+  readonly agentId: string;
+  readonly taskCategory: string;
+  readonly modelId: string;
+};
+
+export function skillFragmentToSkillRecord(
+  params: SkillFragmentToSkillRecordParams,
+): SkillRecord {
+  const { fragment, agentId, taskCategory, modelId } = params;
+  const now = new Date();
+  const name = `${taskCategory}:${modelId}`;
+
+  const convergenceStr =
+    fragment.convergenceIteration != null
+      ? `iteration ${fragment.convergenceIteration}`
+      : "unknown iteration";
+
+  const instructions = [
+    `Learned configuration for ${taskCategory} tasks with ${modelId}.`,
+    ``,
+    `This configuration achieved convergence at ${convergenceStr} with mean entropy ${fragment.meanComposite.toFixed(2)}.`,
+    ``,
+    `Apply these settings for ${taskCategory} tasks:`,
+    `- Reasoning strategy: ${fragment.reasoningConfig.strategy}${fragment.reasoningConfig.strategySwitchingEnabled ? " (strategy-switching enabled)" : ""}`,
+    `- Temperature: ${fragment.contextStrategy.temperature}`,
+    `- Max iterations: ${fragment.contextStrategy.maxIterations}`,
+    `- Tool filtering: ${fragment.contextStrategy.toolFilteringMode}${fragment.contextStrategy.requiredToolsCount > 0 ? ` (${fragment.contextStrategy.requiredToolsCount} required tool(s))` : ""}`,
+    `- Memory tier: ${fragment.memoryConfig.tier}${fragment.memoryConfig.consolidationEnabled ? " with consolidation" : ""}`,
+    `- Context compression: ${fragment.contextStrategy.compressionEnabled ? "enabled" : "disabled"}`,
+    `- Adaptive mode: ${fragment.reasoningConfig.adaptiveEnabled ? "enabled" : "disabled"}`,
+  ].join("\n");
+
+  return {
+    id: crypto.randomUUID(),
+    name,
+    description: `Learned skill for ${taskCategory} tasks on ${modelId} (entropy: ${fragment.meanComposite.toFixed(2)}, convergence at ${convergenceStr})`,
+    agentId,
+    source: "learned",
+    instructions,
+    version: 1,
+    versionHistory: [],
+    config: {
+      strategy: fragment.reasoningConfig.strategy,
+      temperature: fragment.contextStrategy.temperature,
+      maxIterations: fragment.contextStrategy.maxIterations,
+      promptTemplateId: fragment.promptTemplateId,
+      systemPromptTokens: fragment.systemPromptTokens,
+      compressionEnabled: fragment.contextStrategy.compressionEnabled,
+    },
+    evolutionMode: "auto",
+    confidence: "tentative",
+    successRate: 1.0,
+    useCount: 0,
+    refinementCount: 0,
+    taskCategories: [taskCategory],
+    modelAffinities: [modelId],
+    base: null,
+    avgPostActivationEntropyDelta: 0,
+    avgConvergenceIteration: fragment.convergenceIteration ?? 0,
+    convergenceSpeedTrend: [],
+    conflictsWith: [],
+    lastActivatedAt: null,
+    lastRefinedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    contentVariants: {
+      full: instructions,
+      summary: null,
+      condensed: null,
+    },
   };
 }
 
