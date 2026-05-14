@@ -2,7 +2,7 @@
 title: Production Deployment
 description: Best practices for deploying Reactive Agents to production — observability, cost controls, safety, and monitoring.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 This guide covers what to enable and configure when deploying agents to production environments.

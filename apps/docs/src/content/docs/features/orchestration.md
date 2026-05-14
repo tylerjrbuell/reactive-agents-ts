@@ -2,7 +2,7 @@
 title: Orchestration
 description: Multi-agent workflows with 5 execution patterns, checkpoints, and event sourcing.
 sidebar:
-  order: 6
+  order: 9
 ---
 
 The orchestration layer coordinates multiple agents working together on complex tasks. Define workflows with different execution patterns, checkpoint progress for durability, and inspect the full event log.

@@ -2,7 +2,7 @@
 title: Custom Reasoning Strategies
 description: Build and register your own reasoning strategies for specialized agent behavior.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 While the 5 built-in strategies cover most use cases, you can register custom reasoning strategies for specialized behavior.

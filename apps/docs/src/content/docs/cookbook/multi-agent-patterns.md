@@ -2,7 +2,7 @@
 title: Multi-Agent Patterns
 description: Patterns for building multi-agent systems — pipelines, map-reduce, orchestrator-workers, and delegation.
 sidebar:
-  order: 3
+  order: 4
 ---
 
 Reactive Agents supports multiple agents working together through the orchestration layer. This page shows patterns for common multi-agent architectures.

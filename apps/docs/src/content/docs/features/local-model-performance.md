@@ -2,7 +2,7 @@
 title: Local Model Performance
 description: Tier-specific tuning, calibration, and performance characteristics for local LLM providers.
 sidebar:
-  order: 8
+  order: 13
 ---
 
 Reactive Agents automatically adapts its behavior based on the model tier. Local models (Ollama, LiteLLM) have different entropy distributions, latency profiles, and capability envelopes compared to frontier models (OpenAI, Anthropic, Google). The framework accounts for these differences at every level.

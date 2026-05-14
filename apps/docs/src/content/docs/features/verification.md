@@ -2,7 +2,7 @@
 title: Verification
 description: Fact-checking and output quality verification using semantic entropy, fact decomposition, NLI, and hallucination detection.
 sidebar:
-  order: 2
+  order: 5
 ---
 
 The verification layer fact-checks agent outputs before they reach the user. It decomposes responses into claims, measures confidence, and flags unreliable content.

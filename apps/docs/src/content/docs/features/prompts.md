@@ -2,7 +2,7 @@
 title: Prompt Templates
 description: Version-controlled prompt templates with variable interpolation and composition.
 sidebar:
-  order: 7
+  order: 12
 ---
 
 The prompts layer provides a template engine for managing, versioning, and composing prompts. Define reusable templates with typed variables, track versions, and compose complex prompts from smaller pieces.

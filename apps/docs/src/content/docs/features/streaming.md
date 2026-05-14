@@ -2,7 +2,7 @@
 title: Streaming
 description: Token-by-token output streaming with two density modes, fiber-isolated concurrent streams, and adapters for SSE, ReadableStream, and AsyncIterable.
 sidebar:
-  order: 8
+  order: 14
 ---
 
 Agent streaming delivers LLM tokens to your UI the moment they're generated — no waiting for the full response. The `runStream()` API emits a discriminated union of events that you consume with a standard `for await...of` loop, and two **density modes** let you choose between minimal overhead (tokens only) and full lifecycle visibility (phases, tools, thoughts). Concurrent streams are fiber-isolated via Effect-TS `FiberRef`, so multiple callers never see each other's tokens.

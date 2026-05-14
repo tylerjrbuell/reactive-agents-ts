@@ -2,7 +2,7 @@
 title: Cost Tracking
 description: Model routing, budget enforcement, semantic caching, and cost analytics.
 sidebar:
-  order: 3
+  order: 6
 ---
 
 The cost layer keeps your AI spending under control. It routes tasks to the cheapest model that can handle them, enforces budget limits, caches responses, and provides detailed cost analytics.

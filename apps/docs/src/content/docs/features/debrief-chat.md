@@ -2,7 +2,7 @@
 title: Debrief & Chat
 description: Structured run artifacts, post-run synthesis, and conversational interaction with agents.
 sidebar:
-  order: 15
+  order: 19
 ---
 
 ## Overview

@@ -2,7 +2,7 @@
 title: Agent Gateway
 description: Persistent autonomous agent harness with adaptive heartbeats, cron scheduling, webhooks, and a composable policy engine.
 sidebar:
-  order: 1
+  order: 3
 ---
 
 The Agent Gateway turns reactive agents into **persistent, autonomous services**. Instead of waiting for user prompts, gateway-enabled agents respond to heartbeat ticks, cron schedules, webhooks, and other event sources — all governed by a deterministic policy engine that decides what deserves an LLM call and what doesn't.

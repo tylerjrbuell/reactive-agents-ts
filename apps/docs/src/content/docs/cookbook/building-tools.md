@@ -2,7 +2,7 @@
 title: Building Custom Tools
 description: Create typed, validated tools with the fluent ToolBuilder API or plain ToolDefinition objects.
 sidebar:
-  order: 7
+  order: 8
 ---
 
 Tools give agents the ability to take real-world actions — fetch data, run code, call APIs, write files. This recipe covers both the fluent `ToolBuilder` API and the lower-level `ToolDefinition` format.
