@@ -1,5 +1,7 @@
 // packages/health/src/service.ts
 import { Effect, Ref } from "effect";
+import { serve } from "@reactive-agents/runtime-shim";
+import type { ServerLike } from "@reactive-agents/runtime-shim";
 import type {
   HealthConfig,
   HealthService,
@@ -22,7 +24,7 @@ export const makeHealthService = (
   Effect.gen(function* () {
     const checksRef = yield* Ref.make<HealthCheck[]>([]);
     const startedAt = Date.now();
-    let server: ReturnType<typeof Bun.serve> | null = null;
+    let server: ServerLike | null = null;
     let boundPort = config.port;
 
     const runChecks = (): Effect.Effect<HealthCheckResult[], never> =>
@@ -104,8 +106,8 @@ export const makeHealthService = (
       },
 
       start: () =>
-        Effect.sync(() => {
-          server = Bun.serve({
+        Effect.promise(async () => {
+          server = await serve({
             port: config.port,
             fetch: handleRequest,
           });

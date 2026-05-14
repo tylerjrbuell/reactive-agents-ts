@@ -9,6 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots"
   },
+  "dependencies": {
+    "@reactive-agents/runtime-shim": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.7.0",
     "bun-types": "latest",
