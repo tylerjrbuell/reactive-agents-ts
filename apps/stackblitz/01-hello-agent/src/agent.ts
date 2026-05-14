@@ -1,12 +1,12 @@
 /**
- * Hello Agent — simplest Reactive Agents demo
+ * Hello Agent -- simplest Reactive Agents demo
  *
- * Runs a single Q&A query and streams the result.
+ * Runs a single Q&A query and prints the result.
  *
- * Secrets to add in Stackblitz (⚙️ icon):
- *   GOOGLE_API_KEY     → ai.google.dev  ← recommended (free tier)
- *   ANTHROPIC_API_KEY  → console.anthropic.com
- *   OPENAI_API_KEY     → platform.openai.com
+ * Secrets to add in Stackblitz (Settings icon, left sidebar):
+ *   GOOGLE_API_KEY     -> ai.google.dev  (recommended, free tier)
+ *   ANTHROPIC_API_KEY  -> console.anthropic.com
+ *   OPENAI_API_KEY     -> platform.openai.com
  *
  *   Or use local Ollama:
  *   PROVIDER=ollama
@@ -28,18 +28,18 @@ const hasKey =
 
 if (!hasKey) {
   console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  No API key found. Add one in Stackblitz Secrets (⚙️):
+================================================
+  No API key found. Add one in Stackblitz Secrets:
 
-  GOOGLE_API_KEY     → ai.google.dev   ← free tier, recommended
-  ANTHROPIC_API_KEY  → console.anthropic.com
-  OPENAI_API_KEY     → platform.openai.com
+  GOOGLE_API_KEY     -> ai.google.dev   (free tier, recommended)
+  ANTHROPIC_API_KEY  -> console.anthropic.com
+  OPENAI_API_KEY     -> platform.openai.com
 
   For local Ollama (Chrome only):
     PROVIDER          = ollama
     OLLAMA_ENDPOINT   = http://localhost:11434
     (run: OLLAMA_ORIGINS=* ollama serve)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+================================================
 `);
   process.exit(0);
 }
@@ -75,9 +75,9 @@ console.log("Running...\n");
 
 const result = await agent.run(question);
 
-console.log("─── Answer ───");
+console.log("--- Answer ---");
 console.log(result.output);
-console.log("\n─── Stats ───");
+console.log("\n--- Stats ---");
 console.log(`Steps:    ${result.metadata.stepsCount}`);
 console.log(`Tokens:   ${result.metadata.tokensUsed}`);
 console.log(`Cost:     $${result.metadata.cost.toFixed(6)}`);

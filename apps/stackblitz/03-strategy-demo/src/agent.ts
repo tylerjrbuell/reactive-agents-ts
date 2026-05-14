@@ -1,17 +1,17 @@
 /**
- * Strategy Demo — side-by-side reasoning comparison
+ * Strategy Demo -- side-by-side reasoning comparison
  *
  * Runs the same task with two strategies and compares:
- *   reactive:             ReAct loop (think → act → observe)
+ *   reactive:             ReAct loop (think -> act -> observe)
  *   plan-execute-reflect: Plan all steps first, execute, then reflect
  *
  * Try the other available strategies via STRATEGY_B env var:
  *   tree-of-thought | reflexion | adaptive
  *
- * Secrets to add in Stackblitz (⚙️ icon):
- *   GOOGLE_API_KEY     → ai.google.dev  ← recommended (free tier)
- *   ANTHROPIC_API_KEY  → console.anthropic.com
- *   OPENAI_API_KEY     → platform.openai.com
+ * Secrets to add in Stackblitz (Settings icon, left sidebar):
+ *   GOOGLE_API_KEY     -> ai.google.dev  (recommended, free tier)
+ *   ANTHROPIC_API_KEY  -> console.anthropic.com
+ *   OPENAI_API_KEY     -> platform.openai.com
  *
  *   Or use local Ollama:
  *   PROVIDER=ollama
@@ -33,18 +33,18 @@ const hasKey =
 
 if (!hasKey) {
   console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  No API key found. Add one in Stackblitz Secrets (⚙️):
+================================================
+  No API key found. Add one in Stackblitz Secrets:
 
-  GOOGLE_API_KEY     → ai.google.dev   ← free tier, recommended
-  ANTHROPIC_API_KEY  → console.anthropic.com
-  OPENAI_API_KEY     → platform.openai.com
+  GOOGLE_API_KEY     -> ai.google.dev   (free tier, recommended)
+  ANTHROPIC_API_KEY  -> console.anthropic.com
+  OPENAI_API_KEY     -> platform.openai.com
 
   For local Ollama (Chrome only):
     PROVIDER          = ollama
     OLLAMA_ENDPOINT   = http://localhost:11434
     (run: OLLAMA_ORIGINS=* ollama serve)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+================================================
 `);
   process.exit(0);
 }
@@ -73,7 +73,7 @@ type RunResult = { strategy: Strategy; output: string; steps: number; tokens: nu
 
 async function runWithStrategy(strategy: Strategy): Promise<RunResult> {
   const start = Date.now();
-  console.log(`── Starting: ${strategy} ──`);
+  console.log(`-- Starting: ${strategy} --`);
 
   const agent = await ReactiveAgents.create()
     .withName(`strategy-${strategy}`)
@@ -85,7 +85,7 @@ async function runWithStrategy(strategy: Strategy): Promise<RunResult> {
 
   const result = await agent.run(task);
 
-  console.log(`✓ ${strategy} done in ${Date.now() - start}ms (${result.metadata.stepsCount} steps)\n`);
+  console.log(`[done] ${strategy} in ${Date.now() - start}ms (${result.metadata.stepsCount} steps)\n`);
 
   return {
     strategy,
@@ -101,9 +101,9 @@ const [resultA, resultB] = await Promise.all([
   runWithStrategy(strategyB),
 ]);
 
-console.log("═══════════════════════════════════════════════");
+console.log("===============================================");
 console.log("                  COMPARISON                  ");
-console.log("═══════════════════════════════════════════════");
+console.log("===============================================");
 
 for (const r of [resultA, resultB]) {
   console.log(`\n[${r.strategy}]`);
@@ -113,7 +113,7 @@ for (const r of [resultA, resultB]) {
   console.log(`  Output:   ${r.output.slice(0, 120)}${r.output.length > 120 ? "..." : ""}`);
 }
 
-console.log("\n───────────────────────────────────────────────");
+console.log("\n-----------------------------------------------");
 const winner = resultA.tokens <= resultB.tokens ? resultA : resultB;
 console.log(`More token-efficient: ${winner.strategy} (${winner.tokens} tokens)`);
 console.log(`\nTry changing STRATEGY_B to: tree-of-thought | reflexion | adaptive`);

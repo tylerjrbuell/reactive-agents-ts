@@ -1,5 +1,5 @@
 /**
- * Tool Integration — built-in tools demo
+ * Tool Integration -- built-in tools demo
  *
  * The agent uses built-in tools to:
  *   1. Write reasoning notes to the scratchpad
@@ -9,10 +9,10 @@
  * No extra API keys required beyond the LLM provider.
  * Built-in tools run inside the WebContainer sandbox.
  *
- * Secrets to add in Stackblitz (⚙️ icon):
- *   GOOGLE_API_KEY     → ai.google.dev  ← recommended (free tier)
- *   ANTHROPIC_API_KEY  → console.anthropic.com
- *   OPENAI_API_KEY     → platform.openai.com
+ * Secrets to add in Stackblitz (Settings icon, left sidebar):
+ *   GOOGLE_API_KEY     -> ai.google.dev  (recommended, free tier)
+ *   ANTHROPIC_API_KEY  -> console.anthropic.com
+ *   OPENAI_API_KEY     -> platform.openai.com
  *
  *   Or use local Ollama:
  *   PROVIDER=ollama
@@ -33,18 +33,18 @@ const hasKey =
 
 if (!hasKey) {
   console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  No API key found. Add one in Stackblitz Secrets (⚙️):
+================================================
+  No API key found. Add one in Stackblitz Secrets:
 
-  GOOGLE_API_KEY     → ai.google.dev   ← free tier, recommended
-  ANTHROPIC_API_KEY  → console.anthropic.com
-  OPENAI_API_KEY     → platform.openai.com
+  GOOGLE_API_KEY     -> ai.google.dev   (free tier, recommended)
+  ANTHROPIC_API_KEY  -> console.anthropic.com
+  OPENAI_API_KEY     -> platform.openai.com
 
   For local Ollama (Chrome only):
     PROVIDER          = ollama
     OLLAMA_ENDPOINT   = http://localhost:11434
     (run: OLLAMA_ORIGINS=* ollama serve)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+================================================
 `);
   process.exit(0);
 }
@@ -67,7 +67,7 @@ const agent = await ReactiveAgents.create()
   .withProvider(provider)
   .withModel(model ?? "")
   .withTools()                                        // enables: file-read, file-write, code-execute, scratchpad-write, scratchpad-read
-  .withReasoning({ defaultStrategy: "reactive" })     // ReAct loop: think → use tool → observe → repeat
+  .withReasoning({ defaultStrategy: "reactive" })     // ReAct loop: think -> use tool -> observe -> repeat
   .withMaxIterations(8)
   .build();
 
@@ -78,13 +78,13 @@ const task =
 console.log(`\nProvider: ${provider}${model ? ` (${model})` : ""}`);
 console.log(`Task: ${task}\n`);
 console.log("Running agent with built-in tools...\n");
-console.log("(Watch the terminal — you'll see each tool call as it happens)\n");
+console.log("(Watch the terminal -- you'll see each tool call as it happens)\n");
 
 const result = await agent.run(task);
 
-console.log("─── Final Answer ───");
+console.log("--- Final Answer ---");
 console.log(result.output);
-console.log("\n─── Stats ───");
+console.log("\n--- Stats ---");
 console.log(`Steps:    ${result.metadata.stepsCount}`);
 console.log(`Tokens:   ${result.metadata.tokensUsed}`);
 console.log(`Cost:     $${result.metadata.cost.toFixed(6)}`);
