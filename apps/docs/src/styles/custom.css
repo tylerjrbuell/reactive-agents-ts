@@ -1255,28 +1255,24 @@ html {
   50%      { box-shadow: 0 0 0 5px rgba(6, 182, 212, 0); }
 }
 
-/* Sidebar link dot (added by /new-page-indicator.js) */
-.sidebar a[data-ra-new="true"],
-nav a[data-ra-new="true"] {
-  position: relative;
-}
-.sidebar a[data-ra-new="true"]::after,
-nav a[data-ra-new="true"]::after {
+/* Sidebar link dot at start (added by /new-page-indicator.js) */
+.sidebar a[data-ra-new="true"]::before,
+nav a[data-ra-new="true"]::before {
   content: "";
   display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--ra-cyan);
-  margin-left: 0.45em;
-  vertical-align: middle;
-  position: relative;
-  top: -0.05em;
-  opacity: 0.85;
+  margin-right: 0.5em;
+  vertical-align: 0.12em;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.55);
 }
 
 [data-theme="light"] .ra-new-dot,
-[data-theme="light"] .sidebar a[data-ra-new="true"]::after,
-[data-theme="light"] nav a[data-ra-new="true"]::after {
+[data-theme="light"] .sidebar a[data-ra-new="true"]::before,
+[data-theme="light"] nav a[data-ra-new="true"]::before {
   background: var(--ra-violet-deep);
+  box-shadow: 0 0 6px rgba(124, 58, 237, 0.4);
 }
