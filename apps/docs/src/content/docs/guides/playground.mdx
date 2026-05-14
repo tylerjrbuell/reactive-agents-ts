@@ -11,19 +11,21 @@ Run a real agent in your browser — no local install, no cloning, no CLI setup.
 
 ## Quick setup
 
-Add your API key in the Stackblitz **Secrets** panel (⚙️ in the sidebar):
+<Aside type="tip" title="Edit .env directly in the editor">
+Each playground has a `.env` file open in the editor. Replace `your_gemini_key_here` with your actual key, then click the terminal **restart** button (↺).
+</Aside>
 
-| Provider | Free tier? | Secret name |
-|----------|-----------|-------------|
+Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credit card required.
+
+| Provider | Free tier? | `.env` variable |
+|----------|-----------|----------------|
 | **Google Gemini** ← recommended | ✅ Yes — generous free tier | `GOOGLE_API_KEY` |
 | Anthropic Claude | ❌ Pay-as-you-go | `ANTHROPIC_API_KEY` |
 | OpenAI | ❌ Pay-as-you-go | `OPENAI_API_KEY` |
 | Local Ollama | ✅ Free | `PROVIDER=ollama` + `OLLAMA_ENDPOINT` |
 
-Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credit card required.
-
-<Aside type="tip">
-**Secrets stay local.** Stackblitz Secrets are stored in your browser session only. They are never sent to our servers.
+<Aside type="note">
+**Why not Secrets?** The embedded iframe hides the Stackblitz Secrets panel. Editing `.env` directly in the editor is the reliable alternative — keys stay in your browser session only.
 </Aside>
 
 ---

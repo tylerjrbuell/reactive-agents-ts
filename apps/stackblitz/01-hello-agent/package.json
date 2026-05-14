@@ -6,7 +6,7 @@
   "engines": { "node": ">=20" },
   "description": "Reactive Agents hello-agent demo — runs in Stackblitz, no install needed",
   "scripts": {
-    "start": "npx tsx src/agent.ts"
+    "start": "npx tsx --env-file=.env src/agent.ts"
   },
   "dependencies": {
     "reactive-agents": "latest"

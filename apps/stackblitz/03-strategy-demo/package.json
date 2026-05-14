@@ -6,7 +6,7 @@
   "engines": { "node": ">=20" },
   "description": "Reactive Agents strategy-demo — reactive vs plan-execute-reflect side-by-side",
   "scripts": {
-    "start": "npx tsx src/agent.ts"
+    "start": "npx tsx --env-file=.env src/agent.ts"
   },
   "dependencies": {
     "reactive-agents": "latest"
