@@ -1,5 +1,5 @@
 import { Effect, Context, Layer } from "effect";
-import { Database } from "bun:sqlite";
+import { Database } from "@reactive-agents/runtime-shim";
 import { DatabaseError } from "./errors.js";
 import type { MemoryConfig } from "./types.js";
 import * as fs from "node:fs";
