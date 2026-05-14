@@ -26,7 +26,7 @@ export default defineConfig({
         {
           icon: "discord",
           label: "Discord",
-          href: "https://discord.gg/498xEG5A",
+          href: "https://discord.gg/Mp99vQam3Q",
         },
         {
           icon: "npm",
@@ -74,7 +74,7 @@ export default defineConfig({
             },
             {
               label: "Discord",
-              url: "https://discord.gg/498xEG5A",
+              url: "https://discord.gg/Mp99vQam3Q",
               description: "Community support and discussion",
             },
           ],

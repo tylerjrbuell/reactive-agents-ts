@@ -1155,10 +1155,18 @@ html {
   cursor: pointer;
   font: inherit;
   font-size: 0.82rem;
-  /* Fixed width keeps yes / no buttons identical despite different label widths */
-  min-width: 5.25rem;
-  padding: 0.45rem 0.95rem;
+  /* Fixed box keeps Yes / No identical width AND height regardless of
+     emoji glyph metrics. inline-flex + line-height: 1 normalizes the
+     vertical center across 👍 / 👎 baselines. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 5.75rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  line-height: 1;
   text-align: center;
+  box-sizing: border-box;
   background: transparent;
   border: 1px solid rgba(139, 92, 246, 0.30);
   border-radius: 8px;

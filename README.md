@@ -29,7 +29,7 @@ Works on local Ollama models (4B+) through frontier APIs — **same code, same f
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.0%20required-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 
-[Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/498xEG5A) · [Quick Start](#quick-start) · [Features](#features) · [Comparison](#comparison) · [Architecture](#architecture) · [Packages](#packages)
+[Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/Mp99vQam3Q) · [Quick Start](#quick-start) · [Features](#features) · [Comparison](#comparison) · [Architecture](#architecture) · [Packages](#packages)
 
 </div>
 
@@ -771,7 +771,7 @@ Full documentation at **[docs.reactiveagents.dev](https://docs.reactiveagents.de
 
 ## Getting Help
 
--   **Discord** -- [Join the community](https://discord.gg/498xEG5A) for questions, discussions, and support
+-   **Discord** -- [Join the community](https://discord.gg/Mp99vQam3Q) for questions, discussions, and support
 -   **GitHub Issues** -- [Report bugs or request features](https://github.com/tylerjrbuell/reactive-agents-ts/issues)
 -   **GitHub Discussions** -- [Ask questions and share ideas](https://github.com/tylerjrbuell/reactive-agents-ts/discussions)
 
