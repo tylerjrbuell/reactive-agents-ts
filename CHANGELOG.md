@@ -16,6 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - **`rax-diagnose replay-run <runId>` CLI subcommand** — summary of a recorded run (metadata, tool call count, unique tool list) for feeding into the `replay()` API. Supports `--json`.
 - **Docs:** `features/snapshot-replay.mdx` (full API + diff shape + determinism guarantee) + index card + stability marker.
 - **Public ROADMAP.md alignment to North Star v5.0** — Phase A/B shipped, Phase C in flight, accurate v0.11 line-up.
+- **`rax diagnose` unified subcommand** — folds the standalone `rax-diagnose` binary into the main `rax` CLI as `rax diagnose <sub>` (list, replay, replay-run, grep, diff, debrief). Standalone `rax-diagnose` bin retained for backwards compatibility. New programmatic exports from `@reactive-agents/diagnose`: `debriefCommand`, `replayRunCommand`, `ReplayRunOpts`.
 
 ### Notes
 

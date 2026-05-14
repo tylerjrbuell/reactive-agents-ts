@@ -13,6 +13,7 @@ import { runDiscover } from "./commands/discover.js";
 import { runDeploy } from "./commands/deploy/index.js";
 import { runTrace } from "./commands/trace.js";
 import { runSkills } from "./commands/skills.js";
+import { runDiagnose } from "./commands/diagnose.js";
 import { printBanner, printVersion, VERSION } from "./banner.js";
 import { fail, info } from "./ui.js";
 
@@ -42,6 +43,9 @@ const HELP = `
     deploy init                                       Scaffold deployment files only (legacy alias)
     trace inspect <path>                              Parse and display a JSONL trace file
     trace compare <a> <b>                             Compare two trace files side-by-side
+    diagnose <sub> [...]                              Forensic CLI for recorded traces
+                                                        list | replay | replay-run | grep | diff | debrief
+                                                        (run \`rax diagnose --help\` for details)
     skills export --agent <id> [--name <s>] [--out <file|dir>]   Export skills as SKILL.md
     skills import <file> --agent <id> [--rebind <id>] [--regenerate-id]   Import from SKILL.md
     skills list --agent <id>                          List skills for an agent
@@ -129,6 +133,10 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "skills":
       runAsync(runSkills(argv.slice(1)));
+      break;
+
+    case "diagnose":
+      runAsync(runDiagnose(argv.slice(1)));
       break;
 
     case "version":

@@ -11,3 +11,6 @@ export type { ReplayOpts } from "./commands/replay.js";
 export { grepCommand } from "./commands/grep.js";
 export { diffCommand } from "./commands/diff.js";
 export { listCommand } from "./commands/list.js";
+export { debriefCommand } from "./commands/debrief.js";
+export { replayRunCommand } from "./commands/replay-run.js";
+export type { ReplayRunOpts } from "./commands/replay-run.js";

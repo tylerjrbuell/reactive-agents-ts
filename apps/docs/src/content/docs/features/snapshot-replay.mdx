@@ -90,7 +90,7 @@ interface ReplayDiff {
 ## CLI summary
 
 ```bash
-rax-diagnose replay-run r-abc123
+rax diagnose replay-run r-abc123
 # runId    r-abc123
 # task     fetch HN top 10 then summarize
 # model    qwen3:14b
@@ -99,7 +99,9 @@ rax-diagnose replay-run r-abc123
 # tools    7 calls across 3 unique tool(s): fetch, scrape, summarize
 ```
 
-Full re-execution from the CLI requires a builder factory and is API-only in v0.11. Use `replay-run --json` to pipe metadata into a script.
+Full re-execution from the CLI requires a builder factory and is API-only in v0.11. Use `rax diagnose replay-run --json` to pipe metadata into a script.
+
+The legacy standalone bin `rax-diagnose replay-run <runId>` continues to work for backwards compatibility.
 
 ## Determinism guarantee (in progress)
 

@@ -5,7 +5,7 @@ description: Capture *why* every agent decision is made — tool selection, assu
 
 # Decision Tracing (v0.11.x)
 
-Reactive Agents records not just *what* the agent did but *why*. Every tool selection, model-stated assumption, curator action, and termination can carry a structured **Rationale** alongside the existing event stream. The `rax-diagnose debrief` command renders that rationale as a decision-centric timeline that post-hoc reviewers can audit without re-running.
+Reactive Agents records not just *what* the agent did but *why*. Every tool selection, model-stated assumption, curator action, and termination can carry a structured **Rationale** alongside the existing event stream. The `rax diagnose debrief` command renders that rationale as a decision-centric timeline that post-hoc reviewers can audit without re-running.
 
 ## The Rationale shape
 
@@ -116,15 +116,17 @@ terminate(state, {
 
 Use this when `reason` is opaque (e.g. `"quality_threshold"`) and the threshold/score context makes the choice auditable.
 
-## Reading the trace: `rax-diagnose debrief`
+## Reading the trace: `rax diagnose debrief`
 
 The debrief command folds every rationale-bearing event into a single timeline:
 
 ```bash
-rax-diagnose debrief <runId>
-rax-diagnose debrief latest
-rax-diagnose debrief <runId> --json
+rax diagnose debrief <runId>
+rax diagnose debrief latest
+rax diagnose debrief <runId> --json
 ```
+
+The legacy standalone bin `rax-diagnose debrief …` continues to work as well.
 
 Example output:
 

@@ -279,6 +279,25 @@ rax inspect <agent-id> [--logs-tail 200] [--json]
 
 This checks Docker/Compose availability, prints compose status, and scans recent logs for lines containing the provided `agentId`.
 
+### `rax diagnose`
+
+Forensic CLI for recorded JSONL traces. Subcommands:
+
+```bash
+rax diagnose list [--limit 20]              # show recent traces
+rax diagnose replay <runId> [--raw|--json]  # pretty-print trace timeline
+rax diagnose replay-run <runId> [--json]    # recorded-run metadata (replay() API input)
+rax diagnose grep <runId> "<js-expr>"       # filter events with a JS predicate
+rax diagnose diff <runIdA> <runIdB>         # structural diff between two runs
+rax diagnose debrief <runId> [--json]       # decision timeline with rationale
+```
+
+Run IDs accept a bare ULID (resolves under `~/.reactive-agents/traces/`), an absolute path to a `.jsonl` file, or the literal `latest`. Override the trace directory with `REACTIVE_AGENTS_TRACE_DIR`.
+
+Snapshot/Replay re-execution is API-only — see [Snapshot & Replay](/features/snapshot-replay/) for the `replay(recordedRun, builderFn)` workflow.
+
+The standalone bin `rax-diagnose <sub>` is kept for backwards compatibility; new code should prefer the unified `rax diagnose <sub>` form.
+
 ### `rax version`
 
 ```bash

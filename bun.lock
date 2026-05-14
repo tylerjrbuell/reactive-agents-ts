@@ -23,6 +23,7 @@
       "dependencies": {
         "@reactive-agents/a2a": "workspace:*",
         "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/diagnose": "workspace:*",
         "@reactive-agents/eval": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
         "@reactive-agents/memory": "workspace:*",
