@@ -207,6 +207,50 @@ export const executePlanExecute = (
       planMode,
     });
 
+    // ── Rationale enforcement (coax) ──────────────────────────────────────────
+    // Every tool_call step must carry a non-empty rationale.why. The base
+    // prompt marks rationale MANDATORY but small models sometimes still omit
+    // it. One retry with a stronger reminder typically recovers compliance.
+    const stepsMissingRationale = (p: Plan): readonly PlanStep[] =>
+      p.steps.filter((s) => s.type === "tool_call" && (!s.rationale || typeof s.rationale.why !== "string" || s.rationale.why.trim().length === 0));
+
+    let missing = stepsMissingRationale(plan);
+    if (missing.length > 0) {
+      const reminderPrompt = `${planPrompt}\n\n[STRICT RETRY] Your previous plan omitted "rationale" on one or more tool_call steps. EVERY tool_call step MUST include a "rationale": { "why": "<≤280 chars, specific to this call>" } object. Plans without rationale on tool_call steps are rejected. Regenerate the entire plan now, including rationale on every tool_call step.`;
+      const retryResult = yield* extractStructuredOutput({
+        schema: LLMPlanOutputSchema,
+        prompt: reminderPrompt,
+        systemPrompt: input.systemPrompt
+          ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into structured steps. Rationale on tool_call steps is mandatory.`
+          : "You are a planning agent. Decompose the goal into structured steps. Rationale on tool_call steps is mandatory.",
+        maxRetries: 1,
+        temperature: 0.3,
+        maxTokens: 4096,
+      }).pipe(
+        Effect.map((r) => hydratePlan(r.data, {
+          taskId: input.taskId ?? "plan-execute",
+          agentId: input.agentId ?? "reasoning-agent",
+          goal,
+          planMode,
+        })),
+        Effect.catchAll(() => Effect.succeed(plan)),
+      );
+      const retryMissing = stepsMissingRationale(retryResult);
+      if (retryMissing.length < missing.length) {
+        plan = retryResult;
+        missing = retryMissing;
+      }
+      if (missing.length > 0) {
+        yield* emitLog({
+          _tag: "metric",
+          name: "plan_rationale_missing",
+          value: missing.length,
+          unit: "steps",
+          timestamp: new Date(),
+        });
+      }
+    }
+
     // ── Required tools validation ─────────────────────────────────────────────
     // After plan generation, verify every required tool appears in at least one
     // tool_call step. Inject synthetic steps for any missing tools so they are
@@ -1048,6 +1092,21 @@ function executeStep(
         tool: step.toolName!,
         iteration: stepIndex + 1,
         timestamp: new Date(),
+      });
+
+      // Publish ToolCallStarted with the step's intentional rationale so
+      // execution-engine collects it into the debrief. plan-execute owns
+      // tool dispatch directly (no kernel act-phase), so without this
+      // hand-off the rationale never reaches the rationaleLog subscriber.
+      yield* publishReasoningStep(services.eventBus, {
+        _tag: "ToolCallStarted",
+        taskId: input.taskId ?? "plan-execute",
+        toolName: step.toolName!,
+        callId: `${plan.id}_${step.id}`,
+        ...(step.rationale && step.rationale.why
+          ? { rationale: { why: step.rationale.why, ...(typeof step.rationale.confidence === "number" ? { confidence: step.rationale.confidence } : {}) } }
+          : {}),
+        kernelPass: `plan-execute:step-${stepIndex + 1}`,
       });
 
       const toolResult = yield* toolService.value

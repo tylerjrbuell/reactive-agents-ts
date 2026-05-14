@@ -1,33 +1,5 @@
-import type { Rationale } from "@reactive-agents/core"
 import type { ExtractedCall, ToolCallingDriver, ToolSchema } from "./tool-calling-driver.js"
-
-/**
- * Best-effort extraction of a Rationale from a model-emitted JSON object.
- * Returns undefined when the shape is malformed — never throws.
- */
-const extractRationale = (obj: Record<string, unknown>): Rationale | undefined => {
-  const r = obj["rationale"]
-  if (typeof r !== "object" || r === null) return undefined
-  const rec = r as Record<string, unknown>
-  if (typeof rec.why !== "string" || rec.why.length === 0 || rec.why.length > 280) return undefined
-  const out: Record<string, unknown> = { why: rec.why }
-  if (Array.isArray(rec.refs) && rec.refs.every((s) => typeof s === "string")) out.refs = rec.refs
-  if (Array.isArray(rec.alternatives)) {
-    const alts: { option: string; rejectedBecause: string }[] = []
-    for (const alt of rec.alternatives) {
-      if (typeof alt !== "object" || alt === null) continue
-      const a = alt as Record<string, unknown>
-      if (typeof a.option === "string" && typeof a.rejectedBecause === "string" && a.rejectedBecause.length <= 160) {
-        alts.push({ option: a.option, rejectedBecause: a.rejectedBecause })
-      }
-    }
-    if (alts.length > 0) out.alternatives = alts
-  }
-  if (typeof rec.confidence === "number" && rec.confidence >= 0 && rec.confidence <= 1) {
-    out.confidence = rec.confidence
-  }
-  return out as Rationale
-}
+import { extractRationale, parseRationaleBlocks } from "./rationale-parser.js"
 
 export class TextParseDriver implements ToolCallingDriver {
   readonly mode = "text-parse" as const
@@ -59,17 +31,28 @@ export class TextParseDriver implements ToolCallingDriver {
   extractCalls(textOutput: string, _tools: readonly ToolSchema[]): ExtractedCall[] {
     // Tier 1 — structured XML format
     const tier1 = this.parseTier1(textOutput)
-    if (tier1.length > 0) return tier1
+    if (tier1.length > 0) return this.attachExternalRationale(tier1, textOutput)
 
     // Tier 2 — JSON object in prose
     const tier2 = this.parseTier2(textOutput)
-    if (tier2.length > 0) return tier2
+    if (tier2.length > 0) return this.attachExternalRationale(tier2, textOutput)
 
     // Tier 3 — relaxed FC JSON array
     const tier3 = this.parseTier3(textOutput)
-    if (tier3.length > 0) return tier3
+    if (tier3.length > 0) return this.attachExternalRationale(tier3, textOutput)
 
     return []
+  }
+
+  /** Fill missing rationale on parsed calls from `<rationale call="N">{...}</rationale>` blocks. */
+  private attachExternalRationale(calls: ExtractedCall[], text: string): ExtractedCall[] {
+    const blocks = parseRationaleBlocks(text)
+    if (blocks.size === 0) return calls
+    return calls.map((c, i) => {
+      if (c.rationale) return c
+      const r = blocks.get(i + 1)
+      return r ? { ...c, rationale: r } : c
+    })
   }
 
   private parseTier1(text: string): ExtractedCall[] {

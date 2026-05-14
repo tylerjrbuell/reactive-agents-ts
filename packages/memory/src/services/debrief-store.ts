@@ -18,6 +18,12 @@ export interface AgentDebriefShape {
   confidence: string;
   toolsUsed: readonly { name: string; calls: number; successRate: number }[];
   metrics: { tokens: number; duration: number; iterations: number; cost: number };
+  rationale: readonly {
+    readonly iteration: number;
+    readonly decision: string;
+    readonly toolName?: string;
+    readonly rationale: { readonly why: string; readonly refs?: readonly string[]; readonly confidence?: number };
+  }[];
   markdown: string;
 }
 

@@ -221,6 +221,7 @@ describe("formatDebriefMarkdown", () => {
     caveats: undefined,
     toolsUsed: [{ name: "web-search", calls: 2, successRate: 1 }],
     metrics: { tokens: 1000, duration: 5000, iterations: 3, cost: 0.001 },
+    rationale: [],
   };
 
   it("renders all sections", () => {

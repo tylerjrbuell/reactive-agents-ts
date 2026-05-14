@@ -15,6 +15,19 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## v0.11.x — Mandatory decision rationale (May 2026)
+
+Every tool call now carries the model's stated *why*. Rationale capture went from an optional nudge to a coaxed contract across all three execution paths:
+
+- **Kernel-injected system prompt** — Unconditionally appends a MANDATORY rationale instruction regardless of `toolSchemaDetail` (previous compressed profiles silently suppressed it). Model must precede each tool call with `<rationale call="N">{"why":"…","confidence":0-1}</rationale>` in its text content.
+- **Native function-calling capture** — `parseRationaleBlocks()` reads the side-channel blocks from `thought` + `thinking` content and attaches each rationale to the matching `ToolCallSpec` by 1-indexed position. Provider FC events have no sibling field, so this bridges the gap for Ollama, Anthropic, OpenAI, and Gemini.
+- **plan-execute-reflect enforcement** — `LLMPlanStepSchema` now carries a `rationale: { why, confidence? }` field; the planner prompt marks it MANDATORY for every `tool_call` step. If the model omits rationale on hydrate, the strategy issues a `[STRICT RETRY]` plan regeneration with a stronger reminder. Failures after retry emit a `plan_rationale_missing` metric — no synthetic fallback is invented.
+- **`AgentDebrief.rationale[]`** — Unified milestone-decision log: tool selections, curator decisions (`kept`/`dropped`/`compressed`/`marked-untrusted`), strategy switches (`{from}→{to}`), reactive interventions (`early-stop`/`branch`/`compress`/`switch-strategy`/`attribute`), and terminations (`termination:{reason}`). All render in `debrief.markdown` under `## Decision Rationale`.
+
+See [Decision Tracing](/concepts/decision-tracing/) for the full pipeline and [Debrief & Chat](/features/debrief-chat/) for the result shape.
+
+---
+
 ## v0.10.x — Local models match frontier (May 2026)
 
 The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four weeks. The headline: **local Ollama models now hit 91–94% on the same task suite as paid frontier APIs**, thanks to a closed-loop healing pipeline and adaptive tool-calling. Read the full [v0.10.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for engineering detail.

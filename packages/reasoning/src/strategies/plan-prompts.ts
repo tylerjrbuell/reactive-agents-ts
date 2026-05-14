@@ -55,7 +55,8 @@ const PLAN_STEP_SCHEMA = `{
   "toolName": "string (optional) — tool to call if type is tool_call",
   "toolArgs": "object (optional) — ALL required arguments for the tool. Use {{from_step:sN}} to inject the result of a previous step as a string value",
   "toolHints": ["string"] (optional) — tool names available for composite steps",
-  "dependsOn": ["string"] (optional) — step IDs that must complete first"
+  "dependsOn": ["string"] (optional) — step IDs that must complete first",
+  "rationale": { "why": "string (≤280 chars) — REQUIRED for tool_call steps: WHY this tool and these args advance the goal", "confidence": "number 0-1 (optional)" }
 }`;
 
 const PLAN_STEP_EXAMPLE = `{
@@ -65,7 +66,8 @@ const PLAN_STEP_EXAMPLE = `{
       "instruction": "Get the last 10 commits from the main branch",
       "type": "tool_call",
       "toolName": "github/list_commits",
-      "toolArgs": { "owner": "acme", "repo": "app", "perPage": 10 }
+      "toolArgs": { "owner": "acme", "repo": "app", "perPage": 10 },
+      "rationale": { "why": "Need the raw commit list before any summarization can begin", "confidence": 0.95 }
     },
     {
       "title": "Summarize changes",
@@ -79,7 +81,8 @@ const PLAN_STEP_EXAMPLE = `{
       "type": "tool_call",
       "toolName": "messaging/send",
       "toolArgs": { "recipient": "user@example.com", "message": "{{from_step:s2}}" },
-      "dependsOn": ["s2"]
+      "dependsOn": ["s2"],
+      "rationale": { "why": "Deliver the finished summary to the requesting user via the messaging channel", "confidence": 0.9 }
     }
   ]
 }`;
@@ -144,6 +147,7 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
   schemaSection += `- "analysis": LLM reasoning/writing (no tool needed)\n`;
   schemaSection += `- "composite": multi-tool sub-task (set toolHints for available tools)\n`;
   schemaSection += `\nIMPORTANT for tool_call steps:\n`;
+  schemaSection += `- MANDATORY: include a "rationale" object with a "why" string (≤280 chars) explaining specifically why THIS tool with THESE arguments advances the goal. Generic rationales ("call the tool") are not acceptable. Optionally include "confidence" (0-1).\n`;
   schemaSection += `- Include ALL required parameters in toolArgs\n`;
   schemaSection += `- To use output from a PREVIOUS step as an argument value, use {{from_step:sN}} where N is an EARLIER step number\n`;
   schemaSection += `- A step can ONLY reference steps that come BEFORE it (e.g., s3 can reference s1 or s2, NOT s3 itself)\n`;

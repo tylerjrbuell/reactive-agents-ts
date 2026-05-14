@@ -57,7 +57,13 @@ interface AgentDebrief {
   caveats?: string;
   toolsUsed: { name: string; calls: number; successRate: number }[];
   metrics: { tokens: number; duration: number; iterations: number; cost: number };
-  markdown: string;                   // Pre-rendered Markdown
+  rationale: readonly {               // Decision rationale per tool call (v0.11.x)
+    iteration: number;
+    decision: string;                 // "tool-selection"
+    toolName?: string;
+    rationale: { why: string; refs?: readonly string[]; confidence?: number };
+  }[];
+  markdown: string;                   // Pre-rendered Markdown — includes ## Decision Rationale
 }
 ```
 
@@ -81,6 +87,16 @@ if (result.debrief) {
 
   console.log(result.debrief.toolsUsed);
   // [{ name: "github/list_commits", calls: 1, successRate: 1 }]
+
+  console.log(result.debrief.rationale);
+  // [
+  //   {
+  //     iteration: 1,
+  //     decision: "tool-selection",
+  //     toolName: "github/list_commits",
+  //     rationale: { why: "Need raw commit list before summarization", confidence: 0.95 }
+  //   }
+  // ]
 }
 ```
 

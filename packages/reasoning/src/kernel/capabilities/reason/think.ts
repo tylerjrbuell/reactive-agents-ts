@@ -24,6 +24,7 @@ import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,
   shouldShowFinalAnswer,
+  parseRationaleBlocks,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
@@ -440,9 +441,29 @@ export function handleThinking(
     const driverInstructions = canInjectDriverInstructions
       ? context.toolCallingDriver.buildPromptInstructions(filteredToolSchemas)
       : "";
-    const systemPromptWithDriver = driverInstructions
-      ? `${systemPromptText}\n\n${driverInstructions}`
-      : systemPromptText;
+
+    // ── Decision Rationale (MANDATORY, always injected) ─────────────────────
+    // Injected regardless of toolSchemaDetail so compressed profiles (local
+    // tier defaults to "names-and-types" → driver instructions suppressed)
+    // still receive the rationale ask. The format is identical for native-fc
+    // and text-parse paths; parseRationaleBlocks reads it from the same place.
+    const rationaleInstructions = [
+      "## Decision Rationale (MANDATORY — every tool call)",
+      "Every tool call you issue MUST be preceded by a rationale block in your text content. Tool calls without a matching rationale block are considered malformed and you will be asked to retry.",
+      "Emit rationale blocks BEFORE the tool call(s), one per call, in order:",
+      '<rationale call="1">{"why":"one sentence, ≤280 chars, explaining why this tool and these arguments","confidence":0.0-1.0}</rationale>',
+      "Rules:",
+      "- `call` is the 1-indexed position of the tool call within this turn (1 for the first, 2 for the second…).",
+      "- `why` is REQUIRED, max 280 chars, must be specific to THIS call (not generic).",
+      "- `confidence` is OPTIONAL (number 0-1).",
+      "- The rationale is for post-hoc review only — NOT passed to the tool, does NOT change behavior.",
+      "- If you emit no tool calls this turn, emit no rationale blocks.",
+    ].join("\n");
+
+    const parts = [systemPromptText];
+    if (driverInstructions) parts.push(driverInstructions);
+    parts.push(rationaleInstructions);
+    const systemPromptWithDriver = parts.join("\n\n");
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
     // Token budget adapts to model tier: frontier models get more room for
@@ -849,7 +870,19 @@ export function handleThinking(
       }
 
       if (resolverResult._tag === "tool_calls") {
-        const rawCalls = resolverResult.calls as readonly ToolCallSpec[];
+        // Attach intentional rationale from `<rationale call="N">{...}</rationale>`
+        // blocks in the assistant text. Provider native FC events carry no sibling
+        // rationale field, so we match by 1-indexed call position.
+        const rationaleBlocks = parseRationaleBlocks(
+          `${thought ?? ""}\n${thinking ?? ""}`,
+        );
+        const rawCalls = (resolverResult.calls as readonly ToolCallSpec[]).map(
+          (c, i) => {
+            if (c.rationale) return c;
+            const r = rationaleBlocks.get(i + 1);
+            return r ? { ...c, rationale: r } : c;
+          },
+        ) as readonly ToolCallSpec[];
         // Compute per-tool call counts from step history for budget enforcement.
         const toolCallCounts = buildSuccessfulToolCallCounts(state.steps);
 
@@ -1102,6 +1135,12 @@ export function handleThinking(
     // toolCallResolver is absent but the LLM may still emit native FC events.
     // Forward them to act.ts via pendingNativeToolCalls so ToolService executes them.
     if (accumulatedToolCalls.length > 0) {
+      // Native FC: rationale has no sibling field on provider tool_use events.
+      // Parse `<rationale call="N">{...}</rationale>` blocks from the assistant
+      // text (thought + thinking) and attach by 1-indexed position.
+      const rationaleBlocks = parseRationaleBlocks(
+        `${thought ?? ""}\n${thinking ?? ""}`,
+      );
       const parsedCalls: ToolCallSpec[] = accumulatedToolCalls.map((tc, i) => {
         let parsedInput: unknown = {};
         try {
@@ -1109,10 +1148,12 @@ export function handleThinking(
         } catch {
           parsedInput = {};
         }
+        const rationale = rationaleBlocks.get(i + 1);
         return {
           id: tc.id ?? `tc-${state.iteration}-${i}`,
           name: tc.name,
           arguments: parsedInput as Record<string, unknown>,
+          ...(rationale ? { rationale } : {}),
         };
       });
 

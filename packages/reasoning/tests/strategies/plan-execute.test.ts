@@ -18,9 +18,17 @@ function makePlanJson(
     toolArgs?: Record<string, unknown>;
     toolHints?: string[];
     dependsOn?: string[];
+    rationale?: { why: string; confidence?: number };
   }>,
 ): string {
-  return JSON.stringify({ steps });
+  // Auto-fill rationale on tool_call steps so plan-execute's rationale
+  // enforcement retry does not consume an extra mock LLM turn in tests.
+  const enriched = steps.map((s) =>
+    s.type === "tool_call" && !s.rationale
+      ? { ...s, rationale: { why: `Test fixture rationale: ${s.title}`, confidence: 0.9 } }
+      : s,
+  );
+  return JSON.stringify({ steps: enriched });
 }
 
 /** A simple 2-step analysis plan */

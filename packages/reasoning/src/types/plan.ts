@@ -18,6 +18,12 @@ export const LLMPlanStepSchema = Schema.Struct({
   ),
   toolHints: Schema.optional(Schema.Array(Schema.String)),
   dependsOn: Schema.optional(Schema.Array(Schema.String)),
+  rationale: Schema.optional(
+    Schema.Struct({
+      why: Schema.String,
+      confidence: Schema.optional(Schema.Number),
+    }),
+  ),
 });
 export type LLMPlanStep = typeof LLMPlanStepSchema.Type;
 
@@ -61,6 +67,7 @@ export interface PlanStep {
   toolArgs?: Record<string, unknown>;
   toolHints?: readonly string[];
   dependsOn?: readonly string[];
+  rationale?: { why: string; confidence?: number };
   status: PlanStepStatus;
   result?: string;
   error?: string;
@@ -110,6 +117,7 @@ export const hydratePlan = (raw: LLMPlanOutput, context: PlanContext): Plan => {
     toolArgs: step.toolArgs,
     toolHints: step.toolHints,
     dependsOn: step.dependsOn,
+    rationale: step.rationale,
     status: "pending" as PlanStepStatus,
     retries: 0,
     tokensUsed: 0,

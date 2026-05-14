@@ -109,6 +109,17 @@ export interface AgentDebrief {
   toolsUsed: { name: string; calls: number; successRate: number }[];
   /** Quantitative execution metrics */
   metrics: { tokens: number; duration: number; iterations: number; cost: number };
+  /**
+   * Decision rationale events captured from tool calls during execution.
+   * Each entry records why the agent picked a tool at a given iteration.
+   * Empty array when the model never emitted rationale.
+   */
+  rationale: readonly {
+    readonly iteration: number;
+    readonly decision: string;
+    readonly toolName?: string;
+    readonly rationale: { readonly why: string; readonly refs?: readonly string[]; readonly confidence?: number };
+  }[];
   /** Pre-rendered markdown version of the full debrief report */
   markdown: string;
 }
@@ -281,6 +292,7 @@ export function synthesizeDebrief(
       caveats: parsed.caveats || undefined,
       toolsUsed,
       metrics: input.metrics,
+      rationale: input.rationale ?? [],
     };
 
     return { ...debrief, markdown: formatDebriefMarkdown(debrief) };
@@ -322,6 +334,23 @@ export function formatDebriefMarkdown(d: Omit<AgentDebrief, "markdown">): string
 
   if (d.caveats) {
     lines.push("## Caveats", "", d.caveats, "");
+  }
+
+  if (d.rationale.length > 0) {
+    lines.push("## Decision Rationale", "");
+    for (const r of d.rationale) {
+      const conf =
+        r.rationale.confidence !== undefined
+          ? ` _(confidence: ${(r.rationale.confidence * 100).toFixed(0)}%)_`
+          : "";
+      const tool = r.toolName ? ` \`${r.toolName}\`` : "";
+      lines.push(`- **Iteration ${r.iteration}** — ${r.decision}${tool}${conf}`);
+      lines.push(`  - Why: ${r.rationale.why}`);
+      if (r.rationale.refs && r.rationale.refs.length > 0) {
+        lines.push(`  - Refs: ${r.rationale.refs.join(", ")}`);
+      }
+    }
+    lines.push("");
   }
 
   lines.push("## Tools Used", "");

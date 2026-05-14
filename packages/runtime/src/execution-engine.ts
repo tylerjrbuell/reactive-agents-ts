@@ -362,6 +362,78 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 }
                 return Effect.void;
               });
+
+              // ── Milestone decision capture (v0.11.x) ──
+              // Surface every task-advancing decision in debrief.rationale[], not
+              // just tool calls. Each emitter already records a "why" string;
+              // promote it into structured Rationale shape with a decision tag.
+
+              // Curator decisions — already carry structured Rationale (required).
+              yield* eb.on("CuratorDecisionEmitted", (event) =>
+                Effect.sync(() => {
+                  rationaleLog.push({
+                    iteration: event.iteration,
+                    decision: `curator-${event.action}`,
+                    rationale: {
+                      why: event.rationale.why,
+                      refs: event.rationale.refs,
+                      confidence: event.rationale.confidence,
+                    },
+                  });
+                }),
+              );
+
+              // Strategy switches — promote `reason` string into structured form.
+              yield* eb.on("StrategySwitched", (event) =>
+                Effect.sync(() => {
+                  if (!event.reason || event.reason.trim().length === 0) return;
+                  rationaleLog.push({
+                    iteration: _currentKernelIteration,
+                    decision: `strategy-switch:${event.from}→${event.to}`,
+                    rationale: {
+                      why: event.reason.slice(0, 280),
+                    },
+                  });
+                }),
+              );
+
+              // Reactive interventions — corrective dispatch (early-stop, branch, compress…).
+              yield* eb.on("ReactiveDecision", (event) =>
+                Effect.sync(() => {
+                  if (!event.reason || event.reason.trim().length === 0) return;
+                  rationaleLog.push({
+                    iteration: event.iteration,
+                    decision: `reactive-${event.decision}`,
+                    rationale: {
+                      why: event.reason.slice(0, 280),
+                      ...(typeof event.entropyAfter === "number" && typeof event.entropyBefore === "number"
+                        ? { confidence: Math.max(0, Math.min(1, 1 - Math.abs(event.entropyAfter - event.entropyBefore))) }
+                        : {}),
+                    },
+                  });
+                }),
+              );
+
+              // Termination — captured from KernelStateSnapshotEmitted when terminationRationale present.
+              const terminationSeen = new Set<string>();
+              yield* eb.on("KernelStateSnapshotEmitted", (event) => {
+                const tr = event.terminationRationale;
+                if (!tr || !event.terminatedBy) return Effect.void;
+                const dedup = `${event.taskId}:${event.terminatedBy}`;
+                if (terminationSeen.has(dedup)) return Effect.void;
+                terminationSeen.add(dedup);
+                return Effect.sync(() => {
+                  rationaleLog.push({
+                    iteration: event.iteration,
+                    decision: `termination:${event.terminatedBy}`,
+                    rationale: {
+                      why: tr.why,
+                      refs: tr.refs,
+                      confidence: tr.confidence,
+                    },
+                  });
+                });
+              });
             }
 
             // ── Collect EntropyScored events for telemetry + dashboard ──

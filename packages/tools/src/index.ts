@@ -148,6 +148,7 @@ export type { RemoteAgentClient, TaskResult, SubAgentConfig, SubAgentResult, Par
 // ─── Tool Calling Drivers ───
 export { NativeFCDriver } from "./drivers/native-fc-driver.js"
 export { TextParseDriver } from "./drivers/text-parse-driver.js"
+export { extractRationale, parseRationaleBlocks } from "./drivers/rationale-parser.js"
 export type { ToolCallingDriver, ExtractedCall, HealingAction, HealingResult, ParseMode, ToolCallObservation } from "./drivers/tool-calling-driver.js"
 
 // ─── Healing Pipeline ───

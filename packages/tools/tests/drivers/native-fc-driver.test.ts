@@ -16,7 +16,7 @@ describe("NativeFCDriver", () => {
     expect(driver.mode).toBe("native-fc")
   })
 
-  it("buildPromptInstructions returns empty string", () => {
+  it("buildPromptInstructions returns empty string (rationale is injected unconditionally by think.ts)", () => {
     expect(driver.buildPromptInstructions(mockTools)).toBe("")
   })
 
