@@ -3,9 +3,6 @@ title: Cortex — Local Agent Studio
 description: A local companion web app for Reactive Agents. Watch reasoning traces in real time, inspect run history, chat with agents interactively, and manage the full scaffold from a single browser window.
 sidebar:
     order: 1
-    badge:
-        text: New
-        variant: tip
 ---
 
 import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/components";

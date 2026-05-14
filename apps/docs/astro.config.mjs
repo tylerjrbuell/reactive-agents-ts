@@ -12,7 +12,7 @@ export default defineConfig({
   base: "/",
   integrations: [
     skills(),
-    newPageIndicator({ withinDays: 30 }),
+    newPageIndicator({ withinDays: 14, maxAutoDetected: 10 }),
     starlight({
       title: "Reactive Agents",
       description:

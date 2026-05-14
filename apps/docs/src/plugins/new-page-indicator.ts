@@ -6,8 +6,10 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 type Options = {
-  /** Pages added or modified within this many days count as new. Default 30. */
+  /** Pages first added within this many days count as new. Default 14. */
   withinDays?: number;
+  /** Cap auto-detected pages to this many most-recent. Default 10. */
+  maxAutoDetected?: number;
 };
 
 const NEW_PAGES_SCRIPT_ID = "__ra_new_pages_data__";
@@ -40,12 +42,12 @@ function parseFrontmatter(file: string): Record<string, unknown> {
   return fm;
 }
 
-function gitLastChange(file: string, cwd: string): number | null {
+function gitFirstAdded(file: string, cwd: string): number | null {
   try {
-    const iso = execSync(`git log -1 --format=%cI -- "${file}"`, {
-      cwd,
-      encoding: "utf8",
-    }).trim();
+    const iso = execSync(
+      `git log --diff-filter=A --follow --format=%cI -- "${file}" | tail -n 1`,
+      { cwd, encoding: "utf8", shell: "/bin/bash" },
+    ).trim();
     if (!iso) return null;
     return new Date(iso).getTime();
   } catch {
@@ -61,7 +63,8 @@ function fileToSlug(file: string, contentDocsDir: string): string {
 }
 
 export function newPageIndicator(opts: Options = {}): AstroIntegration {
-  const withinDays = opts.withinDays ?? 30;
+  const withinDays = opts.withinDays ?? 14;
+  const maxAutoDetected = opts.maxAutoDetected ?? 10;
 
   return {
     name: "new-page-indicator",
@@ -74,29 +77,39 @@ export function newPageIndicator(opts: Options = {}): AstroIntegration {
         const files = listMarkdownFiles(contentDocsDir);
         const now = Date.now();
         const cutoff = now - withinDays * 24 * 60 * 60 * 1000;
-        const newSlugs: string[] = [];
+        const explicit = new Set<string>();
+        const autoCandidates: { slug: string; addedAt: number }[] = [];
 
         for (const file of files) {
           const fm = parseFrontmatter(file);
-          let isNew = false;
+          const slug = fileToSlug(file, contentDocsDir);
 
-          if (fm.isNew === true) isNew = true;
+          const explicitlyNew =
+            fm.isNew === true ||
+            (typeof fm.newUntil === "string" &&
+              !isNaN(new Date(fm.newUntil).getTime()) &&
+              new Date(fm.newUntil).getTime() > now);
 
-          if (typeof fm.newUntil === "string") {
-            const until = new Date(fm.newUntil).getTime();
-            if (!isNaN(until) && until > now) isNew = true;
+          if (explicitlyNew) {
+            explicit.add(slug);
+            continue;
           }
 
-          if (!isNew) {
-            const lastChange = gitLastChange(file, repoRoot);
-            if (lastChange != null && lastChange >= cutoff) isNew = true;
+          const addedAt = gitFirstAdded(file, repoRoot);
+          if (addedAt != null && addedAt >= cutoff) {
+            autoCandidates.push({ slug, addedAt });
           }
-
-          if (isNew) newSlugs.push(fileToSlug(file, contentDocsDir));
         }
 
+        autoCandidates.sort((a, b) => b.addedAt - a.addedAt);
+        const auto = autoCandidates.slice(0, maxAutoDetected).map((c) => c.slug);
+
+        const newSlugs = Array.from(new Set([...explicit, ...auto]));
+
         logger.info(
-          `new-page-indicator: ${newSlugs.length} new page(s) within ${withinDays}d`,
+          `new-page-indicator: ${newSlugs.length} new page(s) ` +
+            `(${explicit.size} explicit, ${auto.length} auto-detected ` +
+            `within ${withinDays}d, capped at ${maxAutoDetected})`,
         );
 
         injectScript(
