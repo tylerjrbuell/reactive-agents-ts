@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Database } from "bun:sqlite";
+import { Database } from "@reactive-agents/runtime-shim";
 
 /**
  * Lightweight SQLite persistence for budget spend tracking.
