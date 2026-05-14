@@ -30,10 +30,12 @@ function wrapNodeSqlite(
   class WrappedDatabase implements DatabaseLike {
     private db: NodeSqliteDatabase;
     constructor(path: string, options?: { create?: boolean; readonly?: boolean }) {
-      const opts = options
-        ? { open: options.create ?? true, readOnly: options.readonly ?? false }
-        : undefined;
-      this.db = new NodeDb(path, opts);
+      if (options) {
+        const opts = { open: options.create ?? true, readOnly: options.readonly ?? false };
+        this.db = new NodeDb(path, opts);
+      } else {
+        this.db = new NodeDb(path);
+      }
     }
     exec(sql: string): void {
       this.db.exec(sql);
