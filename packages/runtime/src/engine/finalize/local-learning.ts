@@ -15,6 +15,8 @@ import { ProceduralMemoryService } from "@reactive-agents/memory";
 import { skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { extractTaskText } from "../util.js";
+import { SkillStoreService } from "@reactive-agents/memory";
+import { skillFragmentToSkillRecord } from "@reactive-agents/reactive-intelligence";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,7 +97,7 @@ export const runLocalLearning = (
             // Pass learning result to the outcome block via a scoped variable.
             lastLearningResult = learningResult;
 
-            // Persist synthesized skill fragment to procedural memory
+            // Persist synthesized skill fragment to procedural memory AND skill store
             if (learningResult?.skillSynthesized && learningResult?.skillFragment) {
               const entry = skillFragmentToProceduralEntry({
                 fragment: learningResult.skillFragment,
@@ -111,6 +113,24 @@ export const runLocalLearning = (
                   );
                 }),
                 Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/local-learning.ts:service-option-skill-fragment", tag: errorTag(err) })),
+              );
+
+              // Dual-store: also persist as SkillRecord to SkillStoreService so
+              // SkillResolverService can load it on the next session.
+              const skillRecord = skillFragmentToSkillRecord({
+                fragment: learningResult.skillFragment,
+                agentId: config.agentId,
+                taskCategory: learningResult.taskCategory,
+                modelId,
+              });
+              yield* Effect.serviceOption(SkillStoreService).pipe(
+                Effect.flatMap((svcOpt) => {
+                  if (svcOpt._tag !== "Some") return Effect.void;
+                  return svcOpt.value.store(skillRecord).pipe(
+                    Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/local-learning.ts:store-skill-record", tag: errorTag(err) })),
+                  );
+                }),
+                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/local-learning.ts:service-option-skill-record", tag: errorTag(err) })),
               );
             }
           });
