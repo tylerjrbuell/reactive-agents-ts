@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 - Snapshot/Replay is the v0.11 Phase C differentiator: every Reactive Agents decision is auditable-by-demo, distinguishing the framework from black-box alternatives.
 - The layer-override gate test (`packages/replay/tests/layer-override.test.ts`) pins `Layer.merge(live, replay)` priority — if Effect's merge semantics ever changed, replay would silently call the live tool; this test fails first.
+- **Deferred to v0.11.1:** full end-to-end determinism integration test (builder + `TestLLMServiceLayer` + replay layer → assert no-override replay reproduces recorded output). Override mechanism and tool-result freezing are pinned today.
 
 ---
 

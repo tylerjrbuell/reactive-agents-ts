@@ -134,6 +134,8 @@ export const runInlineAct = (
                 callId,
                 durationMs,
                 success: false,
+                args,
+                error: "ToolService not available during recording (no .withTools() configured)",
               }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-tool-call-completed-no-service", tag: errorTag(err) })));
             }
             return {

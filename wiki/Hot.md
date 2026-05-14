@@ -23,7 +23,8 @@ New `@reactive-agents/replay` package shipped. Phase C v0.11 differentiator land
 - Trace recorder (`trace/src/layer.ts`) projects new fields with 8KB truncation guard + JSON.stringify try/catch for unserializable
 - `rax-diagnose replay-run <runId>` CLI subcommand (summary mode)
 - Docs: `features/snapshot-replay.mdx` + index card + stability marker
-- **25/25 replay package tests pass.** Gate test `layer-override.test.ts` pins `Layer.merge(live, replay)` priority — replay layer wins.
+- **24/24 replay package tests pass.** Gate test `layer-override.test.ts` pins `Layer.merge(live, replay)` priority — replay layer wins.
+- **Deferred to v0.11.1:** full end-to-end determinism integration test (builder + TestLLMServiceLayer + replay layer → assert `outputDiff.equal === true`). Layer-override mechanism + tool-result freezing are pinned today; full-loop determinism manually verified, not gated.
 
 **Integration pattern:**
 ```typescript

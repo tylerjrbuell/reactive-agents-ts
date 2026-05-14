@@ -101,9 +101,18 @@ rax-diagnose replay-run r-abc123
 
 Full re-execution from the CLI requires a builder factory and is API-only in v0.11. Use `replay-run --json` to pipe metadata into a script.
 
-## Determinism guarantee
+## Determinism guarantee (in progress)
 
-With no overrides AND `temperature: 0` AND a deterministic provider (e.g. the `test` provider with a scripted scenario), a replay produces an identical output to the recorded run. The package's `tests/layer-override.test.ts` is the gate that pins this: if `Layer.merge(live, extraLayers)` ever stops giving the replay layer priority, the test fails and the override would silently call the live tool.
+The intent: with no overrides AND `temperature: 0` AND a deterministic provider (e.g. the `test` provider with a scripted scenario), a replay produces an identical output to the recorded run.
+
+What's verified today:
+
+- **Override mechanism** — `tests/layer-override.test.ts` pins `Layer.merge(live, extraLayers)` giving the replay layer priority for `ToolService.execute`. If Effect's merge semantics ever stopped honoring this order, the test fails and the override would silently call the live tool.
+- **Tool-result freezing** — `tests/replay-tool-layer.test.ts` proves the replay layer dispenses recorded results without touching the live tool.
+
+What's not yet verified (v0.11.1 follow-up):
+
+- **End-to-end determinism** — full builder integration test asserting `result.diff.outputDiff.equal === true` after a no-override replay through `TestLLMServiceLayer`. Manual verification works today; an automated gate is on the v0.11.1 list.
 
 <Aside type="note">
 Replay re-uses recorded tool results but does **not** mock the LLM. Provider calls are live. For full determinism, override the model to the `test` provider with a fixed scenario, or pin temperature to 0 on a real provider. Provider-side nondeterminism is logged when detected.
