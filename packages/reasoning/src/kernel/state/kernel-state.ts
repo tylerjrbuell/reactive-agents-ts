@@ -352,15 +352,6 @@ export interface KernelInput {
    *   import { type Verifier, defaultVerifier } from "@reactive-agents/reasoning";
    */
   readonly verifier?: import("../capabilities/verify/verifier.js").Verifier;
-  /**
-   * Custom retry policy — controls WHEN the kernel retries on verifier
-   * rejection. Returns `{ retry, signalText?, reason? }`. The default policy
-   * retries any rejection while the budget allows; developers can suppress
-   * retry for known-regressing task classes (e.g., long-form synthesis where
-   * re-rolling adds more fabricated content) or customize the harness
-   * signal text per failure mode.
-   */
-  readonly verifierRetryPolicy?: import("../capabilities/verify/verifier.js").VerifierRetryPolicy;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /**

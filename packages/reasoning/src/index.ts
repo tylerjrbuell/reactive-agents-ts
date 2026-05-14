@@ -194,22 +194,6 @@ export type {
   VerificationResult,
 } from "./kernel/capabilities/verify/verifier.js";
 
-/**
- * ─── Verifier Retry Policy (Sprint 3.5 — developer-overridable retry) ───
- * Pure-function policy consulted on every verifier rejection — controls retry/
- * skip + custom signal text. `defaultVerifierRetryPolicy` preserves pre-3.5
- * behavior (retry while budget remains).
- *
- * @unstable Sprint 3.5 surface (commit 14135d6d); not external-validated. May
- * change in v0.10.x. See AUDIT-overhaul-2026.md §11 #15.
- */
-export { defaultVerifierRetryPolicy } from "./kernel/capabilities/verify/verifier.js";
-export type {
-  VerifierRetryPolicy,
-  VerifierRetryPolicyContext,
-  VerifierRetryDecision,
-} from "./kernel/capabilities/verify/verifier.js";
-
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
