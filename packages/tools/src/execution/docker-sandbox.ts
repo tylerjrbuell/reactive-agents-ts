@@ -22,6 +22,7 @@ import { Effect } from "effect";
 import { join, dirname } from "node:path";
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { spawn } from "@reactive-agents/runtime-shim";
 import { ToolExecutionError, ToolTimeoutError } from "../errors.js";
 
 // ─── Configuration ───
@@ -97,12 +98,12 @@ export const SECCOMP_PROFILE_PATH = join(
 /** Check if Docker daemon is reachable. */
 const isDockerAvailable = async (): Promise<boolean> => {
   try {
-    const proc = Bun.spawn(["docker", "info"], {
+    const proc = spawn(["docker", "info"], {
       stdout: "pipe",
       stderr: "pipe",
     });
-    await proc.exited;
-    return proc.exitCode === 0;
+    const code = await proc.exited;
+    return code === 0;
   } catch {
     return false;
   }
@@ -111,12 +112,12 @@ const isDockerAvailable = async (): Promise<boolean> => {
 /** Check if a specific Docker image exists locally. */
 const isImageAvailable = async (image: string): Promise<boolean> => {
   try {
-    const proc = Bun.spawn(["docker", "image", "inspect", image], {
+    const proc = spawn(["docker", "image", "inspect", image], {
       stdout: "pipe",
       stderr: "pipe",
     });
-    await proc.exited;
-    return proc.exitCode === 0;
+    const code = await proc.exited;
+    return code === 0;
   } catch {
     return false;
   }
@@ -138,12 +139,12 @@ export const buildSandboxImage = async (
   if (!existsSync(dockerfilePath)) return false;
 
   try {
-    const proc = Bun.spawn(
+    const proc = spawn(
       ["docker", "build", "-t", SANDBOX_IMAGES[language], "-f", dockerfilePath, dockerfileDir],
       { stdout: "pipe", stderr: "pipe" },
     );
-    await proc.exited;
-    return proc.exitCode === 0;
+    const code = await proc.exited;
+    return code === 0;
   } catch {
     return false;
   }
@@ -238,14 +239,14 @@ export const makeDockerSandbox = (
    */
   const killContainer = async (name: string): Promise<void> => {
     try {
-      const kill = Bun.spawn(["docker", "kill", name], {
+      const kill = spawn(["docker", "kill", name], {
         stdout: "pipe",
         stderr: "pipe",
       });
       await kill.exited;
     } catch { /* best effort */ }
     try {
-      const rm = Bun.spawn(["docker", "rm", "-f", name], {
+      const rm = spawn(["docker", "rm", "-f", name], {
         stdout: "pipe",
         stderr: "pipe",
       });
@@ -331,7 +332,7 @@ export const makeDockerSandbox = (
           try: async () => {
             // Pass through host env for Docker CLI (socket, context, config).
             // Container env is isolated by Docker — this only affects the `docker` command itself.
-            const proc = Bun.spawn(dockerArgs, {
+            const proc = spawn(dockerArgs, {
               stdout: "pipe",
               stderr: "pipe",
             });

@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Effect } from "effect";
+import { spawn } from "@reactive-agents/runtime-shim";
+import type { SpawnResult } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
@@ -104,9 +106,9 @@ __fn()
         };
       }
 
-      let proc: ReturnType<typeof Bun.spawn>;
+      let proc: SpawnResult;
       try {
-        proc = Bun.spawn(["bun", "run", tmpFile], {
+        proc = spawn(["bun", "run", tmpFile], {
           stdout: "pipe",
           stderr: "pipe",
           // Run in /tmp to prevent Bun from auto-loading .env files from the project.
