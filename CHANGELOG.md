@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased] — v0.11 Phase C
+
+### Added
+
+- **`@reactive-agents/replay` package** — deterministic re-run of recorded traces with prompt/model overrides and tool-result freezing. Public surface: `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces`, `computeArgsHash`. Strict mode errors on unrecorded/truncated tool calls; lenient mode returns failure marker. Integration via existing `.withLayers(makeReplayToolLayer(ctrl, mode))`.
+- **`ToolCallCompleted` event payload extension** — new optional fields `args`, `result`, `error`, `resultTruncated` carry full tool call/response data for replay. Backward compatible (all fields optional). Emission sites updated: `reasoning/src/kernel/state/kernel-hooks.ts`, `runtime/src/engine/phases/agent-loop/inline-act.ts`, `reasoning/src/strategies/plan-execute.ts`.
+- **`ToolCallEvent` trace event extension** — `result` + `resultTruncated` projected from `ToolCallCompleted`. Trace recorder truncates results >8KB and substitutes a `{ replayUnserializable: true }` marker for non-JSON-serializable payloads.
+- **`rax-diagnose replay-run <runId>` CLI subcommand** — summary of a recorded run (metadata, tool call count, unique tool list) for feeding into the `replay()` API. Supports `--json`.
+- **Docs:** `features/snapshot-replay.mdx` (full API + diff shape + determinism guarantee) + index card + stability marker.
+- **Public ROADMAP.md alignment to North Star v5.0** — Phase A/B shipped, Phase C in flight, accurate v0.11 line-up.
+
+### Notes
+
+- Snapshot/Replay is the v0.11 Phase C differentiator: every Reactive Agents decision is auditable-by-demo, distinguishing the framework from black-box alternatives.
+- The layer-override gate test (`packages/replay/tests/layer-override.test.ts`) pins `Layer.merge(live, replay)` priority — if Effect's merge semantics ever changed, replay would silently call the live tool; this test fails first.
+
+---
+
 ## [0.10.0] — 2026-05-04
 
 ### Highlights

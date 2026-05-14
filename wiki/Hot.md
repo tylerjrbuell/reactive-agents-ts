@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-05-13
+updated: 2026-05-14
 ---
 
 # Hot (Recent Context Cache)
@@ -10,7 +10,36 @@ updated: 2026-05-13
 
 ---
 
-## Latest Session (2026-05-13, late afternoon)
+## Latest Session (2026-05-14)
+
+### Snapshot/Replay v0.11 — COMPLETE ✅
+
+New `@reactive-agents/replay` package shipped. Phase C v0.11 differentiator landed.
+
+**What shipped:**
+- New package `packages/replay/` — full surface: `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces`, `computeArgsHash`
+- `ToolCallCompleted` event payload extended with `args` / `result` / `error` / `resultTruncated` (backward compatible)
+- 3 emission sites updated: `kernel-hooks.ts`, `inline-act.ts` (runtime), `plan-execute.ts`
+- Trace recorder (`trace/src/layer.ts`) projects new fields with 8KB truncation guard + JSON.stringify try/catch for unserializable
+- `rax-diagnose replay-run <runId>` CLI subcommand (summary mode)
+- Docs: `features/snapshot-replay.mdx` + index card + stability marker
+- **25/25 replay package tests pass.** Gate test `layer-override.test.ts` pins `Layer.merge(live, replay)` priority — replay layer wins.
+
+**Integration pattern:**
+```typescript
+const ctrl = makeReplayController(run.toolTable)
+const layer = makeReplayToolLayer(ctrl, "strict")
+new ReactiveAgentBuilder().withLayers(layer).build()
+```
+No new builder method needed — existing `.withLayers()` (`builder.ts:1895`) wired through `Layer.merge(runtime, options.extraLayers)` at `runtime.ts:1625`.
+
+### Public ROADMAP aligned to North Star v5.0 ✅
+
+`ROADMAP.md` rewritten for v0.10.6 reality. Phase A/B shipped, Phase C in flight. Phase C #3 closed.
+
+---
+
+## Previous Session (2026-05-13, late afternoon)
 
 ### Wave D — Killswitches Implementation — COMPLETE ✅
 

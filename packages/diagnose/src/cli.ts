@@ -15,6 +15,7 @@
 
 import { listCommand } from "./commands/list.js";
 import { replayCommand } from "./commands/replay.js";
+import { replayRunCommand } from "./commands/replay-run.js";
 import { grepCommand } from "./commands/grep.js";
 import { diffCommand } from "./commands/diff.js";
 import { debriefCommand } from "./commands/debrief.js";
@@ -51,6 +52,7 @@ function printHelp(): void {
 Commands:
   list                            Show recent traces
   replay <runId> [--raw|--json]   Pretty-print timeline; --only=k1,k2 to filter
+  replay-run <runId> [--json]     Show recorded run metadata for re-execution via the replay() API
   grep <runId> "<expr>"           Filter events with a JS predicate (e is the event)
   diff <runIdA> <runIdB>          Structural diff between two runs
   debrief <runId> [--json]        Decision timeline with rationale (why this path)
@@ -92,6 +94,13 @@ async function main(): Promise<void> {
         const onlyFlag = args.flags.get("only");
         const only = typeof onlyFlag === "string" ? onlyFlag.split(",").map((s) => s.trim()) : undefined;
         await replayCommand(id, { raw, json, only });
+        return;
+      }
+      case "replay-run": {
+        const id = args.positional[0];
+        if (!id) throw new Error("replay-run requires a runId. Try: rax-diagnose replay-run latest");
+        const json = Boolean(args.flags.get("json"));
+        await replayRunCommand(id, { json });
         return;
       }
       case "grep": {

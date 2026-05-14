@@ -1,0 +1,121 @@
+---
+title: Snapshot & Replay
+description: Deterministically re-run a recorded agent run with prompt or model overrides — tool results held constant.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every Reactive Agents run produces a JSONL trace at `~/.reactive-agents/traces/<runId>.jsonl` when tracing is enabled. The `@reactive-agents/replay` package lets you re-execute a recorded run against modified prompts, models, or temperatures while holding tool results constant — so you can audit decisions, test prompt changes without paying for tool calls, and A/B model swaps on real production traces.
+
+## Why this matters
+
+No other agent framework lets you replay a recorded decision. The traceable-by-demo guarantee is one of the load-bearing claims in the Vision Pillar of **Observability** — "every decision an agent makes should be controllable, observable, and auditable."
+
+Three primary use cases:
+
+1. **Audit a production failure** — replay the exact recording with no overrides; confirm the agent's decision path is reproducible.
+2. **Test a prompt change** — replay with `systemPrompt: "<new>"`; the tool sequence may diverge, but tool *results* are frozen so you only pay for LLM tokens.
+3. **A/B a model swap** — replay with `model: "gpt-4o-mini"`; the diff reports token, cost, and output deltas.
+
+## API
+
+```typescript
+import {
+  loadRecordedRun,
+  replay,
+  makeReplayController,
+  makeReplayToolLayer,
+} from "@reactive-agents/replay"
+import { ReactiveAgentBuilder } from "@reactive-agents/runtime"
+
+const run = await loadRecordedRun("r-abc123")
+//                                   ^^^^^^^^^^
+//   resolves to ~/.reactive-agents/traces/r-abc123.jsonl
+//   (also accepts an absolute path or a relative .jsonl)
+
+const result = await replay(run, async (ctx) => {
+  const ctrl = makeReplayController(ctx.recordedRun.toolTable)
+  const layer = makeReplayToolLayer(ctrl, ctx.overrides.onMissingToolResult ?? "strict")
+
+  return new ReactiveAgentBuilder()
+    .withProvider("anthropic")
+    .withModel(ctx.overrides.model ?? ctx.recordedRun.model)
+    .withLayers(layer)        // ← replay layer wins ToolService.execute
+    .build()
+}, {
+  systemPrompt: "You are extra concise.",
+})
+
+console.log(result.diff)
+// {
+//   identical: false,
+//   iterationsDelta: -1,
+//   toolSequenceDiff: [...],
+//   outputDiff: { equal: false, original: "...", replay: "..." },
+//   tokensDelta: -120,
+//   costDelta: -0.0012,
+//   durationDeltaMs: -340,
+// }
+```
+
+## Strict vs lenient mode
+
+- **strict** (default) — unrecorded tool calls during replay are a fatal error. Use for audits where any prompt change that alters tool sequence should fail loudly.
+- **lenient** — unrecorded calls return `{ success: false, error: "no recording" }` so the agent can continue exploring. Use for prompt-iteration loops.
+
+Truncated recordings (results larger than 8KB are clipped) are also strict-mode failures: replay can't guarantee determinism when a tool result was lossy.
+
+## Diff shape
+
+```typescript
+interface ReplayDiff {
+  identical: boolean                       // all signals match
+  iterationsDelta: number                  // replay − original
+  toolSequenceDiff: ToolSeqEdit[]          // added / removed / reordered
+  outputDiff: { original?: string; replay?: string; equal: boolean }
+  tokensDelta: number
+  costDelta: number
+  durationDeltaMs: number
+}
+```
+
+`toolSequenceDiff` is an edit script positional in iteration order. Each edit is one of:
+
+- `{ kind: "added",     toolName, argsHash, atIndex }`
+- `{ kind: "removed",   toolName, argsHash, atIndex }`
+- `{ kind: "reordered", toolName, argsHash, from, to }`
+
+`argsHash` is a 16-char SHA-256 prefix over a stable JSON serialization of the arguments — the same key the replay controller uses to match calls.
+
+## CLI summary
+
+```bash
+rax-diagnose replay-run r-abc123
+# runId    r-abc123
+# task     fetch HN top 10 then summarize
+# model    qwen3:14b
+# provider ollama
+# events   84
+# tools    7 calls across 3 unique tool(s): fetch, scrape, summarize
+```
+
+Full re-execution from the CLI requires a builder factory and is API-only in v0.11. Use `replay-run --json` to pipe metadata into a script.
+
+## Determinism guarantee
+
+With no overrides AND `temperature: 0` AND a deterministic provider (e.g. the `test` provider with a scripted scenario), a replay produces an identical output to the recorded run. The package's `tests/layer-override.test.ts` is the gate that pins this: if `Layer.merge(live, extraLayers)` ever stops giving the replay layer priority, the test fails and the override would silently call the live tool.
+
+<Aside type="note">
+Replay re-uses recorded tool results but does **not** mock the LLM. Provider calls are live. For full determinism, override the model to the `test` provider with a fixed scenario, or pin temperature to 0 on a real provider. Provider-side nondeterminism is logged when detected.
+</Aside>
+
+## When replay isn't enough
+
+- **The recorded trace lacks tool result payloads.** Older traces (pre-v0.11) only recorded `success: boolean` and `durationMs`. Re-record under v0.11+ to capture full payloads.
+- **The tool result was truncated** (>8KB) — strict mode rejects; switch to lenient and accept divergence.
+- **The tool is genuinely stateful** (DB writes, queue ingestion). Replay holds the recorded response constant but the world has moved on; treat results as historical, not live.
+- **You want a different decision path** — strict mode is the wrong tool. Use lenient or build a new run.
+
+## Stability
+
+The replay API is `@stable` as of v0.11. See [API Stability](/reference/stability/).

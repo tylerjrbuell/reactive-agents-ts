@@ -28,6 +28,7 @@ The following surfaces are tier-1 stable. We will not break these without a majo
 - **Event bus** — All event tags consumed by the public observability layer (`ToolCallStarted`, `ToolCallCompleted`, `LLMExchangeEmitted`, `StrategySwitched`, `VerifierVerdictEmitted`, plus the 30+ tags listed in `event-bus.ts`)
 - **Lifecycle hooks** — `.withHook(phase, timing, fn)` for the 12 phases and `before` / `after` / `on-error` timings
 - **Compose API** — `.compose()` (alias: `.withHarness()`) for harness composition; `.on()`, `.tap()`, `.before()`, `.after()`, `.onError()` transforms and hooks; all 12-phase composition and tag pattern matching
+- **Snapshot & Replay** (v0.11) — `@reactive-agents/replay` package: `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces`, `computeArgsHash`. The `ToolCallCompleted` event payload's new `args`, `result`, `error`, `resultTruncated` fields are also stable.
 - **AgentResult shape** — `.run()` and `.runStream()` return values
 - **Raw provider clients** — `AnthropicProviderLive`, `OpenAIProviderLive`, `LocalProviderLive`, `GeminiProviderLive`, `LiteLLMProviderLive` exported as standalone Effect Layers (you can skip the harness entirely)
 
