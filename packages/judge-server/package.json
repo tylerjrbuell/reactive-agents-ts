@@ -14,9 +14,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@reactive-agents/core": "workspace:*",
     "@reactive-agents/eval": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/runtime-shim": "workspace:*",
     "effect": "*"
   },
   "peerDependencies": {

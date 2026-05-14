@@ -1,5 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
 import { JudgeLLMService } from "@reactive-agents/eval";
+import { serve, isMain } from "@reactive-agents/runtime-shim";
 import { JudgeRequest, type ReproducibilityMetadata } from "./contract.js";
 import { handleJudgeRequest } from "./handler.js";
 import { buildJudgeLayer, resolveLiveLayerConfig } from "./live-layer.js";
@@ -64,7 +65,7 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
       ? buildJudgeLayer(resolveLiveLayerConfig())
       : StubJudgeLayer;
 
-  const server = Bun.serve({
+  const server = await serve({
     port: config.port,
     fetch: async (req) => {
       const url = new URL(req.url);
@@ -116,7 +117,7 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
   };
 };
 
-if (import.meta.main) {
+if (isMain(import.meta.url)) {
   const port = Number(process.env.PORT ?? "8910");
   const judgeModelSha = process.env.JUDGE_MODEL_SHA ?? "unknown";
   const judgeCodeSha = process.env.JUDGE_CODE_SHA ?? "unknown";
