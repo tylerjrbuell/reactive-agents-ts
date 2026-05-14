@@ -116,6 +116,10 @@ export interface ToolCallEvent extends TraceEventBase {
   readonly kind: "tool-call-start" | "tool-call-end"
   readonly toolName: string
   readonly args?: unknown
+  /** Tool result payload (only on "tool-call-end"; may be truncated for size). */
+  readonly result?: unknown
+  /** True iff `result` was clipped or replaced with an unserializable marker. */
+  readonly resultTruncated?: boolean
   readonly durationMs?: number
   readonly ok?: boolean
   readonly error?: string

@@ -90,6 +90,7 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         }),
       ];
       if (resolvedToolName) {
+        const toolInput = lastStep?.metadata?.toolInput as unknown;
         effects.push(
           publishReasoningStep(eventBus, {
             _tag: "ToolCallCompleted",
@@ -99,6 +100,8 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
             durationMs: (lastStep?.metadata?.duration as number | undefined) ?? 0,
             success,
             kernelPass: getKernelPass(state),
+            ...(toolInput !== undefined ? { args: toolInput } : {}),
+            ...(success ? { result } : { error: result }),
           }),
         );
       } else {

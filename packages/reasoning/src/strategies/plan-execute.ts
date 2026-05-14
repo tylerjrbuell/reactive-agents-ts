@@ -1159,6 +1159,8 @@ function executeStep(
         durationMs: toolDurationMs,
         success: toolResult.success !== false,
         kernelPass: `plan-execute:step-${stepIndex + 1}`,
+        ...(step.toolArgs !== undefined ? { args: step.toolArgs } : {}),
+        ...(toolResult.success !== false ? { result: toolResult.result } : { error: String(toolResult.result) }),
       });
 
       const rawOutput =

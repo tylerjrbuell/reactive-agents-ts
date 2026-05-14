@@ -178,7 +178,7 @@ export const runInlineAct = (
             toolResult.success ? undefined : (toolResult.result as string),
           ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:log-tool-execution", tag: errorTag(err) })));
 
-          // Phase 0.2: Publish ToolCallCompleted
+          // Phase 0.2: Publish ToolCallCompleted (with args + result for replay)
           if (eb) {
             yield* eb.publish({
               _tag: "ToolCallCompleted",
@@ -187,6 +187,8 @@ export const runInlineAct = (
               callId,
               durationMs: toolResult.durationMs,
               success: toolResult.success,
+              args,
+              ...(toolResult.success ? { result: toolResult.result } : { error: String(toolResult.result) }),
             }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-act.ts:emit-tool-call-completed", tag: errorTag(err) })));
           }
 

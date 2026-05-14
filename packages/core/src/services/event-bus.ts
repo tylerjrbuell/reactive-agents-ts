@@ -238,6 +238,14 @@ export type AgentEvent =
       readonly success: boolean;
       /** Which kernel pass produced this call (e.g. "reflexion:generate", "plan-execute:step-2") */
       readonly kernelPass?: string;
+      /** Optional tool arguments (used by replay; may be omitted by emitters that don't carry args). */
+      readonly args?: unknown;
+      /** Optional tool result payload (used by replay; serialized form, may be truncated). */
+      readonly result?: unknown;
+      /** Optional error string when success=false. */
+      readonly error?: string;
+      /** True iff `result` was truncated by the emitter (size guard for trace bloat). */
+      readonly resultTruncated?: boolean;
     }
   // ─── Phase completion events (from @reactive-agents/runtime) ───
   | {

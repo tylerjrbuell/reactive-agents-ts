@@ -237,6 +237,17 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
     }
 
     case "ToolCallCompleted": {
+      const truncate = (v: unknown): { value: unknown; truncated: boolean } => {
+        try {
+          const s = JSON.stringify(v)
+          if (s === undefined) return { value: { replayUnserializable: true }, truncated: true }
+          if (s.length > 8 * 1024) return { value: s.slice(0, 8 * 1024), truncated: true }
+          return { value: v, truncated: false }
+        } catch {
+          return { value: { replayUnserializable: true }, truncated: true }
+        }
+      }
+      const r = raw.result !== undefined ? truncate(raw.result) : undefined
       const ev: ToolCallEvent = {
         kind: "tool-call-end",
         runId: raw.taskId,
@@ -246,6 +257,9 @@ function toTraceEvent(raw: AgentEvent): TraceEvent | null {
         toolName: raw.toolName,
         durationMs: raw.durationMs,
         ok: raw.success,
+        ...(raw.args !== undefined ? { args: raw.args } : {}),
+        ...(r ? { result: r.value, resultTruncated: r.truncated || raw.resultTruncated === true } : {}),
+        ...(raw.error ? { error: raw.error } : {}),
       }
       return ev
     }
