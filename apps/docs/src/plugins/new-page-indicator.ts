@@ -100,7 +100,7 @@ export function newPageIndicator(opts: Options = {}): AstroIntegration {
         );
 
         injectScript(
-          "page",
+          "head-inline",
           `window.${NEW_PAGES_SCRIPT_ID}=${JSON.stringify(newSlugs)};`,
         );
       },
