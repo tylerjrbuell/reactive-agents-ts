@@ -1,0 +1,4 @@
+{"kind":"run-started","runId":"r-fix-1","timestamp":1000,"iter":-1,"seq":0,"task":"echo hello","model":"qwen3:14b","provider":"ollama","config":{"temperature":0}}
+{"kind":"tool-call-start","runId":"r-fix-1","timestamp":1010,"iter":0,"seq":1,"toolName":"echo","args":{"msg":"hello"}}
+{"kind":"tool-call-end","runId":"r-fix-1","timestamp":1020,"iter":0,"seq":2,"toolName":"echo","args":{"msg":"hello"},"result":"hello","ok":true,"durationMs":10}
+{"kind":"run-completed","runId":"r-fix-1","timestamp":1100,"iter":0,"seq":3,"status":"success","output":"hello","totalTokens":42,"totalCostUsd":0,"durationMs":100}
