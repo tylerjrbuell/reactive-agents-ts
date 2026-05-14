@@ -1,4 +1,5 @@
 import { Database } from "@reactive-agents/runtime-shim";
+import type { DatabaseLike } from "@reactive-agents/runtime-shim";
 
 export type ArmStats = {
   readonly contextBucket: string;
@@ -9,7 +10,7 @@ export type ArmStats = {
 };
 
 export class BanditStore {
-  private db: Database;
+  private db: DatabaseLike;
 
   constructor(dbPath: string = ":memory:") {
     this.db = new Database(dbPath, { create: true });
@@ -28,11 +29,10 @@ export class BanditStore {
   }
 
   save(stats: ArmStats): void {
-    this.db.run(
+    this.db.prepare(
       `INSERT OR REPLACE INTO bandit_arms (context_bucket, arm_id, alpha, beta, pulls, updated_at)
        VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-      [stats.contextBucket, stats.armId, stats.alpha, stats.beta, stats.pulls],
-    );
+    ).run(stats.contextBucket, stats.armId, stats.alpha, stats.beta, stats.pulls);
   }
 
   load(contextBucket: string, armId: string): ArmStats | null {

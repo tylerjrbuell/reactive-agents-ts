@@ -1,4 +1,5 @@
 import { Database } from "@reactive-agents/runtime-shim";
+import type { DatabaseLike } from "@reactive-agents/runtime-shim";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
@@ -14,7 +15,7 @@ function expandPath(p: string): string {
 }
 
 export class CalibrationStore {
-  private db: Database;
+  private db: DatabaseLike;
 
   constructor(dbPath: string = DEFAULT_DB_PATH) {
     const resolved = expandPath(dbPath);

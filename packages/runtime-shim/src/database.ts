@@ -46,6 +46,20 @@ function wrapNodeSqlite(
     query(sql: string): StatementLike {
       return wrapStatement(this.db.prepare(sql));
     }
+    transaction<F extends (...args: never[]) => unknown>(fn: F): F {
+      const wrapped = (...args: never[]) => {
+        this.db.exec("BEGIN");
+        try {
+          const result = fn(...args);
+          this.db.exec("COMMIT");
+          return result;
+        } catch (err) {
+          this.db.exec("ROLLBACK");
+          throw err;
+        }
+      };
+      return wrapped as unknown as F;
+    }
     close(): void {
       this.db.close();
     }
@@ -69,6 +83,9 @@ function createStubDatabase(): DatabaseConstructor {
     }
     query(_sql: string): StatementLike {
       return this.prepare(_sql);
+    }
+    transaction<F extends (...args: never[]) => unknown>(fn: F): F {
+      return fn;
     }
     close(): void {
       /* no-op */

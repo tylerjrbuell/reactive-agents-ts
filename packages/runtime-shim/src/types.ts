@@ -14,6 +14,12 @@ export interface DatabaseLike {
   prepare(sql: string): StatementLike;
   /** Bun convenience: same as prepare() on Node-backed impls */
   query(sql: string): StatementLike;
+  /**
+   * Wraps `fn` in a transaction. Returns a callable that, when invoked,
+   * executes `fn` inside BEGIN/COMMIT (ROLLBACK on throw).
+   * Matches Bun.sqlite's transaction() API signature.
+   */
+  transaction<F extends (...args: never[]) => unknown>(fn: F): F;
   close(): void;
 }
 
