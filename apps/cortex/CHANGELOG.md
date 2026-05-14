@@ -1,19 +1,5 @@
 # @reactive-agents/cortex
 
-## 0.10.7
-
-### Patch Changes
-
--   Updated dependencies
-    -   @reactive-agents/core@0.12.0
-    -   @reactive-agents/llm-provider@0.12.0
-    -   @reactive-agents/memory@0.12.0
-    -   @reactive-agents/tools@0.12.0
-    -   @reactive-agents/observability@0.12.0
-    -   @reactive-agents/gateway@0.12.0
-    -   @reactive-agents/reactive-intelligence@0.12.0
-    -   @reactive-agents/runtime@0.12.0
-
 ## 0.10.6
 
 ### Patch Changes

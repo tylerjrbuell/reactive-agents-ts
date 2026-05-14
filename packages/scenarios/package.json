@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/scenarios",
-  "version": "0.10.7",
+  "version": "0.10.6",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

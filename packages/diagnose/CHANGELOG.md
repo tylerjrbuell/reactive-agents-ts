@@ -1,11 +1,5 @@
 # @reactive-agents/diagnose
 
-## 0.10.7
-
-### Patch Changes
-
--   @reactive-agents/trace@0.10.7
-
 ## 0.10.6
 
 ### Patch Changes

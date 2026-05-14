@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/examples",
-  "version": "0.1.10",
+  "version": "0.1.9",
   "private": true,
   "type": "module",
   "scripts": {

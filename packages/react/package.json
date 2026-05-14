@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/react",
-  "version": "0.10.6",
+  "version": "0.10.5",
   "description": "React hooks for Reactive Agents — useAgentStream, useAgent",
   "type": "module",
   "exports": {

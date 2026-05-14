@@ -1,47 +1,5 @@
 # reactive-agents
 
-## 0.12.0
-
-### Minor Changes
-
--   Add `@reactive-agents/runtime-shim` cross-runtime adapter package. The framework now runs on both Bun (with native `Bun.*` fast paths) and Node.js 22.5+ (with `node:sqlite`, `node:child_process`, `node:fs.glob`).
-
-    **What changed:**
-
-    -   New package `@reactive-agents/runtime-shim` exports unified primitives: `Database`, `spawn`, `writeFile`, `readFile`, `hash`, `serve`, `glob`, `isMain`, `isBun`, `isNode`.
-    -   Internal `bun:sqlite` imports and `Bun.*` calls across `memory`, `cost`, `reactive-intelligence`, `llm-provider`, `tools`, `eval`, `a2a`, `benchmarks`, `health`, `judge-server` now route through the shim.
-    -   `@reactive-agents/memory`: FTS5 virtual tables are now optional. When running on `node:sqlite` (which lacks FTS5), the package logs a warning and falls back to `LIKE`-based search on the `content` column. Full-text scoring is preserved on Bun.
-    -   Zero call-site API changes for end users.
-
-    **Why:**
-
-    -   Unblocks Stackblitz embeds (Node-only WebContainer)
-    -   Unblocks Vercel, Netlify, Cloudflare Workers (Node compat layer)
-    -   Removes hard `engines.bun` requirement from the dependency chain
-
-    **Bump:** minor (new package, no end-user API breaking changes).
-
-### Patch Changes
-
--   Updated dependencies
-    -   @reactive-agents/core@0.12.0
-    -   @reactive-agents/llm-provider@0.12.0
-    -   @reactive-agents/memory@0.12.0
-    -   @reactive-agents/reasoning@0.12.0
-    -   @reactive-agents/tools@0.12.0
-    -   @reactive-agents/guardrails@0.12.0
-    -   @reactive-agents/verification@0.12.0
-    -   @reactive-agents/cost@0.12.0
-    -   @reactive-agents/identity@0.12.0
-    -   @reactive-agents/observability@0.12.0
-    -   @reactive-agents/interaction@0.12.0
-    -   @reactive-agents/orchestration@0.12.0
-    -   @reactive-agents/prompts@0.12.0
-    -   @reactive-agents/eval@0.12.0
-    -   @reactive-agents/a2a@0.12.0
-    -   @reactive-agents/runtime@0.12.0
-    -   @reactive-agents/cli@0.12.0
-
 ## 0.10.6
 
 ### Patch Changes

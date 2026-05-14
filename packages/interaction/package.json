@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/interaction",
-  "version": "0.12.0",
+  "version": "0.10.6",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
