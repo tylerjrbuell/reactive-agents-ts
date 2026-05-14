@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database } from "@reactive-agents/runtime-shim";
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";

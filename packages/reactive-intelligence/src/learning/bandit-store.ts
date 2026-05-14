@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database } from "@reactive-agents/runtime-shim";
 
 export type ArmStats = {
   readonly contextBucket: string;

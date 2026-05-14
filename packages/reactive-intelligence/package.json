@@ -13,6 +13,7 @@
   "dependencies": {
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
+    "@reactive-agents/runtime-shim": "workspace:*",
     "@reactive-agents/trace": "workspace:*"
   },
   "devDependencies": {
