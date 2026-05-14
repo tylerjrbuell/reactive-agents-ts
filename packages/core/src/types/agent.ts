@@ -34,6 +34,9 @@ export const ReasoningStrategy = Schema.Literal(
    * "inline LLM-call" path that was duplicated inside the engine
    * agent-loop pre-W23. */
   "direct",
+  /** Generates executable TypeScript code that composes tools, runs in a
+   * Worker sandbox. Phase D strategy for complex multi-tool orchestration. */
+  "code-action",
 );
 export type ReasoningStrategy = typeof ReasoningStrategy.Type;
 
