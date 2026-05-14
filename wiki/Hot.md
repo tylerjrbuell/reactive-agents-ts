@@ -10,7 +10,30 @@ updated: 2026-05-14
 
 ---
 
-## Latest Session (2026-05-14)
+## Latest Session (2026-05-14, evening)
+
+### `create-reactive-agent` CLI — COMPLETE ✅
+
+New `packages/create-reactive-agent/` ships v0.11 onboarding multiplier. `npm create reactive-agent my-app` (or bun/pnpm) scaffolds a Reactive Agents starter.
+
+**What shipped:**
+- New package, zero runtime deps (readline-based prompts). Built via tsup; `bin: { "create-reactive-agent": "./dist/cli.js" }`.
+- 3 templates: `minimal` (single-file agent), `with-tools` (built-in tools layer), `streaming` (`agent.runStream()`).
+- 4 providers: `anthropic`, `openai`, `google`, `ollama`. Each emits correct env-var check, default model, and `.withProvider()` wiring.
+- 4 package managers detected from `npm_config_user_agent`: bun/npm/pnpm/yarn. npm path uses `tsx`; bun path uses `bun run`.
+- Interactive + non-interactive flags (`--template`, `--provider`, `--pm`, `--yes`).
+- 34/34 tests pass. Build clean (dts + cli). Smoke-tested via `bun src/cli.ts` and `node dist/cli.js`.
+- Changeset: `.changeset/create-reactive-agent-initial.md` (minor).
+
+**Files:** `package.json`, `tsconfig.json`, `src/{cli,index,types}.ts`, `src/lib/{prompts,scaffold,provider-config}.ts`, `src/templates/{index,shared,minimal,with-tools,streaming}.ts`, `tests/scaffold.test.ts`, `README.md`, `CHANGELOG.md`.
+
+### Pushed 16 backlog commits to origin/main
+
+`git push origin main` — main now in sync.
+
+---
+
+## Previous Session (2026-05-14)
 
 ### Snapshot/Replay v0.11 — COMPLETE ✅
 
@@ -291,6 +314,6 @@ M3/M6/M7/M8/M10 can run concurrently with Phase A — different files, no confli
 
 At session end: replace "Latest Session" with new date + key updates, update "What's Next," add decisions. Keep it under 120 lines.
 
-**Last Updated:** 2026-05-14
-**Current Phase:** C (v0.11 Launch) — Compose API + Snapshot/Replay + Skill Persistence shipped; remaining: Playground, `create-reactive-agent` CLI, `@reactive-agents/observe` OTel, GH Projects board
+**Last Updated:** 2026-05-14 (evening)
+**Current Phase:** C (v0.11 Launch) — Compose API + Snapshot/Replay + Skill Persistence + `create-reactive-agent` CLI shipped; remaining: Playground, `@reactive-agents/observe` OTel, GH Projects board
 **Next Review:** After v0.11.0 ships

@@ -1,0 +1,56 @@
+{
+  "name": "create-reactive-agent",
+  "version": "0.11.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "create-reactive-agent": "./dist/cli.js"
+  },
+  "description": "Scaffold a new Reactive Agents project in seconds. Run `npm create reactive-agent`.",
+  "keywords": [
+    "create",
+    "scaffold",
+    "starter",
+    "reactive-agents",
+    "ai-agents",
+    "cli"
+  ],
+  "scripts": {
+    "build": "tsup --config ../../tsup.config.base.ts && tsup src/cli.ts --format esm --out-dir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --reporter=dots"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "bun-types": "latest",
+    "tsup": "*"
+  },
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
+    "directory": "packages/create-reactive-agent"
+  },
+  "homepage": "https://docs.reactiveagents.dev/",
+  "bugs": {
+    "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
