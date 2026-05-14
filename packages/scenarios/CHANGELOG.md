@@ -1,5 +1,13 @@
 # @reactive-agents/scenarios
 
+## 0.10.7
+
+### Patch Changes
+
+-   Updated dependencies
+    -   @reactive-agents/testing@0.12.0
+    -   @reactive-agents/trace@0.10.7
+
 ## 0.10.6
 
 ### Patch Changes

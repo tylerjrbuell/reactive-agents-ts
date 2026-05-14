@@ -27,7 +27,8 @@
       "@reactive-agents/cli",
       "@reactive-agents/health",
       "@reactive-agents/benchmarks",
-      "@reactive-agents/channels"
+      "@reactive-agents/channels",
+      "@reactive-agents/runtime-shim"
     ]
   ],
   "linked": [],

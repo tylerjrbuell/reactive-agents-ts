@@ -1,5 +1,12 @@
 # @reactive-agents/trace
 
+## 0.10.7
+
+### Patch Changes
+
+-   Updated dependencies
+    -   @reactive-agents/core@0.12.0
+
 ## 0.10.6
 
 ### Patch Changes
