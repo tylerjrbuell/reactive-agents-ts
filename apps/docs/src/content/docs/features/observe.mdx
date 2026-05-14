@@ -1,0 +1,148 @@
+---
+title: OpenTelemetry Tracing
+description: Export OpenInference-compliant OTel spans from every agent run — compatible with Jaeger, Grafana Tempo, Langfuse, and any OTLP backend.
+sidebar:
+  order: 21
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+`@reactive-agents/observe` bridges the agent event bus to [OpenInference](https://github.com/Arize-ai/openinference)-compliant [OpenTelemetry](https://opentelemetry.io/) spans. Every agent run automatically emits a span hierarchy — workflow → LLM calls → tool calls — that any OTLP-compatible backend can ingest.
+
+## Install
+
+```bash
+npm install @reactive-agents/observe
+# or
+bun add @reactive-agents/observe
+```
+
+## Zero-config auto-export
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` and call `autoConfigureExporter` before running agents:
+
+```typescript
+import { autoConfigureExporter } from "@reactive-agents/observe"
+import { OpenInferenceTracerLayer } from "@reactive-agents/observe"
+// OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 already set in env
+
+const handle = autoConfigureExporter({ serviceName: "my-agent" })
+
+// Wire tracer layer into your Effect runtime...
+// (see "Effect integration" section below)
+
+await handle.shutdown() // flush before process exit
+```
+
+`autoConfigureExporter` is a no-op when `OTEL_EXPORTER_OTLP_ENDPOINT` is not set — safe to ship in all environments.
+
+## Span hierarchy
+
+Each agent run produces a nested span tree:
+
+```
+agent:my-agent-id            ← openinference.span.kind = AGENT
+  llm:anthropic/claude-...   ← openinference.span.kind = LLM
+  tool:web-search            ← openinference.span.kind = TOOL
+  llm:anthropic/claude-...
+```
+
+All child spans share the workflow trace ID, so backends show the full call graph per invocation.
+
+## Span attributes
+
+### Workflow span
+
+| Attribute | Description |
+|-----------|-------------|
+| `openinference.span.kind` | `AGENT` |
+| `llm.model_name` | Model at start |
+| `llm.provider` | Provider name |
+| `agent.id` | Agent identifier |
+| `task.id` | Task correlation ID |
+| `agent.iterations` | Total reasoning loop iterations |
+| `llm.token_count.total` | Aggregate tokens across run |
+| `agent.success` | Boolean — false on error |
+
+### LLM span
+
+| Attribute | Description |
+|-----------|-------------|
+| `openinference.span.kind` | `LLM` |
+| `llm.model_name` | Model name |
+| `llm.provider` | Provider |
+| `llm.token_count.prompt` | Input tokens |
+| `llm.token_count.completion` | Output tokens |
+| `llm.token_count.total` | Total tokens |
+| `llm.estimated_cost_usd` | Estimated cost |
+| `llm.cached` | `true` when served from prompt cache |
+| `llm.duration_ms` | Round-trip latency |
+
+### Tool span
+
+| Attribute | Description |
+|-----------|-------------|
+| `openinference.span.kind` | `TOOL` |
+| `tool.name` | Tool identifier |
+| `tool.parameters` | JSON-serialized arguments |
+| `tool.output` | JSON-serialized result |
+| `agent.iteration` | Reasoning loop iteration |
+| `tool.duration_ms` | Execution latency |
+| `tool.success` | Boolean — false on error |
+
+## Effect integration
+
+`OpenInferenceTracerLayer` is an Effect `Layer` that subscribes to the `EventBus`. Provide it alongside your other layers:
+
+```typescript
+import { Effect, Layer } from "effect"
+import { EventBusLive } from "@reactive-agents/core"
+import { OpenInferenceTracerLayer } from "@reactive-agents/observe"
+import { autoConfigureExporter } from "@reactive-agents/observe"
+
+const handle = autoConfigureExporter({ serviceName: "my-agent" })
+
+const AppLayer = Layer.merge(
+  EventBusLive,
+  OpenInferenceTracerLayer,
+  // ... other layers
+)
+
+await Effect.runPromise(
+  myAgentProgram.pipe(Effect.provide(AppLayer))
+)
+
+await handle.shutdown()
+```
+
+## Explicit OTLP config
+
+```typescript
+import { setupOpenInferenceExporter } from "@reactive-agents/observe"
+
+const handle = setupOpenInferenceExporter({
+  endpoint: "http://my-collector:4318",
+  serviceName: "production-agent",
+  headers: {
+    Authorization: `Bearer ${process.env.BACKEND_TOKEN}`,
+  },
+})
+```
+
+## Backends
+
+`@reactive-agents/observe` emits standard OTLP HTTP spans with OpenInference semantic attributes. Works out of the box with:
+
+- **Jaeger** — `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
+- **Grafana Tempo** — `OTEL_EXPORTER_OTLP_ENDPOINT=https://tempo.example.com`
+- **Langfuse** — set endpoint + `Authorization` header
+- **Arize Phoenix** — `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:6006`
+- Any OTLP HTTP-compatible collector
+
+<Aside type="note">
+`@reactive-agents/observe` is separate from the built-in `.withObservability()` console layer described in [Observability](/features/observability/). Both can run simultaneously — they tap different output channels.
+</Aside>
+
+## Stability
+
+`@reactive-agents/observe` is `@stable` as of v0.11. The `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, and `autoConfigureExporter` exports are stable. Additional exporters (Langfuse, Braintrust) and sampling support are planned for v0.11.1.

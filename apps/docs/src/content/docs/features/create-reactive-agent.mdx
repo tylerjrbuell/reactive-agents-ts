@@ -1,0 +1,162 @@
+---
+title: create-reactive-agent
+description: Scaffold a new Reactive Agents project in seconds — interactive prompts, three templates, four providers, four package managers.
+sidebar:
+  order: 19
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+`create-reactive-agent` scaffolds a ready-to-run Reactive Agents project. One command — you get a typed TypeScript starter with the right provider wired up, an `.env.example`, a `README`, and a working `start` script.
+
+## Quickstart
+
+<Tabs>
+  <TabItem label="npm">
+```bash
+npm create reactive-agent my-agent
+```
+  </TabItem>
+  <TabItem label="bun">
+```bash
+bun create reactive-agent my-agent
+```
+  </TabItem>
+  <TabItem label="pnpm">
+```bash
+pnpm create reactive-agent my-agent
+```
+  </TabItem>
+</Tabs>
+
+The CLI detects your package manager automatically. Running without a project name launches interactive prompts.
+
+## Interactive mode
+
+```
+┌  create-reactive-agent
+│
+◆  Project name?
+│  my-agent
+│
+◆  Template?
+│  ● minimal   — single-file agent, no tools
+│  ○ with-tools — agent with built-in tools (filesystem, fetch, math, shell)
+│  ○ streaming  — token-by-token via agent.runStream()
+│
+◆  Provider?
+│  ● anthropic · openai · google · ollama
+│
+◆  Package manager?
+│  ● bun · npm · pnpm · yarn
+│
+└  Scaffolded my-agent/
+   Next: cd my-agent && bun install && bun run start
+```
+
+## Templates
+
+| Name | Description |
+|------|-------------|
+| `minimal` | Single-file agent. `ReactiveAgents.create()...build()` + `agent.run()`. Best starting point. |
+| `with-tools` | Adds `.withTools()` (built-in: filesystem, fetch, math, shell) and `.withReasoning({ defaultStrategy: "reactive" })`. |
+| `streaming` | Uses `agent.runStream()` — emits `text-delta`, `tool-call`, `step-complete`, `completed`, and `error` events. |
+
+### Minimal output
+
+```typescript
+import { ReactiveAgents } from "reactive-agents"
+
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("ANTHROPIC_API_KEY is required")
+  process.exit(1)
+}
+
+const agent = await ReactiveAgents.create()
+  .withName("my-agent")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withMaxIterations(10)
+  .build()
+
+const result = await agent.run("What is the capital of France?")
+console.log(result.output)
+```
+
+### Streaming output
+
+```typescript
+const stream = agent.runStream("Summarize the latest TypeScript release notes")
+
+for await (const event of stream) {
+  switch (event.type) {
+    case "text-delta":
+      process.stdout.write(event.delta)
+      break
+    case "tool-call":
+      console.log(`\n[tool] ${event.toolName}`)
+      break
+    case "completed":
+      console.log("\nDone.", event.output)
+      break
+    case "error":
+      console.error("Error:", event.error)
+      break
+  }
+}
+```
+
+## Providers
+
+| Provider | Env var | Default model |
+|----------|---------|---------------|
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
+| `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` |
+| `google` | `GOOGLE_API_KEY` | `gemini-2.0-flash` |
+| `ollama` | _(none — local)_ | `qwen3:14b` |
+
+Ollama runs locally with no API key. The scaffolded `.env.example` reflects the correct variable for the chosen provider.
+
+## Non-interactive (CI)
+
+```bash
+npm create reactive-agent my-agent -- \
+  --template=streaming \
+  --provider=anthropic \
+  --pm=bun \
+  --yes
+```
+
+`--yes` skips all prompts and accepts defaults. Combine with explicit flags for a fully deterministic scaffold.
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--template=<name>` | `minimal` \| `with-tools` \| `streaming` |
+| `--provider=<name>` | `anthropic` \| `openai` \| `google` \| `ollama` |
+| `--pm=<manager>` | `bun` \| `npm` \| `pnpm` \| `yarn` |
+| `--yes` | Skip prompts, accept defaults |
+| `--help` | Show help |
+| `--version` | Print version |
+
+<Aside type="note">
+When `stdin` is not a TTY (redirected pipe, CI), the CLI automatically skips prompts and applies defaults — identical to passing `--yes`.
+</Aside>
+
+## What gets scaffolded
+
+```
+my-agent/
+├── src/
+│   └── index.ts        ← your agent (provider + model pre-wired)
+├── package.json        ← reactive-agents dep, start script
+├── tsconfig.json       ← extends @reactive-agents/tsconfig/base
+├── .env.example        ← provider API key hint
+├── .gitignore
+└── README.md
+```
+
+## Stability
+
+`create-reactive-agent` is `@stable` as of v0.11. Template output is considered stable; the scaffold structure may gain new optional files in minor releases. See [API Stability](/reference/stability/).

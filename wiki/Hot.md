@@ -10,9 +10,28 @@ updated: 2026-05-14
 
 ---
 
-## Latest Session (2026-05-14, evening)
+## Latest Session (2026-05-14, night)
 
-### `create-reactive-agent` CLI — COMPLETE ✅
+### `@reactive-agents/observe` — COMPLETE ✅
+
+New `packages/observe/` ships v0.11 OTel exporter (Phase C item).
+
+**What shipped:**
+- New package `@reactive-agents/observe`, v0.11.0. Bridges `EventBus` `AgentEvent` stream → OpenInference-compliant OTel spans.
+- `OpenInferenceTracerLayer` — Effect `Layer.scopedDiscard` subscribing to EventBus. Maps 5 event pairs: `AgentStarted/Completed` (workflow span), `LLMRequestStarted/Completed` (LLM child span), `ToolCallStarted/Completed` (tool child span).
+- Uses `otelApi.ROOT_CONTEXT` (not `context.active()`) as parent base — correct in Effect fiber context.
+- `setupOpenInferenceExporter(config)` + `autoConfigureExporter(config)` — OTLP HTTP; zero-config when `OTEL_EXPORTER_OTLP_ENDPOINT` set.
+- Deps: `@opentelemetry/api`, `@opentelemetry/sdk-trace-node`, `@opentelemetry/exporter-trace-otlp-http`, `@opentelemetry/resources`.
+- **8/8 tests pass** (in-memory exporter, verifies span hierarchy + parent IDs + attributes + token estimates).
+- Build clean: ESM 27.78 KB, DTS 1.44 KB.
+- Changeset: `.changeset/observe-initial.md` (minor).
+- Docs: `apps/docs/src/content/docs/features/observe.mdx` (sidebar order 21). Docs build: 78 pages, all links valid.
+- **NOT added to `reactive-agents` umbrella** — standalone opt-in like `@reactive-agents/replay` and `@reactive-agents/diagnose`.
+- **Deferred to v0.11.1:** LangfuseExporter, BraintrustExporter, sampling, `ReasoningStepCompleted` nesting.
+
+**Files:** `packages/observe/package.json`, `tsconfig.json`, `src/{index,tracer,otlp}.ts`, `tests/tracer.test.ts`, `.changeset/observe-initial.md`, `apps/docs/.../observe.mdx`.
+
+### `create-reactive-agent` docs + verification — COMPLETE ✅
 
 New `packages/create-reactive-agent/` ships v0.11 onboarding multiplier. `npm create reactive-agent my-app` (or bun/pnpm) scaffolds a Reactive Agents starter.
 
