@@ -13,6 +13,7 @@ import type { RuntimeOptions } from "@reactive-agents/runtime";
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { execSync } from "node:child_process"
+import { serve } from "@reactive-agents/runtime-shim"
 import type {
   BenchmarkSession, HarnessVariant, ModelVariant,
   TaskVariantReport, AblationResult, SessionReport, RunScore,
@@ -648,7 +649,7 @@ async function startFlakyPriceServer(): Promise<{ url: string; stop: () => void 
     solana:   { usd: 172.44,   usd_24h_change: 4.12,  usd_market_cap: 79_000_000_000 },
   }
   let callCount = 0
-  const server = Bun.serve({
+  const server = await serve({
     port: 0,
     fetch() {
       callCount++
