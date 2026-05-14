@@ -19,7 +19,7 @@ The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.test
 **Honest caveats:**
 - The framework requires **Bun ≥ 1.0** — we use Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is on the roadmap but not shipped.
 - We're at **v0.10.x** — the API has been stable since 0.9.0 (no breaking changes), but we haven't tagged 1.0 yet.
-- Some advanced features (cross-session skill persistence, full multi-session memory transfer) are still being hardened — see "What's not done yet" below.
+- Some advanced features (full multi-session memory transfer) are still being hardened — see "What's not done yet" below.
 
 If you need an HTTP-API-as-a-service or a hosted control plane, we don't ship that. The framework is a TypeScript SDK.
 
@@ -84,7 +84,6 @@ You'd reinvent: provider adapters (6 LLM providers), guardrails, verification, s
 We try to be honest about gaps. Things on the roadmap that aren't shipped:
 
 - **Node.js support** — Bun-only today.
-- **Cross-session skill persistence** — Living Skills work within a session, but the persistence layer (SQLite-backed cross-session learning) is being hardened.
 - **Multi-session memory transfer** — episodic recall works within a process. Cross-process / cross-machine transfer is being designed.
 - **Sub-agent delegation effectiveness metrics** — the test harness exists; we haven't measured whether delegation beats inline execution on multi-step tasks.
 - **`v1.0` tag** — API is stable since 0.9; we'll tag 1.0 once the items above ship and the calibration store has 1k+ runs across community models.

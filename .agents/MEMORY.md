@@ -150,7 +150,7 @@ All prior roadmap/phase documents are superseded:
 **Strategic context:** v0.10 shipped stable core; v0.11 ships *customizability* (compose API) + *credibility signals* (playground, CLI generator, OpenTelemetry, public roadmap). Outcome: v0.11 is Show-HN launch point positioning RA as transparent alternative to AutoGen/CrewAI/Mastra with proven 100% vs 85% benchmark edge.
 
 **Tier 1 (Before Show-HN Launch):** Five parallel initiatives (3 weeks total):
-1. **Skill Persistence (1 week)** — SQLite-backed persistence + portable SKILL.md import/export; closes M6 Phase-1.5 IMPROVE
+1. ✅ **Skill Persistence** — `skillFragmentToSkillRecord` + dual-store in `local-learning.ts`; learned skills now persist to `SkillStoreService` and appear in `SkillResolverService` on next session. 5 tests (unit + integration + e2e), all green. Shipped 2026-05-13.
 2. **Live Playground (2 days)** — Three Stackblitz embeds on homepage (hero scenario, tool integration, reasoning strategy); <3s cold start
 3. **create-reactive-agent CLI generator (3 days)** — Five templates (web-search, chat-with-tools, gateway-cron, sub-agent-orchestrator, local-ollama)
 4. **OpenInference/OpenTelemetry Exporter (1 week)** — `@reactive-agents/observe` package with Langfuse + Braintrust integrations; zero-config auto-export
