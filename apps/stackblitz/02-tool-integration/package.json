@@ -2,6 +2,8 @@
   "name": "reactive-agents-02-tool-integration",
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "npm@10.9.0",
+  "engines": { "node": ">=20" },
   "description": "Reactive Agents tool-integration demo — scratchpad + code-execute built-in tools",
   "scripts": {
     "start": "npx tsx src/agent.ts"

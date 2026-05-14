@@ -2,6 +2,8 @@
   "name": "reactive-agents-03-strategy-demo",
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "npm@10.9.0",
+  "engines": { "node": ">=20" },
   "description": "Reactive Agents strategy-demo — reactive vs plan-execute-reflect side-by-side",
   "scripts": {
     "start": "npx tsx src/agent.ts"

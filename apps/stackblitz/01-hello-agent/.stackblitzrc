@@ -1,4 +1,13 @@
 {
+  "installDependencies": true,
   "startCommand": "npm install && npm start",
-  "openFile": "src/agent.ts"
+  "openFile": "src/agent.ts",
+  "env": {
+    "PROVIDER": "gemini",
+    "GOOGLE_API_KEY": "",
+    "ANTHROPIC_API_KEY": "",
+    "OPENAI_API_KEY": "",
+    "MODEL": "",
+    "QUESTION": ""
+  }
 }

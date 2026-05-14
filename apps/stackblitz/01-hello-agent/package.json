@@ -2,6 +2,8 @@
   "name": "reactive-agents-01-hello-agent",
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "npm@10.9.0",
+  "engines": { "node": ">=20" },
   "description": "Reactive Agents hello-agent demo — runs in Stackblitz, no install needed",
   "scripts": {
     "start": "npx tsx src/agent.ts"
