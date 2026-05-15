@@ -7,8 +7,8 @@ sidebar:
 
 import { Steps, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-<Aside type="caution" title="Bun ≥1.0.0 required">
-The framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is on the roadmap. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
+<Aside type="tip" title="Bun recommended — Node.js 22.5+ also supported">
+Bun ≥1.0.0 gives optimal performance (native SQLite, subprocess, HTTP). **Node.js 22.5+** is fully supported via `@reactive-agents/runtime-shim` — use `npm install reactive-agents` or `npx tsx` if you prefer the Node.js ecosystem. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
 </Aside>
 
 ## From zero to running agent
@@ -18,7 +18,11 @@ The framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js suppo
 1. **Install the meta-package.**
 
    ```bash
+   # Bun (recommended)
    bun add reactive-agents
+
+   # Node.js 22.5+
+   npm install reactive-agents
    ```
 
 2. **Set at least one provider key** in `.env` (or skip if you're going local).
@@ -39,7 +43,11 @@ The framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js suppo
 4. **Run it.**
 
    ```bash
+   # Bun
    bun run src/agent.ts
+
+   # Node.js (requires tsx)
+   npx tsx src/agent.ts
    ```
 
 </Steps>
@@ -50,6 +58,11 @@ The easiest way to get started is with the `reactive-agents` meta-package, which
 
 ```bash
 bun add reactive-agents
+```
+
+```bash
+# or with npm (Node.js 22.5+)
+npm install reactive-agents
 ```
 
 :::note[Effect dependency]
@@ -78,7 +91,7 @@ The framework is modular — install only the packages you need:
 
 | Package                          | Description                                                               |
 | -------------------------------- | ------------------------------------------------------------------------- |
-| `@reactive-agents/reasoning`     | 5 strategies (ReAct, Plan-Execute, Reflexion, ToT, Adaptive) + composable kernel |
+| `@reactive-agents/reasoning`     | 6 strategies (ReAct, Plan-Execute, Reflexion, ToT, Adaptive) + composable kernel |
 | `@reactive-agents/memory`        | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite    |
 | `@reactive-agents/tools`         | Tool registry, sandbox, MCP client, healing pipeline                      |
 | `@reactive-agents/prompts`       | Template engine, version-controlled prompt library                        |
@@ -101,6 +114,15 @@ The framework is modular — install only the packages you need:
 | -------------------------------- | ------------------------------------------------------------------------- |
 | `@reactive-agents/observability` | OTLP tracing, MetricsCollector, structured logging                        |
 | `@reactive-agents/trace`         | Trace event types and OTLP exporters                                      |
+
+**New in v0.11**
+
+| Package                              | Description                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| `@reactive-agents/runtime-shim`      | Cross-runtime primitives (Bun + Node.js 22.5+) — Database, spawn, serve |
+| `@reactive-agents/compose`           | Harness composition + 6 killswitches (maxIterations, budgetLimit, etc.)  |
+| `@reactive-agents/replay`            | Deterministic trace replay: record runs, replay without LLM calls        |
+| `@reactive-agents/observe`           | Zero-config OpenTelemetry/OpenInference tracing to any OTLP backend      |
 
 **Composition & multi-agent**
 
@@ -136,6 +158,11 @@ The framework is modular — install only the packages you need:
 
 ```bash
 bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
+```
+
+```bash
+# or with npm
+npm install @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
 ```
 
 ## Environment Variables

@@ -132,10 +132,14 @@ Install and run your first TypeScript AI agent in under 60 seconds.
 > **Recommended: [Bun](https://bun.sh) ≥1.0.0** — optimal performance with native SQLite, subprocess, and HTTP APIs. **Node.js 22.5+ is now also supported** via `@reactive-agents/runtime-shim` — same code, both runtimes. Install Bun: `curl -fsSL https://bun.sh/install | bash`
 
 ```bash
+# Bun (recommended)
 bun add reactive-agents
+
+# Node.js 22.5+
+npm install reactive-agents
 ```
 
-> **Note:** `effect` is included as a dependency of `reactive-agents` and installed automatically. If you import from `effect` directly in your own code (e.g. `import { Effect } from "effect"`), add it to your project explicitly: `bun add effect`.
+> **Note:** `effect` is included as a dependency of `reactive-agents` and installed automatically. If you import from `effect` directly in your own code (e.g. `import { Effect } from "effect"`), add it to your project explicitly: `bun add effect` (or `npm install effect`).
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
