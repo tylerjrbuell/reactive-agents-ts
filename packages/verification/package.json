@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/verification",
-  "version": "1.0.0",
+  "version": "0.11.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

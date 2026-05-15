@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/vue",
-  "version": "1.0.0",
+  "version": "0.11.0",
   "description": "Vue composables for Reactive Agents — useAgentStream, useAgent",
   "type": "module",
   "exports": {
