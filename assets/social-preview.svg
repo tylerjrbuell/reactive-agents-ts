@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0a0f"/>
+      <stop offset="100%" stop-color="#1a0f2e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <circle cx="320" cy="320" r="380" fill="url(#glow)"/>
+
+  <!-- logo, scaled from 48x48 viewBox to ~260x260, centered at (200,200) → (200,200)+(260,260) -->
+  <g transform="translate(110, 190) scale(5.4167)">
+    <defs>
+      <linearGradient id="edge-l" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.45"/>
+      </linearGradient>
+      <linearGradient id="edge2-l" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.75"/>
+        <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.35"/>
+      </linearGradient>
+      <radialGradient id="core-l" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#a78bfa"/>
+        <stop offset="100%" stop-color="#6d28d9"/>
+      </radialGradient>
+    </defs>
+    <!-- 6-node graph mesh -->
+    <line x1="24" y1="24" x2="6"  y2="10" stroke="url(#edge-l)" stroke-width="1.2"/>
+    <line x1="24" y1="24" x2="42" y2="10" stroke="url(#edge-l)" stroke-width="1.2"/>
+    <line x1="24" y1="24" x2="6"  y2="38" stroke="url(#edge2-l)" stroke-width="1.2"/>
+    <line x1="24" y1="24" x2="42" y2="38" stroke="url(#edge2-l)" stroke-width="1.2"/>
+    <line x1="24" y1="24" x2="24" y2="4"  stroke="url(#edge-l)" stroke-width="1.2"/>
+    <line x1="24" y1="24" x2="24" y2="44" stroke="url(#edge2-l)" stroke-width="1.2"/>
+    <line x1="6"  y1="10" x2="24" y2="4"  stroke="url(#edge2-l)" stroke-width="0.6"/>
+    <line x1="42" y1="10" x2="24" y2="4"  stroke="url(#edge2-l)" stroke-width="0.6"/>
+    <line x1="6"  y1="38" x2="24" y2="44" stroke="url(#edge-l)" stroke-width="0.6"/>
+    <line x1="42" y1="38" x2="24" y2="44" stroke="url(#edge-l)" stroke-width="0.6"/>
+    <circle cx="24" cy="24" r="5" fill="url(#core-l)"/>
+    <circle cx="6"  cy="10" r="2.4" fill="#a78bfa"/>
+    <circle cx="42" cy="10" r="2.4" fill="#06b6d4"/>
+    <circle cx="6"  cy="38" r="2.4" fill="#06b6d4"/>
+    <circle cx="42" cy="38" r="2.4" fill="#a78bfa"/>
+    <circle cx="24" cy="4"  r="2.4" fill="#a78bfa"/>
+    <circle cx="24" cy="44" r="2.4" fill="#06b6d4"/>
+  </g>
+
+  <!-- text block, right of logo -->
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Inter, sans-serif">
+    <text x="460" y="280" font-size="76" font-weight="800" fill="#ffffff" letter-spacing="-2">Reactive Agents</text>
+    <text x="460" y="350" font-size="38" font-weight="600" fill="url(#accent)" letter-spacing="-1">Built for control, not magic.</text>
+    <text x="460" y="430" font-size="24" font-weight="400" fill="#a1a1aa">TypeScript · Effect-TS · 6 reasoning strategies</text>
+    <text x="460" y="466" font-size="24" font-weight="400" fill="#a1a1aa">6 providers · 30 packages · 5,320 tests</text>
+  </g>
+
+  <!-- footer URL -->
+  <text x="640" y="588" text-anchor="middle" font-family="JetBrains Mono, ui-monospace, monospace"
+        font-size="22" fill="#71717a" letter-spacing="2">github.com/tylerjrbuell/reactive-agents-ts</text>
+</svg>
