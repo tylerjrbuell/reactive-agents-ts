@@ -1,5 +1,13 @@
 # @reactive-agents/diagnose
 
+## 1.0.0
+
+### Patch Changes
+
+-   Updated dependencies [d3ffc25]
+    -   @reactive-agents/replay@1.0.0
+    -   @reactive-agents/trace@1.0.0
+
 ## 0.10.6
 
 ### Patch Changes

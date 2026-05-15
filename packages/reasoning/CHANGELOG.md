@@ -1,5 +1,72 @@
 # @reactive-agents/reasoning
 
+## 1.0.0
+
+### Minor Changes
+
+-   d3ffc25: New experimental `"code-action"` reasoning strategy. Instead of issuing named tool calls, the LLM generates a TypeScript IIFE that runs in a Worker-thread sandbox and calls tools via postMessage round-trips.
+
+    **What shipped:**
+
+    -   `"code-action"` added to `ReasoningStrategy` union in `@reactive-agents/core`
+    -   Registered as 7th strategy in `strategy-registry.ts`
+    -   `executeCodeAction` Effect function — plan → execute → observe → reflect loop
+    -   `generateToolBindings(specs)` — converts `ToolSpec[]` to TypeScript function signatures injected into the LLM plan prompt
+    -   Worker-thread sandbox — tool calls route back to the host via `postMessage`; results resolve as promises inside the generated code
+    -   `shouldTerminate(verdict, iteration, maxIterations)` — reflection gate; iteration continues until code produces a passing verdict or max iterations reached
+    -   `ToolService` is optional (`Effect.serviceOption`) — code-action works without tools for pure-computation tasks
+    -   Uses `noopVerifier` by default; callers may inject a custom verifier via `CodeActionInput.verifier`
+
+    **Stability:** `@experimental`. Real-LLM benchmark vs reactive strategy deferred to v0.11.2.
+
+-   1081024: Add `@reactive-agents/runtime-shim` cross-runtime adapter package. The framework now runs on both Bun (with native `Bun.*` fast paths) and Node.js 22.5+ (with `node:sqlite`, `node:child_process`, `node:fs.glob`).
+
+    **What changed:**
+
+    -   New package `@reactive-agents/runtime-shim` exports unified primitives: `Database`, `spawn`, `writeFile`, `readFile`, `hash`, `serve`, `glob`, `isMain`, `isBun`, `isNode`.
+    -   Internal `bun:sqlite` imports and `Bun.*` calls across `memory`, `cost`, `reactive-intelligence`, `llm-provider`, `tools`, `eval`, `a2a`, `benchmarks`, `health`, `judge-server` now route through the shim.
+    -   `@reactive-agents/memory`: FTS5 virtual tables are now optional. When running on `node:sqlite` (which lacks FTS5), the package logs a warning and falls back to `LIKE`-based search on the `content` column. Full-text scoring is preserved on Bun.
+    -   Zero call-site API changes for end users.
+
+    **Why:**
+
+    -   Unblocks Stackblitz embeds (Node-only WebContainer)
+    -   Unblocks Vercel, Netlify, Cloudflare Workers (Node compat layer)
+    -   Removes hard `engines.bun` requirement from the dependency chain
+
+    **Bump:** minor for all packages using the shim. Patch for `@reactive-agents/svelte`, `@reactive-agents/vue`, `@reactive-agents/react` — these don't import the shim but need a version bump to clear npm publish conflicts.
+
+-   d3ffc25: Skill persistence and `RunHandle` streaming control.
+
+    **Skill persistence** (`@reactive-agents/reasoning`):
+
+    -   Learned `SkillRecord` objects are now dual-stored: in-memory session store AND `SkillStore` (SQLite-backed)
+    -   `skillFragmentToSkillRecord(fragment)` — converter exported from `reactive-agents` umbrella
+    -   Skills resolved across sessions via the persisted store; resolver finds previously learned skills on cold start
+
+    **RunHandle** (`@reactive-agents/runtime`):
+
+    -   `agent.runStream(task)` now returns `RunHandle` — an `AsyncGenerator<AgentStreamEvent>` with attached control methods
+    -   `handle.pause()` / `handle.resume()` — suspends/resumes the kernel loop at the next checkpoint
+    -   `handle.stop()` — graceful stop: kernel finishes current iteration, runs synthesis, emits `StreamCompleted`
+    -   `handle.terminate()` — immediate abort via existing `AbortController` path; emits `StreamCancelled`
+    -   `handle.status` — current `RunStatus` (`"running"` | `"paused"` | `"stopped"` | `"terminated"` | `"completed"`)
+    -   Fully backward compatible: `runStream()` callers that ignore the extra methods continue to work unchanged
+
+    **Exports** (`@reactive-agents/runtime`): `RunHandle`, `RunStatus`, `RunController`, `RunControllerLike`
+
+### Patch Changes
+
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [1081024]
+    -   @reactive-agents/core@1.0.0
+    -   @reactive-agents/llm-provider@1.0.0
+    -   @reactive-agents/memory@1.0.0
+    -   @reactive-agents/tools@1.0.0
+    -   @reactive-agents/observability@1.0.0
+    -   @reactive-agents/prompts@1.0.0
+
 ## 0.10.6
 
 ### Patch Changes

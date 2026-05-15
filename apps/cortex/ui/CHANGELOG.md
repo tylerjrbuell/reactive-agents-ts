@@ -1,5 +1,12 @@
 # @reactive-agents/cortex-ui
 
+## 0.1.6
+
+### Patch Changes
+
+-   Updated dependencies [1081024]
+    -   @reactive-agents/svelte@1.0.0
+
 ## 0.1.5
 
 ### Patch Changes

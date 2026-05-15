@@ -1,5 +1,65 @@
 # @reactive-agents/core
 
+## 1.0.0
+
+### Minor Changes
+
+-   d3ffc25: New experimental `"code-action"` reasoning strategy. Instead of issuing named tool calls, the LLM generates a TypeScript IIFE that runs in a Worker-thread sandbox and calls tools via postMessage round-trips.
+
+    **What shipped:**
+
+    -   `"code-action"` added to `ReasoningStrategy` union in `@reactive-agents/core`
+    -   Registered as 7th strategy in `strategy-registry.ts`
+    -   `executeCodeAction` Effect function — plan → execute → observe → reflect loop
+    -   `generateToolBindings(specs)` — converts `ToolSpec[]` to TypeScript function signatures injected into the LLM plan prompt
+    -   Worker-thread sandbox — tool calls route back to the host via `postMessage`; results resolve as promises inside the generated code
+    -   `shouldTerminate(verdict, iteration, maxIterations)` — reflection gate; iteration continues until code produces a passing verdict or max iterations reached
+    -   `ToolService` is optional (`Effect.serviceOption`) — code-action works without tools for pure-computation tasks
+    -   Uses `noopVerifier` by default; callers may inject a custom verifier via `CodeActionInput.verifier`
+
+    **Stability:** `@experimental`. Real-LLM benchmark vs reactive strategy deferred to v0.11.2.
+
+-   d3ffc25: Initial release of `@reactive-agents/compose`. Harness composition API with six production-ready killswitches and a builder `.compose()` alias.
+
+    **Killswitches** (`@reactive-agents/compose`):
+
+    -   `maxIterations(n)` — stop/terminate after N kernel iterations
+    -   `budgetLimit({ maxTokens?, maxCostUSD? })` — stop/terminate when token or cost budget exceeded
+    -   `timeoutAfter(duration)` — stop/terminate after wall-clock time (`"60s"`, `"5m"`, or milliseconds)
+    -   `watchdog({ timeout })` — stop/terminate when no tool-result progress for a given duration; resets on each tool call
+    -   `requireApprovalFor(toolName, approver)` — gate specific tool calls with a synchronous approver function; deny returns `{ abort: "stop" }`
+    -   `confidenceFloor(threshold)` — early exit when verifier confidence meets or exceeds threshold
+
+    All killswitches are pure `(harness: Harness) => void` factories. They wire into phase hooks (`before`/`after`/`tap`) — no new TagMap entries needed.
+
+    **Builder API** (`@reactive-agents/runtime`):
+
+    -   `.compose(fn)` — alias for `.withHarness(fn)`; attaches a harness transform to the build pipeline
+    -   `.withSystemPrompt(prompt)` — now desugars through `h.on("prompt.system", ...)` in addition to setting the internal field
+    -   `.withErrorHandler(fn)` — now desugars through `h.onError("*", ...)` in addition to the internal field
+    -   `.withHook(phase, fn)` — now registers as a harness phase hook alongside the Effect-based hooks array
+
+    **Core** (`@reactive-agents/core`):
+
+    -   `HarnessPipeline.collectPhaseHooks()` — phase hook registry now wired into kernel execution at bootstrap, think, act, and complete phases
+
+-   1081024: Add `@reactive-agents/runtime-shim` cross-runtime adapter package. The framework now runs on both Bun (with native `Bun.*` fast paths) and Node.js 22.5+ (with `node:sqlite`, `node:child_process`, `node:fs.glob`).
+
+    **What changed:**
+
+    -   New package `@reactive-agents/runtime-shim` exports unified primitives: `Database`, `spawn`, `writeFile`, `readFile`, `hash`, `serve`, `glob`, `isMain`, `isBun`, `isNode`.
+    -   Internal `bun:sqlite` imports and `Bun.*` calls across `memory`, `cost`, `reactive-intelligence`, `llm-provider`, `tools`, `eval`, `a2a`, `benchmarks`, `health`, `judge-server` now route through the shim.
+    -   `@reactive-agents/memory`: FTS5 virtual tables are now optional. When running on `node:sqlite` (which lacks FTS5), the package logs a warning and falls back to `LIKE`-based search on the `content` column. Full-text scoring is preserved on Bun.
+    -   Zero call-site API changes for end users.
+
+    **Why:**
+
+    -   Unblocks Stackblitz embeds (Node-only WebContainer)
+    -   Unblocks Vercel, Netlify, Cloudflare Workers (Node compat layer)
+    -   Removes hard `engines.bun` requirement from the dependency chain
+
+    **Bump:** minor for all packages using the shim. Patch for `@reactive-agents/svelte`, `@reactive-agents/vue`, `@reactive-agents/react` — these don't import the shim but need a version bump to clear npm publish conflicts.
+
 ## 0.10.6
 
 ## 0.10.5
