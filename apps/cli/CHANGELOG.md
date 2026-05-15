@@ -1,5 +1,66 @@
 # @reactive-agents/cli
 
+## 0.11.0
+
+### Minor Changes
+
+-   d3ffc25: Initial release of `@reactive-agents/replay`. Records agent runs as structured traces and replays them deterministically against modified configs or prompts.
+
+    **What shipped:**
+
+    -   `loadRecordedRun(runId)` — loads a recorded trace from `@reactive-agents/trace`
+    -   `replay(run, overrides)` — replays a run with tool results frozen from the original trace
+    -   `makeReplayController(toolTable)` + `makeReplayToolLayer(ctrl, mode)` — Effect Layer that intercepts tool calls and returns recorded results; `"strict"` mode throws on unknown tools
+    -   `diffTraces(a, b)` — structural diff of two trace outputs; returns `{ equal, diffs[] }`
+    -   `computeArgsHash(args)` — deterministic hash for matching tool invocations across runs
+    -   `ToolCallCompleted` event payload extended with `args`, `result`, `error`, `resultTruncated` (backward compatible; existing consumers ignore new fields)
+    -   `rax diagnose replay-run <runId>` — CLI subcommand; summary diff output
+
+    **Integration pattern:**
+
+    ```typescript
+    const ctrl = makeReplayController(run.toolTable)
+    const layer = makeReplayToolLayer(ctrl, 'strict')
+    new ReactiveAgentBuilder().withLayers(layer).build()
+    ```
+
+    Uses existing `.withLayers()` — no new builder method required.
+
+-   1081024: Add `@reactive-agents/runtime-shim` cross-runtime adapter package. The framework now runs on both Bun (with native `Bun.*` fast paths) and Node.js 22.5+ (with `node:sqlite`, `node:child_process`, `node:fs.glob`).
+
+    **What changed:**
+
+    -   New package `@reactive-agents/runtime-shim` exports unified primitives: `Database`, `spawn`, `writeFile`, `readFile`, `hash`, `serve`, `glob`, `isMain`, `isBun`, `isNode`.
+    -   Internal `bun:sqlite` imports and `Bun.*` calls across `memory`, `cost`, `reactive-intelligence`, `llm-provider`, `tools`, `eval`, `a2a`, `benchmarks`, `health`, `judge-server` now route through the shim.
+    -   `@reactive-agents/memory`: FTS5 virtual tables are now optional. When running on `node:sqlite` (which lacks FTS5), the package logs a warning and falls back to `LIKE`-based search on the `content` column. Full-text scoring is preserved on Bun.
+    -   Zero call-site API changes for end users.
+
+    **Why:**
+
+    -   Unblocks Stackblitz embeds (Node-only WebContainer)
+    -   Unblocks Vercel, Netlify, Cloudflare Workers (Node compat layer)
+    -   Removes hard `engines.bun` requirement from the dependency chain
+
+    **Bump:** minor for all packages using the shim. Patch for `@reactive-agents/svelte`, `@reactive-agents/vue`, `@reactive-agents/react` — these don't import the shim but need a version bump to clear npm publish conflicts.
+
+### Patch Changes
+
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [1081024]
+-   Updated dependencies [d3ffc25]
+    -   @reactive-agents/core@0.11.0
+    -   @reactive-agents/runtime@0.11.0
+    -   @reactive-agents/trace@0.11.0
+    -   @reactive-agents/llm-provider@0.11.0
+    -   @reactive-agents/memory@0.11.0
+    -   @reactive-agents/tools@0.11.0
+    -   @reactive-agents/eval@0.11.0
+    -   @reactive-agents/a2a@0.11.0
+    -   @reactive-agents/cortex@0.10.7
+    -   @reactive-agents/diagnose@0.10.7
+
 ## 0.10.6
 
 ### Patch Changes

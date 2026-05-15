@@ -1,5 +1,17 @@
 # @reactive-agents/judge-server
 
+## 0.9.6
+
+### Patch Changes
+
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [1081024]
+    -   @reactive-agents/core@0.11.0
+    -   @reactive-agents/runtime-shim@0.12.0
+    -   @reactive-agents/llm-provider@0.11.0
+    -   @reactive-agents/eval@0.11.0
+
 ## 0.9.5
 
 ### Patch Changes

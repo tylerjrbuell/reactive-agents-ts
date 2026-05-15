@@ -1,5 +1,118 @@
 # @reactive-agents/runtime
 
+## 0.11.0
+
+### Minor Changes
+
+-   d3ffc25: Initial release of `@reactive-agents/compose`. Harness composition API with six production-ready killswitches and a builder `.compose()` alias.
+
+    **Killswitches** (`@reactive-agents/compose`):
+
+    -   `maxIterations(n)` — stop/terminate after N kernel iterations
+    -   `budgetLimit({ maxTokens?, maxCostUSD? })` — stop/terminate when token or cost budget exceeded
+    -   `timeoutAfter(duration)` — stop/terminate after wall-clock time (`"60s"`, `"5m"`, or milliseconds)
+    -   `watchdog({ timeout })` — stop/terminate when no tool-result progress for a given duration; resets on each tool call
+    -   `requireApprovalFor(toolName, approver)` — gate specific tool calls with a synchronous approver function; deny returns `{ abort: "stop" }`
+    -   `confidenceFloor(threshold)` — early exit when verifier confidence meets or exceeds threshold
+
+    All killswitches are pure `(harness: Harness) => void` factories. They wire into phase hooks (`before`/`after`/`tap`) — no new TagMap entries needed.
+
+    **Builder API** (`@reactive-agents/runtime`):
+
+    -   `.compose(fn)` — alias for `.withHarness(fn)`; attaches a harness transform to the build pipeline
+    -   `.withSystemPrompt(prompt)` — now desugars through `h.on("prompt.system", ...)` in addition to setting the internal field
+    -   `.withErrorHandler(fn)` — now desugars through `h.onError("*", ...)` in addition to the internal field
+    -   `.withHook(phase, fn)` — now registers as a harness phase hook alongside the Effect-based hooks array
+
+    **Core** (`@reactive-agents/core`):
+
+    -   `HarnessPipeline.collectPhaseHooks()` — phase hook registry now wired into kernel execution at bootstrap, think, act, and complete phases
+
+-   d3ffc25: Initial release of `@reactive-agents/replay`. Records agent runs as structured traces and replays them deterministically against modified configs or prompts.
+
+    **What shipped:**
+
+    -   `loadRecordedRun(runId)` — loads a recorded trace from `@reactive-agents/trace`
+    -   `replay(run, overrides)` — replays a run with tool results frozen from the original trace
+    -   `makeReplayController(toolTable)` + `makeReplayToolLayer(ctrl, mode)` — Effect Layer that intercepts tool calls and returns recorded results; `"strict"` mode throws on unknown tools
+    -   `diffTraces(a, b)` — structural diff of two trace outputs; returns `{ equal, diffs[] }`
+    -   `computeArgsHash(args)` — deterministic hash for matching tool invocations across runs
+    -   `ToolCallCompleted` event payload extended with `args`, `result`, `error`, `resultTruncated` (backward compatible; existing consumers ignore new fields)
+    -   `rax diagnose replay-run <runId>` — CLI subcommand; summary diff output
+
+    **Integration pattern:**
+
+    ```typescript
+    const ctrl = makeReplayController(run.toolTable)
+    const layer = makeReplayToolLayer(ctrl, 'strict')
+    new ReactiveAgentBuilder().withLayers(layer).build()
+    ```
+
+    Uses existing `.withLayers()` — no new builder method required.
+
+-   1081024: Add `@reactive-agents/runtime-shim` cross-runtime adapter package. The framework now runs on both Bun (with native `Bun.*` fast paths) and Node.js 22.5+ (with `node:sqlite`, `node:child_process`, `node:fs.glob`).
+
+    **What changed:**
+
+    -   New package `@reactive-agents/runtime-shim` exports unified primitives: `Database`, `spawn`, `writeFile`, `readFile`, `hash`, `serve`, `glob`, `isMain`, `isBun`, `isNode`.
+    -   Internal `bun:sqlite` imports and `Bun.*` calls across `memory`, `cost`, `reactive-intelligence`, `llm-provider`, `tools`, `eval`, `a2a`, `benchmarks`, `health`, `judge-server` now route through the shim.
+    -   `@reactive-agents/memory`: FTS5 virtual tables are now optional. When running on `node:sqlite` (which lacks FTS5), the package logs a warning and falls back to `LIKE`-based search on the `content` column. Full-text scoring is preserved on Bun.
+    -   Zero call-site API changes for end users.
+
+    **Why:**
+
+    -   Unblocks Stackblitz embeds (Node-only WebContainer)
+    -   Unblocks Vercel, Netlify, Cloudflare Workers (Node compat layer)
+    -   Removes hard `engines.bun` requirement from the dependency chain
+
+    **Bump:** minor for all packages using the shim. Patch for `@reactive-agents/svelte`, `@reactive-agents/vue`, `@reactive-agents/react` — these don't import the shim but need a version bump to clear npm publish conflicts.
+
+-   d3ffc25: Skill persistence and `RunHandle` streaming control.
+
+    **Skill persistence** (`@reactive-agents/reasoning`):
+
+    -   Learned `SkillRecord` objects are now dual-stored: in-memory session store AND `SkillStore` (SQLite-backed)
+    -   `skillFragmentToSkillRecord(fragment)` — converter exported from `reactive-agents` umbrella
+    -   Skills resolved across sessions via the persisted store; resolver finds previously learned skills on cold start
+
+    **RunHandle** (`@reactive-agents/runtime`):
+
+    -   `agent.runStream(task)` now returns `RunHandle` — an `AsyncGenerator<AgentStreamEvent>` with attached control methods
+    -   `handle.pause()` / `handle.resume()` — suspends/resumes the kernel loop at the next checkpoint
+    -   `handle.stop()` — graceful stop: kernel finishes current iteration, runs synthesis, emits `StreamCompleted`
+    -   `handle.terminate()` — immediate abort via existing `AbortController` path; emits `StreamCancelled`
+    -   `handle.status` — current `RunStatus` (`"running"` | `"paused"` | `"stopped"` | `"terminated"` | `"completed"`)
+    -   Fully backward compatible: `runStream()` callers that ignore the extra methods continue to work unchanged
+
+    **Exports** (`@reactive-agents/runtime`): `RunHandle`, `RunStatus`, `RunController`, `RunControllerLike`
+
+### Patch Changes
+
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [d3ffc25]
+-   Updated dependencies [1081024]
+-   Updated dependencies [d3ffc25]
+    -   @reactive-agents/reasoning@0.11.0
+    -   @reactive-agents/core@0.11.0
+    -   @reactive-agents/trace@0.11.0
+    -   @reactive-agents/llm-provider@0.11.0
+    -   @reactive-agents/memory@0.11.0
+    -   @reactive-agents/tools@0.11.0
+    -   @reactive-agents/guardrails@0.11.0
+    -   @reactive-agents/verification@0.11.0
+    -   @reactive-agents/cost@0.11.0
+    -   @reactive-agents/identity@0.11.0
+    -   @reactive-agents/observability@0.11.0
+    -   @reactive-agents/interaction@0.11.0
+    -   @reactive-agents/orchestration@0.11.0
+    -   @reactive-agents/prompts@0.11.0
+    -   @reactive-agents/a2a@0.11.0
+    -   @reactive-agents/gateway@0.11.0
+    -   @reactive-agents/reactive-intelligence@0.11.0
+    -   @reactive-agents/health@0.11.0
+    -   @reactive-agents/channels@0.11.0
+
 ## 0.10.6
 
 ### Patch Changes
