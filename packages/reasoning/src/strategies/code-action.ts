@@ -1,20 +1,33 @@
 // File: src/strategies/code-action.ts
 //
-// Phase D: CodeAgentStrategy — generates executable TypeScript code that
-// composes available tools and runs the result in a Worker sandbox.
-//
-// Current state: skeleton stub (returns ExecutionError). Full implementation
-// in subsequent tasks (code-gen LLM call, Worker sandbox, output extraction).
-import { Effect } from "effect";
-import type { ReasoningResult } from "../types/index.js";
+// CodeAgent strategy — LLM generates executable TypeScript code that composes
+// available tools as async function calls; executes in a Worker-thread sandbox.
+// Loop: plan (code gen) → execute (sandbox) → observe → reflect (verifier gate)
+import { Effect, Option } from "effect";
+import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { ToolService } from "@reactive-agents/tools";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
 import type { ReasoningConfig } from "../types/config.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import {
+  makeStep,
+  buildStrategyResult,
+} from "../kernel/capabilities/sense/step-utils.js";
+import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
+import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
+import { generateToolBindings } from "./code-action/tool-binding.js";
+import type { ToolSpec } from "./code-action/tool-binding.js";
+import { buildPlanPrompt, extractCodeBlock } from "./code-action/code-action-plan.js";
+import { runInSandbox } from "./code-action/sandbox.js";
+import type { ToolCallRecord } from "./code-action/code-action-observe.js";
+import { formatObservationMessage } from "./code-action/code-action-observe.js";
+import { shouldTerminate } from "./code-action/code-action-reflect.js";
+import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
@@ -36,30 +49,192 @@ export interface CodeActionInput {
   readonly requiredTools?: readonly string[];
   readonly metaTools?: KernelMetaToolsConfig;
   readonly initialMessages?: readonly KernelMessage[];
+  /** Override verifier — defaults to noopVerifier (code-action is its own judge) */
+  readonly verifier?: Verifier;
 }
 
 // ── executeCodeAction ─────────────────────────────────────────────────────────
 
-/**
- * Code-action strategy — stub implementation.
- *
- * Planned behavior:
- * 1. Ask LLM to generate TypeScript code that uses the available tool bindings.
- * 2. Run generated code in a Worker sandbox with tool stubs wired to real tools.
- * 3. Capture output and return as a ReasoningResult.
- *
- * Currently returns ExecutionError("not yet implemented") as a placeholder.
- */
 export const executeCodeAction = (
-  _input: CodeActionInput,
+  input: CodeActionInput,
 ): Effect.Effect<ReasoningResult, ExecutionError, LLMService> =>
   Effect.gen(function* () {
-    return yield* Effect.fail(
-      new ExecutionError({
-        message: "code-action strategy: not yet implemented",
-        cause: undefined,
+    const start = Date.now();
+    const steps: ReasoningStep[] = [];
+    const llm = yield* LLMService;
+    const toolServiceOpt = yield* Effect.serviceOption(ToolService);
+
+    const maxIterations = input.config.strategies.reactive.maxIterations ?? 3;
+    const verifier = input.verifier ?? noopVerifier;
+
+    // ── Build tool specs for binding generation ─────────────────────────────
+    const toolSpecs: ToolSpec[] = (input.availableToolSchemas ?? []).map((s) => {
+      const properties: Record<string, { type: string; description?: string }> = {};
+      const required: string[] = [];
+      for (const p of s.parameters) {
+        properties[p.name] = { type: p.type, description: p.description };
+        if (p.required) required.push(p.name);
+      }
+      return {
+        name: s.name,
+        description: s.description,
+        parameters: { type: "object" as const, properties, required },
+      };
+    });
+
+    const bindings = generateToolBindings(toolSpecs);
+    const { system, user } = buildPlanPrompt(input.taskDescription, bindings);
+
+    // ── Build tool handler map — bridges Worker calls to ToolService ────────
+    const toolHandlers = new Map<string, (args: unknown) => Promise<unknown>>();
+    if (Option.isSome(toolServiceOpt)) {
+      const toolSvc = toolServiceOpt.value;
+      for (const schema of input.availableToolSchemas ?? []) {
+        const toolName = schema.name;
+        toolHandlers.set(toolName, async (args: unknown) => {
+          const output = await Effect.runPromise(
+            toolSvc.execute({
+              toolName,
+              arguments: args as Record<string, unknown>,
+              agentId: input.agentId ?? "code-action-agent",
+              sessionId: input.sessionId ?? "code-action-session",
+            }),
+          );
+          return output.result;
+        });
+      }
+    }
+
+    steps.push(makeStep("thought", `[CODE-ACTION] Plan: generating code for "${input.taskDescription.slice(0, 80)}"`));
+
+    // ── Plan phase — initial LLM code generation ────────────────────────────
+    const planResponse = yield* Effect.mapError(
+      llm.complete({
+        messages: [{ role: "user", content: user }],
+        systemPrompt: system,
+        temperature: 0,
       }),
+      (cause) =>
+        new ExecutionError({
+          strategy: "code-action",
+          message: "code-action plan LLM call failed",
+          cause,
+        }),
     );
+
+    let generatedCode = extractCodeBlock(planResponse.content);
+    let totalTokens = planResponse.usage.totalTokens;
+    let totalCost = planResponse.usage.estimatedCost ?? 0;
+
+    steps.push(makeStep("action", `[CODE-ACTION] Generated code block (${generatedCode.length} chars)`));
+
+    let lastToolCalls: ToolCallRecord[] = [];
+    let lastResult: unknown = undefined;
+    let done = false;
+    let iteration = 0;
+
+    while (!done) {
+      iteration++;
+
+      // ── Execute phase — run in Worker sandbox ─────────────────────────────
+      const sandboxResult = yield* Effect.mapError(
+        Effect.tryPromise({
+          try: () => runInSandbox(generatedCode, toolHandlers),
+          catch: (e) => e,
+        }),
+        (cause) =>
+          new ExecutionError({
+            strategy: "code-action",
+            message: `code-action sandbox execution failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+            cause,
+          }),
+      );
+
+      lastToolCalls = sandboxResult.toolCalls;
+      lastResult = sandboxResult.finalResult;
+
+      steps.push(
+        makeStep(
+          "observation",
+          `[CODE-ACTION] Sandbox: ${sandboxResult.toolCalls.length} tool calls, result type=${typeof sandboxResult.finalResult}`,
+        ),
+      );
+
+      // ── Observe phase — format result for verifier / next iteration ───────
+      const observationText = formatObservationMessage(
+        sandboxResult.toolCalls,
+        sandboxResult.finalResult,
+      );
+
+      // ── Reflect phase — verifier gate ─────────────────────────────────────
+      const verifyResult = verifier.verify({
+        action: "code-execution",
+        content: observationText,
+        actionSuccess: true,
+        task: input.taskDescription,
+        priorSteps: steps,
+      });
+
+      const verdict: VerifierVerdict = verifyResult.verified ? "PASS" : "FAIL";
+
+      if (shouldTerminate({ verdict, iteration, maxIterations })) {
+        done = true;
+        steps.push(makeStep("thought", `[CODE-ACTION] Terminating: verdict=${verdict}, iteration=${iteration}`));
+        break;
+      }
+
+      // ── Retry — regenerate code with verifier feedback ────────────────────
+      steps.push(makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${verifyResult.summary}`));
+
+      const retryUser = [
+        `Previous attempt failed verification. Reason: ${verifyResult.summary}`,
+        `Previous code:\n\`\`\`typescript\n${generatedCode}\n\`\`\``,
+        `Observation:\n${observationText}`,
+        `\nTry again. Task: ${input.taskDescription}`,
+      ].join("\n\n");
+
+      const retryResponse = yield* Effect.mapError(
+        llm.complete({
+          messages: [
+            { role: "user", content: user },
+            { role: "assistant", content: `\`\`\`typescript\n${generatedCode}\n\`\`\`` },
+            { role: "user", content: retryUser },
+          ],
+          systemPrompt: system,
+          temperature: 0.1 * iteration,
+        }),
+        (cause) =>
+          new ExecutionError({
+            strategy: "code-action",
+            message: "code-action retry LLM call failed",
+            cause,
+          }),
+      );
+
+      generatedCode = extractCodeBlock(retryResponse.content);
+      totalTokens += retryResponse.usage.totalTokens;
+      totalCost += retryResponse.usage.estimatedCost ?? 0;
+    }
+
+    const resultString =
+      typeof lastResult === "string"
+        ? lastResult
+        : JSON.stringify(lastResult) ?? "";
+
+    return buildStrategyResult({
+      strategy: "code-action",
+      steps,
+      output: resultString,
+      status: "completed",
+      start,
+      totalTokens,
+      totalCost,
+      extraMetadata: {
+        toolCallCount: lastToolCalls.length,
+        iterations: iteration,
+        codeLength: generatedCode.length,
+      },
+    });
   });
 
 (executeCodeAction as unknown as Record<string, unknown>).strategyId =
