@@ -73,6 +73,7 @@ jobs:
         with:
           # When changesets are present: opens/updates a "Version Packages" PR
           # When that PR is merged: publishes to npm
+          version: bun run version
           publish: bun run release
           title: "chore: version packages"
           commit: "chore: version packages"

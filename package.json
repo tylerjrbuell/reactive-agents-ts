@@ -35,7 +35,7 @@
     "docs:build": "cd apps/docs && bun x astro build",
     "docs:preview": "cd apps/docs && bun x astro preview",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && bun scripts/normalize-release-version.ts",
     "release": "bun run build && node scripts/resolve-workspace-deps.mjs && changeset publish",
     "check:versions": "bun scripts/check-npm-versions.ts",
     "check:version-sync": "bun scripts/check-version-sync.ts",
