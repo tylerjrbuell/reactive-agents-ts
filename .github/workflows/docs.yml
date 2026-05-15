@@ -30,7 +30,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.3.10"
 
       # T1.2 — Cache Bun's install dir.
       - name: Cache Bun install
@@ -46,7 +46,7 @@ jobs:
 
       - name: Build Astro site
         working-directory: apps/docs
-        run: bunx astro build
+        run: bun run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

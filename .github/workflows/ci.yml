@@ -23,7 +23,7 @@ jobs:
           node-version: '22'
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.3.10"
       # T1.2 — Cache Bun's install dir, keyed on bun.lock. Restore-keys lets
       # a partial-key match seed the cache when the lock file changes.
       - name: Cache Bun install
@@ -52,7 +52,7 @@ jobs:
           node-version: '22'
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.3.10"
       - name: Cache Bun install
         uses: actions/cache@v4
         with:
@@ -113,7 +113,7 @@ jobs:
           node-version: '22'
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.3.10"
       - name: Cache Bun install
         uses: actions/cache@v4
         with:
@@ -124,7 +124,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build docs
         working-directory: apps/docs
-        run: bunx astro build
+        run: bun run build
       - name: Check links in built HTML
         uses: lycheeverse/lychee-action@v2
         with:

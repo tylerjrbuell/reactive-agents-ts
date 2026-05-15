@@ -19,6 +19,8 @@ export default defineConfig({
     "@reactive-agents/trace",
     "@reactive-agents/tools",
     "@reactive-agents/cortex",
+    "@reactive-agents/diagnose",
+    "@reactive-agents/memory",
     "bun:sqlite",
     "chalk",
     "ora",
