@@ -18,7 +18,7 @@ Foundation (no reactive-agents deps)
 │
 ├── @reactive-agents/memory        — 4-layer memory (Working/Semantic/Episodic/Procedural), SQLite/FTS5/vec
 │
-├── @reactive-agents/reasoning     — 5 strategies + ThoughtKernel, KernelRunner, Structured Plan Engine
+├── @reactive-agents/reasoning     — 6 strategies + ThoughtKernel, KernelRunner, Structured Plan Engine
 │   └── depends on: core, llm-provider, memory (PlanStoreService), tools (ToolService)
 │
 ├── @reactive-agents/tools         — ToolService, ToolRegistry, 11 built-in tools, MCP client, sandbox
@@ -60,6 +60,18 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/testing       — Mock LLMService, mock ToolService, mock EventBus, assertion helpers
 │   └── depends on: core, llm-provider (dev only)
 │
+├── @reactive-agents/runtime-shim  — Bun/Node.js unified primitives (Database, spawn, serve, glob, hash)
+│   (no reactive-agents deps — consumed by memory, tools, health, judge-server)
+│
+├── @reactive-agents/compose       — Harness composition + 6 killswitches (maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor, confidenceFloor)
+│   └── depends on: core, runtime
+│
+├── @reactive-agents/replay        — Deterministic trace replay: loadRecordedRun, makeReplayController, makeReplayToolLayer, diffTraces
+│   └── depends on: core, trace, runtime
+│
+├── @reactive-agents/observe       — OpenTelemetry/OpenInference span exporter: OpenInferenceTracerLayer, setupOpenInferenceExporter
+│   └── depends on: core
+│
 └── Facade & Runtime
     ├── @reactive-agents/runtime   — ExecutionEngine, ReactiveAgentBuilder, createRuntime()
     │   └── depends on: all packages above (optional via Effect Layers)
@@ -83,6 +95,10 @@ Foundation (no reactive-agents deps)
 | `observability` | `src/services/observability-service.ts` | `ObservabilityService`, `ThoughtTracer`                     |
 | `gateway`       | `src/services/gateway-service.ts`       | `GatewayService`, `PolicyEngine`, `WebhookService`          |
 | `eval`          | `src/services/eval-service.ts`          | `EvalService`, `EvalStore`, `EvalSuite`                     |
+| `runtime-shim`  | `src/index.ts`                          | `Database`, `spawn`, `serve`, `glob`, `hash`, `isMain`, `isBun`, `isNode` |
+| `compose`       | `src/killswitches/index.ts`             | `maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`, `confidenceFloor`, `killswitches` |
+| `replay`        | `src/index.ts`                          | `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces` |
+| `observe`       | `src/index.ts`                          | `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, `autoConfigureExporter` |
 | `runtime`       | `src/builder.ts`                        | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
 
 ### Adaptive Calibration (Live Learning)
@@ -153,7 +169,7 @@ Key references:
 
 ## Runtime Policy
 
-**Required runtime: Bun ≥1.1.0** (W12 — `engines.bun` declared on the 8 published packages with direct `bun:sqlite` or `Bun.*` runtime usage, plus the umbrella). The framework uses `bun:sqlite`, `Bun.spawn`, and `Bun.serve` in core packages. Node.js support is planned — see `wiki/Planning/Implementation-Plans/Superpowers/2026-04-17-nodejs-support.md` for the migration plan.
+**Recommended runtime: Bun ≥1.1.0** — optimal performance with `bun:sqlite`, `Bun.spawn`, `Bun.serve`. **Node.js 22.5+ is now supported** via `@reactive-agents/runtime-shim` which provides unified `Database`, `spawn`, `serve`, `glob`, and `hash` primitives that route to Bun fast-paths or `node:sqlite`/`node:child_process`/`node:fs` equivalents. FTS5 full-text search is unavailable on Node sqlite — falls back to `LIKE` search automatically.
 
 **Do not introduce new Bun-specific APIs in new code.** When adding features, prefer `node:` built-ins (`node:crypto`, `node:fs/promises`, `node:child_process`) over Bun globals — Bun supports all `node:` modules natively, and using them keeps each file one import-swap away from Node compatibility. Reserve `bun:sqlite`, `Bun.serve`, and `Bun.spawn` only for files already using them.
 

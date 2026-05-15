@@ -27,6 +27,7 @@ user-invocable: false
 **Zero internal deps:**
 
 - `@reactive-agents/core` — EventBus, types, Agent/Task services
+- `@reactive-agents/runtime-shim` — unified Bun/Node.js primitives; consumed by memory, tools, health, judge-server
 
 **Depends on core only:**
 
@@ -35,6 +36,7 @@ user-invocable: false
 - `@reactive-agents/identity` → `core`
 - `@reactive-agents/a2a` → `core`
 - `@reactive-agents/interaction` → `core`
+- `@reactive-agents/observe` → `core` — OpenInference/OTel span exporter
 
 **Depends on core + llm-provider:**
 
@@ -52,10 +54,12 @@ user-invocable: false
 - `@reactive-agents/orchestration` → `core`, `llm-provider`, `tools`, `reasoning`
 - `@reactive-agents/gateway` → `core`, `llm-provider`, `tools`
 - `@reactive-agents/reactive-intelligence` → `core`, `llm-provider`
+- `@reactive-agents/replay` → `core`, `trace`, `runtime` — deterministic trace replay
+- `@reactive-agents/compose` → `core`, `runtime` — harness composition + 6 killswitches
 
 **Planned (branch `feat/channels-package`, not merged to `main`):**
 
-- `@reactive-agents/channels` → `core`, `gateway` (external triggers, session bridge, webhook adapter); consumed by `@reactive-agents/runtime` via **`.withChannels()`** and optional dynamic import at `start()`. Gateway **`channels` → `accessControl`** rename separates sender policy from chat/task mode. See `docs/superpowers/debriefs/2026-05-03-channels-phase1-development-debrief.md`.
+- `@reactive-agents/channels` → `core`, `gateway` (external triggers, session bridge, webhook adapter); consumed by `@reactive-agents/runtime` via **`.withChannels()`** and optional dynamic import at `start()`. Gateway **`channels` → `accessControl`** rename separates sender policy from chat/task mode. See `wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`.
 
 **Facade (depends on ALL):**
 
@@ -97,7 +101,7 @@ Phase 10: COMPLETE         EventBus.publish("AgentCompleted") + DebriefSynthesiz
 
 ## Kernel Architecture (Reasoning)
 
-All 5 strategies delegate to `runKernel(reactKernel, input, options)` in `packages/reasoning/src/strategies/kernel/`.
+All 6 strategies delegate to `runKernel(reactKernel, input, options)` in `packages/reasoning/src/strategies/kernel/`.
 
 ### Composable Phase Pipeline
 

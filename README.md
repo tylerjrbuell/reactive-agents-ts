@@ -14,8 +14,8 @@ Works on local Ollama models (4B+) through frontier APIs — **same code, same f
 | ---------------------------- | ---------------------------------------------------------------- |
 | **35 total**                 | 30 packages + 5 apps — exactly what you need, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
-| **5 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive    |
-| **5,028 tests · 556 files**  | Production-grade confidence (verified `bun test` on every PR)    |
+| **6 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
+| **5,320 tests · 603 files**  | Production-grade confidence (verified `bun test` on every PR)    |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, zero `any`, explicit tagged errors     |
@@ -71,7 +71,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 Grouped by capability. **Every layer is opt-in** — call `.with*()` only for what you need.
 
 ### 🧠 Reasoning & Cognition
--   **5 reasoning strategies** + adaptive meta-strategy: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive
+-   **6 reasoning strategies** + adaptive meta-strategy: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action (@experimental)
 -   **Intelligent context synthesis** — fast-template or deep-LLM transcript shaping per iteration (`ContextSynthesized` on EventBus)
 -   **Reactive intelligence** — 5-source entropy sensor + 8-action controller (early-stop, compress, switch strategy, adjust temp, inject tool, activate skill, redirect on failure, stall-detect) + Thompson Sampling bandit
 -   **Adaptive calibration** — three-tier live learning (shipped prior → community profile → local posterior) with per-run observations and classifier bypass
@@ -122,14 +122,14 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **5,028 tests** across 556 files — 5,002 pass / 26 skip / 0 fail in ~65s
+- **5,320 tests** across 603 files — verified `bun test` on every PR
 - **Zero `any`** in framework code — Effect-TS schemas validate every service boundary
 
 ## Quick Start
 
 Install and run your first TypeScript AI agent in under 60 seconds.
 
-> **Requires [Bun](https://bun.sh) ≥1.0.0** — the framework uses Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is [planned for a future release](wiki/Planning/Implementation-Plans/Superpowers/archive/2026-04-17-nodejs-support.md). Install Bun in one command: `curl -fsSL https://bun.sh/install | bash`
+> **Recommended: [Bun](https://bun.sh) ≥1.0.0** — optimal performance with native SQLite, subprocess, and HTTP APIs. **Node.js 22.5+ is now also supported** via `@reactive-agents/runtime-shim` — same code, both runtimes. Install Bun: `curl -fsSL https://bun.sh/install | bash`
 
 ```bash
 bun add reactive-agents
@@ -371,7 +371,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | ----------------------------- | :-------------: | :----------: | :-----------: | :-----: |
 | Full type safety (Effect-TS)  |       Yes       |      --      |    Partial    | Partial |
 | Composable layer architecture |    13 layers    |      --      |      --       |   --    |
-| Reasoning strategies          |  5 + adaptive   |  1 (ReAct)   |      --       |    1    |
+| Reasoning strategies          | 6 (+ @exp code-action) |  1 (ReAct)   |      --       |    1    |
 | Model-adaptive context        |     4 tiers     |      --      |      --       |   --    |
 | Local model optimization      |       Yes       |      --      |      --       |   --    |
 | Execution lifecycle hooks     |    12 phases    |  Callbacks   |  Middleware   |   --    |

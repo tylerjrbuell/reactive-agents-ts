@@ -18,22 +18,74 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ## v0.11.x — Production tooling + full observability (May 2026)
 
-The focus: developer tooling that makes agents production-observable and repeatable, plus the first `create-reactive-agent` scaffolder.
+The focus: developer tooling that makes agents production-observable and repeatable, plus the first `create-reactive-agent` scaffolder, cross-runtime support, and three new capabilities (`code-action` strategy, skill persistence, interactive playground).
 
 ### New packages
 
 - **`@reactive-agents/observe`** — Zero-config OpenTelemetry tracing. Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every run emits a workflow → LLM → tool span hierarchy, OpenInference-compliant, to any OTLP backend (Jaeger, Grafana Tempo, Langfuse, Arize Phoenix). See [OpenTelemetry Tracing](/features/observe/).
 - **`@reactive-agents/replay`** — Deterministic trace replay. Record any run to a snapshot file and re-run it with a different model or prompt without calling the LLM again. Enables regression testing and prompt A/B comparisons. See [Snapshot & Replay](/features/snapshot-replay/).
+- **`@reactive-agents/runtime-shim`** — Cross-runtime support. The framework now runs on Node.js 22.5+ in addition to Bun. Provides unified `Database`, `spawn`, `serve`, `glob`, `writeFile`, `readFile`, and `hash` primitives that delegate to the available runtime. FTS5 is optional — falls back to LIKE-based search on Node's built-in SQLite. Unblocks Stackblitz WebContainers (Node-only) and Vercel/Netlify deployments.
 
 ### New tooling
 
 - **`create-reactive-agent` CLI** — `bunx create-reactive-agent my-app` scaffolds a runnable agent project in seconds. Supports `--template minimal|standard|tool-use|multi-agent|gateway`, `--provider`, `--model`, `--pm bun|npm|yarn|pnpm`. See [create-reactive-agent](/features/create-reactive-agent/).
 
+### Interactive Playground
+
+Three live Stackblitz scenarios, zero install. Runs fully in-browser via WebContainers — no local runtime required. Default provider is Google Gemini (free tier).
+
+| Scenario | What it shows |
+|----------|--------------|
+| **Hello Agent** | Simple Q&A — minimal builder, one-step response |
+| **Tool Integration** | Built-in `code-execute` + `scratchpad` tools working together |
+| **Strategy Demo** | `reactive` vs `plan-execute-reflect` side-by-side on the same task |
+
+See [Playground](/guides/playground/).
+
+### `code-action` strategy (`@experimental`)
+
+A 7th reasoning strategy in which the LLM generates a TypeScript IIFE that runs inside a Worker-thread sandbox. Tools are exposed as normal async functions and called via `postMessage` round-trips — no JSON schema juggling in the prompt. Best suited for multi-tool orchestration tasks where expressing control flow in code is cleaner than iterative tool calls.
+
+Enable with `defaultStrategy: "code-action"`. `ToolService` is optional; the strategy also handles pure computation tasks. See [code-action](/features/code-action/).
+
+### Skill persistence
+
+Learned `SkillRecord` objects now survive process restarts. The skill system uses a dual-store: the existing in-memory session store for fast within-run access, plus a new SQLite-backed `SkillStore` that persists across runs. On cold start, skills are resolved from the persistent store before any LLM call. `skillFragmentToSkillRecord()` is exported from `reactive-agents` for manual skill construction.
+
 ### New runtime controls
 
-- **`RunHandle`** — `.run()` now returns a handle with `.cancel()` to stop a running agent mid-flight and `.result` (a Promise that resolves on completion or cancellation). See [Compose API](/reference/compose-api/).
-- **Killswitches** — `.withKillswitch(signal)` wires an `AbortSignal` into the agent loop. When the signal fires, the loop exits cleanly after the current step. Compose with `AbortController` for timeout-based cancellation. See [Compose API](/reference/compose-api/).
-- **Compose API** (`@stable`) — The full fluent compose surface (`pipe`, `chain`, `race`, `parallel`, `withKillswitch`, `withTimeout`) is now `@stable` as of v0.11. See [Compose API](/reference/compose-api/).
+- **`RunHandle`** — `runStream()` now returns a `RunHandle` with four controls and a status property:
+  - `.pause()` — suspends the loop at the next safe checkpoint
+  - `.resume()` — resumes a paused run
+  - `.stop()` — graceful shutdown: finishes the current step, then runs output synthesis
+  - `.terminate()` — immediate abort, skips synthesis
+  - `.status` — `"running" | "paused" | "stopped" | "terminated" | "completed"`
+  - `.result` — `Promise` that resolves when the run reaches a terminal state
+
+  See [Compose API](/reference/compose-api/).
+
+- **Killswitches** — Six factory functions from `@reactive-agents/compose` that wire stopping conditions into the agent loop. Pass them to `.compose()` or `.withHarness()`:
+
+  ```ts
+  import { maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor, confidenceFloor } from "@reactive-agents/compose";
+  ```
+
+  | Factory | Stops when… |
+  |---------|-------------|
+  | `maxIterations(n)` | Loop count reaches `n` |
+  | `budgetLimit({ maxTokens?, maxCostUSD? })` | Token or cost ceiling hit |
+  | `timeoutAfter(duration)` | Wall-clock duration exceeded |
+  | `watchdog({ timeout })` | No progress within `timeout` |
+  | `requireApprovalFor(toolName, approver)` | Named tool needs human approval |
+  | `confidenceFloor(threshold)` | Agent confidence drops below threshold |
+
+  See [Compose API](/reference/compose-api/).
+
+- **Compose API** (`@stable`) — `.compose(fn)` (alias: `.withHarness(fn)`) attaches a harness transform that intercepts tagged chokepoints (`prompt.system`, `nudge.loop-detected`, `message.tool-result`, etc.) via `h.on()`, `h.tap()`, `h.before()`, `h.after()`, and `h.onError()`. Existing builder methods `.withSystemPrompt()`, `.withErrorHandler()`, and `.withHook()` now desugar through the harness. See [Compose API](/reference/compose-api/) and [Harness Tags](/reference/harness-tags/).
+
+### Strategy switching on by default
+
+`enableStrategySwitching` now defaults to `true`. The reactive intelligence dispatcher will switch strategies automatically when entropy signals a stuck loop — no explicit opt-in required.
 
 ### Decision tracing
 
