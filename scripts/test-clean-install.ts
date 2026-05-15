@@ -281,15 +281,22 @@ console.log("Node standalones import OK");
       throw new Error(`create-reactive-agent scaffold missing expected file: ${expected}`);
     }
   }
-  // Point reactive-agents dep to our local tarball so npm install resolves offline
+  // Point reactive-agents dep to our local tarball so npm install resolves offline.
+  // Also add npm `overrides` for every @reactive-agents/* package so transitive deps
+  // resolve to the local tarballs rather than stale registry versions. Without this,
+  // npm falls back to published versions (e.g. reactive-intelligence@0.10.6) that
+  // pre-date runtime-shim and contain `import { Database } from "bun:sqlite"` as a
+  // static ESM import, which crashes Node with ERR_UNSUPPORTED_ESM_URL_SCHEME.
   const scaffoldPkg = JSON.parse(readFileSync(scaffoldPkgPath, "utf8")) as {
     dependencies?: Record<string, string>;
+    overrides?: Record<string, string>;
   };
   if (scaffoldPkg.dependencies) {
     if ("reactive-agents" in scaffoldPkg.dependencies) {
       scaffoldPkg.dependencies["reactive-agents"] = tarballEntries["reactive-agents"]!;
     }
   }
+  scaffoldPkg.overrides = { ...tarballEntries };
   writeFileSync(scaffoldPkgPath, JSON.stringify(scaffoldPkg, null, 2) + "\n");
   run("npm install --no-audit --no-fund --silent", scaffoldAppDir, { stdio: "inherit" });
   writeFileSync(
