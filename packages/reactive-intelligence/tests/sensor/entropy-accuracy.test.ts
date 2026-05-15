@@ -680,15 +680,16 @@ describe("conformal calibration accuracy", () => {
   });
 
   test("drift detected when recent scores are outliers", () => {
-    // 20 stable scores around 0.5, then 3 extreme values
-    const stable = Array.from({ length: 20 }, () => 0.5 + (Math.random() - 0.5) * 0.1);
+    // 20 stable scores around 0.5 (deterministic), then 3 extreme values
+    const stable = Array.from({ length: 20 }, (_, i) => 0.48 + (i % 5) * 0.01);
     const withDrift = [...stable, 0.99, 0.98, 0.97]; // extreme outliers
     const cal = computeCalibration("test-model", withDrift);
     expect(cal.driftDetected).toBe(true);
   });
 
   test("no drift when scores are stable", () => {
-    const stable = Array.from({ length: 25 }, () => 0.5 + (Math.random() - 0.5) * 0.05);
+    // deterministic values tightly clustered around 0.5; mean+2σ ≈ 0.574, max = 0.52
+    const stable = Array.from({ length: 25 }, (_, i) => 0.48 + (i % 5) * 0.01);
     const cal = computeCalibration("test-model", stable);
     expect(cal.driftDetected).toBe(false);
   });
