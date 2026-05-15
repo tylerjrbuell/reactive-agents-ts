@@ -107,7 +107,7 @@ All prior roadmap/phase documents are superseded:
 |---|---|---|
 | **A** | Architecture Cleanup — W23–W25: `execution-engine.ts` 4,499→1,637 LOC (W24) + `builder.ts` 6,232→2,481 LOC (W25). | ✅ **Complete** |
 | **B** | Compose API — Waves A–F, 5+ chokepoints live, 6 killswitches, RunHandle. | ✅ **Complete** (May 13) |
-| **C** | v0.11 Launch — skill persistence ✅, Snapshot/Replay ✅; **remaining:** playground, `create-reactive-agent` CLI, OTel exporter, GH Projects board. | ⏳ in flight |
+| **C** | v0.11 Launch — skill persistence ✅, Snapshot/Replay ✅, `@reactive-agents/observe` (OTel) ✅, `create-reactive-agent` CLI ✅, `code-action` strategy ✅, Compose API + 6 killswitches ✅. **v0.11.0 release prep complete 2026-05-15** — 7 changesets staged, all CI fixes in commit `6d71d691` (bun pin 1.3.10, docs prebuild, CLI externals). | 🟢 **Ready** |
 | **1.5** | Mechanism Improvements — M3 REWORK ✅ shipped; M6 persistence ✅; M7/M8/M10 IMPROVE pending | Parallel with C |
 | **D** | Code-as-Action Strategy — 6th reasoning strategy, ≥20% local model lift | v0.12 |
 | **E** | Local Model Engineering — calibration consumers (≥8 fields), per-provider parser, paging | v0.12 |
@@ -420,6 +420,7 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
 - **Control pillar — every harness primitive must be developer-overridable.** Vision Pillar 1. New behaviors ship with: `defaultFoo` preserving prior behavior, `KernelInput.foo?: FooHookType` injection field, public type export. Hardcoded harness logic = black box = anti-pattern.
 - **Research discipline — spike-validated harness changes only.** Read `00-RESEARCH-DISCIPLINE.md` for the 12 rules. Notable: spike validates ONE mechanism × ONE failure-mode × ≤2 models × ONE task (Rule 11); single-spike findings shape the next spike, not harness-level decisions.
 - **Trust `bunx turbo run build` over `tsc --noEmit` for `ignoreDeprecations`.** TS 6.0.3's tsc reports `error TS5103: Invalid value` on `"ignoreDeprecations": "6.0"` (false positive), but tsup's DTS step (same TS version) requires `"6.0"` to silence the baseUrl deprecation. Keep `"6.0"` everywhere (root + leaf tsconfigs); the lone tsc error in `bun run typecheck` output is expected noise. Confirmed 2026-05-11: all 33 turbo build tasks pass with `"6.0"`.
+- **Pin `bun-version: "1.3.10"` in CI workflows — do NOT use `latest`.** On 2026-05-15, `latest` resolved to 1.3.14 which broke streaming tests (`TextDelta events with reasoning enabled` returns 0 deltas, FiberRef inheritance regression in `StreamingTextCallback` propagation through `Effect.forkDaemon`). Reproduced locally by downloading the 1.3.14 binary against the same tree (5/6 pass on 1.3.14, 6/6 on 1.3.10). Re-test the streaming suite before bumping the pin. Affected workflows: `.github/workflows/{ci,docs,publish,eval}.yml`. Fix: commit `6d71d691`.
 
 ---
 
