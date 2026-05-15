@@ -38,6 +38,7 @@
     "version": "changeset version",
     "release": "bun run build && node scripts/resolve-workspace-deps.mjs && changeset publish",
     "check:versions": "bun scripts/check-npm-versions.ts",
+    "check:version-sync": "bun scripts/check-version-sync.ts",
     "test:install": "bun scripts/test-clean-install.ts"
   },
   "license": "MIT",

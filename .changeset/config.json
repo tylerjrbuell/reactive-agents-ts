@@ -27,7 +27,19 @@
       "@reactive-agents/cli",
       "@reactive-agents/health",
       "@reactive-agents/benchmarks",
-      "@reactive-agents/channels"
+      "@reactive-agents/channels",
+      "@reactive-agents/diagnose",
+      "@reactive-agents/trace",
+      "@reactive-agents/scenarios",
+      "@reactive-agents/compose",
+      "@reactive-agents/observe",
+      "@reactive-agents/replay",
+      "@reactive-agents/runtime-shim",
+      "create-reactive-agent",
+      "@reactive-agents/cortex",
+      "@reactive-agents/react",
+      "@reactive-agents/svelte",
+      "@reactive-agents/vue"
     ]
   ],
   "linked": [],

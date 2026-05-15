@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/observe",
-  "version": "0.11.0",
+  "version": "0.10.6",
   "description": "OpenInference-compliant OpenTelemetry tracing for reactive-agents — maps AgentEvent stream to semantic spans",
   "type": "module",
   "scripts": {

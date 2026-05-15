@@ -46,6 +46,9 @@ jobs:
       # release with no correctness benefit. If a future release needs a
       # clean cache, that's an explicit workflow_dispatch input, not always-on.
 
+      - name: Check public package version sync
+        run: bun run check:version-sync
+
       # Separate build and test steps so failures pinpoint cleanly. Previously
       # one combined `bun run build && bun test` step made it harder to tell
       # whether a release halted on build or on test.
