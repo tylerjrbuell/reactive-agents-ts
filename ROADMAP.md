@@ -37,16 +37,18 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 | Skill Persistence (M6: SQLite-backed, cross-session) | ✅ Shipped | — |
 | Live Playground (Stackblitz, 3 scenarios) | ✅ Shipped | — |
 | Decision rationale traceability (every milestone) | ✅ Shipped | — |
-| `npx create-reactive-agent` + 5 templates | 🔲 Not started | 3 days |
-| OpenInference / OTel exporter (`@reactive-agents/observe`) | 🔲 Not started | 1 week |
-| Snapshot / Replay (`agent.replay(traceId, overrides)`) | 🔲 Not started | 1 week |
+| `npx create-reactive-agent` + 4 templates × 4 providers | ✅ Shipped | — |
+| OpenInference / OTel exporter (`@reactive-agents/observe`) | ✅ Shipped | — |
+| Snapshot / Replay (`@reactive-agents/replay`) | ✅ Shipped | — |
+| Code-as-Action strategy (`code-action`, experimental, v0.11.1 promote) | ✅ Shipped | — |
 | Public roadmap + named users (this doc + GitHub Projects) | 🔄 In progress | 1 day |
 
 **v0.11.0 release gate:**
-- [ ] All Phase C items above shipped
-- [ ] Zero regressions on 5,128+ tests (current count)
-- [ ] Snapshot / Replay deterministic on same overrides
-- [ ] This doc aligned to North Star v5.0 ✅ (May 14, 2026)
+- [x] All Phase C items shipped (compose, skill persistence, playground, create-reactive-agent, observe, replay)
+- [x] Zero regressions on 5,128+ tests
+- [ ] Snapshot / Replay deterministic E2E integration test (deferred to v0.11.1)
+- [ ] GitHub Projects board live + named users section
+- [x] This doc aligned to North Star v5.0 ✅ (May 14, 2026)
 
 ---
 

@@ -1,0 +1,49 @@
+name: ✨ Feature Request
+description: Propose a new capability or change.
+title: "[feature] "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reactive Agents is **built for control, not magic**. Before proposing, check `ROADMAP.md` and `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` — your idea may already be tracked, or intentionally deferred.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't you do today, and why does it matter?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Sketch the API. Effect-TS-friendly, composable via `.with*()` / `.compose()` where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Core capability (kernel / strategy / harness)
+        - New package
+        - Provider / adapter
+        - CLI / DX
+        - Docs / examples
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: discipline
+    attributes:
+      label: Research discipline
+      description: Single-spike claims welcome; framework-wide claims need evidence.
+      options:
+        - label: I have evidence (bench, trace, or wiki/Research artifact) — link below
+        - label: This is a single-mechanism × single-failure-mode improvement
+        - label: I'm willing to run the spike if my proposal is accepted

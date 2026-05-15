@@ -2,11 +2,13 @@
 
 Thank you for your interest in contributing! This guide covers everything you need to get started.
 
+> **First stop:** read [`AGENTS.md`](./AGENTS.md) — the canonical agent workflow + build commands. This file is the human-facing version; AGENTS.md is the agent-facing version.
+
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.1+
-- TypeScript 5.5+
-- An Anthropic or OpenAI API key (for integration tests)
+- TypeScript 5.7+
+- An Anthropic, OpenAI, or Google API key — or local [Ollama](https://ollama.com) — for integration tests
 
 ## Setup
 
@@ -56,10 +58,11 @@ apps/
 ## Development Workflow
 
 ```bash
-bun test              # Run all ~4,150 tests across ~460 files
-bun run build         # Typecheck all packages
+bun test              # Run all 5,128+ tests
+bun run build         # Build + typecheck all packages (turbo-cached)
 bun run docs:dev      # Start docs dev server
 bun run rax --help    # Test the CLI
+bun run check:versions # Pre-release: detect npm/main version drift
 ```
 
 ## Running Tests
@@ -93,11 +96,13 @@ See the `effect-ts-patterns` skill in `.claude/skills/` for the full coding conv
 
 ## Adding a Feature
 
-1. Check the relevant spec in `spec/docs/` for the layer you're modifying
-2. Write a failing test first
-3. Implement the feature following existing Effect-TS patterns
-4. Run `bun test && bun run build` — both must pass
-5. Update the docs page for the affected package if behaviour changes
+1. Check `ROADMAP.md` and `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` — your change should map to a milestone
+2. Write a failing test first (TDD is the house style)
+3. Implement following existing Effect-TS patterns
+4. Run `bun test && bun run build` — both must pass clean
+5. Add a `.changeset/` entry for any user-visible change
+6. Update the docs page for the affected package if behaviour changes
+7. File evidence under `wiki/Research/Harness-Reports/` if making a behaviour/perf claim
 
 ## Pull Request Process
 
@@ -109,7 +114,7 @@ See the `effect-ts-patterns` skill in `.claude/skills/` for the full coding conv
 ## Reporting Issues
 
 - **Bug reports** — open an issue at https://github.com/tylerjrbuell/reactive-agents-ts/issues
-- **Security issues** — please email directly rather than opening a public issue
+- **Security issues** — file privately via [GitHub Security Advisory](https://github.com/tylerjrbuell/reactive-agents-ts/security/advisories/new), not a public issue
 
 ## License
 

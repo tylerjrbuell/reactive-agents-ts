@@ -1,0 +1,61 @@
+name: 🐛 Bug Report
+description: Something is broken or behaves unexpectedly.
+title: "[bug] "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more reproducible the report, the faster the fix.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug. Include error messages and stack traces verbatim.
+      placeholder: "`agent.run()` throws ToolNotFoundError when..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal code or a link to a runnable repo. Use `withTestScenario` for offline repros where possible.
+      render: typescript
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package + version
+      placeholder: "reactive-agents@0.10.6 (or specific subpackage)"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options: [Anthropic, OpenAI, Google, Ollama, LiteLLM, Test, N/A]
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model (if applicable)
+      placeholder: "claude-sonnet-4-6 / gpt-4o-mini / qwen3:14b ..."
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      placeholder: "Bun 1.1.x / Node 22 / OS"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traces
+      description: Paste relevant output. Wrap with triple backticks.
+      render: shell

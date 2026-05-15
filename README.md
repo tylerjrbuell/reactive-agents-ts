@@ -769,11 +769,25 @@ Full documentation at **[docs.reactiveagents.dev](https://docs.reactiveagents.de
 -   [Architecture](https://docs.reactiveagents.dev/concepts/architecture/) -- Layer system deep dive
 -   [Cookbook](https://docs.reactiveagents.dev/cookbook/testing-agents/) -- Testing, multi-agent patterns, production deployment
 
+## Used By
+
+Reactive Agents is in early access. If you're using it in production or a research project, [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md) adding your name here, or drop a note in [Discussions](https://github.com/tylerjrbuell/reactive-agents-ts/discussions).
+
+<!-- BEGIN-USED-BY -->
+*Your team here.*
+<!-- END-USED-BY -->
+
+## Roadmap
+
+Public milestone tracker: [`ROADMAP.md`](./ROADMAP.md) — synced with internal North Star v5.0.
+Live board: [GitHub Projects — Reactive Agents Roadmap](https://github.com/users/tylerjrbuell/projects).
+
 ## Getting Help
 
 -   **Discord** -- [Join the community](https://discord.gg/Mp99vQam3Q) for questions, discussions, and support
 -   **GitHub Issues** -- [Report bugs or request features](https://github.com/tylerjrbuell/reactive-agents-ts/issues)
 -   **GitHub Discussions** -- [Ask questions and share ideas](https://github.com/tylerjrbuell/reactive-agents-ts/discussions)
+-   **Security** -- File privately via [GitHub Security Advisory](https://github.com/tylerjrbuell/reactive-agents-ts/security/advisories/new)
 
 ## License
 

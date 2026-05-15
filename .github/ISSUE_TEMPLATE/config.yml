@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://docs.reactiveagents.dev
+    about: Read the docs before filing — most "how do I" questions are answered there.
+  - name: 💬 Discussion
+    url: https://github.com/tylerjrbuell/reactive-agents-ts/discussions
+    about: Open-ended questions, ideas, and "is this a bug?" — start here.
+  - name: 🔐 Security
+    url: https://github.com/tylerjrbuell/reactive-agents-ts/security/advisories/new
+    about: Privately report a security vulnerability.

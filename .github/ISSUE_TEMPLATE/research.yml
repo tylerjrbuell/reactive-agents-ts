@@ -1,0 +1,37 @@
+name: 🔬 Research Spike
+description: Propose an investigation, ablation, or mechanism validation.
+title: "[spike] "
+labels: ["type:research", "evidence-required"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Spikes follow `wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md` — one mechanism × one failure mode × ≤2 models × one task. Findings shape the next spike, not framework marketing.
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: What do you expect to find, and why?
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method
+      description: Models, tasks, seed count, harness config. Mock vs real LLM.
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: What numbers / behaviours would confirm or kill the hypothesis?
+    validations:
+      required: true
+  - type: input
+    id: artifact
+    attributes:
+      label: Evidence artifact path
+      placeholder: "wiki/Research/Harness-Reports/YYYY-MM-DD-<topic>.md"
+    validations:
+      required: true
