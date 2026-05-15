@@ -32,12 +32,12 @@
   ],
   "exports": {
     ".": {
-      "bun": "./src/index.ts",
+      "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./killswitches": {
-      "bun": "./src/killswitches/index.ts",
+      "bun": "./dist/killswitches/index.js",
       "import": "./dist/killswitches/index.js",
       "types": "./dist/killswitches/index.d.ts"
     }
