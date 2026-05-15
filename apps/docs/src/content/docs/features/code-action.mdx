@@ -1,0 +1,47 @@
+---
+title: Code-Action Strategy
+description: LLM generates executable code that composes tools as function calls — runs in a Worker sandbox for isolation.
+sidebar:
+  order: 16
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`code-action` is the sixth reasoning strategy. Instead of calling tools one at a time in a ReAct loop, the LLM writes a single code block that orchestrates multiple tools as ordinary async function calls. The block runs in an isolated Worker-thread sandbox.
+
+## When to use
+
+- Tasks requiring multi-step numeric computation
+- Any task where tool call order is deterministic and parallelizable
+- When token efficiency matters more than step-by-step observability
+
+## Enable
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withReasoning({ defaultStrategy: "code-action" })
+  .build();
+```
+
+## How it works
+
+1. **Plan** — LLM receives TypeScript function signatures for each registered tool and writes a single async IIFE.
+2. **Execute** — The IIFE runs in a Node.js Worker thread. Tool calls are routed back to the host via `postMessage` round-trips.
+3. **Observe** — Tool call log and final return value are formatted as an observation message.
+4. **Reflect** — Verifier checks the result; if it fails, the LLM regenerates code with feedback.
+
+## Span hierarchy
+
+```
+agent:my-agent              ← AGENT span
+  code-action:plan          ← LLM span (code generation)
+  code-action:execute       ← TOOL span (sandbox run)
+```
+
+<Aside type="caution">
+`code-action` executes LLM-generated JavaScript in a Worker thread. The Worker runs inside Node.js with access to all built-in modules. Do not use with untrusted tool inputs in production without additional sandboxing.
+</Aside>
+
+## Stability
+
+`@experimental` — v0.11.1
