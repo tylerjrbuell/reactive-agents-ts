@@ -10,7 +10,37 @@ updated: 2026-05-14
 
 ---
 
-## Latest Session (2026-05-14, night)
+## Latest Session (2026-05-14, night+2)
+
+### Phase D — `code-action` strategy — COMPLETE ✅
+
+6th reasoning strategy: LLM generates TypeScript IIFE, runs in Worker-thread sandbox.
+
+**What shipped:**
+- `packages/reasoning/src/strategies/code-action.ts` — full `executeCodeAction` Effect function with plan→execute→observe→reflect loop
+- `code-action/tool-binding.ts` — `generateToolBindings(ToolSpec[])` → TS function signatures for LLM prompt
+- `code-action/sandbox-worker.ts` + `sandbox.ts` — Worker thread sandbox; tool calls route back via postMessage round-trips
+- `code-action/code-action-plan.ts` — `buildPlanPrompt` + `extractCodeBlock`
+- `code-action/code-action-observe.ts` — `formatObservationMessage`
+- `code-action/code-action-reflect.ts` — `shouldTerminate(verdict, iteration, maxIterations)`
+- `"code-action"` added to `ReasoningStrategy` union in `@reactive-agents/core`
+- `strategy-registry.ts` — registered as 7th strategy
+- **32/32 tests pass** across 6 test files; 1143/1143 reasoning tests pass (no regressions)
+- Docs: `features/code-action.mdx` (sidebar order 16, `@experimental`)
+- **9 commits**: `62f1c5a4` → `<latest>`
+
+**Key design decisions:**
+- Bypasses kernel entirely — no `runKernel`/`reactKernel` used; own plan→execute loop
+- ToolService is optional (`Effect.serviceOption`) — code-action works without tools (pure computation)
+- Tool handlers bridge via `Effect.runPromise(toolSvc.execute(...))` from Worker postMessage callbacks
+- Uses `noopVerifier` by default (code-action is its own judge); caller can inject custom verifier via `CodeActionInput.verifier`
+- Token efficiency validated: 11/11 offline tasks pass; code-action beats reactive token estimates on 10/10 pure-compute cases
+
+**Deferred to v0.11.2:** Real LLM benchmark vs reactive on qwen3:14b, ToolService fiber context safety audit for `Effect.runPromise` in Worker callback.
+
+---
+
+## Previous Latest Session (2026-05-14, night)
 
 ### `@reactive-agents/observe` — COMPLETE ✅
 
