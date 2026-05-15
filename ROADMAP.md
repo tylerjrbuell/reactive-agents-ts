@@ -5,6 +5,8 @@
 
 This roadmap is the public-facing milestone tracker. The internal authoritative plan lives in `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` (v5.0). When the two disagree, North Star wins and this doc is out of date — open an issue.
 
+**Live board:** [github.com/users/tylerjrbuell/projects/1](https://github.com/users/tylerjrbuell/projects/1) — 24+ tracked issues across 5 milestones with `Phase` and `Priority` fields.
+
 ---
 
 ## Where we are today (v0.10.6 → v0.11 in flight)

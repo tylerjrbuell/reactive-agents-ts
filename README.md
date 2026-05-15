@@ -784,7 +784,7 @@ Reactive Agents is in early access. If you're using it in production or a resear
 ## Roadmap
 
 Public milestone tracker: [`ROADMAP.md`](./ROADMAP.md) — synced with internal North Star v5.0.
-Live board: [GitHub Projects — Reactive Agents Roadmap](https://github.com/users/tylerjrbuell/projects).
+Live board: [GitHub Projects — Reactive Agents Roadmap](https://github.com/users/tylerjrbuell/projects/1).
 
 ## Getting Help
 
