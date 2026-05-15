@@ -25,6 +25,7 @@ apps/cortex/.cortex/
 
 # Git worktrees
 .worktrees/
+.claude/worktrees/
 
 # Harness reports moved to wiki/Research/Harness-Reports (May 2026 consolidation).
 # Old root path retained as guard against accidental recreation.
