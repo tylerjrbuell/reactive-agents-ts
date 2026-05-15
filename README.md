@@ -28,6 +28,7 @@ Works on local Ollama models (4B+) through frontier APIs — **same code, same f
 [![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED)](https://effect.website)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.0%20required-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-black?logo=github)](https://codespaces.new/tylerjrbuell/reactive-agents-ts?quickstart=1)
 
 [Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/Mp99vQam3Q) · [Quick Start](#quick-start) · [Features](#features) · [Comparison](#comparison) · [Architecture](#architecture) · [Packages](#packages)
 
@@ -792,6 +793,16 @@ Live board: [GitHub Projects — Reactive Agents Roadmap](https://github.com/use
 -   **GitHub Issues** -- [Report bugs or request features](https://github.com/tylerjrbuell/reactive-agents-ts/issues)
 -   **GitHub Discussions** -- [Ask questions and share ideas](https://github.com/tylerjrbuell/reactive-agents-ts/discussions)
 -   **Security** -- File privately via [GitHub Security Advisory](https://github.com/tylerjrbuell/reactive-agents-ts/security/advisories/new)
+
+## Contributors
+
+<a href="https://github.com/tylerjrbuell/reactive-agents-ts/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=tylerjrbuell/reactive-agents-ts" alt="Contributors" />
+</a>
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=tylerjrbuell/reactive-agents-ts&type=Date)](https://star-history.com/#tylerjrbuell/reactive-agents-ts&Date)
 
 ## License
 

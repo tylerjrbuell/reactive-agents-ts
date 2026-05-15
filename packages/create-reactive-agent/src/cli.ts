@@ -32,16 +32,26 @@ interface ParsedArgs {
   readonly flags: ReadonlyMap<string, string | boolean>;
 }
 
+const BOOL_FLAGS = new Set(["help", "h", "version", "v", "yes", "y"]);
+
 function parseArgs(argv: readonly string[]): ParsedArgs {
   const positional: string[] = [];
   const flags = new Map<string, string | boolean>();
-  for (const token of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i]!;
     if (token.startsWith("--")) {
       const eq = token.indexOf("=");
       if (eq > 0) {
         flags.set(token.slice(2, eq), token.slice(eq + 1));
       } else {
-        flags.set(token.slice(2), true);
+        const name = token.slice(2);
+        const next = argv[i + 1];
+        if (!BOOL_FLAGS.has(name) && next !== undefined && !next.startsWith("-")) {
+          flags.set(name, next);
+          i++;
+        } else {
+          flags.set(name, true);
+        }
       }
     } else if (token.startsWith("-") && token.length > 1) {
       flags.set(token.slice(1), true);

@@ -9,6 +9,16 @@
  * `package.json` `dependencies` — which compiles cleanly in the workspace
  * but crashes with `Cannot find package` after a real `npm install`.
  *
+ * Smoke test matrix:
+ *   1. rax --version (CLI binary resolution)
+ *   2. rax --help (all command modules load without unresolved imports)
+ *   3. rax cortex --help (lazy-load path, friendly error if cortex absent)
+ *   4. Bun: import reactive-agents umbrella (SDK import under Bun)
+ *   5. Node: import reactive-agents umbrella (ESM dynamic import under Node)
+ *   6. Node: import v0.11 standalones — observe, replay, compose (catches missing deps post-publish)
+ *   7. Node: require() reactive-agents throws helpful ESM-only error (not ERR_MODULE_NOT_FOUND)
+ *   8. create-reactive-agent: scaffold minimal → install deps → verify import resolves under Node
+ *
  * Run via:
  *   bun run scripts/test-clean-install.ts
  *
@@ -192,9 +202,6 @@ async function main() {
   run("./node_modules/.bin/rax cortex --help", projectDir);
 
   log("smoke test 4: import { ReactiveAgents } from 'reactive-agents' (under Bun)");
-  // Bun is the supported runtime for the SDK (uses bun:sqlite). Testing under
-  // Node would require a separate cjs-shim path that isn't part of the smoke
-  // contract.
   writeFileSync(
     join(projectDir, "smoke-sdk.ts"),
     `import { ReactiveAgents } from "reactive-agents";
@@ -206,6 +213,93 @@ console.log("SDK import OK");
 `,
   );
   run("bun smoke-sdk.ts", projectDir, { stdio: "inherit" });
+
+  log("smoke test 5: import reactive-agents (under Node ESM)");
+  writeFileSync(
+    join(projectDir, "smoke-node.mjs"),
+    `import { ReactiveAgents } from "reactive-agents";
+if (typeof ReactiveAgents?.create !== "function") {
+  console.error("ReactiveAgents.create is not a function");
+  process.exit(1);
+}
+console.log("Node ESM import OK");
+`,
+  );
+  run("node smoke-node.mjs", projectDir, { stdio: "inherit" });
+
+  log("smoke test 6: import v0.11 standalones (observe, replay, compose) under Node");
+  writeFileSync(
+    join(projectDir, "smoke-standalones.mjs"),
+    `import { OpenInferenceTracerLayer } from "@reactive-agents/observe";
+import { loadRecordedRun } from "@reactive-agents/replay";
+import { maxIterations } from "@reactive-agents/compose";
+if (typeof OpenInferenceTracerLayer === "undefined") { console.error("observe: OpenInferenceTracerLayer missing"); process.exit(1); }
+if (typeof loadRecordedRun !== "function") { console.error("replay: loadRecordedRun missing"); process.exit(1); }
+if (typeof maxIterations !== "function") { console.error("compose: maxIterations missing"); process.exit(1); }
+console.log("Node standalones import OK");
+`,
+  );
+  run("node smoke-standalones.mjs", projectDir, { stdio: "inherit" });
+
+  log("smoke test 7: require('reactive-agents') throws helpful ESM-only error (not ERR_MODULE_NOT_FOUND)");
+  writeFileSync(
+    join(projectDir, "smoke-cjs-require.cjs"),
+    `try {
+  require("reactive-agents");
+  console.error("Expected require() to throw — it did not");
+  process.exit(1);
+} catch (err) {
+  const msg = err && err.message ? err.message : String(err);
+  if (msg.includes("Cannot find module") || msg.includes("ERR_MODULE_NOT_FOUND")) {
+    console.error("require() threw ERR_MODULE_NOT_FOUND — cjs-shim is missing or misconfigured:", msg);
+    process.exit(1);
+  }
+  if (!msg.includes("ESM-only") && !msg.includes("import syntax")) {
+    console.error("require() threw unexpected error:", msg);
+    process.exit(1);
+  }
+  console.log("CJS require correctly throws ESM-only guidance error OK");
+}
+`,
+  );
+  run("node smoke-cjs-require.cjs", projectDir, { stdio: "inherit" });
+
+  log("smoke test 8: create-reactive-agent scaffold → install → Node ESM import");
+  // Run the CLI from the installed tarball, non-interactively
+  run(
+    `node ./node_modules/.bin/create-reactive-agent --template=minimal --provider=anthropic --pm=npm --yes scaffold-app`,
+    projectDir,
+    { stdio: "inherit" },
+  );
+  const scaffoldAppDir = join(projectDir, "scaffold-app");
+  const scaffoldPkgPath = join(scaffoldAppDir, "package.json");
+  if (!existsSync(scaffoldPkgPath)) {
+    throw new Error("create-reactive-agent did not produce scaffold-app/package.json");
+  }
+  for (const expected of ["src/index.ts", "tsconfig.json", ".env.example", ".gitignore", "README.md"]) {
+    if (!existsSync(join(scaffoldAppDir, expected))) {
+      throw new Error(`create-reactive-agent scaffold missing expected file: ${expected}`);
+    }
+  }
+  // Point reactive-agents dep to our local tarball so npm install resolves offline
+  const scaffoldPkg = JSON.parse(readFileSync(scaffoldPkgPath, "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+  if (scaffoldPkg.dependencies) {
+    if ("reactive-agents" in scaffoldPkg.dependencies) {
+      scaffoldPkg.dependencies["reactive-agents"] = tarballEntries["reactive-agents"]!;
+    }
+  }
+  writeFileSync(scaffoldPkgPath, JSON.stringify(scaffoldPkg, null, 2) + "\n");
+  run("npm install --no-audit --no-fund --silent", scaffoldAppDir, { stdio: "inherit" });
+  writeFileSync(
+    join(scaffoldAppDir, "smoke-scaffold.mjs"),
+    `import { ReactiveAgents } from "reactive-agents";
+if (typeof ReactiveAgents?.create !== "function") { console.error("scaffold: ReactiveAgents.create missing"); process.exit(1); }
+console.log("scaffold import OK");
+`,
+  );
+  run("node smoke-scaffold.mjs", scaffoldAppDir, { stdio: "inherit" });
 
   log("✓ all clean-install smoke tests passed");
 }

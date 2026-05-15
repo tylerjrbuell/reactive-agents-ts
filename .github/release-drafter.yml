@@ -1,0 +1,64 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+categories:
+  - title: '🚀 Features'
+    labels:
+      - 'feature'
+      - 'enhancement'
+  - title: '🐛 Bug Fixes'
+    labels:
+      - 'bug'
+      - 'fix'
+  - title: '🧪 Research / Mechanism'
+    labels:
+      - 'research'
+      - 'mechanism'
+  - title: '📚 Docs'
+    labels:
+      - 'documentation'
+      - 'docs'
+  - title: '🏗️ Internal'
+    labels:
+      - 'chore'
+      - 'refactor'
+      - 'test'
+      - 'ci'
+  - title: '⚠️ Breaking Changes'
+    labels:
+      - 'breaking'
+      - 'breaking-change'
+change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
+change-title-escapes: '\<*_&'
+version-resolver:
+  major:
+    labels:
+      - 'breaking'
+      - 'breaking-change'
+  minor:
+    labels:
+      - 'feature'
+      - 'enhancement'
+  patch:
+    labels:
+      - 'bug'
+      - 'fix'
+      - 'chore'
+      - 'docs'
+      - 'documentation'
+      - 'refactor'
+      - 'test'
+      - 'ci'
+  default: patch
+exclude-labels:
+  - 'skip-changelog'
+  - 'duplicate'
+  - 'invalid'
+  - 'wontfix'
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/tylerjrbuell/reactive-agents-ts/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+  **Install:** `npm install reactive-agents@$RESOLVED_VERSION`

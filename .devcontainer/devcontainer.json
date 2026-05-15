@@ -1,0 +1,53 @@
+{
+  "name": "Reactive Agents",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/shyim/devcontainers-features/bun:0": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "bun install",
+  "postAttachCommand": {
+    "welcome": "echo '\\n🚀 Reactive Agents devcontainer ready.\\n→ bun test           # 5,128+ tests\\n→ bun run build      # build all packages\\n→ bun run docs:dev   # docs site\\n→ bun run rax --help # CLI\\n\\nFirst agent: see README.md \"Quick Start\" or apps/examples/.'\n"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "biomejs.biome",
+        "oven.bun-vscode",
+        "ms-azuretools.vscode-docker",
+        "github.vscode-github-actions",
+        "github.copilot",
+        "github.copilot-chat",
+        "yzhang.markdown-all-in-one",
+        "effectful-tech.effect-vscode"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "typescript.enablePromptUseWorkspaceTsdk": true,
+        "files.eol": "\n"
+      }
+    },
+    "codespaces": {
+      "openFiles": ["README.md", "QUICK_START.md"]
+    }
+  },
+  "containerEnv": {
+    "FORCE_COLOR": "1",
+    "REACTIVE_AGENTS_DEVCONTAINER": "1"
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/node/.bun/bin"
+  },
+  "forwardPorts": [4321, 4400, 5173, 8787],
+  "portsAttributes": {
+    "4321": { "label": "Docs (Astro)" },
+    "5173": { "label": "Cortex UI (SvelteKit)" },
+    "4400": { "label": "Cortex Server (Elysia)" },
+    "8787": { "label": "Examples" }
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb"
+  }
+}

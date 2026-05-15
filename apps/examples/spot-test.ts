@@ -45,5 +45,5 @@ const result = await agent.run(
     'Fetch the last 10 commits of tylerjrbuell/reactive-agents-ts and summarize them, then synthesize the summary into a markdown report, then write the summary to a local file called ra-summary.md using the file-write tool only'
 )
 
-console.log(result.debrief)
+console.log(result.debrief?.rationale)
 await agent.dispose()

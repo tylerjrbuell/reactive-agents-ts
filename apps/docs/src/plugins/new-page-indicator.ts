@@ -42,10 +42,10 @@ function parseFrontmatter(file: string): Record<string, unknown> {
   return fm;
 }
 
-function gitFirstAdded(file: string, cwd: string): number | null {
+function gitLastModified(file: string, cwd: string): number | null {
   try {
     const iso = execSync(
-      `git log --diff-filter=A --follow --format=%cI -- "${file}" | tail -n 1`,
+      `git log --follow --format=%cI -- "${file}" | head -n 1`,
       { cwd, encoding: "utf8", shell: "/bin/bash" },
     ).trim();
     if (!iso) return null;
@@ -95,7 +95,7 @@ export function newPageIndicator(opts: Options = {}): AstroIntegration {
             continue;
           }
 
-          const addedAt = gitFirstAdded(file, repoRoot);
+          const addedAt = gitLastModified(file, repoRoot);
           if (addedAt != null && addedAt >= cutoff) {
             autoCandidates.push({ slug, addedAt });
           }
@@ -107,8 +107,8 @@ export function newPageIndicator(opts: Options = {}): AstroIntegration {
         const newSlugs = Array.from(new Set([...explicit, ...auto]));
 
         logger.info(
-          `new-page-indicator: ${newSlugs.length} new page(s) ` +
-            `(${explicit.size} explicit, ${auto.length} auto-detected ` +
+          `new-page-indicator: ${newSlugs.length} new/updated page(s) ` +
+            `(${explicit.size} explicit, ${auto.length} auto-detected by last-modified ` +
             `within ${withinDays}d, capped at ${maxAutoDetected})`,
         );
 
