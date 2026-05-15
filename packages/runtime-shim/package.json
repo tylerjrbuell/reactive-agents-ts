@@ -10,10 +10,6 @@
       "bun": "./dist/index.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    },
-    "./types": {
-      "import": "./dist/types.js",
-      "types": "./dist/types.d.ts"
     }
   },
   "scripts": {
@@ -37,6 +33,11 @@
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts.git",
     "directory": "packages/runtime-shim"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   }
