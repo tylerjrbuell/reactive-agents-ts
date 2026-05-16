@@ -184,17 +184,36 @@ All prior roadmap/phase documents are superseded:
 
 ---
 
-### NPM Version Drift Prevention — ADDED ✅ (May 5, 2026 — 8:00pm EDT)
+### Release Pipeline — REWRITTEN ✅ (2026-05-16) — CURRENT, supersedes all prior release notes
 
-**Problem:** Manual `npm publish` operations bypassed changesets, leaving main package.json versions behind npm-published versions. When changeset patch-bumps from main's lower version, it produced collisions with already-published npm versions (e.g., main bumped 0.10.2→0.10.3 while CLI was already at 0.10.3 on npm).
+**Tag-driven lockstep.** One explicit version stamps **all** ~35 public
+packages. Mechanism: `scripts/release.ts`, run by
+`.github/workflows/publish.yml` on a `vX.Y.Z` tag push.
 
-**Fix:**
-- New script `scripts/check-npm-versions.ts` queries the npm registry for every published package and fails if local version <= npm version, or if internal `@reactive-agents/*` deps drift from workspace versions
-- Wired into `.github/workflows/ci.yml` as `continue-on-error` step (surfaces drift, doesn't block unrelated commits)
-- Available locally as `bun run check:versions`
-- All packages aligned to 0.10.3 on main (matching CLI's highest npm version) so v0.10.4 release bumps cleanly
+- **Author notes:** `bun run changeset` writes `.changeset/*.md` prose. That
+  body is the only human-curated release text.
+- **Release:** `git tag vX.Y.Z && git push origin vX.Y.Z` → CI: build/test/
+  clean-install/`release:dry` gate → `release.ts` aggregates changeset bodies
+  into root `CHANGELOG.md` as `## [<version>] — <date>`, consumes them, stamps
+  all packages + root, builds, publishes in topological order (fail-fast,
+  idempotent re-run skips already-published).
+- **GitHub Release:** `publish.yml` is the **sole** author (release-drafter
+  removed). Body = the `## [<version>] — <date>` CHANGELOG section verbatim.
+- **Recovery:** "Backfill GitHub Releases" workflow (manual) recreates missing
+  releases from CHANGELOG. `publish.yml` `workflow_dispatch` re-runs a failed
+  publish.
+- **Drift is structurally impossible** — single version var stamps everything.
+  `changesets/action`, `changeset version`, the "Version Packages" PR, and the
+  drift scripts (`check-npm-versions.ts`, `check-version-sync.ts`,
+  `normalize-release-version.ts`, `resolve-workspace-deps.mjs`) are **all
+  deleted**. Do not look for them or treat their absence as a regression.
 
-**Rule going forward:** Never run `npm publish` manually. If drift occurs, run `check:versions` and bump main past npm BEFORE creating a changeset.
+**Why (historical, do not resurface):** manual `npm publish` once left
+package.json behind npm, causing changeset-bump collisions. The lockstep
+single-version design removes the entire failure class — no reconciliation
+exists because nothing can desync.
+
+Runbook: `.agents/skills/prepare-release/SKILL.md` (kept in sync).
 
 ### Eval Workflow Disabled (May 5, 2026 — 8:00pm EDT)
 
@@ -415,7 +434,7 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
 - **Skip plans for content/skill writing.** No formal implementation plan for SKILL.md or doc tasks; implement directly.
 - **Strict TypeScript — no `any` casts.** Use `unknown` + guards or proper types.
 - **Don't `rm -rf` untracked dirs with content.** Confirm before deleting any `??` directory with >5 files; git can't recover untracked content. Cost: lost `wiki/` + 3 `obsidian-vault-*` skill modules on 2026-04-24 cleanup.
-- **Always use CI workflow for changesets and publishing.** Never manually run `bun run changeset` or `npm publish`. Commit code changes, push to GitHub, let CI handle versioning and coordinated releases. Manual publishes create version skew between git and npm (learned May 5 cortex publish).
+- **Release = author changeset, then push a tag.** `bun run changeset` IS the required manual step (writes `.changeset/*.md` notes). Then `git tag vX.Y.Z && git push origin vX.Y.Z` triggers CI publish. Never manually run `npm publish` or `changeset version` — CI's `release.ts` owns versioning/publishing. See the Release Pipeline section above.
 - **Workspace runs from `src/` under Bun.** Every `packages/*` declares `"bun": "./src/index.ts"` first in `exports`. Edits picked up at next `bun run`, no rebuild needed. Rebuild only for: (a) npm-publish validation, (b) Node-runtime consumers, (c) `.d.ts` refresh.
 - **Control pillar — every harness primitive must be developer-overridable.** Vision Pillar 1. New behaviors ship with: `defaultFoo` preserving prior behavior, `KernelInput.foo?: FooHookType` injection field, public type export. Hardcoded harness logic = black box = anti-pattern.
 - **Research discipline — spike-validated harness changes only.** Read `00-RESEARCH-DISCIPLINE.md` for the 12 rules. Notable: spike validates ONE mechanism × ONE failure-mode × ≤2 models × ONE task (Rule 11); single-spike findings shape the next spike, not harness-level decisions.
