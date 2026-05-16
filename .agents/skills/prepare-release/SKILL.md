@@ -1,203 +1,144 @@
 ---
 name: prepare-release
-description: Prepare a Reactive Agents release. Validates build and tests, audits documentation, generates changeset, and writes a consistent changelog entry. Use when cutting a new release version.
+description: Use when cutting, tagging, or publishing a new Reactive Agents version, or when a release/publish run fails and needs resuming. Covers the tag-driven lockstep flow (scripts/release.ts + .github/workflows/publish.yml).
 argument-hint: [vX.Y.Z]
 ---
 
 # Prepare Release: $ARGUMENTS
 
-## Step 0: Gather Release Context (Wiki Workflow Orient Step)
+## Mental model — read this first
 
-Before generating release notes, query the wiki for what shipped in this cycle. See [[wiki/Development/Wiki-Workflow|Wiki-Workflow.md]].
+Release is **tag-driven lockstep**. One version number stamps **all** public
+packages. The release mechanism is `scripts/release.ts`, run by
+`.github/workflows/publish.yml` when you push a `vX.Y.Z` tag.
+
+- **Changesets are notes, not the driver.** `bun run changeset` only writes
+  `.changeset/*.md` prose. `release.ts` aggregates those into root
+  `CHANGELOG.md` under `## <version>` and deletes them at release time.
+- **Do NOT hand-edit `CHANGELOG.md`.** It is generated. Curate the wording in
+  the changeset `.md` body instead.
+- **No `docs/releases/`.** That directory was eliminated. The GitHub Release
+  (auto-created from the CHANGELOG section) is the announcement.
+- **No changesets/action, no "Version Packages" PR.** That flow was removed.
+  Pushing the tag is the entire trigger.
+- **Drift is impossible by construction** — there is nothing to reconcile and
+  no `check:versions` / `check-npm-versions` step anymore. Don't look for them.
+
+## Step 0: Gather release context (wiki orient)
 
 ```
 claude-obsidian:wiki-query "completed plans since <last-release-date>"
 claude-obsidian:wiki-query "debriefs <package-or-feature-area>"
 ```
+High-volume cycle (>20 plans/debriefs): `claude-obsidian:wiki-fold wiki/Research/Debriefs` first, then draft from the fold.
 
-**For high-volume release cycles** (>20 plans/debriefs), roll up first:
+Sources: `wiki/Planning/Planning-Index.md`, `wiki/Research/Debriefs/`, `wiki/Decisions/Decision Index.md`, `wiki/Failure-Modes/`, `wiki/Issues/Running Issues Log.md`.
 
-```
-claude-obsidian:wiki-fold wiki/Research/Debriefs
-claude-obsidian:wiki-fold wiki/Planning/Implementation-Plans
-```
-
-The fold output gives you compact summaries to draft release notes from. Originals are preserved.
-
-**Wiki sources for release notes:**
-- `wiki/Planning/Planning-Index.md` — completed plans (filter by `completed: <date-range>`)
-- `wiki/Research/Debriefs/` — engineering debriefs (one per significant feature)
-- `wiki/Decisions/Decision Index.md` — architectural decisions affecting users
-- `wiki/Failure-Modes/` — newly mitigated failure modes
-- `wiki/Issues/Running Issues Log.md` — resolved blockers
-
-The `wiki/Planning/active-plans.base` view filters to active plans; `wiki/Experiments/by-verdict.base` shows mechanism validation state for the release.
-
-## Step 1: Pre-Flight Gate — All Must Pass
+## Step 1: Pre-flight gate — all must pass
 
 ```bash
-# 1. Full build
-bun run build
-# Expected: all packages build without errors
-
-# 2. Full test suite with timeout
-bun test --timeout 15000
-# Expected: all tests pass, 0 failures
-
-# 3. Type checking
-bun run typecheck
-# Expected: 0 errors
+bun run build       # all packages, 0 errors
+bun test            # 0 failures
+bun run typecheck   # 0 errors
 ```
+**Hard stop on any failure.** Fix before continuing.
 
-**Hard stop:** Do not proceed if any of these fail. Fix failures before continuing.
-
-## Step 2: Identify Changes Since Last Release
+## Step 2: Identify changes since last release
 
 ```bash
-# Find last release tag
-git describe --tags --abbrev=0
-
-# List all commits since last tag
-git log $(git describe --tags --abbrev=0)..HEAD --oneline
-
-# List all changed packages
-git diff $(git describe --tags --abbrev=0)..HEAD --name-only | grep "^packages/" | cut -d/ -f2 | sort -u
+git describe --tags --abbrev=0                                   # last tag
+git log $(git describe --tags --abbrev=0)..HEAD --oneline        # commits
+git diff $(git describe --tags --abbrev=0)..HEAD --name-only | grep '^packages/' | cut -d/ -f2 | sort -u
 ```
 
-## Step 3: Audit Documentation
+## Step 3: Audit documentation
 
-Run the `update-docs` skill against all changes since last release. Verify:
+Run the `update-docs` skill against changes since last release. Verify AGENTS.md / README.md test-count and package-count claims still match reality. Verify changed public APIs (`git diff <lasttag>..HEAD -- packages/*/src/index.ts | grep '^+export'`) are documented. Fix stale docs before proceeding.
 
-```bash
-# Current test count in docs matches reality
-bun test --timeout 15000 2>&1 | grep "tests passed"
-# Compare against what AGENTS.md and README.md say
-
-# Current package count matches
-ls packages/ | wc -l
-# Compare against AGENTS.md package count
-grep -n "packages" AGENTS.md | grep -i "22\|count\|total" | head -5
-
-# API signatures in docs match current code
-# (search for any changed public APIs and verify docs reference current signatures)
-git diff $(git describe --tags --abbrev=0)..HEAD -- packages/*/src/index.ts | grep "^+export"
-```
-
-Fix any documentation that is stale before proceeding.
-
-## Step 4: Create Changeset
+## Step 4: Author the change notes (changeset)
 
 ```bash
 bun run changeset
 ```
-
-When prompted, choose the semver bump:
+Choose the bump for the **note's** semver intent:
 
 | Change type | Bump |
-|------------|------|
-| Bug fix, internal refactor, perf improvement | `patch` |
-| New feature, new package, new builder method | `minor` |
-| Breaking API change, removed export, behavioral change | `major` |
+|---|---|
+| Bug fix, internal refactor, perf | `patch` |
+| New feature / package / builder method | `minor` |
+| Breaking API change, removed export | `major` |
 
-Select affected packages. Write a one-sentence summary of the change for the changeset.
+The changeset `.md` **body becomes the public changelog text verbatim** (its
+frontmatter is stripped). Write it as the user-facing note: what changed, which
+package, migration if breaking. This is the only place you curate prose.
 
-## Step 5: Write the Changelog Entry
+> Lockstep note: every public package ships at the same tag version regardless
+> of per-changeset bump. The bump type informs the note; it does not produce
+> independent package versions.
 
-Add a new entry at the top of `CHANGELOG.md` using this mandatory template:
+## Step 5: Decide the version number
 
-```markdown
-## vX.Y.Z — YYYY-MM-DD
+You choose the explicit version — it is the git tag, the single source of
+truth. There is no tool that computes it for you (by design).
 
-### Highlights
-
-[1-3 sentences describing the theme and most important changes of this release.
-What problem does this release primarily solve? What is the headline capability?]
-
-### Breaking Changes
-
-[List each breaking change with migration guidance. If none, write "None."]
-
-- `MethodName` renamed to `NewMethodName` — update all callers
-- `PackageName` now requires `newField` in config
-
-### New Features
-
-[Each item: what it does, which package, brief usage example if non-obvious]
-
-- **`featureName`** (`@reactive-agents/package`): Description of what it does.
-  ```typescript
-  // Usage example
-  ```
-
-### Bug Fixes
-
-[Each item: what was broken, what the fix is, affected package]
-
-- Fixed `ServiceName.method()` returning stale state after concurrent updates (`@reactive-agents/package`)
-
-### Internal / Architecture
-
-[Significant internal changes that don't affect the public API but matter for contributors]
-
-- Refactored `kernel-runner.ts` into composable phase pipeline
-- Dead code sections isolated behind feature flag
-
-### Migration Guide
-
-[Only if there are breaking changes. Step-by-step migration for each breaking change.]
-
-#### Migrating from vX.Y.Z-1
-
-**If you use `oldMethodName`:** Replace with `newMethodName`. The signature is identical.
-```
-
-> **Repo note:** This monorepo normally uses Changesets to generate `CHANGELOG.md` on the version PR. Use Step 4 (`bun run changeset`) as the primary release mechanism; treat manual `CHANGELOG.md` edits here as optional documentation prep only when not using the automated flow.
-
-## Step 6: Write Release Overview Document
-
-Create `docs/releases/vX.Y.Z.md` with the same content as the changelog entry. This file serves as the standalone release announcement.
+## Step 6: Dry-run gate (no mutation, no npm)
 
 ```bash
-mkdir -p docs/releases
-# Write the file using the template above
+bun run release:dry <version>          # e.g. bun run release:dry 0.11.0
 ```
+Confirms package discovery (expect ~35 public), topological publish order,
+already-published classification, and changeset note count. Mutates nothing.
 
-## Step 7: Update Agent Memory
-
-Update `.agents/MEMORY.md` with the new version status:
-
-```markdown
-## Current Status ([Month] [Day], [Year])
-- **vX.Y.Z released** — [one-line summary of what shipped]
-```
-
-Also update Claude project memory in `~/.claude/projects/*/memory/` if maintained.
-
-## Step 8: Final Checklist
+Optional full local confirm (stamps + builds, stops before npm):
 
 ```bash
-# Verify changeset file exists
-ls .changeset/
-
-# Confirm CHANGELOG.md has the new entry at top
-head -20 CHANGELOG.md
-
-# Confirm release doc exists
-ls docs/releases/
-
-# Final full test run
-bun test --timeout 15000
-
-# Tag if ready (only after all checks pass)
-git tag vX.Y.Z
+bun scripts/release.ts <version> --no-publish
+git restore .            # revert stamped versions + CHANGELOG + consumed changesets
 ```
 
-- [ ] All tests pass
-- [ ] Build succeeds
-- [ ] Typecheck clean
-- [ ] AGENTS.md test/package counts current
-- [ ] README.md accurate
-- [ ] Changeset file created
-- [ ] CHANGELOG.md has new entry with mandatory template sections (or changeset will generate it)
-- [ ] `docs/releases/vX.Y.Z.md` created
-- [ ] `.agents/MEMORY.md` updated with release status
+## Step 7: Tag and push — this triggers the release
+
+```bash
+git tag v<version>
+git push origin v<version>          # e.g. git push origin v0.11.0
+```
+`publish.yml` then: install → build → test → clean-install smoke →
+`release:dry` gate → `release.ts <version>` (aggregate CHANGELOG, consume
+changesets, stamp all packages + root, build, publish in dependency order,
+fail-fast) → create GitHub Release from the `## <version>` CHANGELOG section.
+
+Manual fallback / resume: GitHub → Actions → "Publish to npm" →
+`workflow_dispatch`, enter the version. Re-running is safe — already-published
+packages are skipped (idempotent), so a partial failure resumes cleanly after
+you fix the cause.
+
+## Step 8: Post-release — update memory
+
+```markdown
+## Current Status (<Month> <Day>, <Year>)
+- **v<version> released** — <one-line summary>
+```
+Update `.agents/MEMORY.md` AND Claude project memory under
+`~/.claude/projects/*/memory/` (keep both in sync — other agents read
+`.agents/MEMORY.md`).
+
+## Final checklist
+
+- [ ] Build / test / typecheck green (Step 1)
+- [ ] Docs audited, AGENTS.md & README counts current (Step 3)
+- [ ] Changeset authored with user-facing prose (Step 4)
+- [ ] `release:dry <version>` clean (Step 6)
+- [ ] Tag pushed; "Publish to npm" workflow green (Step 7)
+- [ ] GitHub Release present with notes
+- [ ] `.agents/MEMORY.md` + Claude memory updated (Step 8)
+
+## Common mistakes
+
+| Mistake | Reality |
+|---|---|
+| Hand-editing `CHANGELOG.md` | `release.ts` generates it; manual edits collide. Edit the changeset `.md` instead. |
+| Creating `docs/releases/vX.Y.Z.md` | `docs/` was eliminated — that's an orphan file. The GitHub Release is the announcement. |
+| Waiting for a "Version Packages" PR | changesets/action was removed. Pushing the tag is the whole trigger. |
+| `git tag` without `git push origin <tag>` | The tag push is what fires CI. A local tag releases nothing. |
+| Looking for `check:versions` / drift scripts | Deleted — drift is structurally impossible in lockstep. |
+| Running `release.ts` with no version arg | It requires an explicit semver and exits otherwise. |
