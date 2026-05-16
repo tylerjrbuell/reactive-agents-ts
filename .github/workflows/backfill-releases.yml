@@ -42,17 +42,26 @@ jobs:
                     version="${tag#v}"
                     tmp="/tmp/release-${tag}.md"
 
-                    # Extract the section for this version. Matches the uniform
-                    # `## [<version>] — <date>` headers (and tolerates an
-                    # optional bracket / legacy hyphen date). Dots are escaped
-                    # so 0.1.0 does not match 0x1y0, and a trailing non-digit
-                    # boundary stops 0.1.0 matching 0.1.05. Prints from the
-                    # header until the next `## ` header, then stops — no
-                    # sed '$d' last-line trim, so the final section in the file
-                    # is extracted correctly.
-                    ver_re="$(printf '%s' "$version" | sed 's/\./\\./g')"
-                    awk -v re="^## \\[?${ver_re}\\]?([^0-9]|\$)" '
-                      $0 ~ re { grab = 1; print; next }
+                    # Extract this version's section. Regex-free on purpose:
+                    # passing a regex via `awk -v` mangles backslashes, so we
+                    # match structurally — strip an optional leading `[` after
+                    # `## `, then require an exact literal version match
+                    # followed by a boundary (`]`, space, or end-of-line). This
+                    # handles `## [<v>] — <date>`, legacy `## [<v>] - <date>`,
+                    # and bare `## <v>`, while 0.1.0 will not match 0.1.05 or
+                    # [Unreleased]. Prints from the header until the next `## `
+                    # header (exclusive); no sed '$d', so the final section in
+                    # the file extracts correctly.
+                    awk -v ver="$version" '
+                      function isHeader(line,   s, n) {
+                        if (line !~ /^## /) return 0
+                        s = substr(line, 4)
+                        sub(/^\[/, "", s)
+                        if (substr(s, 1, length(ver)) != ver) return 0
+                        n = substr(s, length(ver) + 1, 1)
+                        return (n == "" || n == "]" || n == " ")
+                      }
+                      isHeader($0) { grab = 1; print; next }
                       grab && /^## / { exit }
                       grab { print }
                     ' CHANGELOG.md > "$tmp"
