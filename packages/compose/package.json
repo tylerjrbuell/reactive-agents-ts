@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/compose",
-  "version": "0.10.6",
+  "version": "1.0.0",
   "description": "Prebuilt killswitch compositions for reactive agents",
   "type": "module",
   "scripts": {

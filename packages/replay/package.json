@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/replay",
-  "version": "0.10.6",
+  "version": "1.0.0",
   "description": "Deterministic re-run of recorded reactive-agent traces with prompt/model overrides",
   "type": "module",
   "scripts": {

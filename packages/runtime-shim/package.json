@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/runtime-shim",
-  "version": "0.10.6",
+  "version": "1.0.0",
   "type": "module",
   "description": "Cross-runtime adapter — unified API for Bun and Node.js fast paths",
   "main": "./dist/index.js",

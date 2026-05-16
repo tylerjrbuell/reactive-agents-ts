@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/cortex",
-  "version": "0.10.6",
+  "version": "1.0.0",
   "type": "module",
   "description": "Cortex companion studio — visual UI + API for inspecting and managing reactive-agents in real time",
   "keywords": [
