@@ -63,6 +63,7 @@ import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../act/tool-execution.js";
 import {
   transitionState,
+  asKernelStateLike,
   type KernelState,
   type KernelContext,
   type KernelMessage,
@@ -358,7 +359,7 @@ export function handleThinking(
           pipeline.transform('prompt.system', rawSystemPrompt ?? "", {
             iteration: state.iteration,
             phase: 'think',
-            state,
+            state: asKernelStateLike(state),
             strategy,
           })
         )) ?? rawSystemPrompt
@@ -392,7 +393,7 @@ export function handleThinking(
         pipeline.transform('nudge.loop-detected', defaultNudge, {
           iteration: state.iteration,
           phase: 'think',
-          state,
+          state: asKernelStateLike(state),
           strategy,
           trigger: 'loop-detector',
           severity: 'warn',

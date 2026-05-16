@@ -42,10 +42,12 @@ import {
 } from "../decide/arbitrator.js";
 import {
   transitionState,
+  asKernelStateLike,
   type KernelState,
   type KernelContext,
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
+import { runPhaseHooks } from "../../../kernel/loop/phase-hooks.js";
 import { planNextMoveBatches } from "../act/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
@@ -1024,15 +1026,12 @@ export function handleActing(
       const pipeline = input.harnessPipeline;
 
       // 'before act' hooks — may abort iteration
-      if (pipeline) {
-        const beforeActHooks = pipeline.collectPhaseHooks('before', 'act');
-        for (const hook of beforeActHooks) {
-          const result = yield* Effect.promise(() =>
-            hook({ phase: 'act', iteration: state.iteration, state })
-          );
-          if (result && typeof result === 'object' && 'abort' in result) {
-            return { ...state, status: result.abort === 'terminate' ? 'failed' : 'done' };
-          }
+      {
+        const ctrl = yield* Effect.promise(() =>
+          runPhaseHooks(pipeline, 'before', 'act', state.iteration, state)
+        );
+        if (ctrl) {
+          return { ...state, status: ctrl.abort === 'terminate' ? 'failed' : 'done' };
         }
       }
 
@@ -1044,7 +1043,7 @@ export function handleActing(
               pipeline.transform('message.tool-result', msg as KernelMessageLike, {
                 iteration: state.iteration,
                 phase: 'act',
-                state,
+                state: asKernelStateLike(state),
                 strategy: state.strategy,
                 toolName: msg.toolName,
                 callId: msg.toolCallId,
@@ -1070,15 +1069,12 @@ export function handleActing(
       const hasActGuidance = actGuidance.actReminder !== undefined || actGuidance.errorRecovery !== undefined;
 
       // 'after act' hooks
-      if (pipeline) {
-        const afterActHooks = pipeline.collectPhaseHooks('after', 'act');
-        for (const hook of afterActHooks) {
-          const result = yield* Effect.promise(() =>
-            hook({ phase: 'act', iteration: state.iteration, state })
-          );
-          if (result && typeof result === 'object' && 'abort' in result) {
-            return { ...state, status: result.abort === 'terminate' ? 'failed' : 'done' };
-          }
+      {
+        const ctrl = yield* Effect.promise(() =>
+          runPhaseHooks(pipeline, 'after', 'act', state.iteration, state)
+        );
+        if (ctrl) {
+          return { ...state, status: ctrl.abort === 'terminate' ? 'failed' : 'done' };
         }
       }
 

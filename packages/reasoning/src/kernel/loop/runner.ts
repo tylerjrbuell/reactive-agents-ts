@@ -38,6 +38,7 @@ import {
 import { evaluateStrategySwitch, buildHandoff } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
+import { runPhaseHooks } from "./phase-hooks.js";
 import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
 // Sprint 3.3 — Sole Termination Authority: dispatcher-early-stop now flows
 // through the Arbitrator so the veto applies (catches "framework giving
@@ -432,28 +433,7 @@ function getToolFailureRecovery(
 }
 
 // ── Phase hooks helper ─────────────────────────────────────────────────────────
-
-/**
- * Runs before/after phase hooks; returns abort signal if any hook requests it.
- * Hooks are collected from the harness pipeline and executed in registration order.
- */
-async function runPhaseHooks(
-  pipeline: HarnessPipeline | undefined,
-  kind: 'before' | 'after',
-  phase: Phase,
-  iteration: number,
-  state: Readonly<KernelState>,
-): Promise<{ abort: 'stop' | 'terminate'; reason?: string } | undefined> {
-  if (!pipeline) return undefined;
-  const hooks = pipeline.collectPhaseHooks(kind, phase);
-  for (const hook of hooks) {
-    const result = await hook({ phase, iteration, state });
-    if (result && typeof result === 'object' && 'abort' in result) {
-      return result as { abort: 'stop' | 'terminate'; reason?: string };
-    }
-  }
-  return undefined;
-}
+// `runPhaseHooks` moved to ./phase-hooks.js (shared with act.ts).
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 

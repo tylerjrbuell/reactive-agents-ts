@@ -20,7 +20,17 @@ import type {
   ToolElaborationInjectionConfig,
   NextMovesPlanningConfig,
 } from "../../kernel/capabilities/act/tool-gating.js";
-import type { HarnessPipeline } from "@reactive-agents/core";
+import type { HarnessPipeline, KernelStateLike } from "@reactive-agents/core";
+
+// ── Cross-package state bridge ───────────────────────────────────────────────
+// `KernelStateLike` (core) is a deliberately loose structural type that avoids
+// a core→reasoning circular dependency: its `meta` is `Readonly<Record<string,
+// unknown>>`, which the concrete `KernelState.meta` interface is not structurally
+// assignable to. This single sanctioned cast is the boundary adapter for all
+// harness-pipeline ctx fields (phase hooks, tag transforms). Use this instead
+// of scattering `as any` at call sites.
+export const asKernelStateLike = (s: Readonly<KernelState>): Readonly<KernelStateLike> =>
+  s as unknown as Readonly<KernelStateLike>;
 
 // ── Kernel Status ────────────────────────────────────────────────────────────
 
