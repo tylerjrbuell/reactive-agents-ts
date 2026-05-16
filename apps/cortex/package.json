@@ -68,7 +68,7 @@
     "@reactive-agents/reactive-intelligence": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "tsup": "^8.5.1",
     "@types/bun": "latest"
   }

@@ -19,7 +19,7 @@
     "test:node": "node --experimental-strip-types --test tests/node.test.ts"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.3",
     "bun-types": "latest",
     "@types/node": "^22.10.0"
   },

@@ -38,7 +38,7 @@
       "devDependencies": {
         "@reactive-agents/benchmarks": "workspace:*",
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "@reactive-agents/cortex": "workspace:*",
@@ -51,21 +51,21 @@
       "name": "@reactive-agents/cortex",
       "version": "0.10.6",
       "dependencies": {
-        "@reactive-agents/core": "0.10.2",
-        "@reactive-agents/gateway": "0.10.2",
-        "@reactive-agents/llm-provider": "0.10.2",
-        "@reactive-agents/memory": "0.10.2",
-        "@reactive-agents/observability": "0.10.2",
-        "@reactive-agents/reactive-intelligence": "0.10.2",
-        "@reactive-agents/runtime": "0.10.2",
-        "@reactive-agents/tools": "0.10.2",
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/gateway": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/memory": "workspace:*",
+        "@reactive-agents/observability": "workspace:*",
+        "@reactive-agents/reactive-intelligence": "workspace:*",
+        "@reactive-agents/runtime": "workspace:*",
+        "@reactive-agents/tools": "workspace:*",
         "effect": "^3.10.0",
         "elysia": "^1.1.0",
       },
       "devDependencies": {
         "@types/bun": "latest",
         "tsup": "^8.5.1",
-        "typescript": "^5.9.3",
+        "typescript": "^6.0.3",
       },
     },
     "apps/cortex/ui": {
@@ -93,7 +93,7 @@
         "svelte": "^5.16.0",
         "svelte-check": "^4.1.0",
         "tailwindcss": "^3.4.17",
-        "typescript": "^5.7.2",
+        "typescript": "^6.0.3",
         "vite": "^6.0.0",
       },
     },
@@ -140,7 +140,7 @@
       },
       "devDependencies": {
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "apps/meta-agent": {
@@ -153,7 +153,7 @@
       },
       "devDependencies": {
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/a2a": {
@@ -167,7 +167,7 @@
         "@reactive-agents/identity": "workspace:*",
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "@reactive-agents/identity": ">=0.7.0",
@@ -202,7 +202,7 @@
         "ai": "^4.0",
         "bun-types": "latest",
         "llamaindex": "^0.8",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
         "zod": "^3.23",
       },
     },
@@ -216,7 +216,7 @@
       },
       "devDependencies": {
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -224,13 +224,13 @@
     },
     "packages/compose": {
       "name": "@reactive-agents/compose",
-      "version": "0.1.0",
+      "version": "0.10.6",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/core": {
@@ -242,7 +242,7 @@
       },
       "devDependencies": {
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -260,7 +260,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -268,14 +268,14 @@
     },
     "packages/create-reactive-agent": {
       "name": "create-reactive-agent",
-      "version": "0.11.0",
+      "version": "0.10.6",
       "bin": {
         "create-reactive-agent": "./dist/cli.js",
       },
       "devDependencies": {
         "bun-types": "latest",
         "tsup": "*",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/diagnose": {
@@ -291,7 +291,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "tsup": "*",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/eval": {
@@ -305,7 +305,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -320,7 +320,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -336,7 +336,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -351,7 +351,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -367,7 +367,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -385,7 +385,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -418,7 +418,7 @@
         "bun-types": "latest",
         "effect": "^3.10.0",
         "ollama": "^0.6.3",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "optionalDependencies": {
         "@anthropic-ai/sdk": "^0.30.0",
@@ -440,7 +440,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -464,7 +464,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -472,7 +472,7 @@
     },
     "packages/observe": {
       "name": "@reactive-agents/observe",
-      "version": "0.11.0",
+      "version": "0.10.6",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
@@ -484,7 +484,7 @@
       "devDependencies": {
         "@opentelemetry/sdk-trace-base": "^1.30.1",
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/orchestration": {
@@ -500,7 +500,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -515,7 +515,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -523,7 +523,7 @@
     },
     "packages/react": {
       "name": "@reactive-agents/react",
-      "version": "0.10.5",
+      "version": "0.10.6",
       "devDependencies": {
         "@types/react": "^18.0.0",
         "tsup": "^8.0.0",
@@ -541,28 +541,28 @@
         "reactive-agents": "bin/rax.js",
       },
       "dependencies": {
-        "@reactive-agents/a2a": "0.10.2",
-        "@reactive-agents/cli": "0.10.2",
-        "@reactive-agents/core": "0.10.2",
-        "@reactive-agents/cost": "0.10.2",
-        "@reactive-agents/eval": "0.10.2",
-        "@reactive-agents/guardrails": "0.10.2",
-        "@reactive-agents/identity": "0.10.2",
-        "@reactive-agents/interaction": "0.10.2",
-        "@reactive-agents/llm-provider": "0.10.2",
-        "@reactive-agents/memory": "0.10.2",
-        "@reactive-agents/observability": "0.10.2",
-        "@reactive-agents/orchestration": "0.10.2",
-        "@reactive-agents/prompts": "0.10.2",
-        "@reactive-agents/reasoning": "0.10.2",
-        "@reactive-agents/runtime": "0.10.2",
-        "@reactive-agents/tools": "0.10.2",
-        "@reactive-agents/verification": "0.10.2",
+        "@reactive-agents/a2a": "workspace:*",
+        "@reactive-agents/cli": "workspace:*",
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/cost": "workspace:*",
+        "@reactive-agents/eval": "workspace:*",
+        "@reactive-agents/guardrails": "workspace:*",
+        "@reactive-agents/identity": "workspace:*",
+        "@reactive-agents/interaction": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/memory": "workspace:*",
+        "@reactive-agents/observability": "workspace:*",
+        "@reactive-agents/orchestration": "workspace:*",
+        "@reactive-agents/prompts": "workspace:*",
+        "@reactive-agents/reasoning": "workspace:*",
+        "@reactive-agents/runtime": "workspace:*",
+        "@reactive-agents/tools": "workspace:*",
+        "@reactive-agents/verification": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -580,7 +580,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -601,7 +601,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -609,7 +609,7 @@
     },
     "packages/replay": {
       "name": "@reactive-agents/replay",
-      "version": "0.11.0",
+      "version": "0.10.6",
       "dependencies": {
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/tools": "workspace:*",
@@ -618,7 +618,7 @@
       },
       "devDependencies": {
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/runtime": {
@@ -648,7 +648,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -656,11 +656,11 @@
     },
     "packages/runtime-shim": {
       "name": "@reactive-agents/runtime-shim",
-      "version": "0.11.0",
+      "version": "0.10.6",
       "devDependencies": {
         "@types/node": "^22.10.0",
         "bun-types": "latest",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
     },
     "packages/scenarios": {
@@ -678,7 +678,7 @@
     },
     "packages/svelte": {
       "name": "@reactive-agents/svelte",
-      "version": "0.10.5",
+      "version": "0.10.6",
       "devDependencies": {
         "svelte": "^5.0.0",
         "tsup": "^8.0.0",
@@ -692,16 +692,16 @@
       "name": "@reactive-agents/testing",
       "version": "0.10.6",
       "dependencies": {
-        "@reactive-agents/core": "0.10.2",
-        "@reactive-agents/llm-provider": "0.10.2",
-        "@reactive-agents/runtime": "0.10.2",
-        "@reactive-agents/tools": "0.10.2",
-        "@reactive-agents/trace": "0.10.2",
+        "@reactive-agents/core": "workspace:*",
+        "@reactive-agents/llm-provider": "workspace:*",
+        "@reactive-agents/runtime": "workspace:*",
+        "@reactive-agents/tools": "workspace:*",
+        "@reactive-agents/trace": "workspace:*",
       },
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -719,7 +719,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -735,7 +735,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "tsup": "*",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -752,7 +752,7 @@
       "devDependencies": {
         "bun-types": "latest",
         "effect": "^3.10.0",
-        "typescript": "^5.7.0",
+        "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "effect": "^3.10.0",
@@ -760,7 +760,7 @@
     },
     "packages/vue": {
       "name": "@reactive-agents/vue",
-      "version": "0.10.5",
+      "version": "0.10.6",
       "devDependencies": {
         "tsup": "^8.0.0",
         "typescript": "^6.0.0",
@@ -4178,79 +4178,43 @@
 
     "@reactive-agents/a2a/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/a2a/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/benchmarks/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/benchmarks/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/channels/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/channels/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/cli/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/cli/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/compose/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/compose/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/core/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/core/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
-    "@reactive-agents/cortex/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
-    "@reactive-agents/cortex-ui/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "@reactive-agents/cortex/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 
     "@reactive-agents/cost/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/cost/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/diagnose/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/diagnose/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/eval/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/eval/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
-    "@reactive-agents/examples/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "@reactive-agents/examples/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
     "@reactive-agents/gateway/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/gateway/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/guardrails/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/guardrails/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/health/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/health/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/identity/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/identity/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/interaction/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/interaction/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/llm-provider/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/llm-provider/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/memory/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/memory/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
-    "@reactive-agents/meta-agent/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "@reactive-agents/meta-agent/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
     "@reactive-agents/observability/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/observability/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/observe/@opentelemetry/exporter-trace-otlp-http": ["@opentelemetry/exporter-trace-otlp-http@0.57.2", "", { "dependencies": { "@opentelemetry/core": "1.30.1", "@opentelemetry/otlp-exporter-base": "0.57.2", "@opentelemetry/otlp-transformer": "0.57.2", "@opentelemetry/resources": "1.30.1", "@opentelemetry/sdk-trace-base": "1.30.1" }, "peerDependencies": { "@opentelemetry/api": "^1.3.0" } }, "sha512-sB/gkSYFu+0w2dVQ0PWY9fAMl172PKMZ/JrHkkW8dmjCL0CYkmXeE+ssqIL/yBUTPOvpLIpenX5T9RwXRBW/3g=="],
 
@@ -4258,49 +4222,27 @@
 
     "@reactive-agents/observe/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/observe/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/orchestration/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/orchestration/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/prompts/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/prompts/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/reactive-intelligence/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/reactive-intelligence/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/reasoning/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/reasoning/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/replay/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/replay/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@reactive-agents/runtime/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/runtime/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/runtime-shim/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/runtime-shim/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
-    "@reactive-agents/testing/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "@reactive-agents/testing/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
     "@reactive-agents/tools/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/tools/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/trace/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "@reactive-agents/trace/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "@reactive-agents/verification/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
-
-    "@reactive-agents/verification/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@smithy/eventstream-codec/@smithy/types": ["@smithy/types@1.2.0", "", { "dependencies": { "tslib": "^2.5.0" } }, "sha512-z1r00TvBqF3dh4aHhya7nz1HhvCg4TRmw51fjMrh5do3h+ngSstt/yKlNbHeb9QxJmFbmN8KEVSWgb1bRvfEoA=="],
 
@@ -4402,8 +4344,6 @@
 
     "create-reactive-agent/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
-    "create-reactive-agent/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
-
     "csso/css-tree": ["css-tree@2.2.1", "", { "dependencies": { "mdn-data": "2.0.28", "source-map-js": "^1.0.1" } }, "sha512-OA0mILzGc1kCOCSJerOeqDxDQ4HOh+G8NbOJFOTgOCzpw7fCBubk0fEyxp8AgOL/jvLgYA/uV0cMbe43ElF1JA=="],
 
     "d3-dsv/commander": ["commander@7.2.0", "", {}, "sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw=="],
@@ -4492,7 +4432,7 @@
 
     "rc/strip-json-comments": ["strip-json-comments@2.0.1", "", {}, "sha512-4gB8na07fecVVkOI6Rs4e7T6NOTki5EmL7TUduTs6bu3EdnSycntVJ4re8kgZA+wx9IueI2Y11bfbgwtzuE0KQ=="],
 
-    "reactive-agents/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+    "reactive-agents/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
     "read-cache/pify": ["pify@2.3.0", "", {}, "sha512-udgsAY+fTnvv7kI7aaxbqwWNb0AHiB0qBO89PZKPkoTmGOgdbrHDKD+0B2X4uTfJ/FT1R09r9gTsjUjNJotuog=="],
 
@@ -4808,11 +4748,15 @@
 
     "@reactive-agents/core/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
+    "@reactive-agents/cortex/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+
     "@reactive-agents/cost/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
     "@reactive-agents/diagnose/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
     "@reactive-agents/eval/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
+
+    "@reactive-agents/examples/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
     "@reactive-agents/gateway/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
@@ -4827,6 +4771,8 @@
     "@reactive-agents/llm-provider/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
     "@reactive-agents/memory/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
+
+    "@reactive-agents/meta-agent/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
     "@reactive-agents/observability/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
@@ -4851,6 +4797,8 @@
     "@reactive-agents/runtime-shim/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
     "@reactive-agents/runtime/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
+
+    "@reactive-agents/testing/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
     "@reactive-agents/tools/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
 
@@ -4992,6 +4940,8 @@
 
     "protobufjs/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
+    "reactive-agents/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
+
     "read-yaml-file/js-yaml/argparse": ["argparse@1.0.10", "", { "dependencies": { "sprintf-js": "~1.0.2" } }, "sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg=="],
 
     "sitemap/@types/node/undici-types": ["undici-types@7.16.0", "", {}, "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw=="],
@@ -5132,11 +5082,15 @@
 
     "@reactive-agents/core/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
+    "@reactive-agents/cortex/@types/bun/bun-types/@types/node": ["@types/node@25.3.0", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A=="],
+
     "@reactive-agents/cost/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "@reactive-agents/diagnose/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "@reactive-agents/eval/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
+
+    "@reactive-agents/examples/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "@reactive-agents/gateway/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
@@ -5151,6 +5105,8 @@
     "@reactive-agents/llm-provider/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "@reactive-agents/memory/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
+
+    "@reactive-agents/meta-agent/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "@reactive-agents/observability/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
@@ -5172,6 +5128,8 @@
 
     "@reactive-agents/runtime/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
+    "@reactive-agents/testing/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
+
     "@reactive-agents/tools/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "@reactive-agents/trace/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
@@ -5191,6 +5149,8 @@
     "onnx-proto/protobufjs/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "prebuild-install/tar-fs/tar-stream/readable-stream": ["readable-stream@3.6.2", "", { "dependencies": { "inherits": "^2.0.3", "string_decoder": "^1.1.1", "util-deprecate": "^1.0.1" } }, "sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA=="],
+
+    "reactive-agents/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
 
     "tailwindcss/chokidar/readdirp/picomatch": ["picomatch@2.3.1", "", {}, "sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA=="],
 
@@ -5291,5 +5251,7 @@
     "yargs/string-width/strip-ansi/ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
 
     "@mapbox/node-pre-gyp/rimraf/glob/minimatch/brace-expansion": ["brace-expansion@1.1.14", "", { "dependencies": { "balanced-match": "^1.0.0", "concat-map": "0.0.1" } }, "sha512-MWPGfDxnyzKU7rNOW9SP/c50vi3xrmrua/+6hfPbCS2ABNWfx24vPidzvC7krjU/RTo235sV776ymlsMtGKj8g=="],
+
+    "@reactive-agents/cortex/@types/bun/bun-types/@types/node/undici-types": ["undici-types@7.18.2", "", {}, "sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w=="],
   }
 }

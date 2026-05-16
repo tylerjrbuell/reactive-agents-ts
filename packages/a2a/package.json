@@ -15,7 +15,7 @@
     "@reactive-agents/runtime-shim": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.3",
     "bun-types": "latest",
     "@reactive-agents/identity": "workspace:*",
     "effect": "^3.10.0"

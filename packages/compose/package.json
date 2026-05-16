@@ -13,7 +13,7 @@
     "@reactive-agents/core": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.3",
     "bun-types": "latest"
   },
   "license": "MIT",
