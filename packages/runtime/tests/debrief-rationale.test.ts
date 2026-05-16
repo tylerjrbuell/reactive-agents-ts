@@ -5,6 +5,7 @@ import {
   type DebriefInput,
 } from "../src/debrief.js";
 import { LLMService } from "@reactive-agents/llm-provider";
+import type { CompletionRequest } from "@reactive-agents/llm-provider";
 import type { Rationale } from "@reactive-agents/core";
 
 const baseInput: DebriefInput = {
@@ -31,9 +32,10 @@ describe("synthesizeDebrief with rationale", () => {
     let capturedUserPrompt = "";
 
     // Create a mock LLM that captures the prompt
-    const mockLLM: LLMService = {
-      complete: (input) => {
-        capturedUserPrompt = input.messages[0]?.content ?? "";
+    const mockLLM = {
+      complete: (input: CompletionRequest) => {
+        const first = input.messages[0]?.content;
+        capturedUserPrompt = typeof first === "string" ? first : "";
         return Effect.succeed({
           content: JSON.stringify({
             summary: "Agent made informed decisions.",
@@ -47,7 +49,7 @@ describe("synthesizeDebrief with rationale", () => {
           model: "test",
         });
       },
-    };
+    } as unknown as LLMService["Type"];
 
     const rationale: Rationale = {
       why: "chose github/list_commits because task explicitly asks for commits",

@@ -37,10 +37,7 @@ describe("Self-Improvement — Builder API", () => {
 
 describe("Self-Improvement — Adaptive Strategy Experience", () => {
   it("buildAnalysisPrompt includes past experience when provided", async () => {
-    // Import the adaptive module to access the exported type
-    const { executeAdaptive } = await import(
-      "../../reasoning/src/strategies/adaptive.js"
-    );
+    const { executeAdaptive } = await import("@reactive-agents/reasoning");
     expect(executeAdaptive).toBeDefined();
 
     // Verify the StrategyOutcome type is exported from reasoning

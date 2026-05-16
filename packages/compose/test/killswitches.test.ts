@@ -5,17 +5,29 @@ import {
   requireApprovalFor, confidenceFloor
 } from '../src/killswitches/index.js';
 import { killswitches } from '../src/killswitches/registry.js';
-import type { Harness } from '@reactive-agents/core';
+import type { Harness, KernelStateLike } from '@reactive-agents/core';
 
 // Helper: build a harness with a killswitch registered, return its pipeline
 function buildPipeline(ks: (h: Harness) => void): HarnessPipeline {
   const reg = new RegistrationHarness();
   ks(reg);
-  return new HarnessPipeline(reg._collected as Parameters<typeof HarnessPipeline>[0]);
+  return new HarnessPipeline(reg._collected as ConstructorParameters<typeof HarnessPipeline>[0]);
 }
 
-// Minimal KernelStateLike for tests
-const mockState = { tokens: 0, steps: [], iteration: 0, status: 'running' } as const;
+// Complete KernelStateLike for tests (the harness ctx requires the full shape).
+const mockState: Readonly<KernelStateLike> = {
+  taskId: 'test',
+  strategy: 'reactive',
+  kernelType: 'thought',
+  steps: [],
+  toolsUsed: new Set<string>(),
+  iteration: 0,
+  tokens: 0,
+  status: 'running',
+  output: null,
+  error: null,
+  meta: {},
+};
 
 describe('maxIterations', () => {
   it('aborts when iteration >= max', async () => {

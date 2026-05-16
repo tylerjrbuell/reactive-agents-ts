@@ -9,7 +9,7 @@ import {
 import { createTestLLMServiceLayer } from "@reactive-agents/testing";
 import { ReactiveAgents } from "../src/index.js";
 import type { AgentEvent } from "@reactive-agents/core";
-import { FallbackChain } from "../../llm-provider/src/fallback-chain.js";
+import { FallbackChain } from "@reactive-agents/llm-provider";
 
 const baseInput: DebriefInput = {
   taskPrompt: "Fetch commits and send Signal message",

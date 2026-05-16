@@ -197,7 +197,6 @@ export async function runAgent(args: string[]): Promise<void> {
   if (enableCortex) {
     const cortexUrl = process.env.CORTEX_URL?.trim() || DEFAULT_CORTEX_URL;
     process.env.CORTEX_URL = cortexUrl;
-    // @ts-expect-error Method exists in runtime but TypeScript resolution lag
     builder = builder.withCortex(cortexUrl);
   }
 

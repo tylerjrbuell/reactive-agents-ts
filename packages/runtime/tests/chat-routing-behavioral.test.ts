@@ -104,6 +104,7 @@ describe("formatTaskContextForChat / buildChatSystemContext", () => {
         errorsEncountered: [],
         lessonsLearned: [],
         metrics: { tokens: 1, duration: 1, iterations: 1, cost: 0 },
+        rationale: [],
         markdown: "",
       },
       undefined,
