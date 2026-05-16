@@ -14,11 +14,15 @@ packages. The release mechanism is `scripts/release.ts`, run by
 
 - **Changesets are notes, not the driver.** `bun run changeset` only writes
   `.changeset/*.md` prose. `release.ts` aggregates those into root
-  `CHANGELOG.md` under `## <version>` and deletes them at release time.
+  `CHANGELOG.md` under `## [<version>] — <date>` and deletes them at release
+  time.
 - **Do NOT hand-edit `CHANGELOG.md`.** It is generated. Curate the wording in
   the changeset `.md` body instead.
 - **No `docs/releases/`.** That directory was eliminated. The GitHub Release
   (auto-created from the CHANGELOG section) is the announcement.
+- **`publish.yml` is the sole GitHub Release author.** release-drafter was
+  removed — there is no parallel PR-label draft. The published release body =
+  the `## [<version>] — <date>` CHANGELOG section, verbatim.
 - **No changesets/action, no "Version Packages" PR.** That flow was removed.
   Pushing the tag is the entire trigger.
 - **Drift is impossible by construction** — there is nothing to reconcile and
@@ -105,12 +109,18 @@ git push origin v<version>          # e.g. git push origin v0.11.0
 `publish.yml` then: install → build → test → clean-install smoke →
 `release:dry` gate → `release.ts <version>` (aggregate CHANGELOG, consume
 changesets, stamp all packages + root, build, publish in dependency order,
-fail-fast) → create GitHub Release from the `## <version>` CHANGELOG section.
+fail-fast) → create GitHub Release from the `## [<version>] — <date>`
+CHANGELOG section.
 
 Manual fallback / resume: GitHub → Actions → "Publish to npm" →
 `workflow_dispatch`, enter the version. Re-running is safe — already-published
 packages are skipped (idempotent), so a partial failure resumes cleanly after
 you fix the cause.
+
+If npm published but the GitHub Release is missing (GH-release step flaked
+after publish): GitHub → Actions → "Backfill GitHub Releases" →
+`workflow_dispatch`. It recreates releases for every tag from its CHANGELOG
+section. Idempotent (skips/updates existing).
 
 ## Step 8: Post-release — update memory
 
@@ -139,6 +149,7 @@ Update `.agents/MEMORY.md` AND Claude project memory under
 | Hand-editing `CHANGELOG.md` | `release.ts` generates it; manual edits collide. Edit the changeset `.md` instead. |
 | Creating `docs/releases/vX.Y.Z.md` | `docs/` was eliminated — that's an orphan file. The GitHub Release is the announcement. |
 | Waiting for a "Version Packages" PR | changesets/action was removed. Pushing the tag is the whole trigger. |
+| Looking for a release-drafter draft | release-drafter was removed. `publish.yml` is the sole GitHub Release author. |
 | `git tag` without `git push origin <tag>` | The tag push is what fires CI. A local tag releases nothing. |
 | Looking for `check:versions` / drift scripts | Deleted — drift is structurally impossible in lockstep. |
 | Running `release.ts` with no version arg | It requires an explicit semver and exits otherwise. |

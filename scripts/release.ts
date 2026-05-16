@@ -160,12 +160,17 @@ if (dryRun) {
 const prevLog = (await Bun.file("CHANGELOG.md").exists())
   ? await Bun.file("CHANGELOG.md").text()
   : "";
+// Header format matches the existing CHANGELOG: `## [<version>] — <date>`.
+// Keeps the whole file uniform so the backfill + GitHub-release regexes
+// (which anchor on `## \[?<version>\]?`) match every entry, legacy and new.
+const today = new Date().toISOString().slice(0, 10);
+const header = `## [${version}] — ${today}`;
 const entry =
-  `## ${version}\n\n` +
+  `${header}\n\n` +
   (notes.length ? notes.join("\n\n") + "\n\n" : "_No notable changes._\n\n");
 await Bun.write("CHANGELOG.md", entry + prevLog);
 for (const f of csFiles) await Bun.file(f).unlink();
-console.log(`changelog: wrote ## ${version} (${notes.length} note(s)), consumed ${csFiles.length} changeset file(s)`);
+console.log(`changelog: wrote ${header} (${notes.length} note(s)), consumed ${csFiles.length} changeset file(s)`);
 
 // ── Mutate: stamp every package + root to the single version ─────────────────
 
