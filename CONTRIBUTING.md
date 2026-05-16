@@ -62,7 +62,7 @@ bun test              # Run all 5,128+ tests
 bun run build         # Build + typecheck all packages (turbo-cached)
 bun run docs:dev      # Start docs dev server
 bun run rax --help    # Test the CLI
-bun run check:versions # Pre-release: detect npm/main version drift
+bun run release:dry 0.0.0 # Pre-release: validate publish plan (no mutation)
 ```
 
 ## Running Tests

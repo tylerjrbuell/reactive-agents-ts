@@ -35,11 +35,8 @@
     "docs:build": "cd apps/docs && bun x astro build",
     "docs:preview": "cd apps/docs && bun x astro preview",
     "changeset": "changeset",
-    "version": "changeset version && bun scripts/normalize-release-version.ts",
     "release": "bun scripts/release.ts",
     "release:dry": "bun scripts/release.ts --dry-run",
-    "check:versions": "bun scripts/check-npm-versions.ts",
-    "check:version-sync": "bun scripts/check-version-sync.ts",
     "test:install": "bun scripts/test-clean-install.ts"
   },
   "license": "MIT",
