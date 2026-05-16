@@ -75,6 +75,13 @@ jobs:
       - name: Build
         run: bun run build
 
+      # Type gate: full workspace tsc. Catches type debt that esbuild/tsup
+      # transpile-only builds skip. Must stay green before any release —
+      # this is the gate that blocked v0.11.0 until the TS5103-masked
+      # errors were fixed.
+      - name: Typecheck
+        run: bun run typecheck
+
       - name: Test
         run: bun test
 
