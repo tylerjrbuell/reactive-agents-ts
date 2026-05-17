@@ -129,6 +129,25 @@ jobs:
       - name: Release
         run: bun scripts/release.ts ${{ steps.ver.outputs.version }}
 
+      # Tag-driven flow leaves repo package.json unbumped. Sync the single
+      # VERSION file back to main so `cat VERSION` == npm @latest. [skip ci]
+      # prevents a docs/publish re-trigger loop.
+      - name: Sync VERSION to main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          echo "${{ steps.ver.outputs.version }}" > VERSION
+          if git diff --quiet -- VERSION; then
+            echo "VERSION already ${{ steps.ver.outputs.version }} — nothing to sync"
+            exit 0
+          fi
+          git add VERSION
+          git commit -m "chore(release): VERSION → ${{ steps.ver.outputs.version }} [skip ci]"
+          git push origin main
+
       - name: Create consolidated GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

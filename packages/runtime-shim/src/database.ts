@@ -100,10 +100,20 @@ function loadDatabase(): DatabaseConstructor {
     return BunDatabase as unknown as DatabaseConstructor;
   }
   try {
-    // Node 22.5+ has node:sqlite
+    // Node 22.5+ has node:sqlite. require() succeeding is NOT enough:
+    // WebContainer/browser runtimes resolve the module but ship a
+    // non-functional DatabaseSync (no working .exec) — that surfaced as
+    // "this.db.exec is not a function" at runtime. Probe an in-memory
+    // instance and fall back to the no-op stub if it isn't usable.
     const mod = require("node:sqlite") as {
       DatabaseSync: new (path: string, opts?: unknown) => NodeSqliteDatabase;
     };
+    const probe = new mod.DatabaseSync(":memory:");
+    if (typeof probe.exec !== "function" || typeof probe.prepare !== "function") {
+      throw new Error("node:sqlite present but non-functional");
+    }
+    probe.exec("CREATE TABLE __probe__(x)");
+    probe.close();
     return wrapNodeSqlite(mod.DatabaseSync);
   } catch {
     return createStubDatabase();

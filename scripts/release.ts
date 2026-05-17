@@ -202,6 +202,10 @@ for (const t of targets) {
 }
 root.version = version;
 await Bun.write("package.json", JSON.stringify(root, null, 2) + "\n");
+// Single committed source-of-truth for the published version. publish.yml
+// syncs this back to main so `cat VERSION` always matches npm @latest
+// (repo package.json stays unbumped by the tag-driven flow).
+await Bun.write("VERSION", version + "\n");
 console.log(
   `stamped ${targets.length} packages + root → ${version} (pinned ${pinned} workspace:* dep(s))`,
 );
