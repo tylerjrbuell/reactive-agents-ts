@@ -192,8 +192,10 @@ packages. Mechanism: `scripts/release.ts`, run by
 
 - **Author notes:** `bun run changeset` writes `.changeset/*.md` prose. That
   body is the only human-curated release text.
-- **Release:** `git tag vX.Y.Z && git push origin vX.Y.Z` → CI: build/test/
-  clean-install/`release:dry` gate → `release.ts` aggregates changeset bodies
+- **Release:** `git tag vX.Y.Z && git push origin vX.Y.Z` → CI: build/
+  **typecheck** (66/66, commit `3cdfeaef` — sole tsc gate; esbuild/tsup are
+  transpile-only)/test/clean-install/`release:dry` gate → `release.ts`
+  aggregates changeset bodies
   into root `CHANGELOG.md` as `## [<version>] — <date>`, consumes them, stamps
   all packages + root, builds, publishes in topological order (fail-fast,
   idempotent re-run skips already-published).
