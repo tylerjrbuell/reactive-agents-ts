@@ -6,7 +6,7 @@
   "engines": { "node": ">=22.5.0" },
   "description": "Reactive Agents strategy-demo — reactive vs plan-execute-reflect side-by-side",
   "scripts": {
-    "prestart": "[ -f .env ] || cp .env.example .env",
+    "prestart": "node -e \"const f=require('fs');f.existsSync('.env')||f.copyFileSync('.env.example','.env')\"",
     "start": "npx tsx --env-file-if-exists=.env src/agent.ts"
   },
   "dependencies": {
