@@ -72,6 +72,17 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # release.ts shells `bun publish`. setup-node writes the auth token to
+      # $RUNNER_TEMP/.npmrc and points npm at it via NPM_CONFIG_USERCONFIG —
+      # but bun ignores NPM_CONFIG_USERCONFIG, reading only cwd .npmrc and
+      # $HOME/.npmrc. Write the token where bun looks. Literal shell expansion,
+      # NOT a ${NODE_AUTH_TOKEN} placeholder (bun does not interpolate it the
+      # way npm does). This is the v0.11.0 "missing authentication" fix.
+      - name: Authenticate bun to npm
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Build
         run: bun run build
 
