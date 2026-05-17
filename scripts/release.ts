@@ -16,6 +16,9 @@
  *    correct resume substitute for an atomic registry.)
  */
 import { Glob, $ } from "bun";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 type Pkg = {
   dir: string;
@@ -195,13 +198,37 @@ if (noPublish) {
   process.exit(0);
 }
 
+// ── Authenticate `bun publish` ───────────────────────────────────────────────
+// `bun publish` resolves .npmrc from the publish CWD and from $HOME ONLY —
+// never from ancestor directories (verified empirically, bun 1.3.10). We run
+// `bun publish`.cwd(<pkgdir>), and the Bun-shell subprocess does not reliably
+// inherit the CI runner's HOME, so a workflow-written $HOME/.npmrc is invisible
+// here (this was the v0.11.0 "missing authentication" failure). Fix: point HOME
+// at a dir we own that holds the literal token, and pass it per publish.
+// Token comes from NPM_TOKEN, falling back to NODE_AUTH_TOKEN (publish.yml
+// exposes secrets.NPM_TOKEN as NODE_AUTH_TOKEN at job scope).
+const npmToken = (process.env.NPM_TOKEN ?? process.env.NODE_AUTH_TOKEN)?.trim();
+if (!npmToken) {
+  fail(
+    "no npm token in env — cannot authenticate `bun publish`. " +
+      "publish.yml must expose secrets.NPM_TOKEN as NPM_TOKEN or NODE_AUTH_TOKEN.",
+  );
+}
+const authHome = mkdtempSync(join(tmpdir(), "ra-npm-auth-"));
+writeFileSync(
+  join(authHome, ".npmrc"),
+  `//registry.npmjs.org/:_authToken=${npmToken}\n`,
+  { mode: 0o600 },
+);
+const publishEnv = { ...process.env, HOME: authHome };
+
 // ── Publish in dependency order, fail-fast ───────────────────────────────────
 
 const done: string[] = [];
 for (let i = 0; i < needsPublish.length; i++) {
   const t = needsPublish[i];
   // bun publish rewrites workspace:* → ${version} automatically.
-  const res = await $`bun publish --access public`.cwd(t.dir).nothrow();
+  const res = await $`bun publish --access public`.cwd(t.dir).env(publishEnv).nothrow();
   if (res.exitCode !== 0) {
     const remaining = needsPublish.slice(i).map((p) => p.name);
     console.error(`\nFAILED publishing ${t.name}@${version} (exit ${res.exitCode})`);
