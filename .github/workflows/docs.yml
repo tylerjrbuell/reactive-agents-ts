@@ -23,6 +23,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # new-page-indicator runs `git log --follow` per doc to date pages.
+          # Default depth-1 collapses history to one commit, so only pages
+          # touched in the deploy commit get the badge. Full history = parity
+          # with local.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
