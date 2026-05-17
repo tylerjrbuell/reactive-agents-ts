@@ -82,6 +82,17 @@ export default defineConfig({
       ],
       customCss: ["./src/styles/custom.css"],
       head: [
+        // MUST be first + non-deferred: a service worker that injects
+        // COOP/COEP client-side so the page is crossOriginIsolated. GitHub
+        // Pages can't send these headers, and the StackBlitz WebContainer
+        // playground iframe refuses to boot without isolation. Uses COEP
+        // credentialless (Chrome) to avoid breaking cross-origin analytics.
+        {
+          tag: "script",
+          attrs: {
+            src: "/coi-serviceworker.js",
+          },
+        },
         {
           tag: "script",
           attrs: {
