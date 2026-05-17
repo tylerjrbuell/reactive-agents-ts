@@ -368,9 +368,8 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         EventBus events. You see what your agent decided, why, in what order, at
         what cost — no manual instrumentation required.
     </Card>
-    <Card title="5 Reasoning Strategies" icon="star">
-        **ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive** — plus
-        automatic strategy switching when entropy detects the agent is stuck.
+    <Card title="6 Reasoning Strategies" icon="star">
+        **ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action** (@experimental) — plus automatic strategy switching when entropy detects the agent is stuck.
         Register your own strategies. ToT outer-loop early-stop and 8-action
         reactive controller ship out of the box.
     </Card>
@@ -381,9 +380,8 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         compaction per tier. Same code, frontier-to-local.
     </Card>
     <Card title="MCP-Native Tool I/O" icon="puzzle">
-        **Connect any Model Context Protocol server** — local or remote, stdio
-        or HTTP. The 9,400+ public MCP servers (filesystem, GitHub, Slack,
-        browsers, databases) plug in alongside your custom tools. The protocol
+        **Connect any Model Context Protocol server** — local (`stdio`) or remote (`streamable-http`). The 9,400+ public MCP servers (filesystem, GitHub, Slack,
+        browsers, databases) plug in alongside your custom tools via `.withMCP()`. The protocol
         is the integration layer; we don't reinvent it.
     </Card>
     <Card title="Skills as a Primitive" icon="open-book">

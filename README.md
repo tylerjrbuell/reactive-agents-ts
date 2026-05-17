@@ -24,7 +24,7 @@ Works on local Ollama models (4B+) through frontier APIs — **same code, same f
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
 [![npm downloads](https://img.shields.io/npm/dm/reactive-agents?logo=npm)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED)](https://effect.website)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.0%20required-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
@@ -46,7 +46,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 | **Monolithic**            | 13 independent layers -- enable only what you need                                                                  |
 | **Opaque decisions**      | 12-phase execution engine with before/after/error hooks on every phase                                              |
 | **Model lock-in**         | Model-adaptive context profiles (4 tiers: local, mid, large, frontier) help smaller models punch above their weight |
-| **Single reasoning mode** | 5 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive)                                            |
+| **Single reasoning mode** | 6 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action @experimental)                 |
 | **Unsafe by default**     | Guardrails block injection/PII/toxicity before the LLM sees input                                                   |
 | **No cost control**       | Complexity router picks the cheapest capable model; budget enforcement at 4 levels                                  |
 | **Poor DX**               | Builder API chains capabilities in one place                                                                        |
@@ -332,7 +332,7 @@ controller.abort()
 
 ### Lifecycle Hooks
 
-Intercept any of the 10 execution phases with before, after, or error hooks:
+Intercept any of the 12 execution phases with before, after, or error hooks:
 
 ```typescript
 import { Effect } from 'effect'
@@ -390,7 +390,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   5,028 tests   |      --      |      --       |   --    |
+| Test suite                    |   5,320 tests   |      --      |      --       |   --    |
 
 ## Use Cases
 
@@ -454,15 +454,16 @@ Verify --> Memory Flush --> Cost Track --> Audit --> Complete
 
 Every phase supports `before`, `after`, and `on-error` lifecycle hooks. When observability is enabled, every phase emits trace spans and metrics.
 
-## 5 Reasoning Strategies
+## 6 Reasoning Strategies
 
-| Strategy            | How It Works                               | Best For                      |
-| ------------------- | ------------------------------------------ | ----------------------------- |
-| **ReAct**           | Think -> Act -> Observe loop               | Tool use, step-by-step tasks  |
-| **Reflexion**       | Generate -> Critique -> Improve            | Quality-critical output       |
-| **Plan-Execute**    | Plan steps -> Execute -> Reflect -> Refine | Structured multi-step work    |
-| **Tree-of-Thought** | Branch -> Score -> Prune -> Synthesize     | Creative, open-ended problems |
-| **Adaptive**        | Analyze task -> Auto-select best strategy  | Mixed workloads               |
+| Strategy                | How It Works                               | Best For                           |
+| ----------------------- | ------------------------------------------ | ---------------------------------- |
+| **ReAct**               | Think -> Act -> Observe loop               | Tool use, step-by-step tasks       |
+| **Reflexion**           | Generate -> Critique -> Improve            | Quality-critical output            |
+| **Plan-Execute**        | Plan steps -> Execute -> Reflect -> Refine | Structured multi-step work         |
+| **Tree-of-Thought**     | Branch -> Score -> Prune -> Synthesize     | Creative, open-ended problems      |
+| **Adaptive**            | Analyze task -> Auto-select best strategy  | Mixed workloads                    |
+| **Code-Action** `@exp`  | LLM generates a TypeScript IIFE run in a Worker sandbox; tools exposed as async functions | Multi-tool orchestration, pure computation |
 
 ```typescript
 // Auto-select the best strategy per task
@@ -471,11 +472,11 @@ const agent = await ReactiveAgents.create()
     .withReasoning({ defaultStrategy: 'adaptive' })
     .build()
 
-// Automatic strategy switching on loop detection
+// Strategy switching is on by default — customize or disable explicitly
 const agent2 = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning({
-        enableStrategySwitching: true,
+        // enableStrategySwitching defaults to true
         maxStrategySwitches: 1,
         fallbackStrategy: 'plan-execute-reflect',
     })
@@ -524,7 +525,7 @@ const agent = await ReactiveAgents.create()
 | [`@reactive-agents/runtime`](packages/runtime)                             | 12-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` layer composer                                                                                                          |
 | [`@reactive-agents/llm-provider`](packages/llm-provider)                   | Unified LLM interface for Anthropic, OpenAI, Gemini, Ollama, LiteLLM, and Test providers                                                                                                  |
 | [`@reactive-agents/memory`](packages/memory)                               | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite; ExperienceStore cross-agent learning; background consolidation + decay                                            |
-| [`@reactive-agents/reasoning`](packages/reasoning)                         | 5 strategies (ReAct, Reflexion, Plan-Execute, ToT, Adaptive) with composable kernel architecture                                                                                          |
+| [`@reactive-agents/reasoning`](packages/reasoning)                         | 6 strategies (ReAct, Reflexion, Plan-Execute, ToT, Adaptive, Code-Action @experimental) with composable kernel architecture                                                               |
 | [`@reactive-agents/tools`](packages/tools)                                 | Tool registry with sandboxed execution, MCP client, agent-as-tool adapter, dynamic sub-agent spawning                                                                                     |
 | [`@reactive-agents/guardrails`](packages/guardrails)                       | Pre-LLM safety: injection detection, PII filtering, toxicity blocking                                                                                                                     |
 | [`@reactive-agents/verification`](packages/verification)                   | Post-LLM quality: semantic entropy, fact decomposition, NLI hallucination detection                                                                                                       |
@@ -544,6 +545,10 @@ const agent = await ReactiveAgents.create()
 | [`@reactive-agents/react`](packages/react)                                 | React 18+ hooks: `useAgentStream` (token streaming), `useAgent` (one-shot) — consume `AgentStream.toSSE()` endpoints                                                                      |
 | [`@reactive-agents/vue`](packages/vue)                                     | Vue 3 composables: `useAgentStream`, `useAgent` with reactive refs                                                                                                                        |
 | [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores: `createAgentStream`, `createAgent` writable stores                                                                                                                     |
+| [`@reactive-agents/observe`](packages/observe)                             | Zero-config OpenTelemetry tracing — maps `AgentStarted/Completed`, `LLMRequest*`, and `ToolCall*` events to OpenInference-compliant OTLP spans                                            |
+| [`@reactive-agents/replay`](packages/replay)                               | Deterministic trace replay — record any run to a snapshot file, re-run with different model/prompt without re-calling the LLM; supports strict/lenient mode and `diffTraces`              |
+| [`@reactive-agents/runtime-shim`](packages/runtime-shim)                   | Cross-runtime adapter — lets the framework run on Node.js 22.5+ in addition to Bun; provides unified `Database`, `spawn`, `serve`, and file I/O primitives                               |
+| [`create-reactive-agent`](packages/create-reactive-agent)                  | Project scaffolder — `bunx create-reactive-agent my-app` generates a runnable agent project with template, provider, and package-manager selection                                        |
 
 **Branch preview (not on `main` yet):** [`feat/channels-package`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/feat/channels-package) adds **`@reactive-agents/channels`**, runtime **`.withChannels()`**, and renames gateway **`channels` → `accessControl`** for sender policy vs chat mode. Summary: [`wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`](wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md).
 
@@ -709,6 +714,46 @@ Sub-agents receive a clean context window, inherit the parent's provider and mod
 | `.withAgentTool("name", config)` | Named, purpose-built sub-agent with a specific role    |
 | `.withDynamicSubAgents()`        | Ad-hoc delegation at model's discretion, unknown tasks |
 
+## MCP (Model Context Protocol)
+
+Connect any MCP-compatible server — 9,400+ public servers covering filesystem, GitHub, Slack, browsers, databases, and more. Use `.withMCP()` for each server you need:
+
+```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
+// stdio transport — subprocess communicates via JSON-RPC over stdin/stdout
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withReasoning()
+    .withMCP({
+        name: 'filesystem',
+        transport: 'stdio',
+        command: 'bunx',
+        args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
+    })
+    .withMCP({
+        name: 'github',
+        transport: 'stdio',
+        command: 'bunx',
+        args: ['-y', '@modelcontextprotocol/server-github'],
+        env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GH_TOKEN ?? '' },
+    })
+    .build()
+
+// Streamable HTTP transport — modern cloud-hosted MCP servers
+const agent2 = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withMCP({
+        name: 'stripe',
+        transport: 'streamable-http',
+        endpoint: 'https://mcp.stripe.com',
+        headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+    })
+    .build()
+```
+
+MCP tools appear in the tool registry alongside custom tools — the LLM sees them all uniformly. Mix MCP servers with `ToolBuilder` custom tools in the same agent. See [full MCP docs](https://docs.reactiveagents.dev/guides/tools/).
+
 ## Testing
 
 Built-in test scenario support for deterministic, offline tests:
@@ -750,7 +795,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (5,028 tests / 556 files, ~65s)
+bun test                 # Run full test suite (5,320 tests / 603 files, ~65s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
@@ -770,7 +815,7 @@ LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
 Full documentation at **[docs.reactiveagents.dev](https://docs.reactiveagents.dev/)**
 
 -   [Getting Started](https://docs.reactiveagents.dev/guides/quickstart/) -- Build an agent in 5 minutes
--   [Reasoning Strategies](https://docs.reactiveagents.dev/guides/reasoning/) -- All 5 strategies explained
+-   [Reasoning Strategies](https://docs.reactiveagents.dev/guides/choosing-strategies/) -- All 6 strategies explained
 -   [Architecture](https://docs.reactiveagents.dev/concepts/architecture/) -- Layer system deep dive
 -   [Cookbook](https://docs.reactiveagents.dev/cookbook/testing-agents/) -- Testing, multi-agent patterns, production deployment
 
