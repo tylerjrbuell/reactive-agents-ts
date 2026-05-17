@@ -1,5 +1,5 @@
 {
   "installDependencies": true,
-  "startCommand": "cp -n .env.example .env && npm install && npm start",
+  "startCommand": "npm install && npm start",
   "openFile": ".env"
 }

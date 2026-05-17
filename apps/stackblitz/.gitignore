@@ -1,5 +1,11 @@
 # Stackblitz projects resolve from npm registry — local installs are dev-only
 node_modules/
+
+# Re-include the placeholder .env so it ships in the GitHub repo the
+# Stackblitz embed imports (root .gitignore excludes all .env). These
+# contain blank keys only — never paste real keys into a tracked .env.
+!.env
+!*/.env
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
