@@ -209,6 +209,23 @@ packages. Mechanism: `scripts/release.ts`, run by
   drift scripts (`check-npm-versions.ts`, `check-version-sync.ts`,
   `normalize-release-version.ts`, `resolve-workspace-deps.mjs`) are **all
   deleted**. Do not look for them or treat their absence as a regression.
+- **Publish = `npm publish`, NOT `bun publish` (hard-won, v0.11.0).**
+  `bun publish` cannot authenticate from release.ts's Bun-shell subprocess
+  in CI ("missing authentication") despite 4 `.npmrc`/`$HOME` fixes — yet
+  `npm whoami` succeeds from the same `~/.npmrc`. bun 1.3.10 reads `.npmrc`
+  only from publish-CWD and `$HOME` (never ancestors) and the Bun-shell
+  child doesn't inherit the runner `$HOME`. **Never revert to bun publish.**
+  Because npm doesn't resolve `workspace:*`, `release.ts` pins every
+  internal `workspace:*` → exact lockstep version in the stamping pass.
+  `bun pm pack` is NOT a substitute (resolves from stale `bun.lock`).
+- **Auth invariants:** setup-node has **no `registry-url:`** (it would
+  export `NPM_CONFIG_USERCONFIG` → placeholder file → broken auth). The
+  `Authenticate` step writes the **literal** token (no `${VAR}`) to
+  `${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}`. **npm token must cover scoped
+  AND unscoped names** — a `@reactive-agents/*`-scoped token `E403`s on
+  `create-reactive-agent` + `reactive-agents` (the 2 unscoped); v0.11.0
+  required an org/account-wide token. Credential fix + `workflow_dispatch`
+  re-run resumes idempotently (skips already-published).
 
 **Why (historical, do not resurface):** manual `npm publish` once left
 package.json behind npm, causing changeset-bump collisions. The lockstep
