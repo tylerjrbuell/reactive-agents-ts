@@ -7,8 +7,9 @@ standalone with `bun run`.
 ## Quick Start
 
 ```bash
-# Run all offline examples (no API key needed):
 cd apps/examples
+
+# Run all offline examples (no API key needed):
 bun run index.ts --offline
 
 # Run a single example:
@@ -16,10 +17,20 @@ bun run src/foundations/01-simple-agent.ts
 
 # Run a category:
 bun run index.ts --filter trust
-
-# Run all examples (requires ANTHROPIC_API_KEY):
-ANTHROPIC_API_KEY=sk-ant-... bun run index.ts
 ```
+
+### Live mode (with an API key)
+
+Copy the env template and fill in **one** key — Bun auto-loads `.env`:
+
+```bash
+cp .env.example .env
+# edit .env, set GOOGLE_API_KEY (free tier) / ANTHROPIC_API_KEY / OPENAI_API_KEY
+bun run index.ts
+```
+
+`.env` is gitignored. Leave every key blank to stay in TEST/offline mode.
+One-off without a file: `ANTHROPIC_API_KEY=sk-ant-... bun run index.ts`.
 
 ## All Examples
 

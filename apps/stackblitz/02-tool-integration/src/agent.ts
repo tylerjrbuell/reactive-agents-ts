@@ -25,10 +25,15 @@ type PN = "gemini" | "anthropic" | "openai" | "ollama";
 
 const provider = (process.env.PROVIDER ?? "gemini") as PN;
 
+// Treat empty / unedited placeholder values as "no key" so the user gets
+// the friendly setup message instead of a provider 400.
+const realKey = (v?: string) =>
+  !!v && v.trim().length > 0 && !/^your_|_here$|^<.*>$/i.test(v.trim());
+
 const hasKey =
-  Boolean(process.env.GOOGLE_API_KEY) ||
-  Boolean(process.env.ANTHROPIC_API_KEY) ||
-  Boolean(process.env.OPENAI_API_KEY) ||
+  realKey(process.env.GOOGLE_API_KEY) ||
+  realKey(process.env.ANTHROPIC_API_KEY) ||
+  realKey(process.env.OPENAI_API_KEY) ||
   provider === "ollama";
 
 if (!hasKey) {

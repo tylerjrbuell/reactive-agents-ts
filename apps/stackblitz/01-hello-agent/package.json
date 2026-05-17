@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "packageManager": "npm@10.9.0",
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22.5.0" },
   "description": "Reactive Agents hello-agent demo — runs in Stackblitz, no install needed",
   "scripts": {
-    "start": "npx tsx --env-file=.env src/agent.ts"
+    "start": "npx tsx --env-file-if-exists=.env src/agent.ts"
   },
   "dependencies": {
     "reactive-agents": "latest"
