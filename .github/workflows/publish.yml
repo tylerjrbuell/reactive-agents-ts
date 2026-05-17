@@ -35,10 +35,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # No `registry-url:` — it makes setup-node write a placeholder
+      # $RUNNER_TEMP/.npmrc and export NPM_CONFIG_USERCONFIG pointing at it.
+      # bun honors NPM_CONFIG_USERCONFIG but does NOT expand the
+      # ${NODE_AUTH_TOKEN} placeholder, so `bun publish` fails auth. Omitting
+      # registry-url leaves $HOME/.npmrc as the sole npm/bun config path.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -72,14 +76,24 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # release.ts shells `bun publish`. setup-node writes the auth token to
-      # $RUNNER_TEMP/.npmrc and points npm at it via NPM_CONFIG_USERCONFIG —
-      # but bun ignores NPM_CONFIG_USERCONFIG, reading only cwd .npmrc and
-      # $HOME/.npmrc. Write the token where bun looks. Literal shell expansion,
-      # NOT a ${NODE_AUTH_TOKEN} placeholder (bun does not interpolate it the
-      # way npm does). This is the v0.11.0 "missing authentication" fix.
-      - name: Authenticate bun to npm
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+      # release.ts shells `bun publish`. Write the literal token (NOT a
+      # ${VAR} placeholder — bun does not interpolate .npmrc the way npm
+      # does) to whatever config path is in effect: NPM_CONFIG_USERCONFIG
+      # if some action still set it, else $HOME/.npmrc. Fail fast if any
+      # placeholder slipped through. This is the v0.11.0 auth fix (#3).
+      - name: Authenticate bun + npm to registry
+        run: |
+          set -euo pipefail
+          AUTHFILE="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$AUTHFILE"
+          echo "auth written to: $AUTHFILE"
+          if grep -qE '\$\{[A-Z_]+\}' "$AUTHFILE"; then
+            echo "::error::placeholder unexpanded in $AUTHFILE"; exit 1
+          fi
+          echo "NPM_CONFIG_USERCONFIG=${NPM_CONFIG_USERCONFIG:-<unset>}"
+          echo "config lines (redacted):"
+          sed 's/_authToken=.*/_authToken=<redacted>/' "$AUTHFILE"
+          echo "npm identity check:"; npm whoami || echo "(npm whoami failed — bun publish may still succeed via .npmrc)"
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
