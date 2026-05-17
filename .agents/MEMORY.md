@@ -199,6 +199,12 @@ packages. Mechanism: `scripts/release.ts`, run by
   into root `CHANGELOG.md` as `## [<version>] — <date>`, consumes them, stamps
   all packages + root, builds, publishes in topological order (fail-fast,
   idempotent re-run skips already-published).
+- **VERSION file (commit 30ccf590):** root `/VERSION` is the committed
+  source-of-truth == npm @latest. `release.ts` writes it on stamp;
+  `publish.yml` "Sync VERSION to main" commits it back with `[skip ci]`.
+  Repo package.json staying unbumped by the tag-driven flow is intentional,
+  not drift. `release:dry` mutates then self-cleans the tree — EXIT=0 +
+  uniform `X.Y.Z → A.B.C` on all 35 lines = gate green; no manual revert.
 - **GitHub Release:** `publish.yml` is the **sole** author (release-drafter
   removed). Body = the `## [<version>] — <date>` CHANGELOG section verbatim.
 - **Recovery:** "Backfill GitHub Releases" workflow (manual) recreates missing
