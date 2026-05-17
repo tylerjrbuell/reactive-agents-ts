@@ -16,9 +16,6 @@
  *    correct resume substitute for an atomic registry.)
  */
 import { Glob, $ } from "bun";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 type Pkg = {
   dir: string;
@@ -177,13 +174,37 @@ console.log(`changelog: wrote ${header} (${notes.length} note(s)), consumed ${cs
 
 // ── Mutate: stamp every package + root to the single version ─────────────────
 
+// Rewrite internal `workspace:*` deps → the exact lockstep version. We
+// publish via `npm publish` (npm does NOT resolve the workspace protocol;
+// only `bun publish` did, but its auth is unreliable in CI). All internal
+// packages share one version, so an exact pin is correct. Reuses the
+// module-level DEP_FIELDS (declared above for the topo-order step).
+function pinWorkspaceDeps(json: Record<string, unknown>): number {
+  let n = 0;
+  for (const field of DEP_FIELDS) {
+    const deps = json[field];
+    if (!deps || typeof deps !== "object") continue;
+    for (const [name, range] of Object.entries(deps as Record<string, string>)) {
+      if (typeof range === "string" && range.startsWith("workspace:")) {
+        (deps as Record<string, string>)[name] = version;
+        n++;
+      }
+    }
+  }
+  return n;
+}
+
+let pinned = 0;
 for (const t of targets) {
   t.json.version = version;
+  pinned += pinWorkspaceDeps(t.json as Record<string, unknown>);
   await Bun.write(t.file, JSON.stringify(t.json, null, 2) + "\n");
 }
 root.version = version;
 await Bun.write("package.json", JSON.stringify(root, null, 2) + "\n");
-console.log(`stamped ${targets.length} packages + root → ${version}`);
+console.log(
+  `stamped ${targets.length} packages + root → ${version} (pinned ${pinned} workspace:* dep(s))`,
+);
 
 // ── Build once (turbo cache) ─────────────────────────────────────────────────
 
@@ -198,37 +219,17 @@ if (noPublish) {
   process.exit(0);
 }
 
-// ── Authenticate `bun publish` ───────────────────────────────────────────────
-// `bun publish` resolves .npmrc from the publish CWD and from $HOME ONLY —
-// never from ancestor directories (verified empirically, bun 1.3.10). We run
-// `bun publish`.cwd(<pkgdir>), and the Bun-shell subprocess does not reliably
-// inherit the CI runner's HOME, so a workflow-written $HOME/.npmrc is invisible
-// here (this was the v0.11.0 "missing authentication" failure). Fix: point HOME
-// at a dir we own that holds the literal token, and pass it per publish.
-// Token comes from NPM_TOKEN, falling back to NODE_AUTH_TOKEN (publish.yml
-// exposes secrets.NPM_TOKEN as NODE_AUTH_TOKEN at job scope).
-const npmToken = (process.env.NPM_TOKEN ?? process.env.NODE_AUTH_TOKEN)?.trim();
-if (!npmToken) {
-  fail(
-    "no npm token in env — cannot authenticate `bun publish`. " +
-      "publish.yml must expose secrets.NPM_TOKEN as NPM_TOKEN or NODE_AUTH_TOKEN.",
-  );
-}
-const authHome = mkdtempSync(join(tmpdir(), "ra-npm-auth-"));
-writeFileSync(
-  join(authHome, ".npmrc"),
-  `//registry.npmjs.org/:_authToken=${npmToken}\n`,
-  { mode: 0o600 },
-);
-const publishEnv = { ...process.env, HOME: authHome };
-
 // ── Publish in dependency order, fail-fast ───────────────────────────────────
+// `npm publish` (not `bun publish`): npm's setup-node/$HOME/.npmrc auth is
+// proven in CI (`npm whoami` succeeds there), whereas `bun publish` could not
+// resolve auth from the Bun-shell subprocess in CI despite 4 attempts. Safe
+// because workspace:* deps were already pinned to ${version} above, so npm
+// (which does not understand the workspace protocol) sees concrete ranges.
 
 const done: string[] = [];
 for (let i = 0; i < needsPublish.length; i++) {
   const t = needsPublish[i];
-  // bun publish rewrites workspace:* → ${version} automatically.
-  const res = await $`bun publish --access public`.cwd(t.dir).env(publishEnv).nothrow();
+  const res = await $`npm publish --access public`.cwd(t.dir).nothrow();
   if (res.exitCode !== 0) {
     const remaining = needsPublish.slice(i).map((p) => p.name);
     console.error(`\nFAILED publishing ${t.name}@${version} (exit ${res.exitCode})`);
