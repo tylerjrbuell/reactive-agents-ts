@@ -121,6 +121,17 @@ export default defineConfig({
             src: "/new-page-indicator.js",
           },
         },
+        {
+          tag: "script",
+          attrs: {
+            defer: true,
+            src: "https://context7.com/widget.js",
+            "data-library": "/tylerjrbuell/reactive-agents-ts",
+            "data-color": "#7c3aed",
+            "data-position": "bottom-right",
+            "data-placeholder": "Ask about Reactive Agents...",
+          },
+        },
       ],
       components: {
         PageTitle: "./src/components/PageTitle.astro",
