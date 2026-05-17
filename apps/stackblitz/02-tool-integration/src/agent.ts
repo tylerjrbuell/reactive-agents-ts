@@ -62,7 +62,7 @@ const ollamaEndpoint =
 const model =
   process.env.MODEL ??
   (provider === "gemini"
-    ? "gemini-1.5-flash"
+    ? "gemini-2.0-flash"
     : provider === "ollama"
       ? "llama3.2"
       : undefined);
