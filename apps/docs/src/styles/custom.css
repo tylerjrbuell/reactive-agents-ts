@@ -1470,3 +1470,197 @@ nav a[data-ra-new='true']::before {
         box-shadow: 0 0 6px rgba(124, 58, 237, 0.4);
     }
 }
+
+/* ── Email subscription form ─────────────────────────────────── */
+.ra-sub-panel {
+    margin-bottom: 2.5rem;
+}
+
+.ra-sub-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    text-align: center;
+}
+
+.ra-sub-header {
+    max-width: 560px;
+}
+
+.ra-sub-title {
+    margin-top: 0 !important;
+    margin-bottom: 0.6rem !important;
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--ra-violet), var(--ra-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.ra-sub-desc {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--sl-color-gray-2);
+}
+
+.ra-sub-form {
+    display: flex;
+    gap: 0.6rem;
+    width: 100%;
+    max-width: 440px;
+}
+
+.ra-sub-form--inline {
+    max-width: 380px;
+}
+
+.ra-sub-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--sl-color-white);
+    font-size: 0.9rem;
+    font-family: var(--sl-font-system);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ra-sub-input::placeholder {
+    color: var(--sl-color-gray-3);
+}
+
+.ra-sub-input:focus {
+    border-color: rgba(139, 92, 246, 0.7);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+.ra-sub-btn {
+    position: relative;
+    flex: 0 0 auto;
+    padding: 0.6rem 1.25rem;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, var(--ra-violet-deep), #0e7490);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: var(--sl-font-system);
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.08s;
+    white-space: nowrap;
+}
+
+.ra-sub-btn:hover:not([disabled]) {
+    opacity: 0.88;
+}
+
+.ra-sub-btn:active:not([disabled]) {
+    transform: translateY(1px);
+}
+
+.ra-sub-btn[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ra-sub-btn-spinner {
+    display: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: ra-spin 0.6s linear infinite;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.ra-sub-btn--loading .ra-sub-btn-text {
+    visibility: hidden;
+}
+
+.ra-sub-btn--loading .ra-sub-btn-spinner {
+    display: block;
+}
+
+@keyframes ra-spin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.ra-sub-msg {
+    min-height: 1.2rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.ra-sub-msg--ok  { color: var(--ra-cyan); }
+.ra-sub-msg--warn { color: #f59e0b; }
+.ra-sub-msg--err  { color: #f87171; }
+
+/* Compact footer strip */
+.ra-footer-subscribe {
+    border-top: 1px solid rgba(139, 92, 246, 0.15);
+    padding: 1.5rem var(--sl-content-pad-x, 1rem);
+}
+
+.ra-sub-strip {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.ra-sub-strip-label {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--sl-color-gray-2);
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.ra-sub-strip .ra-sub-form {
+    flex: 1;
+    min-width: 240px;
+    max-width: 380px;
+}
+
+.ra-sub-strip .ra-sub-msg {
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    .ra-sub-form {
+        flex-direction: column;
+    }
+    .ra-sub-btn {
+        width: 100%;
+    }
+    .ra-sub-strip {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .ra-sub-strip .ra-sub-form {
+        width: 100%;
+        max-width: none;
+    }
+}
+
+[data-theme='light'] .ra-sub-input {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(124, 58, 237, 0.3);
+    color: var(--sl-color-gray-6);
+}
+
+[data-theme='light'] .ra-sub-input:focus {
+    border-color: rgba(124, 58, 237, 0.6);
+}

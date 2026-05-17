@@ -1,0 +1,130 @@
+---
+/**
+ * Full-width email subscription form.
+ * POSTs to https://api.reactiveagents.dev/v1/subscribe (double opt-in).
+ *
+ * Props:
+ *   compact — strip panel chrome, render as an inline strip (for Footer use)
+ */
+interface Props {
+    compact?: boolean;
+}
+const { compact = false } = Astro.props;
+const formId = compact ? "ra-sub-footer" : "ra-sub-main";
+---
+
+{compact ? (
+    <div class="ra-sub-strip">
+        <p class="ra-sub-strip-label">Get notified on new releases</p>
+        <form id={formId} class="ra-sub-form ra-sub-form--inline" novalidate>
+            <input
+                type="email"
+                name="email"
+                class="ra-sub-input"
+                placeholder="you@example.com"
+                autocomplete="email"
+                required
+                aria-label="Email address"
+            />
+            <button type="submit" class="ra-sub-btn">Subscribe</button>
+        </form>
+        <p class="ra-sub-msg" aria-live="polite"></p>
+    </div>
+) : (
+    <div class="ra-section-card ra-panel ra-sub-panel">
+        <div class="ra-panel-inner ra-sub-inner">
+            <div class="ra-sub-header">
+                <h2 class="ra-sub-title">Stay in the loop</h2>
+                <p class="ra-sub-desc">
+                    Get notified when new releases ship. Reactive Agents is under active
+                    development — new strategies, adapters, and integrations land regularly.
+                    No spam. One-click unsubscribe.
+                </p>
+            </div>
+            <form id={formId} class="ra-sub-form" novalidate>
+                <input
+                    type="email"
+                    name="email"
+                    class="ra-sub-input"
+                    placeholder="you@example.com"
+                    autocomplete="email"
+                    required
+                    aria-label="Email address"
+                />
+                <button type="submit" class="ra-sub-btn">
+                    <span class="ra-sub-btn-text">Notify me</span>
+                    <span class="ra-sub-btn-spinner" aria-hidden="true"></span>
+                </button>
+            </form>
+            <p class="ra-sub-msg" aria-live="polite"></p>
+        </div>
+    </div>
+)}
+
+<script define:vars={{ formId }}>
+(function () {
+    const API = "https://api.reactiveagents.dev/v1/subscribe";
+
+    function init() {
+        const form = document.getElementById(formId);
+        if (!form) return;
+        const msg = form.parentElement?.querySelector(".ra-sub-msg");
+        const btn = form.querySelector(".ra-sub-btn");
+        const btnText = btn?.querySelector(".ra-sub-btn-text");
+
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const email = form.querySelector("input[name=email]").value.trim();
+            if (!email) return;
+
+            if (btn) btn.setAttribute("disabled", "true");
+            if (btn) btn.classList.add("ra-sub-btn--loading");
+            if (msg) { msg.className = "ra-sub-msg"; msg.textContent = ""; }
+
+            try {
+                const res = await fetch(API, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email }),
+                });
+
+                if (res.ok) {
+                    showMsg(msg, "Check your inbox — confirmation email sent.", "ok");
+                    form.reset();
+                } else if (res.status === 409) {
+                    const body = await res.json().catch(() => ({}));
+                    const detail = body?.message ?? "";
+                    if (detail.includes("unsubscribed")) {
+                        showMsg(msg, "This address was previously unsubscribed. Re-subscribe via the link in your original confirmation email.", "warn");
+                    } else {
+                        showMsg(msg, "Already subscribed — check your inbox for a confirmation link.", "ok");
+                    }
+                } else if (res.status === 400) {
+                    showMsg(msg, "Please enter a valid email address.", "err");
+                } else if (res.status === 429) {
+                    showMsg(msg, "Too many requests — please try again in a moment.", "warn");
+                } else {
+                    showMsg(msg, "Something went wrong. Try again or reach us on Discord.", "err");
+                }
+            } catch (_) {
+                showMsg(msg, "Network error — check your connection and try again.", "err");
+            } finally {
+                if (btn) btn.removeAttribute("disabled");
+                if (btn) btn.classList.remove("ra-sub-btn--loading");
+            }
+        });
+    }
+
+    function showMsg(el, text, kind) {
+        if (!el) return;
+        el.textContent = text;
+        el.className = "ra-sub-msg ra-sub-msg--" + kind;
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+})();
+</script>
