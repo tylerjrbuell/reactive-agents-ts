@@ -13,9 +13,10 @@
  *   ANTHROPIC_API_KEY  -> console.anthropic.com
  *   OPENAI_API_KEY     -> platform.openai.com
  *
- *   Or use local Ollama:
- *   PROVIDER=ollama
- *   OLLAMA_ENDPOINT=http://localhost:11434
+ *   Or local Ollama via an HTTPS tunnel (WebContainer localhost is NOT
+ *   your machine — bare localhost only works on a local clone):
+ *   PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
+ *   (OLLAMA_ORIGINS=* ollama serve + cloudflared tunnel --url http://localhost:11434)
  */
 
 import { ReactiveAgents } from "reactive-agents";
@@ -45,10 +46,11 @@ if (!hasKey) {
   ANTHROPIC_API_KEY  -> console.anthropic.com
   OPENAI_API_KEY     -> platform.openai.com
 
-  For local Ollama (Chrome only):
-    PROVIDER          = ollama
-    OLLAMA_ENDPOINT   = http://localhost:11434
-    (run: OLLAMA_ORIGINS=* ollama serve)
+  Local Ollama (Chrome) needs an HTTPS tunnel — WebContainer localhost
+  is NOT your machine. See the playground guide for the full recipe:
+    OLLAMA_ORIGINS=* ollama serve
+    cloudflared tunnel --url http://localhost:11434
+    PROVIDER=ollama  OLLAMA_ENDPOINT=https://YOUR-TUNNEL.trycloudflare.com
 ================================================
 `);
   process.exit(0);

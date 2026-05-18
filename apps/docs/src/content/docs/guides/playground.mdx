@@ -22,7 +22,7 @@ Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credi
 | **Google Gemini** ← recommended | ✅ Yes — generous free tier | `GOOGLE_API_KEY` |
 | Anthropic Claude | ❌ Pay-as-you-go | `ANTHROPIC_API_KEY` |
 | OpenAI | ❌ Pay-as-you-go | `OPENAI_API_KEY` |
-| Local Ollama | ✅ Free | `PROVIDER=ollama` + `OLLAMA_ENDPOINT` |
+| Local Ollama | ✅ Free | `PROVIDER=ollama` + `OLLAMA_ENDPOINT` (HTTPS tunnel — see below) |
 
 <Aside type="note">
 **Why not Secrets?** The embedded iframe hides the Stackblitz Secrets panel. Editing `.env` directly in the editor is the reliable alternative — keys stay in your browser session only.
@@ -86,11 +86,16 @@ Get a free Gemini API key at [ai.google.dev](https://ai.google.dev) — no credi
 ## Using local Ollama
 
 <Aside type="caution">
-Local Ollama requires Chrome 94+ (loopback exception). Does not work in Firefox or Safari.
+**`http://localhost:11434` does NOT work in the embed.** The StackBlitz
+WebContainer routes `localhost` to its own sandbox, not your machine — and
+a plain LAN IP is blocked as mixed content on this HTTPS page. The only way
+to reach your local Ollama from the hosted playground is an **HTTPS tunnel**
+(Chrome only). Bare `localhost` works *solely* if you clone this repo and
+run the scenario on your own machine, outside the browser sandbox.
 </Aside>
 
 <Steps>
-1. Start Ollama with CORS enabled:
+1. Start Ollama with CORS open (it must accept the tunnel origin):
 
    **Mac/Linux:**
    ```bash
@@ -106,12 +111,24 @@ Local Ollama requires Chrome 94+ (loopback exception). Does not work in Firefox 
    ollama pull llama3.2
    ```
 
-3. In Stackblitz Secrets (⚙️), add:
+3. Expose Ollama over HTTPS with a tunnel:
+   ```bash
+   cloudflared tunnel --url http://localhost:11434
+   # or:  ngrok http 11434
+   ```
+   Copy the `https://…` URL it prints.
+
+4. In the `.env` tab, set:
    ```
    PROVIDER        = ollama
-   OLLAMA_ENDPOINT = http://localhost:11434
+   OLLAMA_ENDPOINT = https://YOUR-TUNNEL.trycloudflare.com
    MODEL           = llama3.2
    ```
 
-4. Click the terminal **restart** button (↺) to re-run with the new env vars.
+5. Click the terminal **restart** button (↺) to re-run with the new env vars.
 </Steps>
+
+<Aside type="note">
+This tunnel hop is the gap the v0.12 browser-extension Ollama bridge will
+close. Until then, the zero-setup path is a cloud key (Gemini free tier).
+</Aside>
