@@ -13,9 +13,13 @@ export function requireApprovalFor(options: RequireApprovalForOptions): (harness
   const toolSet = new Set(tools);
   return (harness: Harness) => {
     harness.before('act', (ctx) => {
-      // ctx.state has pending tool calls — extract next tool name if available
-      const pendingTools = (ctx.state as { pendingToolCalls?: Array<{ name?: string }> })
-        .pendingToolCalls ?? [];
+      // Pending provider-parsed tool calls live at state.meta.pendingNativeToolCalls
+      // (kernel-state.ts). The previous code read a non-existent
+      // state.pendingToolCalls, so this safety gate silently approved every
+      // call. Tests encoded the same wrong shape and false-passed.
+      const pendingTools =
+        (ctx.state as { meta?: { pendingNativeToolCalls?: ReadonlyArray<{ name?: string }> } })
+          .meta?.pendingNativeToolCalls ?? [];
       for (const call of pendingTools) {
         if (call.name && toolSet.has(call.name)) {
           const approved = approver({ toolName: call.name, iteration: ctx.iteration });

@@ -142,20 +142,20 @@ describe('watchdog', () => {
     expect(result).toBeUndefined();
   });
 
-  it('resets timer on observation.tool-result', async () => {
+  it('resets the no-progress timer on after(act) — a phase the runtime fires', async () => {
+    // Progress must be tracked on a phase the runner actually fires. The
+    // observation.tool-result tag has no runtime emit site (v0.12 deferred
+    // pass-through), so the old tap-based reset was dead and the timer
+    // froze at construction — watchdog would kill healthy agents. after(act)
+    // fires once per executed tool batch = a real progress signal.
     const pipeline = buildPipeline(watchdog({ noProgressFor: 50 })); // 50ms
-    // Fire a tap to reset progress
-    const result = await pipeline.transform('observation.tool-result', { type: 'tool_result' } as any, {
-      iteration: 1,
-      phase: 'observe' as any,
-      state: mockState,
-      strategy: 'reactive',
-    } as any);
-    expect(result).toBeDefined();
-    // Check immediately — should NOT abort
-    const hooks = pipeline.collectPhaseHooks('before', 'think');
-    const checkResult = await hooks[0]!({ phase: 'think', iteration: 1, state: mockState });
-    expect(checkResult).toBeUndefined();
+    const progressHooks = pipeline.collectPhaseHooks('after', 'act');
+    expect(progressHooks.length).toBe(1);
+    await new Promise(r => setTimeout(r, 40));
+    await progressHooks[0]!({ phase: 'act', iteration: 1, state: mockState }); // progress → reset
+    const checkHooks = pipeline.collectPhaseHooks('before', 'think');
+    const checkResult = await checkHooks[0]!({ phase: 'think', iteration: 1, state: mockState });
+    expect(checkResult).toBeUndefined(); // timer reset → no abort despite 40ms elapsed pre-reset
   });
 
   it('supports onTrigger option', async () => {
@@ -174,7 +174,7 @@ describe('requireApprovalFor', () => {
       approver: () => false,
     }));
     const hooks = pipeline.collectPhaseHooks('before', 'act');
-    const stateWithPending = { ...mockState, pendingToolCalls: [{ name: 'send_email' }] };
+    const stateWithPending = { ...mockState, meta: { pendingNativeToolCalls: [{ name: 'send_email' }] } };
     const result = await hooks[0]!({ phase: 'act', iteration: 1, state: stateWithPending as any });
     expect(result).toMatchObject({ abort: 'stop' });
   });
@@ -185,7 +185,7 @@ describe('requireApprovalFor', () => {
       approver: () => true,
     }));
     const hooks = pipeline.collectPhaseHooks('before', 'act');
-    const stateWithPending = { ...mockState, pendingToolCalls: [{ name: 'send_email' }] };
+    const stateWithPending = { ...mockState, meta: { pendingNativeToolCalls: [{ name: 'send_email' }] } };
     const result = await hooks[0]!({ phase: 'act', iteration: 1, state: stateWithPending as any });
     expect(result).toBeUndefined();
   });
@@ -196,7 +196,7 @@ describe('requireApprovalFor', () => {
       approver: () => { throw new Error('Should not be called'); },
     }));
     const hooks = pipeline.collectPhaseHooks('before', 'act');
-    const stateWithPending = { ...mockState, pendingToolCalls: [{ name: 'web_search' }] };
+    const stateWithPending = { ...mockState, meta: { pendingNativeToolCalls: [{ name: 'web_search' }] } };
     const result = await hooks[0]!({ phase: 'act', iteration: 1, state: stateWithPending as any });
     expect(result).toBeUndefined();
   });
@@ -208,7 +208,7 @@ describe('requireApprovalFor', () => {
       onDeny: 'terminate',
     }));
     const hooks = pipeline.collectPhaseHooks('before', 'act');
-    const stateWithPending = { ...mockState, pendingToolCalls: [{ name: 'send_email' }] };
+    const stateWithPending = { ...mockState, meta: { pendingNativeToolCalls: [{ name: 'send_email' }] } };
     const result = await hooks[0]!({ phase: 'act', iteration: 1, state: stateWithPending as any });
     expect(result).toMatchObject({ abort: 'terminate' });
   });
