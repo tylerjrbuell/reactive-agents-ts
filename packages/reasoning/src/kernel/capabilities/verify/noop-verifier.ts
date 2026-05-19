@@ -25,6 +25,7 @@ export const noopVerifier: Verifier = {
       checks: [{ name: "noop", passed: true }],
       summary: `${ctx.action}: noop (ablation)`,
       action: ctx.action,
+      softFail: false,
     };
   },
 };
