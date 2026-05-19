@@ -1,49 +1,47 @@
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
-    .withName('github-research-agent')
-    .withAgentId('github-research-agent')
-    .withPersona({
-        role: 'GitHub Research Agent',
-        background:
-            'You are a GitHub research agent that can fetch information from GitHub',
-        instructions:
-            'Use the github-mcp-server to fetch information from GitHub and perform research on GitHub repositories',
-        tone: 'friendly, technical, developer-to-developer',
-    })
+    // .withPersona({
+    //     role: 'Crypto Analyst',
+    //     background:
+    //         'Expert in crypto analysis and research. You can use the crypto prices tool to get live price data.',
+    //     instructions:
+    //         'Always use the crypto prices tool to get live price data. Timestamp your work with the date and time at the top of the report.',
+    //     tone: 'friendly, technical, developer-to-developer',
+    // })
     .withProvider('ollama')
-    .withModel('cogito')
+    .withModel({ model: 'cogito:14b', maxTokens: 32000, temperature: 0.4 })
+    .withCortex()
     .withReasoning({
         defaultStrategy: 'adaptive',
         enableStrategySwitching: false,
     })
-    .withTools({
-        allowedTools: ['file-write', 'github/list_commits'],
-    })
-    .withMCP({
-        name: 'github',
-        transport: 'stdio',
-        command: 'docker',
-        args: [
-            'run',
-            '-i',
-            '--rm',
-            '-e',
-            'GITHUB_PERSONAL_ACCESS_TOKEN',
-            'ghcr.io/github/github-mcp-server',
-        ],
-        env: {
-            GITHUB_PERSONAL_ACCESS_TOKEN:
-                process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
-        },
-    })
-    .withMemory()
-    .withObservability({ verbosity: 'debug', live: true })
+    .withTools()
+    // .withTools({
+    //     allowedTools: ['file-write', 'github/list_commits'],
+    // })
+    // .withMCP({
+    //     name: 'github',
+    //     transport: 'stdio',
+    //     command: 'docker',
+    //     args: [
+    //         'run',
+    //         '-i',
+    //         '--rm',
+    //         '-e',
+    //         'GITHUB_PERSONAL_ACCESS_TOKEN',
+    //         'ghcr.io/github/github-mcp-server',
+    //     ],
+    //     env: {
+    //         GITHUB_PERSONAL_ACCESS_TOKEN:
+    //             process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
+    //     },
+    // })
+    .withObservability({ verbosity: 'verbose', live: true, logModelIO: true })
     .build()
 
 const result = await agent.run(
-    'Fetch the last 10 commits of tylerjrbuell/reactive-agents-ts and summarize them, then synthesize the summary into a markdown report, then write the summary to a local file called ra-summary.md using the file-write tool only'
+    'Research latest cryptocurrency news and trends, then use the crypto prices tool to get live price data, then synthesis a report in markdown format with the current date.'
 )
-
-console.log(result.debrief?.rationale)
+console.log(result)
 await agent.dispose()
