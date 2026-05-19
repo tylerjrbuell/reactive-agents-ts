@@ -51,8 +51,10 @@ export interface PreLoopDispatchDeps {
 export interface PreLoopDispatchResult {
   /** Updated execution context after Phases 2–4. */
   readonly ctx: ExecutionContext;
-  /** Effective allowed-tools list (from config.allowedTools ?? []). */
+  /** Effective allowed-tools list (from config.allowedTools ?? []). Filters prompt AND blocks execution. */
   readonly effectiveAllowedTools: readonly string[];
+  /** Effective focused-tools list (from config.focusedTools ?? []). Filters prompt only, no execution gate. */
+  readonly effectiveFocusedTools: readonly string[];
   /** Required tools the agent MUST call (gate-enforced); undefined = none. */
   readonly effectiveRequiredTools: readonly string[] | undefined;
   /** Per-tool minCalls quantities; undefined = none. */
@@ -122,6 +124,7 @@ export const runPreLoopDispatch = (
     const cachedToolDefs = yield* fetchToolsRegistry(config, ctx, obs, isNormal);
     // Used downstream by built-ins opt-in logic.
     const effectiveAllowedTools = config.allowedTools ?? [];
+    const effectiveFocusedTools = config.focusedTools ?? [];
 
     // ── LLM-based tool classification (required + relevant) ──
     // Extracted to engine/phases/agent-loop/setup/classifier.ts (W23 step 4b).
@@ -150,6 +153,7 @@ export const runPreLoopDispatch = (
     return {
       ctx,
       effectiveAllowedTools,
+      effectiveFocusedTools,
       effectiveRequiredTools,
       effectiveRequiredToolQuantities,
       classifiedRelevantTools,

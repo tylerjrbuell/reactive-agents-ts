@@ -46,6 +46,7 @@ export interface PrepareToolSchemasArgs {
   readonly availableToolSchemas: readonly ToolSchema[];
   readonly availableToolNames: readonly string[];
   readonly effectiveAllowedTools: readonly string[];
+  readonly effectiveFocusedTools: readonly string[];
   readonly effectiveRequiredTools: readonly string[] | undefined;
   readonly classifiedRelevantTools: readonly string[] | undefined;
   readonly resolvedCalibration: ModelCalibration | undefined;
@@ -67,6 +68,7 @@ export const prepareReasoningToolSchemas = (
     availableToolSchemas: initialSchemas,
     availableToolNames: initialNames,
     effectiveAllowedTools,
+    effectiveFocusedTools,
     effectiveRequiredTools,
     classifiedRelevantTools,
     resolvedCalibration,
@@ -135,14 +137,15 @@ export const prepareReasoningToolSchemas = (
       };
     });
 
-    // ── allowedTools prompt filtering (IC-6) ──
-    // When allowedTools is specified, restrict the schemas shown in the prompt
-    // to only those tools. Without this, ALL registered tools (including meta-tools
-    // like find/brief/recall) appear in the system prompt even when the caller
-    // narrowed the allowlist — the model then attempts to call them and receives
-    // guard rejections, inflating iteration counts.
-    // allToolSchemas above retains the full set for the completion guard.
-    if (effectiveAllowedTools.length > 0) {
+    // ── Prompt visibility filter ──
+    // Priority: focusedTools (soft guidance) → allowedTools (hard restriction) → all tools.
+    // focusedTools: show only these in prompt, execution of other tools is NOT blocked.
+    // allowedTools: show only these in prompt AND block execution of non-listed tools.
+    if (effectiveFocusedTools.length > 0) {
+      availableToolSchemas = availableToolSchemas.filter(ts =>
+        effectiveFocusedTools.includes(ts.name)
+      );
+    } else if (effectiveAllowedTools.length > 0) {
       availableToolSchemas = availableToolSchemas.filter(ts =>
         effectiveAllowedTools.includes(ts.name)
       );

@@ -48,6 +48,7 @@ export const ReasoningConfigSchema = Schema.Struct({
 
 export const ToolsConfigSchema = Schema.Struct({
   allowedTools: Schema.optional(Schema.Array(Schema.String)),
+  focusedTools: Schema.optional(Schema.Array(Schema.String)),
   adaptive: Schema.optional(Schema.Boolean),
   terminal: Schema.optional(Schema.Boolean),
 });
@@ -366,6 +367,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
     const t = config.tools;
     const opts = {
       ...(t?.allowedTools ? { allowedTools: t.allowedTools } : {}),
+      ...(t?.focusedTools ? { focusedTools: t.focusedTools } : {}),
       ...(t?.adaptive !== undefined ? { adaptive: t.adaptive } : {}),
       ...(t?.terminal !== undefined ? { terminal: t.terminal } : {}),
     };

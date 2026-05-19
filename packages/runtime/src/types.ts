@@ -602,10 +602,18 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
   /** Options for `outputValidator` — controls retry count. */
   readonly outputValidatorOptions?: { maxRetries?: number };
   /**
-   * Whitelist of tool names the agent is allowed to use. Forwarded from runtime options so
-   * the execution engine can warn when a listed name does not match any registered tool.
+   * Allowlist of tool names. When set, only these tools appear in the LLM prompt AND
+   * execution of any non-listed (non-meta) tool is blocked. Use for hard agent restrictions.
+   * Framework meta-tools (final-answer, recall, brief, etc.) always bypass this gate.
    */
   readonly allowedTools?: readonly string[];
+  /**
+   * Prompt-only tool guidance. When set, only these tools appear in the LLM prompt.
+   * Unlike allowedTools, this does NOT block execution — other tools remain callable.
+   * Use for soft guidance without hard restrictions. Takes precedence over allowedTools
+   * for prompt visibility when both are set.
+   */
+  readonly focusedTools?: readonly string[];
   /**
    * Opt-in for built-in tools in the base schema. See `ToolsOptions.builtins`
    * for full semantics. Default `undefined`/`false`: built-ins are excluded

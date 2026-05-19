@@ -114,6 +114,19 @@ export interface ToolsOptions {
      */
     readonly allowedTools?: readonly string[]
     /**
+     * Tools to show in the LLM prompt — restricts what the model sees but does NOT block execution.
+     * Use when you want to guide the model toward specific tools while other tools remain callable.
+     * Contrast with `allowedTools` which filters the prompt AND blocks execution of non-listed tools.
+     *
+     * @example
+     * ```typescript
+     * agent.withTools({ focusedTools: ["crypto-price"] })
+     * ```
+     *
+     * Default: undefined (prompt visibility follows allowedTools or all tools)
+     */
+    readonly focusedTools?: readonly string[]
+    /**
      * Enable adaptive tool filtering. When true, only task-relevant tools are shown
      * to the agent — reducing context noise and improving small-model accuracy.
      *

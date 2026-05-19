@@ -334,6 +334,7 @@ export const buildBaseRuntimeAndEngine = (
           ? { adaptive: true }
           : undefined),
       allowedTools: state._toolsOptions?.allowedTools,
+      focusedTools: state._toolsOptions?.focusedTools,
       adaptiveToolFiltering: state._toolsOptions?.adaptive,
       builtins: state._toolsOptions?.builtins,
       enableMemory: state._enableMemory,

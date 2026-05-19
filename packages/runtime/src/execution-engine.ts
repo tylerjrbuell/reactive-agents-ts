@@ -743,6 +743,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 });
                 ctx = preLoop.ctx;
                 const effectiveAllowedTools = preLoop.effectiveAllowedTools;
+                const effectiveFocusedTools = preLoop.effectiveFocusedTools;
                 const { effectiveRequiredTools, effectiveRequiredToolQuantities, classifiedRelevantTools } = preLoop;
                 const autoMaxCallsPerTool = preLoop.autoMaxCallsPerTool;
                 const cachedToolDefs = preLoop.cachedToolDefs;
@@ -786,6 +787,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     availableToolSchemas: initialToolSchemas,
                     availableToolNames: initialToolNames,
                     effectiveAllowedTools,
+                    effectiveFocusedTools,
                     effectiveRequiredTools,
                     classifiedRelevantTools,
                     resolvedCalibration,
