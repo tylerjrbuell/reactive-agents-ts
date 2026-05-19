@@ -125,6 +125,9 @@ export const executeReActKernel = (
       strictToolDependencyChain: input.strictToolDependencyChain,
       metaTools: input.metaTools,
       synthesisConfig: input.synthesisConfig,
+      environmentContext: input.environmentContext,
+      providerName: input.providerName,
+      modelId: input.modelId,
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
     } as KernelInput, {
       maxIterations: input.maxIterations ?? 10,
