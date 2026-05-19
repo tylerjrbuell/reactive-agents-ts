@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { HarnessPipeline, RegistrationHarness } from '@reactive-agents/core';
 import {
   maxIterations, budgetLimit, timeoutAfter, watchdog,
-  requireApprovalFor, confidenceFloor
+  requireApprovalFor
 } from '../src/killswitches/index.js';
 import { killswitches } from '../src/killswitches/registry.js';
 import type { Harness, KernelStateLike } from '@reactive-agents/core';
@@ -214,52 +214,30 @@ describe('requireApprovalFor', () => {
   });
 });
 
-describe('confidenceFloor', () => {
-  it('aborts when confidence >= threshold', async () => {
-    const pipeline = buildPipeline(confidenceFloor({ verifier: 0.8, minSteps: 1 }));
-    const hooks = pipeline.collectPhaseHooks('before', 'verify');
-    const stateWithConfidence = { ...mockState, steps: [{ type: 'thought' }], verifierScore: 0.85 };
-    const result = await hooks[0]!({ phase: 'verify', iteration: 1, state: stateWithConfidence as any });
-    expect(result).toMatchObject({ abort: 'stop' });
-  });
-
-  it('does not abort below threshold', async () => {
-    const pipeline = buildPipeline(confidenceFloor({ verifier: 0.8, minSteps: 1 }));
-    const hooks = pipeline.collectPhaseHooks('before', 'verify');
-    const stateWithConfidence = { ...mockState, steps: [{ type: 'thought' }], verifierScore: 0.7 };
-    const result = await hooks[0]!({ phase: 'verify', iteration: 1, state: stateWithConfidence as any });
-    expect(result).toBeUndefined();
-  });
-
-  it('respects minSteps requirement', async () => {
-    const pipeline = buildPipeline(confidenceFloor({ verifier: 0.8, minSteps: 5 }));
-    const hooks = pipeline.collectPhaseHooks('before', 'verify');
-    const stateWithConfidence = { ...mockState, steps: [{ type: 'thought' }], verifierScore: 0.95 };
-    const result = await hooks[0]!({ phase: 'verify', iteration: 1, state: stateWithConfidence as any });
-    expect(result).toBeUndefined();
-  });
-
-  it('disables early exit when earlyExit is false', async () => {
-    const pipeline = buildPipeline(confidenceFloor({ verifier: 0.8, earlyExit: false }));
-    const hooks = pipeline.collectPhaseHooks('before', 'verify');
-    expect(hooks.length).toBe(0);
-  });
-});
-
 describe('killswitches registry', () => {
-  it('lists all 6 killswitches', () => {
+  it('does not register confidenceFloor — verify phase is never fired at runtime', () => {
+    // The runner only fires bootstrap/think/act/complete phase hooks. A
+    // killswitch registered on before('verify') can never execute, and the
+    // implementation also read a state.verifierScore field that does not
+    // exist. A registered-but-dead killswitch is a credibility defect, so
+    // confidenceFloor was unshipped. See
+    // wiki/Research/2026-05-19-framework-state-and-priorities.md (Tier 0).
     const list = killswitches.list();
-    expect(list).toHaveLength(6);
+    expect(list).not.toContain('confidenceFloor');
+  });
+
+  it('lists all 5 killswitches', () => {
+    const list = killswitches.list();
+    expect(list).toHaveLength(5);
     expect(list).toContain('budgetLimit');
     expect(list).toContain('timeoutAfter');
     expect(list).toContain('maxIterations');
     expect(list).toContain('requireApprovalFor');
     expect(list).toContain('watchdog');
-    expect(list).toContain('confidenceFloor');
   });
 
   it('list is immutable', () => {
     const list = killswitches.list();
-    expect(list).toHaveLength(6);
+    expect(list).toHaveLength(5);
   });
 });

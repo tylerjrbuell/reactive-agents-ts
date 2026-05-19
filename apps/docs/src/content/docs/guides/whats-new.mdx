@@ -67,7 +67,7 @@ Learned `SkillRecord` objects now survive process restarts. The skill system use
 - **Killswitches** — Six factory functions from `@reactive-agents/compose` that wire stopping conditions into the agent loop. Pass them to `.compose()` or `.withHarness()`:
 
   ```ts
-  import { maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor, confidenceFloor } from "@reactive-agents/compose";
+  import { maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor } from "@reactive-agents/compose";
   ```
 
   | Factory | Stops when… |
@@ -77,7 +77,6 @@ Learned `SkillRecord` objects now survive process restarts. The skill system use
   | `timeoutAfter(duration)` | Wall-clock duration exceeded |
   | `watchdog({ timeout })` | No progress within `timeout` |
   | `requireApprovalFor(toolName, approver)` | Named tool needs human approval |
-  | `confidenceFloor(threshold)` | Agent confidence drops below threshold |
 
   See [Compose API](/reference/compose-api/).
 

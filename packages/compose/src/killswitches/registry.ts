@@ -4,7 +4,6 @@ const KILLSWITCH_NAMES = [
   'maxIterations',
   'requireApprovalFor',
   'watchdog',
-  'confidenceFloor',
 ] as const;
 
 export type KillswitchName = typeof KILLSWITCH_NAMES[number];
