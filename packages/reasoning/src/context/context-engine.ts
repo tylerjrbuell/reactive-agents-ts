@@ -53,17 +53,12 @@ export function buildStaticContext(input: StaticContextInput): string {
   const { task, profile, availableToolSchemas, requiredTools } = input;
   const sections: string[] = [];
 
-  // Environment context (date, time, timezone, platform, custom)
-  // Lazy mode (default) skips this — curator-style high-signal-only assembly.
-  // The agent sees env data only when it actually needs it (via brief() etc).
-  // Opt out via RA_LAZY_TOOLS=0.
-  const lazyMode = process.env.RA_LAZY_TOOLS !== "0";
-  if (!lazyMode) {
-    sections.push(buildEnvironmentContext(input.environmentContext));
-  }
+  // Environment context (date, time, timezone, platform, custom).
+  // Always injected — temporal context is critical for date-sensitive tasks.
+  // Without it agents hallucinate stale dates (e.g. search "December 2024" in 2026).
+  sections.push(buildEnvironmentContext(input.environmentContext));
 
-  // Tool reference (full schemas — no pinned duplicate needed since both
-  // tool ref and RULES are together in the system prompt now)
+  // Tool reference
   sections.push(
     buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail, profile.tier),
   );
@@ -71,9 +66,8 @@ export function buildStaticContext(input: StaticContextInput): string {
   // Task description
   sections.push(`Task: ${task}`);
 
-  // RULES block. In lazyMode, omit by default — only inject when a violation
-  // is observed (handled by the kernel's guidance pipeline). The verbose 4-7
-  // rule list adds tokens + noise without changing behavior on small models.
+  // RULES block — still lazy-gated (verbose, adds noise for small models).
+  const lazyMode = process.env.RA_LAZY_TOOLS !== "0";
   if (!lazyMode) {
     sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier));
   }
