@@ -812,6 +812,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                       availableToolNames,
                       availableToolSchemas,
                       allToolSchemas,
+                      effectiveAllowedTools,
                       effectiveRequiredTools,
                       effectiveRequiredToolQuantities,
                       classifiedRelevantTools,

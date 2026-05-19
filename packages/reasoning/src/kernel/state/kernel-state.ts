@@ -365,6 +365,12 @@ export interface KernelInput {
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /**
+   * Tool execution allowlist. When set, non-META tool calls not in this list
+   * are blocked at act.ts with an error observation. META_TOOLS (final-answer,
+   * recall, brief, etc.) always bypass this gate. Empty/undefined = no enforcement.
+   */
+  readonly allowedTools?: readonly string[];
+  /**
    * Optional seed messages for the LLM conversation thread.
    * When provided, `state.messages` is initialized from these instead of starting empty.
    * Allows the execution engine to inject prior conversation context (e.g. chat history).

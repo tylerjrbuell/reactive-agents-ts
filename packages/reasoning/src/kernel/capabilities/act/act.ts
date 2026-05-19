@@ -366,6 +366,32 @@ export function handleActing(
           continue;
         }
 
+        // ── allowedTools execution gate ──────────────────────────────────────────
+        // Block non-allowed tools before any dispatch. META_TOOLS bypass unconditionally.
+        const effectiveAllowedTools = input.allowedTools ?? [];
+        if (
+          effectiveAllowedTools.length > 0 &&
+          !META_TOOLS.has(tc.name) &&
+          !effectiveAllowedTools.includes(tc.name)
+        ) {
+          const blockedMsg = `[Tool "${tc.name}" is not in allowedTools — blocked. Allowed: ${effectiveAllowedTools.join(", ")}]`;
+          const actionStep = makeStep("action", `${tc.name}(${JSON.stringify(tc.arguments)})`, {
+            toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+          });
+          const blockedObsStep = makeStep("observation", blockedMsg, {
+            toolCallId: tc.id,
+            observationResult: makeObservationResult(tc.name, false, blockedMsg),
+          });
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onObservation(
+            transitionState(state, { steps: [...allSteps, actionStep] }),
+            blockedMsg,
+            false,
+          );
+          allSteps = [...allSteps, actionStep, blockedObsStep];
+          continue;
+        }
+
         // ── Check meta-tool registry first (brief, pulse, activate-skill) ───────
         const metaHandler = metaToolRegistry.get(tc.name);
         if (metaHandler && (

@@ -82,6 +82,8 @@ interface ReactiveInput {
   readonly temperature?: number;
   /** Custom environment context key-value pairs injected into system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
+  /** Tool execution allowlist — blocked non-META calls return error observation in act.ts. */
+  readonly allowedTools?: readonly string[];
   /** Meta-tool configuration and pre-computed static data for brief/pulse/recall/find. */
   readonly metaTools?: KernelMetaToolsConfig;
   /** Runtime-resolved skills merged into `brief` (SkillResolver, etc.). */
@@ -195,6 +197,7 @@ export const executeReactive = (
       maxCallsPerTool: input.maxCallsPerTool,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       environmentContext: input.environmentContext,
+      allowedTools: input.allowedTools,
       metaTools: input.metaTools,
       toolElaboration: input.config.strategies.reactive.toolElaboration,
       nextMovesPlanning: input.config.strategies.reactive.nextMovesPlanning,

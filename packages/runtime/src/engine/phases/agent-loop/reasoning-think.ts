@@ -37,6 +37,7 @@ export interface ReasoningThinkDeps {
   readonly availableToolNames: readonly string[];
   readonly availableToolSchemas: readonly ToolSchemaShape[];
   readonly allToolSchemas: readonly ToolSchemaShape[];
+  readonly effectiveAllowedTools: readonly string[];
   readonly effectiveRequiredTools: readonly string[] | undefined;
   readonly effectiveRequiredToolQuantities: Readonly<Record<string, number>> | undefined;
   readonly classifiedRelevantTools: readonly string[] | undefined;
@@ -57,6 +58,7 @@ export const runReasoningThink = (
     availableToolNames,
     availableToolSchemas,
     allToolSchemas,
+    effectiveAllowedTools,
     effectiveRequiredTools,
     effectiveRequiredToolQuantities,
     classifiedRelevantTools,
@@ -200,6 +202,7 @@ export const runReasoningThink = (
       taskCategory,
       temperature: config.contextProfile?.temperature as number | undefined,
       environmentContext: config.environmentContext as Record<string, string> | undefined,
+      allowedTools: effectiveAllowedTools.length > 0 ? effectiveAllowedTools : undefined,
       metaTools: config.metaTools,
       briefResolvedSkills: briefResolvedSkillsFromMetadata(
         c.metadata as Record<string, unknown>,
