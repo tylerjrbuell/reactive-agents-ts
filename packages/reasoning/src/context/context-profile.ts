@@ -1,6 +1,6 @@
 // File: src/context/context-profile.ts
 import { Schema } from "effect";
-import { ModelTierSchema, type ModelTier as CapabilityModelTier } from "@reactive-agents/llm-provider";
+import { ModelTierSchema, resolveCapability, type ModelTier as CapabilityModelTier } from "@reactive-agents/llm-provider";
 
 // ─── Model Tier ───
 //
@@ -119,3 +119,27 @@ export const mergeProfile = (
   ...overrides,
   tier: overrides.tier ?? base.tier,
 });
+
+/**
+ * S1.4 — Wire `capability.recommendedNumCtx` into `profile.maxTokens`.
+ *
+ * Resolution: the caller-supplied `contextProfile.maxTokens` always wins
+ * (passed as `callerProvidedMaxTokens`). Otherwise, when both provider and
+ * model are known, resolve the Capability and use its `recommendedNumCtx`
+ * as the effective context window. With provider or model missing, the
+ * profile is returned unchanged (tier default stands).
+ *
+ * Pure / synchronous — `resolveCapability` is a sync three-tier lookup
+ * (cache → static table → conservative fallback 2048).
+ */
+export function applyCapabilityMaxTokens(
+  profile: ContextProfile,
+  providerName: string | undefined,
+  modelId: string | undefined,
+  callerProvidedMaxTokens: number | undefined,
+): ContextProfile {
+  if (callerProvidedMaxTokens !== undefined) return profile;
+  if (!providerName || !modelId) return profile;
+  const cap = resolveCapability(providerName, modelId);
+  return { ...profile, maxTokens: cap.recommendedNumCtx };
+}

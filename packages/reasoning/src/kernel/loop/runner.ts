@@ -20,7 +20,7 @@ import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agent
 import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
 import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
 import { checkpointStoreRef } from "@reactive-agents/tools";
-import { CONTEXT_PROFILES } from "../../context/context-profile.js";
+import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
 import { buildKernelHooks } from "../../kernel/state/kernel-hooks.js";
@@ -491,9 +491,19 @@ export function runKernel(
       baseProfile.tier,
       effectiveInput.modelId,
     );
-    const profile: ContextProfile = profileOverrides
+    const mergedProfile: ContextProfile = profileOverrides
       ? ({ ...baseProfile, ...profileOverrides } as ContextProfile)
       : baseProfile;
+    // S1.4 — derive the effective context window from the model Capability
+    // unless the caller explicitly set contextProfile.maxTokens (their value
+    // wins). Without this, local tier stays at the 32K placeholder while
+    // Ollama silently truncates at the model's real num_ctx (cogito:14b=8192).
+    const profile: ContextProfile = applyCapabilityMaxTokens(
+      mergedProfile,
+      effectiveInput.providerName,
+      effectiveInput.modelId,
+      effectiveInput.contextProfile?.maxTokens,
+    );
 
     // ── 3. Build hooks ───────────────────────────────────────────────────────
     const hooks = buildKernelHooks(eventBus);
