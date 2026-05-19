@@ -10,7 +10,28 @@ updated: 2026-05-14
 
 ---
 
-## Latest Session (2026-05-14, night+2)
+## Latest Session (2026-05-19) — Tier 0 honesty sweep
+
+Ownership pass after v0.11.1. Artifact: `wiki/Research/2026-05-19-framework-state-and-priorities.md` (state + priority tiers + verified scope corrections).
+
+**Shipped (10 commits unpushed → push pending):**
+- `e8dc8b20` **build-unblock** — HEAD DTS was RED (`runtime.ts` `leanModeVerifier` missing required `softFail`; `a368a186` fixed only the sibling `noopVerifier`). `main` could not publish. Full build now 38/38 green.
+- **Killswitch honesty sweep — 3 of 6 killswitches were broken in shipped v0.11.1:**
+  - `c7fa29c2` `confidenceFloor` **unshipped** — `before('verify')` never fires + `state.verifierScore` phantom; fix = mechanism change (N=3-gated), unship was in-scope.
+  - `035f4765` `watchdog` **fixed** — progress reset rode dead `tap('observation.tool-result')` (no emit site) → froze at construction, killed healthy agents → re-targeted to `after('act')`.
+  - `0460aaad` `requireApprovalFor` **fixed** — read phantom `state.pendingToolCalls` (real: `state.meta.pendingNativeToolCalls`) → safety gate silently approved everything.
+  - `budgetLimit`/`timeoutAfter`/`maxIterations` verified sound.
+- **Lesson:** every broken killswitch had isolation tests feeding the buggy shape (false-pass). Killswitch tests must use real runtime state shape + real fire path.
+
+**Scope corrections (verified, in artifact §4b):**
+- `experienceSummary` (`context-manager.ts:272`) is **not a 1d wire** — `materializeExperienceSummary` never called at runtime, no `ToolCallObservation` ever written to store. It IS the M6/M10 loop → Phase 1.5, N=3-gated.
+- `authorize()` is **not "one seam"** — identity/reasoning/runtime zero cross-refs; real multi-day cross-package wire + coupling decision. Tier 0 cheap alt = audit/unship the delegation-enforcement *claims* in docs/README.
+
+**Next:** push 10 commits; then user decides — finish Tier 0 with the security-claims doc audit (½ day) vs open a properly-scoped Phase 1.5 unit (M6/M10/M14 or the real authorize() wire — each its own approval). Do NOT conflate the doc audit and the authorize() wire.
+
+---
+
+## Previous Session (2026-05-14, night+2)
 
 ### Phase D — `code-action` strategy — COMPLETE ✅
 
