@@ -40,6 +40,20 @@ The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.
 
 ## Current state (May 12, 2026)
 
+### Tier 0 Honesty Sweep — SHIPPED ✅ (May 19, 2026, v0.11.1, pushed)
+
+Ownership pass after v0.11.1. Artifact: `wiki/Research/2026-05-19-framework-state-and-priorities.md`.
+
+- **HEAD DTS build was RED** — `runtime.ts` `leanModeVerifier` missing required `softFail` (`a368a186` fixed only sibling `noopVerifier`); `main` could not publish. Fixed `e8dc8b20`.
+- **3 of 6 compose killswitches were broken in shipped v0.11.1** (systemic "shipped+documented+dead"):
+  - `confidenceFloor` unshipped `c7fa29c2` — `before('verify')` never fires + phantom `state.verifierScore`.
+  - `watchdog` fixed `035f4765` — dead `tap('observation.tool-result')` → `after('act')` (was killing healthy agents).
+  - `requireApprovalFor` fixed `0460aaad` — phantom `state.pendingToolCalls` → `state.meta.pendingNativeToolCalls` (safety gate silently approved everything).
+  - `budgetLimit`/`timeoutAfter`/`maxIterations` verified sound.
+- **Anti-pattern:** every broken killswitch had isolation tests feeding the buggy state shape (false-pass CI). Killswitch/hook tests MUST use real runtime state shape + a phase the runner actually fires (fire-set: before bootstrap/think/act, after think/act/complete — NOT verify; `observation.tool-result` has no emit site).
+- **Scope corrections:** `experienceSummary` (`context-manager.ts:272`) is the M6/M10 loop, not a 1d wire (no runtime producer, no store writes). `authorize()` is multi-day cross-package wire (identity/reasoning/runtime zero cross-refs), not "one seam"; Tier 0 cheap alt = audit/unship the delegation-enforcement claims in docs.
+- **Next:** user decides — Tier 0 close (security-claims doc audit, ½d) vs properly-scoped Phase 1.5 unit (M6/M10/M14 or real authorize() wire). Do NOT conflate doc audit with authorize() wire.
+
 ### M3 Ablation Running — Decision Traceability Inquiry (May 12, 2026)
 
 External user email: "What do you have agents record so another agent, or future you, can understand why a change happened?"
