@@ -283,7 +283,7 @@ export function handleThinking(
       missingRequiredForPressure.length === 0 &&
       shouldNarrowToFinalAnswerOnly({
         estimatedTokens: state.tokens,
-        maxTokens: input.contextProfile?.maxTokens ?? Number.MAX_SAFE_INTEGER,
+        maxTokens: profile.maxTokens ?? Number.MAX_SAFE_INTEGER,
         tier: profile.tier,
       });
 

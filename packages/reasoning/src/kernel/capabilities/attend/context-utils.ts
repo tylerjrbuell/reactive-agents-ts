@@ -136,8 +136,7 @@ export function buildConversationMessages(
   const compactedMessages = applyMessageWindowWithCompact(
     state.messages,
     profile.tier ?? "mid",
-    (input.contextProfile as { maxTokens?: number } | undefined)?.maxTokens ??
-      Number.MAX_SAFE_INTEGER,
+    profile.maxTokens ?? Number.MAX_SAFE_INTEGER,
   );
   let workingMessages = compactedMessages;
 
