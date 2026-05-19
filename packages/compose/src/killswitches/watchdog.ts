@@ -2,7 +2,6 @@ import type { Harness } from '@reactive-agents/core';
 
 export interface WatchdogOptions {
   noProgressFor: string | number;  // '30s' | milliseconds
-  progressSignal?: 'observation.tool-result';  // currently only this tag in TagMap
   onTrigger?: 'stop' | 'terminate';
 }
 
@@ -22,8 +21,12 @@ export function watchdog(options: WatchdogOptions): (harness: Harness) => void {
   return (harness: Harness) => {
     let lastProgress = Date.now();
 
-    // Track progress via observation.tool-result events
-    harness.tap('observation.tool-result', () => {
+    // Progress = a tool batch executed. Tracked on after('act'), which the
+    // runner actually fires (act.ts). The original observation.tool-result
+    // tap was dead — that tag has no runtime emit site (v0.12 deferred
+    // pass-through), so the timer never reset and watchdog aborted healthy
+    // long-running agents.
+    harness.after('act', () => {
       lastProgress = Date.now();
     });
 
