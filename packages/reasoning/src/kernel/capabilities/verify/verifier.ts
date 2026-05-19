@@ -128,6 +128,14 @@ export interface VerificationResult {
    * consumers that need to correlate verifications with actions.
    */
   readonly action: string;
+  /**
+   * When true, the failure is advisory only — the caller should surface
+   * the output with a warning rather than suppressing it. Set when the
+   * only failing checks are evidence-grounded or synthesis-grounded.
+   * Hard-fail checks (output-is-model-authored, output-not-harness-parrot)
+   * always set softFail=false.
+   */
+  readonly softFail: boolean;
 }
 
 /**
@@ -370,12 +378,17 @@ export const defaultVerifier: Verifier = {
       }
     }
 
+    const SOFT_FAIL_CHECKS = new Set(["evidence-grounded", "synthesis-grounded"]);
+    const failedChecks = checks.filter((c) => !c.passed);
+    const softFail = failedChecks.length > 0 && failedChecks.every((c) => SOFT_FAIL_CHECKS.has(c.name));
+
     const verified = checks.every((c) => c.passed);
     return {
       verified,
       checks,
       summary: buildSummary(ctx.action, checks),
       action: ctx.action,
+      softFail,
     };
   },
 };

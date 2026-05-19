@@ -1620,15 +1620,28 @@ export function runKernel(
           message: `[verifier] terminal output rejected: ${verdict.summary}`,
           timestamp: new Date(),
         });
-        state = transitionState(state, {
-          status: "failed",
-          error: `Verifier rejected output: ${verdict.summary}`,
-          meta: {
-            ...state.meta,
-            verifierRejected: true,
-            verifierVerdict: verdict.summary,
-          } as KernelState["meta"],
-        });
+        if (verdict.softFail) {
+          // Advisory failure: grounding check missed compressed observation.
+          // Surface output with warning metadata; do NOT nullify.
+          state = transitionState(state, {
+            meta: {
+              ...state.meta,
+              verifierRejected: false,
+              verificationWarning: verdict.summary,
+            } as KernelState["meta"],
+          });
+        } else {
+          // Hard failure: parrot or harness-authored output. Suppress entirely.
+          state = transitionState(state, {
+            status: "failed",
+            error: `Verifier rejected output: ${verdict.summary}`,
+            meta: {
+              ...state.meta,
+              verifierRejected: true,
+              verifierVerdict: verdict.summary,
+            } as KernelState["meta"],
+          });
+        }
       }
     }
 
