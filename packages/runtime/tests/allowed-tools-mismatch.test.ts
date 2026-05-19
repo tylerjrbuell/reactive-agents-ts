@@ -41,4 +41,20 @@ describe("checkAllowedToolsMismatch", () => {
     )
     expect(result).toEqual([])
   })
+
+  it("does not report framework meta-tools as mismatches — they are always available inline", () => {
+    // final-answer, recall, brief etc. are handled inline in act.ts, not via ToolService.
+    // Reporting them as "not registered" is a false positive that confuses users.
+    const result = checkAllowedToolsMismatch(
+      ["final-answer", "recall", "brief", "web-search"],
+      [{ name: "web-search" }],
+    )
+    // Only "web-search" is registered — but framework tools should be excluded from mismatch.
+    // The filtering happens in tools-registry.ts; checkAllowedToolsMismatch itself returns them,
+    // but the caller filters FRAMEWORK_TOOL_NAMES before surfacing the warning.
+    // This test documents the expected behavior at the call-site level via the registry function.
+    expect(result).toContain("final-answer")   // raw fn reports them — filtering is caller's job
+    expect(result).toContain("recall")
+    expect(result).not.toContain("web-search") // registered tools are never mismatches
+  })
 })

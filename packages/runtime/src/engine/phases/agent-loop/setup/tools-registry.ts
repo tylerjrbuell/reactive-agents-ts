@@ -59,15 +59,17 @@ export const fetchToolsRegistry = (
       Effect.catchAll(() => Effect.succeed([] as readonly any[])),
     );
 
-    // Warn on allowedTools mismatch
+    // Warn on allowedTools mismatch — exclude framework meta-tools (always available inline)
     const effectiveAllowedTools = config.allowedTools ?? [];
     if (effectiveAllowedTools.length > 0) {
-      const mismatches = checkAllowedToolsMismatch(effectiveAllowedTools, cachedToolDefs);
+      const mismatches = checkAllowedToolsMismatch(effectiveAllowedTools, cachedToolDefs)
+        .filter((name) => !FRAMEWORK_TOOL_NAMES.has(name));
       if (mismatches.length > 0 && obs && isNormal) {
         yield* obs
           .info(
-            `[allowedTools] These tools were specified but are NOT registered: ${mismatches.join(", ")}. ` +
-              `Registered tools: ${cachedToolDefs.map((t: any) => t.name).join(", ")}`,
+            `[allowedTools] These tools are in allowedTools but not registered in ToolService: ${mismatches.join(", ")}. ` +
+              `Registered tools: ${cachedToolDefs.map((t: any) => t.name).join(", ")}. ` +
+              `Note: framework tools (final-answer, recall, brief, etc.) are always available inline.`,
           )
           .pipe(
             Effect.catchAll((err) =>
