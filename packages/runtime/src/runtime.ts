@@ -806,6 +806,7 @@ export interface RuntimeOptions {
 const leanModeVerifier: Verifier = {
   verify: (ctx) => ({
     verified: true,
+    softFail: false,
     checks: [{ name: "noop", passed: true }],
     summary: `${ctx.action}: noop (lean harness)`,
     action: ctx.action,
