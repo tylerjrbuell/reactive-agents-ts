@@ -48,6 +48,29 @@ describe("cryptoPriceHandler", () => {
     expect(result.prices.find((p) => p.symbol === "XLM")?.price).toBe(0.1);
   });
 
+  it("accepts comma-separated string instead of array (model coercion)", async () => {
+    mockCoinGecko({ bitcoin: { usd: 77000 }, ethereum: { usd: 2300 } });
+
+    const result = await Effect.runPromise(
+      cryptoPriceHandler({ coins: "BTC,ETH", currency: "usd" }),
+    );
+
+    expect(result.prices).toHaveLength(2);
+    expect(result.prices.find((p) => p.symbol === "BTC")?.price).toBe(77000);
+    expect(result.prices.find((p) => p.symbol === "ETH")?.price).toBe(2300);
+  });
+
+  it("accepts single coin as string instead of array (model coercion)", async () => {
+    mockCoinGecko({ bitcoin: { usd: 77000 } });
+
+    const result = await Effect.runPromise(
+      cryptoPriceHandler({ coins: "BTC" }),
+    );
+
+    expect(result.prices).toHaveLength(1);
+    expect(result.prices[0]?.price).toBe(77000);
+  });
+
   it("defaults currency to usd when omitted", async () => {
     mockCoinGecko({ bitcoin: { usd: 77000 } });
 

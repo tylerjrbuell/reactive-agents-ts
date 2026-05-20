@@ -166,6 +166,40 @@ describe("validateToolInput", () => {
     expect(result).toEqual({ items: [1, 2, 3] });
   });
 
+  it("should coerce comma-separated string to array for array params", async () => {
+    const def = makeDef([
+      {
+        name: "coins",
+        type: "array",
+        items: { type: "string" },
+        description: "Coin symbols",
+        required: true,
+      },
+    ]);
+
+    const result = await Effect.runPromise(
+      validateToolInput(def, { coins: "BTC,ETH,XRP" }),
+    );
+    expect(result).toEqual({ coins: ["BTC", "ETH", "XRP"] });
+  });
+
+  it("should coerce single-item string to array for array params", async () => {
+    const def = makeDef([
+      {
+        name: "coins",
+        type: "array",
+        items: { type: "string" },
+        description: "Coin symbols",
+        required: true,
+      },
+    ]);
+
+    const result = await Effect.runPromise(
+      validateToolInput(def, { coins: "BTC" }),
+    );
+    expect(result).toEqual({ coins: ["BTC"] });
+  });
+
   it("should validate object types", async () => {
     const def = makeDef([
       {

@@ -148,7 +148,11 @@ export const cryptoPriceHandler = (
 ): Effect.Effect<CryptoPriceResult, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
-      const rawCoins = args.coins as string[];
+      const rawCoins = (
+        Array.isArray(args.coins)
+          ? args.coins
+          : String(args.coins).split(",").map((s) => s.trim()).filter(Boolean)
+      ) as string[];
       const currency = ((args.currency as string | undefined) ?? "usd").toLowerCase();
 
       const requested = rawCoins.map((c) => c.toUpperCase().trim());

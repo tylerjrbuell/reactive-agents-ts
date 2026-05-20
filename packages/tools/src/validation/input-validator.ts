@@ -70,6 +70,12 @@ export const validateToolInput = (
         continue;
       }
 
+      // Coerce string → array: models (especially small ones) often pass "a,b" instead of ["a","b"]
+      if (param.type === "array" && typeof value === "string") {
+        validated[param.name] = value.split(",").map((s) => s.trim()).filter(Boolean);
+        continue;
+      }
+
       // Type check
       const actualType = Array.isArray(value) ? "array" : typeof value;
       if (
