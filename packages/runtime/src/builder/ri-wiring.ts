@@ -12,27 +12,75 @@
 
 import type { AgentEvent } from '@reactive-agents/core'
 
+/** Extracted `EntropyScored` event payload — full struct from core. */
+export type RiEntropyScore = Extract<AgentEvent, { _tag: 'EntropyScored' }>
+
+/** Extracted `ReactiveDecision` event payload — full struct from core. */
+export type RiControllerDecision = Extract<
+    AgentEvent,
+    { _tag: 'ReactiveDecision' }
+>
+
+/**
+ * Slim context passed alongside a controller decision. Surfaces the
+ * iteration index and prior entropy reading so user code can correlate
+ * the decision with surrounding observability.
+ */
+export interface RiControllerDecisionContext {
+    readonly iteration: number
+    readonly entropyBefore: number
+}
+
+/**
+ * Skill descriptor surfaced to lifecycle hooks. Derived from the
+ * underlying `SkillActivated` / `SkillRefined` events; intentionally
+ * narrower than the full event so consumers don't depend on the
+ * envelope `_tag`.
+ */
+export interface RiSkillDescriptor {
+    readonly name: string
+    readonly version: number
+    /** Present on activation hooks; omitted from refinement hooks. */
+    readonly confidence?: string
+    /** Present on activation hooks; omitted from refinement hooks. */
+    readonly iteration?: number
+    /** Present on refinement hooks; omitted from activation. */
+    readonly taskCategory?: string
+}
+
+/** Outcome of the user-supplied controller-decision hook. */
+export type RiDecisionVerdict = 'accept' | 'reject'
+
+/** Outcome of the user-supplied skill-conflict hook. */
+export type RiSkillConflictVerdict = 'merge' | 'surface' | 'ignore'
+
 /**
  * Canonical shape of the user-supplied RI hooks bag.
  *
  * Mirrored by both the private `_riHooks` field on `ReactiveAgentBuilder`
- * and the inline overload type in `withReactiveIntelligence(...)`. The
- * `any` typings on payload positions match the public API surface; this
- * module is purely a wiring shim and does not narrow them.
+ * and the inline overload type in `withReactiveIntelligence(...)`.
+ *
+ * HS-09 (2026-05-20 sweep): replaced the prior `: any` payload typings
+ * with the concrete struct shapes the wiring shim passes to each hook,
+ * so the public extension surface no longer lies about what consumers
+ * receive.
  */
 export interface RiHooks {
-    onEntropyScored?: (score: any, iteration: number) => void
+    onEntropyScored?: (score: RiEntropyScore, iteration: number) => void
     onControllerDecision?: (
-        decision: any,
-        context: any
-    ) => 'accept' | 'reject' | any
-    onSkillActivated?: (skill: any, trigger: string) => void
-    onSkillRefined?: (skill: any, previousVersion: any) => void
-    onSkillConflict?: (a: any, b: any) => 'merge' | 'surface' | 'ignore'
+        decision: RiControllerDecision,
+        context: RiControllerDecisionContext,
+    ) => RiDecisionVerdict | void
+    onSkillActivated?: (skill: RiSkillDescriptor, trigger: string) => void
+    onSkillRefined?: (
+        skill: RiSkillDescriptor,
+        previousVersion: number,
+    ) => void
+    onSkillConflict?: (a: string, b: string) => RiSkillConflictVerdict
     onMidRunAdjustment?: (
         type: string,
         before: unknown,
-        after: unknown
+        after: unknown,
     ) => void
 }
 
