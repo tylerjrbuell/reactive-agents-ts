@@ -52,6 +52,7 @@ import {
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { withEnvContext } from "../context/context-engine.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -617,9 +618,11 @@ export const executePlanExecute = (
       const reflectResponse = yield* llm
         .complete({
           messages: [{ role: "user", content: reflectionPrompt }],
-          systemPrompt: input.systemPrompt
-            ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
-            : "You are evaluating plan execution. Determine if the task has been adequately addressed.",
+          systemPrompt: withEnvContext(
+            input.systemPrompt
+              ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
+              : "You are evaluating plan execution. Determine if the task has been adequately addressed.",
+          ),
           maxTokens: reflectionDepth === "deep" ? 2500 : 1500,
           temperature: 0.3,
         })
@@ -842,9 +845,11 @@ export const executePlanExecute = (
                 content: `Task: ${goal}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task. Do NOT include internal details like tool names, JSON payloads, recipient numbers, or execution metadata — only user-facing content.`,
               },
             ],
-            systemPrompt: input.systemPrompt
-              ? `${input.systemPrompt}\n\nYou are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.`
-              : "You are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.",
+            systemPrompt: withEnvContext(
+              input.systemPrompt
+                ? `${input.systemPrompt}\n\nYou are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.`
+                : "You are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.",
+            ),
             maxTokens: 4096,
             temperature: 0.3,
           })
@@ -1021,6 +1026,7 @@ function enforceOutputQualityGate(input: {
   return input.llm
     .complete({
       messages: [{ role: "user", content: synthesisPrompt }],
+      systemPrompt: withEnvContext(undefined),
       maxTokens: 1500,
       temperature: 0.2,
     })
@@ -1219,9 +1225,10 @@ function executeStep(
     return services.llm
       .complete({
         messages: [{ role: "user", content: taskText }],
-        systemPrompt:
+        systemPrompt: withEnvContext(
           input.systemPrompt ??
-          "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
+            "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
+        ),
         maxTokens: 4096,
         temperature: 0.5,
       })

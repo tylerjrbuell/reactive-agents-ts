@@ -26,6 +26,7 @@ import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { withEnvContext } from "../context/context-engine.js";
 
 // ── Tier-Adaptive ToT Limits ─────────────────────────────────────────────────
 
@@ -188,13 +189,15 @@ export const executeTreeOfThought = (
                 ),
               },
             ],
-            systemPrompt: yield* compilePromptOrFallback(
-              promptService,
-              "reasoning.tree-of-thought-expand",
-              { task: input.taskDescription, breadth },
-              input.systemPrompt
-                ? `${input.systemPrompt}\n\nYou are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`
-                : `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
+            systemPrompt: withEnvContext(
+              yield* compilePromptOrFallback(
+                promptService,
+                "reasoning.tree-of-thought-expand",
+                { task: input.taskDescription, breadth },
+                input.systemPrompt
+                  ? `${input.systemPrompt}\n\nYou are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`
+                  : `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
+              ),
             ),
             maxTokens: 800 * breadth,
             temperature: 0.8,

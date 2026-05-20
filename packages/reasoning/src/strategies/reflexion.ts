@@ -37,6 +37,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { withEnvContext } from "../context/context-engine.js";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -233,7 +234,7 @@ export const executeReflexion = (
               ),
             },
           ],
-          systemPrompt: critiqueSystemPrompt,
+          systemPrompt: withEnvContext(critiqueSystemPrompt),
           maxTokens: selfCritiqueDepth === "deep" ? 2500 : 1500,
           temperature: 0.3, // low temp for objective critique
         })
@@ -524,6 +525,7 @@ function enforceOutputQualityGate(input: {
   return input.llm
     .complete({
       messages: [{ role: "user", content: synthesisPrompt }],
+      systemPrompt: withEnvContext(undefined),
       maxTokens: 1500,
       temperature: 0.2,
     })

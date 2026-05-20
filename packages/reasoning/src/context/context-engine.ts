@@ -49,6 +49,26 @@ export function buildEnvironmentContext(
   return `Environment:\n${lines.join("\n")}`;
 }
 
+/**
+ * Prepend the standard `Environment:` block (date, time, timezone, platform,
+ * plus optional custom fields) to a system prompt. Use at direct LLM call
+ * sites that bypass `ContextManager`/`buildStaticContext` — e.g. plan-execute
+ * analysis steps, reflexion critique/refine, ToT BFS expansion, code-action
+ * generation. Without this, those calls produce text-output steps with no
+ * date in context (agents can't transcribe a date they were never given).
+ *
+ * Skip this for stripped-prompt JSON paths (planners, classifiers,
+ * structured-output) where any extra block can break structured parsing.
+ */
+export function withEnvContext(
+  systemPrompt: string | undefined,
+  environmentContext?: Readonly<Record<string, string>>,
+): string {
+  const env = buildEnvironmentContext(environmentContext);
+  const sp = systemPrompt?.trim();
+  return sp ? `${env}\n\n${systemPrompt}` : env;
+}
+
 export function buildStaticContext(input: StaticContextInput): string {
   const { task, profile, availableToolSchemas, requiredTools } = input;
   const sections: string[] = [];

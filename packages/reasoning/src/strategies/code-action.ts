@@ -28,6 +28,7 @@ import type { ToolCallRecord } from "./code-action/code-action-observe.js";
 import { formatObservationMessage } from "./code-action/code-action-observe.js";
 import { shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
+import { withEnvContext } from "../context/context-engine.js";
 
 // ── CodeActionInput ───────────────────────────────────────────────────────────
 
@@ -111,7 +112,7 @@ export const executeCodeAction = (
     const planResponse = yield* Effect.mapError(
       llm.complete({
         messages: [{ role: "user", content: user }],
-        systemPrompt: system,
+        systemPrompt: withEnvContext(system),
         temperature: 0,
       }),
       (cause) =>
@@ -200,7 +201,7 @@ export const executeCodeAction = (
             { role: "assistant", content: `\`\`\`typescript\n${generatedCode}\n\`\`\`` },
             { role: "user", content: retryUser },
           ],
-          systemPrompt: system,
+          systemPrompt: withEnvContext(system),
           temperature: 0.1 * iteration,
         }),
         (cause) =>
