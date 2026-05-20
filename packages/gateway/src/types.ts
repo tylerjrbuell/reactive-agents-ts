@@ -3,11 +3,25 @@ import { Effect, Schema } from "effect";
 // ─── EventBus structural type ──────────────────────────────────────────────
 
 /**
+ * Minimum shape a published event must satisfy: a discriminant `_tag`
+ * field plus arbitrary additional payload. Mirrors the
+ * `@reactive-agents/core` `AgentEvent` taxonomy structurally without
+ * forcing a hard import.
+ */
+export type TaggedEventLike = Readonly<{ _tag: string }> &
+  Readonly<Record<string, unknown>>;
+
+/**
  * Structural type for optional EventBus dependency injection.
- * Avoids a hard dependency on `@reactive-agents/core` while enabling observability.
+ * Avoids a hard dependency on `@reactive-agents/core` while enabling
+ * observability. HS-05 (2026-05-20 sweep) replaced the prior `(event:
+ * any)` signature so consumers can no longer accidentally publish
+ * un-tagged payloads through the gateway boundary.
  */
 export type EventBusLike = {
-  readonly publish: (event: any) => Effect.Effect<void, never>;
+  readonly publish: (
+    event: TaggedEventLike,
+  ) => Effect.Effect<void, never>;
 };
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
