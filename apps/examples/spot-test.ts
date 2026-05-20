@@ -1,14 +1,14 @@
 import { ReactiveAgents } from 'reactive-agents'
 
 const agent = await ReactiveAgents.create()
-    // .withPersona({
-    //     role: 'Crypto Analyst',
-    //     background:
-    //         'Expert in crypto analysis and research. You can use the crypto prices tool to get live price data.',
-    //     instructions:
-    //         'Always use the crypto prices tool to get live price data. Timestamp your work with the date and time at the top of the report.',
-    //     tone: 'friendly, technical, developer-to-developer',
-    // })
+    .withPersona({
+        role: 'Crypto Analyst',
+        background:
+            'Expert in crypto analysis and research. You can use the crypto prices tool to get live price data.',
+        instructions:
+            'Always use the crypto prices tool to get live price data. Timestamp your work with the date and time at the top of the report.',
+        tone: 'friendly, technical, developer-to-developer',
+    })
     .withProvider('ollama')
     .withModel({ model: 'cogito:14b', maxTokens: 32000, temperature: 0.4 })
     .withCortex()
