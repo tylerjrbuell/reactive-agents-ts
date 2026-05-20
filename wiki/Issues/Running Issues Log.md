@@ -7,7 +7,7 @@ tags: [issues, blockers, active-work]
 
 **Purpose:** Canonical tracking of active blockers, known problems, pending resolutions, and historical closure notes.
 
-**Updated:** 2026-05-20
+**Updated:** 2026-05-20 (stale-prune pass)
 
 ---
 
@@ -81,32 +81,6 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 
 ---
 
-### Issue #7: Pruning Principle Has No Builder API
-
-**Status:** 🟡 KNOWN (Phase B/C work)
-
-**Description:** North Star §9 encodes the empirical finding from NLAH (arXiv:2603.25723): full harness = 13.6× tokens with −0.8pp accuracy on frontier models. Despite this, `ReactiveAgents.create()` has no lean-mode opt-in. Every user runs at maximum token cost regardless of their model tier or task complexity.
-
-**Root Cause:** Pruning Principle documented in North Star but not surfaced in the builder API. No `.withLeanHarness()` or tier-based pruning flag exists.
-
-**Impact:**
-- Users adopting the full harness stack pay 13.6× tokens with negative returns on frontier models
-- No programmatic way to opt into a pruned/lean configuration
-- Token cost is a show-HN concern for v0.11 positioning
-
-**Fix:** Add `.withLeanHarness()` or tier-based pruning flag to builder before v0.11 ships.
-
-**Phase Gate:** Phase C (v0.11 launch readiness)
-
-**Owner:** Builder team
-
-**References:**
-- North Star §9 (Pruning Principle)
-- `packages/runtime/src/builder.ts`
-- NLAH arXiv:2603.25723
-
----
-
 ## Health Sweep — 2026-05-20
 
 **Baseline (pre-sweep):** Build GREEN (38/38), Tests 5317 pass / 26 skip / 0 fail, branch `main` ahead 7.
@@ -137,7 +111,7 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 | HS-16 | B | Providers `anthropic.ts:346`, `openai.ts:486`, `gemini.ts:575`, `local.ts:691`, `litellm.ts:479-481` | P2 | Retry loops overwrite `lastError = e` — only the final attempt's error survives; original parse error lost | Accumulate `errors: unknown[]` with attempt index |
 | HS-17 | B | `packages/runtime/src/execution-engine.ts:1365` | P0 (= HS-01) | Same as HS-01; flagged independently by Agent B | See HS-01 |
 | HS-18 | C | `packages/llm-provider/src/index.ts:15-17` + `capabilities.ts:9` | 🟡 **PARTIAL** — annotation amended (`<commit>`); migration outstanding | Re-exports `ProviderCapabilities`, `DEFAULT_CAPABILITIES` marked `@deprecated v0.10 — Removed in v0.11.0`; **v0.11.0 already shipped and v0.11.1 current — removal-target version was in the past**; 5 internal callers still on the deprecated type. | ✅ Annotation re-targeted to v0.12.0 with explicit caller list documented. ⏳ Migration: providers/{litellm,openai,anthropic,gemini,local}.ts return `Capability` instead of `ProviderCapabilities`; runner.ts:464 reads `Capability` fields; testing.ts:278 uses `Capability` defaults. M effort. |
-| HS-19 | C | `packages/runtime/src/builder.ts` (2481 LOC), `runtime.ts` (1997 LOC), `runner.ts` (1742 LOC), `execution-engine.ts` (1640 LOC), `reactive-agent.ts` (1578 LOC) | P1 | Five files >1500 LOC; `execution-engine.ts` drifted +100 LOC since W24 (May 8) completion | Next decomposition wave (W26+) |
+| HS-19 | C | `packages/runtime/src/builder.ts` (2481 LOC), `runtime.ts` (1997 LOC), `execution-engine.ts` (1648 LOC), `reactive-agent.ts` (1578 LOC) | P1 | Four files >1500 LOC; `execution-engine.ts` drifted +108 LOC since W24 (May 8) completion. `runner.ts` removed in W25 decomp. | Next decomposition wave (W26+) |
 | HS-20 | C | `packages/reasoning/src/strategies/plan-execute.ts` (1554 LOC), `core/services/event-bus.ts` (1347 LOC), `reasoning/.../think.ts` (1283 LOC), `act.ts` (1137 LOC), `llm-provider/types.ts` (1063 LOC), `decide/arbitrator.ts` (992 LOC), `observability/exporters/console-exporter.ts` (895 LOC) | P2 | 7 single-files >800 LOC — secondary decomposition candidates | Plan post-W26 |
 | HS-21 | C | `packages/llm-provider/src/llm-service.ts:75`, `llm-config.ts:143`, `kernel-state.ts:761-762`, `observability/telemetry/telemetry-schema.ts:37,43`, `tools/adapters/agent-tool-adapter.ts:30` | P2 | 5 `@deprecated` symbols/aliases pending removal — audit removal-target version on each (v0.11 already shipped) | Sweep next minor; amend stale `@deprecated v0.11` annotations |
 | HS-22 | C | Providers — `tool_use_start` + `tool_use_delta` emit pattern duplicated 65 times across anthropic/gemini/local/openai | P2 | Extract `emitToolCallStream(emit, id, name, argsJson)` helper into `llm-provider/src/streaming-helpers.ts` | Single helper, 4 callers updated |
@@ -184,6 +158,26 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 ---
 
 ## Resolved Issues (History)
+
+### ✅ RESOLVED: Pruning Principle Builder API (Issue #7)
+
+**Status:** ✅ Resolved (pre-2026-05-20 stale-prune verification)
+
+**Issue:** North Star §9 Pruning Principle (NLAH arXiv:2603.25723) not surfaced in builder; users paid 13.6× tokens with −0.8pp accuracy on frontier.
+
+**Resolution:** `withLeanHarness()` shipped on builder.
+- `packages/runtime/src/builder.ts:977` — `withLeanHarness(): this { this._leanHarness = true; ... }`
+- `packages/runtime/src/builder.ts:357` — `_leanHarness: boolean = false` state field
+- `packages/runtime/src/builder/build-effect/runtime-construction.ts:156,391` — threads `leanHarness` into runtime options
+- `packages/runtime/src/runtime.ts:797` — `leanHarness?: boolean` on options
+- `packages/runtime/src/runtime.ts:915,922` — wires lean mode: forces `strategySwitching: false` and swaps in `leanModeVerifier`
+
+**References:**
+- North Star §9 (Pruning Principle)
+- `packages/runtime/src/builder.ts:977`
+- `packages/runtime/src/runtime.ts:797,915,922`
+
+---
 
 ### ✅ RESOLVED: Strategy Routing Opt-In (Issue #5)
 
@@ -318,15 +312,15 @@ At that point, we expect to see:
 - ✅ Rule 4 frozen judge resolved
 - ✅ @reactive-agents/diagnose published
 - ✅ Strategy routing opt-in flipped to default-on (#5)
-- 🔄 cogito:14b FM-A1 reduced via M3 retry tuning (#3)
-- 🔄 M3 REWORK implementation complete — terminal retry loop removed (#6)
-- 🔄 Pruning Principle builder API scoped (#7)
+- ✅ cogito:14b FM-A1 closed via `oracle-nudge.ts` Pivot B (#3, closed 2026-05-20)
+- ✅ M3 REWORK implementation complete — terminal retry loop removed (#6, closed 2026-05-12)
+- ✅ Pruning Principle builder API shipped (#7, `withLeanHarness()`)
 - 🔄 Phase 2 plan finalized
 - 🟢 Any new issues discovered during Phase 1.5 work
 
 ---
 
-**Last Updated:** 2026-05-20  
-**Total Open:** 2 (#4, #7 — 0 critical, 2 known; #3 closed 2026-05-20, #6 closed 2026-05-12)  
-**Health Sweep 2026-05-20:** 31 findings filed (2 P0, 13 P1, 16 P2 — v0.11.1 context), 0 fixed in-sweep (verification deferred)  
-**Resolved in Phase 1:** 7
+**Last Updated:** 2026-05-20 (stale-prune)  
+**Total Open:** 1 (#4 — 0 critical, 1 known; #3/#6/#7 closed)  
+**Health Sweep 2026-05-20:** 31 findings filed; 7 fixed (HS-01/05/09/10/11/12 + HS-18 annotation amend), 2 partials (HS-18 migration, HS-25 tagged), 2 false-positives closed (HS-13/15), 1 stale (HS-19 file list — runner.ts removed)  
+**Resolved in Phase 1:** 8

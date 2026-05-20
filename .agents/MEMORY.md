@@ -634,7 +634,8 @@ The full list lives in `AUDIT-overhaul-2026.md` §11 (44 items). Top items as of
 1. ~~`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC~~ — ✅ RESOLVED Phase A (May 8–9): `execution-engine.ts` 4,499→1,637 LOC (W24); `builder.ts` 6,232→2,481 LOC (W25). Both decomposed into capability-grouped modules.
 2. ~~**Eval Rule 4 frozen-judge**~~ — ✅ RESOLVED W9/FIX-21 (commit a9a7c55f): `eval-service.ts:189` yields `JudgeLLMService` Tag; benchmarks route through `packages/judge-server/` HTTP process.
 3. **ToT outer loop still unhooked** from `dispatcher-early-stop` — each branch is a separate sub-kernel (PER inner loop fixed Apr 19 at `plan-execute.ts:781,806`).
-4. ~~Strategy routing opt-in~~ — ✅ RESOLVED May 12: enabled by default (`enableStrategySwitching !== false`); runtime read at `runner.ts:811,1174`; field type still optional at `strategies/reactive.ts:72`.
+4. ~~Strategy routing opt-in~~ — ✅ RESOLVED May 12: enabled by default (`enableStrategySwitching !== false`); wired at `packages/runtime/src/runtime.ts:915` (also gated off by `withLeanHarness()`); field type still optional at `strategies/reactive.ts:72`. (`packages/runtime/src/runner.ts` removed in W25 decomp.)
+5. ~~Pruning Principle Builder API (Issue #7)~~ — ✅ RESOLVED (verified 2026-05-20): `withLeanHarness()` shipped at `builder.ts:977`, wired `runtime.ts:797,915,922`, state field `_leanHarness` at `builder/build-effect/runtime-construction.ts:156,391`.
 
 **Resolved in prior work:** kept inline; the planned `MEMORY-ARCHIVE-RESOLVED.md` extraction was not produced. Resolved P0s listed below.
 
