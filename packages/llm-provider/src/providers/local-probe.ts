@@ -127,6 +127,7 @@ function showResponseToCapability(
 export async function probeOllamaCapability(
   model: string,
   baseUrl: string,
+  apiKey?: string,
 ): Promise<Capability | null> {
   const key = probeKey(baseUrl, model);
   const cached = probeCache.get(key);
@@ -137,7 +138,10 @@ export async function probeOllamaCapability(
     const timer = setTimeout(() => ctrl.abort(), 5000);
     const res = await fetch(`${baseUrl}/api/show`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
       body: JSON.stringify({ name: model }),
       signal: ctrl.signal,
     });

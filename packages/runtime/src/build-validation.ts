@@ -5,6 +5,7 @@ const PROVIDER_API_KEY_MAP: Record<string, string> = {
   openai: "OPENAI_API_KEY",
   gemini: "GOOGLE_API_KEY",
   litellm: "OPENAI_API_KEY",
+  ollama: "OLLAMA_API_KEY",
 };
 
 const PROVIDER_MODEL_PREFIXES: Record<string, string[]> = {

@@ -73,6 +73,16 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly ollamaEndpoint?: string;
 
     /**
+     * Ollama API key for cloud-hosted Ollama-compatible endpoints.
+     * Retrieved from OLLAMA_API_KEY environment variable.
+     * Sent as a Bearer token in the Authorization header.
+     * Not needed for local Ollama instances.
+     *
+     * @default From OLLAMA_API_KEY env var (undefined if not set)
+     */
+    readonly ollamaApiKey?: string;
+
+    /**
      * Embedding configuration — model, provider, dimensions.
      * Anthropic has no embeddings API; embeddings always route to OpenAI or Ollama.
      * This is the sole embedding config for the entire framework.
@@ -228,6 +238,7 @@ export const llmConfigFromEnv = LLMConfig.of({
   googleApiKey: process.env.GOOGLE_API_KEY,
   ollamaEndpoint:
     process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434",
+  ollamaApiKey: process.env.OLLAMA_API_KEY,
   embeddingConfig: {
     model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
     dimensions: Number(process.env.EMBEDDING_DIMENSIONS ?? 1536),
