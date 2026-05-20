@@ -107,6 +107,7 @@ const IGNORED_INTERNAL_RUN_IDS = new Set([
   "unknown",
   "structured-output",
   "classify-tool-relevance",
+  "llm-direct",
 ]);
 
 function shouldIgnoreRunId(runId: string): boolean {
