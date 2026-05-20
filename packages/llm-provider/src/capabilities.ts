@@ -8,9 +8,10 @@
  *
  * @deprecated Phase 1 introduces the per-(provider, model) {@link Capability}
  * struct in `./capability.ts` with 12 fields and probe + static-table +
- * fallback resolution. `ProviderCapabilities` will be removed in Phase 2 once
- * all internal callers migrate to `Capability`. New code should consume
- * `Capability` directly via the resolver (S1.3).
+ * fallback resolution. **Scheduled removal: v0.12.0** (was v0.11.0 — see
+ * HS-18 in `wiki/Issues/Running Issues Log.md`; v0.11.0/v0.11.1 shipped
+ * with the legacy surface still live and 5 internal callers still on it).
+ * New code should consume `Capability` directly via the resolver (S1.3).
  */
 export interface ProviderCapabilities {
   /** Provider supports native function / tool calling (structured tool_use). */
