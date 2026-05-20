@@ -26,6 +26,7 @@ import { createCostLayer } from "@reactive-agents/cost";
 import {
   createReasoningLayer,
   defaultReasoningConfig,
+  makeObservableLLM,
 } from "@reactive-agents/reasoning";
 import type { ReasoningConfig, KernelMetaToolsConfig, Verifier } from "@reactive-agents/reasoning";
 import { createToolsLayer, ToolResultCacheLive, ToolService, ToolNotFoundError } from "@reactive-agents/tools";
@@ -1092,6 +1093,15 @@ export const createRuntime = (options: RuntimeOptions) => {
         ) as Layer.Layer<LLMService>
       : finalLlmLayer;
 
+  // Observable wrapper (Task 7) — emits `LLMExchangeEmitted` events on every
+  // complete/completeStructured call so observers (reasoning-stream-logger
+  // with logModelIO, trace layer, diagnose CLI) can see direct LLM calls
+  // outside the kernel main loop (plan-execute analysis, reflexion, ToT
+  // BFS, etc.). Always wrap — events are silent unless someone subscribes.
+  const observableLlmLayer: Layer.Layer<LLMService> = makeObservableLLM().pipe(
+    Layer.provide(rateLimitedLlmLayer as Layer.Layer<LLMService, never, never>),
+  ) as Layer.Layer<LLMService>;
+
   const memoryOverrides: Record<string, unknown> = { agentId: options.agentId };
   if (options.memoryOptions) {
     const mo = options.memoryOptions;
@@ -1151,7 +1161,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         bridgedLLM,
       );
     }),
-  ).pipe(Layer.provide(Layer.merge(rateLimitedLlmLayer, eventBusLayer)));
+  ).pipe(Layer.provide(Layer.merge(observableLlmLayer, eventBusLayer)));
   const hookLayer = LifecycleHookRegistryLive;
   const engineLayer = ExecutionEngineLive(config).pipe(
     Layer.provide(hookLayer),
@@ -1161,7 +1171,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   let runtime = Layer.mergeAll(
     coreLayer,
     eventBusLayer,
-    rateLimitedLlmLayer,
+    observableLlmLayer,
     memoryLayer,
     hookLayer,
     engineLayer,
@@ -1223,7 +1233,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         ? createVerificationLayerWithRuntimeLlm(verificationConfig).pipe(
             // Same pattern as memoryLayer: satisfy LLM here so merge order does not
             // leave VerificationService construction without LLMService.
-            Layer.provide(rateLimitedLlmLayer as Layer.Layer<LLMService>),
+            Layer.provide(observableLlmLayer as Layer.Layer<LLMService>),
           )
         : createVerificationLayer({ ...verificationConfig, useLLMTier: false });
     runtime = Layer.merge(runtime, verificationLayer) as any;
@@ -1379,9 +1389,9 @@ export const createRuntime = (options: RuntimeOptions) => {
       : defaultReasoningConfig;
 
     // ReasoningService requires LLMService, optionally ToolService + PromptService
-    let reasoningDeps = rateLimitedLlmLayer;
+    let reasoningDeps = observableLlmLayer;
     if (toolsLayer) {
-      reasoningDeps = Layer.merge(rateLimitedLlmLayer, toolsLayer) as any;
+      reasoningDeps = Layer.merge(observableLlmLayer, toolsLayer) as any;
     }
     if (promptLayer) {
       reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as any;

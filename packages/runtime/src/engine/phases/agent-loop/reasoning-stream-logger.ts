@@ -80,6 +80,43 @@ export const subscribeReasoningStreamLogger = (
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-stream-logger.ts:log-step-content", tag: errorTag(err) })));
       },
     );
-    return unsubscribe;
+
+    // Task 7 — surface every direct LLM call (LLMExchangeEmitted) when
+    // logModelIO is on. Captures bypass sites the ReasoningStepCompleted
+    // listener misses: plan-execute analysis/synthesis, reflexion critique,
+    // ToT BFS, code-action generation. Emitted by the makeObservableLLM
+    // wrapper at the LLMService layer (single chokepoint).
+    let unsubscribeExchange: (() => void) | null = null;
+    if (capturedLogModelIO) {
+      unsubscribeExchange = yield* eb.on(
+        "LLMExchangeEmitted",
+        (event) => {
+          const indent = (s: string) => s.replace(/\n/g, "\n    ");
+          const threadLines = event.messages
+            .map((m) => `[${m.role.toUpperCase()}] ${m.content}`)
+            .join("\n    ────\n    ");
+          const sys = event.systemPrompt ?? "";
+          const resp = event.response?.content ?? "";
+          const tag = `direct-llm:${event.requestKind}:${event.provider}/${event.model}`;
+          return capturedObs
+            .debug(
+              `  ┄ [model-io:${tag}]\n    ── system ──\n    ${indent(sys)}\n    ── thread (${event.messages.length} msg) ──\n    ${indent(threadLines)}\n    ── response ──\n    ${indent(resp)}`,
+            )
+            .pipe(
+              Effect.catchAll((err) =>
+                emitErrorSwallowed({
+                  site: "runtime/src/engine/phases/agent-loop/reasoning-stream-logger.ts:log-llm-exchange",
+                  tag: errorTag(err),
+                }),
+              ),
+            );
+        },
+      );
+    }
+
+    return () => {
+      unsubscribe();
+      if (unsubscribeExchange) unsubscribeExchange();
+    };
   });
 };

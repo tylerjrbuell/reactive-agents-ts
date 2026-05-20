@@ -200,3 +200,6 @@ export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } 
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";
+
+// ─── Observable LLM (Task 7 — direct-LLM-call observability) ───
+export { makeObservableLLM } from "./kernel/observable-llm.js";
