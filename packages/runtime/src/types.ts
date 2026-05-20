@@ -650,6 +650,19 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
     readonly mode?: "stream" | "status";
 
     /**
+     * Opt out of auto-enabling 'status' mode even when stdout is a TTY.
+     * Tests, CI runs, and headless services should set this to `true` so
+     * the runtime never spins up the TUI renderer behind their back.
+     *
+     * Also honored via the `REACTIVE_AGENTS_DISABLE_STATUS_MODE=true`
+     * environment variable for cases where the embedding host can't
+     * thread the option through the builder.
+     *
+     * Default: `false`.
+     */
+    readonly disableStatusMode?: boolean;
+
+    /**
      * Minimum log level to emit: 'debug' | 'info' | 'warn' | 'error'
      * Default: 'info'
      */

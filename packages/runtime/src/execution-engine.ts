@@ -1358,11 +1358,19 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               });
 
             // Initialize ObservableLogger
+            //
+            // Status-mode auto-activation uses an explicit opt-out signal so
+            // the runtime never reads NODE_ENV (HS-01, 2026-05-20 sweep).
+            // Tests/CI set `logging.disableStatusMode: true` or the
+            // `REACTIVE_AGENTS_DISABLE_STATUS_MODE=true` env var.
+            const statusModeDisabled =
+              config.logging?.disableStatusMode === true ||
+              process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE === "true";
             const isStatusMode =
               config.logging?.mode === "status" ||
               (config.logging?.mode !== "stream" &&
                 Boolean(process.stdout.isTTY) &&
-                process.env.NODE_ENV !== "test");
+                !statusModeDisabled);
 
             const loggerConfig = {
               // In status mode the renderer owns all output; logger stays buffered
