@@ -81,10 +81,18 @@ function ensureExitHandler(): void {
   exitHandlerRegistered = true;
   process.on("exit", cleanupAll);
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
-    process.on(sig, () => {
+    // HS-12 (2026-05-20 sweep): library code must not unilaterally call
+    // `process.exit`. Previously this handler killed the host process on
+    // SIGINT/SIGTERM, breaking any embedding consumer that wanted to
+    // handle signals itself. Now we clean up our docker containers and
+    // re-raise the signal so the caller's own handlers (or Node's
+    // defaults) decide the exit path.
+    const handler = (): void => {
       cleanupAll();
-      process.exit(128 + (sig === "SIGINT" ? 2 : 15));
-    });
+      process.off(sig, handler);
+      process.kill(process.pid, sig);
+    };
+    process.on(sig, handler);
   }
 }
 
