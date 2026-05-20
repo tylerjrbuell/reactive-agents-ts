@@ -189,7 +189,16 @@ export function makeStatusRenderer(
   // ─── Keyboard ────────────────────────────────────────────────────────────────
 
   function onKey(key: string): void {
-    if (key === "\x03") process.exit();                 // Ctrl+C
+    if (key === "\x03") {
+      // Ctrl+C in raw mode is captured here, not delivered as SIGINT
+      // by the terminal. Previously this called `process.exit()`,
+      // unilaterally killing the host. HS-11 (2026-05-20 sweep): tear
+      // down the raw-mode keyboard hook and re-raise SIGINT so the
+      // caller's signal handlers (or Node's defaults) decide the exit.
+      cleanupKeyboard();
+      process.kill(process.pid, "SIGINT");
+      return;
+    }
     if ((key === "t" || key === "T") && s.active) togglePanel();
   }
 
