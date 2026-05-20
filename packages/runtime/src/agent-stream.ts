@@ -2,6 +2,28 @@ import { Stream, Effect, Fiber } from "effect";
 import type { AgentStreamEvent } from "./stream-types.js";
 import type { AgentResult } from "./builder.js";
 
+/**
+ * Typed error thrown by `AgentStream.collect()` when the stream ends in
+ * failure or terminates without a `StreamCompleted` event.
+ *
+ * `streamCause` carries the original `StreamError.cause` string when one
+ * was emitted; otherwise the error documents the missing-completion path.
+ * Consumers can `instanceof AgentStreamCollectError` to recover the
+ * underlying signal instead of string-matching the message.
+ *
+ * Added 2026-05-20 (HS-10) — previously `collect()` threw `new Error(cause)`
+ * losing both the typed shape and any diagnostic chaining.
+ */
+export class AgentStreamCollectError extends Error {
+  readonly _tag = "AgentStreamCollectError" as const;
+  readonly streamCause: string | undefined;
+  constructor(message: string, streamCause?: string) {
+    super(message);
+    this.name = "AgentStreamCollectError";
+    this.streamCause = streamCause;
+  }
+}
+
 /** Internal helper — build SSE ReadableStream from an AsyncIterable of events. */
 function _sseFromAsyncIterable(
   iterable: AsyncIterable<AgentStreamEvent>,
@@ -205,9 +227,15 @@ export const AgentStream = {
           error = event.cause;
         }
       }
-      if (error) throw new Error(error);
+      if (error)
+        throw new AgentStreamCollectError(
+          `Stream emitted StreamError: ${error}`,
+          error,
+        );
       if (result) return result;
-      throw new Error("Stream ended without StreamCompleted event");
+      throw new AgentStreamCollectError(
+        "Stream ended without StreamCompleted event",
+      );
     }
     return Effect.runPromise(
       Stream.runFold(
@@ -234,10 +262,19 @@ export const AgentStream = {
       ).pipe(
         Effect.flatMap(({ result, error }) =>
           error
-            ? Effect.fail(new Error(error))
+            ? Effect.fail(
+                new AgentStreamCollectError(
+                  `Stream emitted StreamError: ${error}`,
+                  error,
+                ),
+              )
             : result
               ? Effect.succeed(result)
-              : Effect.fail(new Error("Stream ended without StreamCompleted event")),
+              : Effect.fail(
+                  new AgentStreamCollectError(
+                    "Stream ended without StreamCompleted event",
+                  ),
+                ),
         ),
       ),
     );
