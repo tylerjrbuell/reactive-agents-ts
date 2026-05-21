@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { InterventionHandler } from "../intervention.js";
+import { asHandlerState } from "../handler-state.js";
 
 export interface HarmSignals {
   readonly interventionCount: number;
@@ -28,7 +29,7 @@ export const harnessHarmDetectorHandler: InterventionHandler<"harness-harm"> = {
   description: "Circuit-breaks RI interventions when harness is provably making model performance worse",
   defaultMode: "dispatch",
   execute: (_decision, state, _ctx) => {
-    const decisionLog = (state as unknown as { controllerDecisionLog?: readonly string[] }).controllerDecisionLog ?? [];
+    const decisionLog = asHandlerState(state).controllerDecisionLog ?? [];
     const harmDecisions = decisionLog.filter((e) => e.startsWith("harness-harm")).length;
 
     // controllerDecisionLog is pre-populated before dispatch fires, so harmDecisions >= 1 on first fire.

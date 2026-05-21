@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import type { InterventionHandler } from "../intervention.js"
+import { asHandlerState } from "../handler-state.js"
 
 export const switchStrategyHandler: InterventionHandler<"switch-strategy"> = {
   type: "switch-strategy",
@@ -8,8 +9,8 @@ export const switchStrategyHandler: InterventionHandler<"switch-strategy"> = {
   execute: (decision, state, _ctx) => {
     const to = decision.to
     // `state.strategy` is the canonical field on KernelStateLike; tests may pass `currentStrategy`
-    const current: string | undefined =
-      state.strategy ?? (state as unknown as Record<string, unknown>).currentStrategy as string | undefined
+    const s = asHandlerState(state)
+    const current: string | undefined = s.strategy ?? s.currentStrategy
     if (!to || to === current) {
       return Effect.succeed({
         applied: false,

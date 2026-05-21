@@ -1,12 +1,13 @@
 import { Effect } from "effect"
 import type { InterventionHandler } from "../intervention.js"
+import { asHandlerState } from "../handler-state.js"
 
 export const tempAdjustHandler: InterventionHandler<"temp-adjust"> = {
   type: "temp-adjust",
   description: "Adjust LLM temperature to break repetition or overconfidence",
   defaultMode: "dispatch",
   execute: (decision, state, _ctx) => {
-    const current = (state as any).currentOptions?.temperature ?? 0.7
+    const current = asHandlerState(state).currentOptions?.temperature ?? 0.7
     const { delta } = decision
     if (Math.abs(delta) < 0.05) {
       return Effect.succeed({
