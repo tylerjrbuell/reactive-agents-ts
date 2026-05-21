@@ -503,6 +503,7 @@ Canonical project skills live in `.agents/skills/`:
 - `validate-build` — quality gate checklist for build/test/review
 - `effect-abstraction-audit` — architectural analysis for abstraction opportunities, composability gaps, and Effect-TS engineering quality
 - `architecture-audit` — system-level architecture health check: dead code, layer violations, over-abstraction, documentation drift, and simplification opportunities
+- `execute-backlog` — SCAN → BUNDLE → PLAN → EXECUTE → VERIFY → UPDATE → RETRO loop over GitHub issue backlog. Self-improving: every retro must amend this skill. Supports parallel agent teams via label-scoped bundles.
 - `obsidian-vault-query` — read the Obsidian vault (external project oracle) at session start
 - `obsidian-vault-sync` — write durable artifacts (decisions, experiments, sessions) to the vault
 - `obsidian-vault-hygiene` — orphan / bitrot / duplicate loops keeping the vault graph coherent
