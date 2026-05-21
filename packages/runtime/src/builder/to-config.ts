@@ -14,6 +14,15 @@
  * structurally satisfies this interface.
  */
 import type { AgentConfig } from "../agent-config.js";
+import type { ReasoningOptions } from "../types.js";
+import type {
+  ToolsOptions,
+  GuardrailsOptions,
+  MemoryOptions,
+  ObservabilityOptions,
+  CostTrackingOptions,
+  VerificationOptions,
+} from "./types.js";
 
 /**
  * Structural slice of `ReactiveAgentBuilder` that the serializer reads.
@@ -33,22 +42,22 @@ export interface BuilderStateForSerialization {
   _systemPrompt?: string;
   _persona?: unknown;
   _enableReasoning: boolean;
-  _reasoningOptions?: unknown;
+  _reasoningOptions?: ReasoningOptions;
   _enableTools: boolean;
-  _toolsOptions?: unknown;
+  _toolsOptions?: ToolsOptions;
   _enableGuardrails: boolean;
-  _guardrailsOptions?: unknown;
+  _guardrailsOptions?: GuardrailsOptions;
   _enableMemory: boolean;
   _memoryTier: "1" | "2";
-  _memoryOptions?: unknown;
+  _memoryOptions?: MemoryOptions;
   _enableExperienceLearning: boolean;
   _enableMemoryConsolidation: boolean;
   _enableObservability: boolean;
-  _observabilityOptions?: unknown;
+  _observabilityOptions?: ObservabilityOptions;
   _enableCostTracking: boolean;
-  _costTrackingOptions?: unknown;
+  _costTrackingOptions?: CostTrackingOptions;
   _enableVerification: boolean;
-  _verificationOptions?: unknown;
+  _verificationOptions?: VerificationOptions;
   _maxIterations: number | undefined;
   _executionTimeoutMs?: number;
   _retryPolicy?: { maxRetries: number; backoffMs: number };
@@ -95,7 +104,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Reasoning
   if (state._enableReasoning || state._reasoningOptions) {
     const r: Record<string, unknown> = {};
-    const ro = state._reasoningOptions as any;
+    const ro = state._reasoningOptions;
     if (ro?.defaultStrategy) r["defaultStrategy"] = ro.defaultStrategy;
     if (ro?.enableStrategySwitching !== undefined) r["enableStrategySwitching"] = ro.enableStrategySwitching;
     if (ro?.maxStrategySwitches !== undefined) r["maxStrategySwitches"] = ro.maxStrategySwitches;
@@ -106,7 +115,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Tools
   if (state._enableTools || state._toolsOptions) {
     const t: Record<string, unknown> = {};
-    const to = state._toolsOptions as any;
+    const to = state._toolsOptions;
     if (to?.allowedTools) t["allowedTools"] = [...to.allowedTools];
     if (to?.adaptive !== undefined) t["adaptive"] = to.adaptive;
     if (to?.terminal !== undefined) {
@@ -119,7 +128,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Guardrails
   if (state._enableGuardrails || state._guardrailsOptions) {
     const g: Record<string, unknown> = {};
-    const go = state._guardrailsOptions as any;
+    const go = state._guardrailsOptions;
     if (go?.injection !== undefined) g["injection"] = go.injection;
     if (go?.pii !== undefined) g["pii"] = go.pii;
     if (go?.toxicity !== undefined) g["toxicity"] = go.toxicity;
@@ -132,7 +141,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     const m: Record<string, unknown> = {};
     // Map internal "1"/"2" back to "standard"/"enhanced"
     m["tier"] = state._memoryTier === "2" ? "enhanced" : "standard";
-    const mo = state._memoryOptions as any;
+    const mo = state._memoryOptions;
     if (mo?.dbPath) m["dbPath"] = mo.dbPath;
     if (mo?.maxEntries !== undefined) m["maxEntries"] = mo.maxEntries;
     if (mo?.capacity !== undefined) m["capacity"] = mo.capacity;
@@ -147,7 +156,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Observability
   if (state._enableObservability || state._observabilityOptions) {
     const o: Record<string, unknown> = {};
-    const oo = state._observabilityOptions as any;
+    const oo = state._observabilityOptions;
     if (oo?.verbosity) o["verbosity"] = oo.verbosity;
     if (oo?.live !== undefined) o["live"] = oo.live;
     if (oo?.file) o["file"] = oo.file;
@@ -158,7 +167,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Cost tracking
   if (state._enableCostTracking || state._costTrackingOptions) {
     const c: Record<string, unknown> = {};
-    const co = state._costTrackingOptions as any;
+    const co = state._costTrackingOptions;
     if (co?.perRequest !== undefined) c["perRequest"] = co.perRequest;
     if (co?.perSession !== undefined) c["perSession"] = co.perSession;
     if (co?.daily !== undefined) c["daily"] = co.daily;
@@ -169,7 +178,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Verification
   if (state._enableVerification || state._verificationOptions) {
     const v: Record<string, unknown> = {};
-    const vo = state._verificationOptions as any;
+    const vo = state._verificationOptions;
     if (vo?.semanticEntropy !== undefined) v["semanticEntropy"] = vo.semanticEntropy;
     if (vo?.factDecomposition !== undefined) v["factDecomposition"] = vo.factDecomposition;
     if (vo?.multiSource !== undefined) v["multiSource"] = vo.multiSource;
