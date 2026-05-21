@@ -110,7 +110,7 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 | HS-15 | B | `packages/reasoning/src/kernel/capabilities/act/tool-execution.ts:333` + `attend/tool-formatting.ts:233` + `loop/output-synthesis.ts:112` | ❌ **FALSE-POSITIVE** | Agent B flagged JSON.parse without try/catch; verified all three sites ARE wrapped (tool-execution try line 332→catch 406; tool-formatting try 232; output-synthesis try 102 + fenceMatch guarded at line 110 with `if (fenceMatch?.[1])`) | No fix needed; closed |
 | HS-16 | B | Providers `anthropic.ts:346`, `openai.ts:486`, `gemini.ts:575`, `local.ts:691`, `litellm.ts:479-481` | P2 | Retry loops overwrite `lastError = e` — only the final attempt's error survives; original parse error lost | Accumulate `errors: unknown[]` with attempt index |
 | HS-17 | B | `packages/runtime/src/execution-engine.ts:1365` | P0 (= HS-01) | Same as HS-01; flagged independently by Agent B | See HS-01 |
-| HS-18 | C | `packages/llm-provider/src/index.ts:15-17` + `capabilities.ts:9` | 🟡 **PARTIAL** — annotation amended (`<commit>`); migration outstanding | Re-exports `ProviderCapabilities`, `DEFAULT_CAPABILITIES` marked `@deprecated v0.10 — Removed in v0.11.0`; **v0.11.0 already shipped and v0.11.1 current — removal-target version was in the past**; 5 internal callers still on the deprecated type. | ✅ Annotation re-targeted to v0.12.0 with explicit caller list documented. ⏳ Migration: providers/{litellm,openai,anthropic,gemini,local}.ts return `Capability` instead of `ProviderCapabilities`; runner.ts:464 reads `Capability` fields; testing.ts:278 uses `Capability` defaults. M effort. |
+| HS-18 | C | `packages/llm-provider/src/index.ts` + `capabilities.ts` + `llm-service.ts:75` | ✅ **FIXED** (2026-05-21, annotation-fix scope) — original framing wrong | `ProviderCapabilities`, `StructuredOutputCapabilities`, `Capability` were marked `@deprecated`/"superseded" but encode **orthogonal concerns** (per-provider API flags vs granular JSON-extraction flags vs per-model spec). Wiki HS-18 framed migration as "providers return Capability instead of ProviderCapabilities" — but `Capability` has no analogs for `supportsStreaming`/`supportsLogprobs`/`supportsStructuredOutput`. | Removed false `@deprecated` annotations from `capabilities.ts`, `index.ts` re-exports, `llm-service.ts:75` (`getStructuredOutputCapabilities` "superseded by capabilities()" — granular vs coarse, not a replacement). Added taxonomy doc clarifying the three types are permanent + orthogonal. No code migration needed. |
 | HS-19 | C | `packages/runtime/src/builder.ts` (2481 LOC), `runtime.ts` (1997 LOC), `execution-engine.ts` (1648 LOC), `reactive-agent.ts` (1578 LOC) | P1 | Four files >1500 LOC; `execution-engine.ts` drifted +108 LOC since W24 (May 8) completion. `runner.ts` removed in W25 decomp. | Next decomposition wave (W26+) |
 | HS-20 | C | `packages/reasoning/src/strategies/plan-execute.ts` (1554 LOC), `core/services/event-bus.ts` (1347 LOC), `reasoning/.../think.ts` (1283 LOC), `act.ts` (1137 LOC), `llm-provider/types.ts` (1063 LOC), `decide/arbitrator.ts` (992 LOC), `observability/exporters/console-exporter.ts` (895 LOC) | P2 | 7 single-files >800 LOC — secondary decomposition candidates | Plan post-W26 |
 | HS-21 | C | `packages/llm-provider/src/llm-service.ts:75`, `llm-config.ts:143`, `kernel-state.ts:761-762`, `observability/telemetry/telemetry-schema.ts:37,43`, `tools/adapters/agent-tool-adapter.ts:30` | P2 | 5 `@deprecated` symbols/aliases pending removal — audit removal-target version on each (v0.11 already shipped) | Sweep next minor; amend stale `@deprecated v0.11` annotations |
@@ -136,8 +136,8 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 ### Top 3 P2 opportunities for next sprint
 
 1. **HS-22:** Extract provider tool-call streaming emit helper — single PR collapses 65 duplicated emit lines.
-2. **HS-18 (escalated P0):** `@deprecated Removed in v0.11.0` annotation lies — v0.11.0 already shipped, v0.11.1 current. Migrate 5 callers + delete deprecated exports in v0.12, OR amend the annotation. Public API integrity.
-3. **HS-26:** Add at least one smoke test per UI package (react/svelte/vue) before v0.11 ships untested adapters.
+2. **HS-26:** Add at least one smoke test per UI package (react/svelte/vue) before v0.11 ships untested adapters.
+3. **HS-21:** Audit remaining stale `@deprecated v0.11` annotations — sweep `llm-service.ts:75` (now fixed via HS-18), `llm-config.ts:143`, `kernel-state.ts:761-762`, `telemetry-schema.ts:37,43`, `agent-tool-adapter.ts:30`.
 
 ### Final state (post-sweep + follow-up fix loop)
 
@@ -150,10 +150,10 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
   - ✅ HS-10 — `AgentStreamCollectError` typed class replaces 4 `throw new Error(string)` sites
   - ✅ HS-11 — status-renderer Ctrl-C → re-raises SIGINT instead of `process.exit`
   - ✅ HS-12 — mcp-client SIGINT/SIGTERM → re-raises instead of `process.exit`
-  - 🟡 HS-18 — `@deprecated Removed in v0.11.0` annotation amended to v0.12.0 + caller list documented (migration deferred)
+  - ✅ HS-18 — annotation-fix (2026-05-21): removed false `@deprecated` from `ProviderCapabilities`/`DEFAULT_CAPABILITIES`/`getStructuredOutputCapabilities`; documented as orthogonal types (not replacements). Original "Capability supersedes" framing reverted as design error.
   - 🟡 HS-25 — undocumented `it.skip` calls tagged with drift root cause + fix path
 - **False-positives closed:** HS-13, HS-15 (Agent B's claims contradicted by code: both sites already had try/catch or `isMain` gate)
-- **Filed for planning (remaining):** 22 items (HS-02/03/04/06/07/08/14/16/17/19/20/21/22/23/24/26/27/28/29/30/31)
+- **Filed for planning (remaining):** 21 items (HS-02/03/04/06/07/08/14/16/17/19/20/21/22/23/24/26/27/28/29/30/31)
 
 ---
 
