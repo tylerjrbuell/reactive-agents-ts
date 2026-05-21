@@ -138,6 +138,21 @@ Read the `superpowers:writing-plans` skill conventions (location override: `wiki
 
 ---
 
+## Phase 3.5 — BRANCH (mandatory)
+
+Before any code edits land, create a dedicated feature branch off `main` for the bundle:
+
+```bash
+rtk git fetch origin main
+rtk git checkout -B bundle/<bundle-name> origin/main
+```
+
+Naming pattern: `bundle/<area>-<theme>` (e.g., `bundle/runtime-builder-state-typing`). The branch is the unit-of-work for the entire bundle. All commits in Phase 4 land here; the Phase 6 PR ships them together.
+
+If the working tree is dirty when this skill is invoked, **stop** and surface the dirt — do not stash silently. The caller decides: commit, discard, or move out of the way. (Reason: per `feedback_commit_before_branch.md`, exploratory state must not get mixed into bundle commits.)
+
+---
+
 ## Phase 4 — EXECUTE
 
 For each execution unit, follow `agent-tdd` discipline:
@@ -194,15 +209,42 @@ If a verified-by check fails to come down → the fix didn't actually address th
 
 ## Phase 6 — UPDATE
 
-Close the bundle. For each closed issue:
+**6a — Open the PR (mandatory).** Every execution session ships its bundle as one PR. No direct-to-main pushes.
 
 ```bash
-rtk gh issue close <N> --comment "Resolved in bundle <name> (commits <sha>..<sha>).
-Verified-by recheck: <command> → <new result>.
-See wiki/Planning/Implementation-Plans/YYYY-MM-DD-<bundle>.md."
+rtk git push -u origin bundle/<bundle-name>
+rtk gh pr create \
+  --base main \
+  --head bundle/<bundle-name> \
+  --title "<bundle-name>: <one-line summary>" \
+  --body "$(cat <<'EOF'
+## Bundle: <name>
+
+Closes #N
+Closes #N
+
+## Summary
+<2-3 lines on what changed>
+
+## Verification
+- `bun run build` ✅
+- `bun test` ✅ (delta: +X / -Y vs baseline)
+- `bunx turbo run typecheck --filter=<changed>` ✅
+- Verified-by rechecks (per issue):
+  - #N: `<command>` → <new result> (was <old>)
+
+## Plan + Retro
+- Plan: wiki/Planning/Implementation-Plans/YYYY-MM-DD-<bundle>.md
+- Retro: wiki/Research/Debriefs/YYYY-MM-DD-<bundle>-execution-debrief.md
+EOF
+)"
 ```
 
-Update the project board: move bundle issues to **Done** column.
+PR body MUST include `Closes #N` for every issue in the bundle — GitHub auto-closes them on merge, no manual `gh issue close` needed. If a bundle issue was descoped mid-EXECUTE, drop its `Closes #N` line and explain in the PR body.
+
+The skill's job ends at PR open. **Merge is a human decision** — do not auto-merge.
+
+**6b — Project board + knowledge sync.** Move bundle issues to **In Review** column (not Done — done happens on merge). Then:
 
 Sync local knowledge:
 - `wiki/Hot.md` — append session note (bundle name, issues closed, key learnings)
@@ -308,9 +350,10 @@ Schedule via `/loop` — `/loop 1d /execute-backlog labels=priority:p1 max_bundl
 SCAN     gh issue list --label … --json
 BUNDLE   greedy cohesion grow, cap at max_bundle_size
 PLAN     wiki/Planning/Implementation-Plans/YYYY-MM-DD-<bundle>.md
+BRANCH   git checkout -B bundle/<bundle-name> origin/main (clean tree only)
 EXECUTE  TDD per unit, conventional commits cite #N
 VERIFY   build + test + typecheck + re-run each verified-by
-UPDATE   gh issue close --comment, board → Done, Hot.md note
+UPDATE   gh pr create with Closes #N (auto-close on merge), board → In Review, Hot.md note
 RETRO    wiki/Research/Debriefs/, AMEND THIS SKILL.md
 ```
 
