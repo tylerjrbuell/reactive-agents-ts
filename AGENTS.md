@@ -122,9 +122,9 @@ Quick reference for tracing issues to specific kernel phases/services:
 
 | Symptom | Start here |
 | --- | --- |
-| Tools not called | `packages/reasoning/src/strategies/kernel/phases/think.ts` → `phases/act.ts` |
-| Context missing | `context/context-manager.ts` (`ContextManager.build`) → `context/message-window.ts` |
-| Tool results lost | `utils/tool-execution.ts` → `utils/tool-utils.ts:compressToolResult` |
+| Tools not called | `packages/reasoning/src/kernel/capabilities/reason/think.ts` → `kernel/capabilities/act/act.ts` |
+| Context missing | `packages/reasoning/src/context/context-manager.ts` (`ContextManager.build`) → `context/message-window.ts` |
+| Tool results lost | `kernel/capabilities/act/tool-execution.ts` → `kernel/capabilities/attend/tool-formatting.ts:compressToolResult` |
 | EventBus silent | `packages/core/src/services/event-bus.ts` (check shared ManagedRuntime) |
 | LLM call fails | `packages/llm-provider/src/runtime.ts` → provider-specific in `src/providers/` |
 | Memory not persisting | `packages/memory/src/runtime.ts:createMemoryLayer()` wiring |
@@ -529,7 +529,7 @@ Canonical project skills live in `.agents/skills/`:
 | Layer violation | `service-utils.ts` | `reasoning` imported `@reactive-agents/prompts` — zero matches remain in `packages/reasoning/src` for `@reactive-agents/(runtime\|prompts\|reactive-agents)` imports | Medium | Medium | Fixed (Apr 2026) |
 | Scope creep | `tool-utils.ts` | Originally 944 LOC, 5+ concerns — split into `tool-execution.ts` (752), `tool-formatting.ts` (448), `tool-gating.ts` (263), `tool-parsing.ts`, `tool-capabilities.ts` | Medium | Medium | Fixed (Apr 2026) — split into 5 files |
 | Dead production code | `context-manager.ts` | Now actively used — `ContextManager.build()` called from `think.ts:208` | Medium | Medium | Fixed (Apr 2026) |
-| Dead production code | `evidence-grounding.ts` | Moved to `packages/reasoning/src/strategies/kernel/utils/evidence-grounding.ts`, imported by `think-guards.ts:28` | Low | Low | Fixed (Apr 2026) |
+| Dead production code | `evidence-grounding.ts` | Located at `packages/reasoning/src/kernel/capabilities/verify/evidence-grounding.ts` (kernel reorganized to capabilities/ in Stage 5; previous `kernel/utils/` path stale), imported by `think-guards.ts:28` | Low | Low | Fixed (May 2026, path corrected 2026-05-21) |
 | Dead production code | `context-utils.ts` | Now imported by `think.ts:20` AND `context-manager.ts:24` | Low | Medium | Fixed (Apr 2026) |
 | Barrel leak | `kernel/index.ts` | `export *` from 13 modules leaks internal utils like `tool-execution.ts`, `tool-formatting.ts` as public API | Medium | Medium | Fixed (May 2026) — stale audit finding; `kernel/index.ts` does not exist. The package's curated re-export barrel is `packages/reasoning/src/index.ts` (lines 148-210), already named-exports-only. |
 | Loop vs switch | `loop-detector.ts`, `kernel-runner.ts` | Loop streak logic can mask duplicate-tool patterns so `strategySwitching` may never trigger (see `.agents/MEMORY.md` W8) | Medium | Medium | Open |
@@ -563,9 +563,9 @@ Canonical project skills live in `.agents/skills/`:
 ## Current Framework Snapshot (v0.11.0)
 
 - Monorepo scale: **35 packages + 6 apps** (cli, cortex, docs, examples, meta-agent, stackblitz)
-- Verified quality: **5,294 tests across 603 test files** (last workspace run) — run `bun test` for the authoritative count before release
+- Verified quality: **5,317 tests, 26 skip, 0 fail** (2026-05-20 health-sweep baseline) — run `bun test` for the authoritative count before release
 - Public facade: `reactive-agents` built on Effect-TS layered runtime
-- Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **8 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint)
+- Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **9 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint, discover-tools) — *shell-execute is gated via `.withTerminalTools()`, not auto-registered*
 
 ### Recently Shipped Highlights (cross-checked with `CHANGELOG.md`)
 

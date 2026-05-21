@@ -110,11 +110,11 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 | HS-15 | B | `packages/reasoning/src/kernel/capabilities/act/tool-execution.ts:333` + `attend/tool-formatting.ts:233` + `loop/output-synthesis.ts:112` | ❌ **FALSE-POSITIVE** | Agent B flagged JSON.parse without try/catch; verified all three sites ARE wrapped (tool-execution try line 332→catch 406; tool-formatting try 232; output-synthesis try 102 + fenceMatch guarded at line 110 with `if (fenceMatch?.[1])`) | No fix needed; closed |
 | HS-16 | B | Providers `anthropic.ts:346`, `openai.ts:486`, `gemini.ts:575`, `local.ts:691`, `litellm.ts:479-481` | P2 | Retry loops overwrite `lastError = e` — only the final attempt's error survives; original parse error lost | Accumulate `errors: unknown[]` with attempt index |
 | HS-17 | B | `packages/runtime/src/execution-engine.ts:1365` | P0 (= HS-01) | Same as HS-01; flagged independently by Agent B | See HS-01 |
-| HS-18 | C | `packages/llm-provider/src/index.ts:15-17` + `capabilities.ts:9` | 🟡 **PARTIAL** — annotation amended (`<commit>`); migration outstanding | Re-exports `ProviderCapabilities`, `DEFAULT_CAPABILITIES` marked `@deprecated v0.10 — Removed in v0.11.0`; **v0.11.0 already shipped and v0.11.1 current — removal-target version was in the past**; 5 internal callers still on the deprecated type. | ✅ Annotation re-targeted to v0.12.0 with explicit caller list documented. ⏳ Migration: providers/{litellm,openai,anthropic,gemini,local}.ts return `Capability` instead of `ProviderCapabilities`; runner.ts:464 reads `Capability` fields; testing.ts:278 uses `Capability` defaults. M effort. |
-| HS-19 | C | `packages/runtime/src/builder.ts` (2481 LOC), `runtime.ts` (1997 LOC), `execution-engine.ts` (1648 LOC), `reactive-agent.ts` (1578 LOC) | P1 | Four files >1500 LOC; `execution-engine.ts` drifted +108 LOC since W24 (May 8) completion. `runner.ts` removed in W25 decomp. | Next decomposition wave (W26+) |
+| HS-18 | C | `packages/llm-provider/src/index.ts` + `capabilities.ts` + `llm-service.ts:75` | ✅ **FIXED** (2026-05-21, commit `ac6e6e5d`, annotation-fix scope) — original framing wrong | `ProviderCapabilities`, `StructuredOutputCapabilities`, `Capability` were marked `@deprecated`/"superseded" but encode **orthogonal concerns** (per-provider API flags vs granular JSON-extraction flags vs per-model spec). Wiki HS-18 framed migration as "providers return Capability instead of ProviderCapabilities" — but `Capability` has no analogs for `supportsStreaming`/`supportsLogprobs`/`supportsStructuredOutput`. Removed false `@deprecated` annotations; added taxonomy doc clarifying the three types are permanent + orthogonal. No code migration needed. |
+| HS-19 | C | `packages/runtime/src/builder.ts` (2481 LOC), `runtime.ts` (1997 LOC), `execution-engine.ts` (1656 LOC, +8 since 2026-05-20), `reactive-agent.ts` (1578 LOC) | P1 | Four files >1500 LOC; `execution-engine.ts` continues to drift (+116 LOC since W24 May 8). `runner.ts` removed in W25 decomp. **Re-verified 2026-05-21.** | Next decomposition wave (W26+) |
 | HS-20 | C | `packages/reasoning/src/strategies/plan-execute.ts` (1554 LOC), `core/services/event-bus.ts` (1347 LOC), `reasoning/.../think.ts` (1283 LOC), `act.ts` (1137 LOC), `llm-provider/types.ts` (1063 LOC), `decide/arbitrator.ts` (992 LOC), `observability/exporters/console-exporter.ts` (895 LOC) | P2 | 7 single-files >800 LOC — secondary decomposition candidates | Plan post-W26 |
 | HS-21 | C | `packages/llm-provider/src/llm-service.ts:75`, `llm-config.ts:143`, `kernel-state.ts:761-762`, `observability/telemetry/telemetry-schema.ts:37,43`, `tools/adapters/agent-tool-adapter.ts:30` | P2 | 5 `@deprecated` symbols/aliases pending removal — audit removal-target version on each (v0.11 already shipped) | Sweep next minor; amend stale `@deprecated v0.11` annotations |
-| HS-22 | C | Providers — `tool_use_start` + `tool_use_delta` emit pattern duplicated 65 times across anthropic/gemini/local/openai | P2 | Extract `emitToolCallStream(emit, id, name, argsJson)` helper into `llm-provider/src/streaming-helpers.ts` | Single helper, 4 callers updated |
+| HS-22 | C | Providers — `tool_use_start` + `tool_use_delta` emit pattern across anthropic/gemini/local/openai | ✅ **FIXED** (2026-05-21, commit `8ec95598`) — original "65 duplicated lines" inflated; actual 9 emit sites in 4 providers | Extracted `streaming-helpers.ts` (`emitToolUseStart`/`emitToolUseDelta`/`emitToolCallComplete`); 6 co-emit lines collapsed to 3; `as const`/`as StreamEvent` casts removed. |
 | HS-23 | C | `packages/runtime/src/engine/finalize/telemetry-emit.ts:201`, `execution-engine.ts:1232,1239`, `reasoning/src/context/context-manager.ts:271` | P2 | 4 `TODO` comments on live code paths (placeholder scoring, missing TaskResult metadata fields, unwired ExperienceSummary) | Address with Phase 1.5 M6/M10 work |
 | HS-24 | D | `packages/reactive-intelligence/tests/m1-dispatcher-validation.test.ts:65` | P1 | `test.skip("RED phase: define measurement requirements…")` contradicts shipped M1 ✅ KEEP verdict in MEMORY.md; placeholder is stale | Delete `test.skip` block (lines 65-174) + helper `computeEntropyStdDev` (lines 246-257) + dead interfaces |
 | HS-25 | D | `packages/reactive-intelligence/tests/skills/skill-resolver.test.ts:248,269` | 🟡 **TAGGED** (`<commit>`) — root cause: resolver now returns +1 bundled default skill; assertions written before bundling shipped | Probed by un-skipping: both fail. Comments added in test file documenting drift + fix path. Still skipped; needs `excludeBundled` option or filtered assertions. |
@@ -123,7 +123,7 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 | HS-28 | D | `packages/llm-provider/src/providers/openai.ts:37,115,133,180` | P2 | 4 `@internal Exported for testing only` exports leak through `src/index.ts` re-export | Move to `__internal__/` subpath or gate in `package.json` exports map |
 | HS-29 | A | `packages/reactive-intelligence/src/controller/handlers/index.ts:16-24` | P2 | 9 different intervention handlers double-cast `as unknown as InterventionHandler` — implies interface ≠ implementation shape | Reconcile `InterventionHandler` signature with handler returns |
 | HS-30 | A | `apps/examples/src/integrations/{25-nextjs-streaming,26-hono-agent-api,27-express-middleware}.ts` | P2 | Whole-file `@ts-nocheck` on three integration examples; `(agentInstance as any).dispose()` in 26+27 | Provide typed examples or convert to `.md` snippets |
-| HS-31 | D | Cross-package — 74 `as unknown as` casts in test files; concentrated in `llm-provider`, `observability`, `reasoning` | P2 | Signature-drift sink — packages with most refactor velocity carry highest drift risk | Add lint rule warning above threshold per file; centralize mock factories |
+| HS-31 | D | Cross-package — **55** `as unknown as` casts in test files (original "74" was inflated — grep match-line count, re-verified 2026-05-21); concentrated in `llm-provider`, `observability`, `reasoning` | P2 | Signature-drift sink — packages with most refactor velocity carry highest drift risk | Add lint rule warning above threshold per file; centralize mock factories |
 
 ### Themes (root causes — collapse multiple findings)
 
@@ -320,7 +320,30 @@ At that point, we expect to see:
 
 ---
 
-**Last Updated:** 2026-05-20 (stale-prune)  
-**Total Open:** 1 (#4 — 0 critical, 1 known; #3/#6/#7 closed)  
-**Health Sweep 2026-05-20:** 31 findings filed; 7 fixed (HS-01/05/09/10/11/12 + HS-18 annotation amend), 2 partials (HS-18 migration, HS-25 tagged), 2 false-positives closed (HS-13/15), 1 stale (HS-19 file list — runner.ts removed)  
+**Last Updated:** 2026-05-21 (audit re-verification + GH migration kickoff)
+**Total Open:** 1 (#4 — 0 critical, 1 known; #3/#6/#7 closed)
+**Health Sweep 2026-05-20:** 31 findings filed; **9 fixed** (HS-01/05/09/10/11/12/18/22 + count-verify HS-19/31), 1 partial (HS-25 tagged), 2 false-positives closed (HS-13/15)
 **Resolved in Phase 1:** 8
+
+---
+
+## Migration to GitHub Issues (2026-05-21)
+
+**All open HS-NN + AGENTS.md `## Architecture Debt` rows are being migrated to GitHub issues** with the existing label taxonomy (`area:*`, `phase:*`, `type:*`, `priority:*`, plus new labels `health-sweep`, `architecture-debt`, `verified`).
+
+**Why:** single source of truth for issue tracking; frees local wiki context for *immediate* current-state, not backlog. GH supports project boards, automation, cross-references, and external contribution discovery.
+
+**Convention going forward:**
+- New issues file directly to GitHub via templates at `.github/ISSUE_TEMPLATE/`
+- This file becomes canonical *history* — closed issues + audit pattern + retrospective notes
+- Health sweeps cite GH issue numbers, not HS-NN
+- Hot.md links to active GH milestone, not Running Issues Log
+
+### Inflation pattern (audit-of-audit, 2026-05-21)
+
+3/31 HS items shipped with bad framing across 2 sweeps:
+- **HS-18:** framed as "Capability supersedes ProviderCapabilities" — actually orthogonal types (per-provider API flags vs JSON-extraction flags vs per-model spec)
+- **HS-22:** claimed "65 duplicated lines" — actually 9 emit sites in 4 providers
+- **HS-31:** claimed "74 casts" — actually 55 (grep counted match lines, not occurrences)
+
+**Process fix:** every future health-sweep finding requires a `verified-by:` line citing concrete file:line evidence before filing. `.claude/skills/codebase-health-sweep/SKILL.md` updated to enforce this.
