@@ -17,6 +17,7 @@ import type {
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
+import { emitToolCallComplete } from "../streaming-helpers.js";
 
 // ─── Gemini Message Conversion Helpers ───
 
@@ -418,8 +419,7 @@ export const GeminiProviderLive = Layer.effect(
                       if (fc && typeof fc.name === "string") {
                         const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
                         accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
-                        emit.single({ type: "tool_use_start" as const, id: tcId, name: fc.name });
-                        emit.single({ type: "tool_use_delta", input: JSON.stringify(fc.args) } as StreamEvent);
+                        emitToolCallComplete(emit, tcId, fc.name, fc.args);
                       }
                     }
                   } else {
@@ -433,8 +433,7 @@ export const GeminiProviderLive = Layer.effect(
                       for (const fc of fcs) {
                         const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
                         accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
-                        emit.single({ type: "tool_use_start" as const, id: tcId, name: fc.name });
-                        emit.single({ type: "tool_use_delta", input: JSON.stringify(fc.args) } as StreamEvent);
+                        emitToolCallComplete(emit, tcId, fc.name, fc.args);
                       }
                     }
                   }

@@ -114,7 +114,7 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 | HS-19 | C | `packages/runtime/src/builder.ts` (2481 LOC), `runtime.ts` (1997 LOC), `execution-engine.ts` (1648 LOC), `reactive-agent.ts` (1578 LOC) | P1 | Four files >1500 LOC; `execution-engine.ts` drifted +108 LOC since W24 (May 8) completion. `runner.ts` removed in W25 decomp. | Next decomposition wave (W26+) |
 | HS-20 | C | `packages/reasoning/src/strategies/plan-execute.ts` (1554 LOC), `core/services/event-bus.ts` (1347 LOC), `reasoning/.../think.ts` (1283 LOC), `act.ts` (1137 LOC), `llm-provider/types.ts` (1063 LOC), `decide/arbitrator.ts` (992 LOC), `observability/exporters/console-exporter.ts` (895 LOC) | P2 | 7 single-files >800 LOC — secondary decomposition candidates | Plan post-W26 |
 | HS-21 | C | `packages/llm-provider/src/llm-service.ts:75`, `llm-config.ts:143`, `kernel-state.ts:761-762`, `observability/telemetry/telemetry-schema.ts:37,43`, `tools/adapters/agent-tool-adapter.ts:30` | P2 | 5 `@deprecated` symbols/aliases pending removal — audit removal-target version on each (v0.11 already shipped) | Sweep next minor; amend stale `@deprecated v0.11` annotations |
-| HS-22 | C | Providers — `tool_use_start` + `tool_use_delta` emit pattern duplicated 65 times across anthropic/gemini/local/openai | P2 | Extract `emitToolCallStream(emit, id, name, argsJson)` helper into `llm-provider/src/streaming-helpers.ts` | Single helper, 4 callers updated |
+| HS-22 | C | Providers — `tool_use_start` + `tool_use_delta` emit pattern across anthropic/gemini/local/openai | ✅ **FIXED** (2026-05-21) — original "65 duplicated lines" count inflated (actual: 9 emit sites in 4 providers) | Extracted `streaming-helpers.ts` with three helpers: `emitToolUseStart`, `emitToolUseDelta` (separate-emit transports: anthropic + openai), `emitToolCallComplete` (co-emit transports: gemini × 2 + local). 6 dup co-emit lines collapsed to 3; `as const`/`as StreamEvent` casts removed; type-safe construction at one location. |
 | HS-23 | C | `packages/runtime/src/engine/finalize/telemetry-emit.ts:201`, `execution-engine.ts:1232,1239`, `reasoning/src/context/context-manager.ts:271` | P2 | 4 `TODO` comments on live code paths (placeholder scoring, missing TaskResult metadata fields, unwired ExperienceSummary) | Address with Phase 1.5 M6/M10 work |
 | HS-24 | D | `packages/reactive-intelligence/tests/m1-dispatcher-validation.test.ts:65` | P1 | `test.skip("RED phase: define measurement requirements…")` contradicts shipped M1 ✅ KEEP verdict in MEMORY.md; placeholder is stale | Delete `test.skip` block (lines 65-174) + helper `computeEntropyStdDev` (lines 246-257) + dead interfaces |
 | HS-25 | D | `packages/reactive-intelligence/tests/skills/skill-resolver.test.ts:248,269` | 🟡 **TAGGED** (`<commit>`) — root cause: resolver now returns +1 bundled default skill; assertions written before bundling shipped | Probed by un-skipping: both fail. Comments added in test file documenting drift + fix path. Still skipped; needs `excludeBundled` option or filtered assertions. |
@@ -135,9 +135,9 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 
 ### Top 3 P2 opportunities for next sprint
 
-1. **HS-22:** Extract provider tool-call streaming emit helper — single PR collapses 65 duplicated emit lines.
-2. **HS-26:** Add at least one smoke test per UI package (react/svelte/vue) before v0.11 ships untested adapters.
-3. **HS-21:** Audit remaining stale `@deprecated v0.11` annotations — sweep `llm-service.ts:75` (now fixed via HS-18), `llm-config.ts:143`, `kernel-state.ts:761-762`, `telemetry-schema.ts:37,43`, `agent-tool-adapter.ts:30`.
+1. **HS-26:** Add at least one smoke test per UI package (react/svelte/vue) before v0.11 ships untested adapters.
+2. **HS-21:** Audit remaining stale `@deprecated v0.11` annotations — sweep `llm-config.ts:143`, `kernel-state.ts:761-762`, `telemetry-schema.ts:37,43`, `agent-tool-adapter.ts:30` (`llm-service.ts:75` already fixed via HS-18).
+3. **HS-16:** Retry-loop `lastError` overwrite — accumulate `errors: unknown[]` with attempt index across providers (anthropic.ts:346, openai.ts:486, gemini.ts:575, local.ts:691, litellm.ts:479-481).
 
 ### Final state (post-sweep + follow-up fix loop)
 
@@ -151,9 +151,10 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
   - ✅ HS-11 — status-renderer Ctrl-C → re-raises SIGINT instead of `process.exit`
   - ✅ HS-12 — mcp-client SIGINT/SIGTERM → re-raises instead of `process.exit`
   - ✅ HS-18 — annotation-fix (2026-05-21): removed false `@deprecated` from `ProviderCapabilities`/`DEFAULT_CAPABILITIES`/`getStructuredOutputCapabilities`; documented as orthogonal types (not replacements). Original "Capability supersedes" framing reverted as design error.
+  - ✅ HS-22 — extracted `streaming-helpers.ts` (`emitToolUseStart`/`emitToolUseDelta`/`emitToolCallComplete`); 4 providers updated; 6 co-emit lines collapsed to 3; `as const`/`as StreamEvent` casts removed. Original "65 duplicated lines" count audited to 9 actual emit sites.
   - 🟡 HS-25 — undocumented `it.skip` calls tagged with drift root cause + fix path
 - **False-positives closed:** HS-13, HS-15 (Agent B's claims contradicted by code: both sites already had try/catch or `isMain` gate)
-- **Filed for planning (remaining):** 21 items (HS-02/03/04/06/07/08/14/16/17/19/20/21/22/23/24/26/27/28/29/30/31)
+- **Filed for planning (remaining):** 20 items (HS-02/03/04/06/07/08/14/16/17/19/20/21/23/24/26/27/28/29/30/31)
 
 ---
 

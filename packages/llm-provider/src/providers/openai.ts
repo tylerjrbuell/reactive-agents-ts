@@ -20,6 +20,7 @@ import type {
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import type { CacheUsage } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
+import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 
 // ─── OpenAI Message Conversion ───
 
@@ -345,12 +346,12 @@ export const OpenAIProviderLive = Layer.effect(
                         });
                         // Emit tool_use_start on first chunk for this tool
                         if (tc.id && tc.function?.name) {
-                          emit.single({ type: "tool_use_start", id: tc.id, name: tc.function.name });
+                          emitToolUseStart(emit, tc.id, tc.function.name);
                         }
                       }
                       // Emit argument deltas for progressive parsing
                       if (tc.function?.arguments) {
-                        emit.single({ type: "tool_use_delta", input: tc.function.arguments });
+                        emitToolUseDelta(emit, tc.function.arguments);
                       }
                     }
                   }
