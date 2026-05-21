@@ -1,0 +1,70 @@
+name: 🏗️ Architecture Debt
+description: Structural problem in the codebase — dead code, layer violations, over-abstraction, scope creep, duplicated systems.
+title: "[arch-debt] "
+labels: ["architecture-debt", "type:chore"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for structural cleanups: file too large, layer violation, parallel systems, dead code, untyped seams.
+        For runtime bugs use 🐛 Bug Report; for new capabilities use ✨ Feature Request.
+  - type: input
+    id: location
+    attributes:
+      label: Primary location (file:line — relative to repo root)
+      placeholder: "packages/runtime/src/execution-engine.ts:1365"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem (one-sentence ideal)
+      description: What's wrong structurally. Avoid prescribing the fix here.
+      placeholder: "Layer.merge sites cast to `Layer.Layer<any, any>` because the R-union isn't threaded through runtime.ts builder."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Verified-by (file:line + concrete numbers)
+      description: |
+        Required. Cite the grep / wc / file:line that proves the claim.
+        Example: `grep -c "as any" packages/runtime/src/runtime.ts` → 39 occurrences
+      placeholder: |
+        - `wc -l packages/runtime/src/execution-engine.ts` → 1656
+        - Comment at runtime-construction.ts:165 explicitly notes workaround
+    validations:
+      required: true
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Effort estimate
+      options: [Low (< 50 LOC, 1-2 files), Medium (50-500 LOC, 2-5 files), High (>500 LOC or cross-package)]
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact estimate
+      options: [Low (cosmetic / single-site), Medium (clarifies one subsystem), High (unblocks future work / collapses cluster)]
+    validations:
+      required: true
+  - type: textarea
+    id: fix-direction
+    attributes:
+      label: Fix direction (not a plan — a pointer)
+      description: One sentence on the kind of fix. Leave detailed planning to a wiki plan.
+      placeholder: "Define `KernelContextDeps` narrow interface, drop the `as any` cast, thread real R through layer build."
+  - type: input
+    id: phase
+    attributes:
+      label: Phase (if known)
+      placeholder: "phase:C / phase:E / phase:1.5"
+  - type: textarea
+    id: related
+    attributes:
+      label: Related (issues, wiki pages, prior HS-NN)
+      placeholder: |
+        - HS-19 (Running Issues Log)
+        - wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md §X
+        - #50

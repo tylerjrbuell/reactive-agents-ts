@@ -329,7 +329,49 @@ At that point, we expect to see:
 
 ## Migration to GitHub Issues (2026-05-21)
 
-**All open HS-NN + AGENTS.md `## Architecture Debt` rows are being migrated to GitHub issues** with the existing label taxonomy (`area:*`, `phase:*`, `type:*`, `priority:*`, plus new labels `health-sweep`, `architecture-debt`, `verified`).
+**All open HS-NN + AGENTS.md `## Architecture Debt` rows migrated to GitHub issues** with existing label taxonomy (`area:*`, `phase:*`, `type:*`, `priority:*`) plus new labels `health-sweep`, `architecture-debt`, `verified`, `audit-2026-05-21`.
+
+### HS → GH issue map
+
+| HS-NN | GH Issue | Title (truncated) |
+|-------|----------|-------------------|
+| HS-02 | #68 | ProviderAdapter M12 hooks declare `: any` on 5 of 7 hooks |
+| HS-03 | #69 | Layer composition uses `as any` on every Layer.merge (~39 sites) |
+| HS-04 | #70 | `LLMForX` duplicated 6× across cost + verification |
+| HS-06 | #71 | RI handlers reach into `(state as any)` (7 sites) |
+| HS-07 | #72 | 7 option-group readers read builder state via `as any` |
+| HS-08 | #73 | Central think phase casts memoryContext/selectedStrategy/LLMResponse.model |
+| HS-14 | #74 | Lifecycle hook errors swallowed |
+| HS-16 | #75 | Provider retry loops overwrite lastError |
+| HS-19 | #76 | Four runtime files >1500 LOC need W26+ decomposition |
+| HS-20 | #77 | Seven secondary files >800 LOC |
+| HS-21 | #78 | Sweep 5 stale `@deprecated` annotations |
+| HS-23 | #79 | 4 `TODO` comments on live code paths |
+| HS-24 | #80 | Stale `test.skip("RED phase…")` contradicts M1 KEEP |
+| HS-25 | #81 | skill-resolver tests drift on bundled-default skill |
+| HS-26 | #82 | Zero tests in @reactive-agents/{react,svelte,vue} |
+| HS-27 | #83 | ~30 fixed-delay setTimeout calls in tests |
+| HS-28 | #84 | 4 `@internal` OpenAI exports leak through barrel |
+| HS-29 | #85 | 9 intervention handlers double-cast as InterventionHandler |
+| HS-30 | #86 | Three integration examples use whole-file @ts-nocheck |
+| HS-31 | #87 | 55 `as unknown as` casts in tests (was 74) |
+
+### AGENTS.md Architecture Debt → GH issue map
+
+| Debt row | GH Issue | Title |
+|----------|----------|-------|
+| Loop vs switch | #88 | Loop-detector streak logic masks duplicate-tool patterns |
+| Sub-agent dup | #89 | `.withAgentTool` vs `.withDynamicSubAgents` overlap |
+| Strategy dup | #90 | `direct.ts` + `reactive.ts` collapse into `coreReactive()` |
+| Coupling hotspot | #91 | `runtime/types.ts` + `builder/types.ts` 360+ inbound imports |
+
+### Known issues (Wiki #N → GH issue map)
+
+| Wiki ref | GH Issue | Title |
+|----------|----------|-------|
+| Issue #4 | #92 | ToT outer loop doesn't honor dispatcher-early-stop |
+
+**Why migrated:** single source of truth for issue tracking; frees local wiki context for *immediate* current-state. GH supports project boards, automation, cross-references, and external contribution discovery.
 
 **Why:** single source of truth for issue tracking; frees local wiki context for *immediate* current-state, not backlog. GH supports project boards, automation, cross-references, and external contribution discovery.
 

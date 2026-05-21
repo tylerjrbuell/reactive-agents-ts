@@ -1,0 +1,83 @@
+name: 🔍 Audit Finding (Health-Sweep / Architecture Audit)
+description: Findings from a codebase-health-sweep, architecture-audit, or other systematic scan. Requires verified-by evidence.
+title: "[audit] "
+labels: ["health-sweep", "type:chore"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for findings from automated or systematic scans (health-sweep, architecture-audit, simplify, effect-abstraction-audit).
+        **Every finding must be verified before filing** — no grep-without-semantic-check claims.
+
+        See `.claude/skills/codebase-health-sweep/SKILL.md` for the verification protocol.
+  - type: dropdown
+    id: sweep
+    attributes:
+      label: Audit type
+      options:
+        - codebase-health-sweep
+        - architecture-audit
+        - effect-abstraction-audit
+        - simplify
+        - manual / other
+    validations:
+      required: true
+  - type: input
+    id: sweep-date
+    attributes:
+      label: Sweep date (YYYY-MM-DD)
+      placeholder: "2026-05-21"
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Location (file:line)
+      placeholder: "packages/llm-provider/src/adapter.ts:104"
+    validations:
+      required: true
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding (one-sentence)
+      placeholder: "ProviderAdapter M12 hooks declare `: any` on response/parts/error/chunk — 5 of 7 public hooks erase types across providers."
+    validations:
+      required: true
+  - type: textarea
+    id: verified-by
+    attributes:
+      label: Verified-by (REQUIRED — cite concrete grep / wc / file:line / behavior trace)
+      description: |
+        This field exists because past sweeps inflated counts via raw grep.
+        Provide the command you ran AND the output that supports the claim.
+      placeholder: |
+        `grep -n ": any" packages/llm-provider/src/adapter.ts` →
+          104: handle(response: any): ...
+          113: parse(parts: any[]): ...
+          126: onError(error: any): ...
+          145: onChunk(chunk: any): ...
+          154: ...
+        5 occurrences verified.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - P0 — blocks release / data-loss / silent failure
+        - P1 — next milestone, real friction
+        - P2 — defer, low impact
+        - false-positive (close immediately)
+    validations:
+      required: true
+  - type: textarea
+    id: fix-direction
+    attributes:
+      label: Fix direction (pointer, not plan)
+      placeholder: "Discriminated `RawProviderResponse`/`RawStreamChunk` union; centralize once in `@reactive-agents/core`."
+  - type: input
+    id: hs-id
+    attributes:
+      label: Source HS-NN ID (if migrating from Running Issues Log)
+      placeholder: "HS-02"
