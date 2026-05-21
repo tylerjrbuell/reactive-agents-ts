@@ -135,9 +135,9 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 
 ### Top 3 P2 opportunities for next sprint
 
-1. **HS-22:** Extract provider tool-call streaming emit helper — single PR collapses 65 duplicated emit lines.
-2. **HS-18 (escalated P0):** `@deprecated Removed in v0.11.0` annotation lies — v0.11.0 already shipped, v0.11.1 current. Migrate 5 callers + delete deprecated exports in v0.12, OR amend the annotation. Public API integrity.
-3. **HS-26:** Add at least one smoke test per UI package (react/svelte/vue) before v0.11 ships untested adapters.
+1. **HS-26:** Add at least one smoke test per UI package (react/svelte/vue) before v0.11 ships untested adapters.
+2. **HS-21:** Audit remaining stale `@deprecated v0.11` annotations — sweep `llm-config.ts:143`, `kernel-state.ts:761-762`, `telemetry-schema.ts:37,43`, `agent-tool-adapter.ts:30` (`llm-service.ts:75` already fixed via HS-18).
+3. **HS-16:** Retry-loop `lastError` overwrite — accumulate `errors: unknown[]` with attempt index across providers (anthropic.ts:346, openai.ts:486, gemini.ts:575, local.ts:691, litellm.ts:479-481).
 
 ### Final state (post-sweep + follow-up fix loop)
 
@@ -150,10 +150,11 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
   - ✅ HS-10 — `AgentStreamCollectError` typed class replaces 4 `throw new Error(string)` sites
   - ✅ HS-11 — status-renderer Ctrl-C → re-raises SIGINT instead of `process.exit`
   - ✅ HS-12 — mcp-client SIGINT/SIGTERM → re-raises instead of `process.exit`
-  - 🟡 HS-18 — `@deprecated Removed in v0.11.0` annotation amended to v0.12.0 + caller list documented (migration deferred)
+  - ✅ HS-18 — annotation-fix (2026-05-21): removed false `@deprecated` from `ProviderCapabilities`/`DEFAULT_CAPABILITIES`/`getStructuredOutputCapabilities`; documented as orthogonal types (not replacements). Original "Capability supersedes" framing reverted as design error.
+  - ✅ HS-22 — extracted `streaming-helpers.ts` (`emitToolUseStart`/`emitToolUseDelta`/`emitToolCallComplete`); 4 providers updated; 6 co-emit lines collapsed to 3; `as const`/`as StreamEvent` casts removed. Original "65 duplicated lines" count audited to 9 actual emit sites.
   - 🟡 HS-25 — undocumented `it.skip` calls tagged with drift root cause + fix path
 - **False-positives closed:** HS-13, HS-15 (Agent B's claims contradicted by code: both sites already had try/catch or `isMain` gate)
-- **Filed for planning (remaining):** 22 items (HS-02/03/04/06/07/08/14/16/17/19/20/21/22/23/24/26/27/28/29/30/31)
+- **Filed for planning (remaining):** 20 items (HS-02/03/04/06/07/08/14/16/17/19/20/21/23/24/26/27/28/29/30/31)
 
 ---
 

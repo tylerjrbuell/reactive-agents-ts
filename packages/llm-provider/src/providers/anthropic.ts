@@ -18,6 +18,7 @@ import type {
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
+import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 
 // ─── Anthropic Message Conversion Helpers ───
 
@@ -215,11 +216,11 @@ export const AnthropicProviderLive = Layer.effect(
                 if (e.delta?.type === "text_delta" && e.delta.text) {
                   emit.single({ type: "text_delta", text: e.delta.text });
                 } else if (e.delta?.type === "input_json_delta" && e.delta.partial_json) {
-                  emit.single({ type: "tool_use_delta", input: e.delta.partial_json });
+                  emitToolUseDelta(emit, e.delta.partial_json);
                 }
               } else if (e.type === "content_block_start") {
                 if (e.content_block?.type === "tool_use" && e.content_block.id && e.content_block.name) {
-                  emit.single({ type: "tool_use_start", id: e.content_block.id, name: e.content_block.name });
+                  emitToolUseStart(emit, e.content_block.id, e.content_block.name);
                 }
               }
             });

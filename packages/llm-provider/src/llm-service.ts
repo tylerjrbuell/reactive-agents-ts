@@ -69,22 +69,26 @@ export class LLMService extends Context.Tag("LLMService")<
     readonly getModelConfig: () => Effect.Effect<ModelConfig, never>;
 
     /**
-     * Report structured output capabilities for this provider.
-     * Used by the structured output pipeline to select optimal JSON extraction strategy.
+     * Report granular structured-output capabilities for this provider —
+     * which JSON-extraction strategies are supported (native JSON mode,
+     * schema enforcement, prefill, grammar constraints).
      *
-     * @deprecated Superseded by `capabilities()`. This method is retained for backward
-     * compatibility. New code should use `capabilities()` and read
-     * `supportsStructuredOutput` from `ProviderCapabilities`.
+     * Distinct from {@link capabilities}: that method reports a single
+     * coarse `supportsStructuredOutput` boolean for picking between native
+     * function calling and structured-output fallback paths. This method
+     * answers the follow-up question "which JSON extraction strategy?"
+     * and is consumed by `reasoning/structured-output/pipeline.ts`.
      */
     readonly getStructuredOutputCapabilities: () => Effect.Effect<StructuredOutputCapabilities, never>;
 
     /**
-     * Declare the provider's runtime capabilities.
-     * Returns a static, pure value — no API calls are made.
+     * Declare the provider's coarse API-surface capabilities (tool calling,
+     * streaming, structured output, logprobs). Returns a static, pure value —
+     * no API calls are made.
      *
-     * Subsumes `getStructuredOutputCapabilities()`. Use this method for all
-     * new provider-capability checks (tool calling, streaming, structured output,
-     * logprobs).
+     * Orthogonal to {@link getStructuredOutputCapabilities} (granular JSON
+     * strategy flags) and to the per-(provider, model) `Capability` struct
+     * (context window, tokenizer, tier, dialect).
      */
     readonly capabilities: () => Effect.Effect<ProviderCapabilities, never>;
   }

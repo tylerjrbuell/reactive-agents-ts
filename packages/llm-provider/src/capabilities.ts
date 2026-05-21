@@ -1,17 +1,25 @@
 /**
- * ProviderCapabilities — static capability declaration for each LLM provider.
+ * ProviderCapabilities — static, per-provider API-surface declaration.
  *
- * These are coarse-grained, model-agnostic flags that reflect what the
- * provider's API reliably supports. They let the framework choose between
- * native function calling and structured-output fallback paths without
- * querying the provider at runtime.
+ * Coarse-grained boolean flags describing what each provider's API reliably
+ * supports. Used by the framework to pick between native function calling
+ * and structured-output fallback paths without querying the provider at
+ * runtime.
  *
- * @deprecated Phase 1 introduces the per-(provider, model) {@link Capability}
- * struct in `./capability.ts` with 12 fields and probe + static-table +
- * fallback resolution. **Scheduled removal: v0.12.0** (was v0.11.0 — see
- * HS-18 in `wiki/Issues/Running Issues Log.md`; v0.11.0/v0.11.1 shipped
- * with the legacy surface still live and 5 internal callers still on it).
- * New code should consume `Capability` directly via the resolver (S1.3).
+ * ## Taxonomy (orthogonal types — do not collapse)
+ *
+ * - **`ProviderCapabilities`** (this type) — per-provider API surface flags
+ *   (tool calling, streaming, structured output, logprobs).
+ * - **{@link StructuredOutputCapabilities}** (in `./types.ts`) — granular
+ *   JSON-extraction strategy flags (native JSON mode, schema enforcement,
+ *   prefill, grammar constraints).
+ * - **{@link Capability}** (in `./capability.ts`) — per-(provider, model)
+ *   spec resolved via probe → static-table → fallback (context window,
+ *   tokenizer, tier, dialect).
+ *
+ * These three types answer different questions; an earlier "Capability
+ * supersedes ProviderCapabilities" design intent was reverted because the
+ * concerns are orthogonal in practice (see wiki HS-18). Treat as permanent.
  */
 export interface ProviderCapabilities {
   /** Provider supports native function / tool calling (structured tool_use). */

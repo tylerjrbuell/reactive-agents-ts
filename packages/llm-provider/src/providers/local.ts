@@ -19,6 +19,7 @@ import { resolveCapability } from '../capability-resolver.js'
 import { probeOllamaCapability } from './local-probe.js'
 import { warnCapabilityFallback } from '../capability-resolver.js'
 import type { Capability } from '../capability.js'
+import { emitToolCallComplete } from '../streaming-helpers.js'
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
 // per process. CalibrationStore write-through (cross-process) lands in S2.4.
@@ -592,17 +593,12 @@ export const LocalProviderLive = Layer.effect(
                                                 input: tc.function.arguments,
                                             }
                                             accumulatedToolCalls.push(toolCall)
-                                            emit.single({
-                                                type: 'tool_use_start',
-                                                id: toolCall.id,
-                                                name: toolCall.name,
-                                            })
-                                            emit.single({
-                                                type: 'tool_use_delta',
-                                                input: JSON.stringify(
-                                                    tc.function.arguments
-                                                ),
-                                            })
+                                            emitToolCallComplete(
+                                                emit,
+                                                toolCall.id,
+                                                toolCall.name,
+                                                tc.function.arguments,
+                                            )
                                         }
                                     }
 
