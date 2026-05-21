@@ -72,6 +72,16 @@ For each candidate, parse:
 
 **Drift check (added 2026-05-21):** for any candidate carrying a verified-by command with file:line references, re-run the command. If the emitted line numbers differ from the issue body's claimed lines by **>5** on any row, mark the candidate `🟡 drift detected` and re-read the cited spans to confirm the semantic cast/pattern still matches. Counts can match while locations move 25+ lines — that means the surrounding logic refactored and the fix shape may no longer apply. Acceptable to proceed; not acceptable to skip the check.
 
+**Drift check addendum (added 2026-05-21 v3): semantic-equivalent pattern grep.** When the issue body claims N sites but the primary grep returns fewer, the gap may be a *syntactic variant of the same anti-pattern*, not real drift. Before declaring `🟡 drift detected`, additionally grep the known equivalence classes:
+
+| Primary pattern | Semantic equivalents to also grep |
+|-----------------|-----------------------------------|
+| `(x as any)` | `(x as unknown as {…})`, `(x as unknown as Record<…>)` |
+| `: any` | `: unknown` (intentional widening), `: Record<string, any>`, untyped function-type `Function` |
+| `as Function` | `(...args: any[]) => any`, `Callable` aliases |
+
+If the **sum** of equivalence-class matches reproduces the claimed count, proceed (no drift — issue author counted across both forms). If the sum still falls short, mark drift and re-read the cited spans. (Reason: 2026-05-21 #71 spawn — issue claimed 7 sites; primary grep `(state as any)` returned 3; the other 4 lived under `as unknown as { … }` narrowings. Including both forms recovered the exact 7.)
+
 Output: candidate set, sorted by `priority:p0` > `p1` > `p2` > `p3`, then by `verified` label (verified issues rank higher), then drift-clean before drift-detected.
 
 ---

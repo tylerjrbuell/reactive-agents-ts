@@ -10,7 +10,22 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-21, late) — execute-backlog v1 + #72 PR
+## Latest Session (2026-05-21, evening) — execute-backlog v3 + #71 PR
+
+**Bundle:** `ri-handlers-state-shape` (singleton, #71 HS-06).
+
+- **Fix:** new `packages/reactive-intelligence/src/controller/handler-state.ts` defining `HandlerState = Readonly<KernelStateLike> & {currentOptions?, activatedSkills?, controllerDecisionLog?, currentStrategy?}` + `asHandlerState()` boundary helper. 7 untyped reads across 7 handler files migrated to typed accesses; single named cast at boundary.
+- **Architectural call:** mirrored `PatchedState` precedent at `patch-applier.ts:4` — local widening keeps the change inside `reactive-intelligence`. `KernelStateLike` in `@reactive-agents/core` untouched (cross-package extension was the issue body's "OR" alternative).
+- **`context-compress.ts` dead-cast:** `(state as any).tokens` was already on `KernelStateLike`. Removed the cast entirely instead of routing through widening.
+- **Verified-by recheck:** `grep '(state as any)' …/handlers/` → 0 (was 3); `grep 'as unknown as {' …/handlers/` → 0 (was 4); total 7 sites → 1 named boundary cast.
+- **Suite:** reactive-intelligence 455/0/3-skip; build 38/38.
+- **Branch:** `bundle/ri-handlers-state-shape`; **PR:** #96.
+- **Skill amendment (v3):** Phase 1 drift check expanded to grep semantic-equivalent patterns (`as any` ↔ `as unknown as`) before declaring drift — this pass would have false-positived without it (issue claimed 7 sites; primary grep found 3; the gap was the narrowing variant, not real drift).
+- **Note on parallel PR #95:** previous bundle `providers-adapter-typing` (#68) is still open; this bundle branched off `origin/main` clean and does not depend on it.
+
+---
+
+## Previous Session (2026-05-21, late) — execute-backlog v1 + #72 PR
 
 **Bundle:** `runtime-builder-state-typing` (singleton, #72 HS-07).
 
