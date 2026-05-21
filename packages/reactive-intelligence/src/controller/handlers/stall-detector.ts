@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { InterventionHandler } from "../intervention.js";
+import { asHandlerState } from "../handler-state.js";
 
 export function jaccardSimilarity(a: string, b: string): number {
   const tokensA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
@@ -38,7 +39,7 @@ export const stallDetectorHandler: InterventionHandler<"stall-detect"> = {
   description: "Detects when model repeats content without progress; escalates to early-stop on second fire",
   defaultMode: "dispatch",
   execute: (decision, state, _ctx) => {
-    const decisionLog = (state as unknown as { controllerDecisionLog?: readonly string[] }).controllerDecisionLog ?? [];
+    const decisionLog = asHandlerState(state).controllerDecisionLog ?? [];
     // controllerDecisionLog is pre-populated before dispatch fires, so priorStalls >= 1 on first fire.
     const priorStalls = decisionLog.filter((e) => e.startsWith("stall-detect")).length;
     const isEscalation = priorStalls >= 2;

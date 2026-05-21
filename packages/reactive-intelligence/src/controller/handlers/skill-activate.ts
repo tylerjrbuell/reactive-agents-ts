@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import type { InterventionHandler } from "../intervention.js"
+import { asHandlerState } from "../handler-state.js"
 import { loadSkillContent } from "./skill-loader.js"
 
 export const skillActivateHandler: InterventionHandler<"skill-activate"> = {
@@ -19,9 +20,7 @@ export const skillActivateHandler: InterventionHandler<"skill-activate"> = {
         }
       }
 
-      const activatedSkills = (state as any).activatedSkills as
-        | Array<{ id: string; content: string }>
-        | undefined
+      const activatedSkills = asHandlerState(state).activatedSkills
       const already = (activatedSkills ?? []).some((s) => s.id === skillName)
       if (already) {
         return {

@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import type { InterventionHandler } from "../intervention.js"
+import { asHandlerState } from "../handler-state.js"
 
 export const toolFailureRedirectHandler: InterventionHandler<"tool-failure-redirect"> = {
   type: "tool-failure-redirect",
@@ -12,7 +13,7 @@ export const toolFailureRedirectHandler: InterventionHandler<"tool-failure-redir
     // budget.interventionsFiredThisRun (now tracked in W3 FIX-23 via
     // KernelState.meta.riBudget) counts ALL prior fires across decision types,
     // which is too broad for re-fire detection of a single decision class.
-    const decisionLog = (state as unknown as { controllerDecisionLog?: readonly string[] }).controllerDecisionLog ?? [];
+    const decisionLog = asHandlerState(state).controllerDecisionLog ?? [];
     const priorRedirects = decisionLog.filter((e) => e.startsWith("tool-failure-redirect")).length;
     const isEscalation = priorRedirects >= 1;
 

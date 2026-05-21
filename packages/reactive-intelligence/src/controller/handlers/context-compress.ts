@@ -8,7 +8,7 @@ export const contextCompressHandler: InterventionHandler<"compress"> = {
   description: "Compress message history when tokens trend high",
   defaultMode: "dispatch",
   execute: (decision, state, _ctx) => {
-    const currentTokens = (state as any).tokens as number ?? 0
+    const currentTokens = state.tokens ?? 0
     const estimatedSavings = decision.estimatedSavings
     if (estimatedSavings <= COMPRESS_COST_TOKENS * 2) {
       return Effect.succeed({
