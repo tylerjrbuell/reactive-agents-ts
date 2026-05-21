@@ -46,13 +46,15 @@ export interface InlineThinkDeps {
   readonly eb: EbLike | null;
   readonly obs: ObsLike | null;
   readonly isVerbose: boolean;
+  /** Effective context window for this run: recommendedNumCtx for local models, maxContextTokens for cloud. */
+  readonly effectiveContextTokens: number;
 }
 
 export const runInlineThink = (
   c: ExecutionContext,
   deps: InlineThinkDeps,
 ): Effect.Effect<ExecutionContext, never> => {
-  const { config, functionCallingTools, availableToolNames, contextManagerOpt, eb, obs, isVerbose } = deps;
+  const { config, functionCallingTools, availableToolNames, contextManagerOpt, eb, obs, isVerbose, effectiveContextTokens } = deps;
   return Effect.gen(function* () {
     const llm = yield* Context.GenericTag<{
       complete: (req: unknown) => Effect.Effect<{
@@ -167,14 +169,14 @@ export const runInlineThink = (
 
     const llmCallStart = performance.now();
     const streamCb = yield* FiberRef.get(StreamingTextCallback);
-    let response: { content: string; toolCalls?: unknown[]; stopReason: string; usage?: { totalTokens?: number; estimatedCost?: number } };
+    let response: { content: string; toolCalls?: unknown[]; stopReason: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCost?: number } };
     if (streamCb) {
       // Streaming path: emit TextDelta events as tokens arrive
       const llmStream = yield* llm.stream(llmRequest);
       let content = "";
       let toolCalls: unknown[] | undefined;
       let stopReason = "end_turn";
-      let usage: { totalTokens?: number; estimatedCost?: number } | undefined;
+      let usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCost?: number } | undefined;
       yield* EStream.runForEach(llmStream, (event: any) =>
         Effect.gen(function* () {
           if (event.type === "text_delta" && event.text) {
@@ -185,7 +187,7 @@ export const runInlineThink = (
             if (event.stopReason) stopReason = event.stopReason;
             if (event.toolCalls?.length) toolCalls = event.toolCalls;
           } else if (event.type === "usage") {
-            usage = { totalTokens: event.usage?.totalTokens, estimatedCost: event.usage?.estimatedCost };
+            usage = { inputTokens: event.usage?.inputTokens, outputTokens: event.usage?.outputTokens, totalTokens: event.usage?.totalTokens, estimatedCost: event.usage?.estimatedCost };
           }
         }),
       ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:stream-runforeach", tag: errorTag(err) })));
@@ -232,6 +234,29 @@ export const runInlineThink = (
         tokensUsed: response.usage?.totalTokens ?? 0,
         estimatedCost: response.usage?.estimatedCost ?? 0,
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:emit-llm-request-completed", tag: errorTag(err) })));
+
+      if (effectiveContextTokens > 0) {
+        // Use inputTokens (live context sent to model this call) when available;
+        // fall back to accumulated tokensUsed for providers that only report totals (e.g. Ollama).
+        const liveContextTokens =
+          (response.usage?.inputTokens ?? 0) > 0
+            ? response.usage!.inputTokens!
+            : c.tokensUsed + (response.usage?.totalTokens ?? 0);
+        const tokensAvailable = Math.max(0, effectiveContextTokens - liveContextTokens);
+        const utilizationPct = Math.min(100, Math.max(0, (liveContextTokens / effectiveContextTokens) * 100));
+        const level =
+          utilizationPct >= 90 ? "critical" :
+          utilizationPct >= 75 ? "high" :
+          utilizationPct >= 45 ? "medium" : "low";
+        yield* eb.publish({
+          _tag: "ContextPressure",
+          taskId: c.taskId,
+          utilizationPct,
+          tokensUsed: liveContextTokens,
+          tokensAvailable,
+          level,
+        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:emit-context-pressure", tag: errorTag(err) })));
+      }
     }
 
     // Phase 0.5: Record LLM timing histogram

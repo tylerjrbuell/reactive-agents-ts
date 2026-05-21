@@ -14,6 +14,12 @@
     markdown?: string;
     metrics?: { iterations?: number; tokens?: number; duration?: number; cost?: number };
     toolsUsed?: ReadonlyArray<{ name?: string; calls?: number; errors?: number; avgDurationMs?: number }>;
+    rationale?: ReadonlyArray<{
+      readonly iteration: number;
+      readonly decision: string;
+      readonly toolName?: string;
+      readonly rationale: { readonly why: string; readonly refs?: readonly string[]; readonly confidence?: number };
+    }>;
   };
 
   const d = $derived(
@@ -154,6 +160,33 @@
                   </ul>
                 </div>
               {/if}
+            </div>
+          {/if}
+
+          <!-- Decision Rationale -->
+          {#if (d.rationale?.length ?? 0) > 0}
+            <div>
+              <div class="text-[9px] font-mono text-outline/60 uppercase tracking-widest mb-2">Decision Rationale</div>
+              <ul class="space-y-2">
+                {#each d.rationale ?? [] as r}
+                  <li class="font-mono text-[10px] border-l-2 border-outline-variant/20 pl-3 space-y-0.5">
+                    <div class="flex items-center gap-2 text-on-surface/70">
+                      <span class="text-outline/40">iter {r.iteration}</span>
+                      <span class="text-on-surface/60">{r.decision}</span>
+                      {#if r.toolName}
+                        <span class="text-secondary/60 bg-secondary/8 px-1.5 py-px rounded text-[9px]">{r.toolName}</span>
+                      {/if}
+                      {#if r.rationale.confidence != null}
+                        <span class="text-outline/40 text-[9px]">{Math.round(r.rationale.confidence * 100)}%</span>
+                      {/if}
+                    </div>
+                    <div class="text-outline/55">{r.rationale.why}</div>
+                    {#if r.rationale.refs && r.rationale.refs.length > 0}
+                      <div class="text-outline/35 text-[9px]">refs: {r.rationale.refs.join(", ")}</div>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
             </div>
           {/if}
 

@@ -7,11 +7,12 @@ const agent = await ReactiveAgents.create()
             'Expert in crypto analysis and research. You can use the crypto prices tool to get live price data.',
         instructions:
             'Always use the crypto prices tool to get live price data. Timestamp your work with the date and time at the top of the report.',
-        tone: 'friendly, technical, developer-to-developer',
+        tone: 'friendly, concise',
     })
     .withProvider('ollama')
-    .withModel({ model: 'cogito:14b', maxTokens: 32000, temperature: 0.4 })
+    .withModel('gemma4:e4b')
     .withCortex()
+    .withMemory()
     .withReasoning({
         defaultStrategy: 'adaptive',
         enableStrategySwitching: false,
@@ -37,11 +38,11 @@ const agent = await ReactiveAgents.create()
     //             process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
     //     },
     // })
-    .withObservability({ verbosity: 'verbose', live: true, logModelIO: true })
+    .withObservability({ verbosity: 'verbose', live: true, logModelIO: false })
     .build()
 
 const result = await agent.run(
-    'Research latest cryptocurrency news and trends, then use the crypto prices tool to get live price data, then synthesis a report in markdown format with the current date.'
+    'First search the web for the latest cryptocurrency news and trends for XRP and Bitcoin and use the crypto prices tool to get live price data, then synthesis a report in markdown format with the current date.'
 )
-console.log(result)
+console.log(result.output)
 await agent.dispose()

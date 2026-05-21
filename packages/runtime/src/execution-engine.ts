@@ -35,6 +35,7 @@ import { PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memo
 import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry, loadObservations } from "@reactive-agents/reactive-intelligence";
 import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
+import { resolveCapability } from "@reactive-agents/llm-provider";
 import { literalMentionRequired } from "./classifier-bypass.js";
 import { resolveSynthesisConfigForStrategy } from "./synthesis-resolve.js";
 import { formatTaskContextForChat } from "./chat.js";
@@ -950,6 +951,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           eb,
                           obs,
                           isVerbose,
+                          effectiveContextTokens: resolveCapability(
+                            String(c.provider ?? config.provider ?? "unknown"),
+                            String((c.selectedModel as any)?.model ?? c.selectedModel ?? config.defaultModel ?? "unknown"),
+                          ).recommendedNumCtx,
                         }),
                     );
 
@@ -1062,7 +1067,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         inputTokens: 0,
                         outputTokens: ctx.tokensUsed,
                         contextWindowUsed: ctx.messages.length,
-                        contextWindowMax: 200_000,
+                        contextWindowMax: resolveCapability(
+                          String(ctx.provider ?? config.provider ?? "unknown"),
+                          String((ctx.selectedModel as any)?.model ?? ctx.selectedModel ?? config.defaultModel ?? "unknown"),
+                        ).recommendedNumCtx,
                       },
                       costAccumulated: ctx.cost,
                     }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2992", tag: errorTag(err) })));

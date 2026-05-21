@@ -11,6 +11,9 @@ const BACKOFF_BASE_MS = 100;
 const BACKOFF_MAX_MS = 2_000;
 const MAX_BUFFERED_MESSAGES = 2_000;
 
+/** Run IDs that represent internal pseudo-tasks — never forward to cortex. */
+const IGNORED_RUN_IDS = new Set(["llm-direct", "structured-output", "classify-tool-relevance"]);
+
 type CortexIngestMessage = {
   readonly v: 1;
   readonly agentId: string;
@@ -136,6 +139,8 @@ export const RuntimeCortexReporterLive = (cortexUrl: string) =>
 
       const unsubscribe = yield* eventBus.subscribe((event) =>
         Effect.gen(function* () {
+          const taskId = "taskId" in event && typeof event.taskId === "string" ? event.taskId : "";
+          if (IGNORED_RUN_IDS.has(taskId)) return;
           const socket = yield* Ref.get(socketRef);
           const connected = yield* Ref.get(connectedRef);
           const payload = JSON.stringify(toIngestMessage(event));

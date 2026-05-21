@@ -14,6 +14,9 @@
     level?: string;
     tokensUsed?: number;
     tokensAvailable?: number;
+    isFallback?: boolean;
+    iteration?: number;
+    maxIterations?: number;
   };
 
   function tokensFromPayload(p: Record<string, unknown>): number {
@@ -66,6 +69,9 @@
       level,
       tokensUsed,
       tokensAvailable: undefined,
+      isFallback: true,
+      iteration,
+      maxIterations,
     };
   });
 
@@ -81,7 +87,7 @@
     <p class="font-mono text-[10px] text-outline text-center">No context pressure data yet.</p>
   {:else}
     <div class="flex items-center justify-between font-mono text-[10px]">
-      <span class="text-outline uppercase">Context Window</span>
+      <span class="text-outline uppercase">{pressure.isFallback ? "Iteration Progress" : "Context Window"}</span>
       <span style="color: {barColor}">{pct.toFixed(0)}%</span>
     </div>
     <div class="w-full h-2 bg-surface-container-lowest rounded-full overflow-hidden">
@@ -91,11 +97,15 @@
       ></div>
     </div>
     <div class="flex justify-between font-mono text-[10px] text-outline">
-      <span>{(pressure.tokensUsed ?? 0).toLocaleString()} tokens</span>
+      {#if pressure.isFallback && (pressure.tokensUsed ?? 0) === 0 && (pressure.maxIterations ?? 0) > 0}
+        <span>iter {pressure.iteration ?? 0} / {pressure.maxIterations}</span>
+      {:else}
+        <span>{(pressure.tokensUsed ?? 0).toLocaleString()} tokens</span>
+      {/if}
       {#if pressure.tokensAvailable != null}
         <span>{pressure.tokensAvailable.toLocaleString()} available</span>
-      {:else}
-        <span>{pct.toFixed(0)}% of iterations</span>
+      {:else if pressure.isFallback}
+        <span class="text-outline/40">no ctx window data</span>
       {/if}
     </div>
   {/if}
