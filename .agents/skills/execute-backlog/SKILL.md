@@ -70,7 +70,9 @@ For each candidate, parse:
 3. Drop issues with the `blocked` label
 4. Drop issues assigned to someone else
 
-Output: candidate set, sorted by `priority:p0` > `p1` > `p2` > `p3`, then by `verified` label (verified issues rank higher).
+**Drift check (added 2026-05-21):** for any candidate carrying a verified-by command with file:line references, re-run the command. If the emitted line numbers differ from the issue body's claimed lines by **>5** on any row, mark the candidate `🟡 drift detected` and re-read the cited spans to confirm the semantic cast/pattern still matches. Counts can match while locations move 25+ lines — that means the surrounding logic refactored and the fix shape may no longer apply. Acceptable to proceed; not acceptable to skip the check.
+
+Output: candidate set, sorted by `priority:p0` > `p1` > `p2` > `p3`, then by `verified` label (verified issues rank higher), then drift-clean before drift-detected.
 
 ---
 
@@ -90,6 +92,8 @@ Group candidates into one **bundle** (max `max_bundle_size`) that ships together
 2. Greedily add candidates that share ≥1 cohesion signal with the bundle
 3. Stop at `max_bundle_size` OR when no remaining candidate has cohesion ≥1 with the bundle
 4. If the bundle has <2 issues after greedy growth → still proceed (singleton bundles are fine)
+
+**Hard gate (added 2026-05-21): cross-package descope.** Before locking the bundle, re-grep each candidate's verified-by command and inspect the file paths it emits. If those paths span **≥2 packages** (`packages/<a>/…` vs `packages/<b>/…`), descope to a per-package bundle even if the issue body's "Fix direction" suggests otherwise. The body lies; the grep doesn't. (Reason: 2026-05-21 #73 spawn — body said "type properly in the think phase" but the actual `as any` targets resolved to types owned by `@reactive-agents/llm-service` and the kernel-context shape, both other packages.)
 
 **Output:** named bundle. Pattern: `<area>-<theme>` (e.g., `providers-untyped-hooks`, `runtime-builder-as-any-sweep`).
 
@@ -150,6 +154,15 @@ rtk git checkout -B bundle/<bundle-name> origin/main
 Naming pattern: `bundle/<area>-<theme>` (e.g., `bundle/runtime-builder-state-typing`). The branch is the unit-of-work for the entire bundle. All commits in Phase 4 land here; the Phase 6 PR ships them together.
 
 If the working tree is dirty when this skill is invoked, **stop** and surface the dirt — do not stash silently. The caller decides: commit, discard, or move out of the way. (Reason: per `feedback_commit_before_branch.md`, exploratory state must not get mixed into bundle commits.)
+
+**Baseline capture (added 2026-05-21):** immediately after branching, pin the pre-EXECUTE state:
+
+```bash
+rtk bun run build 2>&1 | tail -3   # → record "Tasks: N/N successful"
+rtk bun test 2>&1 | tail -3        # → record pass/fail/skip counts
+```
+
+Stash the numbers in the plan doc under a `## Baseline` heading. Phase 5 compares against these; pre-existing reds get filed as follow-up issues (see #93 pattern) rather than blocking the bundle. Without this baseline, a pre-existing failure surfaced by your edits looks like a regression and you'll burn budget chasing it.
 
 ---
 

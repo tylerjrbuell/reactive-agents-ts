@@ -10,7 +10,20 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-21) — Full architecture audit + GH issue migration
+## Latest Session (2026-05-21, late) — execute-backlog v1 + #72 PR
+
+**Bundle:** `runtime-builder-state-typing` (singleton, #72 HS-07).
+
+- **Fix:** `packages/runtime/src/builder/to-config.ts` — replaced 7 `as any` reads of `_*Options` with proper interface types (`ReasoningOptions`, `ToolsOptions`, `GuardrailsOptions`, `MemoryOptions`, `ObservabilityOptions`, `CostTrackingOptions`, `VerificationOptions`). Verified-by recheck `grep -c 'as any' …to-config.ts` → 0 (was 7).
+- **Suite:** 5321 pass / 0 fail / 26 skip workspace-wide; build 38/38 green.
+- **Branch:** `bundle/runtime-builder-state-typing`; PR pending.
+- **Skill amendment (per user feedback this session):** `execute-backlog` now mandates Phase 3.5 BRANCH (clean tree off `origin/main`) and Phase 6a per-bundle PR with `Closes #N` (no direct-to-main pushes).
+- **Pre-existing red flagged:** `runtime-construction.ts:337` passes `focusedTools` to `RuntimeOptions` literal that doesn't declare it. Was hidden by `as any` widening. Follow-up issue filed.
+- **Descoped from bundle:** #73 (cross-package; needs `LLMResponse.model` + kernel context type edits — spawn `kernel-context-typing` bundle next). #68/#69/#71 also deferred per per-package anti-pattern rule. #83 has no `verified-by`; commented requesting evidence.
+
+---
+
+## Previous Session (2026-05-21) — Full architecture audit + GH issue migration
 
 **Outcome:** Single-source-of-truth migration to GitHub. 25 new issues filed (#68-#92) covering all open HS-NN items + AGENTS.md Architecture Debt rows + 1 known issue. All added to "Reactive Agents Roadmap" project board (project 1).
 
