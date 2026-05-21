@@ -101,7 +101,7 @@ export interface ProviderAdapter {
    * Called after LLM response parsing. Return undefined for no normalization.
    */
   parseToolCalls?(
-    response: any,
+    response: unknown,
     modelId?: string
   ): Array<{ name: string; arguments: Record<string, unknown> }> | undefined;
 
@@ -110,7 +110,7 @@ export interface ProviderAdapter {
    * Called during streaming to reassemble text-only output from mixed parts.
    * Return undefined if not applicable.
    */
-  extractText?(parts: any, modelId?: string): string | undefined;
+  extractText?(parts: unknown, modelId?: string): string | undefined;
 
   /**
    * (M12 Hook 3/7) Compute token cost from input/output token counts.
@@ -123,7 +123,7 @@ export interface ProviderAdapter {
    * Called after parsing. Return validation result or undefined if not applicable.
    */
   validateResponse?(
-    response: any,
+    response: unknown,
     modelId?: string
   ): { valid: boolean; error?: string } | undefined;
 
@@ -142,7 +142,7 @@ export interface ProviderAdapter {
    * Called on error. Return classification {retryable, errorType} or undefined.
    */
   handleError?(
-    error: any,
+    error: unknown,
     modelId?: string
   ): { retryable: boolean; errorType: string } | undefined;
 
@@ -151,7 +151,7 @@ export interface ProviderAdapter {
    * Called during streaming. Return StreamEvent[] or undefined if not streaming.
    */
   streamSupport?(
-    chunk: any,
+    chunk: unknown,
     modelId?: string
   ): Array<{ type: "text_delta" | "tool_call_start" | "tool_call_delta"; text?: string }> | undefined;
 }
