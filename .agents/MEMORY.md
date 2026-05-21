@@ -38,7 +38,29 @@ The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.
 
 ---
 
-## Current state (May 12, 2026)
+## Current state (May 21, 2026)
+
+### Full architecture audit + GH issue migration — SHIPPED ✅ (May 21, 2026)
+
+Single-source-of-truth migration: all open HS-NN items + AGENTS.md Architecture Debt rows filed to GitHub issues (#68-#92, 25 total) on project board "Reactive Agents Roadmap" (project 1). Wiki Running Issues Log becomes canonical *history* + audit-pattern doc.
+
+**Audit re-verification surfaced 3 inflated/misframed claims:**
+- HS-18: framed as "Capability supersedes ProviderCapabilities" — actually orthogonal types (fixed `ac6e6e5d`)
+- HS-22: claimed "65 duplicated lines" — actually 9 emit sites in 4 providers (fixed `8ec95598`)
+- HS-31: claimed "74 casts" — actually 55 (grep counted match-lines, not occurrences)
+
+**Stale doc path drift fixed in AGENTS.md (`aab68353`):**
+- Debugging entry points: `strategies/kernel/phases/think.ts` → `kernel/capabilities/reason/think.ts` (Stage 5 kernel reorg)
+- evidence-grounding.ts: actual location `kernel/capabilities/verify/`, not `kernel/utils/`
+- Tool count: 9 meta-tools (was 8 — discover-tools was missing)
+- Tests: 5,317 pass / 26 skip / 0 fail (2026-05-20 baseline, was 5,294)
+
+**New GH infra (`<this commit>`):**
+- Issue templates: `architecture-debt.yml`, `audit-finding.yml` (both require `verified-by` field with file:line evidence — prevents future inflation)
+- Labels: `health-sweep`, `architecture-debt`, `verified`, `audit-2026-05-21`, `priority:p3`
+- Process: every health-sweep finding now requires `verified-by:` line before filing. `.claude/skills/codebase-health-sweep/SKILL.md` updated to enforce.
+
+**HS items still tracked in wiki (for context):** 11 fixed (HS-01/05/09/10/11/12/18/22 + 3 false-positives + count-verify 19/31). Total open in GH: 25 new + ~22 pre-existing = ~47.
 
 ### Tier 0 Honesty Sweep — SHIPPED ✅ (May 19, 2026, v0.11.1, pushed)
 

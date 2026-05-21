@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-05-14
+updated: 2026-05-21
 ---
 
 # Hot (Recent Context Cache)
@@ -10,7 +10,31 @@ updated: 2026-05-14
 
 ---
 
-## Latest Session (2026-05-19) — Tier 0 honesty sweep
+## Latest Session (2026-05-21) — Full architecture audit + GH issue migration
+
+**Outcome:** Single-source-of-truth migration to GitHub. 25 new issues filed (#68-#92) covering all open HS-NN items + AGENTS.md Architecture Debt rows + 1 known issue. All added to "Reactive Agents Roadmap" project board (project 1).
+
+**Stale-claim corrections committed (`aab68353`):**
+- HS-18/HS-22: misframed, re-verified and marked FIXED in Running Issues Log
+- HS-19: execution-engine.ts 1656 LOC (was 1648 — drift +8)
+- HS-31: 55 `as unknown as` casts in tests (was 74 — grep counted match-lines)
+- AGENTS.md kernel paths: `strategies/kernel/phases/` → `kernel/capabilities/` (Stage 5 reorg)
+- AGENTS.md evidence-grounding: `kernel/utils/` → `kernel/capabilities/verify/`
+- AGENTS.md tool count: 9 meta-tools (was 8 — discover-tools was missing)
+- AGENTS.md tests: 5,317 (was 5,294)
+
+**New GH infra:**
+- `.github/ISSUE_TEMPLATE/architecture-debt.yml` — structural problem template
+- `.github/ISSUE_TEMPLATE/audit-finding.yml` — REQUIRES `verified-by` line
+- Labels: `health-sweep`, `architecture-debt`, `verified`, `audit-2026-05-21`, `priority:p3`
+
+**Pattern detected (3/31 inflation):** HS-18/22/31 each shipped with bad framing — grep-without-semantic-verify. **Process fix:** `codebase-health-sweep` skill requires `verified-by:` line citing file:line evidence on every finding.
+
+**Where to go next:** the GH project board (https://github.com/users/tylerjrbuell/projects/1) is now the canonical backlog. Filter by `audit-2026-05-21` label for the migration batch; by `health-sweep` for all sweep findings; by `priority:p1` for next-milestone work.
+
+---
+
+## Previous Session (2026-05-19) — Tier 0 honesty sweep
 
 Ownership pass after v0.11.1. Artifact: `wiki/Research/2026-05-19-framework-state-and-priorities.md` (state + priority tiers + verified scope corrections).
 

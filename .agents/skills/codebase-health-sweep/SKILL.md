@@ -112,6 +112,53 @@ Output per finding: `package | test-name or file:line | severity | description`
 
 ---
 
+## Phase 1.5 — VERIFY (MANDATORY before TRIAGE)
+
+**Why this exists:** the 2026-05-21 audit-of-audit found 3/31 prior sweep items shipped with bad framing (HS-18 orthogonal-not-superseded, HS-22 65→9 emit sites, HS-31 74→55 casts). Pattern: agents grepped without semantic verification, then committed bad counts to the register.
+
+**Rule:** every finding from Phase 1 must have a `verified-by:` line BEFORE it can be triaged. No exceptions.
+
+### Verification protocol per finding
+
+For each finding, the sweep-runner re-runs the exact claim with explicit evidence:
+
+```
+finding: "Provider retry loops overwrite lastError across 5 providers"
+verified-by:
+  - grep -n "lastError = " packages/llm-provider/src/providers/{anthropic,openai,gemini,local,litellm}.ts
+  - 5 matches, 1 per file, all inside retry loops (lines: anthropic 346, openai 486, gemini 575, local 691, litellm 479)
+  - Each loop has no error accumulator — only `lastError = e` reassignment
+```
+
+Acceptable evidence shapes:
+- `grep -c <pattern> <file>` → exact count
+- `wc -l <file>` → exact LOC
+- `grep -n <pattern> <file>` → file:line list
+- File read of named lines (paste 3-line context if claiming a semantic concern)
+- For runtime claims: trace/test that demonstrates the behavior
+
+**Unacceptable:**
+- "grep showed about 60 matches" (no exact number, no command)
+- "looks like duplication" (no diff'd block, no LOC)
+- "should be unused" (no zero-callers proof)
+- Counting `grep -rn <pattern> | wc -l` for "occurrences" — that counts MATCH-LINES, which is ≥ occurrences when multiple matches share a line. Use `grep -ro <pattern> | wc -l` for occurrences.
+
+### Inflation guard for common patterns
+
+| Claim shape | Common inflation | Correct check |
+|-------------|------------------|---------------|
+| "N duplicated lines" | grep counts ALL matches across files | Diff the blocks; count semantically equivalent ones |
+| "N `as any` casts" | `grep -c` counts lines, not casts | `grep -ro 'as any' \| wc -l` |
+| "@deprecated annotations" | Counts include re-export sites | Check declaration site only |
+| "File >1500 LOC" | Includes blank lines + comments | `wc -l` is fine, but note effective code LOC |
+| "Zero tests" | Misses tests/ vs test/ vs __tests__/ directory variations | Check all 3 conventions |
+
+### Verified-by carries forward to GH issue
+
+When migrating findings to a GitHub issue (template `audit-finding.yml`), the `verified-by` text becomes a required body field. The template will reject submission without it.
+
+---
+
 ## Phase 2 — TRIAGE
 
 Wait for all four agents. Merge findings into a single prioritized register.

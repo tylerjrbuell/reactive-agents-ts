@@ -41,6 +41,11 @@
             "type": "command",
             "command": "jq -r '.tool_input.file_path // \"\"' | { read -r f; if echo \"$f\" | grep -qE \"\\.claude/projects.*memory/\"; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Memory file written. Sync .agents/MEMORY.md with any new or changed content before completing.\"}}'; fi; } 2>/dev/null || true",
             "statusMessage": "Checking memory sync..."
+          },
+          {
+            "type": "command",
+            "command": "jq -r 'if .tool_input.new_string then .tool_input.new_string elif .tool_input.content then .tool_input.content else \"\" end' | { content=$(cat); fp=$(jq -r '.tool_input.file_path // \"\"' <<< \"$CLAUDE_HOOK_PAYLOAD\" 2>/dev/null); echo \"$fp\" | grep -qE 'AGENTS\\.md|MEMORY\\.md|Hot\\.md|Running Issues Log\\.md' || exit 0; warnings=''; echo \"$content\" | grep -q 'strategies/kernel/phases/' && warnings=\"$warnings\\nStale kernel path: 'strategies/kernel/phases/' → kernel was reorganized to 'kernel/capabilities/' in Stage 5 (May 2026). Use 'kernel/capabilities/reason/' for think.ts, 'kernel/capabilities/act/' for act.ts.\"; echo \"$content\" | grep -q 'kernel/utils/evidence-grounding' && warnings=\"$warnings\\nStale path: 'kernel/utils/evidence-grounding' → actual location is 'kernel/capabilities/verify/evidence-grounding'.\"; echo \"$content\" | grep -qE 'packages/runtime/src/runner\\.ts' && warnings=\"$warnings\\nStale path: 'packages/runtime/src/runner.ts' was removed in W25 decomposition. Replaced by modules under 'packages/runtime/src/agent/'.\"; [ -z \"$warnings\" ] && exit 0; printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"⚠ Stale path drift detected in doc edit:%s\\\\n\\\\nVerify before committing.\"}}' \"$warnings\"; } 2>/dev/null || true",
+            "statusMessage": "Checking for stale paths in docs..."
           }
         ]
       }
