@@ -84,6 +84,15 @@ If the **sum** of equivalence-class matches reproduces the claimed count, procee
 
 Output: candidate set, sorted by `priority:p0` > `p1` > `p2` > `p3`, then by `verified` label (verified issues rank higher), then drift-clean before drift-detected.
 
+**Cross-package consistency probe (added 2026-05-22 v9).** When the issue touches per-framework / per-platform packages providing equivalent APIs (e.g., `@reactive-agents/react` + `@reactive-agents/svelte` + `@reactive-agents/vue` all exporting `useAgentStream`-style hooks/factories), briefly diff the impl shape across siblings:
+
+```bash
+# Side-by-side compare of equivalent files
+diff packages/<sibling-a>/src/<file>.ts packages/<sibling-b>/src/<file>.ts | head -40
+```
+
+Same name + equivalent signature + **divergent behavior** = latent defect. Surface in the plan's "Adjacent improvement found" section. Fix opportunistically per the test+fix combo rule (Phase 4 v9). (Reason: 2026-05-22 #82 closeout — vue's `useAgentStream.StreamError` branch threw + was caught by inner try/catch; svelte's equivalent branch used direct `next.error = …; next.status = "error"` and worked correctly. Sibling diff would have flagged the divergence before the test had to.)
+
 ---
 
 ## Phase 2 — BUNDLE
@@ -285,10 +294,18 @@ Failing any of these means the deletion missed adjacent dead-code; either expand
 - Test suite gains net-new failures → same as above
 - Effort blows past unit estimate by 2× → mark issue `over-budget` label, defer, continue
 
+**Test+fix combo bundles (added 2026-05-22 v9).** When a behavioral RED test surfaces an impl bug during a test-coverage bundle, the fix lands in the same PR. The PR title combines verbs: `test(X): add coverage; fix Y`. Allowed when **all** apply:
+
+1. The fix is ≤10 lines.
+2. The fix mirrors an existing-working pattern in a sibling package, OR passes a code-reviewer agent for correctness.
+3. The fix is covered by the same test that surfaced it (test serves as regression check).
+
+If any of those fail, **descope**: file the bug as a separate issue and ship the bundle with the test marked `test.skip` / `xfail` referencing the new issue. (Reason: 2026-05-22 #82 vue portion — behavioral SSE-error test failed because `use-agent-stream.ts:76-78` threw inside an inner `JSON.parse try/catch` that swallowed it. Svelte sibling used direct assignment, no throw. 2-line mirror fix landed in PR #102 alongside the regression test. Defended over "test-only PR + separate fix PR" because the swallow is invisible to types and would have stayed latent.)
+
 **Do NOT:**
 - Skip tests for time pressure
 - Use `as any` to silence types from the very issues you're closing
-- Mix unrelated changes into a single commit
+- Mix unrelated changes into a single commit (test+fix combo is NOT mixed — it's one observably-correct concern)
 
 ---
 

@@ -10,7 +10,37 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-22, mid+1) — execute-backlog v8 + #101 PR
+## Latest Session (2026-05-22, mid+2) — execute-backlog v9 + #102 PR + #103 flake issue
+
+**Bundle:** `vue-smoke-tests` (closes #82 entirely alongside #100 + #101).
+
+- **Coverage:** `packages/vue/tests/smoke.test.ts` — 12 tests, 3 surface + 9 behavioral via mocked `fetch`. Vue refs framework-agnostic (per v8 substrate classification).
+- **Bug fixed (test+fix combo):** `packages/vue/src/use-agent-stream.ts:76-78` `StreamError` branch threw `new Error(cause)` inside inner JSON.parse try/catch → swallowed → status stuck at `"streaming"` forever. Fix mirrors svelte impl: direct `error.value`/`status.value` assignment. 2-line behavior fix; the failing test is now the regression check.
+- **Verified-by recheck:** `find packages/vue -name '*.test.ts*'` → 1 (was 0). Suite: vue 12/0; build 38/38.
+- **Branch:** `bundle/vue-smoke-tests`; **PR:** #102.
+- **Filed follow-up:** **#103** — recurring `httpbin.org` external-network flake in `packages/tools/tests/builtin-handlers.test.ts`. Confirmed ≥2 occurrences (PR #99 initial CI, this session's workspace run). First instance of skill v7 "track recurring flakes in own issue" rule firing in practice.
+- **Skill amendments (v9):** (1) Phase 4 test+fix combo bundles — when behavioral RED surfaces a real bug, fix lands same PR if ≤10 lines + mirrors existing-working sibling + same test acts as regression check; otherwise descope to separate issue. (2) Phase 1 cross-package consistency probe — diff equivalent files across sibling per-framework packages before locking the bundle; divergent behavior in equivalent APIs = latent defect signal.
+
+### Session arc (6 bundles, 6 PRs queued, 1 issue filed)
+- 2026-05-21 night → `bundle/harness-lifecycle-hook-errors` (#74 HS-14) → PR #97
+- 2026-05-21 night+1 → `bundle/runtime-think-phase-typing` (#73 HS-08) → PR #98
+- 2026-05-22 early → `bundle/tests-stale-m1-red-cleanup` (#80 HS-24) → PR #99
+- 2026-05-22 mid → `bundle/react-smoke-tests` (#82 react) → PR #100
+- 2026-05-22 mid+1 → `bundle/svelte-smoke-tests` (#82 svelte) → PR #101
+- 2026-05-22 mid+2 → `bundle/vue-smoke-tests` (#82 vue, +bug fix) → PR #102 + filed #103 (flake)
+
+Total ~3h wall clock for 6 bundles. Skill v3 → v9 across 6 PRs. CI on #97-#101 all green; #102 pending.
+
+### Pattern this session
+PRs alternated between two shapes: **typing/refactor bundles** (#97, #98, #99, #80 cleanup) and **test-coverage bundles** (#100/#101/#102 closing #82). Skill amendments specifically codify the shape differences:
+- Local widening + boundary helper for typing (v5)
+- Dead-code sweep + pure-deletion verified-by triad (v6)
+- Substrate-aware test strategy + multi-package split (v7-v8)
+- Test+fix combo + cross-package consistency probe (v9)
+
+---
+
+## Previous Session (2026-05-22, mid+1) — execute-backlog v8 + #101 PR
 
 **Bundle:** `svelte-smoke-tests` (#82 partial, svelte portion).
 
@@ -20,15 +50,6 @@ updated: 2026-05-21
 - **Verified-by recheck:** `find packages/svelte -name '*.test.ts*'` → 1 (was 0). Suite: svelte 13/0; build 38/38.
 - **Branch:** `bundle/svelte-smoke-tests`; **PR:** #101 (companion to PR #100).
 - **Skill amendment (v8):** Phase 3 PLAN — codify substrate-aware test strategy. Three substrate classes (render-bound / framework-agnostic / pure). Default coverage tier matches substrate. Picking wrong tier = scope creep or coverage gap. Bundle #100 vs #101 = case study.
-
-### Session arc (5 bundles, 6 PRs queued)
-- 2026-05-21 night → `bundle/harness-lifecycle-hook-errors` (#74 HS-14) → PR #97
-- 2026-05-21 night+1 → `bundle/runtime-think-phase-typing` (#73 HS-08) → PR #98
-- 2026-05-22 early → `bundle/tests-stale-m1-red-cleanup` (#80 HS-24) → PR #99
-- 2026-05-22 mid → `bundle/react-smoke-tests` (#82 react) → PR #100
-- 2026-05-22 mid+1 → `bundle/svelte-smoke-tests` (#82 svelte) → PR #101
-
-Total ~2h40m wall clock. Skill v3→v8 over 5 PRs. Next promised: `bundle/vue-smoke-tests` to fully close #82.
 
 ---
 
@@ -44,14 +65,6 @@ Total ~2h40m wall clock. Skill v3→v8 over 5 PRs. Next promised: `bundle/vue-sm
 - **Branch:** `bundle/react-smoke-tests`; **PR:** #100.
 - **Skill amendments (v7):** (1) Phase 5 workspace-test-flake protocol — accept workspace failures when isolation passes + failure isn't in touched package + not a verified-by recheck. Track recurring flakes in own issue. (2) Phase 2 multi-package test-infra split — same descope rule as typing applies to test-infra issues.
 
-### Session arc (4 bundles, 2 calendar days)
-- 2026-05-21 night → `bundle/harness-lifecycle-hook-errors` (#74 HS-14) → PR #97
-- 2026-05-21 night+1 → `bundle/runtime-think-phase-typing` (#73 HS-08) → PR #98
-- 2026-05-22 early → `bundle/tests-stale-m1-red-cleanup` (#80 HS-24) → PR #99
-- 2026-05-22 mid → `bundle/react-smoke-tests` (#82 react portion) → PR #100
-
-All four branched off `origin/main` clean. Total ~2h15m wall clock. Skill SKILL.md amendments accumulated v3→v7 across the four PRs; each PR carries its own delta — when all merge, deltas compose on main.
-
 ---
 
 ## Previous Session (2026-05-22, early) — execute-backlog v6 + #99 PR
@@ -64,13 +77,6 @@ All four branched off `origin/main` clean. Total ~2h15m wall clock. Skill SKILL.
 - **Suite:** reactive-intelligence 455/0/2-skip; build 38/38. File LOC 257 → 77.
 - **Branch:** `bundle/tests-stale-m1-red-cleanup`; **PR:** #99.
 - **Skill amendments (v6):** (1) Phase 4 dead-code sweep generalized from dead-cast — applies to `test.skip`, helpers, interfaces, TODOs. (2) Phase 5 pure-deletion verified-by — strengthen with test-count delta + zero inbound refs + zero dangling imports.
-
-### Session arc (3 bundles, 2 calendar days)
-- 2026-05-21 night → `bundle/harness-lifecycle-hook-errors` (#74 HS-14) → PR #97
-- 2026-05-21 night+1 → `bundle/runtime-think-phase-typing` (#73 HS-08) → PR #98
-- 2026-05-22 early → `bundle/tests-stale-m1-red-cleanup` (#80 HS-24) → PR #99
-
-All three branched off `origin/main` clean per same-session multi-bundle protocol (v5). Disjoint scopes, independent PRs, ~2h wall clock total.
 
 ---
 

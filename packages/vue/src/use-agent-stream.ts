@@ -74,7 +74,9 @@ export function useAgentStream(
               status.value = "completed";
               return;
             } else if (event._tag === "StreamError" && "cause" in event) {
-              throw new Error((event as { cause: string }).cause);
+              error.value = (event as { cause: string }).cause;
+              status.value = "error";
+              return;
             } else if (event._tag === "StreamCancelled") {
               status.value = "idle";
               return;
