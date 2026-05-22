@@ -20,6 +20,11 @@ import { formatTaskContextForChat } from "../../../chat.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import { MemoryServiceLogEpisodeTag } from "../../service-tags.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
+import {
+  asThinkContext,
+  getResponseModel,
+  getSelectedModelName,
+} from "./think-context.js";
 
 type ContextManagerLike = {
   buildContext: (options: {
@@ -82,7 +87,7 @@ export const runInlineThink = (
             phase: 'think',
             state: {
               taskId: c.taskId,
-              strategy: String((c as any).selectedStrategy ?? "reactive"),
+              strategy: String(c.selectedStrategy ?? "reactive"),
               kernelType: "inline",
               steps: [],
               toolsUsed: new Set<string>(),
@@ -93,7 +98,7 @@ export const runInlineThink = (
               error: null,
               meta: {},
             },
-            strategy: String((c as any).selectedStrategy ?? "reactive"),
+            strategy: String(c.selectedStrategy ?? "reactive"),
           })
         )) ?? defaultPrompt
       : defaultPrompt;
@@ -104,7 +109,7 @@ export const runInlineThink = (
       config.taskContext as Record<string, string> | undefined,
     ).trim();
     const semanticMem = String(
-      (c.memoryContext as any)?.semanticContext ?? "",
+      asThinkContext(c).memoryContext?.semanticContext ?? "",
     ).trim();
     const directLlmMemoryContext =
       taskCtxBlock && semanticMem
@@ -217,7 +222,7 @@ export const runInlineThink = (
     }
 
     // Update selectedModel to the actual model used by the provider
-    const actualModel = (response as any).model;
+    const actualModel = getResponseModel(response);
     if (actualModel) {
       c = { ...c, selectedModel: actualModel };
     }
@@ -270,7 +275,7 @@ export const runInlineThink = (
 
     // Verbose: log LLM call details
     if (obs && isVerbose) {
-      const modelName = String((c.selectedModel as any)?.model ?? c.selectedModel ?? "unknown");
+      const modelName = String(getSelectedModelName(asThinkContext(c).selectedModel) ?? "unknown");
       const toks = response.usage?.totalTokens ?? 0;
       const stopReason = response.stopReason ?? "?";
       yield* obs.debug(
@@ -307,7 +312,7 @@ export const runInlineThink = (
             tokensUsed: response.usage?.totalTokens ?? 0,
             durationMs: llmDurationMs,
           },
-        } as any)
+        })
         .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:log-llm-episode", tag: errorTag(err) })));
     }
 

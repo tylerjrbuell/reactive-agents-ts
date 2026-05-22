@@ -19,6 +19,7 @@ import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
+import { asThinkContext } from "./think-context.js";
 import {
   briefResolvedSkillsFromMetadata,
   extractTaskText,
@@ -70,7 +71,7 @@ export const runReasoningThink = (
 
   return Effect.gen(function* () {
     // ── Self-improvement read-back: surface prior strategy outcomes ──
-    let memCtx = String((c.memoryContext as any)?.semanticContext ?? "");
+    let memCtx = String(asThinkContext(c).memoryContext?.semanticContext ?? "");
     const skillCatalogXml = (c.metadata as { skillCatalogXml?: string } | undefined)
       ?.skillCatalogXml;
     if (skillCatalogXml && skillCatalogXml.trim().length > 0) {
@@ -81,9 +82,7 @@ export const runReasoningThink = (
     // so default logEpisode "task-completed" lines were invisible (e.g. gateway
     // follow-ups after a Signal heartbeat).
     {
-      const episodes = (c.memoryContext as any)?.recentEpisodes as
-        | readonly { eventType?: string; content?: string; metadata?: Record<string, unknown> }[]
-        | undefined;
+      const episodes = asThinkContext(c).memoryContext?.recentEpisodes;
       if (episodes && episodes.length > 0) {
         const cap = 15;
         const maxLine = 600;
@@ -255,7 +254,7 @@ export const runReasoningThink = (
     // Prefer result.metadata.selectedStrategy (set by adaptive to show actual sub-strategy)
     // over result.strategy (which stays "adaptive" for API compatibility).
     const activeStrategy =
-      (result as any).metadata?.selectedStrategy ??
+      result.metadata?.selectedStrategy ??
       result.strategy ??
       c.selectedStrategy;
 
