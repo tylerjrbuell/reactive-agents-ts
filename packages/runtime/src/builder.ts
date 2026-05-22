@@ -183,6 +183,46 @@ export const ReactiveAgents = {
 }
 
 /**
+ * Run a user lifecycle hook and route any escaping error to the builder's
+ * `_errorHandler` (when set) or `console.warn` (fallback). Resolves HS-14 (#74):
+ * hook errors are no longer silently discarded.
+ */
+async function invokeUserHookSafely(
+    self: ReactiveAgentBuilder,
+    hook: LifecycleHook,
+    ctx: { phase: string; iteration: number },
+): Promise<void> {
+    const surface = (err: unknown): void => {
+        const handler = (self as unknown as { _errorHandler?: (e: RuntimeErrors | Error, c: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void })._errorHandler
+        const normalized = err instanceof Error ? err : new Error(String(err))
+        if (handler) {
+            try {
+                handler(normalized, { taskId: '', phase: ctx.phase, iteration: ctx.iteration })
+            } catch {
+                // Handler-of-handler crash: swallow to avoid recursion; preserve original via console.warn
+                console.warn('[reactive-agents] error handler crashed while reporting lifecycle hook failure:', normalized)
+            }
+            return
+        }
+        console.warn('[reactive-agents] lifecycle hook threw (no errorHandler registered):', normalized)
+    }
+    let result: unknown
+    try {
+        result = hook.handler({ phase: ctx.phase, iteration: ctx.iteration } as ExecutionContext)
+    } catch (err) {
+        surface(err)
+        return
+    }
+    if (result && typeof (result as { then?: unknown }).then === 'function') {
+        try {
+            await (result as Promise<unknown>)
+        } catch (err) {
+            surface(err)
+        }
+    }
+}
+
+/**
  * Fluent builder for configuring and instantiating Reactive Agents.
  *
  * All builder methods return `this` for method chaining. Call `.build()` or `.buildEffect()`
@@ -785,16 +825,12 @@ export class ReactiveAgentBuilder {
      */
     withHook(hook: LifecycleHook): this {
         this._hooks.push(hook)
+        const self = this
         // Also register as harness phase hook for compose-side observability
         if (hook.timing === 'on-error') {
             return this.withHarness((h) => {
-                h.onError(hook.phase as import('@reactive-agents/core').Phase, async (err, ctx) => {
-                    // Fire original handler as side-effect, ignore Effect return/errors
-                    try {
-                        await Promise.resolve(hook.handler({ phase: ctx.phase, iteration: ctx.iteration } as any)).catch(() => undefined)
-                    } catch {
-                        // Silently ignore handler errors
-                    }
+                h.onError(hook.phase as import('@reactive-agents/core').Phase, async (_err, ctx) => {
+                    await invokeUserHookSafely(self, hook, ctx)
                 })
             })
         }
@@ -802,12 +838,7 @@ export class ReactiveAgentBuilder {
         const kind = hook.timing === 'before' ? 'before' : 'after'
         return this.withHarness((h) => {
             h[kind](hook.phase as import('@reactive-agents/core').Phase, async (ctx) => {
-                // Fire original handler as side-effect, ignore Effect return/errors
-                try {
-                    await Promise.resolve(hook.handler({ phase: ctx.phase, iteration: ctx.iteration } as any)).catch(() => undefined)
-                } catch {
-                    // Silently ignore handler errors
-                }
+                await invokeUserHookSafely(self, hook, ctx)
             })
         })
     }

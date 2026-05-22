@@ -10,7 +10,21 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-21, evening) — execute-backlog v3 + #71 PR
+## Latest Session (2026-05-21, night) — execute-backlog v4 + #74 PR
+
+**Bundle:** `harness-lifecycle-hook-errors` (singleton, #74 HS-14).
+
+- **Fix:** `packages/runtime/src/builder.ts` — both `withHook` harness wrappers (lines 794, 807) previously held `.catch(() => undefined)` + outer `try{}catch{}` with comment "Silently ignore handler errors". Replaced with `invokeUserHookSafely()` helper that catches sync throws + promise rejections and routes through `self._errorHandler` (when set) or `console.warn` fallback. Never silent.
+- **Cross-package descope:** issue's "Fix direction" hinted at `AgentEvent.HookFailed`; that would touch `@reactive-agents/core` (event-bus.ts union). Restricted to runtime-only per Phase 2 hard gate; HookFailed event = follow-up bundle.
+- **Test discipline pivot (skill amendment trigger):** initial integration tests with `withTestScenario` + `withReasoning()` failed because `withTestScenario` short-circuits the reactive loop and `runPhaseHooks` at `runner.ts:683` is never reached. Probes confirmed `withHook` registration ran but the wrapper never fired. Rewrote 6 tests to drive the wrappers directly via `RegistrationHarness._collected` — unit-tests the swallow site rather than the full kernel.
+- **Verified-by recheck:** `grep -c '.catch(() => undefined)' builder.ts` → 0 (was 3 — the remaining `.catch((e) => { ... })` at line 2050 is a non-empty Effect.runPromise handler, unrelated).
+- **Suite:** runtime 798/0/1-skip (was 792/0/1, +6 new tests). Build 38/38.
+- **Pre-existing red surfaced:** `tsc --noEmit` shows `focusedTools` error at `runtime-construction.ts:337` — already filed as #93. Not a regression; bundle proceeded per baseline rule (build is authoritative).
+- **Branch:** `bundle/harness-lifecycle-hook-errors`; **PR:** #97.
+
+---
+
+## Previous Session (2026-05-21, evening) — execute-backlog v3 + #71 PR
 
 **Bundle:** `ri-handlers-state-shape` (singleton, #71 HS-06).
 

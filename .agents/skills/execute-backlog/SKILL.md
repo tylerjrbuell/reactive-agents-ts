@@ -150,6 +150,18 @@ Issues: #N, #N, #N
 
 Read the `superpowers:writing-plans` skill conventions (location override: `wiki/Planning/Implementation-Plans/`).
 
+**Fire-site reachability check (added 2026-05-21 v4):** before designing integration-style tests for any unit, grep the call graph to verify the test scenario will actually exercise the code under fix. A hook/handler/wrapper can be **registered** without being **fired** if the test scenario routes through an alternate code path (e.g., `withTestScenario` short-circuits the reactive loop and bypasses `runner.ts:683` `runPhaseHooks`). Quick check:
+
+```bash
+# 1. Locate where the unit under fix gets invoked
+rtk grep -rn "<wrapper-or-helper-name>\|<registered-fn-pattern>" packages/
+
+# 2. Confirm at least one fire site is reached by the planned test config
+#    (provider, reasoning, strategy, test scenario, etc.)
+```
+
+If reachability is uncertain, **default to direct-invocation tests** (instantiate the helper / pull from registry / call wrapper directly) rather than full-stack `agent.run()` tests. Reason: 2026-05-21 #74 spawn — initial test design called `agent.run()` with `withTestScenario` + `withReasoning()`, expecting the harness `before('think')` wrapper to fire. It never did. Probes confirmed the wrapper was registered but the kernel-loop fire site was bypassed. Direct invocation via `RegistrationHarness._collected` pinned the unit in 6 tests, 0 flakes.
+
 ---
 
 ## Phase 3.5 — BRANCH (mandatory)
@@ -195,6 +207,16 @@ Closes #N (bundle: <bundle-name>)
 <one line on what changed>
 <one line on what verified it>
 ```
+
+**Test-path fallback (added 2026-05-21 v4):** if a planned RED integration test cannot reach the unit under fix after one debug round (e.g., wrapper registers but never fires), **stop debugging the test scaffold and switch to direct invocation**. Pull the registered handler/wrapper/helper from its registry (e.g., `RegistrationHarness._collected`, `LifecycleHookRegistry.list()`) and call it directly. Direct-invocation tests:
+
+- pin the unit faster (sub-second runs vs full agent.run loops)
+- isolate the fix from orthogonal config (provider, reasoning, scenario)
+- match the cohesion signal: if the issue cites a *single file:line*, the test should hit *that line* without depending on a deep call chain
+
+When in doubt, write the direct-invocation test first; expand to integration coverage only if multi-component interaction is actually under fix.
+
+**Path-aware verified-by (added 2026-05-21 v4):** when a single file:line cited by an issue is fired from **multiple call-graph paths** (e.g., engine `LifecycleHookRegistry` AND harness `HarnessPipeline` both invoke the same hook handler), the issue's symptom may already be partially fixed by one path while the other still has the bug. Before locking the bundle scope, grep callers of the cited site and document in the plan which paths actually exhibit the symptom. The fix may be narrower than the verified-by suggests. (Reason: 2026-05-21 #74 — the engine path already escalated sync throws as defects through `Effect.catchAll`, surfacing them to `reactive-agent.ts:549` and firing `_errorHandler`. Only the harness duplicate-fire path was truly silent. A naive fix targeting "all hook error paths" would have overscoped.)
 
 **Pause conditions (descope rather than skip):**
 - Build goes red → revert unit, reopen issue with new failure mode, continue with remaining units
