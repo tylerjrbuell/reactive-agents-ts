@@ -96,6 +96,15 @@ Group candidates into one **bundle** (max `max_bundle_size`) that ships together
 | Primary files overlap (same dir, same package) | All under `packages/runtime/src/builder/` |
 | Root-cause cluster | HS-06/07/08 all share "untyped state shape" |
 | Cross-cutting fix shape | "Remove `as any` from N hook surfaces" |
+| Untyped schema field needs structured access in callers | Local widening type + boundary helper inside the consuming package — see "default fix shape" below |
+
+**Default fix shape for typing issues (added 2026-05-21 v5).** When the cited `as any` casts all narrow the same schema-typed-`unknown` field, default to:
+1. Create `<domain>-context.ts` (or `-state.ts`) in the consuming dir.
+2. Define `<Domain>Context = ExecutionContext & { <field>: <ConcreteShape> }` (interface mirroring runtime usage, NOT the schema source-of-truth).
+3. Export `as<Domain>Context(c)` boundary helper — single named cast.
+4. Migrate each cited site through the helper; delete the cast at sources where the field was already typed (dead-cast sweep — see Phase 4).
+
+Three shipped precedents to copy from: #71 `HandlerState` (`packages/reactive-intelligence/src/controller/handler-state.ts`), #72 typed `BuilderState` option groups (`packages/runtime/src/builder/to-config.ts`), #73 `ThinkContext` (`packages/runtime/src/engine/phases/agent-loop/think-context.ts`). The pattern keeps each fix inside its consuming package (cross-package descope gate satisfied automatically).
 
 **Bundling algorithm:**
 1. Take the highest-priority candidate as seed
@@ -198,6 +207,25 @@ GREEN → minimum fix that turns the test
 REVIEW → run review-patterns; address findings
 COMMIT → conventional commit, citing GH issue numbers
 ```
+
+**Dead-cast sweep (added 2026-05-21 v5).** Before migrating each cited `as any` site through a new helper, check whether the underlying type already supports the access pattern (the schema may have been tightened since the cast was added; the cast was historic). Delete dead casts outright — lighter diff, no helper indirection, less maintenance. Procedure for each site:
+
+```bash
+# Read the cited line's surrounding context
+# Check the field's type in the schema (e.g., `packages/runtime/src/types.ts`)
+# If the type already covers the access → delete the cast
+# If `unknown` / `any` / missing field → migrate via the boundary helper
+```
+
+(Reason: 2026-05-21 #73 spawn — 2 of 9 cited `(c as any).selectedStrategy` casts were dead because `selectedStrategy` was already `Schema.optional(Schema.String)` on the schema. The casts were historic from a pre-typing era and could be deleted without any helper plumbing.)
+
+**Same-session multi-bundle protocol (added 2026-05-21 v5).** When chaining bundles in one session, **each subsequent branch MUST be created from `origin/main`, not from the previous bundle's branch.** Stacking bundles undermines the verified-by gate — a subtle regression in bundle 1 would mask in bundle 2's tests (or worse: cause bundle 2 to attribute its failures incorrectly). Each bundle:
+
+1. branches off `origin/main` clean (`git checkout -B bundle/<name> origin/main`)
+2. ships its own PR
+3. is merged independently — never auto-merged
+
+This session (2026-05-21 night+1) shipped #97 + #98 disjoint via this protocol; total ~1h45m. Worth pinning.
 
 **Commit message template:**
 ```
