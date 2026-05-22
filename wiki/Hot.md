@@ -10,7 +10,29 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-22, mid) — execute-backlog v7 + #100 PR
+## Latest Session (2026-05-22, mid+1) — execute-backlog v8 + #101 PR
+
+**Bundle:** `svelte-smoke-tests` (#82 partial, svelte portion).
+
+- **Fix:** `packages/svelte/tests/smoke.test.ts` — 13 cases: 4 public-surface + 4 `createAgent` behavioral + 5 `createAgentStream` behavioral. Mock `globalThis.fetch` with `new Response(...)` (JSON + SSE bodies). State transitions captured via `subscribe`.
+- **Substrate decision:** Svelte stores are pure JS factories (no render context). Behavioral coverage cheap — got 9 behavioral cases above the smoke ceiling. Stronger than react bundle (#100, 6 smoke only) because the substrate allowed it.
+- **SSE happy-path covered;** chunked-buffer fuzz deferred (deltas split across read boundaries — needs multi-chunk fetch mock).
+- **Verified-by recheck:** `find packages/svelte -name '*.test.ts*'` → 1 (was 0). Suite: svelte 13/0; build 38/38.
+- **Branch:** `bundle/svelte-smoke-tests`; **PR:** #101 (companion to PR #100).
+- **Skill amendment (v8):** Phase 3 PLAN — codify substrate-aware test strategy. Three substrate classes (render-bound / framework-agnostic / pure). Default coverage tier matches substrate. Picking wrong tier = scope creep or coverage gap. Bundle #100 vs #101 = case study.
+
+### Session arc (5 bundles, 6 PRs queued)
+- 2026-05-21 night → `bundle/harness-lifecycle-hook-errors` (#74 HS-14) → PR #97
+- 2026-05-21 night+1 → `bundle/runtime-think-phase-typing` (#73 HS-08) → PR #98
+- 2026-05-22 early → `bundle/tests-stale-m1-red-cleanup` (#80 HS-24) → PR #99
+- 2026-05-22 mid → `bundle/react-smoke-tests` (#82 react) → PR #100
+- 2026-05-22 mid+1 → `bundle/svelte-smoke-tests` (#82 svelte) → PR #101
+
+Total ~2h40m wall clock. Skill v3→v8 over 5 PRs. Next promised: `bundle/vue-smoke-tests` to fully close #82.
+
+---
+
+## Previous Session (2026-05-22, mid) — execute-backlog v7 + #100 PR
 
 **Bundle:** `react-smoke-tests` (#82 partial, react portion only).
 
