@@ -114,6 +114,8 @@ Three shipped precedents to copy from: #71 `HandlerState` (`packages/reactive-in
 
 **Hard gate (added 2026-05-21): cross-package descope.** Before locking the bundle, re-grep each candidate's verified-by command and inspect the file paths it emits. If those paths span **≥2 packages** (`packages/<a>/…` vs `packages/<b>/…`), descope to a per-package bundle even if the issue body's "Fix direction" suggests otherwise. The body lies; the grep doesn't. (Reason: 2026-05-21 #73 spawn — body said "type properly in the think phase" but the actual `as any` targets resolved to types owned by `@reactive-agents/llm-service` and the kernel-context shape, both other packages.)
 
+**Multi-package test-infra split (added 2026-05-22 v7).** The cross-package gate isn't only for typing/refactor issues — it applies the same way when an issue cites adding tests / infra / docs to N packages. Ship N bundles (one per package), each with its own PR. Name the follow-up bundles in the seed bundle's PR description so the queue is explicit. (Reason: 2026-05-22 #82 spawn — issue cited zero tests across `packages/react/`, `packages/svelte/`, `packages/vue/`. Shipped `bundle/react-smoke-tests` first; named `bundle/svelte-smoke-tests` and `bundle/vue-smoke-tests` as follow-ups in the PR body. Disjoint scopes, independent CI, no cross-package merge conflicts.)
+
 **Output:** named bundle. Pattern: `<area>-<theme>` (e.g., `providers-untyped-hooks`, `runtime-builder-as-any-sweep`).
 
 Open a new GH issue or use an existing tracker as the *bundle parent* — link it to all members via `Tracks: #N` lines. Apply the `tracking` label.
@@ -297,6 +299,16 @@ new check:                  `grep -c "as any" packages/X/Y.ts` → 0
 ```
 
 If a verified-by check fails to come down → the fix didn't actually address the claim. Reopen the issue with the new count + commit ref.
+
+**Workspace-test-flake protocol (added 2026-05-22 v7).** When `bun test` (workspace, run from repo root) shows failures but per-package isolation runs clean, treat as test-order / fixture-state flake. Verification is acceptable when:
+
+1. The bundle's touched package suite passes in isolation: `rtk bun test packages/<touched>/` → 0 fail.
+2. The failing tests live in packages NOT touched by the bundle. (`rtk bun test packages/<failing-pkg>/` → 0 fail confirms it's flake, not real.)
+3. The failing tests are not the verified-by recheck for any bundle issue.
+
+Document the flake in the PR body (test name + isolation evidence). Do NOT block the bundle. CI may surface the same flake; if so, rerun the failed job. (Reason: 2026-05-22 #82 spawn — workspace `bun test` showed 2 fails in `packages/diagnose/`; `rtk bun test packages/diagnose/` → 35/0. Pre-existing test-order issue, unrelated to the react smoke bundle. CI on #100 will rerun cleanly. Same pattern surfaced on #99 — `httpbin.org` external-network flake resolved on rerun.)
+
+Track flakes that recur across ≥2 bundles in their own follow-up issue (e.g., "test-order flake in packages/diagnose under workspace `bun test`") — separately from any active bundle.
 
 ---
 

@@ -10,7 +10,29 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-22, early) — execute-backlog v6 + #99 PR
+## Latest Session (2026-05-22, mid) — execute-backlog v7 + #100 PR
+
+**Bundle:** `react-smoke-tests` (#82 partial, react portion only).
+
+- **Fix:** `packages/react/tests/smoke.test.ts` — 6 public-surface cases (export presence + `AgentStreamEvent._tag` + `AgentHookState` union + return-type shapes). Previously: 0 test files in `packages/react/`.
+- **Strategy decision:** pure smoke (no React render). React hooks throw "Invalid hook call" outside render context; adding `@testing-library/react` + `happy-dom` for one smoke test = scope creep. `AgentStreamEvent._tag` assertion IS load-bearing — hook's SSE parser switches on these strings, so type drift surfaces at compile time before silent prod misses.
+- **Cross-package descope:** issue cites 3 packages (react/svelte/vue); shipped react only. `bundle/svelte-smoke-tests` + `bundle/vue-smoke-tests` named as follow-ups in PR body.
+- **Verified-by recheck:** `find packages/react -name '*.test.ts*'` → 1 (was 0). Suite: react 6/0; build 38/38.
+- **Workspace test flake observed:** `packages/diagnose/` shows 2 fails in workspace `bun test` mode but 35/0 in isolation. Same flake class as #99 httpbin. Skill v7 codifies the protocol.
+- **Branch:** `bundle/react-smoke-tests`; **PR:** #100.
+- **Skill amendments (v7):** (1) Phase 5 workspace-test-flake protocol — accept workspace failures when isolation passes + failure isn't in touched package + not a verified-by recheck. Track recurring flakes in own issue. (2) Phase 2 multi-package test-infra split — same descope rule as typing applies to test-infra issues.
+
+### Session arc (4 bundles, 2 calendar days)
+- 2026-05-21 night → `bundle/harness-lifecycle-hook-errors` (#74 HS-14) → PR #97
+- 2026-05-21 night+1 → `bundle/runtime-think-phase-typing` (#73 HS-08) → PR #98
+- 2026-05-22 early → `bundle/tests-stale-m1-red-cleanup` (#80 HS-24) → PR #99
+- 2026-05-22 mid → `bundle/react-smoke-tests` (#82 react portion) → PR #100
+
+All four branched off `origin/main` clean. Total ~2h15m wall clock. Skill SKILL.md amendments accumulated v3→v7 across the four PRs; each PR carries its own delta — when all merge, deltas compose on main.
+
+---
+
+## Previous Session (2026-05-22, early) — execute-backlog v6 + #99 PR
 
 **Bundle:** `tests-stale-m1-red-cleanup` (singleton, #80 HS-24).
 
