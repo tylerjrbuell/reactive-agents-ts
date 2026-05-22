@@ -159,6 +159,18 @@ Issues: #N, #N, #N
 - If any unit depends on infra not in the repo → mark `blocked` on that issue, drop from bundle
 - If two units conflict (same file, conflicting changes) → sequence them, never parallelize
 
+**Substrate-aware test strategy (added 2026-05-22 v8).** When the bundle adds tests to a new framework/package, identify the test substrate up front. Three classes:
+
+| Substrate | Examples | Default coverage |
+|-----------|----------|------------------|
+| **Render-bound** | React hooks, Vue `setup()`, web components | Public-surface smoke + type contracts. Behavioral via render = follow-up bundle (justify the `@testing-library/X` + happy-dom investment separately). |
+| **Framework-agnostic** | Svelte stores (`writable`), Solid signals, Effect.Effect | Behavioral coverage with mocked I/O (e.g., `globalThis.fetch = async () => new Response(...)`). No DOM/render needed. |
+| **Pure** | Plain JS factories, helpers, parsers | Behavioral coverage directly. No mocking infrastructure beyond stub inputs. |
+
+Picking the wrong default = scope creep (render-bound bundle pulled into the test-infra rabbit hole) or coverage gap (framework-agnostic bundle capped at smoke when behavioral was cheap). (Reason: 2026-05-22 #82 spawn — react bundle (#100) capped at 6 smoke cases due to render-context requirement; svelte bundle (#101) shipped 13 cases including 9 behavioral because stores work in any runtime. Coverage gap would have been ~half if both bundles defaulted to "smoke only".)
+
+When in doubt, write one case at the framework-agnostic tier and see if it runs under bare `bun:test`. If yes, proceed behavioral. If "Invalid hook call" / setup errors → drop to smoke + name the follow-up bundle.
+
 Read the `superpowers:writing-plans` skill conventions (location override: `wiki/Planning/Implementation-Plans/`).
 
 **Fire-site reachability check (added 2026-05-21 v4):** before designing integration-style tests for any unit, grep the call graph to verify the test scenario will actually exercise the code under fix. A hook/handler/wrapper can be **registered** without being **fired** if the test scenario routes through an alternate code path (e.g., `withTestScenario` short-circuits the reactive loop and bypasses `runner.ts:683` `runPhaseHooks`). Quick check:
