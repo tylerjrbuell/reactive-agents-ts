@@ -10,17 +10,29 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-21, night) — execute-backlog v4 + #74 PR
+## Latest Session (2026-05-21, night+1) — execute-backlog v4+v5 + #97/#98 PRs
 
-**Bundle:** `harness-lifecycle-hook-errors` (singleton, #74 HS-14).
+**Two bundles shipped same session.**
 
-- **Fix:** `packages/runtime/src/builder.ts` — both `withHook` harness wrappers (lines 794, 807) previously held `.catch(() => undefined)` + outer `try{}catch{}` with comment "Silently ignore handler errors". Replaced with `invokeUserHookSafely()` helper that catches sync throws + promise rejections and routes through `self._errorHandler` (when set) or `console.warn` fallback. Never silent.
-- **Cross-package descope:** issue's "Fix direction" hinted at `AgentEvent.HookFailed`; that would touch `@reactive-agents/core` (event-bus.ts union). Restricted to runtime-only per Phase 2 hard gate; HookFailed event = follow-up bundle.
-- **Test discipline pivot (skill amendment trigger):** initial integration tests with `withTestScenario` + `withReasoning()` failed because `withTestScenario` short-circuits the reactive loop and `runPhaseHooks` at `runner.ts:683` is never reached. Probes confirmed `withHook` registration ran but the wrapper never fired. Rewrote 6 tests to drive the wrappers directly via `RegistrationHarness._collected` — unit-tests the swallow site rather than the full kernel.
-- **Verified-by recheck:** `grep -c '.catch(() => undefined)' builder.ts` → 0 (was 3 — the remaining `.catch((e) => { ... })` at line 2050 is a non-empty Effect.runPromise handler, unrelated).
-- **Suite:** runtime 798/0/1-skip (was 792/0/1, +6 new tests). Build 38/38.
-- **Pre-existing red surfaced:** `tsc --noEmit` shows `focusedTools` error at `runtime-construction.ts:337` — already filed as #93. Not a regression; bundle proceeded per baseline rule (build is authoritative).
-- **Branch:** `bundle/harness-lifecycle-hook-errors`; **PR:** #97.
+### Bundle 1 — `harness-lifecycle-hook-errors` (#74 HS-14, v4) → PR #97
+
+- **Fix:** `packages/runtime/src/builder.ts` — `withHook` harness wrappers at L794, L807 previously held `.catch(() => undefined)` + outer `try{}catch{}` with comment "Silently ignore handler errors". Replaced with `invokeUserHookSafely()` helper that catches sync throws + promise rejections and routes through `self._errorHandler` (when set) or `console.warn` fallback. Never silent.
+- **Cross-package descope:** issue suggested `AgentEvent.HookFailed`; would touch `@reactive-agents/core`. Restricted to runtime-only; HookFailed event = follow-up.
+- **Test discipline pivot:** initial integration tests with `withTestScenario` + `withReasoning()` never reached the wrapper — `withTestScenario` short-circuits the reactive loop, `runner.ts:683 runPhaseHooks` never fires. Probes confirmed registration ran but wrapper didn't. Rewrote 6 tests to drive wrappers directly via `RegistrationHarness._collected`.
+- **Verified-by recheck:** `grep -c '.catch(() => undefined)' builder.ts` → 0 (was 3; the remaining L2050 site is a non-empty `.catch((e) => {...})` on Effect.runPromise, unrelated).
+- **Suite:** runtime 798/0/1-skip (+6); build 38/38.
+
+### Bundle 2 — `runtime-think-phase-typing` (#73 HS-08, v5) → PR #98
+
+- **Fix:** new `packages/runtime/src/engine/phases/agent-loop/think-context.ts` defining `ThinkContext` = `ExecutionContext` + concrete `memoryContext`/`selectedModel` shapes, plus `asThinkContext()`, `getResponseModel()`, `getSelectedModelName()` boundary helpers. 9 `as any` casts in `inline-think.ts` (6) + `reasoning-think.ts` (3) collapsed to typed accesses.
+- **Architectural call:** mirrored #71/#72 local-widening precedent — kept inside `@reactive-agents/runtime`. Core (`KernelContext`) and llm-provider (`LLMResponse`) untouched.
+- **Dead casts found mid-migration:** `(c as any).selectedStrategy` was redundant — `selectedStrategy` already typed `string | undefined` on schema (2 sites deleted outright, not migrated). `} as any)` on `logEpisode` payload was also dead — service tag accepts `unknown`.
+- **`ExecutionReasoningResult.metadata` extended** with `selectedStrategy?: string` to drop the L258 cast — adaptive strategy writes this field via `extraMetadata`, the type just hadn't tracked it. Single-line schema fix in `engine/util.ts`.
+- **Verified-by recheck:** `grep -nF 'as any' inline-think.ts reasoning-think.ts` → 0 (was 9). Suite: runtime 805/0/1-skip (+13). Workspace: 5334/0/26-skip. Build 38/38.
+- **Out-of-scope deferred:** `execution-engine.ts:956,1072` same pattern, sibling files; follow-up bundle `runtime-execution-engine-as-any-sweep`.
+
+### Session pattern observation
+Same-session two-bundle execution worked because each was a clean singleton off `origin/main` (no inter-dependency). Total ~1h45m wall clock for both, both shipped with passing CI gates locally.
 
 ---
 
