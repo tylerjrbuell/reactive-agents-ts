@@ -10,7 +10,27 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-21, night+1) — execute-backlog v4+v5 + #97/#98 PRs
+## Latest Session (2026-05-22, early) — execute-backlog v6 + #99 PR
+
+**Bundle:** `tests-stale-m1-red-cleanup` (singleton, #80 HS-24).
+
+- **Fix:** `packages/reactive-intelligence/tests/m1-dispatcher-validation.test.ts` — stripped 110-line `test.skip("RED phase…")` placeholder + `computeEntropyStdDev` helper + two dead interfaces (`RIDispatchMetrics`, `M1DispatcherValidationResult`). Kept two surviving smoke tests + `EntropyScore` import. Added top-of-file pointer to `harness-reports/phase-1-mechanism-validation-2026-05-04.md` (M1 ✅ KEEP evidence).
+- **Pattern:** dead-code sweep — same instinct as v5 dead-cast sweep, broader application. M1 shipped KEEP per Phase 1 validation; RED placeholder was structurally obsolete.
+- **Verified-by recheck:** `grep -n 'test.skip\|computeEntropyStdDev\|RIDispatchMetrics\|M1DispatcherValidationResult' …` → 0 (was 4). Skip count -1 (was 3 → 2).
+- **Suite:** reactive-intelligence 455/0/2-skip; build 38/38. File LOC 257 → 77.
+- **Branch:** `bundle/tests-stale-m1-red-cleanup`; **PR:** #99.
+- **Skill amendments (v6):** (1) Phase 4 dead-code sweep generalized from dead-cast — applies to `test.skip`, helpers, interfaces, TODOs. (2) Phase 5 pure-deletion verified-by — strengthen with test-count delta + zero inbound refs + zero dangling imports.
+
+### Session arc (3 bundles, 2 calendar days)
+- 2026-05-21 night → `bundle/harness-lifecycle-hook-errors` (#74 HS-14) → PR #97
+- 2026-05-21 night+1 → `bundle/runtime-think-phase-typing` (#73 HS-08) → PR #98
+- 2026-05-22 early → `bundle/tests-stale-m1-red-cleanup` (#80 HS-24) → PR #99
+
+All three branched off `origin/main` clean per same-session multi-bundle protocol (v5). Disjoint scopes, independent PRs, ~2h wall clock total.
+
+---
+
+## Previous Session (2026-05-21, night+1) — execute-backlog v4+v5 + #97/#98 PRs
 
 **Two bundles shipped same session.**
 
