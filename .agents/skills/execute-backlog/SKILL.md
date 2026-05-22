@@ -246,6 +246,26 @@ When in doubt, write the direct-invocation test first; expand to integration cov
 
 **Path-aware verified-by (added 2026-05-21 v4):** when a single file:line cited by an issue is fired from **multiple call-graph paths** (e.g., engine `LifecycleHookRegistry` AND harness `HarnessPipeline` both invoke the same hook handler), the issue's symptom may already be partially fixed by one path while the other still has the bug. Before locking the bundle scope, grep callers of the cited site and document in the plan which paths actually exhibit the symptom. The fix may be narrower than the verified-by suggests. (Reason: 2026-05-21 #74 — the engine path already escalated sync throws as defects through `Effect.catchAll`, surfacing them to `reactive-agent.ts:549` and firing `_errorHandler`. Only the harness duplicate-fire path was truly silent. A naive fix targeting "all hook error paths" would have overscoped.)
 
+**Dead-code sweep (added 2026-05-22 v6).** Before applying the issue's prescribed fix, check whether the cited code is **dead in the current codebase state**. Deletion is preferable to migration/replacement when the original purpose is already satisfied elsewhere. The check applies broadly:
+
+| Cited surface | Dead-code check |
+|---------------|------------------|
+| `as any` cast | does the underlying type already cover the access? → delete cast |
+| `test.skip("RED…")` placeholder | did the targeted mechanism ship ✅ KEEP per phase-1/health-sweep evidence? → delete block |
+| Helper function only referenced by deleted code | grep for inbound refs → delete |
+| Interface/type only used inside a deleted span | same — delete |
+| `TODO` on live code path | does the followup issue exist OR is the work obsolete? → wire or remove per HS-23 pattern |
+
+When deletion is the right action, also confirm the issue's verified-by points at a stable external artifact (phase-1 evidence, MEMORY.md verdict, audit report) — that's what makes "delete" safe vs "replace with TBD". (Reason: 2026-05-22 #80 spawn — `m1-dispatcher-validation.test.ts:65` `test.skip("RED phase…")` was 110 LOC of placeholder. M1 had already shipped ✅ KEEP per `harness-reports/phase-1-mechanism-validation-2026-05-04.md`. Pure deletion was correct; replacement would have invented coverage that doesn't exist.)
+
+**Pure-deletion verified-by (added 2026-05-22 v6).** When the bundle is purely deletion (no new helper, no migration, no replacement), the standard "grep target → 0" recheck is structurally weaker than for typing/refactor bundles. Strengthen by also asserting:
+
+1. **Test count delta matches expectation.** If you deleted `test.skip(...)`, the package test runner's `skip` count should drop by exactly that number. Capture in retro alongside pass/fail.
+2. **No inbound references remain.** For any symbol deleted (helper fn, interface, type), grep workspace-wide for references and confirm zero matches outside the touched file itself: `grep -rn "<DeletedSymbol>" packages/ | grep -v "<touched-file>"` → 0. If any inbound ref survives, your deletion shipped a compile-time break.
+3. **No dangling imports.** `grep -n "import.*<DeletedSymbol>" packages/` → 0.
+
+Failing any of these means the deletion missed adjacent dead-code; either expand scope or undo and re-bundle.
+
 **Pause conditions (descope rather than skip):**
 - Build goes red → revert unit, reopen issue with new failure mode, continue with remaining units
 - Test suite gains net-new failures → same as above
