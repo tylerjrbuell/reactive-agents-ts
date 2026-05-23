@@ -1,27 +1,40 @@
 /**
  * Observable LLM wrapper — emits `LLMExchangeEmitted` events to EventBus on
- * every `complete()` and `completeStructured()` call so observers (the
- * reasoning-stream-logger when `logModelIO` is on, the trace layer, the
- * diagnose CLI) can see EVERY direct LLM call — including the ones outside
- * the kernel main loop that the kernel's own `[model-io]` capture misses
- * (plan-execute analysis steps, reflexion critique/refine, ToT BFS, etc.).
+ * every `complete()`, `stream()`, and `completeStructured()` call so observers
+ * (the reasoning-stream-logger when `logModelIO` is on, the trace layer, the
+ * diagnose CLI) can see EVERY direct LLM call across all 4 providers
+ * (Anthropic / OpenAI / Google / Ollama) from a single chokepoint — including
+ * calls outside the kernel main loop that the kernel's own `[model-io]`
+ * capture misses (plan-execute analysis, reflexion critique/refine, ToT BFS).
  *
  * `emitLLMExchange` already publishes the event with truncation + EventBus
- * service-option guard; this wrapper just calls it consistently from a
- * single chokepoint. Inner LLMService remains untouched.
+ * service-option guard; this wrapper just calls it consistently. Inner
+ * LLMService remains untouched.
  *
- * `stream()` is passthrough — the kernel main loop already emits
- * `ReasoningStepCompleted` with the system prompt + thread when
- * `logModelIO` is on, so wrapping stream would double-emit.
+ * Stream wrapping note: the wrapper transforms the returned `Stream` with
+ * `Stream.tap` (per-event accumulation into a Ref) and `Stream.ensuring`
+ * (exactly-once emission at finalization — success, failure, or interrupt).
+ * The Stream's element and error types are unchanged, so callers see
+ * identical events in identical order with no consumption-once issues.
+ *
+ * Not a double-emit with `ReasoningStepCompleted`: that's a kernel-side
+ * post-processed *step* event (carries observation + entropy); this is a
+ * *raw exchange* event with the system prompt, message thread, and decoded
+ * response. Different schemas, different consumers, no conflict.
+ *
+ * Note: stream emission fires only when the caller actually consumes the
+ * Stream (Stream.ensuring runs at finalization). A bound-but-never-run
+ * Stream produces no event — that is correct behavior, not a bug.
  */
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Ref, Stream } from "effect";
 import type { Context } from "effect";
 import {
   LLMService,
   type CompletionRequest,
-  type CompletionResponse,
   type StructuredCompletionRequest,
   type LLMMessage,
+  type StreamEvent,
+  type StopReason,
 } from "@reactive-agents/llm-provider";
 import { emitLLMExchange } from "./utils/diagnostics.js";
 
@@ -66,12 +79,27 @@ function toExchangeMessages(
   });
 }
 
+// Structural subset of CompletionResponse — every field optional so both
+// `complete` (full response) and `stream` (accumulated partial) can pass
+// shape-compatible objects without unsafe casts. emitForRequest reads each
+// field with optional-chaining anyway.
+type PartialCompletion = {
+  readonly model?: string;
+  readonly stopReason?: StopReason;
+  readonly toolCalls?: readonly { readonly name: string; readonly arguments?: unknown }[];
+  readonly usage?: {
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly estimatedCost?: number;
+  };
+};
+
 function emitForRequest(
   request: CompletionRequest,
   responseContent: string,
   durationMs: number,
-  kind: "complete" | "completeStructured",
-  fullResponse?: CompletionResponse,
+  kind: "complete" | "stream" | "completeStructured",
+  fullResponse?: PartialCompletion,
 ): Effect.Effect<void, never> {
   return emitLLMExchange({
     taskId: PLACEHOLDER_TASK_ID,
@@ -88,7 +116,7 @@ function emitForRequest(
       content: responseContent,
       toolCalls: fullResponse?.toolCalls?.map((tc) => ({
         name: tc.name,
-        arguments: (tc as { arguments?: unknown }).arguments,
+        arguments: tc.arguments,
       })),
       stopReason: fullResponse?.stopReason,
       tokensIn: fullResponse?.usage?.inputTokens,
@@ -130,7 +158,65 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             yield* emitForRequest(request, json, Date.now() - start, "completeStructured");
             return result;
           }),
-        stream: inner.stream,
+        stream: (request) =>
+          Effect.gen(function* () {
+            const start = Date.now();
+            const accum = yield* Ref.make<{
+              content: string;
+              toolCalls: { name: string; id: string }[];
+              usage?: PartialCompletion["usage"];
+              stopReason?: StopReason;
+            }>({ content: "", toolCalls: [] });
+            const innerStream = yield* inner.stream(request);
+            return innerStream.pipe(
+              Stream.tap((event: StreamEvent) =>
+                Ref.update(accum, (s) => {
+                  switch (event.type) {
+                    case "text_delta":
+                      return { ...s, content: s.content + event.text };
+                    case "content_complete":
+                      // Prefer the provider's authoritative accumulated text
+                      // when it arrives — text_delta sums may diverge for
+                      // providers that emit normalized completes.
+                      return { ...s, content: event.content };
+                    case "tool_use_start":
+                      return {
+                        ...s,
+                        toolCalls: [...s.toolCalls, { name: event.name, id: event.id }],
+                        stopReason: "tool_use" as StopReason,
+                      };
+                    case "usage":
+                      return {
+                        ...s,
+                        usage: {
+                          inputTokens: event.usage.inputTokens,
+                          outputTokens: event.usage.outputTokens,
+                          estimatedCost: event.usage.estimatedCost,
+                        },
+                      };
+                    default:
+                      return s;
+                  }
+                }),
+              ),
+              Stream.ensuring(
+                Effect.gen(function* () {
+                  const s = yield* Ref.get(accum);
+                  yield* emitForRequest(
+                    request,
+                    s.content,
+                    Date.now() - start,
+                    "stream",
+                    {
+                      stopReason: s.stopReason ?? ("end_turn" as StopReason),
+                      toolCalls: s.toolCalls.length > 0 ? s.toolCalls : undefined,
+                      usage: s.usage,
+                    },
+                  );
+                }),
+              ),
+            );
+          }),
         embed: inner.embed,
         countTokens: inner.countTokens,
         getModelConfig: inner.getModelConfig,
