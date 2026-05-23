@@ -106,9 +106,11 @@ async function runCell(scenario: Scenario, model: string, riEnabled: boolean): P
       .withTools({ tools: scenario.tools })
       .withTracing({ dir: TRACE_DIR });
 
-    if (riEnabled) {
-      builder = builder.withReactiveIntelligence();
-    }
+    // HS-108 / R10: RI is opt-OUT (builder default `_enableReactiveIntelligence`
+    // is true at builder.ts:363). Prior code did not call `.withReactiveIntelligence(false)`
+    // for the RI-off variant, so RI fired on both arms and contaminated the
+    // ablation. Explicit boolean toggle makes the on/off intent unambiguous.
+    builder = builder.withReactiveIntelligence(riEnabled);
 
     const agent = await builder.build();
     const result = await agent.run(scenario.task);
