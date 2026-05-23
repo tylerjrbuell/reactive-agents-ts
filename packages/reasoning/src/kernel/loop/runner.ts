@@ -60,6 +60,7 @@ import {
 } from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
+import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
 import {
   emitKernelStateSnapshot,
   emitVerifierVerdict,
@@ -558,6 +559,13 @@ export function runKernel(
     // Track tool calls per iteration by scanning new action steps since last check.
     let prevActionCount = 0;
     let prevStepCount = 0;
+    // Learn capability — per-iter diff cursors for LearningPipeline.write().
+    // Tracked separately from prevStepCount above so the learn write can
+    // pass ONLY the new steps/decisions appended during the current iter
+    // (mission-brief decisions a + b). Coupling to prevStepCount would
+    // break if the action-count delta logic ever resets that cursor.
+    let prevStepCountForLearn = 0;
+    let prevDecisionLogCountForLearn = 0;
     const loopCfg = options.loopDetection;
     const tierGuards = TIER_GUARD_THRESHOLDS[profile.tier] ?? TIER_GUARD_THRESHOLDS["mid"];
     const maxSameTool = resolveMaxSameTool(
@@ -1482,6 +1490,40 @@ export function runKernel(
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
       });
+
+      // ── Learn capability — per-iter LearningPipeline write ───────────────
+      // Issue #120 / North Star §4.3 / Audit G-D — the compounding-intelligence
+      // seam. Fires EXACTLY ONCE per iter, after Verify/post-iteration finalize
+      // and BEFORE the next iter dispatches. Uses `Effect.serviceOption` so the
+      // kernel works with no LearningPipeline layer provided (returns None →
+      // no-op). Wrapped in `Effect.forkDaemon` so user-supplied slow writers
+      // (SkillStore disk flush, MemoryStore vector write) cannot block the
+      // kernel hot path. Errors are swallowed by the service contract
+      // (Effect<void, never> in learning-pipeline.ts).
+      //
+      // Args follow mission-brief decisions a–c:
+      //   observations = ReasoningSteps appended during THIS iter only
+      //   decisions    = controllerDecisionLog ADDITIONS this iter
+      //   outcome      = mid-loop snapshot (success only authoritative on
+      //                  the terminal iter — see learning-pipeline.ts JSDoc)
+      {
+        const learnOpt = yield* Effect.serviceOption(LearningPipeline);
+        if (learnOpt._tag === "Some") {
+          const newObservations = state.steps.slice(prevStepCountForLearn);
+          const newDecisions = state.controllerDecisionLog.slice(prevDecisionLogCountForLearn);
+          const outcomeSnapshot = {
+            success: state.status === "done",
+            output: state.output ?? undefined,
+            tokensUsed: state.tokens,
+            costUsd: state.cost,
+          } as const;
+          yield* Effect.forkDaemon(
+            learnOpt.value.write(newObservations, newDecisions, outcomeSnapshot),
+          );
+          prevStepCountForLearn = state.steps.length;
+          prevDecisionLogCountForLearn = state.controllerDecisionLog.length;
+        }
+      }
     }
 
     // Fire 'complete' phase hooks once after loop exits normally.
