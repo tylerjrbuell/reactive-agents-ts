@@ -1,0 +1,54 @@
+[
+  {
+    "task": "t1-trivial",
+    "complexity": "trivial",
+    "strategy": "reactive",
+    "model": "qwen3:14b",
+    "success": true,
+    "outputLength": 3,
+    "tokens": 1879,
+    "durationMs": 13805,
+    "iterationsUsed": 1,
+    "costUsd": 0,
+    "outputPreview": "391"
+  },
+  {
+    "task": "t2-factual",
+    "complexity": "factual",
+    "strategy": "reactive",
+    "model": "qwen3:14b",
+    "success": true,
+    "outputLength": 37,
+    "tokens": 4445,
+    "durationMs": 17776,
+    "iterationsUsed": 6,
+    "costUsd": 0,
+    "outputPreview": "Canberra is the capital of Australia."
+  },
+  {
+    "task": "t1-trivial",
+    "complexity": "trivial",
+    "strategy": "direct",
+    "model": "qwen3:14b",
+    "success": true,
+    "outputLength": 3,
+    "tokens": 777,
+    "durationMs": 11096,
+    "iterationsUsed": 1,
+    "costUsd": 0,
+    "outputPreview": "391"
+  },
+  {
+    "task": "t2-factual",
+    "complexity": "factual",
+    "strategy": "direct",
+    "model": "qwen3:14b",
+    "success": true,
+    "outputLength": 37,
+    "tokens": 720,
+    "durationMs": 5575,
+    "iterationsUsed": 1,
+    "costUsd": 0,
+    "outputPreview": "The capital of Australia is Canberra."
+  }
+]

@@ -142,7 +142,9 @@ async function runCell(task: TaskSpec, strategy: string, model: string, traceDir
       model,
       success: result.success,
       outputLength: result.output.length,
-      tokens: result.metadata?.totalTokens ?? 0,
+      // ResultMetadata schema field is `tokensUsed` (packages/core/src/types/result.ts:38),
+      // not `totalTokens` (which is used in events + strategy types only).
+      tokens: result.metadata?.tokensUsed ?? 0,
       durationMs,
       iterationsUsed: result.metadata?.stepsCount ?? null,
       costUsd: result.metadata?.cost ?? 0,

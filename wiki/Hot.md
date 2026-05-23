@@ -16,8 +16,8 @@ updated: 2026-05-23
 
 ### Key findings (cross-tier confirmed)
 
-**🔴 4 P0 surface-trust bugs (Phase 0 of convergence spec):**
-- **M1** `result.metadata.totalTokens=0` universal silent loss; phase logs show real numbers (#104)
+**🔴 P0 surface-trust bugs (Phase 0 of convergence spec):**
+- **M1** ~~`result.metadata.totalTokens=0` universal silent loss~~ — **REVERSED 2026-05-23**: probe scripts read wrong field (`totalTokens` doesn't exist; canonical is `tokensUsed`). Framework was always correct. #104 closed as invalid; #126 filed as P2 naming-consistency followup.
 - **M2a/b/c** Output leaks — `<rationale call=N>` XML (cogito), `[CRITIQUE N] SATISFIED:` (frontier reflexion), `[find result — compressed preview]` (frontier ToT). Verifier `output-not-harness-parrot` too narrow. (#105)
 - **M7** ToT `failed to produce output` → `success=true` propagation bug, cogito + qwen3 + gpt-4o-mini (#106)
 - **R9** 3 duplicate event-name pairs for same RI decisions (#107)

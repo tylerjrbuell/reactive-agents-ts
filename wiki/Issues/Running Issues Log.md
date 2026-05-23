@@ -19,7 +19,7 @@ tags: [issues, blockers, active-work]
 
 | GH | Title | Severity |
 |---|---|---|
-| #104 | `result.metadata.totalTokens=0` universal silent loss (M1) | 🔴 P0 |
+| ~~#104~~ | ~~`result.metadata.totalTokens=0` universal silent loss (M1)~~ — **REVERSED 2026-05-23**: probe-side bug, not framework. Closed as invalid. #126 P2 followup for naming consistency. | ❌ invalid |
 | #105 | Output sanitize — rationale/CRITIQUE/find-result leaks (M2a/b/c) | 🔴 P0 |
 | #106 | ToT `failed to produce output` → `success=true` (M7) | 🔴 P0 |
 | #107 | 3 duplicate RI decision event-name pairs (R9) | 🔴 P0 |

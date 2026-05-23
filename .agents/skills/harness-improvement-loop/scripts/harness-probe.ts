@@ -136,9 +136,11 @@ async function runProbe(probe: ProbeConfig): Promise<ProbeResult> {
       totalTokens: s.totalTokens,
     };
   } catch {
-    // trace not available (e.g. tracing not wired yet) — fall back to result metadata
+    // trace not available (e.g. tracing not wired yet) — fall back to result metadata.
+    // ResultMetadata schema field is `tokensUsed` (packages/core/src/types/result.ts:38),
+    // not `totalTokens`. Reading `totalTokens` returns undefined.
     stats.iterations = result.metadata?.stepsCount ?? null;
-    stats.totalTokens = result.metadata?.totalTokens ?? 0;
+    stats.totalTokens = result.metadata?.tokensUsed ?? 0;
   }
 
   const probeResult: ProbeResult = {

@@ -138,7 +138,10 @@ async function runCell(scenario: Scenario, model: string, riEnabled: boolean): P
       success: result.success,
       iterationsUsed: iterations,
       durationMs,
-      tokens: result.metadata?.totalTokens ?? 0,
+      // ResultMetadata schema field is `tokensUsed` (packages/core/src/types/result.ts:38),
+      // not `totalTokens`. The `totalTokens` field on AgentCompleted event and on
+      // strategy ReasoningResult are separate; ResultMetadata uses `tokensUsed`.
+      tokens: result.metadata?.tokensUsed ?? 0,
       outputLength: result.output.length,
       maxEntropy,
       interventionsDispatched,

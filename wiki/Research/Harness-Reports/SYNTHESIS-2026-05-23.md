@@ -6,6 +6,12 @@ status: SYNTHESIS — ready for morph spec + GitHub issues
 companion: all wiki/Research/Harness-Reports/*-2026-05-23.md
 ---
 
+> ⚠️ **CORRECTION (2026-05-23, post-synthesis):** Finding M1 ("`totalTokens=0` universal silent data loss") was REVERSED. Empirical field audit showed framework correctly populates `result.metadata.tokensUsed`. Probe scripts read non-existent `result.metadata.totalTokens` field, defaulting to 0. **GH #104 closed as invalid; #126 filed as P2 naming-consistency follow-up.**
+>
+> **Implication for this synthesis:** all `tokens=0` references in tables below are probe artifacts, not framework bugs. Token counts in phase logs (`[metric:tokens_used] N tokens`) are accurate. Cost / latency / success / output-length findings stand; token-cost comparisons need re-run with fixed probes for confidence. **All other P0 findings (M2/M7/R9/R10/R11) hold — they have independent evidence chains.**
+>
+> Course-corrected via verification-before-completion discipline (caught BEFORE shipping a wrong-direction fix).
+
 # Harness Sweep — Final Synthesis
 
 ## Campaign coverage

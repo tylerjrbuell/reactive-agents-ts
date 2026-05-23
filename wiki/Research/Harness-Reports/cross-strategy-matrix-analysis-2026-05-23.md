@@ -6,6 +6,8 @@ answers: Q2b (cross-strategy quality variance) + new findings
 basis: cross-strategy-matrix-2026-05-23-03:34.json (40 cells, 2 models × 4 strategies × 5 tasks)
 ---
 
+> ⚠️ **CORRECTION (2026-05-23, post-analysis):** Finding M1 (totalTokens=0 silent loss) was REVERSED. Probe scripts read `result.metadata?.totalTokens` (doesn't exist); canonical field is `result.metadata.tokensUsed`. All "tokens=0" observations are probe-side artifacts. Framework token wiring is correct. **GH #104 closed as invalid; naming-consistency followup filed as #126.** All other findings (M2a/b/c, M3, M5, M7) stand — independent evidence.
+
 # Cross-Strategy Matrix Analysis
 
 40 cells. cogito:14b + qwen3:14b × {reactive, plan-execute-reflect, reflexion, tree-of-thought} × 5 tasks.
