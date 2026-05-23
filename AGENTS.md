@@ -246,6 +246,49 @@ Run this checklist:
 
 ---
 
+## Team-Ownership Dev Contract (PILOT — expires 2026-06-15)
+
+> **Status:** ablation pilot per [`wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`](wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md). Default-revert on 2026-06-15 unless lift threshold met. Do not extend without affirmative evidence.
+
+### Forcing function (REQUIRED during pilot window)
+
+Between **2026-05-23** and **2026-06-15**, any edit whose primary scope is `packages/reasoning/src/kernel/**` MUST be routed through `kernel-warden` via `Agent` dispatch with a valid MissionBrief. Main-thread direct edits during the pilot window violate the contract and disqualify the task from pilot data.
+
+**Single exception:** hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md`.
+
+### Required schemas
+
+- `MissionBrief` — input contract, see `.agents/skills/mission-brief/SKILL.md`
+- `UpwardReport` — output contract, see `.agents/skills/upward-report/SKILL.md`
+
+### Dispatcher FSM (main-thread behavior on warden output)
+
+| Report state | Parent action |
+|---|---|
+| `completed`, confidence ≥ 0.7 | Run verifier (typecheck + targeted tests). Pass → accept. |
+| `completed`, confidence < 0.7 | Run verifier + ablation-warden if change is a new mechanism. **Never** re-prompt warden for self-review (M3 REWORK precedent). |
+| `failed`, blockers present, retries remain | Re-dispatch with blockers injected into next MissionBrief.key-tasks. |
+| `failed`, retries exhausted OR escalation-required | Escalate via `AskUserQuestion`. |
+| `denied-by-authority` | Escalate. Authority widening = user decision. |
+| `blocked` | Surface blocker to user; do not re-dispatch. |
+
+### Anti-patterns (refuse these — load-bearing)
+
+- ❌ Parent re-prompts warden to "review your own work" — recreates `verifier.ts:217-222` failure mode and M3 verify-retry loop.
+- ❌ Silent retry past `retries-allowed` in MissionBrief.
+- ❌ Warden widens its own authority without parent gate.
+- ❌ New warden role added before `ablation-warden` shows ≥3pp lift over current setup.
+
+### Logging requirement
+
+Every pilot-window kernel/* task: append one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there.
+
+### Evaluation
+
+**Date:** 2026-06-15. **Owner:** Tyler. **Decision:** canonicalize (Phase 2 — add `provider-warden`, `harness-warden`, `ablation-warden`, `debrief-scribe`) OR revert (single commit removing all pilot files). **Inconclusive → kill** per default.
+
+---
+
 ## Plans, Specs & Knowledge Storage (Agent-Agnostic)
 
 **The `wiki/` directory is the single source of truth for all project knowledge.** This applies to every AI agent working on this repo (Claude Code, Cursor, Codex, Aider, GitHub Copilot, etc.) and human contributors alike.
