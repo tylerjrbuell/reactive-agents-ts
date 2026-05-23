@@ -26,6 +26,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -197,6 +198,39 @@ export const executeAdaptive = (
       status: "success",
     });
 
+    // ── HS-111 / M5 cost-aware downgrade ──
+    //
+    // After strategy is selected (by heuristic or LLM), consult pastExperience
+    // for cost telemetry. If the picked strategy has historically been ≥2×
+    // more expensive than a cheaper alternative with comparable success rate,
+    // downgrade. Probe evidence (sweep-2026-05-23) showed adaptive routing
+    // never considered cost — expensive strategies kept being selected on
+    // trivial tasks even when cheap ones had higher success on the same
+    // history. Only fires with ≥3 samples of each strategy in pastExperience.
+    let costAwareDowngradeReason: string | null = null;
+    if (input.pastExperience && input.pastExperience.length > 0) {
+      const adjustment = costAwareAdjustment(selectedStrategy, input.pastExperience);
+      if (adjustment.downgraded) {
+        steps.push(
+          makeStep(
+            "thought",
+            `[ADAPTIVE] Cost-aware downgrade: ${adjustment.reason}`,
+          ),
+        );
+        yield* publishReasoningStep(ebOpt, {
+          _tag: "ReasoningStepCompleted",
+          taskId: input.taskId ?? "adaptive",
+          strategy: "adaptive",
+          step: steps.length,
+          totalSteps: steps.length,
+          thought: `[ADAPTIVE] cost-downgrade ${selectedStrategy}→${adjustment.strategy}`,
+          kernelPass: "adaptive:cost-downgrade",
+        });
+        selectedStrategy = adjustment.strategy;
+        costAwareDowngradeReason = adjustment.reason;
+      }
+    }
+
     yield* emitLog({ _tag: "phase_started", phase: "adaptive:dispatch", timestamp: new Date() });
 
     // ── Dispatch to selected strategy ──
@@ -265,6 +299,9 @@ export const executeAdaptive = (
       extraMetadata: {
         selectedStrategy: activeStrategy,
         fallbackOccurred,
+        ...(costAwareDowngradeReason
+          ? { costAwareDowngrade: costAwareDowngradeReason }
+          : {}),
       },
     });
   });
@@ -344,10 +381,94 @@ function dispatchStrategy(
 }
 
 /**
+ * HS-111 / M5 cost-aware downgrade.
+ *
+ * Given a heuristic-picked strategy and the agent's past execution history,
+ * downgrade to a cheaper strategy when the picked one is ≥COST_RATIO_THRESHOLD
+ * times more expensive on average than a cheaper alternative AND the cheaper
+ * alternative has a comparable success rate (within tolerance).
+ *
+ * Only considers strategies with ≥MIN_SAMPLES historical runs each — single
+ * outliers don't trigger a downgrade. Returns the input strategy unchanged
+ * when there's not enough data or when the picked strategy is already cheapest.
+ */
+export interface CostAwareDowngradeAdjustment {
+  readonly strategy: SubStrategy;
+  readonly downgraded: boolean;
+  readonly reason: string;
+}
+
+const COST_RATIO_THRESHOLD = 2.0; // 2× more expensive triggers downgrade
+const MIN_SAMPLES = 3;             // need ≥3 runs of each strategy to compare
+const SUCCESS_TOLERANCE = 0.15;    // cheaper strategy must be within 15pp success rate
+
+export function costAwareAdjustment(
+  picked: SubStrategy,
+  history: readonly StrategyOutcome[],
+): CostAwareDowngradeAdjustment {
+  // Aggregate per-strategy metrics from history.
+  type Agg = { count: number; successes: number; totalTokens: number };
+  const byStrategy = new Map<string, Agg>();
+  for (const o of history) {
+    const a = byStrategy.get(o.strategy) ?? { count: 0, successes: 0, totalTokens: 0 };
+    a.count += 1;
+    a.successes += o.success ? 1 : 0;
+    a.totalTokens += o.tokensUsed;
+    byStrategy.set(o.strategy, a);
+  }
+
+  const pickedAgg = byStrategy.get(picked);
+  if (!pickedAgg || pickedAgg.count < MIN_SAMPLES) {
+    return { strategy: picked, downgraded: false, reason: "insufficient-history" };
+  }
+  const pickedMeanTokens = pickedAgg.totalTokens / pickedAgg.count;
+  const pickedSuccessRate = pickedAgg.successes / pickedAgg.count;
+
+  // Look for a cheaper alternative meeting the constraints.
+  let best: { strategy: SubStrategy; mean: number; success: number } | null = null;
+  for (const candidate of ["reactive", "plan-execute-reflect"] as SubStrategy[]) {
+    if (candidate === picked) continue;
+    const a = byStrategy.get(candidate);
+    if (!a || a.count < MIN_SAMPLES) continue;
+    const mean = a.totalTokens / a.count;
+    const success = a.successes / a.count;
+    const ratio = mean > 0 ? pickedMeanTokens / mean : 0;
+    if (ratio < COST_RATIO_THRESHOLD) continue;
+    if (success < pickedSuccessRate - SUCCESS_TOLERANCE) continue;
+    if (best === null || mean < best.mean) {
+      best = { strategy: candidate, mean, success };
+    }
+  }
+
+  if (best === null) {
+    return { strategy: picked, downgraded: false, reason: "no-cheaper-alternative" };
+  }
+
+  return {
+    strategy: best.strategy,
+    downgraded: true,
+    reason: `cost-downgrade:${picked}(${Math.round(pickedMeanTokens)}tok)→${best.strategy}(${Math.round(best.mean)}tok)`,
+  };
+}
+
+/**
  * Heuristic pre-classifier — handles obvious cases without an LLM call.
  * Returns null for ambiguous tasks that require LLM classification.
+ *
+ * HS-111 / M5: first consults the pre-execution complexity classifier
+ * (kernel/capabilities/comprehend/task-complexity.ts). Trivial-classified
+ * tasks force reactive — the cost-cheapest strategy — before any pattern
+ * matching can route them to expensive ToT/plan-execute paths.
  */
 function heuristicClassify(input: AdaptiveInput): SubStrategy | null {
+  // HS-111 cost-class gate: trivial tasks always route to reactive,
+  // regardless of other pattern matches. Probe evidence (sweep-2026-05-23)
+  // showed adaptive routing trivial tasks to ToT cost 3.3-23× reactive.
+  const complexityVerdict = classifyTaskComplexity(input.taskDescription);
+  if (complexityVerdict.complexity === "trivial" && complexityVerdict.confidence >= 0.7) {
+    return "reactive";
+  }
+
   const task = input.taskDescription.toLowerCase();
   const hasTools = input.availableTools.length > 0;
   const wordCount = task.split(/\s+/).length;
