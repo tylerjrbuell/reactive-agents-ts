@@ -4,6 +4,7 @@ import {
   EventBus,
   EventBusLive,
   emitErrorSwallowed,
+  emitLoadBearingFailure,
   errorTag,
   type AgentEvent,
 } from "../src/index.js";
@@ -64,5 +65,70 @@ describe("ErrorSwallowed event", () => {
   it("errorTag ignores non-string _tag values", () => {
     expect(errorTag({ _tag: 42 })).toBe("UnknownError");
     expect(errorTag({ _tag: "" })).toBe("UnknownError");
+  });
+});
+
+// HS-cleanup-3 — load-bearing failure primitive invariants.
+describe("emitLoadBearingFailure", () => {
+  it("publishes an ErrorSwallowed event tagged with LoadBearingFailure:<capability>", async () => {
+    const events = await Effect.runPromise(
+      Effect.gen(function* () {
+        const captured = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.subscribe((event) => Ref.update(captured, (xs) => [...xs, event]));
+        yield* emitLoadBearingFailure({
+          capability: "skill-persistence",
+          site: "test/path:1",
+          tag: "StoreFail",
+          entityId: "my-skill",
+          message: "disk-full",
+        });
+        return yield* Ref.get(captured);
+      }).pipe(Effect.provide(EventBusLive)),
+    );
+
+    const failure = events.find(
+      (e) => e._tag === "ErrorSwallowed" && (e as any).tag === "LoadBearingFailure:skill-persistence",
+    );
+    expect(failure).toBeDefined();
+    expect((failure as any).message).toContain("my-skill");
+    expect((failure as any).message).toContain("disk-full");
+    expect((failure as any).site).toBe("test/path:1");
+  });
+
+  it("never throws — succeeds with void even without EventBus", async () => {
+    const result = await Effect.runPromise(
+      emitLoadBearingFailure({
+        capability: "memory-flush",
+        site: "no-bus:1",
+        tag: "Nope",
+      }),
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("preserves capability in the tag so trace consumers can grep one canonical predicate", async () => {
+    const tags = await Effect.runPromise(
+      Effect.gen(function* () {
+        const captured = yield* Ref.make<string[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.subscribe((event) => {
+          if (event._tag === "ErrorSwallowed") {
+            return Ref.update(captured, (xs) => [...xs, event.tag]);
+          }
+          return Effect.void;
+        });
+        yield* emitLoadBearingFailure({ capability: "skill-persistence", site: "s", tag: "T" });
+        yield* emitLoadBearingFailure({ capability: "debrief-persistence", site: "s", tag: "T" });
+        yield* emitLoadBearingFailure({ capability: "memory-semantic-write", site: "s", tag: "T" });
+        return yield* Ref.get(captured);
+      }).pipe(Effect.provide(EventBusLive)),
+    );
+
+    expect(tags).toContain("LoadBearingFailure:skill-persistence");
+    expect(tags).toContain("LoadBearingFailure:debrief-persistence");
+    expect(tags).toContain("LoadBearingFailure:memory-semantic-write");
+    // One canonical predicate matches all three:
+    expect(tags.every((t) => t.startsWith("LoadBearingFailure:"))).toBe(true);
   });
 });

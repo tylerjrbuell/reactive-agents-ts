@@ -10,7 +10,7 @@ import {
 import { updateArm } from "./bandit.js";
 import type { BanditStore } from "./bandit-store.js";
 import { classifyTaskCategory } from "./task-classifier.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 
 export type RunCompletedData = {
   readonly modelId: string;
@@ -162,33 +162,18 @@ export const LearningEngineServiceLive = (
               taskCategory,
               modelId: data.modelId,
             });
-            // HS-109 / R11 — skill persistence is the load-bearing mechanism
-            // behind the framework's "compounding intelligence" claim. A silent
-            // catchAll here means SQLite write failures disappear with one
-            // debug event. The framework would then keep advertising the
-            // capability while default config produces zero compounding.
-            //
-            // Fix: failures are now triple-surfaced —
-            //   1. console.warn (visible in any process output)
-            //   2. Effect.logWarning (structured logger consumers)
-            //   3. ErrorSwallowed with a `SkillPersistenceFailed` tag (so
-            //      trace consumers can grep
-            //      `e._tag === "ErrorSwallowed" && e.tag === "SkillPersistenceFailed"`).
+            // HS-109 / R11 — skill persistence is load-bearing. Routes
+            // through the canonical `emitLoadBearingFailure` primitive
+            // (HS-cleanup-3) which guarantees console.warn + logWarning +
+            // typed ErrorSwallowed event in one call. Trace consumers grep
+            // on `e.tag === "LoadBearingFailure:skill-persistence"`.
             yield* Effect.catchAll(skillStore.store(entry), (err) =>
-              Effect.gen(function* () {
-                const tag = errorTag(err);
-                const message = err instanceof Error ? err.message : String(err);
-                console.warn(
-                  `[reactive-intelligence] SkillPersistenceFailed: skill="${entry.name}" tag=${tag} message=${message}`,
-                );
-                yield* Effect.logWarning(
-                  `SkillPersistenceFailed: skill="${entry.name}" tag=${tag}`,
-                );
-                yield* emitErrorSwallowed({
-                  site: "reactive-intelligence/src/learning/learning-engine.ts:164",
-                  tag: "SkillPersistenceFailed",
-                  message: `skill="${entry.name}" cause=${tag}: ${message}`,
-                });
+              emitLoadBearingFailure({
+                capability: "skill-persistence",
+                site: "reactive-intelligence/src/learning/learning-engine.ts:165",
+                tag: errorTag(err),
+                entityId: entry.name,
+                message: err instanceof Error ? err.message : String(err),
               }),
             );
           }

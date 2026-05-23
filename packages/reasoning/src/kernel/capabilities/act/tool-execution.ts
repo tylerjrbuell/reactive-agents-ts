@@ -34,7 +34,7 @@ import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting
 import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 
 // ── Result type ──────────────────────────────────────────────────────────────
 
@@ -128,10 +128,16 @@ function storeToolObservationSemantic(
     .storeSemantic(entry)
     .pipe(
       Effect.asVoid,
+      // HS-cleanup-3: tool-observation memory accumulation is load-bearing
+      // for the M10 memory mechanism. Silently swallowing here means the
+      // framework's claim of "memory of past tool calls" degrades invisibly.
       Effect.catchAll((err) =>
-        emitErrorSwallowed({
+        emitLoadBearingFailure({
+          capability: "memory-semantic-write",
           site: "reasoning/src/kernel/capabilities/act/tool-execution.ts:storeToolObservationSemantic",
           tag: errorTag(err),
+          entityId: entry.id,
+          message: err instanceof Error ? err.message : String(err),
         }),
       ),
     );

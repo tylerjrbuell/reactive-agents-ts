@@ -15,7 +15,7 @@
 import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task } from "@reactive-agents/core";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "../../debrief.js";
 import { DebriefStoreService } from "@reactive-agents/memory";
@@ -198,7 +198,17 @@ export const synthesizeAndStoreDebrief = (
             output: String(sanitizedOutput ?? ""),
             outputFormat: "text",
             debrief: debrief as unknown as AgentDebriefShape,
-          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-store-save", tag: errorTag(err) })));
+          }).pipe(
+            Effect.catchAll((err) =>
+              emitLoadBearingFailure({
+                capability: "debrief-persistence",
+                site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-store-save",
+                tag: errorTag(err),
+                entityId: ctx.taskId,
+                message: err instanceof Error ? err.message : String(err),
+              }),
+            ),
+          );
         }),
         Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-store-resolve", tag: errorTag(err) })),
       );

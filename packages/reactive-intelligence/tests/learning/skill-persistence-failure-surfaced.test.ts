@@ -78,14 +78,17 @@ describe("HS-109 — skill persistence failure surfaces a SkillPersistenceFailed
     // The learning step itself must still complete — failure is non-fatal.
     expect(result).toBeDefined();
 
-    // The persistence failure must have surfaced a non-silent signal.
+    // The persistence failure must have surfaced a non-silent signal via
+    // the canonical `emitLoadBearingFailure` primitive (HS-cleanup-3):
+    // tag is `LoadBearingFailure:<capability>`, entityId carried in message.
     const failureEvent = collected.find(
       (e): e is Extract<AgentEvent, { _tag: "ErrorSwallowed" }> =>
-        e._tag === "ErrorSwallowed" && (e as any).tag === "SkillPersistenceFailed",
+        e._tag === "ErrorSwallowed" &&
+        (e as any).tag === "LoadBearingFailure:skill-persistence",
     );
     expect(failureEvent).toBeDefined();
     // The failed skill name must be preserved in the message so trace
     // consumers can attribute the failure without inspecting upstream context.
-    expect(failureEvent!.message ?? "").toContain("skill=");
+    expect(failureEvent!.message ?? "").toContain("code-write");
   });
 });

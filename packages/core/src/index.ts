@@ -72,9 +72,10 @@ export type {
 // `catchAll(() => Effect.void)` sites with an observable event.
 export {
   emitErrorSwallowed,
+  emitLoadBearingFailure,
   errorTag,
 } from "./services/error-swallowed.js";
-export type { ErrorSwallowedPayload } from "./services/error-swallowed.js";
+export type { ErrorSwallowedPayload, LoadBearingFailurePayload } from "./services/error-swallowed.js";
 export {
   ContextWindowManager,
   ContextWindowManagerLive,
