@@ -76,11 +76,30 @@ Phase 0 (6 P0 bugs) → Phase 0.5 (M3 ToT cost gate + M5 routing) → Phase 1 (8
 
 ## ACTIVE — Team-Ownership Dev Contract Pilot (2026-05-23 → 2026-06-15)
 
-**Status:** 3-week ablation pilot, scaffolded in commit `f9d508d8` (merged to `main`). Default-reverts on 2026-06-15 unless lift threshold met.
+**Status:** 3-week ablation pilot, scaffolded in commits `f9d508d8` + `6786af72` (merged to `main`). Default-reverts on 2026-06-15 unless lift threshold met.
+
+### Warden roster (10 total)
+
+- **Domain wardens** (own package slice, refuse cross-boundary): `kernel-warden` (reasoning/kernel/**), `provider-warden` (llm-provider/**), `tools-warden` (tools/**), `memory-warden` (memory/**), `runtime-warden` (runtime/**), `compose-warden` (compose/**).
+- **Cross-cutting specialists** (read all, edit only narrow surfaces, never patch framework code): `harness-warden` (probes + harness-reports), `ablation-warden` (cross-tier matrix + lift rule + veto), `release-warden` (pre-tag audit + drift gate), `debrief-scribe` (AAR in wiki/Research/Debriefs/).
+- **Shared I/O:** `MissionBrief` (`.agents/skills/mission-brief/SKILL.md`) + `UpwardReport` (`.agents/skills/upward-report/SKILL.md`).
 
 ### Forcing function (REQUIRED during pilot window)
 
-Any edit whose primary scope is `packages/reasoning/src/kernel/**` MUST be routed through `kernel-warden` via `Agent` dispatch with a valid `MissionBrief` YAML block. Main-thread direct edits violate the contract and disqualify the task from pilot data. Single exception: hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md`.
+Edits within any warden's authority manifest MUST be routed through that warden via `Agent` dispatch with a valid `MissionBrief` YAML block. Main-thread direct edits violate the contract and disqualify the task from pilot data. Single exception: hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md`.
+
+| Primary scope | Warden |
+|---|---|
+| `packages/reasoning/src/kernel/**` | `kernel-warden` |
+| `packages/llm-provider/**` | `provider-warden` |
+| `packages/tools/**` | `tools-warden` |
+| `packages/memory/**` | `memory-warden` |
+| `packages/runtime/**` | `runtime-warden` |
+| `packages/compose/**` | `compose-warden` |
+| Probes, `wiki/Research/Harness-Reports/**` | `harness-warden` |
+| Default-on toggles, new mechanisms | `ablation-warden` |
+| Pre-tag audit, version-drift, release pipeline | `release-warden` |
+| Post-merge AAR in `wiki/Research/Debriefs/**` | `debrief-scribe` |
 
 ### Why (do not waive)
 
@@ -120,11 +139,11 @@ Affirmative evidence required for canonicalization. Mirrors M3 REWORK discipline
 - ❌ Warden self-widens authority without parent gate
 - ❌ New warden role added before `ablation-warden` shows ≥3pp lift over current setup
 
-### Pilot files (cleanup on revert = one commit)
+### Pilot files (cleanup on revert = revert both commits)
 
-- `.claude/agents/kernel-warden.md` — bounded warden (`packages/reasoning/src/kernel/**` only, hard-refuses cross-package)
+- `.claude/agents/{kernel,provider,tools,memory,runtime,compose,harness,ablation,release}-warden.md` + `debrief-scribe.md` — 10 bounded warden definitions
 - `.agents/skills/mission-brief/SKILL.md` + `.agents/skills/upward-report/SKILL.md` (symlinked into `.claude/skills/`)
-- `AGENTS.md § Team-Ownership Dev Contract (PILOT — expires 2026-06-15)`
+- `AGENTS.md § Team-Ownership Dev Contract (PILOT — expires 2026-06-15)` — forcing-function table per warden + dispatcher FSM + anti-patterns
 - `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/{README.md,log.md}`
 - `wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`
 
