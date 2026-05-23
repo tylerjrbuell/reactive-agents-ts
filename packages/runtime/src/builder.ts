@@ -393,6 +393,7 @@ export class ReactiveAgentBuilder {
     >
     private _sessionPersist: boolean = false
     private _sessionMaxAgeDays?: number
+    private _skillPersistence?: boolean = undefined
     private _documents: DocumentSpec[] = []
     private _pricingRegistry: Record<
         string,
@@ -811,6 +812,34 @@ export class ReactiveAgentBuilder {
             }
             this._memoryOptions = tierOrOptions
         }
+        return this
+    }
+
+    /**
+     * Persist learned skills across sessions via `@reactive-agents/memory`
+     * `SkillStoreService`.
+     *
+     * Requires memory to be enabled (via `.withMemory()`). When unset, defaults
+     * to `true` when memory is enabled — graduates M6 "learning transfers within
+     * session but doesn't persist" verdict to KEEP by activating the existing
+     * skill-persistence write path in the reactive-intelligence learning engine.
+     *
+     * Without memory, this flag is ignored: `SkillStoreService` is not in the
+     * layer and `agent.skills()` silently returns `[]` via
+     * `Effect.serviceOption` at `reactive-agent.ts:370`.
+     *
+     * @param enabled - When `true` (default), wire `SkillStoreServiceLive`;
+     *                  when `false`, explicitly disable even if memory is on.
+     * @returns `this` for chaining
+     * @example
+     * ```typescript
+     * builder
+     *   .withMemory({ tier: "enhanced", dbPath: "./data/agent.db" })
+     *   .withSkillPersistence()
+     * ```
+     */
+    withSkillPersistence(enabled: boolean = true): this {
+        this._skillPersistence = enabled
         return this
     }
 

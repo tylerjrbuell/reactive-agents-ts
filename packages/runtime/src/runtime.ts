@@ -13,7 +13,7 @@ import {
   FallbackChain,
 } from "@reactive-agents/llm-provider";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive } from "@reactive-agents/memory";
+import { createMemoryLayer, ExperienceStoreLive, MemoryConsolidatorServiceLive, SessionStoreLive, SkillStoreServiceLive } from "@reactive-agents/memory";
 import type { MemoryLLM } from "@reactive-agents/memory";
 
 // Optional package imports
@@ -710,6 +710,36 @@ export interface RuntimeOptions {
   sessionMaxAgeDays?: number;
 
   /**
+   * Persist learned skills across sessions via the memory package's
+   * `SkillStoreServiceLive` layer. When wired, `agent.skills()` returns
+   * stored `SkillRecord[]` and the reactive-intelligence learning engine's
+   * skill-persistence write path (`learning-engine.ts:170`) activates.
+   *
+   * Policy: wire-when-memory-enabled. The service requires `MemoryDatabase`
+   * from the memory layer, so this flag is honored only when
+   * `enableMemory: true` (or `.withMemory(...)`). When memory is enabled
+   * and `skillPersistence` is unset, the layer is wired by default
+   * (graduates M6 "learning transfers within session but doesn't persist"
+   * to KEEP). Pass `false` to disable explicitly.
+   *
+   * Without memory, this flag is ignored and `agent.skills()` returns `[]`
+   * via the existing `Effect.serviceOption` fallback at
+   * `reactive-agent.ts:370`.
+   *
+   * Default: `true` when memory is enabled, otherwise off.
+   *
+   * @example
+   * ```typescript
+   * createRuntime({
+   *   enableMemory: true,
+   *   memoryOptions: { dbPath: "./data/skills.db" },
+   *   // skillPersistence: true is the implicit default here
+   * });
+   * ```
+   */
+  skillPersistence?: boolean;
+
+  /**
    * Structured logging configuration. When provided, a logger tap is wired into the
    * EventBus and emits structured log entries for all agent lifecycle events in real time.
    *
@@ -1358,6 +1388,20 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       SessionStoreLive.pipe(Layer.provide(memoryLayer)),
+    ) as any;
+  }
+
+  // ── Skill persistence layer (requires MemoryDatabase from memoryLayer) ──
+  // Policy: wire-when-memory-enabled. Default-on when memory is enabled — graduates
+  // M6 "learning transfers within session but doesn't persist" verdict to KEEP and
+  // activates the existing dead write path at
+  // `reactive-intelligence/src/learning/learning-engine.ts:170`. Without memory,
+  // SkillStoreService is absent and `agent.skills()` returns [] via the existing
+  // `Effect.serviceOption` fallback at `reactive-agent.ts:370`.
+  if (options.enableMemory && options.skillPersistence !== false) {
+    runtime = Layer.merge(
+      runtime,
+      SkillStoreServiceLive.pipe(Layer.provide(memoryLayer)),
     ) as any;
   }
 
