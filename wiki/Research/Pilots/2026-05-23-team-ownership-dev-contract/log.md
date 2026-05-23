@@ -36,6 +36,35 @@ created: 2026-05-23
 ## Entries
 
 ```yaml
+- task: hs-115-required-tool-nomination
+  date: 2026-05-23
+  warden: kernel-warden
+  routed: warden
+  commits: 1  # 9d7bb884
+  agent-spawns: 1
+  tokens-est: ~81K
+  regression-prevented: phantom-tool-nominations (only availableTools names emitted); guard-test partial-state breakage caught via defensive optional-chain
+  notes: >
+    Single kernel-warden dispatch closed Audit G-E + anti-scaffolds F4+F5. Pure
+    regex/keyword nominator (5 semantic categories: math, search, http, file-write,
+    file-read) seeded into state.meta.nominatedTools at runner comprehend boundary.
+    Same-commit consumer: act/guard.ts effectiveRequiredTools(state, input) fallback
+    fires when input.requiredTools empty AND nomination confidence ≥0.7. North Star §9
+    discipline preserved — emit+consumer in single commit, no scaffold-without-caller.
+    Phantom-name guard verified by test ('does not emit a name absent from availableTools').
+    17 new tests added (8 nominator + 3 guard-integration + 6 supporting). Suite
+    1240 → 1257, 0 fail. LOC src 262 / 300 cap. Confidence 0.88. Authority bounds
+    honored zero cross-package edits.
+  evidence-anchors:
+    - packages/reasoning/src/kernel/capabilities/comprehend/task-intent.ts:330 (nominateRequiredTools)
+    - packages/reasoning/src/kernel/capabilities/comprehend/task-intent.ts:210 (NominatedTool type)
+    - packages/reasoning/src/kernel/state/kernel-state.ts:123 (KernelMeta.nominatedTools)
+    - packages/reasoning/src/kernel/loop/runner.ts:550-564 (runner seed)
+    - packages/reasoning/src/kernel/capabilities/act/guard.ts:45 (effectiveRequiredTools helper)
+    - packages/reasoning/src/kernel/capabilities/act/guard.ts:130,197 (guard fallback sites)
+    - packages/reasoning/tests/kernel/capabilities/comprehend/task-intent.test.ts (17 tests)
+    - bun test packages/reasoning 1257/1257 (was 1240; +17)
+
 - task: hs-116-controller-decision-classification
   date: 2026-05-23
   warden: none
