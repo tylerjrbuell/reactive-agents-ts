@@ -10,7 +10,20 @@ updated: 2026-05-23
 
 ---
 
-## Latest Session (2026-05-23) — Harness Improvement Loop / Multi-Model Sweep + Convergence Spec + 22 GH Issues
+## Latest Session (2026-05-23) — Phase 0 of Harness Convergence COMPLETE
+
+**Phase 0 closure (5 P0 issues shipped + verified):**
+- ✅ #105 M2 — output sanitization (commit b82aac35). Triple-layer: output-assembly + runtime sanitizeOutput + verifier backstop. Cogito 9/9 + qwen3 9/9 clean.
+- ✅ #106 M7 — output/status coherence invariant at `buildStrategyResult` (commit 05b7ab8d). 8 new tests.
+- ✅ #107 R9 — `DispatchResult.appliedPatches: AppliedPatchRecord[]` preserves decision→patch link (commit 8715fb13). Trace verification confirms zero conflation.
+- ✅ #108 R10 — ablation probe `.withReactiveIntelligence(riEnabled)` explicit toggle (commit 1d528861). RI-off cells: disp=0.
+- ✅ #109 R11 — triple-surface persistence failure signal: console.warn + Effect.logWarning + tagged ErrorSwallowed (commit af6a9e35).
+
+**Regression: 1193 reasoning + 454 reactive-intelligence + 811 runtime = 2458 tests pass post-Phase-0.**
+
+---
+
+## Prior Sweep (2026-05-23 earlier) — Harness Improvement Loop / Multi-Model Sweep + Convergence Spec + 22 GH Issues
 
 **Outcome:** Full harness audit campaign. 97 evidence-bearing runs across cogito:14b + qwen3:14b + gpt-4o-mini. 10 evidence reports + morph spec + mission statements + optimal algorithm spec landed. 5 North Star amendments applied. **22 GH issues #104–#125** filed under `harness-convergence` + `sweep-2026-05-23` labels.
 

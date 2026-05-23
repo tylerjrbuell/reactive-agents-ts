@@ -32,15 +32,16 @@ The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.
 
 **Codified as Anti-Scaffold Principle in North Star §9.** Every declared surface element MUST have an emit site / consumer in same commit. v0.12 lint discipline.
 
-### Phase 0 — Surface Trust Restoration (GATES ALL ELSE)
+### Phase 0 — Surface Trust Restoration (COMPLETE 2026-05-23 ✅)
 
-P0 bugs blocking every higher empirical measurement (lying API):
-- **#104 M1** — `result.metadata.totalTokens=0` universal silent loss; phase logs show real numbers
-- **#105 M2a/b/c** — Output leaks: `<rationale call=N>` (cogito) + `[CRITIQUE N] SATISFIED:` (frontier reflexion) + `[find result — compressed preview]` (frontier ToT)
-- **#106 M7** — ToT `failed to produce output` → `success=true` propagation (all 3 tiers)
-- **#107 R9** — 3 duplicate event-name pairs for same RI decisions
-- **#108 R10** — `interventionsDispatched` counter contamination (non-zero on RI-OFF)
-- **#109 R11** — Silent skill persistence failure via `emitErrorSwallowed`
+All P0 bugs closed on branch `fix/harness-convergence-104-total-tokens`. Probe-verified cross-tier (cogito:14b + qwen3:14b). 2458 tests green.
+
+- ✅ **#104 M1** — INVALID after empirical verification: schema field is `tokensUsed`, not `totalTokens`. Probe scripts fixed (commit 977da423). #126 filed as P2 naming-consistency followup.
+- ✅ **#105 M2a/b/c** — `stripFrameworkLeaks()` at output-assembly + runtime `sanitizeOutput` + verifier `output-not-harness-parrot` backstop (commit b82aac35). Strips paired/orphan `<rationale>`, `[CRITIQUE N] <STATUS>:` (all statuses), `[find/search result —]` templates. Cogito 9/9 + qwen3 9/9 CLEAN post-fix.
+- ✅ **#106 M7** — Output/status coherence invariant at `buildStrategyResult` (commit 05b7ab8d). Null/empty/whitespace output coerced to `status:"failed"` regardless of caller. 8 new tests + honest-failure regression updates.
+- ✅ **#107 R9** — `DispatchResult.appliedPatches: AppliedPatchRecord[] = {decisionType, patch}[]` preserves decision→patch link (commit 8715fb13). Both InterventionDispatched emit sites publish source decisionType + patchKind separately. Trace shows: decisionType ∈ {early-stop, stall-detect}; patchKind ∈ {early-stop}. Zero conflation.
+- ✅ **#108 R10** — Ablation probe `.withReactiveIntelligence(riEnabled)` explicit toggle (commit 1d528861). RI-off cells: `interventionsDispatched=0` across all 4 scenarios. Counter is correctly RI-scoped.
+- ✅ **#109 R11** — Triple-surface skill persistence failure: console.warn + Effect.logWarning + ErrorSwallowed tagged `"SkillPersistenceFailed"` (commit af6a9e35). Canonical grep predicate: `e._tag === "ErrorSwallowed" && e.tag === "SkillPersistenceFailed"`.
 
 ### Architectural reframes (evidence-grounded)
 
