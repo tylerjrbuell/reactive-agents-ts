@@ -162,8 +162,34 @@ export const LearningEngineServiceLive = (
               taskCategory,
               modelId: data.modelId,
             });
-            yield* Effect.catchAll((err) => emitErrorSwallowed({ site: "reactive-intelligence/src/learning/learning-engine.ts:164", tag: errorTag(err) }))(
-              skillStore.store(entry),
+            // HS-109 / R11 — skill persistence is the load-bearing mechanism
+            // behind the framework's "compounding intelligence" claim. A silent
+            // catchAll here means SQLite write failures disappear with one
+            // debug event. The framework would then keep advertising the
+            // capability while default config produces zero compounding.
+            //
+            // Fix: failures are now triple-surfaced —
+            //   1. console.warn (visible in any process output)
+            //   2. Effect.logWarning (structured logger consumers)
+            //   3. ErrorSwallowed with a `SkillPersistenceFailed` tag (so
+            //      trace consumers can grep
+            //      `e._tag === "ErrorSwallowed" && e.tag === "SkillPersistenceFailed"`).
+            yield* Effect.catchAll(skillStore.store(entry), (err) =>
+              Effect.gen(function* () {
+                const tag = errorTag(err);
+                const message = err instanceof Error ? err.message : String(err);
+                console.warn(
+                  `[reactive-intelligence] SkillPersistenceFailed: skill="${entry.name}" tag=${tag} message=${message}`,
+                );
+                yield* Effect.logWarning(
+                  `SkillPersistenceFailed: skill="${entry.name}" tag=${tag}`,
+                );
+                yield* emitErrorSwallowed({
+                  site: "reactive-intelligence/src/learning/learning-engine.ts:164",
+                  tag: "SkillPersistenceFailed",
+                  message: `skill="${entry.name}" cause=${tag}: ${message}`,
+                });
+              }),
             );
           }
         }
