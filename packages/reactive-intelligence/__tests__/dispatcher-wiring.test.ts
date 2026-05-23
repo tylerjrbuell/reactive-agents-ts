@@ -31,7 +31,7 @@ test("dispatcher wiring: early-stop fires when entropy is high and iteration >= 
   )
 
   expect(result.appliedPatches).toHaveLength(1)
-  expect(result.appliedPatches[0]!.kind).toBe("early-stop")
+  expect(result.appliedPatches[0]!.patch.kind).toBe("early-stop")
   expect(result.skipped).toHaveLength(0)
 })
 
@@ -54,7 +54,7 @@ test("dispatcher wiring: early-stop is EXEMPT from entropy floor and fires at lo
   )
 
   expect(result.appliedPatches).toHaveLength(1)
-  expect(result.appliedPatches[0]!.kind).toBe("early-stop")
+  expect(result.appliedPatches[0]!.patch.kind).toBe("early-stop")
   expect(result.skipped).toHaveLength(0)
 })
 
@@ -128,5 +128,5 @@ test("InterventionDispatcherServiceLive: Layer provides a working dispatcher", a
   )
 
   expect(result.appliedPatches).toHaveLength(1)
-  expect(result.appliedPatches[0]!.kind).toBe("early-stop")
+  expect(result.appliedPatches[0]!.patch.kind).toBe("early-stop")
 })

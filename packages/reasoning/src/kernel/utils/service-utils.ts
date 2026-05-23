@@ -98,7 +98,14 @@ type DispatcherInstance = {
       readonly adaptiveMinEntropy?: number;
     },
   ) => Effect.Effect<{
-    readonly appliedPatches: readonly { readonly kind: string; readonly [k: string]: unknown }[];
+    // HS-107: each applied patch is tagged with the source decision type
+    // so trace consumers can distinguish decisions (e.g. "tool-inject") from
+    // patches (e.g. "inject-tool-guidance"). Local structural type — avoids
+    // cross-package dep on reactive-intelligence's AppliedPatchRecord.
+    readonly appliedPatches: readonly {
+      readonly decisionType: string;
+      readonly patch: { readonly kind: string; readonly [k: string]: unknown };
+    }[];
     readonly skipped: readonly { decisionType: string; reason: string }[];
     readonly totalCost: { tokens: number; latencyMs: number };
   }>;

@@ -1,0 +1,10 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t1-trivial,trivial,reactive,qwen3_14b,1,3,1749,1,14843,0.000000
+t4-multistep,multi-step,reactive,qwen3_14b,1,1444,2592,1,23119,0.000000
+t5-critique,critique-amenable,reactive,qwen3_14b,1,2168,8052,7,54686,0.000000
+t1-trivial,trivial,reflexion,qwen3_14b,1,3,6264,2,34424,0.000000
+t4-multistep,multi-step,reflexion,qwen3_14b,1,602,24909,7,115434,0.000000
+t5-critique,critique-amenable,reflexion,qwen3_14b,1,2013,6636,2,46170,0.000000
+t1-trivial,trivial,tree-of-thought,qwen3_14b,1,3,25250,25,262977,0.000000
+t4-multistep,multi-step,tree-of-thought,qwen3_14b,1,1985,24832,37,264381,0.000000
+t5-critique,critique-amenable,tree-of-thought,qwen3_14b,1,270,31162,34,244205,0.000000

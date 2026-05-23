@@ -328,14 +328,19 @@ export function runReactiveObserver(
               });
             }
 
-            // Emit InterventionDispatched events for applied patches
-            for (const patch of dispatchResult.appliedPatches) {
+            // Emit InterventionDispatched events for applied patches.
+            // HS-107: decisionType carries the ControllerDecision that fired
+            // (e.g. "tool-inject"); patchKind carries the KernelStatePatch
+            // produced (e.g. "inject-tool-guidance"). Prior code passed
+            // patch.kind for both, conflating 8 names for 5 decisions in
+            // trace analytics.
+            for (const { decisionType, patch } of dispatchResult.appliedPatches) {
               if (eventBus._tag === "Some") {
                 yield* eventBus.value.publish({
                   _tag: "InterventionDispatched",
                   taskId: s.taskId,
                   iteration: s.iteration,
-                  decisionType: patch.kind,
+                  decisionType,
                   patchKind: patch.kind,
                   cost: {
                     tokensEstimated: dispatchResult.totalCost.tokens,

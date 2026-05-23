@@ -273,7 +273,7 @@ describe("TreeOfThoughtStrategy", () => {
     let dispatchCallCount = 0;
     const InterventionDispatcherTag = Context.GenericTag<{
       readonly dispatch: (...args: any[]) => Effect.Effect<{
-        readonly appliedPatches: readonly { readonly kind: string }[];
+        readonly appliedPatches: readonly { readonly decisionType: string; readonly patch: { readonly kind: string } }[];
         readonly skipped: readonly { decisionType: string; reason: string }[];
         readonly totalCost: { tokens: number; latencyMs: number };
       }>;
@@ -282,7 +282,7 @@ describe("TreeOfThoughtStrategy", () => {
       dispatch: () => {
         dispatchCallCount += 1;
         return Effect.succeed({
-          appliedPatches: [{ kind: "early-stop" }],
+          appliedPatches: [{ decisionType: "early-stop", patch: { kind: "early-stop" } }],
           skipped: [],
           totalCost: { tokens: 50, latencyMs: 10 },
         });

@@ -769,13 +769,16 @@ export const executePlanExecute = (
               perStrategyRiBudget.interventionsFiredThisRun += dispatchResult.appliedPatches.length;
               perStrategyRiBudget.tokensSpentOnInterventions += dispatchResult.totalCost.tokens;
 
-              for (const patch of dispatchResult.appliedPatches) {
+              // HS-107: preserve source decisionType for trace analytics.
+              // Prior code passed patch.kind for both fields, conflating
+              // decisions (tool-inject) with patches (inject-tool-guidance).
+              for (const { decisionType, patch } of dispatchResult.appliedPatches) {
                 if (services.eventBus._tag === "Some") {
                   yield* services.eventBus.value.publish({
                     _tag: "InterventionDispatched",
                     taskId: input.taskId ?? "plan-execute",
                     iteration: refinement,
-                    decisionType: patch.kind,
+                    decisionType,
                     patchKind: patch.kind,
                     cost: { tokensEstimated: dispatchResult.totalCost.tokens, latencyMsEstimated: dispatchResult.totalCost.latencyMs },
                     telemetry: {},

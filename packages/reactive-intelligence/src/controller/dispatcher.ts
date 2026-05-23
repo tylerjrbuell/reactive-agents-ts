@@ -8,8 +8,19 @@ import type {
 import type { ControllerDecision } from "../types.js"
 import type { KernelStateLike } from "@reactive-agents/core"
 
+/**
+ * One applied patch tagged with the ControllerDecision type that produced it.
+ * HS-107: prior `KernelStatePatch[]` flat shape dropped the decision→patch
+ * link, causing downstream emitters to publish `decisionType=patch.kind` and
+ * conflate 8 distinct names for 5 logical decisions in trace analytics.
+ */
+export interface AppliedPatchRecord {
+  readonly decisionType: ControllerDecision["decision"]
+  readonly patch: KernelStatePatch
+}
+
 export interface DispatchResult {
-  readonly appliedPatches: readonly KernelStatePatch[]
+  readonly appliedPatches: readonly AppliedPatchRecord[]
   readonly skipped: readonly { decisionType: string; reason: string }[]
   readonly totalCost: { tokens: number; latencyMs: number }
 }
@@ -33,7 +44,7 @@ export function makeDispatcher(config: InterventionConfig): Dispatcher {
     context: InterventionContext
   ): Effect.Effect<DispatchResult, never> =>
     Effect.gen(function* () {
-      const appliedPatches: KernelStatePatch[] = []
+      const appliedPatches: AppliedPatchRecord[] = []
       const skipped: { decisionType: string; reason: string }[] = []
       let tokens = 0
       let latencyMs = 0
@@ -96,7 +107,9 @@ export function makeDispatcher(config: InterventionConfig): Dispatcher {
           )
 
         if (outcome.applied) {
-          appliedPatches.push(...outcome.patches)
+          for (const patch of outcome.patches) {
+            appliedPatches.push({ decisionType: key as ControllerDecision["decision"], patch })
+          }
           tokens += outcome.cost.tokensEstimated
           latencyMs += outcome.cost.latencyMsEstimated
         } else {

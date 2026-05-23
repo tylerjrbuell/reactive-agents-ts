@@ -108,7 +108,9 @@ export function makeDispatchMeasurementCollector(): {
             interventionEvents.push({
               taskId: e.taskId ?? "unknown",
               iteration: typeof e.iteration === "number" ? e.iteration : 0,
-              decisionType: e.decisionType ?? e.patchKind ?? "unknown",
+              // HS-107: schema-required field. Prior fallback to e.patchKind
+              // conflated patches with decisions in trace analytics.
+              decisionType: e.decisionType ?? "unknown",
               cost: {
                 tokensEstimated: e.cost?.tokensEstimated ?? 0,
                 latencyMsEstimated: e.cost?.latencyMsEstimated ?? 0,

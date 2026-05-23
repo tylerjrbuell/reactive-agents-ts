@@ -421,7 +421,7 @@ export const executeTreeOfThought = (
               .pipe(Effect.catchAll(() => Effect.succeed({ appliedPatches: [], skipped: [], totalCost: { tokens: 0, latencyMs: 0 } })));
             perStrategyRiBudget.interventionsFiredThisRun += dispatchResult.appliedPatches.length;
             perStrategyRiBudget.tokensSpentOnInterventions += dispatchResult.totalCost.tokens;
-            for (const patch of dispatchResult.appliedPatches) {
+            for (const { patch } of dispatchResult.appliedPatches) {
               if (patch.kind === "early-stop") perStrategyEarlyStop = true;
             }
           }
