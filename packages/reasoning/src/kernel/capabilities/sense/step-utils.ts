@@ -53,13 +53,28 @@ export function buildStrategyResult(params: {
   /** Strategy-specific metadata fields merged into result.metadata */
   extraMetadata?: Record<string, unknown>;
 }): ReasoningResult {
-  const confidence = params.status === "completed" ? 0.8 : 0.4;
-
   // Sanitize output to strip internal agent metadata before it reaches the user
   const sanitizedOutput =
     typeof params.output === "string"
       ? sanitizeAgentOutput(params.output)
       : params.output;
+
+  // HS-106 / M7 invariant — output/status coherence (sweep-2026-05-23).
+  //
+  // If a strategy emitted no substantive output, force status to "failed"
+  // regardless of what the caller claimed. Without this, ToT/plan-execute
+  // returning `status:"partial"` + `output:null` triggered the runtime's
+  // empty-output fallback (execution-engine.ts:1138), which substituted the
+  // last tool observation as the "answer" and reported success=true beside a
+  // `failed to produce output` log line — direct anti-mission #4 violation.
+  const hasSubstantiveOutput =
+    typeof sanitizedOutput === "string"
+      ? sanitizedOutput.trim().length > 0
+      : sanitizedOutput != null;
+  const effectiveStatus: "completed" | "partial" | "failed" =
+    hasSubstantiveOutput ? params.status : "failed";
+
+  const confidence = effectiveStatus === "completed" ? 0.8 : 0.4;
 
   return {
     strategy: params.strategy,
@@ -73,6 +88,6 @@ export function buildStrategyResult(params: {
       confidence,
       ...params.extraMetadata,
     },
-    status: params.status,
+    status: effectiveStatus,
   };
 }

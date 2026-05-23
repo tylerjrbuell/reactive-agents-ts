@@ -82,11 +82,15 @@ describe("ReflexionStrategy", () => {
     expect(result.steps.length).toBe(2);
   });
 
-  it("returns partial when maxRetries exhausted without satisfaction", async () => {
-    // TestLLMService never returns SATISFIED
+  it("returns failed when maxRetries exhausted without substantive output", async () => {
+    // TestLLMService never returns SATISFIED, and the default "Test response"
+    // is stripped by enforceOutputQualityGate, leaving empty output.
+    // HS-106 / M7 invariant: empty/null output forces status=failed at
+    // buildStrategyResult, regardless of what the strategy claimed. Prior
+    // behavior reported `partial` here — anti-mission #4 (hides failure).
     const result = await run({ maxRetries: 2 });
 
-    expect(result.status).toBe("partial");
+    expect(result.status).toBe("failed");
     // Steps: attempt1, critique1, attempt2, critique2, attempt3
     // (initial + maxRetries * (critique + improved attempt))
     expect(result.steps.length).toBeGreaterThanOrEqual(3);

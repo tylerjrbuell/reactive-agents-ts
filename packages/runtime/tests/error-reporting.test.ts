@@ -6,13 +6,14 @@ import type { AgentEvent } from "@reactive-agents/core";
 type AgentCompletedWithError = Extract<AgentEvent, { _tag: "AgentCompleted" }> & { error?: string };
 
 describe("Error reporting chain", () => {
-  it("AgentResult succeeds gracefully when loop fires on pure thought steps", async () => {
+  it("AgentResult reports honest failure when loop fires with no substantive output (HS-106)", async () => {
     // Empty-response loops produce only thought steps (no action steps).
-    // Loop detection trips after `maxConsecutiveThoughts` (default 3) and
-    // degrades gracefully → success: true with last thought as output.
-    // Use maxIterations=8 so the loop detector has room to trip before the
-    // iteration cap fires (a max-iterations exit is now an honest failure
-    // post-W4, not a graceful success).
+    // Loop detection trips after `maxConsecutiveThoughts` (default 3).
+    // Pre-HS-106 the runtime returned success:true with the empty / harness-
+    // injected text as a "graceful degradation" — direct anti-mission #4
+    // violation (a system that hides failure). HS-106 invariant: strategy
+    // result with null/empty output is forced to status=failed at
+    // buildStrategyResult, so the runtime correctly reports success:false.
     const agent = await ReactiveAgents.create()
       .withName("error-test-agent")
       .withTestScenario([{ text: "" }])
@@ -21,8 +22,8 @@ describe("Error reporting chain", () => {
 
     const result = await agent.run("Test task");
 
-    expect(result.success).toBe(true);
-    expect(result.error).toBeUndefined();
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
     await agent.dispose();
   });
 
@@ -39,7 +40,7 @@ describe("Error reporting chain", () => {
     await agent.dispose();
   });
 
-  it("AgentCompleted event fires with success:true on graceful loop degradation", async () => {
+  it("AgentCompleted event fires with success:false on empty-output loop (HS-106)", async () => {
     const collectedEvents: AgentEvent[] = [];
 
     const agent = await ReactiveAgents.create()
@@ -60,10 +61,11 @@ describe("Error reporting chain", () => {
       (e) => e._tag === "AgentCompleted",
     ) as AgentCompletedWithError | undefined;
 
-    // Pure thought loop → graceful degradation → success:true, no error surfaced
+    // HS-106: pure thought loop with empty output is an honest failure,
+    // not a "graceful degradation" disguised as success.
     expect(completedEvent).toBeDefined();
-    expect(completedEvent!.success).toBe(true);
-    expect(completedEvent!.error).toBeUndefined();
+    expect(completedEvent!.success).toBe(false);
+    expect(completedEvent!.error).toBeDefined();
     await agent.dispose();
   });
 
