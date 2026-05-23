@@ -27,6 +27,7 @@ import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
+import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
 export interface StrategyOutcome {
@@ -74,6 +75,13 @@ interface AdaptiveInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   readonly metaTools?: KernelMetaToolsConfig;
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  /**
+   * Pre-computed task classification from the upstream `comprehend` pass.
+   * When provided, adaptive reads complexity/intent here and threads it to
+   * the dispatched sub-strategy (HS-cleanup-2). When absent, classifies
+   * once at entry and threads that snapshot.
+   */
+  readonly taskClassification?: TaskClassification;
 }
 
 type SubStrategy =
@@ -107,9 +115,19 @@ export const executeAdaptive = (
 
     yield* emitLog({ _tag: "phase_started", phase: "adaptive:select", timestamp: new Date() });
 
+    // HS-cleanup-2: one canonical pre-execution classification per agent run.
+    // Reuse the upstream snapshot when threaded; classify locally only as
+    // backward-compat fallback for direct adaptive callers. The same snapshot
+    // is forwarded to the dispatched sub-strategy so it doesn't re-classify.
+    const taskClassification =
+      input.taskClassification ?? {
+        complexity: classifyTaskComplexity(input.taskDescription),
+        intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
+      };
+
     // ── Heuristic pre-classifier ──
     // Avoid an LLM call for obvious cases. Only consult the LLM for ambiguous tasks.
-    const heuristicResult = heuristicClassify(input);
+    const heuristicResult = heuristicClassify(input, taskClassification);
 
     let selectedStrategy: SubStrategy;
     let analysisTokens = 0;
@@ -234,7 +252,12 @@ export const executeAdaptive = (
     yield* emitLog({ _tag: "phase_started", phase: "adaptive:dispatch", timestamp: new Date() });
 
     // ── Dispatch to selected strategy ──
-    const subResult = yield* dispatchStrategy(selectedStrategy, input);
+    // HS-cleanup-2: forward the canonical classification snapshot so the
+    // sub-strategy doesn't re-classify the same task string.
+    const subResult = yield* dispatchStrategy(selectedStrategy, {
+      ...input,
+      taskClassification,
+    });
 
     // ── Fallback: if sub-strategy returned partial and wasn't already reactive ──
     let finalSubResult = subResult;
@@ -260,7 +283,7 @@ export const executeAdaptive = (
       // only the reactive result's tokens are reported. This is acceptable
       // since this is a best-effort fallback and the partial tokens are
       // from an unsuccessful run.
-      finalSubResult = yield* executeReactive(input).pipe(
+      finalSubResult = yield* executeReactive({ ...input, taskClassification }).pipe(
         // If reactive also fails, use original partial result rather than throwing
         Effect.catchAll(() => Effect.succeed(subResult)),
       );
@@ -455,17 +478,21 @@ export function costAwareAdjustment(
  * Heuristic pre-classifier — handles obvious cases without an LLM call.
  * Returns null for ambiguous tasks that require LLM classification.
  *
- * HS-111 / M5: first consults the pre-execution complexity classifier
- * (kernel/capabilities/comprehend/task-complexity.ts). Trivial-classified
- * tasks force reactive — the cost-cheapest strategy — before any pattern
- * matching can route them to expensive ToT/plan-execute paths.
+ * HS-111 / M5: consults the pre-execution complexity classification.
+ * Trivial-classified tasks force reactive — the cost-cheapest strategy —
+ * before any pattern matching can route them to expensive ToT/plan-execute.
+ *
+ * HS-cleanup-2: classification is supplied by the caller (computed once
+ * upstream per agent run) rather than re-derived here.
  */
-function heuristicClassify(input: AdaptiveInput): SubStrategy | null {
+function heuristicClassify(
+  input: AdaptiveInput,
+  classification: TaskClassification,
+): SubStrategy | null {
   // HS-111 cost-class gate: trivial tasks always route to reactive,
   // regardless of other pattern matches. Probe evidence (sweep-2026-05-23)
   // showed adaptive routing trivial tasks to ToT cost 3.3-23× reactive.
-  const complexityVerdict = classifyTaskComplexity(input.taskDescription);
-  if (complexityVerdict.complexity === "trivial" && complexityVerdict.confidence >= 0.7) {
+  if (classification.complexity.complexity === "trivial" && classification.complexity.confidence >= 0.7) {
     return "reactive";
   }
 

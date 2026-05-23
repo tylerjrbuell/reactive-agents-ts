@@ -28,6 +28,7 @@ import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/to
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
 import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
+import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
 
 // ── Tier-Adaptive ToT Limits ─────────────────────────────────────────────────
 
@@ -87,6 +88,13 @@ interface TreeOfThoughtInput {
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
   /** Model tier for tier-adaptive iteration limits. */
   readonly tier?: "local" | "mid" | "large" | "frontier";
+  /**
+   * Pre-computed task classification from the upstream `comprehend` pass.
+   * When provided, ToT reads complexity/intent from this snapshot and does
+   * NOT re-classify (HS-cleanup-2). When absent (direct caller without
+   * upstream classification), ToT computes its own — backward-compatible.
+   */
+  readonly taskClassification?: TaskClassification;
 }
 
 interface ThoughtNode {
@@ -142,7 +150,11 @@ export const executeTreeOfThought = (
     // exploration phase. Moderate/complex tasks fall through to full BFS.
     const skipBfsForTrivial =
       input.config.strategies.treeOfThought.skipBfsForTrivial !== false;
-    const complexityVerdict = classifyTaskComplexity(input.taskDescription);
+    // HS-cleanup-2: prefer upstream classification when threaded; classify
+    // locally only when invoked outside the engine path.
+    const complexityVerdict =
+      input.taskClassification?.complexity ??
+      classifyTaskComplexity(input.taskDescription);
     const SKIP_BFS_CONFIDENCE = 0.7;
     if (
       skipBfsForTrivial &&

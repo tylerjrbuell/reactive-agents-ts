@@ -83,6 +83,8 @@ interface PlanExecuteInput {
   /** LLM temperature override */
   readonly temperature?: number;
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
+  /** HS-cleanup-2: upstream task classification snapshot (currently unused, kept for forward compat). */
+  readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
 }
 
 export const executePlanExecute = (

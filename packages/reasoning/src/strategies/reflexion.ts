@@ -70,6 +70,8 @@ interface ReflexionInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   readonly metaTools?: KernelMetaToolsConfig;
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
+  /** HS-cleanup-2: upstream task classification snapshot (currently unused, kept for forward compat). */
+  readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
 }
 
 /**

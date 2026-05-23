@@ -151,6 +151,10 @@ export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/t
 export type { KernelMessage, EntropyScoreLike } from "./kernel/state/kernel-state.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
 export { extractOutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
+export { classifyTask } from "./kernel/capabilities/comprehend/task-classification.js";
+export type { TaskClassification } from "./kernel/capabilities/comprehend/task-classification.js";
+export { classifyTaskComplexity } from "./kernel/capabilities/comprehend/task-complexity.js";
+export type { TaskComplexityClassification, PreTaskComplexity } from "./kernel/capabilities/comprehend/task-complexity.js";
 export { assembleOutput, extractCodeBlocks } from "./kernel/loop/output-assembly.js";
 export type { TaskIntent, OutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
 export { buildOracleNudge } from "./kernel/capabilities/decide/oracle-nudge.js";

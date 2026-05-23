@@ -95,6 +95,14 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
        */
       readonly verifier?: import("../kernel/capabilities/verify/verifier.js").Verifier;
       readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+      /**
+       * HS-cleanup-2 (2026-05-23): single canonical pre-execution task
+       * classification. Engine computes this once per agent run via
+       * `classifyTask(taskDescription)`; strategies READ from this snapshot
+       * instead of re-classifying the same task string. Backward-compatible:
+       * when absent, strategies fall back to classifying locally.
+       */
+      readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

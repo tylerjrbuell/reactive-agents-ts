@@ -104,6 +104,8 @@ interface ReactiveInput {
    */
   readonly verifier?: Verifier;
   readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  /** HS-cleanup-2: upstream task classification snapshot (currently unused, kept for forward compat). */
+  readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
+import { classifyTask } from "@reactive-agents/reasoning";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -176,9 +177,16 @@ export const runReasoningThink = (
     const effectiveStrategy =
       effectiveStrategyName as NonNullable<ReasoningExecuteRequest["strategy"]>;
 
+    // HS-cleanup-2: classify ONCE per agent run at the engine layer; thread
+    // through `taskClassification` so every downstream consumer (adaptive
+    // heuristic, ToT cost gate, future capabilities) reads from a single
+    // canonical snapshot instead of re-classifying the same task string.
+    const taskClassification = classifyTask(extractTaskText(task.input));
+
     const executeRequest = {
       taskDescription: extractTaskText(task.input),
       taskType: task.type,
+      taskClassification,
       memoryContext: memCtx,
       availableTools: availableToolNames,
       availableToolSchemas,
