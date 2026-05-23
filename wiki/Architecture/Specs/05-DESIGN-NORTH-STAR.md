@@ -15,6 +15,9 @@
 **Referenced design specs (tactical detail — not absorbed here):**
 - `wiki/Architecture/Design-Specs/2026-05-06-compose-harness-api.md` — Compose API injection points, type system, tag catalog.
 - `wiki/Planning/Implementation-Plans/2026-05-06-v0.11-launch-readiness.md` — v0.11 tactical rollout, metrics, timeline.
+- `wiki/Architecture/Design-Specs/2026-05-23-harness-convergence.md` — sweep-2026-05-23 follow-on morph plan (Phase 0/0.5/1/2/3, 22 GH issues #104–#125, 4 anti-pattern fixes).
+- `wiki/Architecture/Specs/06-MISSION-STATEMENTS.md` — positive guiding statements + L1/L2/L3 success metric ladder + 8 anti-mission boundaries.
+- `wiki/Architecture/Specs/07-OPTIMAL-EXECUTION-ALGORITHM.md` — canonical per-iter algorithm (10-step canonical loop) + per-capability success signals + algorithmic invariants.
 
 ---
 
@@ -104,11 +107,16 @@ This section replaces the Apr 27 baseline from v3.0. All forward planning in §6
 | Gap | Description | Phase |
 |---|---|---|
 | **G-3** | Memory not async | Phase E |
-| **G-4** | 3 compression systems (curator is sole author; dual systems deferred) | Phase A (opportunistic) |
+| **G-4** | 3 compression systems (curator is sole author; dual systems deferred) | Phase A (opportunistic) / Convergence Phase 1.8 |
 | ~~**G-6**~~ | ~~`builder.ts` 6,082 LOC + `execution-engine.ts` 4,499 LOC~~ — ✅ CLOSED W23–W25 (May 9, 2026): builder.ts 6,232 → 2,407 LOC (-61%); execution-engine.ts 4,499 → 1,539 LOC (-66%). Internals decomposed into `engine/`, `builder/`, `agent/` subdirs. | ~~Phase A~~ |
 | **G-7** | Calibration: 14 fields defined, ~5 active consumers | Phase 1.5 + Phase E |
+| **G-8** | Result surface trust: `totalTokens=0`, `success=true` on visibly-failed runs, output leaks (M1/M2/M7). Multi-model confirmed. | Convergence Phase 0 (`2026-05-23-harness-convergence.md`) |
+| **G-9** | "Scaffold without callers" anti-pattern shipped 4× — 4 dead Compose tags, 8 dead ControllerDecision variants, ~9 dead calibration fields, 1 silent skill persistence path. | Convergence Phase 0 + 1 |
+| **G-10** | Strategy outer-loops bypass kernel instrumentation; capability emit lives at runner.ts not at capability boundary (F1). | Convergence Phase 1 |
 
 Closed gaps: G-1 (num_ctx from capability), G-2 (dual ModelTier schemas), G-5 (9 termination paths).
+
+Convergence cross-reference: `wiki/Architecture/Design-Specs/2026-05-23-harness-convergence.md` (G-8/G-9/G-10 work plan, 22 issues, multi-phase migration); `wiki/Architecture/Specs/07-OPTIMAL-EXECUTION-ALGORITHM.md` (canonical per-iter algorithm + success signals).
 
 ---
 
@@ -236,7 +244,7 @@ Established cognitive architectures (ACT-R, SOAR, ~30–40 years of research) co
 | EffectorPool | Act | `kernel/capabilities/act/` |
 | Verifier | Verify | `kernel/capabilities/verify/` |
 | ReflectionEngine | Reflect | `kernel/capabilities/reflect/` |
-| LearningPipeline | Learn | `kernel/capabilities/learn/` |
+| LearningPipeline | Learn | `kernel/capabilities/learn/` ⚠️ *currently missing — Phase 2 of convergence spec creates it; M6/M7/M10 wired but scattered* |
 
 | Cross-cutting concern | Where |
 |---|---|
@@ -248,9 +256,9 @@ Established cognitive architectures (ACT-R, SOAR, ~30–40 years of research) co
 
 ### 4.4 The unifying principle
 
-> **Every cognitive function in the agent is implemented as a service with: one owner, typed contract, observable events, replaceable strategy, and isolated tests.**
+> **Every cognitive function in the agent is implemented as a service with: one owner, typed contract, observable events, replaceable strategy, isolated tests, AND a live emit/consumer site in the same commit it was declared. Surfaces never ship without callers.**
 
-Violating this is the failure mode this architecture exists to prevent.
+Violating this is the failure mode this architecture exists to prevent. The "scaffold without callers" anti-pattern (G-9) shipped 4× in v0.10.6 — Compose tags, ControllerDecision variants, calibration fields, skill persistence error swallow — and is the single highest-leverage lesson from the 2026-05-23 sweep. **No declared surface element ships without a live emit site / consumer in the same commit.** Lint rule + doc convention enforce this for v0.12+.
 
 ---
 
@@ -737,6 +745,26 @@ Harness components encode assumptions about what the model cannot do alone. Thos
 
 **Operational rule:** Before adding any new harness mechanism, identify and document the model-capability assumption it encodes. During each major version review, test whether that assumption still holds on current frontier models. Mechanisms whose assumptions have expired are removal candidates, not improvement candidates.
 
+### The Anti-Scaffold Principle (v5.0, amended 2026-05-23)
+
+Sweep-2026-05-23 evidence (97 runs × 3 model tiers) confirmed the "scaffold without callers" anti-pattern shipped **four times** in v0.10.6:
+- 4 of 7 Compose tags scaffolded with no `pipeline.transform()` emit sites
+- 8 of 13 `ControllerDecision` variants empirically never fire on failure-corpus
+- ~9 of 14 calibration fields with zero consumers
+- 1 silent skill persistence path (`emitErrorSwallowed` on the only learning write)
+
+**Operational rule:** Every declared discriminator variant, every typed Compose tag, every calibration field, every public type — must have a `git grep` hit demonstrating an emit site / consumer in the same commit. Lint rule (Phase 0 + 1 of convergence spec) enforces this. Variants with 0 hits must either be wired in next quarter OR documented as `@experimental` with version target. `@experimental` without version target ≥2 quarters → delete.
+
+This rule is enforced quarterly via harness improvement loop campaign.
+
+### The Empirical Evidence Cadence (v5.0, added 2026-05-23)
+
+Every architectural decision in this North Star is grounded in `wiki/Research/Harness-Reports/` evidence. Quarterly: harness improvement loop runs with cross-tier (local + frontier) campaign. Findings update mission statements (L1/L2/L3 metric ladder in `06-MISSION-STATEMENTS.md`) and morph spec.
+
+**"Documents bend to reality OR reality bends to documents — never both silently."**
+
+If a sweep produces evidence contradicting a statement in this document, the document MUST be amended in the same PR that lands the empirical report. No silent drift.
+
 ---
 
 ## 10. Glossary
@@ -775,6 +803,7 @@ Every amendment to this North Star (phase reordering, gate revision, phase addit
 | 2026-05-07 | **v4.0** — `07-ROADMAP-v1.0.md` and `Phase 1.5 Improvement Roadmap.md` absorbed; Phase A (W23–W28) established as now-work before Compose API; Snapshot/Replay promoted from Phase 6 → Phase C (v0.11); `04-PROJECT-STATE.md` retained as separate framing doc; public `ROADMAP.md` alignment flagged as Phase C gate requirement | Single source of truth directive — plans were sprawled across 3+ documents; architecture cleanup before Compose API prevents rework | tylerjrbuell |
 | 2026-05-07 | **W23 gate refinement** — module count "9" replaced by composability + LOC ceilings: `execution-engine.ts` ≤ 600 LOC, every phase module ≤ 400 LOC, phase composition declarative (single array literal). Empirical structure has 10 named phases; two (`agent-loop` ~1,950 LOC, `complete` ~787 LOC) need internal sub-modules. Final layout is ~13–17 files via phase-as-data architecture (each phase exports a typed `Phase` value; pipeline runner composes them). This is the substrate Phase B (`.compose()`) builds on. | Decomposition design discovered the empirical phase count exceeds initial estimate; counting files is less meaningful than declarative composition + LOC ceilings. Phase-as-data design also eliminates the closure-breakage cost the advisor flagged and pre-builds the Phase B substrate. | tylerjrbuell + Claude (Opus 4.7) |
 | v5.0 | 2026-05-11 | Pruning Principle (§9); M14 Self-Evolution (§2.2 + §6 Phase 1.5); M3 ablation-gated (§2.2 + §6 Phase 1.5); M8 elevated-priority IMPROVE (§2.2 + §6 Phase 1.5); Phase B Wave A/B tag catalog expanded to 7 (§6). Research basis: arXiv 2603.25723, 2603.28052. Design spec: `Architecture/Design-Specs/2026-05-11-harness-research-integration.md`. | tylerjrbuell |
+| 2026-05-23 | Sweep-2026-05-23 amendment — §2.3 add G-8 (result-surface trust), G-9 (scaffold-without-callers), G-10 (capability-scoped emit drift); §4.3 flag `learn/` capability as currently-missing; §4.4 unifying principle add "live emit/consumer site in same commit; surfaces never ship without callers"; §9 add Anti-Scaffold Principle + Empirical Evidence Cadence subsections. References: `2026-05-23-harness-convergence.md`, `06-MISSION-STATEMENTS.md`, `07-OPTIMAL-EXECUTION-ALGORITHM.md`. Evidence basis: 97 runs × 3 model tiers (cogito:14b + qwen3:14b + gpt-4o-mini) + 10 evidence reports under `wiki/Research/Harness-Reports/*-2026-05-23.md`. GH issues filed: #104–#125 (22 total). | tylerjrbuell + Claude (Opus 4.7) |
 | *(future amendments append here)* | | | |
 
 ---

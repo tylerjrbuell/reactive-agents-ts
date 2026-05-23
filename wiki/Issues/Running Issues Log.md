@@ -7,7 +7,62 @@ tags: [issues, blockers, active-work]
 
 **Purpose:** Canonical tracking of active blockers, known problems, pending resolutions, and historical closure notes.
 
-**Updated:** 2026-05-20 (stale-prune pass)
+**Updated:** 2026-05-23 (harness-convergence sweep — 22 new issues filed)
+
+---
+
+## Active Sweep — Harness Convergence (2026-05-23)
+
+**22 GH issues filed #104–#125** under labels `harness-convergence` + `sweep-2026-05-23`. Evidence basis: 97 multi-model probe runs (cogito:14b + qwen3:14b + gpt-4o-mini). Spec: `wiki/Architecture/Design-Specs/2026-05-23-harness-convergence.md`.
+
+### Phase 0 — Surface Trust Restoration (P0, gates all else)
+
+| GH | Title | Severity |
+|---|---|---|
+| #104 | `result.metadata.totalTokens=0` universal silent loss (M1) | 🔴 P0 |
+| #105 | Output sanitize — rationale/CRITIQUE/find-result leaks (M2a/b/c) | 🔴 P0 |
+| #106 | ToT `failed to produce output` → `success=true` (M7) | 🔴 P0 |
+| #107 | 3 duplicate RI decision event-name pairs (R9) | 🔴 P0 |
+| #108 | `interventionsDispatched` counter contamination (R10) | 🔴 P0 |
+| #109 | Silent skill persistence failure (R11) | 🔴 P0 |
+
+### Phase 0.5 — Cost / Quality Gates (P1)
+
+| GH | Title | Severity |
+|---|---|---|
+| #110 | ToT tier + complexity cost gate (M3) | 🟠 P1 |
+| #111 | Adaptive routing cost dimension (M5) | 🟠 P1 |
+
+### Phase 1 — Convergence Foundations (P1)
+
+| GH | Title | Severity |
+|---|---|---|
+| #112 | Bridge RI decisions through Compose tags (C1) | 🟢 P1 |
+| #113 | Capability-scoped instrumentation (E2, F1) | 🟢 P1 |
+| #114 | `transitionState()` discipline + lint rule (E4) | 🟢 P1 |
+| #115 | Required-tool nomination from task text (I2, F4/F5) | 🟢 P1 |
+| #116 | `ControllerDecision` union audit + prune/doc (R3) | 🟢 P1 |
+| #117 | Wire `emitLLMExchange` at provider boundary (R8, F8) | 🟢 P1 |
+| #118 | Plan-execute synthetic kernel state contract test (R5) | 🟢 P1 |
+| #119 | Triple compression coordination (R6) | 🟢 P1 |
+
+### Phase 2 — Structural (P2)
+
+| GH | Title | Severity |
+|---|---|---|
+| #120 | Open `learn/` capability + LearningPipeline (I3, I7) | 🟡 P2 |
+| #121 | Multi-severity verifier (I5) | 🟡 P2 |
+| #122 | Cross-session skill persistence default-on | 🟡 P2 |
+
+### Phase 3 — Compounding Intelligence (P3)
+
+| GH | Title | Severity |
+|---|---|---|
+| #123 | Single Arbitrator (E1) | 🔵 P3 |
+| #124 | Composite confidence signal (I1) | 🔵 P3 |
+| #125 | Capability composition routing (I4) | 🔵 P3 |
+
+**Sequencing:** Phase 0 gates everything. No higher comparison reads through lying API. Then Phase 0.5 → Phase 1 → (Phase 2 ‖ Phase 3).
 
 ---
 

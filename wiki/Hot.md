@@ -1,7 +1,7 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-05-21
+updated: 2026-05-23
 ---
 
 # Hot (Recent Context Cache)
@@ -10,7 +10,92 @@ updated: 2026-05-21
 
 ---
 
-## Latest Session (2026-05-22, mid+2) — execute-backlog v9 + #102 PR + #103 flake issue
+## Latest Session (2026-05-23) — Harness Improvement Loop / Multi-Model Sweep + Convergence Spec + 22 GH Issues
+
+**Outcome:** Full harness audit campaign. 97 evidence-bearing runs across cogito:14b + qwen3:14b + gpt-4o-mini. 10 evidence reports + morph spec + mission statements + optimal algorithm spec landed. 5 North Star amendments applied. **22 GH issues #104–#125** filed under `harness-convergence` + `sweep-2026-05-23` labels.
+
+### Key findings (cross-tier confirmed)
+
+**🔴 4 P0 surface-trust bugs (Phase 0 of convergence spec):**
+- **M1** `result.metadata.totalTokens=0` universal silent loss; phase logs show real numbers (#104)
+- **M2a/b/c** Output leaks — `<rationale call=N>` XML (cogito), `[CRITIQUE N] SATISFIED:` (frontier reflexion), `[find result — compressed preview]` (frontier ToT). Verifier `output-not-harness-parrot` too narrow. (#105)
+- **M7** ToT `failed to produce output` → `success=true` propagation bug, cogito + qwen3 + gpt-4o-mini (#106)
+- **R9** 3 duplicate event-name pairs for same RI decisions (#107)
+- **R10** `interventionsDispatched` non-zero on RI-OFF cells — counter contamination (#108)
+- **R11** silent skill persistence failure via `emitErrorSwallowed` swallow (#109)
+
+**🟠 2 cost/quality gates (Phase 0.5):**
+- **M3** ToT 3-23× cost on trivial tasks all tiers (#110)
+- **M5** Adaptive routing missing cost dimension (#111)
+
+**🟢 8 convergence foundations (Phase 1):**
+- 1.1 RI → Compose bridge lights 4 dead tags (#112)
+- 1.2 Capability-scoped emit (closes F1) (#113)
+- 1.3 `transitionState()` discipline + ESLint rule (170 → ≤10 mutations) (#114)
+- 1.4 Required-tool nomination extraction (closes F4/F5) (#115)
+- 1.5 ControllerDecision union prune/doc (8 of 13 dead) (#116)
+- 1.6 Wire `emitLLMExchange` at provider boundary (#117)
+- 1.7 Plan-execute synthetic kernel state contract test (#118)
+- 1.8 Triple compression coordination (#119)
+
+**🟡 3 structural (Phase 2):** Open `learn/` capability (#120), multi-severity verifier (#121), cross-session default-on (#122)
+
+**🔵 3 compounding intelligence (Phase 3):** Single Arbitrator (#123), composite confidence signal (#124), capability composition routing (#125)
+
+### Architectural reframe
+
+| Old framing | Sharper framing (evidence-grounded) |
+|---|---|
+| "Harness needs improvement" | "60% of North Star v5.0 shipped, 40% drifted into 2 anti-patterns" |
+| "Strategies bypass kernel" | "5 of 7 use runKernel; outer loops legitimately reimplement (BFS/critique/plan-revision)" |
+| "RI is dead weight" | "75% fire rate on failure-corpus; +1 rescue on qwen3; tier-dependent" |
+| "Compose ↔ RI parallel substrates" | "Complementary; ~zero overlap; gap = non-coordination (bridge, not subsume)" |
+
+### Single highest-leverage learning
+
+**"Scaffold without callers"** anti-pattern shipped 4× (Compose tags + RI variants + calibration fields + skill persistence). Codified as Anti-Scaffold Principle in North Star §9. Every declared surface element MUST have emit/consumer in same commit. **v0.12 lint discipline.**
+
+### Docs produced this session
+
+**Authoritative:**
+- `wiki/Architecture/Specs/06-MISSION-STATEMENTS.md` — 8 pillar missions + 10 capability missions + 5 trait missions + L1/L2/L3 metric ladder + 8 anti-mission boundaries
+- `wiki/Architecture/Specs/07-OPTIMAL-EXECUTION-ALGORITHM.md` — canonical per-iter algorithm (10-step) + per-capability success signals + composite signals (S1-S6) + algorithmic invariants
+- `wiki/Architecture/Design-Specs/2026-05-23-harness-convergence.md` — 16-section morph spec with 22-issue manifest
+
+**Evidence (all under `wiki/Research/Harness-Reports/`):**
+- `sweep-2026-05-23-qwen3-14b.md` — baseline F1-F8
+- `architecture-drift-analysis-2026-05-23.md` — initial drift framing
+- `capability-mapping-2026-05-23.md` — Q2a: <30% capability-mappable
+- `event-coverage-diff-2026-05-23.md` — Q1c: bridge not subsume
+- `cross-strategy-matrix-analysis-2026-05-23.md` — Q2b + M1/M2/M3/M5/M7
+- `ri-ablation-analysis-2026-05-23.md` — Q1a/b + R9/R10
+- `m6-persistence-audit-2026-05-23.md` — R11
+- `elegance-robustness-intelligence-audit-2026-05-23.md` — design lens, 22 candidate moves
+- `SYNTHESIS-2026-05-23.md` — cross-tier synthesis
+- `cross-strategy-matrix-2026-05-23-03:34.json` + `12:01.json` + `ri-ablation-2026-05-23-03:46.json` — raw data
+
+### Probes written this session (reusable)
+
+- `.agents/skills/harness-improvement-loop/scripts/cross-strategy-matrix.ts` — 5 tasks × N strategies × M models matrix probe
+- `.agents/skills/harness-improvement-loop/scripts/ri-ablation.ts` — RI on/off ablation across failure scenarios
+
+### What's next
+
+1. **Phase 0 execution** via `/execute-backlog` skill — 6 P0 issues, can bundle into 3-4 PRs
+2. M2-class issues (#105) are highest leverage — closes 3 distinct output-leak patterns in one PR
+3. M1 (#104) closes universal API lie — single highest user-trust-impact fix
+4. Phase 0 gates Phase 0.5/1/2/3 — until result surface tells truth, every higher comparison reads through lying API
+
+### Anti-patterns codified for v0.12+
+
+- Anti-mission #4: NOT a system that hides failure (M7 directly violates)
+- Anti-mission #6: NOT advertised-surface-without-callers (R2/R3/R4/R11 violate)
+- Anti-Scaffold Principle (North Star §9): every declared surface has emit/consumer in same commit
+- Empirical Evidence Cadence (North Star §9): documents bend to reality OR reality bends to documents — never both silently
+
+---
+
+## Previous Session (2026-05-22, mid+2) — execute-backlog v9 + #102 PR + #103 flake issue
 
 **Bundle:** `vue-smoke-tests` (closes #82 entirely alongside #100 + #101).
 

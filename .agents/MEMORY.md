@@ -8,10 +8,70 @@ Before doing any work in this repo:
 
 1. **`wiki/Architecture/Specs/04-PROJECT-STATE.md`** — current empirical state of the framework.
 2. **`wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`** — authoritative architecture + forward plan. If this memory file conflicts with North Star, North Star wins.
-3. **`wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md`** — 12 rules. Every harness change requires prior spike validation. No exceptions.
-4. **`wiki/Hot.md`** — recent-context cache; check for the latest session handoff.
+3. **`wiki/Architecture/Specs/06-MISSION-STATEMENTS.md`** — guiding statements + L1/L2/L3 success metric ladder + 8 anti-mission boundaries.
+4. **`wiki/Architecture/Specs/07-OPTIMAL-EXECUTION-ALGORITHM.md`** — canonical per-iter algorithm + per-capability success signals (NEW 2026-05-23).
+5. **`wiki/Architecture/Specs/01-RESEARCH-DISCIPLINE.md`** — 12 rules. Every harness change requires prior spike validation. No exceptions.
+6. **`wiki/Hot.md`** — recent-context cache; check for the latest session handoff.
+7. **`wiki/Architecture/Design-Specs/2026-05-23-harness-convergence.md`** — active morph spec (22 GH issues #104–#125).
 
 The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.md`.
+
+---
+
+## ACTIVE — Harness Convergence Sweep (2026-05-23)
+
+**22 GH issues filed, 4-phase migration plan, 97 evidence-bearing multi-model probe runs.**
+
+### Single highest-leverage learning
+
+**"Scaffold without callers"** anti-pattern shipped 4× in v0.10.6:
+- 4 of 7 Compose TagMap entries with no emit sites
+- 8 of 13 `ControllerDecision` variants never fire in failure-corpus
+- ~9 of 14 calibration fields with zero consumers
+- 1 silent skill persistence path (`emitErrorSwallowed` swallow)
+
+**Codified as Anti-Scaffold Principle in North Star §9.** Every declared surface element MUST have an emit site / consumer in same commit. v0.12 lint discipline.
+
+### Phase 0 — Surface Trust Restoration (GATES ALL ELSE)
+
+P0 bugs blocking every higher empirical measurement (lying API):
+- **#104 M1** — `result.metadata.totalTokens=0` universal silent loss; phase logs show real numbers
+- **#105 M2a/b/c** — Output leaks: `<rationale call=N>` (cogito) + `[CRITIQUE N] SATISFIED:` (frontier reflexion) + `[find result — compressed preview]` (frontier ToT)
+- **#106 M7** — ToT `failed to produce output` → `success=true` propagation (all 3 tiers)
+- **#107 R9** — 3 duplicate event-name pairs for same RI decisions
+- **#108 R10** — `interventionsDispatched` counter contamination (non-zero on RI-OFF)
+- **#109 R11** — Silent skill persistence failure via `emitErrorSwallowed`
+
+### Architectural reframes (evidence-grounded)
+
+- ❌ "Strategies bypass kernel" → ✅ 5 of 7 use `runKernel`; outer loops legitimately reimplement BFS/critique/plan-revision (capability mapping <30% mappable)
+- ❌ "RI is dead weight" → ✅ 75% fire rate on failure-corpus; +1 success rescue on qwen3 (tier-dependent)
+- ❌ "Compose ↔ RI parallel substrates" → ✅ Complementary surfaces, ~zero overlap; **bridge, not subsume**
+
+### Evidence trail (under `wiki/Research/Harness-Reports/`)
+
+10 reports + 3 JSON datasets + 2 probe scripts. SYNTHESIS document: `SYNTHESIS-2026-05-23.md`.
+
+### Mission anchors
+
+- North Star §4.4 unifying principle amended: "surfaces never ship without callers"
+- North Star §9: Anti-Scaffold Principle + Empirical Evidence Cadence subsections
+- New Doc 06 (mission statements) + Doc 07 (optimal algorithm)
+
+### Optimal per-iter algorithm
+
+10 steps with time budgets totaling ≤59ms framework overhead per iter:
+Sense (1ms) → Attend (5ms) → Comprehend (2ms) → Recall (10ms) → Reason (provider) → DECIDE Arbitrator (5ms pure) → Act (tool) → Verify (10ms pure) → Reflect (5ms pure) → Learn (20ms async)
+
+See `wiki/Architecture/Specs/07-OPTIMAL-EXECUTION-ALGORITHM.md` for canonical loop + per-capability success signals + composite signals S1-S6 + algorithmic invariants.
+
+### Execution sequencing
+
+Phase 0 (6 P0 bugs) → Phase 0.5 (M3 ToT cost gate + M5 routing) → Phase 1 (8 convergence items: RI→Compose bridge, capability emit, transitionState lint, soft tools, ControllerDecision audit, llm-exchange, contract test, compression coord) → Phase 2 (`learn/`, multi-severity verifier, default-on memory) ‖ Phase 3 (single Arbitrator, composite confidence, composition routing).
+
+**Next session:** Start Phase 0 via `/execute-backlog` skill. Bundle #105 (M2 output sanitize — highest leverage, closes 3 issues in one PR) first.
+
+---
 
 ---
 
