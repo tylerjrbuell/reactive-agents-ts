@@ -36,11 +36,32 @@ created: 2026-05-23
 ## Entries
 
 ```yaml
+- task: hs-117-llm-exchange-stream-wiring
+  date: 2026-05-23
+  warden: kernel-warden
+  routed: warden
+  commits: 1  # 60dac4b7
+  agent-spawns: 1
+  tokens-est: ~62K (provider runs)
+  regression-prevented: stream-bound-never-run-spurious-emit
+  notes: >
+    Single kernel-warden dispatch shipped makeObservableLLM.stream wrap in
+    observable-llm.ts (+102/-16). Confidence 0.85 because no test added
+    (tests/ tree outside warden authority — explicit out-of-scope per
+    brief). Main-thread added 1 stream-emit regression test in
+    packages/reasoning/tests/kernel/observable-llm.test.ts immediately
+    after, per warden's risk-and-followups note. Closed F8 anti-scaffold.
+    Authority discipline: warden refused to edit tests/ correctly.
+  evidence-anchors:
+    - packages/reasoning/src/kernel/observable-llm.ts:115+ (stream wrap)
+    - packages/reasoning/tests/kernel/observable-llm.test.ts:91+ (regression test)
+    - bun test packages/reasoning 1212/1212 (was 1211, +1)
+
 - task: hs-113-emit-helper-extension
   date: 2026-05-23
   warden: kernel-warden
   routed: warden
-  commits: 0  # uncommitted at log time; bundled with strategy emit sites
+  commits: 1  # 6af922cb
   agent-spawns: 2
   tokens-est: ~100K
   regression-prevented: none-known
