@@ -62,6 +62,11 @@ import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
 import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
 import {
+  RecallService,
+  type MemoryRecallResult,
+  type FoundSkill,
+} from "../../kernel/capabilities/recall/recall-service.js";
+import {
   emitKernelStateSnapshot,
   emitVerifierVerdict,
   emitHarnessSignalInjected,
@@ -691,6 +696,49 @@ export function runKernel(
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
       });
+
+      // ── Recall capability — per-iter RecallService dispatch ──────────────
+      // Issue #129 / North Star §4.3 / Audit G-C — the per-iter recall seam.
+      // Fires EXACTLY ONCE per iter at iter-start, AFTER the snapshot emit and
+      // BEFORE the think phase dispatches (so Phase 2 consumers can thread
+      // results into the model prompt). Uses `Effect.serviceOption` so the
+      // kernel works with no RecallService layer provided (returns None →
+      // empty locals). Plain `yield*` (NOT `forkDaemon` like Learn) because
+      // recall PRODUCES values consumed in-iter — forking would leave the
+      // per-iter locals empty in the main loop.
+      //
+      // Wire-spot rationale: chosen here (between iter-snapshot and the
+      // `before think` phase hooks) so recall fires for EVERY iter — even
+      // ones a `before think` hook aborts. Phase 1 stores results in
+      // per-iter LOCALS (not KernelState); Phase 2 decides persistence
+      // shape after the migration of upstream recall (engine/bootstrap)
+      // through this seam.
+      let iterRecallContext: MemoryRecallResult = {
+        semanticContext: "",
+        episodic: [],
+      };
+      let iterRecallSkills: readonly FoundSkill[] = [];
+      {
+        const recallOpt = yield* Effect.serviceOption(RecallService);
+        if (recallOpt._tag === "Some") {
+          iterRecallContext = yield* recallOpt.value.recallMemoryContext(
+            state,
+            undefined,
+          );
+          iterRecallSkills = yield* recallOpt.value.findSkills(
+            state,
+            undefined,
+          );
+        }
+      }
+      // Phase 1 leaves iterRecallContext / iterRecallSkills unused beyond
+      // capture — strategies still consume `input.priorContext` /
+      // `input.briefResolvedSkills` as today. Phase 2 (runtime-warden) will
+      // either merge these into the prompt directly or expose via a new
+      // KernelState field once the upstream `engine/bootstrap` recall is
+      // migrated through this seam.
+      void iterRecallContext;
+      void iterRecallSkills;
 
       const kernelPhaseStart = Date.now();
       yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
