@@ -36,6 +36,7 @@ import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.j
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
+import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
 
@@ -206,6 +207,21 @@ export const executeReflexion = (
         phase: "thought",
         summary: `Reflexion attempt ${attempt}`,
         timestamp: new Date(),
+      });
+
+      // HS-113 / E2: outer-loop snapshot at each reflexion-improve boundary.
+      yield* emitKernelStateSnapshot({
+        state: {
+          status: "evaluating" as const,
+          steps: steps.map((s) => ({ type: s.type })),
+          toolsUsed: new Set<string>(),
+          tokens: totalTokens,
+          cost: totalCost,
+        },
+        taskId: input.taskId ?? "reflexion",
+        iteration: attempt,
+        outerLoopName: "reflexion:improve",
+        outerIter: attempt,
       });
 
       yield* emitLog({ _tag: "phase_started", phase: "reflexion:critique", timestamp: new Date() });

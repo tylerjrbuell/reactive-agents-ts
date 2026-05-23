@@ -19,7 +19,38 @@
 import { Effect } from "effect";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Rationale } from "@reactive-agents/core";
-import type { KernelState } from "../state/kernel-state.js";
+
+// ── KernelStateLike ─────────────────────────────────────────────────────────
+// Narrow structural surface accepted by `emitKernelStateSnapshot` — only the
+// fields the helper actually reads. Defined here (not in kernel-state.ts) so
+// strategies and outer-loop callers (e.g. plan-execute.ts:669-688 syntheticState)
+// can construct snapshot-emit-compatible shapes without casting through
+// `KernelState`. The concrete `KernelState` type is structurally assignable to
+// this interface, so the existing call sites in `kernel/loop/runner.ts` keep
+// type-checking unchanged. (HS-113 step 3.)
+export interface KernelStateLike {
+  readonly status:
+    | "thinking"
+    | "acting"
+    | "observing"
+    | "done"
+    | "failed"
+    | "evaluating"
+    | "paused";
+  readonly steps: ReadonlyArray<{ readonly type: string }>;
+  readonly toolsUsed: ReadonlySet<string> | ReadonlyArray<string>;
+  readonly scratchpad?: ReadonlyMap<string, string>;
+  readonly messages?: ReadonlyArray<unknown>;
+  readonly tokens?: number;
+  readonly cost?: number;
+  readonly llmCalls?: number;
+  readonly output?: string | null;
+  readonly meta?: {
+    readonly terminatedBy?: string;
+    readonly terminationRationale?: Rationale;
+  };
+  readonly pendingGuidance?: unknown;
+}
 
 // ── Truncation budgets ───────────────────────────────────────────────────────
 // Soft caps to keep trace payloads small. Truncation is signalled with a
@@ -47,11 +78,15 @@ function truncate(
 // ── KernelStateSnapshot ──────────────────────────────────────────────────────
 
 export function emitKernelStateSnapshot(args: {
-  readonly state: KernelState;
+  readonly state: KernelStateLike;
   readonly taskId: string;
   readonly iteration: number;
+  /** Optional outer-loop identifier (HS-113 / E2) e.g. "plan-execute:plan". */
+  readonly outerLoopName?: string;
+  /** Optional outer-loop iteration counter, paired with outerLoopName. */
+  readonly outerIter?: number;
 }): Effect.Effect<void, never> {
-  const { state, taskId, iteration } = args;
+  const { state, taskId, iteration, outerLoopName, outerIter } = args;
   return Effect.gen(function* () {
     const busOpt = yield* Effect.serviceOption(EventBus);
     if (busOpt._tag !== "Some") return;
@@ -62,7 +97,7 @@ export function emitKernelStateSnapshot(args: {
       stepsByType[s.type] = (stepsByType[s.type] ?? 0) + 1;
     }
 
-    const terminationRationale = state.meta.terminationRationale;
+    const terminationRationale = state.meta?.terminationRationale;
     yield* busOpt.value
       .publish({
         _tag: "KernelStateSnapshotEmitted",
@@ -70,19 +105,21 @@ export function emitKernelStateSnapshot(args: {
         iteration,
         status: state.status,
         toolsUsed: [...state.toolsUsed],
-        scratchpadKeys: [...state.scratchpad.keys()],
+        scratchpadKeys: state.scratchpad ? [...state.scratchpad.keys()] : [],
         stepsCount: state.steps.length,
         stepsByType,
         outputPreview: state.output ? preview(state.output) : null,
         outputLen: state.output?.length ?? 0,
-        messagesCount: state.messages.length,
-        tokens: state.tokens,
-        cost: state.cost,
+        messagesCount: state.messages?.length ?? 0,
+        tokens: state.tokens ?? 0,
+        cost: state.cost ?? 0,
         llmCalls: state.llmCalls ?? 0,
-        terminatedBy: state.meta.terminatedBy as string | undefined,
+        terminatedBy: state.meta?.terminatedBy as string | undefined,
         pendingGuidance: state.pendingGuidance as Record<string, unknown> | undefined,
         timestamp: Date.now(),
         ...(terminationRationale ? { terminationRationale } : {}),
+        ...(outerLoopName !== undefined ? { outerLoopName } : {}),
+        ...(outerIter !== undefined ? { outerIter } : {}),
       })
       .pipe(
         Effect.catchAll((err) =>

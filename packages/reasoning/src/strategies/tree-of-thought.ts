@@ -25,6 +25,7 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
+import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
 import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
@@ -274,6 +275,21 @@ export const executeTreeOfThought = (
     let bestScorePerDepth: number[] = [];
     for (let d = 1; d <= effectiveDepth; d++) {
       const nextFrontier: ThoughtNode[] = [];
+
+      // HS-113 / E2: outer-loop snapshot at each BFS depth boundary.
+      yield* emitKernelStateSnapshot({
+        state: {
+          status: "thinking" as const,
+          steps: steps.map((s) => ({ type: s.type })),
+          toolsUsed: new Set<string>(),
+          tokens: totalTokens,
+          cost: totalCost,
+        },
+        taskId: input.taskId ?? "tree-of-thought",
+        iteration: d,
+        outerLoopName: "tree-of-thought:explore",
+        outerIter: d,
+      });
 
       // Budget guard: abort exploration if cost exceeds limit
       if (maxCost !== undefined && totalCost >= maxCost) {

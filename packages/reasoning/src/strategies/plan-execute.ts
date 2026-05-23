@@ -41,6 +41,7 @@ import {
   publishReasoningStep,
 } from "../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
+import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
@@ -363,6 +364,25 @@ export const executePlanExecute = (
         timestamp: new Date(),
       });
 
+      // HS-113 / E2: outer-loop snapshot at plan-iteration boundary.
+      yield* emitKernelStateSnapshot({
+        state: {
+          status: "observing" as const,
+          steps: steps.map((s) => ({ type: s.type })),
+          toolsUsed: new Set(
+            plan.steps
+              .filter((ps) => ps.status === "completed" && ps.toolName)
+              .map((ps) => ps.toolName!),
+          ),
+          tokens: totalTokens,
+          cost: totalCost,
+        },
+        taskId: input.taskId ?? "plan-execute",
+        iteration: refinement + 1,
+        outerLoopName: "plan-execute:plan",
+        outerIter: refinement + 1,
+      });
+
       yield* emitLog({ _tag: "phase_started", phase: "plan-execute:execute", timestamp: new Date() });
 
       steps.push(
@@ -601,6 +621,25 @@ export const executePlanExecute = (
       });
 
       yield* emitLog({ _tag: "phase_started", phase: "plan-execute:reflect", timestamp: new Date() });
+
+      // HS-113 / E2: outer-loop snapshot at reflect-iteration boundary.
+      yield* emitKernelStateSnapshot({
+        state: {
+          status: "evaluating" as const,
+          steps: steps.map((s) => ({ type: s.type })),
+          toolsUsed: new Set(
+            plan.steps
+              .filter((ps) => ps.status === "completed" && ps.toolName)
+              .map((ps) => ps.toolName!),
+          ),
+          tokens: totalTokens,
+          cost: totalCost,
+        },
+        taskId: input.taskId ?? "plan-execute",
+        iteration: refinement + 1,
+        outerLoopName: "plan-execute:reflect",
+        outerIter: refinement + 1,
+      });
 
       // ── REFLECT: Evaluate execution quality ──
       const stepResults: StepResult[] = plan.steps.map((s) => ({

@@ -976,6 +976,18 @@ export type AgentEvent =
       readonly timestamp: number;
       /** Set iff terminatedBy is set; structured rationale (v0.11.x). */
       readonly terminationRationale?: import("../types/rationale.js").Rationale;
+      /**
+       * Identifier for the outer-loop site emitting the snapshot (HS-113 / E2).
+       * Strategies that delegate to `runKernel(reactKernel)` get snapshots from
+       * the inner kernel automatically. Strategies with their own outer loops
+       * (plan-execute, tree-of-thought, reflexion) emit at each iteration
+       * boundary with a string like `"plan-execute:plan"`, `"plan-execute:reflect"`,
+       * `"tree-of-thought:explore"`, `"reflexion:improve"`. Absent => standard
+       * inner-kernel snapshot.
+       */
+      readonly outerLoopName?: string;
+      /** Outer-loop iteration counter when `outerLoopName` is set (HS-113 / E2). */
+      readonly outerIter?: number;
     }
   | {
       /**

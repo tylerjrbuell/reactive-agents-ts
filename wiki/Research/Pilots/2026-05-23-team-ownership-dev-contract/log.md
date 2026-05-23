@@ -35,7 +35,29 @@ created: 2026-05-23
 
 ## Entries
 
-(none yet)
+```yaml
+- task: hs-113-emit-helper-extension
+  date: 2026-05-23
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # uncommitted at log time; bundled with strategy emit sites
+  agent-spawns: 2
+  tokens-est: ~100K
+  regression-prevented: none-known
+  notes: >
+    Dispatch #1 added optional outerLoopName?/outerIter? params to
+    emitKernelStateSnapshot in kernel/utils/diagnostics.ts (+7/-1 LOC,
+    1211/1211 tests). Dispatch #2 narrowed args.state from KernelState to
+    a local KernelStateLike interface (+46/-9 LOC, 576/576 kernel tests).
+    Both dispatches: confidence ≥0.9, authority-bounds-honored=true,
+    out-of-scope-touched=[]. Re-spawn driven by genuine scope progression
+    (signature opens → shape opens for outer-loop callers), not retry.
+  evidence-anchors:
+    - packages/reasoning/src/kernel/utils/diagnostics.ts:23-46 (KernelStateLike)
+    - packages/reasoning/src/kernel/utils/diagnostics.ts:80 (signature)
+    - packages/core/src/services/event-bus.ts:980-991 (schema fields)
+```
+
 
 ## Summary (2026-06-15)
 
