@@ -209,6 +209,39 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     expect(captured).toEqual([]);
   });
 
+  it("uses phase='strategy-select' for switch-strategy and phase='audit' for the others", async () => {
+    const h = new RegistrationHarness();
+    const seenCtx: Array<{ tag: Tag; phase: string }> = [];
+    for (const tag of [
+      "control.strategy-evaluated",
+      "lifecycle.failure",
+      "nudge.healing-failure",
+    ] as const) {
+      h.tap(tag, (_payload, ctx) => { seenCtx.push({ tag, phase: (ctx as { phase: string }).phase }); });
+    }
+    const pipeline = new HarnessPipeline(h._collected);
+
+    const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
+    registerHandler(dispatcher, fixedHandler("switch-strategy", successOutcome()));
+    registerHandler(dispatcher, fixedHandler("stall-detect", successOutcome()));
+    registerHandler(dispatcher, fixedHandler("tool-failure-redirect", successOutcome()));
+
+    await Effect.runPromise(dispatcher.dispatch(
+      [
+        { decision: "switch-strategy", from: "react", to: "reflexion", reason: "stall" },
+        { decision: "stall-detect", reason: "no progress", stalledIterations: 3 },
+        { decision: "tool-failure-redirect", failingTool: "web-search", streakCount: 2, reason: "404" },
+      ],
+      makeState(),
+      makeContext(pipeline),
+    ));
+
+    const find = (tag: Tag) => seenCtx.find((c) => c.tag === tag);
+    expect(find("control.strategy-evaluated")?.phase).toBe("strategy-select");
+    expect(find("lifecycle.failure")?.phase).toBe("audit");
+    expect(find("nudge.healing-failure")?.phase).toBe("audit");
+  });
+
   it("is a no-op when no harnessPipeline is provided", async () => {
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
     registerHandler(dispatcher, fixedHandler("switch-strategy", successOutcome()));

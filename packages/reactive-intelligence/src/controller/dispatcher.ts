@@ -60,12 +60,20 @@ const lifecycleFailureFromDecision = (
   currentStrategy: typeof state.strategy === "string" ? state.strategy : "unknown",
 })
 
+// Per-decision phase mapping — observers filtering on `ctx.phase` expect the
+// semantically accurate phase for each emit. The default is "audit" (a
+// catch-all post-iteration synthesis phase); `switch-strategy` overrides
+// to "strategy-select" since it's a routing decision, not an audit one.
+const phaseForDecision = (decision: BridgeableDecision): BaseCtx["phase"] =>
+  decision.decision === "switch-strategy" ? "strategy-select" : "audit"
+
 const baseCtxFromState = (
   ctx: InterventionContext,
   state: Readonly<KernelStateLike & Record<string, unknown>>,
+  phase: BaseCtx["phase"],
 ): BaseCtx => ({
   iteration: ctx.iteration,
-  phase: "audit",
+  phase,
   state: state as unknown as KernelStateLike,
   strategy: typeof state.strategy === "string" ? state.strategy : "unknown",
 })
@@ -73,9 +81,10 @@ const baseCtxFromState = (
 const nudgeCtxFromState = (
   ctx: InterventionContext,
   state: Readonly<KernelStateLike & Record<string, unknown>>,
+  phase: BaseCtx["phase"],
   trigger: string,
 ): NudgeCtx => ({
-  ...baseCtxFromState(ctx, state),
+  ...baseCtxFromState(ctx, state, phase),
   trigger,
   severity: "warn",
 })
@@ -92,6 +101,8 @@ const bridgeAppliedDecision = (
   const pipeline = ctx.harnessPipeline
   if (pipeline === undefined) return Effect.void
 
+  const phase = phaseForDecision(decision)
+
   switch (decision.decision) {
     case "switch-strategy": {
       const payload: ControlStrategyEvaluatedPayload = {
@@ -105,7 +116,7 @@ const bridgeAppliedDecision = (
         pipeline,
         "control.strategy-evaluated" satisfies Tag,
         payload,
-        baseCtxFromState(ctx, state),
+        baseCtxFromState(ctx, state, phase),
       )
     }
     case "harness-harm": {
@@ -119,7 +130,7 @@ const bridgeAppliedDecision = (
           "tool-error",
           `harness-harm detected (${decision.harmLevel}): ${decision.reason}`,
         ),
-        baseCtxFromState(ctx, state),
+        baseCtxFromState(ctx, state, phase),
       )
     }
     case "stall-detect": {
@@ -133,7 +144,7 @@ const bridgeAppliedDecision = (
           "llm-refusal",
           `stall detected after ${decision.stalledIterations} iterations: ${decision.reason}`,
         ),
-        baseCtxFromState(ctx, state),
+        baseCtxFromState(ctx, state, phase),
       )
     }
     case "human-escalate": {
@@ -147,7 +158,7 @@ const bridgeAppliedDecision = (
           "verifier-rejection",
           `human escalation requested: ${decision.reason}`,
         ),
-        baseCtxFromState(ctx, state),
+        baseCtxFromState(ctx, state, phase),
       )
     }
     case "tool-failure-redirect": {
@@ -155,7 +166,7 @@ const bridgeAppliedDecision = (
         pipeline,
         "nudge.healing-failure" satisfies Tag,
         `tool-failure-redirect on "${decision.failingTool}" (streak=${decision.streakCount}): ${decision.reason}`,
-        nudgeCtxFromState(ctx, state, "tool-failure-redirect"),
+        nudgeCtxFromState(ctx, state, phase, "tool-failure-redirect"),
       )
     }
   }
