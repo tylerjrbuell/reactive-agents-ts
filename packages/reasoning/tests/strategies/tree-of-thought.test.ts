@@ -23,7 +23,7 @@ describe("TreeOfThoughtStrategy", () => {
         ...defaultReasoningConfig,
         strategies: {
           ...defaultReasoningConfig.strategies,
-          treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3 },
+          treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3, skipBfsForTrivial: false },
         },
       },
     });
@@ -57,7 +57,7 @@ describe("TreeOfThoughtStrategy", () => {
         ...defaultReasoningConfig,
         strategies: {
           ...defaultReasoningConfig.strategies,
-          treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3 },
+          treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3, skipBfsForTrivial: false },
         },
       },
     });
@@ -95,7 +95,7 @@ describe("TreeOfThoughtStrategy", () => {
         ...defaultReasoningConfig,
         strategies: {
           ...defaultReasoningConfig.strategies,
-          treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3 },
+          treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3, skipBfsForTrivial: false },
         },
       },
     });
@@ -130,7 +130,7 @@ describe("TreeOfThoughtStrategy", () => {
           ...defaultReasoningConfig,
           strategies: {
             ...defaultReasoningConfig.strategies,
-            treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.5 },
+            treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.5, skipBfsForTrivial: false },
           },
         },
       }).pipe(Effect.provide(layer)),
@@ -165,7 +165,7 @@ describe("TreeOfThoughtStrategy", () => {
           strategies: {
             ...defaultReasoningConfig.strategies,
             // depth 1 so there's only one BFS round — we want rescue to happen on that round
-            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5 },
+            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5, skipBfsForTrivial: false },
           },
         },
       }).pipe(Effect.provide(layer)),
@@ -199,7 +199,7 @@ describe("TreeOfThoughtStrategy", () => {
           ...defaultReasoningConfig,
           strategies: {
             ...defaultReasoningConfig.strategies,
-            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5 },
+            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5, skipBfsForTrivial: false },
           },
         },
       }).pipe(Effect.provide(layer)),
@@ -301,7 +301,7 @@ describe("TreeOfThoughtStrategy", () => {
         strategies: {
           ...defaultReasoningConfig.strategies,
           // depth: 3 so we can verify break before exhausting all depths
-          treeOfThought: { breadth: 2, depth: 3, pruningThreshold: 0.3 },
+          treeOfThought: { breadth: 2, depth: 3, pruningThreshold: 0.3, skipBfsForTrivial: false },
         },
       },
     });
@@ -351,7 +351,7 @@ describe("TreeOfThoughtStrategy", () => {
           ...defaultReasoningConfig,
           strategies: {
             ...defaultReasoningConfig.strategies,
-            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5 },
+            treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.5, skipBfsForTrivial: false },
           },
         },
       }).pipe(Effect.provide(layer)),

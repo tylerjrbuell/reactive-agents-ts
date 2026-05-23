@@ -81,7 +81,7 @@ describe("ToT BFS convergence check", () => {
           ...defaultReasoningConfig,
           strategies: {
             ...defaultReasoningConfig.strategies,
-            treeOfThought: { breadth: 2, depth: 6, pruningThreshold: 0.3 },
+            treeOfThought: { breadth: 2, depth: 6, pruningThreshold: 0.3, skipBfsForTrivial: false },
           },
         },
         tier: "large",
@@ -118,7 +118,7 @@ describe("ToT BFS convergence check", () => {
           ...defaultReasoningConfig,
           strategies: {
             ...defaultReasoningConfig.strategies,
-            treeOfThought: { breadth: 2, depth: 3, pruningThreshold: 0.3 },
+            treeOfThought: { breadth: 2, depth: 3, pruningThreshold: 0.3, skipBfsForTrivial: false },
           },
         },
         tier: "frontier",
@@ -154,7 +154,7 @@ describe("ToT tier-constrained Phase 2 iteration", () => {
           ...defaultReasoningConfig,
           strategies: {
             ...defaultReasoningConfig.strategies,
-            treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3 },
+            treeOfThought: { breadth: 2, depth: 2, pruningThreshold: 0.3, skipBfsForTrivial: false },
           },
         },
         tier: "local",

@@ -280,6 +280,15 @@ describe("Kernel pass attribution", () => {
     const result = await Effect.runPromise(
       executeTreeOfThought({
         ...baseInput,
+        // HS-110 gate would skip BFS for the "Say hello" trivial task; disable
+        // so this test exercises explore + execute kernelPass labels.
+        config: {
+          ...baseInput.config,
+          strategies: {
+            ...baseInput.config.strategies,
+            treeOfThought: { ...baseInput.config.strategies.treeOfThought, skipBfsForTrivial: false },
+          },
+        },
       }).pipe(Effect.provide(Layer.merge(mockLLM, ebLayer))),
     );
     expect(result.status).toBe("completed");

@@ -1,0 +1,28 @@
+[
+  {
+    "task": "t1-trivial",
+    "complexity": "trivial",
+    "strategy": "reactive",
+    "model": "cogito:14b",
+    "success": true,
+    "outputLength": 3,
+    "tokens": 3972,
+    "durationMs": 7942,
+    "iterationsUsed": 4,
+    "costUsd": 0,
+    "outputPreview": "391"
+  },
+  {
+    "task": "t1-trivial",
+    "complexity": "trivial",
+    "strategy": "tree-of-thought",
+    "model": "cogito:14b",
+    "success": true,
+    "outputLength": 13,
+    "tokens": 1549,
+    "durationMs": 1960,
+    "iterationsUsed": 2,
+    "costUsd": 0,
+    "outputPreview": "17 * 23 = 391"
+  }
+]

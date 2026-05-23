@@ -39,6 +39,15 @@ export const TreeOfThoughtConfigSchema = Schema.Struct({
   pruningThreshold: Schema.Number,
   /** Maximum cost (USD) for the exploration phase before early-terminating. */
   maxCost: Schema.optional(Schema.Number),
+  /**
+   * HS-110 / M3 cost gate (default `true`): when the pre-execution complexity
+   * classifier marks the task as trivial with confidence ≥ 0.7, skip the BFS
+   * exploration entirely and delegate to the same react kernel Phase 2 would
+   * have used. Set to `false` to force BFS regardless of task complexity
+   * (e.g. for benchmarks or research probes that need to exercise the
+   * exploration path on simple prompts).
+   */
+  skipBfsForTrivial: Schema.optional(Schema.Boolean),
 });
 export type TreeOfThoughtConfig = typeof TreeOfThoughtConfigSchema.Type;
 

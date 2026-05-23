@@ -27,6 +27,7 @@ import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
+import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
 
 // ── Tier-Adaptive ToT Limits ─────────────────────────────────────────────────
 
@@ -127,6 +128,99 @@ export const executeTreeOfThought = (
     const start = Date.now();
     let totalTokens = 0;
     let totalCost = 0;
+
+    // ── HS-110 / M3 cost gate (sweep-2026-05-23) ──
+    //
+    // ToT BFS exploration ran on every task regardless of complexity. Probe
+    // evidence showed ToT × trivial tasks costing 3.3× reactive (frontier) and
+    // 23× reactive (local-tier) for identical answers. Direct anti-mission #6
+    // violation ("NOT a system that spends cost without proportional return").
+    //
+    // Gate: classify the task pre-execution. If trivial with high confidence,
+    // skip the BFS exploration entirely and delegate to the same react kernel
+    // ToT's Phase 2 would have used — without a `priorContext` from a wasted
+    // exploration phase. Moderate/complex tasks fall through to full BFS.
+    const skipBfsForTrivial =
+      input.config.strategies.treeOfThought.skipBfsForTrivial !== false;
+    const complexityVerdict = classifyTaskComplexity(input.taskDescription);
+    const SKIP_BFS_CONFIDENCE = 0.7;
+    if (
+      skipBfsForTrivial &&
+      complexityVerdict.complexity === "trivial" &&
+      complexityVerdict.confidence >= SKIP_BFS_CONFIDENCE
+    ) {
+      yield* emitLog({
+        _tag: "phase_started",
+        phase: "tree-of-thought:bfs-skipped",
+        timestamp: new Date(),
+      });
+      steps.push(
+        makeStep(
+          "observation",
+          `[TOT] BFS exploration skipped — task classified ${complexityVerdict.complexity} (${complexityVerdict.reason}, confidence=${complexityVerdict.confidence.toFixed(2)}). Delegating to react kernel directly.`,
+        ),
+      );
+
+      const tierLimitsForSkip = TOT_TIER_LIMITS[input.tier ?? "mid"];
+      const skipExecState = yield* runKernel(reactKernel, {
+        task: input.taskDescription,
+        systemPrompt: input.systemPrompt,
+        availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+        allToolSchemas: capabilitySnapshot.allToolSchemas,
+        resultCompression: input.resultCompression,
+        temperature: 0.7,
+        agentId: input.agentId,
+        sessionId: input.sessionId,
+        requiredTools: input.requiredTools,
+        maxRequiredToolRetries: input.maxRequiredToolRetries,
+        synthesisConfig: input.synthesisConfig,
+        metaTools: input.metaTools,
+        briefResolvedSkills: input.briefResolvedSkills,
+      }, {
+        maxIterations: tierLimitsForSkip.maxPhase2Iterations,
+        strategy: "tree-of-thought",
+        kernelType: "react",
+        taskId: input.taskId,
+        kernelPass: "tree-of-thought:bfs-skipped",
+        modelId: input.modelId,
+        taskDescription: input.taskDescription,
+        temperature: 0.7,
+      });
+
+      totalTokens += skipExecState.tokens;
+      totalCost += skipExecState.cost;
+      steps.push(...skipExecState.steps);
+      const skipFinalOutput =
+        skipExecState.output ??
+        [...skipExecState.steps]
+          .filter((s) => s.type === "thought")
+          .pop()?.content ??
+        null;
+
+      yield* emitLog({
+        _tag: "completion",
+        success: !!skipFinalOutput,
+        summary: skipFinalOutput
+          ? "Tree-of-thought completed via cost-gated skip (trivial task)"
+          : "Tree-of-thought failed via cost-gated skip path",
+        timestamp: new Date(),
+      });
+
+      return buildStrategyResult({
+        strategy: "tree-of-thought",
+        steps,
+        output: skipFinalOutput || null,
+        status: skipFinalOutput ? "completed" : "partial",
+        start,
+        totalTokens,
+        totalCost,
+        extraMetadata: {
+          bfsSkipped: true,
+          bfsSkipReason: complexityVerdict.reason,
+          bfsSkipConfidence: complexityVerdict.confidence,
+        },
+      });
+    }
 
     // All thought nodes across the tree
     let allNodes: ThoughtNode[] = [];
