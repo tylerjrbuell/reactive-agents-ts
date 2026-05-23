@@ -58,7 +58,7 @@ import {
   decideExecutionLane,
   shouldInjectOracleNudge,
 } from "../../kernel/utils/lane-controller.js";
-import { extractOutputFormat, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
+import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
 import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
 import {
@@ -542,12 +542,30 @@ export function runKernel(
     // ── 5. Extract task intent for output quality gate ─────────────────────
     const taskIntent = extractOutputFormat(effectiveInput.task);
 
+    // ── 5b. Nominate plausibly-required tools (HS-115 / Audit G-E) ─────────
+    // Pure keyword-cue match against this run's available tool surface. Names
+    // are always real (no phantoms). The runner seeds meta.nominatedTools;
+    // act/guard.ts consumes it as a required-tool floor when input.requiredTools
+    // is empty. Same-commit emit+consumer per North Star §9 (anti-scaffold F4/F5).
+    const nominatedTools = nominateRequiredTools(
+      effectiveInput.task,
+      effectiveInput.availableToolSchemas ?? [],
+    );
+
     // ── 6. Create initial state ──────────────────────────────────────────────
     const baseState = initialKernelState(options);
     // Seed messages from input.initialMessages if provided (e.g. chat history injection)
     let state = effectiveInput.initialMessages?.length
       ? transitionState(baseState, { messages: effectiveInput.initialMessages })
       : baseState;
+    // HS-115 — seed nominated tools BEFORE other meta-merging blocks so
+    // subsequent meta updates compose cleanly. Skipped when no nominations
+    // were produced to avoid spurious meta churn.
+    if (nominatedTools.length > 0) {
+      state = transitionState(state, {
+        meta: { ...state.meta, nominatedTools },
+      });
+    }
     // Issue #128 — seed declarative budget limits onto state.meta so the
     // Arbitrator's pre-intent guard can derive a BudgetSignal each iteration
     // via arbitrationContextFromState(). No-op when no limits declared.

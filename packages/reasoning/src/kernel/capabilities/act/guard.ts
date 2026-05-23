@@ -29,6 +29,28 @@ export type Guard = (
   input: KernelInput,
 ) => GuardOutcome;
 
+/**
+ * HS-115 / Audit G-E — derive an effective required-tool list.
+ *
+ * When the caller declared `input.requiredTools`, that wins (explicit user intent
+ * always trumps inference). Otherwise we fall back to the comprehend phase's
+ * tool nominations (seeded onto `state.meta.nominatedTools` by runner.ts),
+ * keeping only those at confidence ≥ 0.7 so weak signals do not block progress.
+ *
+ * Returns a string[] of tool names — caller-compatible with the existing
+ * `input.requiredTools ?? []` shape.
+ */
+function effectiveRequiredTools(state: KernelState, input: KernelInput): readonly string[] {
+  const declared = input.requiredTools ?? [];
+  if (declared.length > 0) return declared;
+  // `state.meta` is mandatory per KernelState's interface, but some tests
+  // construct partial states; defend with optional-chain so the fallback path
+  // is a strict superset of "no requiredTools declared".
+  const nominated = state.meta?.nominatedTools ?? [];
+  if (nominated.length === 0) return [];
+  return nominated.filter((n) => n.confidence >= 0.7).map((n) => n.name);
+}
+
 function buildActionToolCallCounts(state: KernelState): Readonly<Record<string, number>> {
   const counts: Record<string, number> = {};
   for (const step of state.steps) {
@@ -103,7 +125,10 @@ export const duplicateGuard: Guard = (tc, state, input) => {
     return next?.type === "observation" && next.metadata?.observationResult?.success === true;
   });
   const priorObsContent = priorSuccessIdx >= 0 ? state.steps[priorSuccessIdx + 1]?.content ?? "" : "";
-  const reqTools = input.requiredTools ?? [];
+  // HS-115 anti-scaffold closure: fall back to meta.nominatedTools when caller
+  // declared no requiredTools, so missing-tool hints surface even for tasks
+  // that only signal requirements via keyword cues ("what's 17*29" → calculator).
+  const reqTools = effectiveRequiredTools(state, input);
   const missingReq = getEffectiveMissingRequiredTools(
     state.steps,
     reqTools,
@@ -166,8 +191,9 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const threshold = Math.max(quantityLimit, defaultCeiling);
   if (priorCallsOfSameTool < threshold) return { pass: true };
 
-  // Build missing-tools hint with N/M count progress when quantities are known
-  const reqTools = input.requiredTools ?? [];
+  // Build missing-tools hint with N/M count progress when quantities are known.
+  // HS-115 anti-scaffold closure: same nominator-fallback path as duplicateGuard.
+  const reqTools = effectiveRequiredTools(state, input);
   const quantities = input.requiredToolQuantities ?? {};
   const successfulCounts = buildSuccessfulToolCallCounts(state.steps);
   const missingRequired = getEffectiveMissingRequiredTools(

@@ -111,6 +111,17 @@ export interface KernelMeta {
   readonly maxIterations?: number;
   readonly requiredTools?: readonly string[];
 
+  // ── HS-115 / Audit G-E — tool nomination (anti-scaffold F4 closure) ──
+  /**
+   * Tools the comprehend phase nominated as plausibly required from the task
+   * text. Seeded once at kernel start by runner.ts via {@link
+   * import("../capabilities/comprehend/task-intent.js").nominateRequiredTools}.
+   * Consumed by act/guard.ts: when `input.requiredTools` is empty, nominations
+   * with confidence ≥ 0.7 act as the effective required-tool floor. Names are
+   * always drawn from this run's available tool surface — no phantoms.
+   */
+  readonly nominatedTools?: readonly import("../capabilities/comprehend/task-intent.js").NominatedTool[];
+
   // ── Termination tracking ──
   readonly terminatedBy?: string;
   /** Prior terminatedBy value when the post-loop harness-deliverable promotion overrides it. */
