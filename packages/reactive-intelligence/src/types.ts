@@ -165,20 +165,80 @@ export type ReactiveIntelligenceConfig = {
 };
 
 // ─── Controller Types (Phase 2) ───
+//
+// Disposition (HS-116 / Audit R3 — sweep-2026-05-23): 13 declared variants;
+// 5 fire in failure-corpus (✅ ACTIVE), 4 have evaluators+handlers but no
+// corpus-confirmed firing (🟡 UNFIRED — corpus expansion follow-up), 4 have
+// evaluators but no registered handler (⚠ UNWIRED — handler-registration
+// follow-up). Each variant below is tagged with its current state. Anti-
+// scaffold discipline (North Star §9): variants without a wired-and-fired
+// path SHOULD NOT graduate from `@experimental` to public API.
+//
+// Followups filed: corpus expansion (failure-corpus to trigger UNFIRED
+// variants), handler registration (wire UNWIRED variants OR delete after
+// review).
 
 export type ControllerDecision =
+  /** ✅ ACTIVE — fires on entropy convergence / iteration budget low. */
   | { readonly decision: "early-stop"; readonly reason: string; readonly iterationsSaved: number }
+  /**
+   * @experimental 🟡 UNFIRED — handler registered (`contextCompressHandler`,
+   * see handlers/index.ts:4) but no corpus-confirmed firing. Corpus
+   * expansion needed before promotion.
+   */
   | { readonly decision: "compress"; readonly sections: readonly string[]; readonly estimatedSavings: number }
+  /** ✅ ACTIVE — fires on stagnant strategy / repeated failure. */
   | { readonly decision: "switch-strategy"; readonly from: string; readonly to: string; readonly reason: string }
+  /**
+   * @experimental 🟡 UNFIRED — handler registered (`tempAdjustHandler`).
+   * Corpus expansion needed for entropy-driven temperature adjustment scenarios.
+   */
   | { readonly decision: "temp-adjust"; readonly delta: number; readonly reason: string }
+  /**
+   * @experimental 🟡 UNFIRED — handler registered (`skillActivateHandler`).
+   * Cross-session skill persistence (HS-122) needed to populate skill-match
+   * scenarios in corpus.
+   */
   | { readonly decision: "skill-activate"; readonly skillName: string; readonly trigger: "entropy-match" | "task-match"; readonly confidence: string }
+  /**
+   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/prompt-switch.ts)
+   * but NO handler registered in handlers/index.ts. Decision will never
+   * reach a handler. Either register handler OR delete variant + evaluator.
+   */
   | { readonly decision: "prompt-switch"; readonly fromVariant: string; readonly toVariant: string; readonly reason: string }
+  /** ✅ ACTIVE — fires on detected missing required tool / capability gap. */
   | { readonly decision: "tool-inject"; readonly toolName: string; readonly reason: string }
+  /**
+   * @experimental 🟡 UNFIRED — handler registered (`toolFailureRedirectHandler`).
+   * Corpus needs scenarios with repeated tool failures (≥N attempts on same
+   * tool with consistent error).
+   */
   | { readonly decision: "tool-failure-redirect"; readonly failingTool: string; readonly streakCount: number; readonly reason: string }
+  /**
+   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/memory-boost.ts)
+   * but NO handler registered. Decision will never reach a handler.
+   */
   | { readonly decision: "memory-boost"; readonly from: "recent" | "keyword"; readonly to: "semantic"; readonly reason: string }
+  /**
+   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/skill-reinject.ts)
+   * but NO handler registered. Decision will never reach a handler.
+   */
   | { readonly decision: "skill-reinject"; readonly skillName: string; readonly reason: string }
+  /**
+   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/human-escalate.ts)
+   * but NO handler registered. HITL approval gate exists separately at
+   * `packages/interaction/services/interaction-manager.ts:approvalGate`; this
+   * variant is the auto-escalation trigger — needs handler bridging to HITL.
+   */
   | { readonly decision: "human-escalate"; readonly reason: string; readonly decisionsExhausted: readonly string[] }
+  /** ✅ ACTIVE — fires on N consecutive non-progressing iterations. */
   | { readonly decision: "stall-detect"; readonly reason: string; readonly stalledIterations: number }
+  /**
+   * @experimental 🟡 UNFIRED — handler registered (`harnessHarmDetectorHandler`).
+   * Corpus needs scenarios where harness inputs (loop, guard, oracle nudge)
+   * worsen agent outcome — currently no signal triggers the suspected→confirmed
+   * detection chain.
+   */
   | { readonly decision: "harness-harm"; readonly reason: string; readonly harmLevel: "suspected" | "confirmed" };
 
 export type ReactiveControllerConfig = {
