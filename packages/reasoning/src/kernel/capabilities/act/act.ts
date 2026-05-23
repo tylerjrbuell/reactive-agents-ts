@@ -48,6 +48,7 @@ import {
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
 import { runPhaseHooks } from "../../../kernel/loop/phase-hooks.js";
+import { emitToCompose } from "../../../kernel/loop/compose-bridge.js";
 import { planNextMoveBatches } from "../act/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
@@ -263,6 +264,11 @@ export function handleActing(
     // profileOverrides were already merged into `profile` by kernel-runner;
     // here we only need the adapter.
     const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
+    // Compose pipeline — used by the dead-tag emit sites below
+    // (`nudge.healing-failure`, `observation.tool-result`, `lifecycle.failure`)
+    // and by the later message-rewrite chokepoint. Declared once up here so
+    // every emit shares the same handle.
+    const pipeline = input.harnessPipeline;
 
     const obsMode = input.observationSummary;
     const shouldExtract = obsMode === true
@@ -361,6 +367,24 @@ export function handleActing(
           {},  // M7-E: calibrated param aliases (not yet wired from calibration state)
         );
         const tc = healResult.succeeded ? healResult.call : rawTc;
+
+        // HS-112 — lit the `nudge.healing-failure` Compose tag. The healer
+        // could not repair this call (typically: no schema match for the
+        // tool name). The guard pipeline below will reject it; emit first
+        // so external observers see the cause before the symptom.
+        if (!healResult.succeeded) {
+          yield* emitToCompose(pipeline, "nudge.healing-failure",
+            `healing-pipeline could not repair call to "${rawTc.name}" — no schema match in registry`,
+            {
+              iteration: state.iteration,
+              phase: "act",
+              state: asKernelStateLike(state),
+              strategy: state.strategy ?? "react",
+              trigger: "healing-failure",
+              severity: "warn",
+            },
+          );
+        }
 
         if (batchFollowers.has(tc.id)) {
           continue;
@@ -882,6 +906,40 @@ export function handleActing(
           execResult.success,
         );
 
+        // HS-112 — lit the `observation.tool-result` Compose tag. Fires
+        // once per non-meta, non-blocked tool execution so external
+        // observers see every effector outcome with full payload + ctx.
+        const toolResultCtx = {
+          iteration: state.iteration,
+          phase: "act" as const,
+          state: asKernelStateLike(state),
+          strategy: state.strategy ?? "react",
+          toolName: tc.name,
+          callId: tc.id,
+          healed: healResult.succeeded && healResult.call !== rawTc,
+          durationMs: toolDurationMs,
+        };
+        yield* emitToCompose(pipeline, "observation.tool-result", obsStep, toolResultCtx);
+
+        // HS-112 — lit the `lifecycle.failure` Compose tag on tool error.
+        // `lifecycle.failure` covers all three mid-run failure modes
+        // (tool-error / llm-refusal / verifier-rejection); this is the
+        // tool-error site.
+        if (!execResult.success) {
+          yield* emitToCompose(pipeline, "lifecycle.failure", {
+            reason: "tool-error",
+            errorMessage: execResult.content,
+            attemptNumber: state.iteration,
+            failureStreak: 1,
+            currentStrategy: state.strategy ?? "react",
+          }, {
+            iteration: state.iteration,
+            phase: "act",
+            state: asKernelStateLike(state),
+            strategy: state.strategy ?? "react",
+          });
+        }
+
         allSteps = [...allSteps, obsStep];
         lastMetaToolCall = undefined;
         consecutiveMetaToolCount = 0;
@@ -1049,7 +1107,6 @@ export function handleActing(
       })();
 
       let newConversationHistory = conversationAssembly.messages;
-      const pipeline = input.harnessPipeline;
 
       // 'before act' hooks — may abort iteration
       {
