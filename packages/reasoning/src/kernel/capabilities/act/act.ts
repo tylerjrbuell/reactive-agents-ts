@@ -48,7 +48,7 @@ import {
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
 import { runPhaseHooks } from "../../../kernel/loop/phase-hooks.js";
-import { emitToCompose } from "../../../kernel/loop/compose-bridge.js";
+import { emitToCompose } from "@reactive-agents/core";
 import { planNextMoveBatches } from "../act/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,

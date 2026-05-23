@@ -120,6 +120,7 @@ export { CoreServicesLive } from "./runtime.js";
 // ─── Harness API (Wave A) ───
 export { HarnessPipeline, RegistrationHarness, ALL_TAGS } from "./services/harness-pipeline.js";
 export type { Harness } from "./services/harness-pipeline.js";
+export { emitToCompose } from "./services/compose-bridge.js";
 export type {
   Tag,
   TagMap,

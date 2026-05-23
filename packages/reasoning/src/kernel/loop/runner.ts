@@ -762,7 +762,7 @@ export function runKernel(
 
       // ── Entropy scoring + Reactive Controller evaluation ────────────────
       ({ state, prevStepCount } = yield* runReactiveObserver(
-        state, services, eventBus, prevStepCount, currentOptions,
+        state, services, eventBus, prevStepCount, currentOptions, effectiveInput.harnessPipeline,
       ));
 
       // Honor early-stop dispatched by the intervention dispatcher.

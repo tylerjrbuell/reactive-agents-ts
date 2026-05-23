@@ -51,6 +51,7 @@ export function runReactiveObserver(
   eventBus: MaybeService<EventBusInstance>,
   prevStepCount: number,
   currentOptions: KernelRunOptions,
+  harnessPipeline?: import("@reactive-agents/core").HarnessPipeline,
 ): Effect.Effect<{ state: KernelState; prevStepCount: number }, never> {
   return Effect.gen(function* () {
     let s = state;
@@ -300,6 +301,8 @@ export function runReactiveObserver(
               recentDecisions: decisions as readonly { readonly decision: string; readonly reason: string }[],
               budget: priorBudget,
               adaptiveMinEntropy: calibratedMinEntropy(calibration, modelTier),
+              // HS-112 — bridge applied RI decisions into Compose tags.
+              harnessPipeline,
             };
             const dispatchResult = yield* services.dispatcher.value
               .dispatch(

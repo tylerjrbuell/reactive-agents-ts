@@ -1,21 +1,21 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import {
-  HarnessPipeline,
-  RegistrationHarness,
-  type KernelStateLike,
-  type BaseCtx,
-  type NudgeCtx,
-  type ToolResultCtx,
-  type LifecycleFailurePayload,
-  type ObservationStepLike,
-} from "@reactive-agents/core";
-import { emitToCompose } from "../../src/kernel/loop/compose-bridge.js";
+import { HarnessPipeline, RegistrationHarness } from "../src/services/harness-pipeline.js";
+import { emitToCompose } from "../src/services/compose-bridge.js";
+import type {
+  KernelStateLike,
+  BaseCtx,
+  NudgeCtx,
+  ToolResultCtx,
+  LifecycleFailurePayload,
+  ObservationStepLike,
+} from "../src/index.js";
 
-// HS-112 — Compose bridge helper. The kernel emits previously-dead tags
-// (`nudge.healing-failure`, `observation.tool-result`, `lifecycle.failure`,
-// `control.strategy-evaluated`) through this helper so user-supplied taps
-// can observe them. The helper guarantees three invariants:
+// HS-112 — Compose bridge helper invariants.
+//
+// The helper is the single canonical chokepoint for publishing a typed
+// payload through a `HarnessPipeline`. It guarantees three invariants
+// that callers (act, verify, RI dispatcher, …) rely on:
 //   1. always-success (observers can't crash the kernel)
 //   2. no-op when no pipeline is attached
 //   3. correct payload + ctx threading
@@ -57,9 +57,9 @@ const NUDGE_CTX: NudgeCtx = {
 
 describe("emitToCompose", () => {
   it("is a no-op when no pipeline is provided", async () => {
-    // No throw, returns undefined. The dead-tag emit sites pass
-    // `state.harnessPipeline` directly without guarding, so the helper must
-    // handle the no-harness-registered case without surfacing an error.
+    // The dead-tag emit sites pass `state.harnessPipeline` (or equivalent)
+    // directly without guarding, so the helper must handle the no-harness-
+    // registered case without surfacing an error.
     const result = await Effect.runPromise(
       emitToCompose(undefined, "lifecycle.failure", {
         reason: "tool-error",
@@ -136,8 +136,8 @@ describe("emitToCompose", () => {
   });
 
   it("never propagates a throw from a user-registered transform", async () => {
-    // Invariant 1: observers cannot crash the kernel. A transform that throws
-    // must be swallowed so the calling Effect succeeds with void.
+    // Invariant 1: observers cannot crash the kernel. A transform that
+    // throws must be swallowed so the calling Effect succeeds with void.
     const h = new RegistrationHarness();
     h.on("lifecycle.failure", () => {
       throw new Error("user transform bug — must not bubble");

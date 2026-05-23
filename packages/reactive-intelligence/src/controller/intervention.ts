@@ -1,5 +1,5 @@
 import type { Effect } from "effect";
-import type { KernelStateLike } from "@reactive-agents/core";
+import type { HarnessPipeline, KernelStateLike } from "@reactive-agents/core";
 import type { ControllerDecision } from "../types.js";
 import type { EntropyScore } from "../types.js";
 
@@ -53,6 +53,15 @@ export interface InterventionContext {
    *   - unknown fallback:         0.25
    */
   readonly adaptiveMinEntropy?: number;
+  /**
+   * Compose harness pipeline, when registered on the agent. Used by the
+   * dispatcher (HS-112) to bridge applied RI decisions into Compose tag
+   * emissions so external observers can tap previously-dead tag namespaces
+   * (`control.strategy-evaluated`, `lifecycle.failure`, `nudge.healing-failure`).
+   * Absent when no `.withHarness()` block was registered, in which case the
+   * bridge is a zero-cost no-op.
+   */
+  readonly harnessPipeline?: HarnessPipeline;
 }
 
 export interface InterventionHandler<
