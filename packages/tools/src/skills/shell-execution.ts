@@ -114,67 +114,90 @@ export const OPT_IN_COMMANDS: ReadonlyArray<string> = [
  * 10. Cron/scheduled tasks (`crontab`)
  * 11. Chained destructive subcommands via `&&`, `;`, `||`
  */
-export const DEFAULT_BLOCKED_PATTERNS: ReadonlyArray<RegExp> = [
+/**
+ * Labelled blocked-command rule. The `reason` is surfaced in error messages
+ * so callers know *which* policy fired (e.g. "find -exec is blocked — use
+ * `find | xargs` instead").
+ */
+export interface BlockedCommandRule {
+  readonly pattern: RegExp;
+  readonly reason: string;
+}
+
+/**
+ * Single source of truth for default block-list rules. Each entry pairs a
+ * regex with a human-readable reason. Order matters only for the *reported*
+ * reason when multiple rules match (the first match wins).
+ */
+export const DEFAULT_BLOCKED_RULES: ReadonlyArray<BlockedCommandRule> = [
   // rm with force/recursive flags in any order
-  /\brm\b.*-[^\s]*r[^\s]*f/i,
-  /\brm\b.*-[^\s]*f[^\s]*r/i,
-  /\brm\b.*--recursive/i,
-  /\brm\b.*--force/i,
+  { pattern: /\brm\b.*-[^\s]*r[^\s]*f/i, reason: "rm with -rf flags is destructive" },
+  { pattern: /\brm\b.*-[^\s]*f[^\s]*r/i, reason: "rm with -fr flags is destructive" },
+  { pattern: /\brm\b.*--recursive/i, reason: "rm --recursive is destructive" },
+  { pattern: /\brm\b.*--force/i, reason: "rm --force is destructive" },
   // rm as a standalone command (blocked entirely — too dangerous)
-  /(?:^|\s|[;&|])\s*rm\s/i,
+  { pattern: /(?:^|\s|[;&|])\s*rm\s/i, reason: "rm is blocked — use the file-write tool to manage files" },
   // Privilege escalation
-  /(?:^|\s|[;&|])\s*sudo\b/i,
+  { pattern: /(?:^|\s|[;&|])\s*sudo\b/i, reason: "sudo (privilege escalation) is blocked" },
   // Dangerous permissions
-  /\bchmod\s+7[0-7]{2}\b/i,
-  /(?:^|\s|[;&|])\s*chown\b/i,
+  { pattern: /\bchmod\s+7[0-7]{2}\b/i, reason: "chmod 7xx grants world-writable permissions" },
+  { pattern: /(?:^|\s|[;&|])\s*chown\b/i, reason: "chown is blocked" },
   // Shell injection
-  /(?:^|\s|[;&|])\s*eval\b/i,
-  /\$\(/,          // $() command substitution
-  /`[^`]*`/,       // backtick command substitution
+  { pattern: /(?:^|\s|[;&|])\s*eval\b/i, reason: "eval enables shell injection (CWE-78)" },
+  { pattern: /\$\(/, reason: "$(...) command substitution is blocked (shell injection)" },
+  { pattern: /`[^`]*`/, reason: "backtick command substitution is blocked (shell injection)" },
   // Pipe to shell interpreters
-  /\|\s*(sh|bash|zsh|dash|ksh|csh)\b/i,
+  { pattern: /\|\s*(sh|bash|zsh|dash|ksh|csh)\b/i, reason: "piping to a shell interpreter is blocked (curl|sh pattern)" },
   // Writes to sensitive system paths via redirect
-  />\s*\/etc\//i,
-  />\s*\/dev\//i,
-  />\s*\/usr\//i,
-  />\s*\/boot\//i,
-  />\s*\/sys\//i,
-  />\s*\/proc\//i,
-  />\s*\/var\/(log|run|spool)\//i,
+  { pattern: />\s*\/etc\//i, reason: "writes to /etc/ are blocked" },
+  { pattern: />\s*\/dev\//i, reason: "writes to /dev/ are blocked" },
+  { pattern: />\s*\/usr\//i, reason: "writes to /usr/ are blocked" },
+  { pattern: />\s*\/boot\//i, reason: "writes to /boot/ are blocked" },
+  { pattern: />\s*\/sys\//i, reason: "writes to /sys/ are blocked" },
+  { pattern: />\s*\/proc\//i, reason: "writes to /proc/ are blocked" },
+  { pattern: />\s*\/var\/(log|run|spool)\//i, reason: "writes to /var/log|run|spool are blocked" },
   // Disk/partition tools
-  /(?:^|\s|[;&|])\s*mkfs\b/i,
-  /(?:^|\s|[;&|])\s*fdisk\b/i,
-  /(?:^|\s|[;&|])\s*dd\b/i,
+  { pattern: /(?:^|\s|[;&|])\s*mkfs\b/i, reason: "mkfs (filesystem creation) is blocked" },
+  { pattern: /(?:^|\s|[;&|])\s*fdisk\b/i, reason: "fdisk (partition tool) is blocked" },
+  { pattern: /(?:^|\s|[;&|])\s*dd\b/i, reason: "dd (raw disk write) is blocked" },
   // Process manipulation
-  /(?:^|\s|[;&|])\s*kill\b/i,
-  /(?:^|\s|[;&|])\s*killall\b/i,
+  { pattern: /(?:^|\s|[;&|])\s*kill\b/i, reason: "kill is blocked" },
+  { pattern: /(?:^|\s|[;&|])\s*killall\b/i, reason: "killall is blocked" },
   // Persistent background processes
-  /(?:^|\s|[;&|])\s*nohup\b/i,
-  /(?:^|\s|[;&|])\s*disown\b/i,
+  { pattern: /(?:^|\s|[;&|])\s*nohup\b/i, reason: "nohup (persistent background process) is blocked" },
+  { pattern: /(?:^|\s|[;&|])\s*disown\b/i, reason: "disown (persistent background process) is blocked" },
   // Crontab
-  /(?:^|\s|[;&|])\s*crontab\b/i,
+  { pattern: /(?:^|\s|[;&|])\s*crontab\b/i, reason: "crontab is blocked" },
   // awk shell escape — system() executes arbitrary commands
-  /\bawk\b.*\bsystem\s*\(/i,
+  { pattern: /\bawk\b.*\bsystem\s*\(/i, reason: "awk system() enables shell injection" },
   // awk pipe-to-getline — can read from arbitrary commands
-  /\bawk\b.*\|.*\bgetline\b/i,
+  { pattern: /\bawk\b.*\|.*\bgetline\b/i, reason: "awk |getline enables shell injection" },
   // sed execute flag — runs replacement as shell command (s/pat/repl/e)
-  /\bsed\b.*\/e\b/i,
+  { pattern: /\bsed\b.*\/e\b/i, reason: "sed /e flag enables shell injection" },
   // find -exec/-execdir/-ok — arbitrary command execution through find (CWE-78)
-  /\bfind\b.*\s-exec\b/i,
-  /\bfind\b.*\s-execdir\b/i,
-  /\bfind\b.*\s-ok\b/i,
+  { pattern: /\bfind\b.*\s-exec\b/i, reason: "find -exec is blocked (CWE-78) — pipe to xargs instead, e.g. `find . -name '*.ts' | xargs wc -l`" },
+  { pattern: /\bfind\b.*\s-execdir\b/i, reason: "find -execdir is blocked (CWE-78) — pipe to xargs instead" },
+  { pattern: /\bfind\b.*\s-ok\b/i, reason: "find -ok is blocked (CWE-78) — pipe to xargs instead" },
   // find -delete — file deletion through find
-  /\bfind\b.*\s-delete\b/i,
+  { pattern: /\bfind\b.*\s-delete\b/i, reason: "find -delete is blocked (use file-write tool to remove files)" },
   // git config-based code execution (CWE-78): -c injects config that runs code
-  /\bgit\b.*\s-c\s/i,
+  { pattern: /\bgit\b.*\s-c\s/i, reason: "git -c is blocked (CWE-78 — config injection)" },
   // git clone --config — same vector via clone
-  /\bgit\b.*--config\b/i,
+  { pattern: /\bgit\b.*--config\b/i, reason: "git --config is blocked (CWE-78)" },
   // Background operator & (CWE-400): escapes timeout, spawns unmanaged process.
   // Negative lookbehind ensures && (legitimate chaining) is not matched.
-  /(?<!&)&\s*$/,
+  { pattern: /(?<!&)&\s*$/, reason: "trailing & (background operator) is blocked — escapes timeout" },
   // ${...} variable interpolation (CWE-78): indirect injection via parameter expansion
-  /\$\{/,
+  { pattern: /\$\{/, reason: "${...} parameter expansion is blocked (CWE-78)" },
 ];
+
+/**
+ * Back-compat: pattern-only view of {@link DEFAULT_BLOCKED_RULES}. Prefer
+ * the labelled rules when you need an actionable error message.
+ */
+export const DEFAULT_BLOCKED_PATTERNS: ReadonlyArray<RegExp> = DEFAULT_BLOCKED_RULES.map(
+  (rule) => rule.pattern,
+);
 
 // ── Sanitization ──────────────────────────────────────────────────────
 
@@ -197,23 +220,11 @@ export function sanitizeCommand(raw: string): string {
 // ── Validation helpers ────────────────────────────────────────────────
 
 /**
- * Check whether every command in a (potentially chained) pipeline is
- * in the allow-list.
- *
- * Splits on `&&`, `||`, `;`, and `|` so that `echo ok && wget evil.com`
- * correctly rejects `wget`. Also extracts the basename of absolute-path
- * binaries so that `/usr/bin/wget` → `wget` → rejected.
+ * Split a (potentially chained) command pipeline into segments on `&&`,
+ * `||`, `;`, and `|` — but only outside quoted strings so jq filters like
+ * `'.[] | .field'` are preserved.
  */
-export function isCommandAllowed(
-  command: string,
-  allowList: ReadonlyArray<string> = DEFAULT_ALLOWED_COMMANDS,
-): boolean {
-  const trimmed = command.trim();
-  if (!trimmed) return false;
-
-  // Split on chaining operators (&&, ||, ;) and pipes (|), but only when
-  // they appear outside quoted strings so jq filters like '.[] | .field'
-  // do not get treated as shell command separators.
+function splitCommandSegments(trimmed: string): string[] {
   const segments: string[] = [];
   let current = "";
   let inSingleQuote = false;
@@ -252,9 +263,28 @@ export function isCommandAllowed(
     current += ch;
   }
   segments.push(current.trim());
+  return segments;
+}
+
+/**
+ * Find the first pipe/chain segment whose executable is not in the
+ * allow-list. Returns the offender's basename, or `null` if every
+ * segment is allowed. Empty input returns the sentinel `""` so callers
+ * can distinguish "no command" from "all allowed".
+ *
+ * Used to build precise error messages — `find . | xargs wc` should
+ * report `xargs` (the actual offender), not `find` (the first word).
+ */
+export function findDisallowedCommand(
+  command: string,
+  allowList: ReadonlyArray<string> = DEFAULT_ALLOWED_COMMANDS,
+): string | null {
+  const trimmed = command.trim();
+  if (!trimmed) return "";
+
+  const segments = splitCommandSegments(trimmed);
 
   let hasCommand = false;
-
   for (const segment of segments) {
     const seg = segment.trim();
     if (!seg) continue;
@@ -263,10 +293,41 @@ export function isCommandAllowed(
     // Extract basename to prevent absolute-path bypass:
     // /usr/bin/wget → wget → not in defaults → blocked
     const name = firstWord.includes("/") ? firstWord.split("/").pop()! : firstWord;
-    if (!allowList.includes(name)) return false;
+    if (!allowList.includes(name)) return name;
   }
 
-  return hasCommand;
+  return hasCommand ? null : "";
+}
+
+/**
+ * Check whether every command in a (potentially chained) pipeline is
+ * in the allow-list.
+ *
+ * Splits on `&&`, `||`, `;`, and `|` so that `echo ok && wget evil.com`
+ * correctly rejects `wget`. Also extracts the basename of absolute-path
+ * binaries so that `/usr/bin/wget` → `wget` → rejected.
+ */
+export function isCommandAllowed(
+  command: string,
+  allowList: ReadonlyArray<string> = DEFAULT_ALLOWED_COMMANDS,
+): boolean {
+  return findDisallowedCommand(command, allowList) === null;
+}
+
+/**
+ * Find the first blocked-rule match for `command` and return its reason.
+ * Returns `null` if no rule matches. Used to build actionable error
+ * messages — `find . -exec ...` should report "find -exec is blocked
+ * (CWE-78) — pipe to xargs instead" rather than a generic refusal.
+ */
+export function findBlockedReason(
+  command: string,
+  rules: ReadonlyArray<BlockedCommandRule> = DEFAULT_BLOCKED_RULES,
+): string | null {
+  for (const rule of rules) {
+    if (rule.pattern.test(command)) return rule.reason;
+  }
+  return null;
 }
 
 /**
@@ -553,7 +614,15 @@ export function shellExecuteHandler(
     "/bin",
     ...resolvedCommandDirs,
   ].join(":");
-  const blockedPatterns = config?.blockedPatterns ?? DEFAULT_BLOCKED_PATTERNS;
+  // When the caller overrides `blockedPatterns`, we have raw regexes with no
+  // labels — fall back to generic refusal messages. When unset, use the
+  // labelled rule table so error messages name which policy fired.
+  const blockedRules: ReadonlyArray<BlockedCommandRule> = config?.blockedPatterns
+    ? config.blockedPatterns.map((pattern) => ({
+        pattern,
+        reason: "matches custom blocklist pattern",
+      }))
+    : DEFAULT_BLOCKED_RULES;
   const allowUnsafeCwd = config?.allowUnsafeCwd ?? false;
   const onAudit = config?.onAudit;
 
@@ -670,20 +739,32 @@ export function shellExecuteHandler(
         }
 
         // ── 2. Allow-list check ──
-        if (!isCommandAllowed(command, allowedCommands)) {
+        const disallowed = findDisallowedCommand(command, allowedCommands);
+        if (disallowed !== null) {
           audit({ command, allowed: false, reason: "not-in-allowlist" });
+          const firstWord = command.split(/\s+/)[0] ?? "";
+          // Hint when the offender is opt-in (e.g. xargs/curl/node): tells the
+          // caller the command exists in the framework but must be granted.
+          const optInHint = OPT_IN_COMMANDS.includes(disallowed)
+            ? ` ("${disallowed}" is opt-in — add it to additionalCommands to grant access)`
+            : "";
+          const segmentNote =
+            disallowed && disallowed !== firstWord
+              ? ` (in pipeline segment "${disallowed}")`
+              : "";
           return {
             executed: false,
-            error: `Command "${command.split(/\s+/)[0]}" is not in the allowed commands list`,
+            error: `Command "${disallowed || firstWord}" is not in the allowed commands list${segmentNote}${optInHint}`,
           };
         }
 
         // ── 3. Block-list check ──
-        if (isCommandBlocked(command, blockedPatterns)) {
+        const blockedReason = findBlockedReason(command, blockedRules);
+        if (blockedReason !== null) {
           audit({ command, allowed: false, reason: "blocked-pattern" });
           return {
             executed: false,
-            error: `Command blocked by security policy`,
+            error: `Command blocked by security policy: ${blockedReason}`,
           };
         }
 

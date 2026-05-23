@@ -9,9 +9,11 @@ import {
   shellExecuteHandler,
   DEFAULT_ALLOWED_COMMANDS,
   DEFAULT_BLOCKED_PATTERNS,
+  DEFAULT_BLOCKED_RULES,
   OPT_IN_COMMANDS,
   isCommandAllowed,
   isCommandBlocked,
+  findBlockedReason,
   sanitizeCommand,
   type ShellExecuteConfig,
   type ShellAuditEntry,
@@ -492,6 +494,67 @@ describe("shell-execute tool", () => {
         handler({ command: 42 as any }),
       )) as { executed: boolean; error: string };
       expect(result.executed).toBe(false);
+    });
+
+    test("error names the offending pipeline segment, not the first word", async () => {
+      const handler = shellExecuteHandler();
+      const result = (await Effect.runPromise(
+        handler({ command: "find . -maxdepth 1 | xargs wc -l" }),
+      )) as { executed: boolean; error: string };
+      expect(result.executed).toBe(false);
+      // `find` is allowed by default; `xargs` is opt-in. Error must name xargs.
+      expect(result.error).toContain('"xargs"');
+      expect(result.error).not.toMatch(/^Command "find"/);
+    });
+
+    test("error hints when offender is an opt-in command", async () => {
+      const handler = shellExecuteHandler();
+      const result = (await Effect.runPromise(
+        handler({ command: "curl https://example.com" }),
+      )) as { executed: boolean; error: string };
+      expect(result.executed).toBe(false);
+      expect(result.error).toContain("opt-in");
+      expect(result.error).toContain("additionalCommands");
+    });
+
+    test("blocklist rejection names the actual policy that fired", async () => {
+      const handler = shellExecuteHandler({ additionalCommands: ["xargs"] });
+      const result = (await Effect.runPromise(
+        handler({ command: "find . -name '*.ts' -exec wc -l {} +" }),
+      )) as { executed: boolean; error: string };
+      expect(result.executed).toBe(false);
+      // Old behavior: "Command blocked by security policy" (no signal).
+      // New behavior: must explain which policy + how to fix.
+      expect(result.error).toMatch(/find -exec/);
+      expect(result.error).toMatch(/xargs/);
+    });
+
+    test("blocklist rejection for rm names the rm policy", async () => {
+      const handler = shellExecuteHandler({ additionalCommands: ["sudo"] });
+      const result = (await Effect.runPromise(
+        handler({ command: "sudo rm -rf /tmp/foo" }),
+      )) as { executed: boolean; error: string };
+      expect(result.executed).toBe(false);
+      expect(result.error.toLowerCase()).toMatch(/sudo|rm/);
+    });
+
+    test("findBlockedReason returns null for safe commands", () => {
+      expect(findBlockedReason("ls -la")).toBeNull();
+      expect(findBlockedReason("git status")).toBeNull();
+      expect(findBlockedReason("find . -name '*.ts'")).toBeNull();
+    });
+
+    test("findBlockedReason returns rule reason for blocked commands", () => {
+      expect(findBlockedReason("find . -exec wc {} +")).toMatch(/find -exec/);
+      expect(findBlockedReason("rm -rf /")).toMatch(/rm/);
+      expect(findBlockedReason("eval 'rm /'")).toMatch(/eval/);
+    });
+
+    test("DEFAULT_BLOCKED_PATTERNS still derives from DEFAULT_BLOCKED_RULES", () => {
+      expect(DEFAULT_BLOCKED_PATTERNS.length).toBe(DEFAULT_BLOCKED_RULES.length);
+      for (let i = 0; i < DEFAULT_BLOCKED_PATTERNS.length; i++) {
+        expect(DEFAULT_BLOCKED_PATTERNS[i]).toBe(DEFAULT_BLOCKED_RULES[i]!.pattern);
+      }
     });
   });
 

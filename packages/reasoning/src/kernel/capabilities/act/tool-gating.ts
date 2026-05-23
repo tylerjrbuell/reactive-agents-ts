@@ -63,10 +63,17 @@ function describeToolBehavior(name: string): readonly string[] {
 export function isParallelBatchSafeTool(name: string): boolean {
   // Explicitly safe tools — dispatching multiple in parallel is always correct.
   const PARALLEL_SAFE_TOOLS = new Set([
-    "spawn-agent",   // single subagent dispatch
-    "spawn-agents",  // parallel subagent dispatch
-    "recall",        // scratchpad read — pure, no side effect
-    "find",          // index lookup — pure, no side effect
+    "spawn-agent",    // single subagent dispatch
+    "spawn-agents",   // parallel subagent dispatch
+    "recall",         // scratchpad read — pure, no side effect
+    "find",           // index lookup — pure, no side effect
+    // shell-execute is the agent's primary I/O surface. Treating it as
+    // sequential-only caps the per-task budget at 2 calls (via
+    // `repetitionGuard`), which is too tight for any non-trivial audit
+    // or multi-step shell workflow. Destructive ops are still blocked by
+    // the shell-execute tool's own allow/block lists; the kernel does not
+    // need to be a second gate.
+    "shell-execute",
   ]);
   if (PARALLEL_SAFE_TOOLS.has(name)) return true;
 

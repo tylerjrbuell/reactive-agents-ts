@@ -184,13 +184,19 @@ export interface ToolsOptions {
      * Use `true` for defaults or pass a config object for custom behavior
      * (for example, `additionalCommands: ["gh"]`).
      *
+     * **Opt-in commands** — these are NOT in the default allowlist and must be
+     * named explicitly in `additionalCommands` (developer takes liability):
+     * `node`, `bun`, `npm`, `npx`, `python`, `python3`, `curl`, `env`, `xargs`, `tar`.
+     * Common gotcha: `find ... | xargs wc -l` fails until `xargs` is added.
+     *
      * @example
      * ```typescript
      * agent.withTools({ terminal: true })
      *
      * agent.withTools({
      *   terminal: {
-     *     additionalCommands: ["gh"],
+     *     // Grant gh CLI + xargs so `find | xargs wc -l` pipelines work
+     *     additionalCommands: ["gh", "xargs"],
      *   },
      * })
      * ```
