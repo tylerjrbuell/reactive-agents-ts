@@ -252,7 +252,20 @@ Run this checklist:
 
 ### Forcing function (REQUIRED during pilot window)
 
-Between **2026-05-23** and **2026-06-15**, any edit whose primary scope is `packages/reasoning/src/kernel/**` MUST be routed through `kernel-warden` via `Agent` dispatch with a valid MissionBrief. Main-thread direct edits during the pilot window violate the contract and disqualify the task from pilot data.
+Between **2026-05-23** and **2026-06-15**, any edit whose primary scope falls in the table below MUST be routed through the listed warden via `Agent` dispatch with a valid MissionBrief. Main-thread direct edits during the pilot window violate the contract and disqualify the task from pilot data.
+
+| Primary scope | Warden |
+|---|---|
+| `packages/reasoning/src/kernel/**` | `kernel-warden` |
+| `packages/llm-provider/**` | `provider-warden` |
+| `packages/tools/**` | `tools-warden` |
+| `packages/memory/**` | `memory-warden` |
+| `packages/runtime/**` | `runtime-warden` |
+| `packages/compose/**` | `compose-warden` |
+| Framework probes, `wiki/Research/Harness-Reports/**` | `harness-warden` |
+| Default-on toggles, new mechanisms, ablation matrices | `ablation-warden` |
+| Pre-tag audit, version-drift check, release pipeline | `release-warden` |
+| Post-merge AAR, debrief file in `wiki/Research/Debriefs/**` | `debrief-scribe` |
 
 **Single exception:** hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md`.
 
@@ -277,15 +290,17 @@ Between **2026-05-23** and **2026-06-15**, any edit whose primary scope is `pack
 - ❌ Parent re-prompts warden to "review your own work" — recreates `verifier.ts:217-222` failure mode and M3 verify-retry loop.
 - ❌ Silent retry past `retries-allowed` in MissionBrief.
 - ❌ Warden widens its own authority without parent gate.
-- ❌ New warden role added before `ablation-warden` shows ≥3pp lift over current setup.
+- ❌ New warden role added to the pilot set without `ablation-warden` PASS verdict (≥2 tiers, ≥3pp lift, ≤15% token overhead).
+- ❌ Domain warden patches code outside its authority manifest — must escalate via `denied-by-authority` and let parent dispatch the correct warden.
+- ❌ Harness / ablation / debrief-scribe / release wardens editing `packages/**/src/**` directly. They surface findings; domain wardens fix.
 
 ### Logging requirement
 
-Every pilot-window kernel/* task: append one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there.
+Every pilot-window task routed through any warden: append one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there. Include `warden: <name>` field.
 
 ### Evaluation
 
-**Date:** 2026-06-15. **Owner:** Tyler. **Decision:** canonicalize (Phase 2 — add `provider-warden`, `harness-warden`, `ablation-warden`, `debrief-scribe`) OR revert (single commit removing all pilot files). **Inconclusive → kill** per default.
+**Date:** 2026-06-15. **Owner:** Tyler. **Evaluator:** `ablation-warden` (first real assignment — applies its own lift rule to the pilot as a whole). **Decision:** canonicalize (drop PILOT markers + write any Phase 2 expansion plan) OR revert (single commit removing all pilot files). **Inconclusive → kill** per default — aggregate (across all wardens) must show ≥10 logged tasks AND meet lift threshold.
 
 ---
 

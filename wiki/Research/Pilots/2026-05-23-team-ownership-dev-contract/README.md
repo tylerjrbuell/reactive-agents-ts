@@ -11,41 +11,62 @@ related:
 # Pilot Charter — Team-Ownership Dev Contract
 
 **Window:** 2026-05-23 → 2026-06-15 (3 weeks, hard expiry).
-**Scope:** Edits whose primary scope is `packages/reasoning/src/kernel/**`.
-**Hypothesis:** A bounded `kernel-warden` agent with a domain primer + MissionBrief input + UpwardReport output produces measurably better outcomes than main-thread direct edits.
+**Scope:** Edits across all packages listed in the forcing-function table below, plus cross-cutting tasks (probes, ablations, releases, debriefs).
+**Hypothesis:** A team of bounded wardens — each with a domain primer + MissionBrief input + UpwardReport output — produces measurably better outcomes than main-thread direct edits across the codebase.
 
-## Success / kill criteria
+## Warden roster (pilot set)
 
-See [[2026-05-23-team-ownership-dev-contract-pilot#Pre-stated Success / Kill Criteria]]. Reproduced here so the charter is self-sufficient.
+### Domain wardens (own a package slice; refuse cross-boundary edits)
 
-### Forcing function
+| Warden | Authority manifest |
+|---|---|
+| `kernel-warden` | `packages/reasoning/src/kernel/**` |
+| `provider-warden` | `packages/llm-provider/**` |
+| `tools-warden` | `packages/tools/**` |
+| `memory-warden` | `packages/memory/**` |
+| `runtime-warden` | `packages/runtime/**` |
+| `compose-warden` | `packages/compose/**` |
 
-Between 2026-05-23 and 2026-06-15, any edit whose primary scope is `packages/reasoning/src/kernel/**` MUST be routed through `kernel-warden` via Agent dispatch. Main-thread direct edits during the pilot window violate the contract and disqualify the task from pilot data. Single exception: hot-fix to red CI on `main`, logged with `bypass-reason` in `log.md`.
+### Cross-cutting specialists (do NOT patch framework code — surface findings, dispatch domain wardens)
 
-### Lift threshold (canonicalize at Phase 2 if AND-of)
+| Warden | Role |
+|---|---|
+| `harness-warden` | Runs probes, owns `wiki/Research/Harness-Reports/**`, returns rax-diagnose findings |
+| `ablation-warden` | Runs cross-tier matrix, enforces lift rule, holds veto over default-on changes |
+| `release-warden` | Pre-tag audit, version-drift gate, never `npm publish` manually |
+| `debrief-scribe` | Writes AAR to `wiki/Research/Debriefs/**` from UpwardReport + git diff |
 
+All ten share the `MissionBrief` input contract + `UpwardReport` output contract — see `.agents/skills/{mission-brief,upward-report}/SKILL.md`.
+
+## Forcing function
+
+Between 2026-05-23 and 2026-06-15, any edit whose primary scope matches a warden's authority manifest MUST be routed through that warden via `Agent` dispatch. Main-thread direct edits violate the contract and disqualify the task from pilot data. Single exception: hot-fix to red CI on `main`, logged with `bypass-reason` in `log.md`.
+
+## Lift threshold (canonicalize at Phase 2 — AND-of, applied to aggregate)
+
+- ≥ 10 pilot tasks logged across all wardens combined
 - First-attempt completion rate ≥ baseline + 3pp
 - Token overhead ≤ 15%
 - Avg re-spawn count ≤ 1.5
-- ≥ 1 documented regression-catch attributable to warden domain primer
+- ≥ 1 documented regression-catch attributable to a warden's domain primer
 
-### Kill threshold (REWORK if ANY of)
+## Kill threshold (REWORK + revert if ANY of)
 
 - First-attempt completion rate < baseline − 3pp
 - Token overhead > 30%
 - Avg re-spawn count > 2.5
 - < 10 pilot tasks logged by 2026-06-15
-- Tyler declares net friction in `log.md` summary entry
+- Tyler declares net friction in `log.md` summary
 
-### Default on 2026-06-15
+## Default on 2026-06-15
 
-Inconclusive → kill. Affirmative evidence required for canonicalization. Mirrors M3 REWORK precedent.
+Inconclusive → kill. Affirmative evidence required for canonicalization. Mirrors M3 REWORK precedent. Evaluator: `ablation-warden` applies its own lift rule to the pilot as a whole — first real assignment.
 
 ## Out of scope (do not measure)
 
-- Performance on non-kernel packages
-- Multiple wardens (Phase 2 only)
-- Runtime multi-agent execution (separate concern, see [[2026-05-18-agentic-team-ownership-concepts]])
+- Multi-agent runtime contract changes — separate concern, see [[2026-05-18-agentic-team-ownership-concepts]]
+- New warden roles beyond the pilot set (Phase 2 candidates, ablation-gated)
+- LLM re-verify of warden output — recreates M3 verify-retry failure mode (`verifier.ts:217-222`)
 
 ## Evaluation date
 
