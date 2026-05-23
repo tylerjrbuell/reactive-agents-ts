@@ -36,6 +36,31 @@ created: 2026-05-23
 ## Entries
 
 ```yaml
+- task: hs-129-recall-capability-seam-phase1
+  date: 2026-05-23
+  warden: kernel-warden
+  routed: warden
+  commits: 1  # 8cbb1ed9
+  agent-spawns: 1
+  tokens-est: ~67K
+  regression-prevented: forkDaemon-misapplication (advisor-caught divergence)
+  notes: >
+    Single kernel-warden dispatch shipped Phase 1 SEAM mirroring HS-120
+    learn/ pattern. Key divergence: recall uses plain `yield*` not
+    Effect.forkDaemon — recall returns values consumed in-iter (forking
+    would leave per-iter locals empty), learn fires fire-and-forget.
+    Warden caught this via advisor consultation, applied correctly, +
+    inline-documented rationale. Pilot-positive: warden autonomous
+    judgment + correct deviation from precedent + traceable evidence.
+    2 of 3 methods wired (recallMemoryContext + findSkills); loadProfile
+    JSDoc'd as Phase 2 runtime-warden seam (no caller this commit by
+    design — Phase 2 first consumer).
+  evidence-anchors:
+    - packages/reasoning/src/kernel/capabilities/recall/recall-service.ts:1-202 (3-method tag + Noop)
+    - packages/reasoning/src/kernel/loop/runner.ts:694-738 (iter-start wire)
+    - packages/reasoning/src/kernel/capabilities/recall/recall-service.test.ts (7 tests)
+    - bun test packages/reasoning 1240/1240 (was 1233; +7 new)
+
 - task: hs-120-learn-capability-seam-phase1
   date: 2026-05-23
   warden: kernel-warden
