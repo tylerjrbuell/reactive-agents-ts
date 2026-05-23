@@ -34,7 +34,7 @@ The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.
 
 ### Phase 0 — Surface Trust Restoration (COMPLETE 2026-05-23 ✅)
 
-All P0 bugs closed on branch `fix/harness-convergence-104-total-tokens`. Probe-verified cross-tier (cogito:14b + qwen3:14b). 2458 tests green.
+All P0 bugs closed (merged to `main`). Probe-verified cross-tier (cogito:14b + qwen3:14b). 2458 tests green.
 
 - ✅ **#104 M1** — INVALID after empirical verification: schema field is `tokensUsed`, not `totalTokens`. Probe scripts fixed (commit 977da423). #126 filed as P2 naming-consistency followup.
 - ✅ **#105 M2a/b/c** — `stripFrameworkLeaks()` at output-assembly + runtime `sanitizeOutput` + verifier `output-not-harness-parrot` backstop (commit b82aac35). Strips paired/orphan `<rationale>`, `[CRITIQUE N] <STATUS>:` (all statuses), `[find/search result —]` templates. Cogito 9/9 + qwen3 9/9 CLEAN post-fix.
@@ -71,6 +71,69 @@ See `wiki/Architecture/Specs/07-OPTIMAL-EXECUTION-ALGORITHM.md` for canonical lo
 Phase 0 (6 P0 bugs) → Phase 0.5 (M3 ToT cost gate + M5 routing) → Phase 1 (8 convergence items: RI→Compose bridge, capability emit, transitionState lint, soft tools, ControllerDecision audit, llm-exchange, contract test, compression coord) → Phase 2 (`learn/`, multi-severity verifier, default-on memory) ‖ Phase 3 (single Arbitrator, composite confidence, composition routing).
 
 **Next session:** Start Phase 0 via `/execute-backlog` skill. Bundle #105 (M2 output sanitize — highest leverage, closes 3 issues in one PR) first.
+
+---
+
+## ACTIVE — Team-Ownership Dev Contract Pilot (2026-05-23 → 2026-06-15)
+
+**Status:** 3-week ablation pilot, scaffolded in commit `f9d508d8` (merged to `main`). Default-reverts on 2026-06-15 unless lift threshold met.
+
+### Forcing function (REQUIRED during pilot window)
+
+Any edit whose primary scope is `packages/reasoning/src/kernel/**` MUST be routed through `kernel-warden` via `Agent` dispatch with a valid `MissionBrief` YAML block. Main-thread direct edits violate the contract and disqualify the task from pilot data. Single exception: hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md`.
+
+### Why (do not waive)
+
+Per [[wiki/Architecture/Design-Specs/2026-05-18-agentic-team-ownership-concepts]] §Conflict-Warning-2 + North Star §9 Anti-Scaffold Principle + M3 REWORK precedent — canonicalizing a multi-agent dev workflow without empirical lift is exactly the failure mode the project codified against on 2026-05-23. The pilot establishes affirmative evidence OR triggers single-commit revert.
+
+### Workflow per pilot task
+
+1. Compose `MissionBrief` via `mission-brief` skill (end-state / why / key-tasks / authority-bounds / success-criteria / retries-allowed). Refuses dispatch on TBD / missing required fields.
+2. Dispatch `Agent` with `subagent_type: "kernel-warden"`. Prepend MissionBrief at top of prompt.
+3. Parse trailing `upward-report:` YAML block (status / confidence / blockers / escalation-required / evidence-anchors) from warden output.
+4. Apply Dispatcher FSM in `AGENTS.md § Team-Ownership Dev Contract`. **Never** re-prompt warden for self-review (recreates `verifier.ts:217-222` failure / M3 verify-retry death loop). Deterministic verifier only.
+5. Append one YAML entry per task to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md`.
+
+### Lift threshold (canonicalize at Phase 2 — AND-of)
+
+- First-attempt completion rate ≥ baseline + 3pp
+- Token overhead ≤ 15%
+- Avg re-spawn count ≤ 1.5
+- ≥ 1 documented regression-catch attributable to warden domain primer
+
+### Kill threshold (REWORK + revert — ANY of)
+
+- First-attempt completion rate < baseline − 3pp
+- Token overhead > 30%
+- Avg re-spawn count > 2.5
+- < 10 pilot tasks logged by 2026-06-15
+- Tyler declares net friction in `log.md` summary
+
+### Default on 2026-06-15: inconclusive → kill
+
+Affirmative evidence required for canonicalization. Mirrors M3 REWORK discipline.
+
+### Anti-patterns (load-bearing — refuse)
+
+- ❌ Parent LLM-judges warden output → M3 REWORK precedent
+- ❌ Silent retry past `retries-allowed`
+- ❌ Warden self-widens authority without parent gate
+- ❌ New warden role added before `ablation-warden` shows ≥3pp lift over current setup
+
+### Pilot files (cleanup on revert = one commit)
+
+- `.claude/agents/kernel-warden.md` — bounded warden (`packages/reasoning/src/kernel/**` only, hard-refuses cross-package)
+- `.agents/skills/mission-brief/SKILL.md` + `.agents/skills/upward-report/SKILL.md` (symlinked into `.claude/skills/`)
+- `AGENTS.md § Team-Ownership Dev Contract (PILOT — expires 2026-06-15)`
+- `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/{README.md,log.md}`
+- `wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`
+
+### Phase 1 day-1 actions (compute baseline)
+
+- `rtk git log --oneline --pretty='%H %s' -- packages/reasoning/src/kernel/ | head -40` → identify last 10 pre-pilot tasks
+- Classify each: first-attempt (single commit) vs needed-fixup (followup commit within 24h on same scope)
+- `rtk gain --history | rtk grep kernel | head -20` → avg tokens / task baseline if data available
+- Fill `## Baseline` section of `log.md` with concrete numbers
 
 ---
 
