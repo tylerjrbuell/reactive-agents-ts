@@ -321,14 +321,27 @@ export const defaultVerifier: Verifier = {
         }
       }
 
-      const isParrot = startsWithHarnessPrefix || parrotMatch !== null;
+      // M2 backstop (sweep-2026-05-23): output-assembly.ts sanitizes 3 patterns
+      // before promotion. This check rejects them if they slip through (e.g.
+      // strategy outer-loop bypasses output-assembly). See finding M2a/b/c.
+      const M2_LEAK_PATTERNS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
+        { pattern: /<rationale\s+call="[^"]*"/i, label: "M2a rationale-XML wrapper" },
+        { pattern: /<\/rationale>/i, label: "M2a orphan rationale-XML close tag" },
+        { pattern: /(^|\n)\[CRITIQUE\s+\d+\]\s+[A-Z]+:/i, label: "M2b reflexion CRITIQUE marker" },
+        { pattern: /^\s*\[(?:find|search)\s+result\s+[—\-]/i, label: "M2c tool-result-template leak" },
+      ];
+      const m2Leak = M2_LEAK_PATTERNS.find(({ pattern }) => pattern.test(ctx.content));
+
+      const isParrot = startsWithHarnessPrefix || parrotMatch !== null || m2Leak !== undefined;
       checks.push({
         name: "output-not-harness-parrot",
         passed: !isParrot,
         reason: isParrot
-          ? startsWithHarnessPrefix
-            ? "output begins with the harness signal prefix \"⚠️ \" — likely a parroted recovery / loop / oracle nudge"
-            : `output echoes a recent harness_signal step verbatim: "${(parrotMatch ?? "").slice(0, 80)}${(parrotMatch ?? "").length > 80 ? "…" : ""}"`
+          ? m2Leak
+            ? `output contains framework-internal markup (${m2Leak.label}) — output-assembly sanitization bypassed`
+            : startsWithHarnessPrefix
+              ? "output begins with the harness signal prefix \"⚠️ \" — likely a parroted recovery / loop / oracle nudge"
+              : `output echoes a recent harness_signal step verbatim: "${(parrotMatch ?? "").slice(0, 80)}${(parrotMatch ?? "").length > 80 ? "…" : ""}"`
           : undefined,
       });
 
