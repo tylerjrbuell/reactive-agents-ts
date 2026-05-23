@@ -36,6 +36,29 @@ created: 2026-05-23
 ## Entries
 
 ```yaml
+- task: hs-116-controller-decision-classification
+  date: 2026-05-23
+  warden: none
+  routed: main
+  bypass-reason: packages/reactive-intelligence/ not in warden authority table — main-thread is canonical owner per pilot doctrine.
+  commits: 1  # 2f59bd50
+  agent-spawns: 0
+  tokens-est: ~28K (analysis greps + edits)
+  regression-prevented: silent-public-api-promotion-of-unfired-variants
+  notes: >
+    Documentation + coverage-guard disposition. 13 ControllerDecision
+    variants classified: 5 ACTIVE, 4 UNFIRED (handler registered, no
+    corpus firing), 4 UNWIRED (evaluator exists, no handler). Each
+    UNFIRED/UNWIRED variant @experimental-tagged in JSDoc + 5-case
+    regression test pins current state to catch drift. No code deleted;
+    audit Tier 1 mandate was "audit + prune/doc" not "delete now".
+    Followups filed: corpus expansion (UNFIRED) + handler registration
+    decisions (UNWIRED).
+  evidence-anchors:
+    - packages/reactive-intelligence/src/types.ts:167-243 (classified union)
+    - packages/reactive-intelligence/tests/controller/decision-coverage.test.ts (5 tests)
+    - bun test packages/reactive-intelligence 469/471 pass (was 464; +5)
+
 - task: hs-129-recall-capability-seam-phase1
   date: 2026-05-23
   warden: kernel-warden
