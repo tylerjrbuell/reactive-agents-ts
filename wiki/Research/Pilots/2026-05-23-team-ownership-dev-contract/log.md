@@ -36,6 +36,31 @@ created: 2026-05-23
 ## Entries
 
 ```yaml
+- task: hs-120-learn-capability-seam-phase1
+  date: 2026-05-23
+  warden: kernel-warden
+  routed: warden
+  commits: 1  # a8dfc581
+  agent-spawns: 1
+  tokens-est: ~75K
+  regression-prevented: forkDaemon-wraps-slow-writers (blocks-hot-path-risk)
+  notes: >
+    Single kernel-warden dispatch shipped Phase 1 SEAM only — directory
+    + Context.Tag service + NoopLearningPipelineLayer + runner wire +
+    4 co-located tests. Phase 2 (actual writes) deferred to follow-up
+    dispatches per audit Tier 1 plan. Warden's autonomous decisions:
+    (a) forkDaemon-wrap user writers (matches tool-execution.ts:526
+    precedent for memory writes), (b) learn-specific delta cursors
+    (avoid coupling with loop-detection's prevStepCount), (c) class-style
+    Context.Tag (mirrors PromptServiceTag canonical pattern). All 5
+    load-bearing invariants preserved.
+  evidence-anchors:
+    - packages/reasoning/src/kernel/capabilities/learn/learning-pipeline.ts:98-103 (Context.Tag)
+    - packages/reasoning/src/kernel/capabilities/learn/learning-pipeline.ts:116-119 (NoopLayer)
+    - packages/reasoning/src/kernel/loop/runner.ts:1494-1525 (forkDaemon write site)
+    - packages/reasoning/src/kernel/capabilities/learn/learning-pipeline.test.ts (4 tests)
+    - bun test packages/reasoning 1233/1233 (was 1229; +4 new)
+
 - task: hs-128-budget-signal-arbitrator
   date: 2026-05-23
   warden: kernel-warden,runtime-warden
