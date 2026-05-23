@@ -154,6 +154,11 @@ export interface BuilderRuntimeStateView {
   readonly _metaTools?: import("../../types.js").MetaToolsConfig | false;
   readonly _cortexUrl: string | null;
   readonly _leanHarness: boolean;
+  /**
+   * Declarative budget caps forwarded to the Arbitrator pre-intent guard.
+   * Set via `.withBudget()`; mirrored into `RuntimeOptions.budgetLimits`.
+   */
+  readonly _budgetLimits: import("../../builder.js").BudgetLimits | undefined;
   /** Registrations collected by `.withHarness()` calls — compiled into a HarnessPipeline. */
   readonly _harnessRegistrations: ReadonlyArray<(harness: import("@reactive-agents/core").Harness) => void>;
 }
@@ -389,6 +394,7 @@ export const buildBaseRuntimeAndEngine = (
           ? "auto"
           : undefined,
       leanHarness: state._leanHarness || undefined,
+      budgetLimits: state._budgetLimits,
       harnessPipeline,
     });
 

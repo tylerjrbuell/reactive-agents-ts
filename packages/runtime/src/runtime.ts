@@ -235,6 +235,18 @@ export interface RuntimeOptions {
   maxIterations?: number;
 
   /**
+   * Declarative budget caps consulted by the Arbitrator's pre-intent guard
+   * (Issue #128 / North Star v5.0 Pillar 6). Populated by the builder's
+   * `.withBudget()` method; threaded into `ReactiveAgentsConfig.budgetLimits`
+   * and ultimately `KernelInput.budgetLimits`. When `tokenLimit` or
+   * `costLimit` is reached, the Arbitrator returns exit-failure with
+   * `terminatedBy="budget_exceeded"`.
+   *
+   * Default: undefined (no budget guard).
+   */
+  budgetLimits?: import("./builder.js").BudgetLimits;
+
+  /**
    * Mock LLM responses for testing (provider: "test" only).
    * Maps input patterns to predefined outputs.
    *
@@ -919,6 +931,9 @@ export const createRuntime = (options: RuntimeOptions) => {
           maxSwitches: options.reasoningOptions?.maxStrategySwitches,
           fallbackStrategy: options.reasoningOptions?.fallbackStrategy,
         },
+    // Issue #128 / North Star v5.0 Pillar 6 — declarative budget caps for
+    // the Arbitrator pre-intent guard. Propagated from `.withBudget()`.
+    budgetLimits: options.budgetLimits,
     verifier: options.leanHarness ? leanModeVerifier : undefined,
     harnessPipeline: options.harnessPipeline,
     enableReactiveIntelligence: options.enableReactiveIntelligence,

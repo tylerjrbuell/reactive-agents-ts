@@ -63,6 +63,8 @@ export interface DirectInput {
    *  small-model sub-agents per architecture exploration §10. */
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  /** Budget limits (HS-128 / Audit G-A). Threaded to KernelInput.budgetLimits. */
+  readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
 }
 
 // ── executeDirect ─────────────────────────────────────────────────────────────
@@ -169,6 +171,7 @@ export const executeDirect = (
       modelId: input.modelId,
       calibration: input.calibration,
       harnessPipeline: input.harnessPipeline,
+      budgetLimits: input.budgetLimits,
     };
 
     const state = yield* runKernel(reactKernel, kernelInput, {

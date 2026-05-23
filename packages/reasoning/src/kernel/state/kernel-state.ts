@@ -190,6 +190,26 @@ export interface KernelMeta {
     readonly tokensSpentOnInterventions: number;
   };
 
+  // ── Issue #128 — Arbitrator BudgetSignal limits (North Star v5.0 Pillar 6) ─
+  /**
+   * Declarative budget limits consulted by the Arbitrator's pre-intent guard.
+   * Seeded from `KernelInput.budgetLimits` at kernel-start by runner.ts.
+   * The Arbitrator reads this via `arbitrationContextFromState()`, which calls
+   * `computeBudgetSignal({ tokensUsed: state.tokens, costUsd: state.cost,
+   * limits })` and surfaces the result on ArbitrationContext.budget. When the
+   * signal status is "exceeded", arbitrate() returns exit-failure with
+   * terminatedBy="budget_exceeded" dominating every intent.kind branch.
+   *
+   * Structural type — declared here as `unknown`-shaped to avoid a runtime
+   * cycle with the arbitrator module; the canonical type is
+   * `BudgetLimits` exported from `kernel/capabilities/decide/arbitrator.ts`.
+   */
+  readonly budgetLimits?: {
+    readonly tokenLimit?: number;
+    readonly costLimit?: number;
+    readonly warningRatio?: number;
+  };
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
@@ -421,6 +441,22 @@ export interface KernelInput {
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   /** Maximum iterations before giving up. Default: 10 */
   readonly maxIterations?: number;
+  /**
+   * Declarative budget limits consulted by the Arbitrator's pre-intent guard
+   * (Issue #128, North Star v5.0 Pillar 6). When `tokenLimit` or `costLimit`
+   * is reached, the Arbitrator returns exit-failure with
+   * terminatedBy="budget_exceeded" — this dominates every TerminationIntent
+   * branch (final-answer, max-iterations, kernel-error, oracle-decision).
+   * Seeded into `state.meta.budgetLimits` by the kernel runner.
+   *
+   * Canonical type is `BudgetLimits` from
+   * `kernel/capabilities/decide/arbitrator.ts`.
+   */
+  readonly budgetLimits?: {
+    readonly tokenLimit?: number;
+    readonly costLimit?: number;
+    readonly warningRatio?: number;
+  };
   /** Task ID for EventBus correlation */
   readonly taskId?: string;
   /** Name of the calling strategy (for event tagging) */

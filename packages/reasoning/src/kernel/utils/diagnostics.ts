@@ -372,6 +372,51 @@ export function emitLLMExchange(args: {
   });
 }
 
+// ── BudgetSignalCollected (Issue #128 — North Star v5.0 Pillar 6) ───────────
+//
+// Marker emit for the Arbitrator's BudgetSignal input. Surfaces tokensUsed /
+// costUsd / declared limits / status each time the Arbitrator computes the
+// signal, so trace consumers can see budget warnings before exceedance and
+// confirm budget_exceeded fires for the right reason.
+
+export function emitBudgetSignalCollected(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly tokensUsed: number;
+  readonly costUsd: number;
+  readonly tokenLimit?: number;
+  readonly costLimit?: number;
+  readonly status: "ok" | "warning" | "exceeded";
+  readonly reason?: string;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+
+    yield* busOpt.value
+      .publish({
+        _tag: "BudgetSignalCollectedEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        tokensUsed: args.tokensUsed,
+        costUsd: args.costUsd,
+        ...(args.tokenLimit !== undefined ? { tokenLimit: args.tokenLimit } : {}),
+        ...(args.costLimit !== undefined ? { costLimit: args.costLimit } : {}),
+        status: args.status,
+        ...(args.reason !== undefined ? { reason: args.reason } : {}),
+        timestamp: Date.now(),
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitBudgetSignalCollected",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── HarnessSignalInjected ────────────────────────────────────────────────────
 
 export function emitHarnessSignalInjected(args: {

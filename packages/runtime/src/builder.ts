@@ -105,6 +105,33 @@ export type {
 export type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 export type { ReasoningOptions } from './types.js'
 
+/**
+ * Declarative budget caps consulted by the Arbitrator's pre-intent guard.
+ *
+ * When `tokenLimit` or `costLimit` is reached on the running kernel state,
+ * the Arbitrator returns exit-failure with
+ * `terminatedBy="budget_exceeded"`, dominating every other intent branch.
+ *
+ * Structural mirror of the canonical `BudgetLimits` interface in
+ * `@reactive-agents/reasoning` (`kernel/capabilities/decide/arbitrator.ts`).
+ * Re-declared locally because the canonical type isn't currently re-exported
+ * from the reasoning package index; keep field shapes in sync.
+ *
+ * @see KernelInput.budgetLimits in `packages/reasoning/src/kernel/state/kernel-state.ts`.
+ */
+export interface BudgetLimits {
+    /** Hard cap on cumulative tokens (sum of `state.tokens`). */
+    readonly tokenLimit?: number
+    /** Hard cap on cumulative cost in USD (sum of `state.cost`). */
+    readonly costLimit?: number
+    /**
+     * Override the warning threshold (default 0.80 = warn at ≥80% of any
+     * declared limit). Useful for tighter budgets where the warn band should
+     * be wider.
+     */
+    readonly warningRatio?: number
+}
+
 // ReactiveAgent class moved to ./reactive-agent.ts (W25-E T15).
 // Re-export here so consumer imports continue to work unchanged
 // (`import { ReactiveAgent } from "@reactive-agents/runtime"`).
@@ -395,6 +422,13 @@ export class ReactiveAgentBuilder {
     private _metaTools?: import('./types.js').MetaToolsConfig | false
     private _calibration: CalibrationMode = 'skip'
     private _leanHarness: boolean = false
+    /**
+     * Declarative budget caps consumed by the Arbitrator's pre-intent guard
+     * (Issue #128 / North Star v5.0 Pillar 6). Set via `.withBudget()`;
+     * threaded through `RuntimeOptions.budgetLimits` →
+     * `ReactiveAgentsConfig.budgetLimits` → `KernelInput.budgetLimits`.
+     */
+    private _budgetLimits: BudgetLimits | undefined = undefined
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
 
     // ─── Calibration ───
@@ -798,6 +832,41 @@ export class ReactiveAgentBuilder {
      */
     withMaxIterations(n: number): this {
         this._maxIterations = n
+        return this
+    }
+
+    /**
+     * Set declarative budget limits consulted by the Arbitrator's pre-intent
+     * guard (Issue #128 / North Star v5.0 Pillar 6).
+     *
+     * When the running kernel state's `tokens` or `cost` reaches a declared
+     * limit, the Arbitrator returns exit-failure with
+     * `terminatedBy="budget_exceeded"` — dominating every other termination
+     * intent (final-answer, max-iterations, kernel-error, oracle-decision).
+     *
+     * Routes through the canonical Arbitrator decision instead of a
+     * side-channel termination (cf. `compose/killswitches/budget-limit.ts`).
+     *
+     * @param limits - Budget caps. At least one of `tokenLimit` or `costLimit`
+     *                 is required; `warningRatio` is optional (default 0.80).
+     * @returns `this` for chaining
+     * @throws When neither `tokenLimit` nor `costLimit` is supplied.
+     * @example
+     * ```typescript
+     * builder.withBudget({ costLimit: 0.01, warningRatio: 0.75 })
+     * ```
+     */
+    withBudget(limits: BudgetLimits): this {
+        if (limits.tokenLimit === undefined && limits.costLimit === undefined) {
+            throw new Error(
+                'withBudget() requires at least one of `tokenLimit` or `costLimit`.',
+            )
+        }
+        this._budgetLimits = {
+            ...(limits.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
+            ...(limits.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
+            ...(limits.warningRatio !== undefined ? { warningRatio: limits.warningRatio } : {}),
+        }
         return this
     }
 

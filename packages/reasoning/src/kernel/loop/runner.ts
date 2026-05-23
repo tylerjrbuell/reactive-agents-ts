@@ -64,6 +64,7 @@ import {
   emitKernelStateSnapshot,
   emitVerifierVerdict,
   emitHarnessSignalInjected,
+  emitBudgetSignalCollected,
 } from "../../kernel/utils/diagnostics.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import {
@@ -541,6 +542,14 @@ export function runKernel(
     let state = effectiveInput.initialMessages?.length
       ? transitionState(baseState, { messages: effectiveInput.initialMessages })
       : baseState;
+    // Issue #128 — seed declarative budget limits onto state.meta so the
+    // Arbitrator's pre-intent guard can derive a BudgetSignal each iteration
+    // via arbitrationContextFromState(). No-op when no limits declared.
+    if (effectiveInput.budgetLimits) {
+      state = transitionState(state, {
+        meta: { ...state.meta, budgetLimits: effectiveInput.budgetLimits },
+      });
+    }
 
     // Mutable scratchpad mirror — synced from state.scratchpad (ReadonlyMap) after each kernel step.
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
@@ -770,6 +779,27 @@ export function runKernel(
       // a "framework giving up because of approaching maxIterations"
       // early-stop into status:failed when there's tool-failure evidence.
       if (state.meta.terminatedBy === "dispatcher-early-stop") {
+        const arbCtx = arbitrationContextFromState(state, {
+          task: input.task,
+          requiredTools: input.requiredTools,
+        });
+        // Issue #128 — surface BudgetSignal whenever the Arbitrator runs.
+        if (arbCtx.budget) {
+          yield* emitBudgetSignalCollected({
+            taskId: effectiveInput.taskId ?? "",
+            iteration: state.iteration,
+            tokensUsed: arbCtx.budget.tokensUsed,
+            costUsd: arbCtx.budget.costUsd,
+            ...(arbCtx.budget.tokenLimit !== undefined
+              ? { tokenLimit: arbCtx.budget.tokenLimit }
+              : {}),
+            ...(arbCtx.budget.costLimit !== undefined
+              ? { costLimit: arbCtx.budget.costLimit }
+              : {}),
+            status: arbCtx.budget.status,
+            ...(arbCtx.budget.reason !== undefined ? { reason: arbCtx.budget.reason } : {}),
+          });
+        }
         state = arbitrateAndApply(
           state,
           {
@@ -777,10 +807,7 @@ export function runKernel(
             output: state.output ?? "",
             reason: "dispatcher_early_stop",
           },
-          arbitrationContextFromState(state, {
-            task: input.task,
-            requiredTools: input.requiredTools,
-          }),
+          arbCtx,
         );
         break;
       }

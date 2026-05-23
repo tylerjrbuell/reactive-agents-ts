@@ -224,6 +224,15 @@ export const runReasoningThink = (
       calibration: resolvedCalibration,
       verifier: config.verifier,
       harnessPipeline: config.harnessPipeline,
+      // Issue #128 / North Star v5.0 Pillar 6 — declarative budget caps for
+      // the Arbitrator pre-intent guard. Threaded through
+      // `ReactiveAgentsConfig.budgetLimits` from the builder's
+      // `.withBudget()`. The reasoning-service execute params shape does NOT
+      // currently declare this field (kernel-warden follow-up required to add
+      // `budgetLimits` to ReactiveInput + populate `kernelInput.budgetLimits`
+      // in `strategies/reactive.ts`); the field is forwarded here so that
+      // plumb arrives intact as soon as the reasoning leg lands.
+      budgetLimits: config.budgetLimits,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

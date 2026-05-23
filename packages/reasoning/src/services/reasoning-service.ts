@@ -103,6 +103,13 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
        * when absent, strategies fall back to classifying locally.
        */
       readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
+      /**
+       * Budget limits (HS-128 / Audit G-A / North Star Pillar 6).
+       * Propagated through StrategyFn → KernelInput → state.meta.budgetLimits.
+       * Arbitrator pre-guard fires `exit-failure terminatedBy='budget_exceeded'`
+       * when computed BudgetSignal crosses any declared limit.
+       */
+      readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

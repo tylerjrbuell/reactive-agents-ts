@@ -506,6 +506,20 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       maxAgeDays: Schema.optional(Schema.Number),
     })
   ),
+  /**
+   * Declarative budget limits consulted by the Arbitrator's pre-intent guard
+   * (Issue #128 / North Star v5.0 Pillar 6). Populated by `.withBudget()` on
+   * `ReactiveAgentBuilder`; threaded into `KernelInput.budgetLimits` at the
+   * runtime → kernel boundary. When `tokenLimit` or `costLimit` is reached,
+   * the Arbitrator returns exit-failure with `terminatedBy="budget_exceeded"`.
+   */
+  budgetLimits: Schema.optional(
+    Schema.Struct({
+      tokenLimit: Schema.optional(Schema.Number),
+      costLimit: Schema.optional(Schema.Number),
+      warningRatio: Schema.optional(Schema.Number),
+    })
+  ),
   /** Dynamic strategy switching configuration. When enabled, the kernel automatically
    *  switches reasoning strategies on loop detection instead of failing immediately. */
   strategySwitching: Schema.optional(

@@ -81,6 +81,13 @@ export type StrategyFn = (input: {
    */
   readonly verifier?: import("../kernel/capabilities/verify/verifier.js").Verifier;
   readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  /**
+   * Budget limits (HS-128 / Audit G-A / North Star Pillar 6). Propagated to
+   * KernelInput.budgetLimits which seeds state.meta.budgetLimits. Arbitrator
+   * pre-guard fires `exit-failure terminatedBy='budget_exceeded'` when
+   * computed BudgetSignal crosses any declared limit.
+   */
+  readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
 }) => Effect.Effect<
   ReasoningResult,
   ExecutionError | IterationLimitError,

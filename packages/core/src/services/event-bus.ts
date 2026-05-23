@@ -1057,6 +1057,26 @@ export type AgentEvent =
       readonly timestamp: number;
     }
   | {
+      /**
+       * Budget signal collected at the Arbitrator per-iteration (HS-128 /
+       * Audit G-A / North Star v5.0 Pillar 6). Surfaces tokensUsed / costUsd
+       * against any declared limits so trace consumers can see warnings
+       * before exceedance and confirm budget_exceeded fires for the right
+       * reason. `status: 'exceeded'` produces an Arbitrator pre-guard verdict
+       * `exit-failure` with terminatedBy='budget_exceeded'.
+       */
+      readonly _tag: "BudgetSignalCollectedEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly tokensUsed: number;
+      readonly costUsd: number;
+      readonly tokenLimit?: number;
+      readonly costLimit?: number;
+      readonly status: "ok" | "warning" | "exceeded";
+      readonly reason?: string;
+      readonly timestamp: number;
+    }
+  | {
       readonly _tag: "LLMExchangeEmitted";
       readonly taskId: string;
       readonly iteration: number;
