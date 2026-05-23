@@ -36,6 +36,36 @@ created: 2026-05-23
 ## Entries
 
 ```yaml
+- task: hs-122-skill-persistence-wire
+  date: 2026-05-23
+  warden: runtime-warden
+  routed: warden
+  commits: 1  # 44e4fbcf
+  agent-spawns: 1
+  tokens-est: ~95K
+  regression-prevented: mission-brief-pseudocode-contradiction (warden caught `?? options.enableMemory` contradicted "no force-enable without memory" policy; chose `enableMemory && sp !== false` instead via advisor consult)
+  notes: >
+    Single runtime-warden dispatch wired SkillStoreServiceLive into runtime
+    layer composition. Layer existed at packages/memory/services/skill-store.ts:73
+    + exported via memory/index.ts:157 but had ZERO runtime consumer — classic
+    North Star §9 anti-scaffold. Activates M6 IMPROVE → KEEP graduation: skill
+    stored in session A is recoverable in session B via shared dbPath
+    (test g cross-session recall). Side effect: HS-116 skill-activate 🟡 UNFIRED
+    variant becomes reachable for next corpus sweep. Warden's autonomous
+    judgments: (a) advisor-driven correction of mission-brief gating condition,
+    (b) mirror SessionStoreLive precedent exactly for wire pattern, (c) test
+    suite covers all four (enableMemory × skillPersistence) gate cells.
+    7 new tests, 817 → 824, 0 fail. Typecheck zero new errors (pre-existing
+    focusedTools + ExecutionContext flagged via git-stash ablation).
+  evidence-anchors:
+    - packages/runtime/src/runtime.ts:16 (SkillStoreServiceLive import)
+    - packages/runtime/src/runtime.ts:713-741 (RuntimeOptions.skillPersistence)
+    - packages/runtime/src/runtime.ts:1372-1383 (wire block)
+    - packages/runtime/src/builder.ts:817-839 (.withSkillPersistence chainable)
+    - packages/runtime/src/builder/build-effect/runtime-construction.ts:113,354 (forward)
+    - packages/runtime/src/__tests__/builder-with-skill-persistence.test.ts (7 tests)
+    - bun test packages/runtime 824 pass / 1 skip (was 817; +7)
+
 - task: hs-115-required-tool-nomination
   date: 2026-05-23
   warden: kernel-warden
