@@ -25,26 +25,33 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
+
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("\n=== Context Profiles Example ===\n");
-  console.log("Mode: OFFLINE (test provider)\n");
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "OFFLINE (test provider)"}\n`);
 
   // ─── Part 1: Build local-tier and frontier-tier agents in parallel ─────────
 
   console.log("Part 1: Comparing local vs frontier context profiles\n");
 
+  const mkAgent = (name: string, tier: "local" | "frontier" | "mid" | "large", text: string) => {
+    let b = ReactiveAgents.create()
+      .withName(name)
+      .withProvider(provider);
+    if (opts?.model) b = b.withModel(opts.model);
+    if (provider === "test") {
+      b = b.withTestScenario([{ text }]);
+    }
+    return b.withContextProfile({ tier });
+  };
+
   const [localAgent, frontierAgent] = await Promise.all([
-    ReactiveAgents.create()
-      .withName("local-tier-agent")
-      .withTestScenario([{ text: "FINAL ANSWER: 42 (local tier — compact context, minimal prompt)" }])
-      .withContextProfile({ tier: "local" })
-      .build(),
-    ReactiveAgents.create()
-      .withName("frontier-tier-agent")
-      .withTestScenario([{ text: "FINAL ANSWER: 42 (frontier tier — full context budget, rich schema)" }])
-      .withContextProfile({ tier: "frontier" })
-      .build(),
+    mkAgent("local-tier-agent", "local", "FINAL ANSWER: 42 (local tier — compact context, minimal prompt)").build(),
+    mkAgent("frontier-tier-agent", "frontier", "FINAL ANSWER: 42 (frontier tier — full context budget, rich schema)").build(),
   ]);
 
   const [r1, r2] = await Promise.all([
@@ -60,16 +67,8 @@ export async function run(): Promise<ExampleResult> {
   console.log("\nPart 2: Mid and large tiers\n");
 
   const [midAgent, largeAgent] = await Promise.all([
-    ReactiveAgents.create()
-      .withName("mid-tier-agent")
-      .withTestScenario([{ text: "FINAL ANSWER: mid tier response with balanced context budget" }])
-      .withContextProfile({ tier: "mid" })
-      .build(),
-    ReactiveAgents.create()
-      .withName("large-tier-agent")
-      .withTestScenario([{ text: "FINAL ANSWER: large tier response with extended context window" }])
-      .withContextProfile({ tier: "large" })
-      .build(),
+    mkAgent("mid-tier-agent", "mid", "FINAL ANSWER: mid tier response with balanced context budget").build(),
+    mkAgent("large-tier-agent", "large", "FINAL ANSWER: large tier response with extended context window").build(),
   ]);
 
   const [r3, r4] = await Promise.all([
