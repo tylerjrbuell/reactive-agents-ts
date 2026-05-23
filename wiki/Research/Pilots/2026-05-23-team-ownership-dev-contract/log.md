@@ -36,6 +36,37 @@ created: 2026-05-23
 ## Entries
 
 ```yaml
+- task: hs-128-budget-signal-arbitrator
+  date: 2026-05-23
+  warden: kernel-warden,runtime-warden
+  routed: warden+main
+  commits: 1  # 3db49f4a
+  agent-spawns: 2  # kernel-warden + runtime-warden
+  tokens-est: ~340K (provider runs combined)
+  regression-prevented: side-channel-vs-canonical-termination
+  notes: >
+    Multi-warden coordinated landing. kernel-warden shipped arbitrator
+    pre-guard + KernelInput type + runner seed + diagnostics emit
+    + 17 co-located regression tests (confidence 0.85, +553 LOC, over
+    ~200 LOC budget but justified by JSDoc heavy production helper).
+    runtime-warden shipped .withBudget() builder + RuntimeOptions +
+    config schema + 6 builder tests (status=partial-shipped, flagged
+    strategy-bridge as out-of-authority FU). Main-thread completed:
+    AgentEvent schema variant in core/event-bus.ts, StrategyFn input
+    type, ReasoningService.execute params, ReactiveInput + DirectInput
+    + kernelInput pass-through. End-to-end activation path now
+    reaches Arbitrator pre-guard. Pilot data: 2 wardens both honored
+    authority bounds, zero out-of-scope edits, zero retries; both
+    flagged correct followups including kernel-warden's accurate
+    pre-existing-runtime-error ablation note (FU-5).
+  evidence-anchors:
+    - packages/reasoning/src/kernel/capabilities/decide/arbitrator.ts:501 (BudgetLimits type)
+    - packages/reasoning/src/kernel/capabilities/decide/arbitrator.budget.test.ts (17 tests)
+    - packages/runtime/src/builder.ts withBudget chainable method
+    - packages/runtime/src/__tests__/builder-with-budget.test.ts (6 tests)
+    - packages/core/src/services/event-bus.ts:1060+ BudgetSignalCollectedEmitted
+    - bun test packages/reasoning 1229/1229 + packages/runtime 817 pass
+
 - task: hs-117-llm-exchange-stream-wiring
   date: 2026-05-23
   warden: kernel-warden
