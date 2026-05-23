@@ -28,29 +28,33 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-// Always use test provider — this example demonstrates instrumentation, not LLM quality.
-// Swap to "anthropic" (and remove withTestScenario) to observe real LLM execution.
-const PROVIDER = "test" as const;
 const LOG_FILE = "/tmp/example_17_obs.jsonl";
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
+
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
 
   // Clean up any previous run
   try { if (existsSync(LOG_FILE)) unlinkSync(LOG_FILE); } catch { /* ignore */ }
 
   console.log("\n=== Observability Example ===\n");
-  console.log(`Mode: TEST (observability instrumentation demo)\n`);
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
 
   // ─── Part 1: Normal verbosity with JSONL file export ──────────────────────
 
   console.log("Part 1: Normal verbosity + JSONL file export");
 
-  const agent1 = await ReactiveAgents.create()
+  let b1 = ReactiveAgents.create()
     .withName("observed-agent")
-    .withProvider(PROVIDER)
+    .withProvider(provider);
+  if (opts?.model) b1 = b1.withModel(opts.model);
+  if (provider === "test") {
+    b1 = b1.withTestScenario([{ text: "FINAL ANSWER: Observability demo complete. All phases tracked." }]);
+  }
+  const agent1 = await b1
     .withObservability({ verbosity: "normal", live: false, file: LOG_FILE })
-    .withTestScenario([{ text: "FINAL ANSWER: Observability demo complete. All phases tracked." }])
     .build();
 
   const result1 = await agent1.run("Run a task to demonstrate full observability tracking.");
@@ -64,11 +68,15 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("\nPart 2: Verbose mode (structured phase logs)");
 
-  const agent2 = await ReactiveAgents.create()
+  let b2 = ReactiveAgents.create()
     .withName("verbose-agent")
-    .withProvider(PROVIDER)
+    .withProvider(provider);
+  if (opts?.model) b2 = b2.withModel(opts.model);
+  if (provider === "test") {
+    b2 = b2.withTestScenario([{ text: "FINAL ANSWER: Verbose mode captures all phase details." }]);
+  }
+  const agent2 = await b2
     .withObservability({ verbosity: "verbose", live: false })
-    .withTestScenario([{ text: "FINAL ANSWER: Verbose mode captures all phase details." }])
     .build();
 
   const result2 = await agent2.run("Demonstrate verbose observability output.");
@@ -78,11 +86,15 @@ export async function run(): Promise<ExampleResult> {
 
   console.log("\nPart 3: Minimal mode (silent execution)");
 
-  const agent3 = await ReactiveAgents.create()
+  let b3 = ReactiveAgents.create()
     .withName("minimal-agent")
-    .withProvider(PROVIDER)
+    .withProvider(provider);
+  if (opts?.model) b3 = b3.withModel(opts.model);
+  if (provider === "test") {
+    b3 = b3.withTestScenario([{ text: "FINAL ANSWER: Minimal mode suppresses all observability output." }]);
+  }
+  const agent3 = await b3
     .withObservability({ verbosity: "minimal", live: false })
-    .withTestScenario([{ text: "FINAL ANSWER: Minimal mode suppresses all observability output." }])
     .build();
 
   const result3 = await agent3.run("Run silently.");

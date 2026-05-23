@@ -48,14 +48,16 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   console.log("Part 1: Behavioral contracts (deniedTools)");
 
-  const contractAgent = await mkBase("contract-demo")
+  let contractAgentBuilder = mkBase("contract-demo")
     .withTools()
     .withBehavioralContracts({
       deniedTools: ["web-search"],
       maxIterations: 4,
-    })
-    .withTestScenario([{ text: "FINAL ANSWER: I answered this from my training knowledge without using web-search (which is denied by my behavioral contract)." }])
-    .build();
+    });
+  if (provider === "test") {
+    contractAgentBuilder = contractAgentBuilder.withTestScenario([{ text: "FINAL ANSWER: I answered this from my training knowledge without using web-search (which is denied by my behavioral contract)." }]);
+  }
+  const contractAgent = await contractAgentBuilder.build();
 
   const contractResult = await contractAgent.run(
     "What is the capital of France? (Answer from knowledge, do not search the web.)"
@@ -68,10 +70,12 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   console.log("\nPart 2: Kill switch (pause + resume)");
 
-  const ksAgent = await mkBase("killswitch-demo")
-    .withKillSwitch()
-    .withTestScenario([{ text: "FINAL ANSWER: Task completed after pause/resume cycle." }])
-    .build();
+  let ksAgentBuilder = mkBase("killswitch-demo")
+    .withKillSwitch();
+  if (provider === "test") {
+    ksAgentBuilder = ksAgentBuilder.withTestScenario([{ text: "FINAL ANSWER: Task completed after pause/resume cycle." }]);
+  }
+  const ksAgent = await ksAgentBuilder.build();
 
   // Pause the agent, then resume after a short delay
   await ksAgent.pause();

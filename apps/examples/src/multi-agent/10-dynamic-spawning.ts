@@ -36,17 +36,19 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withName("parent-spawner")
     .withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
-  const agent = await b
+  b = b
     .withTools()
     .withDynamicSubAgents({ maxIterations: 4 })
     .withReasoning({ defaultStrategy: "reactive" })
-    .withMaxIterations(8)
-    .withTestScenario([
+    .withMaxIterations(8);
+  if (provider === "test") {
+    b = b.withTestScenario([
       { match: "spawn", text: "FINAL ANSWER: I delegated to a specialist sub-agent. The sub-agent completed the task and returned: SPAWN_COMPLETED" },
       { match: "delegate", text: "FINAL ANSWER: I delegated to a specialist sub-agent. The sub-agent completed the task and returned: SPAWN_COMPLETED" },
       { text: "FINAL ANSWER: Task delegated to sub-agent. Result: SPAWN_COMPLETED" },
-    ])
-    .build();
+    ]);
+  }
+  const agent = await b.build();
 
   console.log("Running parent agent (will spawn sub-agent)...");
   const result = await agent.run(

@@ -1,0 +1,15 @@
+[
+  {
+    "task": "t4-multistep",
+    "complexity": "multi-step",
+    "strategy": "reactive",
+    "model": "cogito:14b",
+    "success": true,
+    "outputLength": 74,
+    "tokens": 6184,
+    "durationMs": 15445,
+    "iterationsUsed": 11,
+    "costUsd": 0,
+    "outputPreview": "Let me continue researching hash indexing and full-text search strategies."
+  }
+]

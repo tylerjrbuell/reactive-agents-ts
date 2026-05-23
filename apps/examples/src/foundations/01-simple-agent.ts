@@ -38,11 +38,12 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withName("simple-qa")
     .withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
-  const agent = await b
-    .withTestScenario([
-      // Test responses used only in test mode
+  if (provider === "test") {
+    b = b.withTestScenario([
       { match: "capital of France", text: "The capital of France is Paris. It has been the capital since the 10th century and is known for landmarks like the Eiffel Tower, the Louvre, and Notre-Dame Cathedral." },
-    ])
+    ]);
+  }
+  const agent = await b
     .withMaxIterations(3)
     .build();
 

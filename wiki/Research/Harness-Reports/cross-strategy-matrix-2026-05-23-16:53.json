@@ -1,0 +1,54 @@
+[
+  {
+    "task": "t1-trivial",
+    "complexity": "trivial",
+    "strategy": "reactive",
+    "model": "cogito:14b",
+    "success": true,
+    "outputLength": 393,
+    "tokens": 4353,
+    "durationMs": 13736,
+    "iterationsUsed": 6,
+    "costUsd": 0,
+    "outputPreview": "I notice that while I can find information about multiplication techniques and tables, none of the results provide the actual computation for 17 × 23. Since this is a straightforward arithmetic problem, let me calculate it directly:\n\n17 × 23 = (17 × 20) + (17 × 3)\n= 340 + 51\n= 391\n\nThe answer is 391"
+  },
+  {
+    "task": "t5-critique",
+    "complexity": "critique-amenable",
+    "strategy": "reactive",
+    "model": "cogito:14b",
+    "success": true,
+    "outputLength": 1294,
+    "tokens": 11945,
+    "durationMs": 27620,
+    "iterationsUsed": 10,
+    "costUsd": 0,
+    "outputPreview": "The trade-off between eventual consistency and strong consistency fundamentally revolves around balancing immediate accuracy with system availability and performance. Strong consistency ensures that all nodes have the same view of data at any given moment, which is crucial for applications where acc"
+  },
+  {
+    "task": "t1-trivial",
+    "complexity": "trivial",
+    "strategy": "tree-of-thought",
+    "model": "cogito:14b",
+    "success": false,
+    "outputLength": 0,
+    "tokens": 1566,
+    "durationMs": 2235,
+    "iterationsUsed": 2,
+    "costUsd": 0,
+    "outputPreview": ""
+  },
+  {
+    "task": "t5-critique",
+    "complexity": "critique-amenable",
+    "strategy": "tree-of-thought",
+    "model": "cogito:14b",
+    "success": true,
+    "outputLength": 1206,
+    "tokens": 17031,
+    "durationMs": 46088,
+    "iterationsUsed": 32,
+    "costUsd": 0,
+    "outputPreview": "Let me analyze the trade-offs based on the search results.\n\nKey Trade-offs:\n\n1. **Consistency Level**:\n   - Strong Consistency: All nodes see identical data at all times.\n   - Eventual Consistency: Nodes may temporarily have different versions of data, eventually syncing when possible.\n\n2. **Perform"
+  }
+]

@@ -43,15 +43,17 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   console.log("Run 1 (baseline — no prior episodic context)...");
 
-  const agent1 = await mkBase("self-improve-demo")
+  let agent1Builder = mkBase("self-improve-demo")
     .withMemory("1")
     .withSelfImprovement()
-    .withMaxIterations(5)
-    .withTestScenario([
+    .withMaxIterations(5);
+  if (provider === "test") {
+    agent1Builder = agent1Builder.withTestScenario([
       { match: "9", text: "FINAL ANSWER: 9 × 8 = 72" },
       { text: "FINAL ANSWER: 72" },
-    ])
-    .build();
+    ]);
+  }
+  const agent1 = await agent1Builder.build();
 
   const run1 = await agent1.run("What is 9 × 8?");
   console.log(`  Steps: ${run1.metadata.stepsCount ?? 1}`);
@@ -63,15 +65,17 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   console.log("\nRun 2 (with episodic learning from run 1)...");
 
-  const agent2 = await mkBase("self-improve-demo")
+  let agent2Builder = mkBase("self-improve-demo")
     .withMemory("1")
     .withSelfImprovement()
-    .withMaxIterations(5)
-    .withTestScenario([
+    .withMaxIterations(5);
+  if (provider === "test") {
+    agent2Builder = agent2Builder.withTestScenario([
       { match: "6", text: "FINAL ANSWER: 6 × 7 = 42" },
       { text: "FINAL ANSWER: 42" },
-    ])
-    .build();
+    ]);
+  }
+  const agent2 = await agent2Builder.build();
 
   const run2 = await agent2.run("What is 6 × 7?");
   console.log(`  Steps: ${run2.metadata.stepsCount ?? 1}`);
@@ -83,15 +87,17 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   console.log("\nRun 3 (different task — factual knowledge)...");
 
-  const agent3 = await mkBase("self-improve-demo")
+  let agent3Builder = mkBase("self-improve-demo")
     .withMemory("1")
     .withSelfImprovement()
-    .withMaxIterations(5)
-    .withTestScenario([
+    .withMaxIterations(5);
+  if (provider === "test") {
+    agent3Builder = agent3Builder.withTestScenario([
       { match: "capital", text: "FINAL ANSWER: Paris is the capital of France." },
       { text: "FINAL ANSWER: Paris" },
-    ])
-    .build();
+    ]);
+  }
+  const agent3 = await agent3Builder.build();
 
   const run3 = await agent3.run("What is the capital of France?");
   console.log(`  Steps: ${run3.metadata.stepsCount ?? 1}`);

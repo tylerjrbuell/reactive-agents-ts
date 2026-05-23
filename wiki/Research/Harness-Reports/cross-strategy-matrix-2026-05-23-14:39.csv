@@ -1,0 +1,2 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t4-multistep,multi-step,reactive,cogito_14b,1,74,6184,11,15445,0.000000

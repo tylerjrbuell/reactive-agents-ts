@@ -41,29 +41,32 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   // ─── Build worker agents ────────────────────────────────────────────────────
 
-  const researchAgent = await mkBase("researcher")
-    .withMaxIterations(3)
-    .withTestScenario([
+  let b1 = mkBase("researcher").withMaxIterations(3);
+  if (provider === "test") {
+    b1 = b1.withTestScenario([
       { match: "research", text: "FINAL ANSWER: Research complete. AI safety involves ensuring AI systems behave as intended and avoid harmful outcomes." },
       { text: "FINAL ANSWER: Research complete. AI safety involves ensuring AI systems behave as intended." },
-    ])
-    .build();
+    ]);
+  }
+  const researchAgent = await b1.build();
 
-  const writerAgent = await mkBase("writer")
-    .withMaxIterations(3)
-    .withTestScenario([
+  let b2 = mkBase("writer").withMaxIterations(3);
+  if (provider === "test") {
+    b2 = b2.withTestScenario([
       { match: "draft", text: "FINAL ANSWER: Draft complete. Summary: AI safety is the discipline of ensuring AI systems are aligned with human values." },
       { text: "FINAL ANSWER: Draft complete. Summary: AI safety ensures alignment with human values." },
-    ])
-    .build();
+    ]);
+  }
+  const writerAgent = await b2.build();
 
-  const reviewerAgent = await mkBase("reviewer")
-    .withMaxIterations(3)
-    .withTestScenario([
+  let b3 = mkBase("reviewer").withMaxIterations(3);
+  if (provider === "test") {
+    b3 = b3.withTestScenario([
       { match: "review", text: "FINAL ANSWER: Review passed. The summary is accurate, clear, and appropriately concise." },
       { text: "FINAL ANSWER: Review passed. The summary is accurate and concise." },
-    ])
-    .build();
+    ]);
+  }
+  const reviewerAgent = await b3.build();
 
   // ─── Define workflow steps ──────────────────────────────────────────────────
 

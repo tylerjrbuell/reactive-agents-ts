@@ -1,0 +1,2 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t5-critique,critique-amenable,tree-of-thought,cogito_14b,1,108,13627,30,37190,0.000000

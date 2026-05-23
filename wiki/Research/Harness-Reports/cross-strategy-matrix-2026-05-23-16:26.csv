@@ -1,0 +1,10 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t1-trivial,trivial,reactive,cogito_14b,0,0,3968,6,6313,0.000000
+t4-multistep,multi-step,reactive,cogito_14b,0,0,10462,16,14660,0.000000
+t5-critique,critique-amenable,reactive,cogito_14b,1,1665,4709,4,14711,0.000000
+t1-trivial,trivial,reflexion,cogito_14b,1,18,2162,2,3197,0.000000
+t4-multistep,multi-step,reflexion,cogito_14b,0,0,21253,7,27450,0.000000
+t5-critique,critique-amenable,reflexion,cogito_14b,0,0,10740,4,13513,0.000000
+t1-trivial,trivial,tree-of-thought,cogito_14b,1,197,1545,2,1909,0.000000
+t4-multistep,multi-step,tree-of-thought,cogito_14b,0,0,15357,31,34575,0.000000
+t5-critique,critique-amenable,tree-of-thought,cogito_14b,1,2104,13944,31,38567,0.000000

@@ -47,13 +47,16 @@ async function buildAgent(provider: PN, model?: string) {
     .withName("sse-agent")
     .withProvider(provider);
   if (model) b = b.withModel(model);
-  return b
+  b = b
     .withReasoning()
-    .withStreaming()
-    .withTestScenario([
+    .withStreaming();
+  if (provider === "test") {
+    b = b.withTestScenario([
       { match: "haiku", text: "FINAL ANSWER: Data in the stream\nBytes flow one by one to you\nOutput is complete" },
       { text: "FINAL ANSWER: SSE stream delivered successfully." },
-    ])
+    ]);
+  }
+  return b
     .withMaxIterations(3)
     .build();
 }

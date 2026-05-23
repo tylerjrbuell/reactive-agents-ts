@@ -1,0 +1,5 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t1-trivial,trivial,reactive,cogito_14b,1,393,4353,6,13736,0.000000
+t5-critique,critique-amenable,reactive,cogito_14b,1,1294,11945,10,27620,0.000000
+t1-trivial,trivial,tree-of-thought,cogito_14b,0,0,1566,2,2235,0.000000
+t5-critique,critique-amenable,tree-of-thought,cogito_14b,1,1206,17031,32,46088,0.000000

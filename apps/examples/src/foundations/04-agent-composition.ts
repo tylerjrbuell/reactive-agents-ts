@@ -20,18 +20,27 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
 
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("=== Reactive Agents: Agent Composition Example ===\n");
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
 
   // ─── Step 1: Build a specialist agent ───
 
-  const researcher = await ReactiveAgents.create()
+  let b1 = ReactiveAgents.create()
     .withName("researcher")
-    .withTestScenario([
+    .withProvider(provider);
+  if (opts?.model) b1 = b1.withModel(opts.model);
+  if (provider === "test") {
+    b1 = b1.withTestScenario([
       { match: "quantum", text: "Based on my research, quantum computing uses qubits which can exist in superposition, enabling parallel computation of multiple states simultaneously." },
-    ])
+    ]);
+  }
+  const researcher = await b1
     .withMaxIterations(3)
     .build();
 
@@ -40,11 +49,16 @@ export async function run(): Promise<ExampleResult> {
   // ─── Step 2: Build a coordinator that uses the researcher as a tool ───
   // The .withAgentTool() method registers a local agent as a callable tool
 
-  const coordinator = await ReactiveAgents.create()
+  let b2 = ReactiveAgents.create()
     .withName("coordinator")
-    .withTestScenario([
+    .withProvider(provider);
+  if (opts?.model) b2 = b2.withModel(opts.model);
+  if (provider === "test") {
+    b2 = b2.withTestScenario([
       { match: "quantum", text: "I'll coordinate the research task. The researcher agent found that quantum computing uses qubits in superposition for parallel computation." },
-    ])
+    ]);
+  }
+  const coordinator = await b2
     .withTools()
     .withAgentTool("research-delegate", {
       name: "researcher",

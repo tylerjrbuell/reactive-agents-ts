@@ -1,0 +1,15 @@
+[
+  {
+    "task": "t5-critique",
+    "complexity": "critique-amenable",
+    "strategy": "tree-of-thought",
+    "model": "cogito:14b",
+    "success": true,
+    "outputLength": 108,
+    "tokens": 13627,
+    "durationMs": 37190,
+    "iterationsUsed": 30,
+    "costUsd": 0,
+    "outputPreview": "Since no relevant documents are available, let's search the web for information about Cassandra and Spanner."
+  }
+]

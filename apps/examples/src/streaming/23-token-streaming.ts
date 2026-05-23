@@ -50,13 +50,16 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
 
-  const agent = await b
+  b = b
     .withReasoning()
-    .withStreaming({ density: "tokens" }) // explicit — "tokens" is also the default
-    .withTestScenario([
+    .withStreaming({ density: "tokens" }); // explicit — "tokens" is also the default
+  if (provider === "test") {
+    b = b.withTestScenario([
       { match: "haiku", text: "FINAL ANSWER: Bytes arrive in flow\nEach token joins the next one\nOutput grows complete" },
       { text: "FINAL ANSWER: Streaming is working." },
-    ])
+    ]);
+  }
+  const agent = await b
     .withMaxIterations(3)
     .build();
 
@@ -96,14 +99,17 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withProvider(provider);
   if (opts?.model) b2 = b2.withModel(opts.model);
 
-  const agent2 = await b2
+  b2 = b2
     .withReasoning()
     .withTools()
-    .withStreaming({ density: "full" })
-    .withTestScenario([
+    .withStreaming({ density: "full" });
+  if (provider === "test") {
+    b2 = b2.withTestScenario([
       { match: "event types", text: "FINAL ANSWER: TextDelta, PhaseStarted, PhaseCompleted, ThoughtEmitted, ToolCallStarted, ToolCallCompleted, StreamCompleted, StreamError." },
       { text: "FINAL ANSWER: Full-density streaming works." },
-    ])
+    ]);
+  }
+  const agent2 = await b2
     .withMaxIterations(3)
     .build();
 

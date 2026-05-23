@@ -40,7 +40,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withName("mcp-filesystem-agent")
     .withProvider(effectiveProvider);
   if (useReal && opts?.model) b = b.withModel(opts.model);
-  const agent = await b
+  b = b
     .withTools()
     .withMCP(useReal ? [{
       name: "filesystem",
@@ -48,9 +48,11 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       command: "bunx",
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
     }] : [])
-    .withMaxIterations(10)
-    .withTestScenario([{ text: "FINAL ANSWER: The /tmp directory contains temporary files managed by the operating system. MCP filesystem access is working." }])
-    .build();
+    .withMaxIterations(10);
+  if (effectiveProvider === "test") {
+    b = b.withTestScenario([{ text: "FINAL ANSWER: The /tmp directory contains temporary files managed by the operating system. MCP filesystem access is working." }]);
+  }
+  const agent = await b.build();
 
   const result = await agent.run("What files or directories are available? Give a brief summary.");
 

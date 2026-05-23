@@ -21,16 +21,22 @@ export interface ExampleResult {
   durationMs: number;
 }
 
-export async function run(): Promise<ExampleResult> {
+export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const startTime = Date.now();
 
+  type PN = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
+
   console.log("=== Reactive Agents: A2A Communication Example ===\n");
+  console.log(`Mode: ${provider !== "test" ? `LIVE (${provider})` : "TEST"}\n`);
 
   // ─── Step 1: Build a "specialist" agent that will serve as the A2A server ───
 
-  const specialist = await ReactiveAgents.create()
+  let b = ReactiveAgents.create()
     .withName("specialist-agent")
-    .withTestScenario([{ text: "The answer is 42. This is the ultimate answer to life, the universe, and everything." }])
+    .withProvider("test");
+  b = b.withTestScenario([{ text: "The answer is 42. This is the ultimate answer to life, the universe, and everything." }]);
+  const specialist = await b
     .withMaxIterations(3)
     .build();
 

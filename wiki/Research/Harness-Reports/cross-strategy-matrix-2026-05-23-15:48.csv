@@ -1,0 +1,3 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t1-trivial,trivial,reactive,cogito_14b,1,3,3972,4,7942,0.000000
+t1-trivial,trivial,tree-of-thought,cogito_14b,1,13,1549,2,1960,0.000000

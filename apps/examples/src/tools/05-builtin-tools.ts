@@ -45,16 +45,18 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withName("builtin-tools-demo")
     .withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
-  const agent = await b
+  b = b
     .withTools()
     .withReasoning({ defaultStrategy: "reactive" })
-    .withMaxIterations(6)
-    .withTestScenario([
+    .withMaxIterations(6);
+  if (provider === "test") {
+    b = b.withTestScenario([
       { match: "write", text: `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
       { match: "file", text: `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
       { text: `FINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
-    ])
-    .build();
+    ]);
+  }
+  const agent = await b.build();
 
   const result = await agent.run(
     `Write the text "${DEMO_CONTENT}" to ${DEMO_FILE} using the file-write tool.`

@@ -51,11 +51,13 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       .withName(`strategy-${strategy}`)
       .withProvider(provider);
     if (opts?.model) b = b.withModel(opts.model);
-    const agent = await b
+    b = b
       .withReasoning({ defaultStrategy: strategy })
-      .withMaxIterations(5)
-      .withTestScenario([{ text: `FINAL ANSWER: [${strategy}] Agent memory enables persistent context across conversation turns, allowing coherent multi-turn interactions.` }])
-      .build();
+      .withMaxIterations(5);
+    if (provider === "test") {
+      b = b.withTestScenario([{ text: `FINAL ANSWER: [${strategy}] Agent memory enables persistent context across conversation turns, allowing coherent multi-turn interactions.` }]);
+    }
+    const agent = await b.build();
 
     const result = await agent.run(TASK);
     const summary = `${strategy}(${result.metadata.stepsCount}st): ${result.output.slice(0, 50)}`;

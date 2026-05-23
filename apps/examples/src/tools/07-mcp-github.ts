@@ -47,7 +47,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withName("mcp-github-agent")
     .withProvider(effectiveProvider);
   if (useReal && opts?.model) b = b.withModel(opts.model);
-  const agent = await b
+  b = b
     .withTools()
     .withMCP(useReal ? [{
       name: "github",
@@ -55,9 +55,11 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       command: "bunx",
       args: ["-y", "@modelcontextprotocol/server-github"],
     }] : [])
-    .withMaxIterations(5)
-    .withTestScenario([{ text: "FINAL ANSWER: The octocat/Hello-World repository is a public demo repository on GitHub used for testing. It has several open issues and is widely forked." }])
-    .build();
+    .withMaxIterations(5);
+  if (effectiveProvider === "test") {
+    b = b.withTestScenario([{ text: "FINAL ANSWER: The octocat/Hello-World repository is a public demo repository on GitHub used for testing. It has several open issues and is widely forked." }]);
+  }
+  const agent = await b.build();
 
   const result = await agent.run(
     "Using the GitHub tools, briefly describe the octocat/Hello-World repository."

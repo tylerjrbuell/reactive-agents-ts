@@ -42,9 +42,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   let b = ReactiveAgents.create().withName("eval-subject").withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
-  const agent = await b
-    .withTestScenario([{ text: "FINAL ANSWER: Paris is the capital of France." }])
-    .build();
+  if (provider === "test") {
+    b = b.withTestScenario([{ text: "FINAL ANSWER: Paris is the capital of France." }]);
+  }
+  const agent = await b.build();
 
   const agentResult = await agent.run("What is the capital of France?");
   console.log(`  Agent output: ${agentResult.output.slice(0, 80)}`);
