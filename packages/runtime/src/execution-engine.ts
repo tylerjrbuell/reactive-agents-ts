@@ -1008,15 +1008,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   rr.steps.length > 0 &&
                   rr.status !== "failed"
                 ) {
-                  // Fall back to last *genuine* tool observation. Skip harness-injected
-                  // observations (toolName="system", success=false) — those carry harness
-                  // guidance text the model parrots ("Your next step: call X..."), not
-                  // user-visible deliverables. Without this filter, on a failed/empty
-                  // run we ship the last harness nudge as the answer.
+                  // Fall back to last *genuine* tool observation. Skip:
+                  //  - harness-injected observations (toolName="system", success=false)
+                  //    — those carry harness guidance text the model parrots ("Your next step: ..."),
+                  //  - framework instrumentation steps (HS-cleanup-1) — `[CRITIQUE N]`,
+                  //    `[TOT depth=...]` and similar control markers exist for the model's
+                  //    reasoning loop, never as user output candidates,
+                  //  - tool-result observations whose content was wrapped with the
+                  //    `[<tool> result — compressed preview]` template (framework
+                  //    presentation envelope, not synthesized model answer).
+                  const FRAMEWORK_PREVIEW_PREFIX = /^\s*\[[^\]]+\s+result\s+[—\-]/i;
                   const lastObs = [...rr.steps].reverse().find((s) => {
                     if (s.type !== "observation") return false;
-                    const obs = s.metadata?.observationResult;
-                    if (obs && (obs.success === false || obs.toolName === "system")) return false;
+                    const md = s.metadata as { observationResult?: { success?: boolean; toolName?: string }; frameworkInstrumentation?: string } | undefined;
+                    if (md?.frameworkInstrumentation) return false;
+                    if (md?.observationResult && (md.observationResult.success === false || md.observationResult.toolName === "system")) return false;
+                    if (typeof s.content === "string" && FRAMEWORK_PREVIEW_PREFIX.test(s.content)) return false;
                     return true;
                   });
                   if (lastObs?.content) rawOutput = lastObs.content;

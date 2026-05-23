@@ -1,55 +1,24 @@
 import type { ReasoningStep } from "../../types/index.js";
 
-// ── Framework-leak sanitization (M2 — sweep-2026-05-23) ─────────────────────
+// HS-cleanup-1 (2026-05-23) — canonical root-fix.
 //
-// Three patterns leaked into user-facing state.output across model tiers:
-//   M2a — `<rationale call="N">{...}</rationale>` XML wrapper from think.ts:455
-//         prompt scaffolding; small models (cogito:14b) reproduce literally
-//         when no tool call follows. think.ts only strips these on the tool-call
-//         path; non-tool path leaks them into thought → state.output.
-//   M2b — `[CRITIQUE N] SATISFIED: ...` reflexion outer-loop control marker.
-//         The strategy uses these as internal convergence signals; output
-//         assembly never strips them.
-//   M2c — `[find result — compressed preview]\nType: Object(...)` tool result
-//         format template emitted by ToT when it ships tool observations
-//         directly as final output without going through output synthesis.
+// Prior shape (HS-105): regex catalog stripped 3 framework-emitted patterns
+// at 4 enforcement points (output-assembly, runtime sanitizeOutput,
+// normalizeReasoningResult, verifier backstop). Every new model leak required
+// a new pattern. The problem was at the producers — framework scaffolding was
+// flowing into model-visible step content with no audience tag.
 //
-// Evidence: 10/60 multi-tier matrix cells shipped these as user output.
-// Fix point: strip at assembleOutput() boundary so every promotion path
-// produces clean output regardless of strategy. Verifier output-not-harness-
-// parrot check is the backstop for any patterns slipping through.
-
-const FRAMEWORK_LEAK_PATTERNS: readonly RegExp[] = [
-  // M2a — paired <rationale call="N">...</rationale> wrapper; multiline-safe.
-  /<rationale\s+call="[^"]*"[^>]*>[\s\S]*?<\/rationale>/g,
-  // M2a — orphan opening `<rationale call="N">...` with no close (model truncated).
-  /<rationale\s+call="[^"]*"[^>]*>[\s\S]*?(?=$)/g,
-  // M2a — orphan closing `</rationale>` left on its own line (open was stripped upstream).
-  /<\/rationale>\s*/g,
-  // M2b — `[CRITIQUE N] <ANY-STATUS>:` line at start-of-string or start-of-line.
-  // Status word is alphabetic (SATISFIED/UNSATISFIED/PARTIAL/etc.) — catch all by allowing [A-Z]+.
-  /(^|\n)\[CRITIQUE\s+\d+\]\s+[A-Z]+:[^\n]*(\n|$)/g,
-  // M2c — `[find result — compressed preview]` template at start-of-string (em-dash or hyphen).
-  /^\s*\[(?:find|search)\s+result\s+[—\-][\s\S]*$/,
-];
-
-/**
- * Strip framework-internal markup that leaked into model output.
- * Idempotent. Order-independent. Returns trimmed result with single internal
- * newline collapsing to preserve paragraph structure.
- *
- * Reference: M2 finding in `wiki/Research/Harness-Reports/cross-strategy-matrix-analysis-2026-05-23.md`.
- */
-export function stripFrameworkLeaks(text: string): string {
-  if (!text) return text;
-  let result = text;
-  for (const pattern of FRAMEWORK_LEAK_PATTERNS) {
-    result = result.replace(pattern, "");
-  }
-  // Collapse runs of blank lines created by stripping
-  result = result.replace(/\n{3,}/g, "\n\n").trim();
-  return result;
-}
+// New shape:
+//   1. Rationale wrapper stripped at parse time in `think.ts` (the producer).
+//   2. Reflexion / ToT instrumentation steps carry
+//      `step.metadata.frameworkInstrumentation = "<kind>"`.
+//   3. Output assembly + runtime empty-output fallback filter on the tag.
+//   4. Verifier `output-not-harness-parrot` keeps known patterns as a producer-
+//      regression alarm — fail-loud, not fix-silent.
+//
+// `stripFrameworkLeaks` retained as an identity shim during the migration so
+// runtime callers don't need to change in lockstep; it will be deleted in the
+// follow-up cleanup commit.
 
 /** Subset of EntropyScore — avoids cross-package dependency on reactive-intelligence. */
 export interface EntropyScoreLike {
@@ -82,24 +51,33 @@ function hasCodeBlocks(text: string): boolean {
   return extractCodeBlocks(text).length > 0;
 }
 
+/** Predicate: is the step framework-internal scaffolding (not a user-output candidate)? */
+function isFrameworkInstrumentation(step: ReasoningStep): boolean {
+  return typeof step.metadata?.frameworkInstrumentation === "string" &&
+    step.metadata.frameworkInstrumentation.length > 0;
+}
+
 /**
  * Assemble final output from execution trace.
- * If the final answer is a short summary but earlier steps contain code,
- * prepend the best code block to the final answer.
+ *
+ * Filters steps tagged `metadata.frameworkInstrumentation` before considering
+ * them as user-output candidates — these are framework control markers (e.g.
+ * `[CRITIQUE N]`, `[TOT depth=2]`) that exist for the model's benefit during
+ * reasoning but must never surface as the answer.
  */
 export function assembleOutput(ctx: OutputAssemblyContext): AssembledOutput {
   const { steps, entropyScores } = ctx;
-  // M2 sanitization (sweep-2026-05-23): strip framework-internal markup before
-  // any further processing so all promotion paths produce clean output.
-  const finalAnswer = stripFrameworkLeaks(ctx.finalAnswer);
+  const finalAnswer = ctx.finalAnswer;
 
   // Rule 1: Final answer already has code or is substantial → use as-is
   if (hasCodeBlocks(finalAnswer) || finalAnswer.length > 200) {
     return { text: finalAnswer, codeBlocks: extractCodeBlocks(finalAnswer), sources: ["final_answer"] };
   }
 
-  // Rule 2: Look for code blocks in preceding thought steps
-  const thoughtSteps = steps.filter((s) => s.type === "thought" && s.content);
+  // Rule 2: Look for code blocks in preceding thought steps (skip instrumentation)
+  const thoughtSteps = steps.filter(
+    (s) => s.type === "thought" && s.content && !isFrameworkInstrumentation(s),
+  );
   const stepsWithCode: Array<{ index: number; code: string[]; content: string }> = [];
 
   for (let i = 0; i < thoughtSteps.length; i++) {

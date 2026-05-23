@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { assembleOutput, extractCodeBlocks, stripFrameworkLeaks } from "../../src/kernel/loop/output-assembly.js";
+import { assembleOutput, extractCodeBlocks } from "../../src/kernel/loop/output-assembly.js";
 import type { ReasoningStep } from "../../src/types/index.js";
 
 describe("extractCodeBlocks", () => {
@@ -86,125 +86,60 @@ describe("assembleOutput", () => {
   });
 });
 
-describe("stripFrameworkLeaks (M2 sweep-2026-05-23)", () => {
-  test("M2a — strips <rationale call='N'>...</rationale> wrapper", () => {
-    const leaked = '<rationale call="1">{"why":"direct calculation","confidence":0.9}</rationale>';
-    expect(stripFrameworkLeaks(leaked)).toBe("");
-  });
+// HS-cleanup-1 — root-fix invariants.
+//
+// The framework-leak problem (HS-105) is fixed at producers, not by stripping
+// at boundaries. `stripFrameworkLeaks` is a deprecated identity shim; the
+// canonical mechanism is `step.metadata.frameworkInstrumentation` and
+// producer-side stripping (think.ts).
 
-  test("M2a — strips wrapper but keeps trailing answer", () => {
-    const leaked = '<rationale call="1">To calculate.</rationale>\nThe result is: 391';
-    const clean = stripFrameworkLeaks(leaked);
-    expect(clean).not.toContain("<rationale");
-    expect(clean).toContain("The result is: 391");
-  });
+describe("assembleOutput — skips framework instrumentation steps (HS-cleanup-1)", () => {
+  const makeStep = (
+    type: string,
+    content: string,
+    metadata?: Record<string, unknown>,
+  ): ReasoningStep =>
+    ({ type, content, timestamp: new Date(), id: "step-1" as any, ...(metadata ? { metadata } : {}) }) as any;
 
-  test("M2a — multiple rationale blocks all stripped", () => {
-    const leaked = '<rationale call="1">first</rationale>\nMid text\n<rationale call="2">second</rationale>\nEnd';
-    const clean = stripFrameworkLeaks(leaked);
-    expect(clean).not.toContain("<rationale");
-    expect(clean).toContain("Mid text");
-    expect(clean).toContain("End");
-  });
-
-  test("M2b — strips [CRITIQUE N] SATISFIED: meta-marker (reflexion)", () => {
-    const leaked = "[CRITIQUE 1] SATISFIED: The agent successfully retrieved...";
-    expect(stripFrameworkLeaks(leaked)).toBe("");
-  });
-
-  test("M2b — strips marker line, keeps following content", () => {
-    const leaked = "[CRITIQUE 2] SATISFIED: All steps complete.\n\nThe trade-offs are: ...";
-    const clean = stripFrameworkLeaks(leaked);
-    expect(clean).not.toContain("[CRITIQUE");
-    expect(clean).toContain("trade-offs");
-  });
-
-  test("M2c — strips [find result — compressed preview] template (ToT)", () => {
-    const leaked = "[find result — compressed preview]\nType: Object(4 keys)\n  query: full-text indexing trade-offs\n  results: Array(5)";
-    expect(stripFrameworkLeaks(leaked).trim()).toBe("");
-  });
-
-  test("does not strip user content matching prefix-like patterns", () => {
-    const valid = "The XML format <rationale> is used in education for...";
-    expect(stripFrameworkLeaks(valid)).toBe(valid);
-  });
-
-  test("idempotent — running twice produces same result", () => {
-    const leaked = '<rationale call="1">x</rationale>\nAnswer';
-    const once = stripFrameworkLeaks(leaked);
-    const twice = stripFrameworkLeaks(once);
-    expect(twice).toBe(once);
-  });
-
-  test("empty input → empty output", () => {
-    expect(stripFrameworkLeaks("")).toBe("");
-  });
-
-  test("clean input → unchanged", () => {
-    expect(stripFrameworkLeaks("Paris is the capital of France.")).toBe("Paris is the capital of France.");
-  });
-
-  test("M2b — UNSATISFIED status also stripped", () => {
-    const leaked = "[CRITIQUE 3] UNSATISFIED: The agent's response only contains a rationale.";
-    expect(stripFrameworkLeaks(leaked)).toBe("");
-  });
-
-  test("M2b — PARTIAL status also stripped", () => {
-    const leaked = "[CRITIQUE 2] PARTIAL: incomplete answer.\nReal content here.";
-    const clean = stripFrameworkLeaks(leaked);
-    expect(clean).not.toContain("[CRITIQUE");
-    expect(clean).toContain("Real content here.");
-  });
-
-  test("M2a — orphan </rationale> close tag stripped", () => {
-    const leaked = "Let's check if everything is complete using pulse().</rationale>";
-    const clean = stripFrameworkLeaks(leaked);
-    expect(clean).not.toContain("</rationale>");
-    expect(clean).toContain("pulse()");
-  });
-
-  test("M2a — orphan opening rationale (no close) stripped", () => {
-    const leaked = 'prefix\n<rationale call="2">truncated content with no closer';
-    const clean = stripFrameworkLeaks(leaked);
-    expect(clean).not.toContain("<rationale");
-    expect(clean).toContain("prefix");
-  });
-
-  test("M2c — [search result —] variant also stripped", () => {
-    const leaked = "[search result — preview]\nType: Array(5)";
-    expect(stripFrameworkLeaks(leaked).trim()).toBe("");
-  });
-});
-
-describe("assembleOutput — sanitizes framework leaks (M2)", () => {
-  const makeStep = (type: string, content: string): ReasoningStep =>
-    ({ type, content, timestamp: new Date(), id: "step-1" as any }) as any;
-
-  test("M2a leak in finalAnswer is stripped on assembly", () => {
+  test("code in instrumentation thought step is ignored — finalAnswer used as-is", () => {
+    // A `[TOT]` marker step that happens to contain a code block must NOT be
+    // promoted as user output. Without the instrumentation filter, the
+    // `[TOT] Starting tree exploration` step's content (with embedded code)
+    // would be prepended to the answer.
     const result = assembleOutput({
-      finalAnswer: '<rationale call="1">{"why":"trivial"}</rationale>',
-      steps: [],
+      finalAnswer: "The answer is 42.",
+      steps: [
+        makeStep("thought", "[TOT] depth=1\n```js\ninternal()\n```", {
+          frameworkInstrumentation: "tot-marker",
+        }),
+      ],
       terminatedBy: "end_turn",
     });
-    expect(result.text).not.toContain("<rationale");
+    expect(result.text).toBe("The answer is 42.");
+    expect(result.text).not.toContain("internal()");
   });
 
-  test("M2b leak in finalAnswer is stripped on assembly", () => {
+  test("non-instrumentation thought with code IS promoted", () => {
     const result = assembleOutput({
-      finalAnswer: "[CRITIQUE 1] SATISFIED: done.\nThe answer is X.",
-      steps: [],
+      finalAnswer: "Done.",
+      steps: [makeStep("thought", "```js\nuserCode()\n```")],
       terminatedBy: "end_turn",
     });
-    expect(result.text).not.toContain("[CRITIQUE");
-    expect(result.text).toContain("The answer is X.");
+    expect(result.text).toContain("userCode()");
   });
 
-  test("M2c leak in finalAnswer is stripped on assembly", () => {
+  test("mix: instrumentation step ignored, normal step preferred", () => {
     const result = assembleOutput({
-      finalAnswer: "[find result — compressed preview]\nType: Object\n  data: ...",
-      steps: [],
+      finalAnswer: "Done.",
+      steps: [
+        makeStep("thought", "[CRITIQUE 1] SATISFIED:\n```js\nlatest()\n```", {
+          frameworkInstrumentation: "critique-marker",
+        }),
+        makeStep("thought", "Real chain:\n```js\nactual()\n```"),
+      ],
       terminatedBy: "end_turn",
     });
-    expect(result.text).not.toContain("[find result");
+    expect(result.text).toContain("actual()");
+    expect(result.text).not.toContain("latest()");
   });
 });

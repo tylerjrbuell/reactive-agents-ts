@@ -277,7 +277,13 @@ export const executeReflexion = (
         timestamp: new Date(),
       });
 
-      steps.push(makeStep("observation", `[CRITIQUE ${attempt}] ${critique}`));
+      // HS-cleanup-1: framework instrumentation — tag so output-assembly +
+      // arbitrator skip this step when assembling user-facing answer.
+      steps.push(
+        makeStep("observation", `[CRITIQUE ${attempt}] ${critique}`, {
+          frameworkInstrumentation: "critique-marker",
+        }),
+      );
 
       yield* publishReasoningStep(ebOpt, {
         _tag: "ReasoningStepCompleted",

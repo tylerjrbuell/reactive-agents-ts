@@ -4,7 +4,10 @@
  * phase module.
  */
 
-import { stripFrameworkLeaks } from "@reactive-agents/reasoning";
+// HS-cleanup-1 (2026-05-23): framework markup is stripped at producers
+// (think.ts + step.metadata.frameworkInstrumentation). Runtime no longer
+// needs stripFrameworkLeaks; the shim was removed from this file along with
+// its callers in `sanitizeOutput` and `normalizeReasoningResult`.
 
 /**
  * Resolve the effective model name for telemetry, snapshot, and capability lookup.
@@ -96,10 +99,7 @@ export function briefResolvedSkillsFromMetadata(
  */
 export function sanitizeOutput(text: string): string {
   if (!text || text.length === 0) return text;
-  // M2 (sweep-2026-05-23 / GH #105): strip framework-internal markup first so
-  // downstream pattern rules operate on clean content. This is the canonical
-  // exit-point for AgentResult.output (see execution-engine.ts:1209).
-  let result = stripFrameworkLeaks(text);
+  let result = text;
   // Strip <think>...</think> tags, but capture the last block as a fallback
   // in case the model (e.g. cogito) puts the entire answer inside <think>.
   const thinkBlocks: string[] = [];
@@ -216,18 +216,8 @@ export function normalizeReasoningResult(
     return undefined;
   }
 
-  // M2 sanitization (sweep-2026-05-23 / GH #105): strip framework-internal
-  // markup at the central strategy-result promotion site. Strategies that
-  // emit output directly (reflexion, tree-of-thought, plan-execute) bypass
-  // kernel/loop/output-assembly.ts:assembleOutput, so apply here as the
-  // authoritative gate before output reaches AgentResult.output.
-  const sanitizedOutput =
-    typeof candidate.output === "string"
-      ? stripFrameworkLeaks(candidate.output)
-      : candidate.output;
-
   return {
-    output: sanitizedOutput,
+    output: candidate.output,
     status: typeof candidate.status === "string" ? candidate.status : "error",
     strategy: typeof candidate.strategy === "string" ? candidate.strategy : undefined,
     steps: Array.isArray(candidate.steps)

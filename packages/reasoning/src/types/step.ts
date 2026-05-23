@@ -64,6 +64,22 @@ export const StepMetadataSchema = Schema.Struct({
    * @reactive-agents/reasoning.
    */
   verification: Schema.optional(Schema.Unknown),
+  /**
+   * HS-cleanup-1 (2026-05-23) — framework instrumentation tag.
+   *
+   * When set, marks the step as framework-emitted scaffolding (control
+   * markers like `[CRITIQUE N]`, `[TOT depth=2]`, tool-result compressed-
+   * preview wrappers) that is INTERNAL to the reasoning machinery — not a
+   * candidate for user-facing output. Output assembly + arbitrator skip
+   * these steps when picking a final answer; verifier rejects any output
+   * whose text matches a known instrumentation pattern as a producer-side
+   * regression signal.
+   *
+   * Value is a short kind tag (`"critique-marker" | "tot-marker" | "tool-preview"`)
+   * for telemetry and pattern attribution. Absence implies the step is
+   * user-facing-eligible.
+   */
+  frameworkInstrumentation: Schema.optional(Schema.String),
 });
 export type StepMetadata = typeof StepMetadataSchema.Type;
 

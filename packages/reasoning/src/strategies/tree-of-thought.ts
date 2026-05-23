@@ -158,6 +158,7 @@ export const executeTreeOfThought = (
         makeStep(
           "observation",
           `[TOT] BFS exploration skipped — task classified ${complexityVerdict.complexity} (${complexityVerdict.reason}, confidence=${complexityVerdict.confidence.toFixed(2)}). Delegating to react kernel directly.`,
+          { frameworkInstrumentation: "tot-marker" },
         ),
       );
 
@@ -238,7 +239,7 @@ export const executeTreeOfThought = (
 
     yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:explore", timestamp: new Date() });
 
-    steps.push(makeStep("thought", `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`));
+    steps.push(makeStep("thought", `[TOT] Starting tree exploration: breadth=${breadth}, depth=${depth}, pruningThreshold=${pruningThreshold}`, { frameworkInstrumentation: "tot-marker" }));
 
     // ── Tier-adaptive depth cap ──
     const tierLimits = TOT_TIER_LIMITS[input.tier ?? "mid"];
@@ -264,7 +265,7 @@ export const executeTreeOfThought = (
 
       // Budget guard: abort exploration if cost exceeds limit
       if (maxCost !== undefined && totalCost >= maxCost) {
-        steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping exploration.`));
+        steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping exploration.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
 
@@ -319,7 +320,7 @@ export const executeTreeOfThought = (
         for (const candidate of candidates) {
           // Budget guard: abort scoring if cost exceeds limit
           if (maxCost !== undefined && totalCost >= maxCost) {
-            steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping scoring.`));
+            steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping scoring.`, { frameworkInstrumentation: "tot-marker" }));
             break;
           }
 
@@ -404,7 +405,7 @@ export const executeTreeOfThought = (
         const maxInWindow = Math.max(...window);
         const minInWindow = Math.min(...window);
         if (maxInWindow - minInWindow < 0.05) {
-          steps.push(makeStep("observation", `[TOT] Score stagnation detected: best scores ${window.map((s) => s.toFixed(2)).join(", ")} over ${tierLimits.stagnationWindow} rounds. Forcing convergence.`));
+          steps.push(makeStep("observation", `[TOT] Score stagnation detected: best scores ${window.map((s) => s.toFixed(2)).join(", ")} over ${tierLimits.stagnationWindow} rounds. Forcing convergence.`, { frameworkInstrumentation: "tot-marker" }));
           break;
         }
       }
@@ -420,13 +421,13 @@ export const executeTreeOfThought = (
           .slice(0, breadth);
 
         if (rescued.length > 0) {
-          steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, rescued ${rescued.length} path(s).`));
+          steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, rescued ${rescued.length} path(s).`, { frameworkInstrumentation: "tot-marker" }));
           frontier = rescued;
           continue;
         }
 
         // Log the adaptive attempt even when no paths could be rescued
-        steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`));
+        steps.push(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
 
@@ -523,7 +524,7 @@ export const executeTreeOfThought = (
       }
 
       if (perStrategyEarlyStop) {
-        steps.push(makeStep("observation", `[TOT] Dispatcher early-stop signal received at depth ${d} — terminating exploration.`));
+        steps.push(makeStep("observation", `[TOT] Dispatcher early-stop signal received at depth ${d} — terminating exploration.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
     }
@@ -548,7 +549,7 @@ export const executeTreeOfThought = (
     // Reconstruct the full path
     const bestPath = getAncestorPath(allNodes, bestLeaf);
 
-    steps.push(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`));
+    steps.push(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`, { frameworkInstrumentation: "tot-marker" }));
 
     yield* emitLog({
       _tag: "phase_complete",

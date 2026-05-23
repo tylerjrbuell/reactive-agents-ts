@@ -25,6 +25,7 @@ import {
   finalAnswerTool,
   shouldShowFinalAnswer,
   parseRationaleBlocks,
+  stripRationaleBlocks,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
@@ -723,6 +724,19 @@ export function handleThinking(
       if (rescued) thought = rescued;
     }
 
+    // HS-cleanup-1 root fix: parse rationale blocks ONCE from the raw text,
+    // then strip the wrapper XML from the thought before storing. Native-FC
+    // attachment (lines below) reuses these pre-parsed blocks via the
+    // `prerasedRationaleBlocks` snapshot — see act/text-parse branches.
+    //
+    // Invariant: framework markup (`<rationale call="N">{...}</rationale>`)
+    // never enters `state.steps[].content`, so it cannot re-enter the model
+    // context next iteration nor surface as user-facing output.
+    const preparsedRationaleBlocks = parseRationaleBlocks(
+      `${thought ?? ""}\n${thinking ?? ""}`,
+    );
+    thought = stripRationaleBlocks(thought);
+
     const thoughtStep = makeStep("thought", thought, thinking ? { thinking } : undefined);
     const newSteps = [...state.steps, thoughtStep];
 
@@ -872,11 +886,10 @@ export function handleThinking(
 
       if (resolverResult._tag === "tool_calls") {
         // Attach intentional rationale from `<rationale call="N">{...}</rationale>`
-        // blocks in the assistant text. Provider native FC events carry no sibling
-        // rationale field, so we match by 1-indexed call position.
-        const rationaleBlocks = parseRationaleBlocks(
-          `${thought ?? ""}\n${thinking ?? ""}`,
-        );
+        // blocks (already parsed once upstream into preparsedRationaleBlocks).
+        // Provider native FC events carry no sibling rationale field, so we
+        // match by 1-indexed call position.
+        const rationaleBlocks = preparsedRationaleBlocks;
         const rawCalls = (resolverResult.calls as readonly ToolCallSpec[]).map(
           (c, i) => {
             if (c.rationale) return c;
@@ -1137,11 +1150,9 @@ export function handleThinking(
     // Forward them to act.ts via pendingNativeToolCalls so ToolService executes them.
     if (accumulatedToolCalls.length > 0) {
       // Native FC: rationale has no sibling field on provider tool_use events.
-      // Parse `<rationale call="N">{...}</rationale>` blocks from the assistant
-      // text (thought + thinking) and attach by 1-indexed position.
-      const rationaleBlocks = parseRationaleBlocks(
-        `${thought ?? ""}\n${thinking ?? ""}`,
-      );
+      // Use the pre-parsed blocks (extracted before the stored thought was
+      // stripped of rationale wrappers — see preparsedRationaleBlocks above).
+      const rationaleBlocks = preparsedRationaleBlocks;
       const parsedCalls: ToolCallSpec[] = accumulatedToolCalls.map((tc, i) => {
         let parsedInput: unknown = {};
         try {

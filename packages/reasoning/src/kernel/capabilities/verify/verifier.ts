@@ -321,24 +321,29 @@ export const defaultVerifier: Verifier = {
         }
       }
 
-      // M2 backstop (sweep-2026-05-23): output-assembly.ts sanitizes 3 patterns
-      // before promotion. This check rejects them if they slip through (e.g.
-      // strategy outer-loop bypasses output-assembly). See finding M2a/b/c.
-      const M2_LEAK_PATTERNS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
-        { pattern: /<rationale\s+call="[^"]*"/i, label: "M2a rationale-XML wrapper" },
-        { pattern: /<\/rationale>/i, label: "M2a orphan rationale-XML close tag" },
-        { pattern: /(^|\n)\[CRITIQUE\s+\d+\]\s+[A-Z]+:/i, label: "M2b reflexion CRITIQUE marker" },
-        { pattern: /^\s*\[(?:find|search)\s+result\s+[—\-]/i, label: "M2c tool-result-template leak" },
+      // HS-cleanup-1: framework markup is stripped at producers (think.ts
+      // rationale strip + `step.metadata.frameworkInstrumentation` tags).
+      // This verifier check remains as a **producer-regression alarm** —
+      // if ANY of these patterns reach the verifier, a producer is leaking
+      // scaffold into model-visible content. Fail loud; don't fix silently.
+      const PRODUCER_REGRESSION_PATTERNS: ReadonlyArray<{ pattern: RegExp; label: string }> = [
+        { pattern: /<rationale\s+call="[^"]*"/i, label: "rationale-XML wrapper (think.ts strip regression)" },
+        { pattern: /<\/rationale>/i, label: "orphan rationale-XML close tag (think.ts strip regression)" },
+        { pattern: /(^|\n)\[CRITIQUE\s+\d+\]\s+[A-Z]+:/i, label: "reflexion CRITIQUE marker (frameworkInstrumentation tag regression)" },
+        { pattern: /(^|\n)\[TOT\]\s/i, label: "tree-of-thought marker (frameworkInstrumentation tag regression)" },
+        { pattern: /^\s*\[[^\]]+\s+result\s+[—\-]/i, label: "tool-result preview wrapper (act fallback path regression)" },
       ];
-      const m2Leak = M2_LEAK_PATTERNS.find(({ pattern }) => pattern.test(ctx.content));
+      const producerLeak = PRODUCER_REGRESSION_PATTERNS.find(
+        ({ pattern }) => pattern.test(ctx.content),
+      );
 
-      const isParrot = startsWithHarnessPrefix || parrotMatch !== null || m2Leak !== undefined;
+      const isParrot = startsWithHarnessPrefix || parrotMatch !== null || producerLeak !== undefined;
       checks.push({
         name: "output-not-harness-parrot",
         passed: !isParrot,
         reason: isParrot
-          ? m2Leak
-            ? `output contains framework-internal markup (${m2Leak.label}) — output-assembly sanitization bypassed`
+          ? producerLeak
+            ? `framework markup reached user output — ${producerLeak.label}`
             : startsWithHarnessPrefix
               ? "output begins with the harness signal prefix \"⚠️ \" — likely a parroted recovery / loop / oracle nudge"
               : `output echoes a recent harness_signal step verbatim: "${(parrotMatch ?? "").slice(0, 80)}${(parrotMatch ?? "").length > 80 ? "…" : ""}"`
