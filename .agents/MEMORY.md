@@ -74,6 +74,30 @@ Phase 0 (6 P0 bugs) → Phase 0.5 (M3 ToT cost gate + M5 routing) → Phase 1 (8
 
 ---
 
+## DRAFTED — Memory v2 Design (2026-05-23) — NOT STARTED
+
+**Artifacts (untracked on disk):**
+- `wiki/Architecture/Design-Specs/2026-05-23-memory-v2-design.md` — 790-line design
+- `wiki/Planning/Implementation-Plans/2026-05-23-memory-v2-phase-v2.0-foundation.md` — 1979-line Phase v2.0 task plan
+
+**Design summary:** 2-axis model (5 tiers × 3 scopes private/team/global). 5 net-new components: `MemoryStore` interface + `ScopeRegistry` + `HeavyDream` scheduler + `AntiPatternsTier` + `CheckpointService`. Phased across v0.12/v0.13/v0.14 (~6.5wk total).
+
+**Advisor verdict (2026-05-24): Design sound. Phase v2.0 as-written trips §9 Anti-Scaffold Principle.**
+
+Phase v2.0 Done Criteria explicitly state:
+- "No consumer (`SemanticMemoryService`, etc.) yet uses `MemoryStore` — that's v2.2 scope"
+- "`withMemoryV2()` builder option NOT yet added"
+
+Ships interface + impl + ~25 tests + schema migration on every user DB — and nothing calls into any of it until v2.2. Pattern just codified to North Star §9 from this same 2026-05-23 sweep ("scaffold without callers" shipped 4× — Compose tags, RI variants, calibration fields, skill persistence).
+
+**Recommended path when resuming: restructured Phase v2.0 bundling MemoryStore + 1 consumer migration (e.g., `SemanticMemoryService` → `MemoryStore`) in single ship.** ~1.5wk. Eliminates §9 violation.
+
+**Strategic payoff lives in speculative v2.3 (HeavyDream).** Spec §7 caveat verbatim: "If LLM-driven pattern detection yields garbage, the 'Day N+1 starts smarter' claim collapses." Show-HN "self-improving fleets" narrative is HeavyDream-dependent. v2.0–v2.2 CAS/scope/checkpoint foundation earns keep regardless.
+
+**Discriminating question on resume:** "Phase v2.0 ships infrastructure with no consumer until v2.2 — restructure to wire one consumer (path C), or defer entirely?"
+
+---
+
 ## ACTIVE — Team-Ownership Dev Contract Pilot (2026-05-23 → 2026-06-15)
 
 **Status:** 3-week ablation pilot, scaffolded in commits `f9d508d8` + `6786af72` (merged to `main`). Default-reverts on 2026-06-15 unless lift threshold met.
