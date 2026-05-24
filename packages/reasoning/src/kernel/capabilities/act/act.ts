@@ -47,7 +47,7 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
-import { runPhaseHooks } from "../../../kernel/loop/phase-hooks.js";
+import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phase-hooks.js";
 import { emitToCompose } from "@reactive-agents/core";
 import { planNextMoveBatches } from "../act/tool-gating.js";
 import {
@@ -1114,7 +1114,14 @@ export function handleActing(
           runPhaseHooks(pipeline, 'before', 'act', state.iteration, state)
         );
         if (ctrl) {
-          return { ...state, status: ctrl.abort === 'terminate' ? 'failed' : 'done' };
+          return {
+            ...state,
+            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
+            meta: {
+              ...state.meta,
+              terminatedBy: killswitchTerminatedBy(ctrl),
+            },
+          };
         }
       }
 
@@ -1157,7 +1164,14 @@ export function handleActing(
           runPhaseHooks(pipeline, 'after', 'act', state.iteration, state)
         );
         if (ctrl) {
-          return { ...state, status: ctrl.abort === 'terminate' ? 'failed' : 'done' };
+          return {
+            ...state,
+            status: ctrl.abort === 'terminate' ? 'failed' : 'done',
+            meta: {
+              ...state.meta,
+              terminatedBy: killswitchTerminatedBy(ctrl),
+            },
+          };
         }
       }
 

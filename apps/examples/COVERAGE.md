@@ -10,7 +10,7 @@ Legend:
 - ❌ — no witness, no xfail; gap not yet captured
 - 🔵 — covered indirectly (mentioned in a multi-feature example, not the focus)
 
-Updated: 2026-05-24. Smoke run: 42 examples, 6 xfail, 0 fail.
+Updated: 2026-05-24. Smoke run: 43 examples, 7 xfail, 0 fail.
 
 ---
 

@@ -40,7 +40,8 @@
     "@reactive-agents/replay": "workspace:*",
     "@reactive-agents/trace": "workspace:*",
     "@reactive-agents/diagnose": "workspace:*",
-    "@reactive-agents/reactive-intelligence": "workspace:*"
+    "@reactive-agents/reactive-intelligence": "workspace:*",
+    "@reactive-agents/compose": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

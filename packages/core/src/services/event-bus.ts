@@ -416,6 +416,16 @@ export type AgentEvent =
       readonly durationMs: number;
       /** Error message when `success` is false. */
       readonly error?: string;
+      /**
+       * Raw termination reason from `state.meta.terminatedBy`. Carries the
+       * full dynamic reason string for killswitch aborts (e.g.
+       * `"budget-limit:tokens:1000/512"`, `"max-iterations:5"`,
+       * `"timeout-after:10ms"`) AND the enumerable `TerminateReason` values
+       * for kernel-driven termination paths. Distinct from
+       * `TaskResult.metadata.terminatedBy` which is normalized to the
+       * closed `TerminatedBy` schema (5 values).
+       */
+      readonly terminationReason?: string;
     }
   // ─── LLM request lifecycle ───
   | {

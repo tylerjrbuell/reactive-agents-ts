@@ -268,6 +268,48 @@ created: 2026-05-23
     - apps/examples/src/reasoning/24-mechanisms-cassette-xfail.ts (M9 removed)
     - bun test packages/reasoning/tests/{terminate-rationale,m9-termination-oracle,shared/termination-oracle} 98/98
 
+- task: killswitch-reason-preservation
+  date: 2026-05-24
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 1
+  tokens-est: ~66K
+  regression-prevented: silent-killswitch-aborts
+  notes: >
+    Single kernel-warden dispatch fixed killswitch.reason preservation
+    at 4 abort-transition sites (runner.ts bootstrap + before-think,
+    act.ts before-act + after-act). All 4 sites now set
+    state.meta.terminatedBy from hookAbort.reason with fallback sentinel
+    `killswitch:${abort}` for safety. Extracted killswitchTerminatedBy()
+    helper in phase-hooks.ts. +5 tests (helper + 4 transition paths +
+    fallback sentinel). 1214/1214 reasoning suite green. LOC +48,
+    well under 60 budget. Confidence 0.88 — kernel-level fix
+    mechanically correct + tests pin the contract; downstream
+    output-assembly normalization (react-kernel.ts:152 + reactive.ts:256
+    narrow to closed TerminatedBy enum) still drops the raw reason,
+    surfaced as followup. Pre-existing termination-paths lint
+    violation at runner.ts:711 (RunController stop bypasses
+    terminate()) verified NOT introduced by this dispatch (via stash
+    + re-run). Authority discipline: 4 files in bounds; no edits
+    to compose, core/event-bus, runtime, or wiki.
+  evidence-anchors:
+    - packages/reasoning/src/kernel/loop/phase-hooks.ts (killswitchTerminatedBy helper)
+    - packages/reasoning/src/kernel/loop/runner.ts (2 abort sites)
+    - packages/reasoning/src/kernel/capabilities/act/act.ts (2 abort sites)
+    - packages/reasoning/tests/kernel/loop/killswitch-reason-preserved.test.ts (+5 tests)
+    - bun test packages/reasoning 1214/1214
+  followups:
+    - "react-kernel.ts:152 + reactive.ts:256 narrow rawTerminatedBy to 5-value TerminatedBy enum. Need parallel `rawTerminatedBy?: string` channel through reasoning result → engine ctx → AgentCompleted.terminationReason (schema already extended)."
+    - "Pre-existing lint violation runner.ts:711 (RunController stop) — separate ship."
+    - "Verdict.terminatedBy in arbitrator.ts still typed `string` — already tracked."
+    - "Output-assembly mapping ctx.metadata.terminatedBy → result.metadata.terminatedBy stays narrow per current TerminatedBy schema; ship the raw channel via separate field rather than widening the enum."
+  pilot-signal:
+    re-dispatch-pattern: clean
+    first-attempt-success: yes
+    re-spawn-count: 0
+    regression-catch: prevented-silent-killswitch-aborts
+
 - task: hs-128-followup-a-profile-max-tokens-plumb
   date: 2026-05-24
   warden: kernel-warden

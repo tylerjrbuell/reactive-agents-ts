@@ -122,6 +122,7 @@
       "version": "0.1.9",
       "dependencies": {
         "@reactive-agents/a2a": "workspace:*",
+        "@reactive-agents/compose": "workspace:*",
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/cost": "workspace:*",
         "@reactive-agents/diagnose": "workspace:*",

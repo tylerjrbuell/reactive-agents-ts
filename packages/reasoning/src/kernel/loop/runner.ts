@@ -38,7 +38,7 @@ import {
 import { evaluateStrategySwitch, buildHandoff } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
-import { runPhaseHooks } from "./phase-hooks.js";
+import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
 import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
 // Sprint 3.3 — Sole Termination Authority: dispatcher-early-stop now flows
 // through the Arbitrator so the veto applies (catches "framework giving
@@ -689,6 +689,10 @@ export function runKernel(
         state = transitionState(state, {
           status: bootstrapAbort.abort === 'terminate' ? 'failed' : 'done',
           output: state.output ?? '',
+          meta: {
+            ...state.meta,
+            terminatedBy: killswitchTerminatedBy(bootstrapAbort),
+          },
         });
       }
     }
@@ -780,6 +784,10 @@ export function runKernel(
         state = transitionState(state, {
           status: beforeThinkAbort.abort === 'terminate' ? 'failed' : 'done',
           output: state.output ?? '',
+          meta: {
+            ...state.meta,
+            terminatedBy: killswitchTerminatedBy(beforeThinkAbort),
+          },
         });
         break;
       }
