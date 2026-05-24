@@ -26,7 +26,7 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
-import { extractThinking } from "../kernel/capabilities/reason/stream-parser.js";
+import { extractThinking, extractThinkingSafeContent, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
 import {
   validateOutputFormat,
@@ -253,7 +253,7 @@ export const executeReflexion = (
             },
           ],
           systemPrompt: withEnvContext(critiqueSystemPrompt),
-          maxTokens: selfCritiqueDepth === "deep" ? 2500 : 1500,
+          maxTokens: selfCritiqueDepth === "deep" ? 2500 : THINKING_SAFE_MIN_TOKENS,
           temperature: 0.3, // low temp for objective critique
         })
         .pipe(
@@ -550,12 +550,16 @@ function enforceOutputQualityGate(input: {
     .complete({
       messages: [{ role: "user", content: synthesisPrompt }],
       systemPrompt: withEnvContext(undefined),
-      maxTokens: 1500,
+      maxTokens: THINKING_SAFE_MIN_TOKENS,
       temperature: 0.2,
     })
     .pipe(
       Effect.map((response) => {
-        const candidate = response.content.trim();
+        // Thinking-safe extraction prevents <think> blocks leaking into the
+        // user-facing synthesized output. Cascading fallback rescues responses
+        // that put the whole answer inside the thinking block.
+        const { content: safeContent } = extractThinkingSafeContent(response);
+        const candidate = safeContent.trim();
         if (!candidate) {
           return {
             output: input.output,

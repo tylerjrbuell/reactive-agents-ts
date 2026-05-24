@@ -40,6 +40,10 @@ import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
 import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../../kernel/capabilities/reason/stream-parser.js";
 // Sprint 3.3 — Sole Termination Authority: dispatcher-early-stop now flows
 // through the Arbitrator so the veto applies (catches "framework giving
 // up due to maxIterations approach with tool failures" as exit-failure).
@@ -1837,25 +1841,32 @@ export function runKernel(
           const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent);
           const synthesized = yield* llmOpt.value.complete({
             messages: [{ role: "user", content: synthesisPrompt }],
-            maxTokens: 1500,
+            maxTokens: THINKING_SAFE_MIN_TOKENS,
             temperature: 0.2,
           }).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
 
-          if (synthesized.content && synthesized.content.length > 0) {
+          // Strip <think> blocks before the synthesized output is gated on
+          // format/completeness OR written into state.output. Without this,
+          // thinking-model preambles leak verbatim into the user-facing
+          // final answer.
+          const safeSynth = extractThinkingSafeContent(synthesized);
+          const synthContent = safeSynth.content;
+
+          if (synthContent && synthContent.length > 0) {
             const formatOk = taskIntent.format
-              ? validateOutputFormat(synthesized.content, taskIntent.format).valid
+              ? validateOutputFormat(synthContent, taskIntent.format).valid
               : true;
-            const contentOk = validateContentCompleteness(synthesized.content, taskIntent).complete;
+            const contentOk = validateContentCompleteness(synthContent, taskIntent).complete;
 
             if (formatOk && contentOk) {
               state = transitionState(state, {
-                output: synthesized.content,
+                output: synthContent,
                 meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: true },
               });
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesized output to match requested format: ${synthesisFormat}`, timestamp: new Date() });
             } else if (terminationSource === "harness" || terminationSource === "oracle") {
               state = transitionState(state, {
-                output: synthesized.content,
+                output: synthContent,
                 meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
               });
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });

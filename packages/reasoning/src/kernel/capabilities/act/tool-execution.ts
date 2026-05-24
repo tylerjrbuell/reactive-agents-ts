@@ -31,6 +31,10 @@ import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform } from "./tool-parsing.js";
 import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../reason/stream-parser.js";
 import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
@@ -874,12 +878,11 @@ export function extractObservationFacts(
         ].join("\n"),
       }],
       temperature: 0,
-      maxTokens: 200,
+      maxTokens: THINKING_SAFE_MIN_TOKENS,
     });
 
-    const extracted = typeof response.content === "string"
-      ? response.content.trim()
-      : "";
+    const safe = extractThinkingSafeContent(response);
+    const extracted = safe.content.trim();
 
     return extracted.length > 0 ? extracted : undefined;
   }).pipe(

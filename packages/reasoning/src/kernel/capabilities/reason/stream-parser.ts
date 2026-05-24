@@ -69,6 +69,118 @@ export function stripThinking(text: string): string {
   return extractThinking(text).content;
 }
 
+/**
+ * Minimum maxTokens budget for any LLM call that may receive output from a
+ * thinking model (qwen3, DeepSeek-R1, QwQ, cogito). Thinking preambles
+ * routinely consume 500–1500 tokens before the parseable answer appears;
+ * budgets below this floor silently truncate the real output.
+ *
+ * Aligns with the structured-output budget bumped 500→2048 in commit 6da177e5.
+ */
+export const THINKING_SAFE_MIN_TOKENS = 2048;
+
+/**
+ * Result of {@link extractThinkingSafeContent}.
+ *
+ * - `content` — usable string for downstream parsing (never null; empty string
+ *   when every fallback was exhausted).
+ * - `recovered` — `true` when any stripping or fallback occurred. `false` only
+ *   when the response was already clean (no think tags, content non-empty).
+ * - `thinking` — extracted thinking trace, preferring the in-band
+ *   `<think>...</think>` payload, falling back to a provider-supplied
+ *   `response.thinking` field. `null` when none is available.
+ */
+export interface ThinkingSafeResponse {
+  content: string;
+  recovered: boolean;
+  thinking: string | null;
+}
+
+/**
+ * Defensive thinking-aware content extractor for kernel LLM call sites.
+ *
+ * Cascading fallback chain (gold-standard pattern from reflexion.ts:271-279):
+ *   1. Strip `<think>...</think>` from response.content → if non-empty, use it.
+ *   2. Else fall back to the extracted thinking payload (model put the answer
+ *      inside the think block).
+ *   3. Else fall back to a provider-separated `response.thinking` field
+ *      (Ollama's `think: true` mode).
+ *   4. Else return the raw `response.content` (may be empty) so callers can
+ *      apply their own empty-string semantics.
+ *
+ * `recovered` is `true` whenever we did anything besides "clean content was
+ * already non-empty and had no think tags" — useful for logging visibility
+ * into how often thinking-budget pressure is biting in production.
+ */
+export function extractThinkingSafeContent(
+  response: { content: string; thinking?: string },
+): ThinkingSafeResponse {
+  const rawContent = typeof response.content === "string" ? response.content : "";
+  const providerThinking =
+    typeof response.thinking === "string" && response.thinking.length > 0
+      ? response.thinking
+      : null;
+
+  // Fast path: empty raw content. If provider supplies thinking we recover
+  // through it; otherwise everything is empty and the safety net engaged
+  // (recovered=true so callers can log the degraded case).
+  if (!rawContent) {
+    if (providerThinking) {
+      return {
+        content: providerThinking,
+        recovered: true,
+        thinking: providerThinking,
+      };
+    }
+    return {
+      content: "",
+      recovered: true,
+      thinking: null,
+    };
+  }
+
+  const { thinking: extractedThinking, content: cleanContent } =
+    extractThinking(rawContent);
+
+  const trimmedClean = cleanContent.trim();
+  const hadThinkTags = extractedThinking !== null || trimmedClean !== rawContent.trim();
+
+  // 1. Clean content non-empty → primary path. recovered iff we stripped.
+  if (trimmedClean.length > 0) {
+    return {
+      content: trimmedClean,
+      recovered: hadThinkTags,
+      thinking: extractedThinking ?? providerThinking,
+    };
+  }
+
+  // 2. Extracted thinking has substance → use it as content fallback.
+  if (extractedThinking && extractedThinking.length > 0) {
+    return {
+      content: extractedThinking,
+      recovered: true,
+      thinking: extractedThinking,
+    };
+  }
+
+  // 3. Provider-separated thinking → use it as content fallback.
+  if (providerThinking) {
+    return {
+      content: providerThinking,
+      recovered: true,
+      thinking: providerThinking,
+    };
+  }
+
+  // 4. Nothing usable — return raw content (may be empty); flag recovered
+  // so callers can log that the safety net engaged.
+  return {
+    content: rawContent,
+    recovered: true,
+    thinking: null,
+  };
+}
+
 // ── FINAL ANSWER regex (local copy to avoid circular dependency with tool-utils) ──
 const FA_RE = /(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]\s*/i;
 

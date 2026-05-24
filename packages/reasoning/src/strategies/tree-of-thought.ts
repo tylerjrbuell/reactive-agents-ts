@@ -19,7 +19,7 @@ import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
-import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
+import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -322,7 +322,7 @@ export const executeTreeOfThought = (
                   : `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
               ),
             ),
-            maxTokens: 800 * breadth,
+            maxTokens: Math.max(800 * breadth, THINKING_SAFE_MIN_TOKENS),
             temperature: 0.8,
           })
           .pipe(
@@ -372,7 +372,7 @@ export const executeTreeOfThought = (
                   ? `${input.systemPrompt}\n\nYou are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.`
                   : "You are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.",
               ),
-              maxTokens: 1500,
+              maxTokens: THINKING_SAFE_MIN_TOKENS,
               temperature: 0.2,
             })
             .pipe(

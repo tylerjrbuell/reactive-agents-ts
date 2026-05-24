@@ -44,7 +44,7 @@ import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
-import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
+import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
 import {
   validateOutputFormat,
@@ -664,7 +664,7 @@ export const executePlanExecute = (
               ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
               : "You are evaluating plan execution. Determine if the task has been adequately addressed.",
           ),
-          maxTokens: reflectionDepth === "deep" ? 2500 : 1500,
+          maxTokens: reflectionDepth === "deep" ? 2500 : THINKING_SAFE_MIN_TOKENS,
           temperature: 0.3,
         })
         .pipe(
@@ -1071,7 +1071,7 @@ function enforceOutputQualityGate(input: {
     .complete({
       messages: [{ role: "user", content: synthesisPrompt }],
       systemPrompt: withEnvContext(undefined),
-      maxTokens: 1500,
+      maxTokens: THINKING_SAFE_MIN_TOKENS,
       temperature: 0.2,
     })
     .pipe(

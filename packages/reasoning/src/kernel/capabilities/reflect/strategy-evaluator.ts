@@ -13,6 +13,10 @@ import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { KernelState } from "../../../kernel/state/kernel-state.js";
 import { getPermanentlyFailedRequiredTools } from "../verify/requirement-state.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../reason/stream-parser.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -150,10 +154,13 @@ export function evaluateStrategySwitch(
           { role: "user", content: prompt },
         ],
         temperature: 0,
-        maxTokens: 256,
+        maxTokens: THINKING_SAFE_MIN_TOKENS,
       })
       .pipe(
-        Effect.map((r) => r.content),
+        // Apply thinking-safe extraction BEFORE the markdown-fence strip +
+        // JSON.parse below so qwen3/DeepSeek-R1 <think> preambles cannot
+        // poison the JSON parser.
+        Effect.map((r) => extractThinkingSafeContent(r).content),
         Effect.catchAll(() =>
           Effect.succeed(
             '{"shouldSwitch":false,"recommendedStrategy":"","reasoning":"LLM error"}',

@@ -12,6 +12,7 @@ import { Effect, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractStructuredOutput } from "./pipeline.js";
+import { THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Schema for the inference result ──
@@ -166,7 +167,7 @@ Respond with JSON matching this schema:
         : "You are analyzing which tools are required for a task. Be precise and conservative.",
       maxRetries: 1,
       temperature: 0.1,
-      maxTokens: 1024,
+      maxTokens: THINKING_SAFE_MIN_TOKENS,
     });
 
     // Validate that returned tool names actually exist in the available set
@@ -287,10 +288,11 @@ Rules:
       systemPrompt: "You are a tool classifier. Output only valid JSON. Be precise.",
       maxRetries: 1,
       temperature: 0,
-      // 2048 covers thinking-model budgets (qwen3:4b emits <think>...</think> blocks
-      // that can eat 500 tokens before JSON starts). Non-thinking models naturally
-      // finish early; this is a ceiling, not a quota.
-      maxTokens: 2048,
+      // Thinking-model budget — qwen3:4b and similar emit <think>...</think>
+      // blocks that can eat 500+ tokens before JSON starts. The constant is the
+      // framework-wide floor for any LLM call whose output is parsed downstream.
+      // Non-thinking models naturally finish early; this is a ceiling, not a quota.
+      maxTokens: THINKING_SAFE_MIN_TOKENS,
     });
 
     // Normalize: collapse string | { name, minCalls? } union to { name, minCalls } objects.

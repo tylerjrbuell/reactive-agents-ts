@@ -20,7 +20,7 @@ import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
-import { stripThinking } from "../kernel/capabilities/reason/stream-parser.js";
+import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -170,7 +170,7 @@ export const executeAdaptive = (
           },
         ],
         systemPrompt: classifySystemPrompt,
-        maxTokens: 500,
+        maxTokens: THINKING_SAFE_MIN_TOKENS,
         temperature: 0.2,
       })
       .pipe(
