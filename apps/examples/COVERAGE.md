@@ -10,7 +10,7 @@ Legend:
 - ❌ — no witness, no xfail; gap not yet captured
 - 🔵 — covered indirectly (mentioned in a multi-feature example, not the focus)
 
-Updated: 2026-05-23. Smoke run: 39 examples, 5 xfail, 0 fail.
+Updated: 2026-05-23. Smoke run: 40 examples, 6 xfail, 0 fail.
 
 ---
 
@@ -71,11 +71,11 @@ Updated: 2026-05-23. Smoke run: 39 examples, 5 xfail, 0 fail.
 | `switch-strategy` | ✅ ACTIVE | R21 (wiring only) | full firing under cassette only |
 | `temp-adjust` | 🟡 UNFIRED | ❌ | |
 | `skill-activate` | 🟡 UNFIRED | partial F7 | needs persisted-skill match scenario |
-| `prompt-switch` | ⚠ UNWIRED | ❌ | handler missing |
+| `prompt-switch` | ⚠ UNWIRED | 🟡 IX2 (xfail) | handler missing |
 | `tool-inject` | ✅ ACTIVE | HS-115 nominator | no example yet |
 | `tool-failure-redirect` | 🟡 UNFIRED | ❌ | |
-| `memory-boost` | ⚠ UNWIRED | ❌ | handler missing |
-| `skill-reinject` | ⚠ UNWIRED | ❌ | handler missing |
+| `memory-boost` | ⚠ UNWIRED | 🟡 IX2 (xfail) | handler missing |
+| `skill-reinject` | ⚠ UNWIRED | 🟡 IX2 (xfail) | handler missing |
 | `human-escalate` | ⚠ UNWIRED | 🟡 IX1 (xfail) | bridge to interaction-manager.approvalGate missing |
 | `stall-detect` | ✅ ACTIVE | ❌ | no focused witness |
 | `harness-harm` | 🟡 UNFIRED | ❌ | needs failure-corpus signal |
@@ -169,13 +169,13 @@ Updated: 2026-05-23. Smoke run: 39 examples, 5 xfail, 0 fail.
 
 - **Tier 1 (core builder):** 24 ✅, 1 🟡, 5 ❌ → ~80% covered
 - **Tier 2 (M1–M13 mechanisms):** 8 ✅, 5 ❌ → ~62% covered (most remaining gaps are cassette-driven)
-- **Tier 3 (controller variants):** 1 ✅, 1 🟡, 11 ❌ → ~15% covered
+- **Tier 3 (controller variants):** 1 ✅, 4 🟡, 8 ❌ → ~38% covered
 - **Tier 4 (trust/safety):** 4 ✅, 2 ❌
 - **Tier 5 (multi-agent):** 4 ✅, 2 ❌
 - **Tier 7 (obs/cost/lifecycle):** 5 ✅, 1 🟡, 11 ❌
 - **Tier 9 (packages):** 5 ✅, 2 🟡, 0 ❌ → **100% covered**
 
-**Suite:** 39 examples, 5 xfail, 0 fail offline. Up from 28/4/0 prior to W3.
+**Suite:** 40 examples, 6 xfail, 0 fail offline. Up from 28/4/0 prior to W3.
 
 ## W3 priority list (close-out, by leverage)
 

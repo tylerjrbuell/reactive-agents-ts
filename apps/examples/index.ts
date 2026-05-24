@@ -341,6 +341,19 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/interaction/hitl-approval-gate.ts',
         expectsFail: true,
     },
+    {
+        // xfail: 3 UNWIRED controller variants (prompt-switch, memory-boost,
+        // skill-reinject) — evaluators exist, no handlers registered. See
+        // HS-116 audit + packages/reactive-intelligence/tests/controller/
+        // decision-coverage.test.ts. When a handler ships, drop the flag and
+        // narrow the witness to the remaining unwired subset.
+        num: 'IX2',
+        label: 'controller-variants-unwired (xfail)',
+        category: 'interaction',
+        requiresKey: false,
+        path: './src/interaction/controller-variants-unwired.ts',
+        expectsFail: true,
+    },
     // gateway — offline (fast heartbeat interval in test mode)
     {
         num: '22',
