@@ -574,6 +574,17 @@ export function runKernel(
         meta: { ...state.meta, budgetLimits: effectiveInput.budgetLimits },
       });
     }
+    // HS-128 FOLLOWUP-A — seed the resolved profile.maxTokens onto state.meta
+    // once at kernel-start so the verbosity-detector caller in
+    // kernel/capabilities/reflect/reactive-observer.ts derives the correct
+    // tier-scaled baseline (profileMaxTokens/64) instead of the helper's
+    // local-only fallback (32_768). Seed-once / read-anywhere — the runner
+    // never re-seeds this field on later iterations.
+    if (profile.maxTokens !== undefined) {
+      state = transitionState(state, {
+        meta: { ...state.meta, profileMaxTokens: profile.maxTokens },
+      });
+    }
 
     // Mutable scratchpad mirror — synced from state.scratchpad (ReadonlyMap) after each kernel step.
     const mutableScratchpad = new Map<string, string>(state.scratchpad);

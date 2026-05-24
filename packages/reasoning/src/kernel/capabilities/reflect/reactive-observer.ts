@@ -502,14 +502,17 @@ export function runReactiveObserver(
     // from overwriting a peer recommendation that already fired this turn
     // or last.
     //
-    // No ContextProfile in scope here — the helper falls back to the local
-    // tier default (32_768) when profileMaxTokens is absent. Curator-side
+    // HS-128 FOLLOWUP-A — profileMaxTokens is seeded once on state.meta by the
+    // runner from the resolved ContextProfile (kernel/loop/runner.ts after the
+    // profile-build block). When absent (legacy state / synthetic test state),
+    // the helper falls back to the local-tier default (32_768). Curator-side
     // applies its own profile clamp so a too-generous target still gets
     // bounded.
     {
       const verbosityRec = evaluateVerbosity({
         lastIterationTokens: s.meta.lastIterationTokens,
         iteration: s.iteration,
+        profileMaxTokens: s.meta.profileMaxTokens,
         existingRecommendation: s.meta.pendingCompressionRecommendation,
       });
       if (verbosityRec) {

@@ -91,6 +91,53 @@ describe("verbosity detector — HS-128 per-iteration token tracking", () => {
     expect(recStale!.reason).toBe("verbosity-detected");
   });
 
+  // ── HS-128 FOLLOWUP-A: state.meta.profileMaxTokens plumbing ───────────
+  // Mission-brief cases: detector consumes the runner-seeded tier ceiling
+  // so frontier (128_000) and local (32_768) tiers compute distinct baselines.
+
+  it("FOLLOWUP-A: frontier-tier state.meta.profileMaxTokens=128_000 emits recommendation with frontier-derived targetTokens", () => {
+    // baseline = 128_000 / 64 = 2000; threshold = 4000.
+    // Window avg = (4000 + 4500 + 5000) / 3 = 4500 > 4000 → recommendation.
+    // targetTokens = floor(128_000 / 4) = 32_000.
+    const rec = evaluateVerbosity({
+      lastIterationTokens: [4000, 4500, 5000],
+      iteration: 3,
+      profileMaxTokens: 128_000,
+    });
+    expect(rec).not.toBeNull();
+    expect(rec!.reason).toBe("verbosity-detected");
+    expect(rec!.targetTokens).toBe(32_000);
+    expect(rec!.recommendedAtIteration).toBe(3);
+  });
+
+  it("FOLLOWUP-A: local-tier state.meta.profileMaxTokens=32_768 emits recommendation with local-derived targetTokens", () => {
+    // baseline = 32_768 / 64 = 512; threshold = 1024.
+    // Window avg = (3000 + 3500 + 4000) / 3 = 3500 > 1024 → recommendation.
+    // targetTokens = floor(32_768 / 4) = 8192.
+    const rec = evaluateVerbosity({
+      lastIterationTokens: [3000, 3500, 4000],
+      iteration: 3,
+      profileMaxTokens: 32_768,
+    });
+    expect(rec).not.toBeNull();
+    expect(rec!.reason).toBe("verbosity-detected");
+    expect(rec!.targetTokens).toBe(8192);
+    expect(rec!.recommendedAtIteration).toBe(3);
+  });
+
+  it("FOLLOWUP-A: legacy state without profileMaxTokens falls back to DEFAULT_PROFILE_MAX_TOKENS (HS-128 baseline behaviour)", () => {
+    // Omit profileMaxTokens — helper must apply the local default exactly as
+    // it did pre-FOLLOWUP-A. Window above local threshold (1024) emits the
+    // same recommendation as the original HS-128 above-threshold case.
+    const recLegacy = evaluateVerbosity({
+      lastIterationTokens: [1500, 1600, 1700],
+      iteration: 3,
+    });
+    expect(recLegacy).not.toBeNull();
+    expect(recLegacy!.targetTokens).toBe(Math.floor(DEFAULT_PROFILE_MAX_TOKENS / 4));
+    expect(recLegacy!.targetTokens).toBe(8192);
+  });
+
   it("baseline scales with profileMaxTokens (frontier-tier behaviour)", () => {
     // 131_072 / 64 = 2048 baseline → threshold 4096. Window avg=3000 → below.
     const belowFrontier = evaluateVerbosity({

@@ -223,6 +223,26 @@ export interface KernelMeta {
     readonly recommendedAtIteration: number;
   };
 
+  // ── HS-128 follow-up — Tier-derived ceiling for verbosity baseline ─────
+  /**
+   * Effective `ContextProfile.maxTokens` for this kernel run. Seeded ONCE at
+   * kernel-start by runner.ts from the resolved profile (post-tier-default,
+   * post-calibration-overrides, post-capability-clamp). Read by the
+   * verbosity-detector caller in `kernel/capabilities/reflect/reactive-observer.ts`
+   * so the tier-derived baseline (`profileMaxTokens / 64`) scales correctly
+   * across local (32_768) and frontier (128_000+) runs — instead of the helper's
+   * local-only fallback (`DEFAULT_PROFILE_MAX_TOKENS = 32_768`).
+   *
+   * Seed-once / read-anywhere — the runner must NOT re-seed on every iteration.
+   * Legacy state without this field falls back to the helper's default, matching
+   * the original HS-128 behaviour.
+   *
+   * HS-128 FOLLOWUP-A — prevents over-aggressive false-positives on frontier-tier
+   * runs (threshold would otherwise trip at avg ≥1024 instead of the correct
+   * ≥4000 for a 128k context window).
+   */
+  readonly profileMaxTokens?: number;
+
   // ── HS-128 — Per-iteration token snapshot (verbosity detector input) ────
   /**
    * Rolling window of `usage.totalTokens` from the last N (≤5) LLM

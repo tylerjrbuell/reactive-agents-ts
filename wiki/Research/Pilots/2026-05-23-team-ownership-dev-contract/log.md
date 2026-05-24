@@ -268,6 +268,102 @@ created: 2026-05-23
     - apps/examples/src/reasoning/24-mechanisms-cassette-xfail.ts (M9 removed)
     - bun test packages/reasoning/tests/{terminate-rationale,m9-termination-oracle,shared/termination-oracle} 98/98
 
+- task: hs-128-followup-a-profile-max-tokens-plumb
+  date: 2026-05-24
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 1
+  tokens-est: ~61K
+  regression-prevented: overly-aggressive-frontier-baseline
+  notes: >
+    Single kernel-warden dispatch plumbed ContextProfile.maxTokens into
+    reactive-observer (HS-128 FOLLOWUP-A). Added KernelMeta.profileMaxTokens
+    typed field seeded ONCE at kernel-start in runner.ts (mirrors HS-128
+    budgetLimits seed pattern, immediately after that block at ~line 577).
+    reactive-observer passes state.meta.profileMaxTokens to evaluateVerbosity;
+    DEFAULT_PROFILE_MAX_TOKENS=32_768 retained as final fallback for
+    synthetic-state callers only. Frontier-tier 128_000 now derives
+    baseline=2000 / threshold=4000 (was hardcoded 512/1024). 1209/1209
+    reasoning tests green (+3 new: frontier / local / legacy-fallback).
+    Typecheck green. Effective src delta ~7 LOC + 47 test LOC; doc-comment
+    + 3 tests pushed total to +85 vs ≤80 cap (surfaced transparently).
+    Authority discipline: no edits outside packages/reasoning/src/kernel/**
+    + co-located tests; runner-init integration test deferred as a flagged
+    followup (typecheck enforces the seed compiles, behavioural test pins
+    the legacy fallback, full suite covers runner code paths).
+  evidence-anchors:
+    - packages/reasoning/src/kernel/state/kernel-state.ts (KernelMeta.profileMaxTokens field)
+    - packages/reasoning/src/kernel/loop/runner.ts (~line 577 seed point, mirrors #128 budgetLimits)
+    - packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:510-515 (caller pass-through)
+    - packages/reasoning/tests/kernel/capabilities/reflect/reactive-observer-verbosity.test.ts (+3 tests)
+    - bun test packages/reasoning 1209/1209
+  followups:
+    - "Runner-init integration test asserting state.meta.profileMaxTokens IS seeded — not required (typecheck + suite cover it) but a defensive belt-and-suspenders option."
+    - "Consider deprecating DEFAULT_PROFILE_MAX_TOKENS export once all callers thread profileMaxTokens — only if a future audit shows a concrete miss-wire."
+  pilot-signal:
+    re-dispatch-pattern: clean
+    first-attempt-success: yes
+    re-spawn-count: 0
+    regression-catch: none
+
+- task: gh-46-per-provider-tool-call-parser-hook
+  date: 2026-05-24
+  warden: provider-warden
+  routed: warden
+  commits: 0  # blocker surfaced — no edits
+  agent-spawns: 1
+  tokens-est: ~49K
+  regression-prevented: false-green-on-undefined-adapter-reference
+  notes: >
+    Provider-warden refused-and-surfaced. Mission scoped a 2-call-site
+    patch at local.ts:425 (complete) + 581-602 (stream) to consume
+    adapter.parseToolCalls when supplied. Empirical orientation found
+    LocalProviderLive Layer.effect consumes ONLY LLMConfig — zero
+    `adapter` references in local.ts, zero `Adapter` references in
+    runtime.ts. The brief explicitly pre-declared this exact scenario
+    as a hard blocker ("Threading the adapter into the runtime factory
+    if it's not already wired — surface as hard blocker"). Warden
+    honored that contract. Time-to-blocker: ~3 min (4 file reads + 2
+    greps). No edits, no test churn. Parent-thread spike-grep
+    confirmed adapter.parseToolCalls is invoked ONLY in
+    m12-provider-adapter-hooks.test.ts — zero production callers. Hook
+    surface is dead code today; the M12 ship verified the hook shape
+    but never wired its consumer side.
+    
+    4-option decision matrix surfaced for parent:
+      Option A (per-request injection): add adapter?: ProviderAdapter
+        to CompletionRequest (types.ts) — high blast radius (6 providers
+        + caller sites).
+      Option B (LLMConfig field): add adapter to LLMConfig — Layer-time
+        binding, lowest blast radius if LLMConfig provider sites are
+        in scope.
+      Option C (new Context.Tag): introduce ProviderAdapterTag — clean
+        Effect-TS idiom, medium blast radius, cross-package wiring
+        required.
+      Option D (do nothing — redefine semantics): acknowledge that M12
+        Hook 1/7 is consumed upstream of the provider boundary; clarify
+        in adapter.ts JSDoc + update GH #46 framing.
+    
+    Catch quality: prevented a likely re-spawn cycle where the patch
+    would have failed typecheck (`adapter is not defined`). This
+    counts as a regression-catch per pilot lift signal.
+  evidence-anchors:
+    - packages/llm-provider/src/providers/local.ts:425 (consume site for complete())
+    - packages/llm-provider/src/providers/local.ts:581-602 (sibling streaming extraction)
+    - packages/llm-provider/src/adapter.ts:103-106 (declared hook signature)
+    - packages/llm-provider/src/runtime.ts (zero adapter references — confirmed not wired)
+    - packages/llm-provider/tests/m12-provider-adapter-hooks.test.ts (the ONLY current caller)
+  followups:
+    - "Parent picks A / B / C / D before re-dispatch. Warden recommends C if Layer wiring is in scope, A otherwise. D is materially different (no code ship; redefine semantics)."
+    - "If A/B/C is picked: spawn kernel-side and provider-side wardens with explicit threading scope (cross-package, larger brief)."
+    - "If D is picked: write a one-paragraph wiki note in wiki/Architecture/Design-Specs/ clarifying that M12 hooks fire upstream of the provider boundary; update GH #46 with the redefinition and close."
+  pilot-signal:
+    re-dispatch-pattern: refused-and-surfaced
+    first-attempt-success: blocked-correctly
+    re-spawn-count: 0
+    regression-catch: prevented-false-green-on-undefined-adapter-reference
+
 - task: hs-128-verbosity-detector
   date: 2026-05-24
   warden: kernel-warden
