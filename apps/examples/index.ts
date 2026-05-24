@@ -70,6 +70,20 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/foundations/04-agent-composition.ts',
     },
+    {
+        num: 'F5',
+        label: 'agent-config',
+        category: 'foundations',
+        requiresKey: false,
+        path: './src/foundations/05-agent-config.ts',
+    },
+    {
+        num: 'F6',
+        label: 'composition',
+        category: 'foundations',
+        requiresKey: false,
+        path: './src/foundations/06-composition.ts',
+    },
     // tools — 05 offline, 06-07 real
     {
         num: '05',
@@ -91,6 +105,13 @@ const EXAMPLES: ExampleMeta[] = [
         category: 'tools',
         requiresKey: true,
         path: './src/tools/07-mcp-github.ts',
+    },
+    {
+        num: 'T7',
+        label: 'dynamic-registration',
+        category: 'tools',
+        requiresKey: false,
+        path: './src/tools/dynamic-registration.ts',
     },
     // multi-agent — real
     {
@@ -172,6 +193,13 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: true,
         path: './src/advanced/18-self-improvement.ts',
     },
+    {
+        num: 'A20',
+        label: 'compose-harness',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/20-compose-harness.ts',
+    },
     // reasoning — 20 offline
     {
         num: '19',
@@ -231,6 +259,14 @@ const EXAMPLES: ExampleMeta[] = [
         category: 'streaming',
         requiresKey: false,
         path: './src/streaming/24-streaming-sse-server.ts',
+    },
+    // messaging — requires Docker (Signal MCP) + Telegram session
+    {
+        num: 'M28',
+        label: 'signal-telegram-hub',
+        category: 'messaging',
+        requiresKey: true,
+        path: './src/messaging/signal-telegram-hub.ts',
     },
 ]
 
