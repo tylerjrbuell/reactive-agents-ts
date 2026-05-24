@@ -154,21 +154,21 @@ const EXAMPLES: ExampleMeta[] = [
         num: '08',
         label: 'a2a-protocol',
         category: 'multi-agent',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/multi-agent/08-a2a-protocol.ts',
     },
     {
         num: '09',
         label: 'orchestration',
         category: 'multi-agent',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/multi-agent/09-orchestration.ts',
     },
     {
         num: '10',
         label: 'dynamic-spawning',
         category: 'multi-agent',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/multi-agent/10-dynamic-spawning.ts',
     },
     {
@@ -194,14 +194,14 @@ const EXAMPLES: ExampleMeta[] = [
         num: '12',
         label: 'guardrails',
         category: 'trust',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/trust/12-guardrails.ts',
     },
     {
         num: '13',
         label: 'verification',
         category: 'trust',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/trust/13-verification.ts',
     },
     // advanced — mostly real, 15 offline
@@ -209,7 +209,7 @@ const EXAMPLES: ExampleMeta[] = [
         num: '14',
         label: 'cost-tracking',
         category: 'advanced',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/advanced/14-cost-tracking.ts',
     },
     {
@@ -220,24 +220,30 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/advanced/15-prompt-experiments.ts',
     },
     {
+        // xfail (framework gap L1): @reactive-agents/eval throws
+        // "Service not found: JudgeLLMService" when an agent is built with
+        // a single provider — the judge LLM service is not auto-resolved.
+        // Promote when withEvalJudge(provider) builder hook ships OR judge
+        // service is auto-bound from the default provider.
         num: '16',
-        label: 'eval-framework',
+        label: 'eval-framework (xfail)',
         category: 'advanced',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/advanced/16-eval-framework.ts',
+        expectsFail: true,
     },
     {
         num: '17',
         label: 'observability',
         category: 'advanced',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/advanced/17-observability.ts',
     },
     {
         num: '18',
         label: 'self-improvement',
         category: 'advanced',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/advanced/18-self-improvement.ts',
     },
     {
@@ -254,20 +260,15 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/advanced/snapshot-replay-determinism.ts',
     },
-    {
-        // xfail (flaky witness): strict `lean < full` on steps OR tokens does
-        // not hold deterministically under the test provider — the LLM token
-        // cost is fixed by the scenario and lean/full step counts can be
-        // equal. Promote when the witness is rewritten to assert RI
-        // phase-event emission delta (lean emits strictly fewer events) or
-        // when a cassette-driven provider produces measurable RI overhead.
-        num: 'A22',
-        label: 'with-lean-harness (xfail)',
-        category: 'advanced',
-        requiresKey: false,
-        path: './src/advanced/with-lean-harness.ts',
-        expectsFail: true,
-    },
+    // NOTE: with-lean-harness.ts is intentionally NOT registered. Witness
+    // requires verifier/RI prompts to observe a delta, but the test provider
+    // returns canned responses (no verifier prompt is generated). When
+    // run via the suite, DEFAULT_PROVIDER=ollama leaks through opts and the
+    // witness becomes a live-LLM probe with nondeterministic step/token
+    // counts. Rewrite path: assert RI phase-event emission delta (lean
+    // emits strictly fewer reactive-intelligence events) OR drive via a
+    // recorded cassette that exercises verifier/RI under test provider.
+    // File retained as a reference for the future rewrite.
     {
         // xfail: targets `.withTraceRecorder({ path })` builder hook — packages/
         // trace/src/recorder.ts exists but no chainable builder surface yet.
@@ -283,7 +284,7 @@ const EXAMPLES: ExampleMeta[] = [
         num: '19',
         label: 'reasoning-strategies',
         category: 'reasoning',
-        requiresKey: true,
+        requiresKey: false,
         path: './src/reasoning/19-reasoning-strategies.ts',
     },
     {
@@ -445,10 +446,17 @@ for (const meta of toRun) {
         const mod = (await import(meta.path)) as {
             run: (opts?: RunConfig) => Promise<ExampleResult>
         }
-        console.log(DEFAULT_MODEL, DEFAULT_PROVIDER)
+        // In --offline mode, force the deterministic test provider so
+        // examples cannot accidentally drift onto a live LLM (which
+        // produces nondeterministic step/token counts and breaks witnesses
+        // that assert relations). Live runs intentionally use the
+        // DEFAULT_PROVIDER env to exercise real adapters.
+        const effectiveProvider = offlineOnly ? 'test' : DEFAULT_PROVIDER
+        const effectiveModel = offlineOnly ? undefined : DEFAULT_MODEL
+        console.log(effectiveModel ?? '(test)', effectiveProvider)
         const result = await mod.run({
-            provider: DEFAULT_PROVIDER,
-            model: DEFAULT_MODEL,
+            provider: effectiveProvider,
+            model: effectiveModel,
         })
         const elapsed = Date.now() - wallStart
         // xfail logic: when expectsFail is set, an example failing is the
