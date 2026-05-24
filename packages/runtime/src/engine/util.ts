@@ -197,7 +197,7 @@ export type ExecutionReasoningResult = {
   status: string;
   strategy?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; selectedStrategy?: string };
+  metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string };
 };
 
 export function normalizeReasoningResult(
@@ -233,6 +233,7 @@ export function normalizeReasoningResult(
       confidence: typeof md.confidence === "number" ? md.confidence : undefined,
       llmCalls: typeof md.llmCalls === "number" ? md.llmCalls : undefined,
       terminatedBy: typeof md.terminatedBy === "string" ? md.terminatedBy : undefined,
+      rawTerminatedBy: typeof md.rawTerminatedBy === "string" ? md.rawTerminatedBy : undefined,
     },
   };
 }

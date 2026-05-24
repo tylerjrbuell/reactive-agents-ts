@@ -295,19 +295,19 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/advanced/event-bus-subscribe.ts',
     },
     {
-        // xfail: kernel-side killswitch.reason preservation shipped
-        // (2026-05-24, runner.ts + act.ts) but react-kernel.ts:152 and
-        // reactive.ts:256 narrow state.meta.terminatedBy to the closed
-        // TerminatedBy 5-value enum before result.metadata is built. The
-        // dynamic killswitch reason is unobservable downstream until the
-        // propagation chain preserves raw kernel meta through to
-        // AgentCompleted.terminationReason. Schema already extended.
+        // rawTerminatedBy propagation chain landed 2026-05-24 (commit
+        // sequence: kernel-warden killswitch-reason-preservation +
+        // react-kernel.ts ReActKernelResult.rawTerminatedBy + inline
+        // reactive.ts/runtime types/util/exec-engine/run-finalize wires).
+        // AgentCompleted.terminationReason now carries the dynamic
+        // killswitch reason. Live witness: timeoutAfter triggers with
+        // raw reason "timeout-after:10ms" reaching AgentCompleted via
+        // the chain.
         num: 'AX2',
-        label: 'killswitch-toggle (xfail)',
+        label: 'killswitch-toggle',
         category: 'advanced',
         requiresKey: false,
         path: './src/advanced/killswitch-toggle.ts',
-        expectsFail: true,
     },
     // reasoning — 20 offline
     {

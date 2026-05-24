@@ -83,6 +83,50 @@ export function makeKernel(options?: { phases?: Phase[] }): ThoughtKernel {
  */
 export const reactKernel: ThoughtKernel = makeKernel();
 
+/**
+ * Derive the canonical `terminatedBy` + raw open-string channel from a kernel
+ * state's `meta.terminatedBy` + `status` pair.
+ *
+ * Returns BOTH:
+ *   - `terminatedBy`: the closed 5-value enum used by `ReActKernelResult.terminatedBy`
+ *   - `rawTerminatedBy?`: the raw `state.meta.terminatedBy` string, preserved
+ *     so dynamic killswitch reasons (e.g. `"budget-limit:tokens:1/0"`) survive
+ *     the narrowing for downstream observability.
+ *
+ * `rawTerminatedBy` is OMITTED (not set to `undefined`) when the source is
+ * absent, so spread-based consumers don't pollute their result with
+ * `{ rawTerminatedBy: undefined }`.
+ *
+ * Pure / synchronous / no Effect — exported for unit testability.
+ */
+export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; status: KernelState["status"] }): {
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error";
+  rawTerminatedBy?: string;
+} {
+  const rawTerminatedBy =
+    typeof state.meta.terminatedBy === "string" ? state.meta.terminatedBy : undefined;
+  const terminatedBy:
+    | "final_answer"
+    | "final_answer_tool"
+    | "max_iterations"
+    | "end_turn"
+    | "llm_error" =
+    rawTerminatedBy === "llm_error"
+      ? "llm_error"
+      : rawTerminatedBy === "final_answer_tool"
+        ? "final_answer_tool"
+        : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
+          ? "end_turn"
+          : rawTerminatedBy === "final_answer_regex"
+            ? "final_answer"
+            : state.status === "done"
+              ? "final_answer"
+              : "max_iterations";
+  return rawTerminatedBy !== undefined
+    ? { terminatedBy, rawTerminatedBy }
+    : { terminatedBy };
+}
+
 // ── Backwards-compatible wrapper ─────────────────────────────────────────────
 
 /**
@@ -141,25 +185,10 @@ export const executeReActKernel = (
       exitOnAllToolsCalled: input.exitOnAllToolsCalled,
     });
 
-    // Determine terminatedBy from state — map oracle reasons to canonical types
-    const rawTerminatedBy = state.meta.terminatedBy as string | undefined;
-    const terminatedBy:
-      | "final_answer"
-      | "final_answer_tool"
-      | "max_iterations"
-      | "end_turn"
-      | "llm_error" =
-      rawTerminatedBy === "llm_error"
-        ? "llm_error"
-        : rawTerminatedBy === "final_answer_tool"
-          ? "final_answer_tool"
-          : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
-            ? "end_turn"
-            : rawTerminatedBy === "final_answer_regex"
-              ? "final_answer"
-              : state.status === "done"
-                ? "final_answer"
-                : "max_iterations";
+    // Determine terminatedBy from state — map oracle reasons to canonical types.
+    // `rawTerminatedBy` preserves the raw open string (e.g. "budget-limit:tokens:1/0")
+    // so dynamic killswitch reasons survive narrowing for downstream observability.
+    const { terminatedBy, rawTerminatedBy } = deriveTerminatedBy(state);
 
     // When failed, surface kernel error; else output / last thought
     const output =
@@ -177,6 +206,7 @@ export const executeReActKernel = (
       toolsUsed: [...state.toolsUsed],
       iterations: state.iteration,
       terminatedBy,
+      ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
       finalAnswerCapture: state.meta.finalAnswerCapture as FinalAnswerCapture | undefined,
       llmCalls: state.llmCalls ?? 0,
     };

@@ -883,8 +883,23 @@ export interface ReActKernelResult {
   toolsUsed: string[];
   /** Number of iterations completed */
   iterations: number;
-  /** How the loop terminated */
+  /** How the loop terminated (narrowed to closed 5-value enum) */
   terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error";
+  /**
+   * Raw `state.meta.terminatedBy` preserved verbatim as an open string channel.
+   *
+   * The narrowed `terminatedBy` field above collapses dynamic killswitch reasons
+   * (e.g. `"budget-limit:tokens:1/0"`, `"timeout-after:30s"`,
+   * `"max-iterations:5"`, `"require-approval-for:denied:TOOL"`,
+   * `"watchdog:no-progress-for:Nms"`) into `"max_iterations"`. Downstream
+   * propagation (AgentCompleted.terminationReason) needs the raw string;
+   * this field carries it alongside the closed-enum form.
+   *
+   * Omitted when `state.meta.terminatedBy` is undefined — never set to
+   * `undefined` explicitly so consumers can distinguish "no reason" from
+   * "present but undefined". (HS-killswitch-toggle / 2026-05-24)
+   */
+  rawTerminatedBy?: string;
   /** Captured final-answer tool payload — present when terminatedBy === "final_answer_tool" */
   finalAnswerCapture?: FinalAnswerCapture;
 }

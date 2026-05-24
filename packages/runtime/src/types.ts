@@ -213,6 +213,14 @@ export interface ExecutionContextMetadata {
       confidence?: number;
       llmCalls?: number;
       terminatedBy?: string;
+      /**
+       * Open-string channel preserving raw kernel `state.meta.terminatedBy`
+       * BEFORE narrowing to the closed TerminatedBy 5-value enum. Carries
+       * dynamic killswitch reasons (e.g. "budget-limit:tokens:1/0") and the
+       * enumerable TerminateReason values. Distinct from `terminatedBy`
+       * above which is the closed-enum normalized result.
+       */
+      rawTerminatedBy?: string;
       reflexionCritiques?: string[];
       finalAnswerCapture?: unknown;
     };
@@ -277,6 +285,20 @@ export interface ExecutionContextMetadata {
   taskComplexity?: TaskComplexity;
   /** Set when the token/cost budget is exceeded */
   budgetExceeded?: boolean;
+
+  // ── Termination ─────────────────────────────────────────────────────────
+  /**
+   * Closed-enum termination reason narrowed at the reasoning-strategy
+   * boundary. One of the 5 TerminatedBy values.
+   */
+  terminatedBy?: string;
+  /**
+   * Raw kernel termination reason preserved BEFORE narrowing. Carries
+   * dynamic killswitch reasons (e.g. "budget-limit:tokens:1/0") and the
+   * enumerable TerminateReason values. Surfaced to consumers via
+   * AgentCompleted.terminationReason.
+   */
+  rawTerminatedBy?: string;
 
   // ── Free-form for hooks / extensions ────────────────────────────────────
   [key: string]: unknown;

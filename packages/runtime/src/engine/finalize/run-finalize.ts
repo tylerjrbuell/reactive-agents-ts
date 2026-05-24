@@ -38,14 +38,16 @@ export const finalizeRun = (
   return Effect.gen(function* () {
     // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
     if (eb) {
-      // Raw termination reason from ctx.metadata.terminatedBy. Carries the
-      // dynamic killswitch reason (e.g. "budget-limit:tokens:1000/512") OR
-      // the enumerable TerminateReason value for kernel-driven termination
-      // paths. Distinct from result.metadata.terminatedBy which is
-      // normalized to the closed TerminatedBy enum.
-      const terminationReason = (
-        ctx as unknown as { metadata?: { terminatedBy?: string } }
-      ).metadata?.terminatedBy;
+      // Raw termination reason from ctx.metadata.rawTerminatedBy (preserved
+      // before the kernel→reasoning-result narrowing to closed TerminatedBy
+      // 5-value enum). Falls back to ctx.metadata.terminatedBy when the raw
+      // channel isn't populated (legacy paths). Carries the dynamic
+      // killswitch reason (e.g. "budget-limit:tokens:1000/512") OR the
+      // enumerable TerminateReason value for kernel-driven termination.
+      const ctxMeta = (
+        ctx as unknown as { metadata?: { terminatedBy?: string; rawTerminatedBy?: string } }
+      ).metadata;
+      const terminationReason = ctxMeta?.rawTerminatedBy ?? ctxMeta?.terminatedBy;
 
       yield* eb.publish({
         _tag: "AgentCompleted",

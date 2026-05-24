@@ -268,6 +268,48 @@ created: 2026-05-23
     - apps/examples/src/reasoning/24-mechanisms-cassette-xfail.ts (M9 removed)
     - bun test packages/reasoning/tests/{terminate-rationale,m9-termination-oracle,shared/termination-oracle} 98/98
 
+- task: react-kernel-raw-terminated-by
+  date: 2026-05-24
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 1
+  tokens-est: ~61K
+  regression-prevented: killswitch-reason-narrowing-loss
+  notes: >
+    Single kernel-warden dispatch closed the last kernel-side blocker in
+    the killswitch propagation chain. Extracted pure
+    `deriveTerminatedBy(state)` helper in react-kernel.ts; added optional
+    `rawTerminatedBy?: string` to `ReActKernelResult` interface in
+    kernel-state.ts; refactored executeReActKernel to emit both fields.
+    Two interpretive calls surfaced cleanly: (a) brief targeted
+    result.metadata.* shape but ReActKernelResult is FLAT — patched the
+    flat shape per out-of-scope-surface clause; (b) brief said no
+    kernel-state.ts schema change but the flat-shape route required one
+    optional field (in kernel-warden authority bounds). +7 tests
+    (1221/1221 reasoning suite green). LOC +45 (5 over 40 soft budget,
+    JSDoc-heavy). Confidence 0.82. Two propagation gaps surfaced for
+    parent: (1) plan-execute.ts:1339 doesn't forward terminatedBy
+    upward (parent's inline list only mentioned reactive.ts); (2)
+    pre-existing llmCalls structural-typing waiver in
+    ReActKernelResult — unrelated. Authority discipline: edits confined
+    to kernel/loop/react-kernel.ts + kernel/state/kernel-state.ts +
+    co-located tests; no edits to strategies/, runtime/, core/, wiki/.
+  evidence-anchors:
+    - packages/reasoning/src/kernel/loop/react-kernel.ts:87-130 (deriveTerminatedBy helper)
+    - packages/reasoning/src/kernel/loop/react-kernel.ts:206 (conditional spread)
+    - packages/reasoning/src/kernel/state/kernel-state.ts:888-902 (ReActKernelResult.rawTerminatedBy)
+    - packages/reasoning/tests/kernel/loop/react-kernel-raw-terminated-by.test.ts (+7 tests)
+    - bun test packages/reasoning 1221/1221
+  followups:
+    - "plan-execute.ts:1339 doesn't forward terminatedBy/rawTerminatedBy upward — parent declined to patch (multi-step aggregation complexity); reactive strategy works, plan-execute strategy doesn't surface killswitch reasons (filed as separate followup)."
+    - "Pre-existing llmCalls structural-typing waiver on ReActKernelResult — unrelated."
+  pilot-signal:
+    re-dispatch-pattern: clean
+    first-attempt-success: yes
+    re-spawn-count: 0
+    regression-catch: prevented-killswitch-reason-loss-at-kernel-narrowing
+
 - task: killswitch-reason-preservation
   date: 2026-05-24
   warden: kernel-warden

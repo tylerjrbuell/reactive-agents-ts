@@ -1042,6 +1042,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const terminatedByRaw = (rr?.metadata?.terminatedBy ?? "end_turn") as
                   "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error";
 
+                // Surface the parallel raw kernel termination reason on ctx so
+                // run-finalize can publish it as AgentCompleted.terminationReason.
+                // Falls back to terminatedByRaw when the strategy didn't preserve
+                // the raw channel (legacy strategies).
+                ctx.metadata.terminatedBy = terminatedByRaw;
+                if (rr?.metadata?.rawTerminatedBy !== undefined) {
+                  ctx.metadata.rawTerminatedBy = rr.metadata.rawTerminatedBy;
+                }
+
                 // Extract dialect from reasoning metadata (set by Task 13 resolver threading)
                 const dialectObserved = ((rr as any)?.metadata?.lastDialectObserved ?? "none") as
                   "native-fc" | "fenced-json" | "pseudo-code" | "nameless-shape" | "none";

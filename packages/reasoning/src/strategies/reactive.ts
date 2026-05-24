@@ -295,6 +295,13 @@ export const executeReactive = (
       totalCost: state.cost,
       extraMetadata: {
         terminatedBy,
+        // Parallel open-string channel preserving raw kernel meta.
+        // Carries dynamic killswitch reasons (e.g.
+        // "budget-limit:tokens:1/0") that don't fit the closed
+        // TerminatedBy 5-value enum on `terminatedBy` above.
+        // Drops through to AgentCompleted.terminationReason via
+        // engine ctx.metadata.rawTerminatedBy.
+        ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
         llmCalls: state.llmCalls ?? 0,
         ...(state.meta.finalAnswerCapture !== undefined
           ? { finalAnswerCapture: state.meta.finalAnswerCapture }
