@@ -14,6 +14,29 @@ function buildPipeline(ks: (h: Harness) => void): HarnessPipeline {
   return new HarnessPipeline(reg._collected as ConstructorParameters<typeof HarnessPipeline>[0]);
 }
 
+// HS-27 (GH #83): poll a hook until it returns an abort verdict (or the
+// timeout elapses). Replaces fixed-delay sleeps that were flake-prone on
+// slow CI — the killswitch hooks under test wrap real `setTimeout` timers
+// internally, so we still need real wall-clock progress, but we no longer
+// gamble on a specific fixed wait fitting both the timer and the JS event
+// loop scheduling jitter.
+async function pollUntilAbort(
+  pipeline: HarnessPipeline,
+  phase: 'think',
+  timeoutMs = 2000,
+  intervalMs = 2,
+): Promise<{ abort?: string; reason?: string } | undefined> {
+  const start = Date.now();
+  let last: any;
+  while (Date.now() - start < timeoutMs) {
+    const hooks = pipeline.collectPhaseHooks('before', phase);
+    last = await hooks[0]!({ phase, iteration: 1, state: mockState });
+    if (last && (last as any).abort) return last as any;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return last;
+}
+
 // Complete KernelStateLike for tests (the harness ctx requires the full shape).
 const mockState: Readonly<KernelStateLike> = {
   taskId: 'test',
@@ -89,10 +112,7 @@ describe('timeoutAfter', () => {
     // Fire bootstrap hooks to start timer
     const bootstrapHooks = pipeline.collectPhaseHooks('before', 'bootstrap');
     for (const h of bootstrapHooks) await h({ phase: 'bootstrap', iteration: 0, state: mockState });
-    // Wait for timeout
-    await new Promise(r => setTimeout(r, 10));
-    const thinkHooks = pipeline.collectPhaseHooks('before', 'think');
-    const result = await thinkHooks[0]!({ phase: 'think', iteration: 1, state: mockState });
+    const result = await pollUntilAbort(pipeline, 'think');
     expect(result).toMatchObject({ abort: 'stop' });
   });
 
@@ -129,9 +149,7 @@ describe('timeoutAfter', () => {
 describe('watchdog', () => {
   it('aborts when no progress for threshold', async () => {
     const pipeline = buildPipeline(watchdog({ noProgressFor: 1 })); // 1ms
-    await new Promise(r => setTimeout(r, 10));
-    const hooks = pipeline.collectPhaseHooks('before', 'think');
-    const result = await hooks[0]!({ phase: 'think', iteration: 1, state: mockState });
+    const result = await pollUntilAbort(pipeline, 'think');
     expect(result).toMatchObject({ abort: 'stop' });
   });
 
@@ -148,21 +166,23 @@ describe('watchdog', () => {
     // pass-through), so the old tap-based reset was dead and the timer
     // froze at construction — watchdog would kill healthy agents. after(act)
     // fires once per executed tool batch = a real progress signal.
-    const pipeline = buildPipeline(watchdog({ noProgressFor: 50 })); // 50ms
+    //
+    // HS-27 (GH #83): use a generous threshold + short pre-reset advance so
+    // CI scheduling jitter can't push the sleep past the threshold before
+    // reset fires. 500ms window with a 20ms advance leaves ~480ms of headroom.
+    const pipeline = buildPipeline(watchdog({ noProgressFor: 500 }));
     const progressHooks = pipeline.collectPhaseHooks('after', 'act');
     expect(progressHooks.length).toBe(1);
-    await new Promise(r => setTimeout(r, 40));
+    await new Promise(r => setTimeout(r, 20));
     await progressHooks[0]!({ phase: 'act', iteration: 1, state: mockState }); // progress → reset
     const checkHooks = pipeline.collectPhaseHooks('before', 'think');
     const checkResult = await checkHooks[0]!({ phase: 'think', iteration: 1, state: mockState });
-    expect(checkResult).toBeUndefined(); // timer reset → no abort despite 40ms elapsed pre-reset
+    expect(checkResult).toBeUndefined(); // timer reset → no abort
   });
 
   it('supports onTrigger option', async () => {
     const pipeline = buildPipeline(watchdog({ noProgressFor: 1, onTrigger: 'terminate' }));
-    await new Promise(r => setTimeout(r, 10));
-    const hooks = pipeline.collectPhaseHooks('before', 'think');
-    const result = await hooks[0]!({ phase: 'think', iteration: 1, state: mockState });
+    const result = await pollUntilAbort(pipeline, 'think');
     expect(result).toMatchObject({ abort: 'terminate' });
   });
 });

@@ -57,8 +57,14 @@ describe("ReactiveAgent .withChannels() + gateway start", () => {
       .build();
 
     const handle = agent.start();
-    // `start()` returns immediately; channel adapters are registered asynchronously on the gateway loop.
-    await new Promise((r) => setTimeout(r, 150));
+    // HS-27 (GH #83): channel adapters register on the gateway loop's first
+    // tick. Poll for that tick rather than sleeping a fixed 150ms.
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 5000) {
+      const status = await agent.gatewayStatus();
+      if (status && status.stats.heartbeatsFired + status.stats.heartbeatsSkipped >= 1) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
     await Effect.runPromise(
       webhook.handleRequest({
         body: JSON.stringify({

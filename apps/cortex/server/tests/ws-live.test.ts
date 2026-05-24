@@ -83,12 +83,22 @@ describe("handleLiveOpen / handleLiveClose", () => {
     } as unknown as ServerWebSocket<unknown>;
     const ws = { data: { agentId: "live-a" }, raw } as unknown as ElysiaWS<LiveWsData>;
 
+    // HS-27 (GH #83): poll subscriberCount until the open-fork lands rather
+    // than sleeping a fixed 30ms.
+    const waitForCount = async (target: number, timeoutMs = 2000) => {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        const n = await Effect.runPromise(bridge.subscriberCount("live-a"));
+        if (n === target) return n;
+        await new Promise((r) => setTimeout(r, 2));
+      }
+      return await Effect.runPromise(bridge.subscriberCount("live-a"));
+    };
+
     handleLiveOpen(ws, bridge);
-    await new Promise((r) => setTimeout(r, 30));
-    expect(await Effect.runPromise(bridge.subscriberCount("live-a"))).toBe(1);
+    expect(await waitForCount(1)).toBe(1);
 
     handleLiveClose(ws, bridge);
-    await new Promise((r) => setTimeout(r, 30));
-    expect(await Effect.runPromise(bridge.subscriberCount("live-a"))).toBe(0);
+    expect(await waitForCount(0)).toBe(0);
   });
 });

@@ -9,6 +9,30 @@ import { CortexEventBridgeLive } from "../services/event-bridge.js";
 const makeLayer = (db: Database) =>
   CortexIngestServiceLive(db).pipe(Layer.provide(CortexEventBridgeLive));
 
+// HS-27 (GH #83): replace fixed-delay sleeps with predicate polling.
+async function waitForRows(
+  getCount: () => number,
+  target: number,
+  timeoutMs = 2000,
+): Promise<number> {
+  const start = Date.now();
+  let last = getCount();
+  while (Date.now() - start < timeoutMs) {
+    last = getCount();
+    if (last >= target) return last;
+    await new Promise((r) => setTimeout(r, 2));
+  }
+  return last;
+}
+
+// For invalid-payload tests we want to assert rowCount stays at 0. The
+// handleIngestMessage path for invalid input returns synchronously (no
+// Effect.runFork), so a single microtask flush is enough — no fixed wait.
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("handleIngestMessage", () => {
   let db: Database;
   let layer: ReturnType<typeof makeLayer>;
@@ -24,7 +48,7 @@ describe("handleIngestMessage", () => {
 
   it("ignores invalid JSON", async () => {
     handleIngestMessage(null, "not-json{{{", layer);
-    await new Promise((r) => setTimeout(r, 20));
+    await flushMicrotasks();
     expect(rowCount()).toBe(0);
   });
 
@@ -34,7 +58,7 @@ describe("handleIngestMessage", () => {
       JSON.stringify({ v: 2, agentId: "a", runId: "r", event: { _tag: "TaskCreated", taskId: "t" } }),
       layer,
     );
-    await new Promise((r) => setTimeout(r, 20));
+    await flushMicrotasks();
     expect(rowCount()).toBe(0);
   });
 
@@ -44,13 +68,13 @@ describe("handleIngestMessage", () => {
       JSON.stringify({ v: 1, runId: "r", event: { _tag: "TaskCreated", taskId: "t" } }),
       layer,
     );
-    await new Promise((r) => setTimeout(r, 20));
+    await flushMicrotasks();
     expect(rowCount()).toBe(0);
   });
 
   it("ignores missing event", async () => {
     handleIngestMessage(null, JSON.stringify({ v: 1, agentId: "a", runId: "r" }), layer);
-    await new Promise((r) => setTimeout(r, 20));
+    await flushMicrotasks();
     expect(rowCount()).toBe(0);
   });
 
@@ -65,7 +89,7 @@ describe("handleIngestMessage", () => {
       }),
       layer,
     );
-    await new Promise((r) => setTimeout(r, 50));
+    await waitForRows(rowCount, 1);
     expect(rowCount()).toBe(1);
   });
 
@@ -80,10 +104,10 @@ describe("handleIngestMessage", () => {
       "utf8",
     );
     handleIngestMessage(null, raw, layer);
-    await new Promise((r) => setTimeout(r, 50));
-    const n = (db.prepare("SELECT COUNT(*) as c FROM cortex_events WHERE run_id = 'r2'").get() as { c: number })
-      .c;
-    expect(n).toBe(1);
+    const readR2 = () =>
+      (db.prepare("SELECT COUNT(*) as c FROM cortex_events WHERE run_id = 'r2'").get() as { c: number }).c;
+    await waitForRows(readR2, 1);
+    expect(readR2()).toBe(1);
   });
 
   it("accepts object body (already-decoded JSON)", async () => {
@@ -97,9 +121,9 @@ describe("handleIngestMessage", () => {
       },
       layer,
     );
-    await new Promise((r) => setTimeout(r, 50));
-    const n = (db.prepare("SELECT COUNT(*) as c FROM cortex_events WHERE run_id = 'r3'").get() as { c: number })
-      .c;
-    expect(n).toBe(1);
+    const readR3 = () =>
+      (db.prepare("SELECT COUNT(*) as c FROM cortex_events WHERE run_id = 'r3'").get() as { c: number }).c;
+    await waitForRows(readR3, 1);
+    expect(readR3()).toBe(1);
   });
 });

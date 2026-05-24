@@ -12,12 +12,17 @@ test(".withTracing() persists JSONL for a run", async () => {
   const result = await agent.run("ping")
   expect(result.output).toContain("pong")
 
-  // Give a moment for async flush
-  await new Promise((r) => setTimeout(r, 100))
-
-  // Find a JSONL file in dir (runId may vary)
-  const { readdirSync } = await import("node:fs")
-  const files = readdirSync(dir).filter((f: string) => f.endsWith(".jsonl"))
+  // HS-27 (GH #83): poll for JSONL flush rather than sleeping 100ms.
+  const { readdirSync, existsSync } = await import("node:fs")
+  const start = Date.now()
+  let files: string[] = []
+  while (Date.now() - start < 5000) {
+    if (existsSync(dir)) {
+      files = readdirSync(dir).filter((f: string) => f.endsWith(".jsonl"))
+      if (files.length > 0) break
+    }
+    await new Promise((r) => setTimeout(r, 5))
+  }
   expect(files.length).toBeGreaterThan(0)
 
   rmSync(dir, { recursive: true, force: true })

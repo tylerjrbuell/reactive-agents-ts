@@ -46,12 +46,18 @@ describe("ReactiveAgent.gatewayStatus()", () => {
 
     const handle = agent.start();
 
-    // Let a tick fire
-    await new Promise((r) => setTimeout(r, 120));
-
-    const status = await agent.gatewayStatus();
+    // HS-27 (GH #83): poll until heartbeat counter advances rather than
+    // sleeping a fixed 120ms. Fixed sleeps were flake-prone on slow CI.
+    const startedAt = Date.now();
+    let status = await agent.gatewayStatus();
+    while (
+      Date.now() - startedAt < 5000 &&
+      (!status || status.stats.heartbeatsFired + status.stats.heartbeatsSkipped < 1)
+    ) {
+      await new Promise((r) => setTimeout(r, 5));
+      status = await agent.gatewayStatus();
+    }
     expect(status).not.toBeNull();
-    // Heartbeats should have been processed through the GatewayService
     expect(status!.stats.heartbeatsFired + status!.stats.heartbeatsSkipped).toBeGreaterThanOrEqual(1);
 
     await handle.stop();

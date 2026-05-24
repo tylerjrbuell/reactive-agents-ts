@@ -1,5 +1,24 @@
 import { describe, test, expect } from "bun:test";
 
+// HS-27 (GH #83): waitForGatewayTick polls live status until the heartbeat
+// counter advances. Replaces fixed-delay `setTimeout(120)` waits that were
+// flaky under slow CI — the test no longer cares how long the loop tick
+// takes, only that one fired.
+async function waitForGatewayTick(
+  agent: { gatewayStatus(): Promise<any> },
+  minHeartbeats = 1,
+  timeoutMs = 5000,
+  pollMs = 5,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const status = await agent.gatewayStatus();
+    if (status && status.stats.heartbeatsFired >= minHeartbeats) return;
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  throw new Error(`Gateway did not fire ${minHeartbeats} heartbeats within ${timeoutMs}ms`);
+}
+
 describe("ReactiveAgent.start() — gateway loop", () => {
   test("start() throws if gateway is not configured", async () => {
     const { ReactiveAgents } = await import("../src/builder");
@@ -27,8 +46,7 @@ describe("ReactiveAgent.start() — gateway loop", () => {
     expect(typeof handle.stop).toBe("function");
     expect(handle.done).toBeInstanceOf(Promise);
 
-    // Let a tick fire
-    await new Promise((r) => setTimeout(r, 120));
+    await waitForGatewayTick(agent, 1);
 
     const summary = await handle.stop();
     expect(summary.heartbeatsFired).toBeGreaterThanOrEqual(1);
@@ -52,8 +70,7 @@ describe("ReactiveAgent.start() — gateway loop", () => {
 
     const handle = agent.start();
 
-    // Let a tick fire
-    await new Promise((r) => setTimeout(r, 120));
+    await waitForGatewayTick(agent, 1);
 
     const stopSummary = await handle.stop();
     const doneSummary = await handle.done;
@@ -75,8 +92,7 @@ describe("ReactiveAgent.start() — gateway loop", () => {
 
     const handle = agent.start();
 
-    // Let several ticks fire
-    await new Promise((r) => setTimeout(r, 250));
+    await waitForGatewayTick(agent, 1);
 
     const summary = await handle.stop();
     // At least the first heartbeat should execute (adaptive policy allows first heartbeat)
@@ -99,7 +115,13 @@ describe("ReactiveAgent.start() — gateway loop", () => {
       .build();
 
     const handle = agent.start();
-    await new Promise((r) => setTimeout(r, 120));
+    // Wait until both a heartbeat fires AND totalRuns advances (test asserts run > 0)
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 5000) {
+      const status = await agent.gatewayStatus();
+      if (status && status.stats.heartbeatsFired >= 1 && status.stats.totalRuns >= 1) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
     const summary = await handle.stop();
     expect(summary.totalRuns).toBeGreaterThanOrEqual(1);
     await agent.dispose();
