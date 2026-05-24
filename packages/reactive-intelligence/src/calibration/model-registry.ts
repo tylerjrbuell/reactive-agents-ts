@@ -6,6 +6,7 @@ export const MODEL_REGISTRY: Record<string, ModelRegistryEntry> = {
   "cogito:14b":    { contextLimit: 32_768, tier: "local", logprobSupport: true },
   "qwen3.5:14b":   { contextLimit: 32_768, tier: "local", logprobSupport: true },
   "qwen3:14b":     { contextLimit: 32_768, tier: "local", logprobSupport: true },
+  "qwen3:4b":      { contextLimit: 32_768, tier: "local", logprobSupport: false },
   "llama3.3:70b":  { contextLimit: 131_072, tier: "local", logprobSupport: true },
 
   // Anthropic (prefix match — versioned IDs like claude-sonnet-4-20250514)
