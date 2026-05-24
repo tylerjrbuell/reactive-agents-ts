@@ -19,6 +19,7 @@ import type {
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
+import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 
 /**
  * LiteLLM Provider — OpenAI-compatible adapter for LiteLLM proxy.
@@ -306,6 +307,22 @@ export const LiteLLMProviderLive = Layer.effect(
               ? request.model
               : request.model?.model ?? defaultModel;
 
+          // Adapter selection up-front for tool_calls normalization. When
+          // the adapter supplies parseToolCalls we SUPPRESS per-chunk
+          // tool_use_* emissions and synthesize them at finish_reason from
+          // the accumulated tool-call map. Pattern mirrors openai.ts
+          // stream() — LiteLLM proxies OpenAI-compat dialect so the chunk
+          // shape and lifecycle are identical. Tier="unknown" because the
+          // proxied family is opaque from this layer; calibration lookup
+          // happens by model name.
+          const { adapter: streamAdapter } = selectAdapter(
+            { supportsToolCalling: true },
+            "unknown",
+            model,
+          );
+          const useAdapterNormalization =
+            typeof streamAdapter.parseToolCalls === "function";
+
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
               try {
@@ -322,18 +339,26 @@ export const LiteLLMProviderLive = Layer.effect(
                   });
                 }
 
+                const streamBody: Record<string, unknown> = {
+                  model,
+                  max_tokens:
+                    request.maxTokens ?? config.defaultMaxTokens,
+                  temperature:
+                    request.temperature ?? config.defaultTemperature,
+                  messages,
+                  stream: true,
+                  // OpenAI-compat: request usage on the final chunk so we
+                  // can emit cost without a second roundtrip.
+                  stream_options: { include_usage: true },
+                };
+                if (request.tools && request.tools.length > 0) {
+                  streamBody.tools = request.tools.map(toLiteLLMTool);
+                }
+
                 const res = await fetch(`${baseURL}/chat/completions`, {
                   method: "POST",
                   headers,
-                  body: JSON.stringify({
-                    model,
-                    max_tokens:
-                      request.maxTokens ?? config.defaultMaxTokens,
-                    temperature:
-                      request.temperature ?? config.defaultTemperature,
-                    messages,
-                    stream: true,
-                  }),
+                  body: JSON.stringify(streamBody),
                 });
 
                 if (!res.ok || !res.body) {
@@ -344,6 +369,74 @@ export const LiteLLMProviderLive = Layer.effect(
                 const decoder = new TextDecoder();
                 let buffer = "";
                 let fullContent = "";
+                // Per-index tool-call accumulator (OpenAI-compat dialect).
+                const toolCallAccum: Map<
+                  number,
+                  { id: string; name: string; arguments: string }
+                > = new Map();
+                let finalUsage:
+                  | { prompt_tokens: number; completion_tokens: number }
+                  | undefined;
+                // Synthesis is single-shot: finish_reason fires first, then
+                // [DONE] arrives. Without the guard both paths would emit
+                // tool_use_start + delta pairs and downstream accumulators
+                // would see duplicates.
+                let synthesized = false;
+
+                const synthesizeAndEmitToolCalls = (
+                  finishReason: string,
+                ): void => {
+                  if (synthesized) return;
+                  if (toolCallAccum.size === 0) {
+                    synthesized = true;
+                    return;
+                  }
+                  synthesized = true;
+                  const rawCalls = [...toolCallAccum.entries()]
+                    .sort(([a], [b]) => a - b)
+                    .map(([, v]) => ({
+                      id: v.id,
+                      type: "function" as const,
+                      function: {
+                        name: v.name,
+                        arguments: v.arguments,
+                      },
+                    }));
+
+                  if (useAdapterNormalization) {
+                    const syntheticResponse = {
+                      choices: [
+                        {
+                          message: {
+                            content: fullContent,
+                            role: "assistant",
+                            tool_calls: rawCalls,
+                          },
+                          finish_reason: finishReason,
+                        },
+                      ],
+                    };
+                    const normalized = streamAdapter.parseToolCalls?.(
+                      syntheticResponse,
+                      model,
+                    );
+                    if (normalized && normalized.length > 0) {
+                      for (let i = 0; i < normalized.length; i++) {
+                        const tc = normalized[i]!;
+                        const id = rawCalls[i]?.id || `litellm-tc-${i}`;
+                        emitToolUseStart(emit, id, tc.name);
+                        emitToolUseDelta(
+                          emit,
+                          JSON.stringify(tc.arguments),
+                        );
+                      }
+                      return;
+                    }
+                  }
+                  // No normalization (or it returned undefined / empty).
+                  // Per-chunk emissions already fired tool_use_start +
+                  // tool_use_delta for each call, so nothing left to emit.
+                };
 
                 while (true) {
                   const { done, value } = await reader.read();
@@ -358,9 +451,30 @@ export const LiteLLMProviderLive = Layer.effect(
                     if (!trimmed.startsWith("data:")) continue;
                     const data = trimmed.slice(5).trim();
                     if (data === "[DONE]") {
+                      // Some proxies emit [DONE] without first sending a
+                      // chunk with finish_reason. Synthesize tool calls
+                      // defensively before closing.
+                      synthesizeAndEmitToolCalls("stop");
                       emit.single({
                         type: "content_complete",
                         content: fullContent,
+                      });
+                      const inputTokens = finalUsage?.prompt_tokens ?? 0;
+                      const outputTokens = finalUsage?.completion_tokens ?? 0;
+                      emit.single({
+                        type: "usage",
+                        usage: {
+                          inputTokens,
+                          outputTokens,
+                          totalTokens: inputTokens + outputTokens,
+                          estimatedCost: calculateCost(
+                            inputTokens,
+                            outputTokens,
+                            model,
+                            undefined,
+                            config.pricingRegistry,
+                          ),
+                        },
                       });
                       emit.end();
                       return;
@@ -369,7 +483,17 @@ export const LiteLLMProviderLive = Layer.effect(
                     try {
                       const chunk = JSON.parse(data) as {
                         choices: Array<{
-                          delta: { content?: string };
+                          delta: {
+                            content?: string;
+                            tool_calls?: Array<{
+                              index: number;
+                              id?: string;
+                              function?: {
+                                name?: string;
+                                arguments?: string;
+                              };
+                            }>;
+                          };
                           finish_reason?: string;
                         }>;
                         usage?: {
@@ -384,26 +508,54 @@ export const LiteLLMProviderLive = Layer.effect(
                         emit.single({ type: "text_delta", text: delta });
                       }
 
+                      // Accumulate tool call deltas. When adapter
+                      // normalization is active we still accumulate (so we
+                      // can synthesize at finish_reason) but suppress
+                      // per-chunk emissions.
+                      const toolDeltas =
+                        chunk.choices[0]?.delta?.tool_calls;
+                      if (toolDeltas) {
+                        for (const tc of toolDeltas) {
+                          const existing = toolCallAccum.get(tc.index);
+                          if (existing) {
+                            if (tc.function?.arguments) {
+                              existing.arguments += tc.function.arguments;
+                            }
+                          } else {
+                            toolCallAccum.set(tc.index, {
+                              id: tc.id ?? "",
+                              name: tc.function?.name ?? "",
+                              arguments: tc.function?.arguments ?? "",
+                            });
+                            if (
+                              !useAdapterNormalization &&
+                              tc.id &&
+                              tc.function?.name
+                            ) {
+                              emitToolUseStart(
+                                emit,
+                                tc.id,
+                                tc.function.name,
+                              );
+                            }
+                          }
+                          if (
+                            !useAdapterNormalization &&
+                            tc.function?.arguments
+                          ) {
+                            emitToolUseDelta(emit, tc.function.arguments);
+                          }
+                        }
+                      }
+
+                      if (chunk.usage) {
+                        finalUsage = chunk.usage;
+                      }
+
                       if (chunk.choices[0]?.finish_reason) {
-                        const inputTokens =
-                          chunk.usage?.prompt_tokens ?? 0;
-                        const outputTokens =
-                          chunk.usage?.completion_tokens ?? 0;
-                        emit.single({
-                          type: "usage",
-                          usage: {
-                            inputTokens,
-                            outputTokens,
-                            totalTokens: inputTokens + outputTokens,
-                            estimatedCost: calculateCost(
-                              inputTokens,
-                              outputTokens,
-                              model,
-                              undefined,
-                              config.pricingRegistry,
-                            ),
-                          },
-                        });
+                        synthesizeAndEmitToolCalls(
+                          chunk.choices[0].finish_reason,
+                        );
                       }
                     } catch {
                       // Skip invalid JSON chunks
