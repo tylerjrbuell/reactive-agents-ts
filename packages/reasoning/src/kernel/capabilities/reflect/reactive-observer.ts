@@ -390,22 +390,20 @@ export function runReactiveObserver(
                       },
                     },
                   });
-                  // Advisory trace event via ObservableLogger. event-bus.ts
-                  // schema gap for a typed CompressionRecommendation event is
-                  // surfaced as a followup (out-of-scope per authority).
-                  yield* Effect.serviceOption(ObservableLogger).pipe(
-                    Effect.flatMap((opt) =>
-                      opt._tag === "Some"
-                        ? opt.value.emit({
-                            _tag: "metric",
-                            name: "compression-recommendation",
-                            value: p.targetTokens,
-                            unit: "tokens",
-                            timestamp: new Date(),
-                          }).pipe(Effect.catchAll(() => Effect.void))
-                        : Effect.void,
-                    ),
-                  );
+                  // Typed advisory trace event (schema landed: CompressionRecommendation
+                  // variant in @reactive-agents/core EventBus AgentEvent union).
+                  // Source discriminant: "dispatcher" distinguishes this from the
+                  // verbosity-detector emission site below.
+                  if (eventBus._tag === "Some") {
+                    yield* eventBus.value.publish({
+                      _tag: "CompressionRecommendation",
+                      taskId: s.taskId,
+                      iteration: s.iteration,
+                      source: "dispatcher",
+                      targetTokens: p.targetTokens,
+                      reason,
+                    }).pipe(Effect.catchAll(() => Effect.void));
+                  }
                   break
                 }
                 case "append-system-nudge": {
@@ -522,6 +520,20 @@ export function runReactiveObserver(
             pendingCompressionRecommendation: verbosityRec,
           },
         });
+        // Typed advisory trace event with source="verbosity-detector"
+        // discriminant. Lets observers distinguish detector-driven vs
+        // dispatcher-driven recommendations without colliding their
+        // thresholds.
+        if (eventBus._tag === "Some") {
+          yield* eventBus.value.publish({
+            _tag: "CompressionRecommendation",
+            taskId: s.taskId,
+            iteration: s.iteration,
+            source: "verbosity-detector",
+            targetTokens: verbosityRec.targetTokens,
+            reason: verbosityRec.reason,
+          }).pipe(Effect.catchAll(() => Effect.void));
+        }
       }
     }
 

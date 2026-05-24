@@ -156,13 +156,14 @@ export function buildConversationMessages(
   let workingMessages = compactedMessages;
 
   // Emit advisory compression-applied log when a fresh recommendation was
-  // consumed. event-bus.ts schema gap for a typed CompressionApplied event
-  // is surfaced as a followup (out-of-scope per authority).
+  // consumed. event-bus.ts now ships a typed CompressionApplied variant
+  // (2026-05-24) but buildConversationMessages is a pure synchronous helper
+  // that cannot open an Effect context here. Lifting the publish to the
+  // caller (curator.curate() → think.ts) requires returning richer metadata
+  // and updating both call sites — deferred as a separate followup. The
+  // console.debug fallback stays until that refactor lands; recommendation
+  // side IS typed via EventBus already (reactive-observer.ts).
   if (recFresh && rec !== undefined) {
-    // Synchronous fallback — buildConversationMessages is a pure function and
-    // can't open an Effect context here. console.debug is the sanctioned
-    // surface per mission brief out-of-scope-surface clause for the applied
-    // side until event-bus.ts gains CompressionApplied.
     // eslint-disable-next-line no-console
     console.debug(
       `[compression-applied] iteration=${state.iteration} target=${rec.targetTokens} actual=${compactedMessages.length} reason="${rec.reason}"`,
