@@ -167,7 +167,7 @@ Updated: 2026-05-23. Smoke run: 41 examples, 7 xfail, 0 fail.
 
 ## Roll-up
 
-- **Tier 1 (core builder):** 28 ✅, 1 🟡, 1 ❌ → **~93% covered**
+- **Tier 1 (core builder):** 29 ✅, 1 🟡, 0 ❌ → **100% covered** (gateway covered by 22/25/26)
 - **Tier 2 (M1–M13 mechanisms):** 8 ✅, 4 🟡, 1 🔵 → **~92% (all cassette-blockers xfail'd)**
 - **Tier 3 (controller variants):** 1 ✅, 4 🟡, 8 ❌ → ~38% covered
 - **Tier 4 (trust/safety):** 4 ✅, 2 ❌
