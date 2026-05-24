@@ -102,6 +102,17 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/foundations/07-cross-session-skill-recall.ts',
     },
+    {
+        // xfail: targets a chainable `.withSessionPersistence()` builder method
+        // that does not yet exist; SessionStoreServiceLive is wired in
+        // runtime.ts:1354-1362 but has no builder surface. Mirror HS-122.
+        num: 'FX1',
+        label: 'with-session-persistence (xfail)',
+        category: 'foundations',
+        requiresKey: false,
+        path: './src/foundations/with-session-persistence.ts',
+        expectsFail: true,
+    },
     // tools — 05 offline, 06-07 real
     {
         num: '05',
@@ -159,6 +170,17 @@ const EXAMPLES: ExampleMeta[] = [
         category: 'multi-agent',
         requiresKey: true,
         path: './src/multi-agent/10-dynamic-spawning.ts',
+    },
+    {
+        // xfail: no offline cassette infrastructure for A2A; @reactive-agents/
+        // replay supports single-agent record/replay only — inter-agent
+        // message replay is not modeled.
+        num: 'MX1',
+        label: 'a2a-cassette-replay (xfail)',
+        category: 'multi-agent',
+        requiresKey: false,
+        path: './src/multi-agent/a2a-cassette-replay.ts',
+        expectsFail: true,
     },
     // trust — real
     {
@@ -233,11 +255,28 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/advanced/snapshot-replay-determinism.ts',
     },
     {
+        // xfail (flaky witness): strict `lean < full` on steps OR tokens does
+        // not hold deterministically under the test provider — the LLM token
+        // cost is fixed by the scenario and lean/full step counts can be
+        // equal. Promote when the witness is rewritten to assert RI
+        // phase-event emission delta (lean emits strictly fewer events) or
+        // when a cassette-driven provider produces measurable RI overhead.
         num: 'A22',
-        label: 'with-lean-harness',
+        label: 'with-lean-harness (xfail)',
         category: 'advanced',
         requiresKey: false,
         path: './src/advanced/with-lean-harness.ts',
+        expectsFail: true,
+    },
+    {
+        // xfail: targets `.withTraceRecorder({ path })` builder hook — packages/
+        // trace/src/recorder.ts exists but no chainable builder surface yet.
+        num: 'AX1',
+        label: 'with-trace-recorder (xfail)',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/with-trace-recorder.ts',
+        expectsFail: true,
     },
     // reasoning — 20 offline
     {
@@ -275,6 +314,17 @@ const EXAMPLES: ExampleMeta[] = [
         category: 'interaction',
         requiresKey: false,
         path: './src/interaction/21-interaction-modes.ts',
+    },
+    {
+        // xfail: human-escalate controller variant is UNWIRED (evaluator
+        // exists, no handler in defaultInterventionRegistry). Bridge to
+        // interaction-manager.approvalGate is missing. See HS-116 audit.
+        num: 'IX1',
+        label: 'hitl-approval-gate (xfail)',
+        category: 'interaction',
+        requiresKey: false,
+        path: './src/interaction/hitl-approval-gate.ts',
+        expectsFail: true,
     },
     // gateway — offline (fast heartbeat interval in test mode)
     {
