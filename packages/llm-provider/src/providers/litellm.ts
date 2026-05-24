@@ -18,6 +18,7 @@ import type {
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
+import { selectAdapter } from "../adapter.js";
 
 /**
  * LiteLLM Provider — OpenAI-compatible adapter for LiteLLM proxy.
@@ -137,7 +138,29 @@ const mapLiteLLMResponse = (
           ? ("max_tokens" as const)
           : ("end_turn" as const);
 
-  const toolCalls: ToolCall[] | undefined = hasToolCalls
+  // M12 Hook 1/7 — give the calibrated/tier ProviderAdapter first crack at
+  // normalizing tool calls. LiteLLM proxies many providers; calibration is
+  // looked up by `model` (e.g., "anthropic/claude-3-5-sonnet-..."), and
+  // tier="unknown" since the proxied family is opaque from this layer.
+  // Pattern mirrors local.ts:440-465.
+  const { adapter: providerAdapter } = selectAdapter(
+    { supportsToolCalling: true },
+    "unknown",
+    model,
+  );
+  const adapterParsed = hasToolCalls
+    ? providerAdapter.parseToolCalls?.(response, model)
+    : undefined;
+  const toolCalls: ToolCall[] | undefined = adapterParsed
+    ? adapterParsed.map((tc, i) => ({
+        // Preserve original LiteLLM tool_call_id when present (kernel uses
+        // it for tool_result correlation). Synthesize only when the adapter
+        // introduced a tool call the raw response lacks at this index.
+        id: rawToolCalls?.[i]?.id ?? `litellm-tc-${i}`,
+        name: tc.name,
+        input: tc.arguments,
+      }))
+    : hasToolCalls
     ? rawToolCalls.map((tc) => {
         let input: unknown;
         try {

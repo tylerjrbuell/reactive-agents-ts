@@ -19,6 +19,7 @@ import type {
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
+import { selectAdapter } from "../adapter.js";
 
 // ─── Anthropic Message Conversion Helpers ───
 
@@ -126,31 +127,45 @@ export const AnthropicProviderLive = Layer.effect(
   Effect.gen(function* () {
     const config = yield* LLMConfig;
 
-    // Lazy-load the SDK to avoid hard dependency if not using Anthropic
-    const createClient = () => {
-      // Dynamic import is handled in Effect.tryPromise
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const Anthropic = require("@anthropic-ai/sdk").default;
-      return new Anthropic({ apiKey: config.anthropicApiKey });
+    // Lazy-load the SDK via dynamic import so Bun `mock.module(...)` can
+    // intercept it during tests (CJS `require()` is not reliably interceptable
+    // across module boundaries in Bun). Mirrors the Gemini/Local provider
+    // loading pattern; functionally equivalent to the prior eager require()
+    // for the production code path (the SDK module is cached after first
+    // resolution).
+    type AnthropicClient = {
+      messages: {
+        create: (opts: unknown) => Promise<unknown>;
+        stream: (opts: unknown) => {
+          on: (event: string, cb: (...args: unknown[]) => void) => void;
+        };
+      };
+    };
+    type AnthropicModule = {
+      default: new (opts: { apiKey?: string }) => AnthropicClient;
     };
 
-    let _client: ReturnType<typeof createClient> | null = null;
-    const getClient = () => {
-      if (!_client) _client = createClient();
-      return _client;
+    let _clientPromise: Promise<AnthropicClient> | null = null;
+    const getClient = (): Promise<AnthropicClient> => {
+      if (!_clientPromise) {
+        _clientPromise = (
+          import("@anthropic-ai/sdk") as unknown as Promise<AnthropicModule>
+        ).then(({ default: Anthropic }) => new Anthropic({ apiKey: config.anthropicApiKey }));
+      }
+      return _clientPromise;
     };
 
     return LLMService.of({
       complete: (request) =>
         Effect.gen(function* () {
-          const client = getClient();
+          const client = yield* Effect.promise(() => getClient());
           const model = typeof request.model === 'string'
             ? request.model
             : request.model?.model ?? config.defaultModel;
 
           const response = yield* Effect.tryPromise({
             try: () =>
-              (client as { messages: { create: (opts: unknown) => Promise<unknown> } }).messages.create({
+              client.messages.create({
                 model,
                 max_tokens: request.maxTokens ?? config.defaultMaxTokens,
                 temperature: request.temperature ?? config.defaultTemperature,
@@ -183,19 +198,26 @@ export const AnthropicProviderLive = Layer.effect(
 
       stream: (request) =>
         Effect.gen(function* () {
-          const client = getClient();
+          const client = yield* Effect.promise(() => getClient());
           const model = typeof request.model === 'string'
             ? request.model
             : request.model?.model ?? config.defaultModel;
 
+          // M12 Hook 1/7 — adapter selection for the streaming tool-call
+          // normalization site. Decided UP-FRONT so we choose between
+          // per-chunk emission (default) vs. buffered end-of-stream synthesis
+          // (adapter-normalized) without ever retracting an already-emitted
+          // event. Stream contract: emit.single is one-way.
+          const { adapter: streamAdapter } = selectAdapter(
+            { supportsToolCalling: true },
+            "frontier",
+            model,
+          );
+          const useAdapterNormalization =
+            typeof streamAdapter.parseToolCalls === "function";
+
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
-            const stream = (client as {
-              messages: {
-                stream: (opts: unknown) => {
-                  on: (event: string, cb: (...args: unknown[]) => void) => void;
-                };
-              };
-            }).messages.stream({
+            const stream = client.messages.stream({
               model,
               max_tokens: request.maxTokens ?? config.defaultMaxTokens,
               temperature: request.temperature ?? config.defaultTemperature,
@@ -210,16 +232,29 @@ export const AnthropicProviderLive = Layer.effect(
             // The helper events (contentBlock, inputJson) fire out of order —
             // inputJson (delta) can arrive before contentBlock (start), causing
             // the kernel to miss accumulating tool call arguments.
+            //
+            // When `useAdapterNormalization` is true we SUPPRESS per-chunk
+            // tool_use_* emissions and synthesize them in `finalMessage` once
+            // the adapter has normalized the complete response.
             stream.on("streamEvent", (event: unknown) => {
               const e = event as { type: string; delta?: { type: string; text?: string; partial_json?: string }; content_block?: { type: string; id?: string; name?: string }; index?: number };
               if (e.type === "content_block_delta") {
                 if (e.delta?.type === "text_delta" && e.delta.text) {
                   emit.single({ type: "text_delta", text: e.delta.text });
-                } else if (e.delta?.type === "input_json_delta" && e.delta.partial_json) {
+                } else if (
+                  !useAdapterNormalization &&
+                  e.delta?.type === "input_json_delta" &&
+                  e.delta.partial_json
+                ) {
                   emitToolUseDelta(emit, e.delta.partial_json);
                 }
               } else if (e.type === "content_block_start") {
-                if (e.content_block?.type === "tool_use" && e.content_block.id && e.content_block.name) {
+                if (
+                  !useAdapterNormalization &&
+                  e.content_block?.type === "tool_use" &&
+                  e.content_block.id &&
+                  e.content_block.name
+                ) {
                   emitToolUseStart(emit, e.content_block.id, e.content_block.name);
                 }
               }
@@ -234,6 +269,27 @@ export const AnthropicProviderLive = Layer.effect(
                 )
                 .map((b: { text: string }) => b.text)
                 .join("");
+
+              // Adapter-normalized end-of-stream tool-call synthesis. Mirrors
+              // the complete() path id-fallback policy: prefer the original
+              // tool_use id from the raw response, synthesize only when absent.
+              if (useAdapterNormalization) {
+                const rawToolUseBlocks = msg.content.filter(
+                  (
+                    b,
+                  ): b is { type: "tool_use"; id: string; name: string; input: unknown } =>
+                    b.type === "tool_use",
+                );
+                const normalized = streamAdapter.parseToolCalls?.(msg, model);
+                if (normalized && normalized.length > 0) {
+                  for (let i = 0; i < normalized.length; i++) {
+                    const tc = normalized[i]!;
+                    const id = rawToolUseBlocks[i]?.id ?? `anthropic-tc-${i}`;
+                    emitToolUseStart(emit, id, tc.name);
+                    emitToolUseDelta(emit, JSON.stringify(tc.arguments));
+                  }
+                }
+              }
 
               emit.single({ type: "content_complete", content });
               emit.single({
@@ -308,9 +364,9 @@ export const AnthropicProviderLive = Layer.effect(
             anthropicMsgs.push({ role: "assistant", content: "{" });
 
             const completeResult = yield* Effect.tryPromise({
-              try: () => {
-                const client = getClient();
-                return (client as { messages: { create: (opts: unknown) => Promise<unknown> } }).messages.create({
+              try: async () => {
+                const client = await getClient();
+                return client.messages.create({
                   model: typeof request.model === 'string'
                     ? request.model
                     : request.model?.model ?? config.defaultModel,
@@ -476,22 +532,42 @@ const mapAnthropicResponse = (
     .map((b) => b.text)
     .join("");
 
-  const toolCalls = response.content
-    .filter(
-      (
-        b,
-      ): b is {
-        type: "tool_use";
-        id: string;
-        name: string;
-        input: unknown;
-      } => b.type === "tool_use",
-    )
-    .map((b) => ({
-      id: b.id,
-      name: b.name,
-      input: b.input,
-    }));
+  // M12 Hook 1/7 — give the calibrated/tier ProviderAdapter first crack at
+  // normalizing tool calls (e.g., stringified arguments, alternate field
+  // names). When the adapter returns undefined or no calibration is
+  // registered for `model`, fall through to the default Anthropic-shaped
+  // extraction. Pattern mirrors local.ts:440-465.
+  const { adapter: providerAdapter } = selectAdapter(
+    { supportsToolCalling: true },
+    "frontier",
+    model,
+  );
+  const rawToolUseBlocks = response.content.filter(
+    (
+      b,
+    ): b is {
+      type: "tool_use";
+      id: string;
+      name: string;
+      input: unknown;
+    } => b.type === "tool_use",
+  );
+  const adapterParsed = providerAdapter.parseToolCalls?.(response, model);
+  const toolCalls = adapterParsed
+    ? adapterParsed.map((tc, i) => ({
+        // Preserve the original Anthropic tool_use id when available — the
+        // kernel uses it as a stable correlation key for tool_result echoing.
+        // Only synthesize when the adapter introduced a tool call that the
+        // raw response did not expose at the same index.
+        id: rawToolUseBlocks[i]?.id ?? `anthropic-tc-${i}`,
+        name: tc.name,
+        input: tc.arguments,
+      }))
+    : rawToolUseBlocks.map((b) => ({
+        id: b.id,
+        name: b.name,
+        input: b.input,
+      }));
 
   const stopReason =
     response.stop_reason === "end_turn"

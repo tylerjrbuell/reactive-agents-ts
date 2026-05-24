@@ -21,6 +21,7 @@ import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import type { CacheUsage } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
+import { selectAdapter } from "../adapter.js";
 
 // ─── OpenAI Message Conversion ───
 
@@ -196,16 +197,32 @@ export const OpenAIProviderLive = Layer.effect(
   Effect.gen(function* () {
     const config = yield* LLMConfig;
 
-    const createClient = () => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const OpenAI = require("openai").default;
-      return new OpenAI({ apiKey: config.openaiApiKey });
+    // Lazy-load the SDK via dynamic import so Bun `mock.module(...)` can
+    // intercept it during tests (CJS `require()` is not reliably interceptable
+    // across module boundaries in Bun). Mirrors the Gemini/Local provider
+    // loading pattern.
+    type OpenAIClient = {
+      chat: {
+        completions: {
+          create: (opts: unknown) => Promise<unknown>;
+        };
+      };
+      embeddings: {
+        create: (opts: unknown) => Promise<{ data: Array<{ embedding: number[] }> }>;
+      };
+    };
+    type OpenAIModule = {
+      default: new (opts: { apiKey?: string }) => OpenAIClient;
     };
 
-    let _client: ReturnType<typeof createClient> | null = null;
-    const getClient = () => {
-      if (!_client) _client = createClient();
-      return _client;
+    let _clientPromise: Promise<OpenAIClient> | null = null;
+    const getClient = (): Promise<OpenAIClient> => {
+      if (!_clientPromise) {
+        _clientPromise = (
+          import("openai") as unknown as Promise<OpenAIModule>
+        ).then(({ default: OpenAI }) => new OpenAI({ apiKey: config.openaiApiKey }));
+      }
+      return _clientPromise;
     };
 
     const defaultModel = config.defaultModel.startsWith("claude")
@@ -215,7 +232,7 @@ export const OpenAIProviderLive = Layer.effect(
     return LLMService.of({
       complete: (request) =>
         Effect.gen(function* () {
-          const client = getClient();
+          const client = yield* Effect.promise(() => getClient());
           const model = typeof request.model === 'string'
             ? request.model
             : request.model?.model ?? defaultModel;
@@ -248,8 +265,7 @@ export const OpenAIProviderLive = Layer.effect(
           }
 
           const response = yield* Effect.tryPromise({
-            try: () =>
-              (client as { chat: { completions: { create: (opts: unknown) => Promise<unknown> } } }).chat.completions.create(requestBody),
+            try: () => client.chat.completions.create(requestBody),
             catch: (error) => toEffectError(error, "openai"),
           });
 
@@ -270,15 +286,28 @@ export const OpenAIProviderLive = Layer.effect(
 
       stream: (request) =>
         Effect.gen(function* () {
-          const client = getClient();
+          const client = yield* Effect.promise(() => getClient());
           const model = typeof request.model === 'string'
             ? request.model
             : request.model?.model ?? defaultModel;
 
+          // M12 Hook 1/7 — adapter selection decided up-front. When the
+          // adapter supplies parseToolCalls we SUPPRESS per-chunk tool_use_*
+          // emissions and synthesize them at finish_reason from the
+          // accumulated tool-call map. See anthropic.ts stream() for the
+          // canonical comment.
+          const { adapter: streamAdapter } = selectAdapter(
+            { supportsToolCalling: true },
+            "frontier",
+            model,
+          );
+          const useAdapterNormalization =
+            typeof streamAdapter.parseToolCalls === "function";
+
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
               try {
-                const stream = await (client as { chat: { completions: { create: (opts: unknown) => Promise<AsyncIterable<unknown>> } } }).chat.completions.create({
+                const stream = (await client.chat.completions.create({
                   model,
                   max_tokens:
                     request.maxTokens ?? config.defaultMaxTokens,
@@ -296,7 +325,7 @@ export const OpenAIProviderLive = Layer.effect(
                     : undefined,
                   stream: true,
                   stream_options: { include_usage: true },
-                });
+                })) as AsyncIterable<unknown>;
 
                 let fullContent = "";
                 // Accumulate streamed tool calls by index
@@ -331,7 +360,9 @@ export const OpenAIProviderLive = Layer.effect(
                     emit.single({ type: "text_delta", text: delta });
                   }
 
-                  // Accumulate tool call deltas
+                  // Accumulate tool call deltas. When adapter normalization
+                  // is active we still accumulate (so we can synthesize at
+                  // finish_reason) but suppress per-chunk emissions.
                   const toolDeltas = chunk.choices[0]?.delta?.tool_calls;
                   if (toolDeltas) {
                     for (const tc of toolDeltas) {
@@ -345,12 +376,16 @@ export const OpenAIProviderLive = Layer.effect(
                           arguments: tc.function?.arguments ?? "",
                         });
                         // Emit tool_use_start on first chunk for this tool
-                        if (tc.id && tc.function?.name) {
+                        if (
+                          !useAdapterNormalization &&
+                          tc.id &&
+                          tc.function?.name
+                        ) {
                           emitToolUseStart(emit, tc.id, tc.function.name);
                         }
                       }
                       // Emit argument deltas for progressive parsing
-                      if (tc.function?.arguments) {
+                      if (!useAdapterNormalization && tc.function?.arguments) {
                         emitToolUseDelta(emit, tc.function.arguments);
                       }
                     }
@@ -362,6 +397,46 @@ export const OpenAIProviderLive = Layer.effect(
                   }
 
                   if (chunk.choices[0]?.finish_reason) {
+                    // Adapter-normalized end-of-stream tool-call synthesis.
+                    // Build a synthetic OpenAI-shaped response so the adapter
+                    // sees the same shape it sees in complete(), then emit
+                    // start+delta pairs per normalized call.
+                    if (useAdapterNormalization && toolCallAccum.size > 0) {
+                      const rawCalls = [...toolCallAccum.entries()]
+                        .sort(([a], [b]) => a - b)
+                        .map(([, v]) => ({
+                          id: v.id,
+                          type: "function" as const,
+                          function: {
+                            name: v.name,
+                            arguments: v.arguments,
+                          },
+                        }));
+                      const syntheticResponse = {
+                        choices: [
+                          {
+                            message: {
+                              content: fullContent,
+                              role: "assistant",
+                              tool_calls: rawCalls,
+                            },
+                            finish_reason: chunk.choices[0].finish_reason,
+                          },
+                        ],
+                      };
+                      const normalized = streamAdapter.parseToolCalls?.(
+                        syntheticResponse,
+                        model,
+                      );
+                      if (normalized && normalized.length > 0) {
+                        for (let i = 0; i < normalized.length; i++) {
+                          const tc = normalized[i]!;
+                          const id = rawCalls[i]?.id || `openai-tc-${i}`;
+                          emitToolUseStart(emit, id, tc.name);
+                          emitToolUseDelta(emit, JSON.stringify(tc.arguments));
+                        }
+                      }
+                    }
                     emit.single({
                       type: "content_complete",
                       content: fullContent,
@@ -414,7 +489,7 @@ export const OpenAIProviderLive = Layer.effect(
           const model = typeof request.model === 'string'
             ? request.model
             : request.model?.model ?? defaultModel;
-          const client = getClient();
+          const client = yield* Effect.promise(() => getClient());
           const maxRetries = request.maxParseRetries ?? 2;
 
           // ── Native JSON Schema mode (gpt-4o-2024-08-06+, o-series, gpt-4.1) ──
@@ -461,7 +536,7 @@ export const OpenAIProviderLive = Layer.effect(
 
             const completeResult = yield* Effect.tryPromise({
               try: () =>
-                (client as { chat: { completions: { create: (opts: unknown) => Promise<unknown> } } }).chat.completions.create({
+                client.chat.completions.create({
                   ...requestBody,
                   messages: toOpenAIMessages(msgs),
                 }),
@@ -501,7 +576,7 @@ export const OpenAIProviderLive = Layer.effect(
       embed: (texts, model) =>
         Effect.tryPromise({
           try: async () => {
-            const client = getClient();
+            const client = await getClient();
             const embeddingModel =
               model ?? config.embeddingConfig.model;
             const batchSize = config.embeddingConfig.batchSize ?? 100;
@@ -509,7 +584,7 @@ export const OpenAIProviderLive = Layer.effect(
 
             for (let i = 0; i < texts.length; i += batchSize) {
               const batch = texts.slice(i, i + batchSize);
-              const response = await (client as { embeddings: { create: (opts: unknown) => Promise<{ data: Array<{ embedding: number[] }> }> } }).embeddings.create({
+              const response = await client.embeddings.create({
                 model: embeddingModel,
                 input: [...batch],
                 dimensions: config.embeddingConfig.dimensions,
@@ -618,7 +693,30 @@ const mapOpenAIResponse = (
           ? ("max_tokens" as const)
           : ("end_turn" as const);
 
-  const toolCalls: ToolCall[] | undefined = hasToolCalls
+  // M12 Hook 1/7 — give the calibrated/tier ProviderAdapter first crack at
+  // normalizing tool calls (e.g., OpenAI nullable inputs, alternate field
+  // names). When the adapter returns undefined or no calibration is
+  // registered for `model`, fall through to the default OpenAI-shaped
+  // extraction (with the existing JSON.parse + {raw} repair). Pattern
+  // mirrors local.ts:440-465.
+  const { adapter: providerAdapter } = selectAdapter(
+    { supportsToolCalling: true },
+    "frontier",
+    model,
+  );
+  const adapterParsed = hasToolCalls
+    ? providerAdapter.parseToolCalls?.(response, model)
+    : undefined;
+  const toolCalls: ToolCall[] | undefined = adapterParsed
+    ? adapterParsed.map((tc, i) => ({
+        // Preserve the original OpenAI tool_call_id when present (the kernel
+        // uses it for tool_result correlation). Synthesize only when the
+        // adapter introduced a tool call the raw response lacks at this index.
+        id: rawToolCalls?.[i]?.id ?? `openai-tc-${i}`,
+        name: tc.name,
+        input: tc.arguments,
+      }))
+    : hasToolCalls
     ? rawToolCalls.map((tc) => {
         let input: unknown;
         try {

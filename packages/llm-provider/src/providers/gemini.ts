@@ -18,6 +18,7 @@ import type {
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
+import { selectAdapter } from "../adapter.js";
 
 // ─── Gemini Message Conversion Helpers ───
 
@@ -184,11 +185,29 @@ const mapGeminiResponse = (
   model: string,
   registry?: Record<string, { readonly input: number; readonly output: number }>,
 ): CompletionResponse => {
-  const toolCalls = response.functionCalls?.map((fc, i) => ({
-    id: `call_${i}`,
-    name: fc.name,
-    input: fc.args,
-  }));
+  // M12 Hook 1/7 — give the calibrated/tier ProviderAdapter first crack at
+  // normalizing tool calls (e.g., Gemini args-as-string variants). When the
+  // adapter returns undefined or no calibration is registered for `model`,
+  // fall through to the default Gemini-shaped extraction. Pattern mirrors
+  // local.ts:440-465.
+  const { adapter: providerAdapter } = selectAdapter(
+    { supportsToolCalling: true },
+    "frontier",
+    model,
+  );
+  const adapterParsed = providerAdapter.parseToolCalls?.(response, model);
+  const toolCalls = adapterParsed
+    ? adapterParsed.map((tc, i) => ({
+        // Gemini synthesizes ids (`call_${i}`) — no original id to preserve.
+        id: `call_${i}`,
+        name: tc.name,
+        input: tc.arguments,
+      }))
+    : response.functionCalls?.map((fc, i) => ({
+        id: `call_${i}`,
+        name: fc.name,
+        input: fc.args,
+      }));
 
   const inputTokens = response.usageMetadata?.promptTokenCount ?? 0;
   const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0;
@@ -358,6 +377,19 @@ export const GeminiProviderLive = Layer.effect(
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
 
+          // M12 Hook 1/7 — adapter selection decided up-front. When the
+          // adapter supplies parseToolCalls we SUPPRESS per-chunk
+          // emitToolCallComplete and synthesize start+delta pairs after the
+          // for-await loop, once the adapter has normalized the accumulated
+          // tool calls. See anthropic.ts stream() for the canonical comment.
+          const { adapter: streamAdapter } = selectAdapter(
+            { supportsToolCalling: true },
+            "frontier",
+            model,
+          );
+          const useAdapterNormalization =
+            typeof streamAdapter.parseToolCalls === "function";
+
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             void (async () => {
               try {
@@ -383,6 +415,9 @@ export const GeminiProviderLive = Layer.effect(
                 let cachedContentTokens = 0;
                 let lastFinishReason: string | undefined;
                 const accumulatedToolCalls: { id: string; name: string; input: unknown }[] = [];
+                // Raw functionCalls captured for adapter normalization at
+                // end-of-stream. Populated only when useAdapterNormalization.
+                const rawFunctionCalls: GeminiFunctionCall[] = [];
 
                 for await (const chunk of stream) {
                   // Walk parts directly when present — Gemini-2.5-pro emits
@@ -419,7 +454,11 @@ export const GeminiProviderLive = Layer.effect(
                       if (fc && typeof fc.name === "string") {
                         const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
                         accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
-                        emitToolCallComplete(emit, tcId, fc.name, fc.args);
+                        if (useAdapterNormalization) {
+                          rawFunctionCalls.push(fc);
+                        } else {
+                          emitToolCallComplete(emit, tcId, fc.name, fc.args);
+                        }
                       }
                     }
                   } else {
@@ -433,7 +472,11 @@ export const GeminiProviderLive = Layer.effect(
                       for (const fc of fcs) {
                         const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
                         accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
-                        emitToolCallComplete(emit, tcId, fc.name, fc.args);
+                        if (useAdapterNormalization) {
+                          rawFunctionCalls.push(fc);
+                        } else {
+                          emitToolCallComplete(emit, tcId, fc.name, fc.args);
+                        }
                       }
                     }
                   }
@@ -443,6 +486,47 @@ export const GeminiProviderLive = Layer.effect(
                     outputTokens =
                       chunk.usageMetadata.candidatesTokenCount ?? 0;
                     cachedContentTokens = (chunk.usageMetadata as { cachedContentTokenCount?: number }).cachedContentTokenCount ?? 0;
+                  }
+                }
+
+                // Adapter-normalized end-of-stream tool-call synthesis. Build
+                // a synthetic Gemini response shape so the adapter sees the
+                // same shape it sees in complete(), then replace
+                // accumulatedToolCalls with the normalized list and emit
+                // start+delta pairs.
+                if (useAdapterNormalization && rawFunctionCalls.length > 0) {
+                  const syntheticResponse: GeminiRawResponse = {
+                    text: fullContent,
+                    functionCalls: rawFunctionCalls,
+                  };
+                  const normalized = streamAdapter.parseToolCalls?.(
+                    syntheticResponse,
+                    model,
+                  );
+                  if (normalized && normalized.length > 0) {
+                    // Reset accumulatedToolCalls to the normalized projection
+                    // so content_complete reflects post-adapter shape.
+                    accumulatedToolCalls.length = 0;
+                    for (let i = 0; i < normalized.length; i++) {
+                      const tc = normalized[i]!;
+                      const tcId = `gemini-tc-${Date.now()}-${i}`;
+                      accumulatedToolCalls.push({
+                        id: tcId,
+                        name: tc.name,
+                        input: tc.arguments,
+                      });
+                      emitToolCallComplete(emit, tcId, tc.name, tc.arguments);
+                    }
+                  } else {
+                    // Adapter declined despite advertising parseToolCalls —
+                    // fall back to raw events using the buffered functionCalls.
+                    for (let i = 0; i < rawFunctionCalls.length; i++) {
+                      const fc = rawFunctionCalls[i]!;
+                      const tc = accumulatedToolCalls[i];
+                      if (tc) {
+                        emitToolCallComplete(emit, tc.id, fc.name, fc.args);
+                      }
+                    }
                   }
                 }
 
