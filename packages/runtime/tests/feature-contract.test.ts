@@ -508,6 +508,29 @@ describe("TaskResult shape contracts", () => {
     expect(result.metadata.tokensUsed).toBeGreaterThan(0);
   });
 
+  // GH #126 — totalTokens is an additive alias mirroring tokensUsed.
+  // Pins the contract so a future commit removing one without updating the
+  // other (or letting them drift) fails this test rather than silently
+  // breaking downstream consumers that read either name.
+  it("result.metadata.totalTokens mirrors tokensUsed (GH #126 alias)", async () => {
+    const { engineLayer } = makeEngine();
+    const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done", tokens: 75 });
+    const testLayer = Layer.mergeAll(engineLayer, llmLayer);
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* (yield* ExecutionEngine).execute(mockTask());
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    const md = result.metadata as {
+      tokensUsed: number;
+      totalTokens?: number;
+    };
+    expect(md.totalTokens).toBeDefined();
+    expect(md.totalTokens).toBe(md.tokensUsed);
+  });
+
   it("result.metadata.duration > 0", async () => {
     const { engineLayer } = makeEngine();
     const llmLayer = makeMockLLM({ content: "FINAL ANSWER: done" });

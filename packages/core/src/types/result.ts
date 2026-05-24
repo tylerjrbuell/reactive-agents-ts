@@ -35,7 +35,23 @@ export type ReasoningStep = typeof ReasoningStepSchema.Type;
 export const ResultMetadataSchema = Schema.Struct({
   duration: Schema.Number,
   cost: Schema.Number,
+  /**
+   * Canonical token-count field. Always populated equal to `totalTokens`.
+   * See GH #126 — other framework surfaces (`AgentCompleted` event,
+   * `ReasoningResult.totalTokens`, `traceStats.totalTokens`) use the
+   * `totalTokens` name; consumers expecting that name read it from this
+   * metadata via the optional alias below.
+   */
   tokensUsed: Schema.Number,
+  /**
+   * Alias of `tokensUsed`. Added 2026-05-24 to close the naming
+   * inconsistency tracked in GH #126 — `AgentCompleted.totalTokens` /
+   * `ReasoningResult.totalTokens` / `traceStats.totalTokens` use this
+   * name, only `ResultMetadata` was the outlier. Both fields are now
+   * always populated to the same value; consumers may use either.
+   * No deprecation — `tokensUsed` remains canonical per #104 reversal.
+   */
+  totalTokens: Schema.optional(Schema.Number),
   confidence: Schema.optional(Schema.Literal("high", "medium", "low")),
   strategyUsed: Schema.optional(Schema.String),
   stepsCount: Schema.optional(Schema.Number),

@@ -1105,6 +1105,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     duration: executionDurationMs,
                     cost: ctx.cost,
                     tokensUsed: ctx.tokensUsed,
+                    // GH #126 — `totalTokens` alias mirrors `tokensUsed`
+                    // for consumers expecting the same name used on
+                    // AgentCompleted / ReasoningResult / traceStats.
+                    totalTokens: ctx.tokensUsed,
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
                     iterations: ctx.iteration,
