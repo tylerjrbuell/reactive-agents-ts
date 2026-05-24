@@ -190,6 +190,8 @@ export type {
 export {
   defaultVerifier,
   contextFromObservation,
+  checkSeverity,
+  resolveResultSeverity,
 } from "./kernel/capabilities/verify/verifier.js";
 export { noopVerifier } from "./kernel/capabilities/verify/noop-verifier.js";
 export type {
@@ -197,6 +199,7 @@ export type {
   VerificationContext,
   VerificationCheck,
   VerificationResult,
+  VerificationSeverity,
 } from "./kernel/capabilities/verify/verifier.js";
 
 // ─── Structured Output ───

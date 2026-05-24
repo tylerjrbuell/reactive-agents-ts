@@ -302,6 +302,221 @@ describe("contextFromObservation helper", () => {
   });
 });
 
+// ─── GH #121 / I5 — Multi-severity verifier ─────────────────────────────────
+describe("defaultVerifier — multi-severity (GH #121)", () => {
+  const harnessSignal = (text: string): ReasoningStep => ({
+    id: "hs1" as ReasoningStep["id"],
+    type: "harness_signal",
+    content: text,
+    timestamp: new Date(),
+  });
+
+  describe("severity field on every check", () => {
+    it("attaches severity to action-success (pass on success)", () => {
+      const r = defaultVerifier.verify(baseCtx);
+      const check = r.checks.find((c) => c.name === "action-success");
+      expect(check?.severity).toBe("pass");
+    });
+
+    it("attaches severity=reject to action-success on failure", () => {
+      const r = defaultVerifier.verify({ ...baseCtx, actionSuccess: false });
+      const check = r.checks.find((c) => c.name === "action-success");
+      expect(check?.severity).toBe("reject");
+    });
+
+    it("attaches severity=reject to non-empty-content on empty output", () => {
+      const r = defaultVerifier.verify({ ...baseCtx, content: "" });
+      const check = r.checks.find((c) => c.name === "non-empty-content");
+      expect(check?.severity).toBe("reject");
+    });
+  });
+
+  describe("F4 success metric (1): M2 producer-leak outputs emit severity=reject", () => {
+    it("rationale XML leak → output-not-harness-parrot severity=reject", () => {
+      // Direct reproduction of cogito:14b ToT/Reflexion M2a/b/c outputs per
+      // wiki/Research/Harness-Reports/cross-strategy-matrix-analysis-2026-05-23.md §M2.
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: `<rationale call="1">{"why":"direct calculation of multiplication","what":"compute 17*23"}</rationale>`,
+        priorSteps: [],
+      });
+      const check = r.checks.find((c) => c.name === "output-not-harness-parrot");
+      expect(check?.passed).toBe(false);
+      expect(check?.severity).toBe("reject");
+      expect(r.severity).toBe("reject");
+      expect(r.verified).toBe(false);
+      expect(r.softFail).toBe(false);
+    });
+
+    it("[CRITIQUE] marker leak → severity=reject", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: `[CRITIQUE 1] NEUTRAL: the prior step is fine`,
+        priorSteps: [],
+      });
+      const check = r.checks.find((c) => c.name === "output-not-harness-parrot");
+      expect(check?.severity).toBe("reject");
+      expect(r.severity).toBe("reject");
+    });
+
+    it("[find result —] preview wrapper leak → severity=reject", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: `[find result — 5 items] foo: bar baz: qux`,
+        priorSteps: [],
+      });
+      const check = r.checks.find((c) => c.name === "output-not-harness-parrot");
+      expect(check?.severity).toBe("reject");
+    });
+
+    it("harness signal '⚠️ ' prefix → severity=reject", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: "⚠️ Recovery required: try web-search.",
+        priorSteps: [harnessSignal("⚠️ Recovery required: try web-search.")],
+      });
+      expect(r.severity).toBe("reject");
+    });
+  });
+
+  describe("F4 success metric (2): shallow give-up answers escalate", () => {
+    it("'no 7th result' + unused tools → severity=escalate (output-not-shallow-giveup)", () => {
+      // Direct reproduction of F4 from sweep-2026-05-23-qwen3-14b.md:
+      // Agent called `find` (wrong tool), saw 5 entries in preview, answered
+      // "no 7th result available." Task included `recall` tool unused.
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: "The search results only contain 5 entries. There is no 7th result available.",
+        priorSteps: [],
+        availableUserTools: ["web-search", "recall"],
+        toolsUsed: new Set(["find"]),
+      });
+      const check = r.checks.find((c) => c.name === "output-not-shallow-giveup");
+      expect(check?.passed).toBe(false);
+      expect(check?.severity).toBe("escalate");
+      expect(r.severity).toBe("escalate");
+      expect(r.verified).toBe(false);
+    });
+
+    it("'I cannot complete this task' + unused tools → severity=escalate", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: "I cannot complete this task with the information provided.",
+        availableUserTools: ["web-search"],
+        toolsUsed: new Set([]),
+      });
+      const check = r.checks.find((c) => c.name === "output-not-shallow-giveup");
+      expect(check?.severity).toBe("escalate");
+    });
+
+    it("give-up phrasing but all tools used → severity=pass (no false positive)", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: "I cannot complete this task.",
+        availableUserTools: ["web-search"],
+        toolsUsed: new Set(["web-search"]),
+      });
+      const check = r.checks.find((c) => c.name === "output-not-shallow-giveup");
+      expect(check?.severity).toBe("pass");
+    });
+
+    it("legitimate answer with no give-up phrasing → severity=pass", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: "The 7th result is React.",
+        availableUserTools: ["web-search", "recall"],
+        toolsUsed: new Set(["find"]),
+      });
+      const check = r.checks.find((c) => c.name === "output-not-shallow-giveup");
+      expect(check?.severity).toBe("pass");
+    });
+  });
+
+  describe("harness_deliverable → severity=escalate (output-is-model-authored)", () => {
+    it("emits escalate so Loop Controller can strategy-switch instead of retry-in-place", () => {
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: '[{"foo":"bar"}]',
+        terminatedBy: "harness_deliverable",
+        priorSteps: [],
+      });
+      const check = r.checks.find((c) => c.name === "output-is-model-authored");
+      expect(check?.passed).toBe(false);
+      expect(check?.severity).toBe("escalate");
+      expect(r.severity).toBe("escalate");
+    });
+  });
+
+  describe("overall severity rollup (max severity wins)", () => {
+    it("warn + pass → overall=warn (softFail=true, verified=false)", () => {
+      // Synthesis-grounded fails (warn), no rejects/escalates.
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: "The price is $9,999.99 today.",
+        priorSteps: [
+          {
+            id: "s1" as ReasoningStep["id"],
+            type: "observation",
+            content: "BTC trades at $1,234.56 USD",
+            timestamp: new Date(),
+          },
+        ],
+      });
+      expect(r.severity).toBe("warn");
+      expect(r.softFail).toBe(true);
+      expect(r.verified).toBe(false);
+    });
+
+    it("reject dominates warn (escalate dominates everything)", () => {
+      // Producer-leak (reject) + grounding miss would-be (warn) → overall reject.
+      const r = defaultVerifier.verify({
+        ...baseCtx,
+        terminal: true,
+        content: `<rationale call="1">stuff</rationale>`,
+        priorSteps: [
+          {
+            id: "s1" as ReasoningStep["id"],
+            type: "observation",
+            content: "some evidence",
+            timestamp: new Date(),
+          },
+        ],
+      });
+      expect(r.severity).toBe("reject");
+      expect(r.softFail).toBe(false);
+    });
+
+    it("all pass → overall=pass, verified=true, softFail=false", () => {
+      const r = defaultVerifier.verify({ ...baseCtx, terminal: true });
+      expect(r.severity).toBe("pass");
+      expect(r.verified).toBe(true);
+      expect(r.softFail).toBe(false);
+    });
+  });
+
+  describe("back-compat: checkSeverity helper handles legacy producers", () => {
+    it("infers pass from {passed:true} when severity is absent", () => {
+      // Eagerly imported alongside defaultVerifier — covered by re-exports.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { checkSeverity } = require("../../../../src/kernel/capabilities/verify/verifier.js") as typeof import("../../../../src/kernel/capabilities/verify/verifier.js");
+      expect(checkSeverity({ name: "x", passed: true })).toBe("pass");
+      expect(checkSeverity({ name: "x", passed: false })).toBe("reject");
+      expect(checkSeverity({ name: "x", passed: true, severity: "warn" })).toBe("warn");
+      expect(checkSeverity({ name: "x", passed: false, severity: "escalate" })).toBe("escalate");
+    });
+  });
+});
+
 describe("Verifier contract — developer overrides", () => {
   it("custom verifier can replace defaultVerifier without touching kernel", () => {
     const customVerifier: Verifier = {

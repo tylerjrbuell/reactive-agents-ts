@@ -63,7 +63,7 @@ import {
   shouldInjectOracleNudge,
 } from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { defaultVerifier } from "../../kernel/capabilities/verify/verifier.js";
+import { defaultVerifier, resolveResultSeverity } from "../../kernel/capabilities/verify/verifier.js";
 import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
 import {
   RecallService,
@@ -1783,12 +1783,38 @@ export function runKernel(
         checks: verdict.checks,
       });
       if (!verdict.verified) {
+        // GH #121 / I5 Loop Controller wire — resolve severity with the
+        // back-compat default so external Verifier implementations that
+        // predate I5 still get a sensible classification.
+        const verdictSeverity = resolveResultSeverity(verdict);
         yield* emitLog({
           _tag: "warning",
-          message: `[verifier] terminal output rejected: ${verdict.summary}`,
+          message: `[verifier] terminal output rejected (severity=${verdictSeverity}): ${verdict.summary}`,
           timestamp: new Date(),
         });
-        if (verdict.softFail) {
+        //   - escalate : structural failure (harness fallback, shallow give-up).
+        //                Suppress + tag for downstream strategy switch /
+        //                human-in-loop. Persist `verifierEscalation` so the
+        //                consumer (today: post-loop failure path; tomorrow:
+        //                strategy-switch controller) can branch on it.
+        //   - reject   : recoverable hard failure (parrot, missing required
+        //                action). Suppress entirely. Identical to legacy
+        //                non-softFail path.
+        //   - warn     : advisory (grounding miss). Surface with metadata;
+        //                do NOT nullify output. Identical to legacy
+        //                softFail path.
+        if (verdictSeverity === "escalate") {
+          state = transitionState(state, {
+            status: "failed",
+            error: `Verifier escalated output: ${verdict.summary}`,
+            meta: {
+              ...state.meta,
+              verifierRejected: true,
+              verifierVerdict: verdict.summary,
+              verifierEscalation: true,
+            } as KernelState["meta"],
+          });
+        } else if (verdict.softFail) {
           // Advisory failure: grounding check missed compressed observation.
           // Surface output with warning metadata; do NOT nullify.
           state = transitionState(state, {

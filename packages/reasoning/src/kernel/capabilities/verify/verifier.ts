@@ -100,24 +100,88 @@ export interface VerificationContext {
 }
 
 /**
+ * Severity of a Verifier check's outcome. GH #121 / I5 promotion of the
+ * pre-existing binary `passed: boolean` into a four-level scale so that
+ * downstream consumers (Loop Controller, Arbitrator, strategy switcher)
+ * can distinguish "passed cleanly" from "advisory warning" from
+ * "rejected but recoverable" from "rejected and must escalate".
+ *
+ * Semantics (consumer contract):
+ *   - `pass`     : check succeeded; no action needed.
+ *   - `warn`     : advisory failure; surface with warning but don't suppress.
+ *                  Maps to the legacy soft-fail concept (evidence/synthesis
+ *                  grounding that may miss compressed observations).
+ *   - `reject`   : the output is wrong as-shipped; suppress and fail the
+ *                  run OR retry within the current strategy.
+ *   - `escalate` : the output is structurally compromised (harness fallback,
+ *                  shallow give-up); the loop should switch strategy or
+ *                  escalate to human-in-loop rather than retry in place.
+ *
+ * Defaulting rule (back-compat): when a custom Verifier returns checks
+ * without `severity`, the default is `passed ? 'pass' : 'reject'`. This
+ * preserves the prior binary semantics for any external Verifier impl.
+ */
+export type VerificationSeverity = "pass" | "warn" | "reject" | "escalate";
+
+/**
  * One named check the Verifier ran with its outcome and reason.
  *
  * Checks are listed in order — gate scenarios + reflection consumers can
  * scan the list to find the first failed check (the "lead" reason for
  * verification failure).
+ *
+ * `severity` (GH #121 / I5) is the structured signal Loop Controller
+ * consumes. `passed` is retained for back-compat — when a check sets
+ * `severity`, `passed` MUST also be set consistently (`passed = severity ===
+ * 'pass' || severity === 'warn'`). Producers should set both; consumers
+ * that read `severity` should call {@link checkSeverity} for the safe
+ * default that handles legacy producers.
  */
 export interface VerificationCheck {
   readonly name: string;
   readonly passed: boolean;
   readonly reason?: string;
+  /**
+   * Severity classification. Optional for back-compat with external
+   * Verifier implementations that predate GH #121. When absent, treat as
+   * `passed ? 'pass' : 'reject'` (see {@link checkSeverity}).
+   */
+  readonly severity?: VerificationSeverity;
+}
+
+/**
+ * Resolve a check's severity with the back-compat default. External
+ * Verifier implementations that haven't migrated to per-check severity
+ * still produce sensible outcomes through this helper.
+ */
+export function checkSeverity(check: VerificationCheck): VerificationSeverity {
+  if (check.severity !== undefined) return check.severity;
+  return check.passed ? "pass" : "reject";
 }
 
 /**
  * The Verifier's structured verdict on a single action's outcome.
  *
- * `verified === true` only when ALL checks pass. A single failed check
- * flips the overall verdict to false, and the failed check's name +
- * reason populate `summary`.
+ * Field semantics post-GH #121:
+ *   - `verified` is a **derived** convenience boolean. True iff every
+ *     check's severity is `pass`. Any non-pass severity (warn, reject,
+ *     escalate) flips it to false — this preserves the legacy contract
+ *     used by runner.ts and existing tests, while the finer-grained
+ *     severity field below tells the Loop Controller HOW to react.
+ *   - `softFail` is a **derived** convenience boolean for the legacy
+ *     advisory-failure path. True iff at least one check is `warn` AND
+ *     no check is `reject`/`escalate`. Kept on the result so existing
+ *     consumers (runner.ts §8.6, telemetry) continue to work unchanged.
+ *   - `severity` is the overall severity for downstream branching:
+ *     escalate > reject > warn > pass.
+ *   - `checks` carries the per-check `severity` (GH #121 / I5) — this is
+ *     the structured signal Loop Controller and Arbitrator consume.
+ *
+ * Loop Controller mapping (runner.ts):
+ *   - severity = pass     → terminal acceptance
+ *   - severity = warn     → surface output with verifierWarning metadata
+ *   - severity = reject   → suppress output + fail (retry within strategy)
+ *   - severity = escalate → suppress + tag for strategy switch / HIL
  */
 export interface VerificationResult {
   readonly verified: boolean;
@@ -130,12 +194,41 @@ export interface VerificationResult {
   readonly action: string;
   /**
    * When true, the failure is advisory only — the caller should surface
-   * the output with a warning rather than suppressing it. Set when the
-   * only failing checks are evidence-grounded or synthesis-grounded.
-   * Hard-fail checks (output-is-model-authored, output-not-harness-parrot)
-   * always set softFail=false.
+   * the output with a warning rather than suppressing it. Derived from
+   * per-check severity post-GH #121.
    */
   readonly softFail: boolean;
+  /**
+   * Highest-severity failure across all checks, or `'pass'` when all
+   * checks passed. The Loop Controller reads this to choose between
+   * accept / warn-and-surface / suppress-and-retry / escalate.
+   * GH #121 / I5.
+   *
+   * Optional for back-compat with existing external Verifier
+   * implementations (runtime lean mode, custom verifiers in tests) that
+   * predate I5. Consumers should default to deriving from
+   * `verified`/`softFail` when this field is absent — see
+   * {@link resolveResultSeverity}.
+   */
+  readonly severity?: VerificationSeverity;
+}
+
+/**
+ * Resolve a VerificationResult's overall severity with the back-compat
+ * default. Use this when consuming `result.severity` from external
+ * Verifier implementations that may not yet emit the field.
+ *
+ * Default rule mirrors the legacy boolean shape:
+ *   - verified=true            → pass
+ *   - softFail=true            → warn
+ *   - else                     → reject (no way to distinguish escalate
+ *                                without the explicit field)
+ */
+export function resolveResultSeverity(result: VerificationResult): VerificationSeverity {
+  if (result.severity !== undefined) return result.severity;
+  if (result.verified) return "pass";
+  if (result.softFail) return "warn";
+  return "reject";
 }
 
 /**
@@ -178,9 +271,11 @@ export const defaultVerifier: Verifier = {
     // ── Check 1: action-success ──────────────────────────────────────────────
     // The tool handler's own success signal. Almost every other check is
     // moot if the action itself errored.
+    // Severity: failure is `reject` — the action errored; output is invalid.
     checks.push({
       name: "action-success",
       passed: ctx.actionSuccess,
+      severity: ctx.actionSuccess ? "pass" : "reject",
       reason: ctx.actionSuccess
         ? undefined
         : `${ctx.action} returned success=false`,
@@ -188,12 +283,14 @@ export const defaultVerifier: Verifier = {
 
     // ── Check 2: non-empty-content ───────────────────────────────────────────
     // An action that succeeded but produced zero bytes is suspicious.
-    // Flag it without failing — empty output is a verifier signal, not
-    // necessarily a failure (e.g., a delete tool legitimately returns "").
+    // Severity: failure is `reject` — terminal verification of empty output
+    // is never a deliverable; for non-terminal observations the existing
+    // legacy semantics treated this as a hard fail too.
     const hasContent = ctx.content.trim().length > 0;
     checks.push({
       name: "non-empty-content",
       passed: hasContent,
+      severity: hasContent ? "pass" : "reject",
       reason: hasContent ? undefined : "action returned empty content",
     });
 
@@ -213,10 +310,14 @@ export const defaultVerifier: Verifier = {
       // `[{...}]` JSON dump via harness_deliverable; pre-fix synthesis-grounded
       // passed (verified=true, faithfulness=7%). Post-fix the verdict is
       // verified=false here, retry path becomes reachable.
+      // Severity: `escalate`. The model failed to synthesize entirely;
+      // the right Loop Controller response is to switch strategy or hand
+      // off to a different mechanism, not to retry the same path. GH #121.
       if (ctx.terminatedBy === "harness_deliverable") {
         checks.push({
           name: "output-is-model-authored",
           passed: false,
+          severity: "escalate",
           reason:
             "output was assembled by harness fallback (terminatedBy=harness_deliverable) — model never produced a synthesized final answer",
         });
@@ -259,16 +360,20 @@ export const defaultVerifier: Verifier = {
       const requiredDataTools = (ctx.requiredTools ?? []).filter(
         (t) => !META_TOOL_SET.has(t),
       );
+      // Severity: failure is `reject` — agent shipped output without any
+      // required data tool call, but a retry within the same strategy can
+      // recover (model often complies on the next iteration once nudged).
       if (requiredDataTools.length > 0) {
         const used = ctx.toolsUsed ?? new Set<string>();
         const nonMetaUsed = [...used].filter((t) => !META_TOOL_SET.has(t));
+        const tookAction = nonMetaUsed.length > 0;
         checks.push({
           name: "agent-took-action",
-          passed: nonMetaUsed.length > 0,
-          reason:
-            nonMetaUsed.length === 0
-              ? `agent shipped output without calling any required data tool (required: ${requiredDataTools.join(", ")})`
-              : undefined,
+          passed: tookAction,
+          severity: tookAction ? "pass" : "reject",
+          reason: tookAction
+            ? undefined
+            : `agent shipped output without calling any required data tool (required: ${requiredDataTools.join(", ")})`,
         });
       }
 
@@ -338,9 +443,14 @@ export const defaultVerifier: Verifier = {
       );
 
       const isParrot = startsWithHarnessPrefix || parrotMatch !== null || producerLeak !== undefined;
+      // Severity: failure is `reject`. GH #121 / I5 success metric (1):
+      // M2a/b/c producer-leak outputs (rationale XML, [CRITIQUE], etc.)
+      // must emit severity='reject' so the Loop Controller suppresses the
+      // output instead of shipping framework markup to the user.
       checks.push({
         name: "output-not-harness-parrot",
         passed: !isParrot,
+        severity: isParrot ? "reject" : "pass",
         reason: isParrot
           ? producerLeak
             ? `framework markup reached user output — ${producerLeak.label}`
@@ -350,13 +460,61 @@ export const defaultVerifier: Verifier = {
           : undefined,
       });
 
+      // ── Check 3d: output-not-shallow-giveup ────────────────────────────
+      // GH #121 / I5 success metric (2): F4 reproduction — agent calls
+      // wrong tool (e.g. `find` instead of `recall`), sees 5 results in a
+      // truncated preview, and answers "no 7th result exists." Output
+      // grounds in observations (those 5 entries are real) → existing
+      // grounding checks pass → user gets a false-negative claim.
+      //
+      // Detection is intentionally narrow to avoid false positives on
+      // legitimate "I don't know" answers: shallow give-up requires BOTH
+      // (a) a give-up phrase and (b) one or more available data tools
+      // that the agent never invoked. When both conditions hold, the
+      // model bailed without exhausting capability — that's a structural
+      // failure that strategy switching or human-in-loop should handle,
+      // not a retry-in-place. Severity: `escalate`.
+      const GIVE_UP_PATTERNS: ReadonlyArray<RegExp> = [
+        /\b(i\s+cannot\s+(complete|fulfill|answer|provide|find|do))\b/i,
+        /\bi['']?m\s+unable\s+to\s+(complete|fulfill|answer|provide|find|do)\b/i,
+        /\bno\s+(\d+(st|nd|rd|th)?|further|additional|more)\s+(result|entry|entries|items?|records?)\s+(is|are)?\s*(available|found|present|exists?)/i,
+        /\bthere\s+(is|are)\s+no\s+(\d+(st|nd|rd|th)?|further|additional|more)\s+(result|entry|entries|items?|records?)/i,
+        /\bonly\s+contains?\s+\d+\s+(result|entry|entries|items?|records?)\b/i,
+      ];
+      const giveUpMatch = GIVE_UP_PATTERNS.find((p) => p.test(ctx.content));
+      // Count distinct user-supplied data tools that were never called.
+      // Use availableUserTools rather than requiredTools: a shallow-give-up
+      // requires the agent had options it didn't try. Meta-tools are
+      // excluded (final-answer/recall/find/etc. are framework helpers).
+      const availableUserToolsList = ctx.availableUserTools ?? [];
+      const toolsUsed = ctx.toolsUsed ?? new Set<string>();
+      const unusedUserTools = availableUserToolsList.filter(
+        (t) => !META_TOOL_SET.has(t) && !toolsUsed.has(t),
+      );
+      if (giveUpMatch && unusedUserTools.length > 0) {
+        checks.push({
+          name: "output-not-shallow-giveup",
+          passed: false,
+          severity: "escalate",
+          reason: `output appears to give up ("${ctx.content.slice(0, 80)}${ctx.content.length > 80 ? "…" : ""}") while ${unusedUserTools.length} available user tool(s) were never invoked: ${unusedUserTools.slice(0, 5).join(", ")}${unusedUserTools.length > 5 ? "…" : ""}`,
+        });
+      } else {
+        checks.push({
+          name: "output-not-shallow-giveup",
+          passed: true,
+          severity: "pass",
+        });
+      }
+
       // Check 4: completion-claim
       // If the model's content includes "satisfied" / completion language,
       // record that as a positive signal. Absence is not a failure — many
       // valid final answers don't use that language.
+      // Severity: always `pass` — informational only.
       checks.push({
         name: "completion-claim",
         passed: true, // informational; never fails
+        severity: "pass",
         reason: isSatisfied(ctx.content)
           ? undefined
           : "no explicit completion-claim phrasing detected (informational)",
@@ -371,9 +529,15 @@ export const defaultVerifier: Verifier = {
             ctx.content,
             corpus,
           );
+          // Severity: failure is `warn`. Preserves the legacy softFail flow
+          // — grounding is advisory because compressed observations and
+          // scratchpad lookups frequently produce false negatives. The
+          // Loop Controller surfaces the output with a warning rather
+          // than suppressing it.
           checks.push({
             name: "evidence-grounded",
             passed: grounding.ok,
+            severity: grounding.ok ? "pass" : "warn",
             reason: grounding.ok
               ? undefined
               : `ungrounded amounts: ${grounding.violations.join(", ")}`,
@@ -383,6 +547,7 @@ export const defaultVerifier: Verifier = {
           // Catches the WHOLE class of fabrication (titles, names, IDs, not just
           // dollar amounts) AND the framework-compression-marker echo failure
           // mode. Task-agnostic: works for any synthesis task.
+          // Severity: failure is `warn` (same rationale as evidence-grounded).
           const generalGrounding = validateGeneralizedGrounding(
             ctx.content,
             corpus,
@@ -390,23 +555,50 @@ export const defaultVerifier: Verifier = {
           checks.push({
             name: "synthesis-grounded",
             passed: generalGrounding.verified,
+            severity: generalGrounding.verified ? "pass" : "warn",
             reason: generalGrounding.verified ? undefined : generalGrounding.reason,
           });
         }
       }
     }
 
-    const SOFT_FAIL_CHECKS = new Set(["evidence-grounded", "synthesis-grounded"]);
-    const failedChecks = checks.filter((c) => !c.passed);
-    const softFail = failedChecks.length > 0 && failedChecks.every((c) => SOFT_FAIL_CHECKS.has(c.name));
+    // ── Derived fields (GH #121 / I5) ────────────────────────────────────────
+    // Overall severity rollup (max severity across all checks):
+    //   - any escalate → overall = escalate
+    //   - else any reject → overall = reject
+    //   - else any warn → overall = warn
+    //   - else → pass
+    // `verified` is true ONLY when overall = pass — preserves legacy contract
+    // (runner.ts:1785 `if (!verdict.verified)` still triggers on warn-only).
+    // `softFail` mirrors the legacy contract: warn-only failures (no
+    // rejects/escalates) — surfaces output with warning rather than
+    // suppressing.
+    let hasEscalate = false;
+    let hasReject = false;
+    let hasWarn = false;
+    for (const c of checks) {
+      const sev = checkSeverity(c);
+      if (sev === "escalate") hasEscalate = true;
+      else if (sev === "reject") hasReject = true;
+      else if (sev === "warn") hasWarn = true;
+    }
+    const overallSeverity: VerificationSeverity = hasEscalate
+      ? "escalate"
+      : hasReject
+        ? "reject"
+        : hasWarn
+          ? "warn"
+          : "pass";
+    const verified = overallSeverity === "pass";
+    const softFail = !hasEscalate && !hasReject && hasWarn;
 
-    const verified = checks.every((c) => c.passed);
     return {
       verified,
       checks,
       summary: buildSummary(ctx.action, checks),
       action: ctx.action,
       softFail,
+      severity: overallSeverity,
     };
   },
 };

@@ -22,10 +22,11 @@ export const noopVerifier: Verifier = {
   verify(ctx: VerificationContext): VerificationResult {
     return {
       verified: true,
-      checks: [{ name: "noop", passed: true }],
+      checks: [{ name: "noop", passed: true, severity: "pass" }],
       summary: `${ctx.action}: noop (ablation)`,
       action: ctx.action,
       softFail: false,
+      severity: "pass",
     };
   },
 };
