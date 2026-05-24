@@ -268,6 +268,50 @@ created: 2026-05-23
     - apps/examples/src/reasoning/24-mechanisms-cassette-xfail.ts (M9 removed)
     - bun test packages/reasoning/tests/{terminate-rationale,m9-termination-oracle,shared/termination-oracle} 98/98
 
+- task: hs-119-curator-sole-prompt-author
+  date: 2026-05-24
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 1
+  tokens-est: ~93K
+  regression-prevented: rogue-state.messages-mutation
+  notes: >
+    Single kernel-warden dispatch closed GH #119 / North Star v5.0 §4.3
+    (curator as sole prompt author). Demoted the reactive-observer
+    `compress-messages` patch handler from a direct `state.messages`
+    mutator (transitionState({ messages: compressed }) at observer.ts:371)
+    to an advisory recommender that sets
+    `state.meta.pendingCompressionRecommendation` + emits an
+    ObservableLogger `compression-recommendation` metric. Curator pipeline
+    (buildConversationMessages → applyMessageWindowWithCompact) now reads
+    that field with a freshness gate (iteration delta <= 1), clamps the
+    effective budget, and emits a `compression-applied` debug log when a
+    recommendation is consumed. Static authority closure asserted by a
+    co-located test: `rtk grep "transitionState.*messages:"` over
+    reactive-observer.ts returns 0 (was 1). Confidence 0.78 — high on the
+    static authority assertion + 256 targeted tests + 1201/1201 full
+    reasoning suite green; tempered because the L4 production validation
+    signal (qwen3 264% token verbosity regression) requires a
+    harness-runner re-run outside this warden's scope. LOC delta +341
+    overruns the 250 cap by +91, entirely in test documentation; the 4
+    mandated invariants are named in the test bodies. Authority
+    discipline: refused event-bus.ts edits (core domain), refused
+    reactive-intelligence patch-type tightening (controller-decisions
+    domain), refused wiki/** writes (scribe territory).
+  evidence-anchors:
+    - packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts (case "compress-messages" — no transitionState messages mutation)
+    - packages/reasoning/src/kernel/capabilities/attend/context-utils.ts (effectiveBudget clamp + freshness gate)
+    - packages/reasoning/src/kernel/state/kernel-state.ts (KernelMeta.pendingCompressionRecommendation typed field)
+    - packages/reasoning/tests/context/curator-compression-recommendation.test.ts (+4 invariants)
+    - packages/reasoning/tests/kernel/capabilities/reflect/reactive-observer-compression.test.ts (+2 checks incl. static regrep)
+    - bun test packages/reasoning 1201/1201; targeted 256/256
+  followups:
+    - event-bus.ts CompressionRecommendation + CompressionApplied schema variants (core domain)
+    - reactive-intelligence patch type — add reason: string to compress-messages canonical shape
+    - harness-runner cross-strategy matrix re-run on context-profiles (L4 closure signal)
+    - freshness-gate widening for future arbitrator pause/resume cycles
+
 - task: test-provider-logprobs
   date: 2026-05-23
   warden: provider-warden

@@ -363,12 +363,48 @@ export function runReactiveObserver(
                   });
                   break
                 case "compress-messages": {
-                  // KernelMessage has no token annotations, so use count-based compression:
-                  // keep the last N messages where N ≈ targetTokens / 200 tok-per-msg.
+                  // Issue #119 / North Star v5.0 §4.3 — curator is the sole
+                  // authority that authors Prompt.messages. The patch handler
+                  // is demoted from "rogue mutator" to "advisory recommender":
+                  // it records a CompressionRecommendation on
+                  // state.meta.pendingCompressionRecommendation and emits an
+                  // advisory log event. The curator
+                  // (applyMessageWindowWithCompact via
+                  // kernel/capabilities/attend/context-utils.ts) consumes the
+                  // recommendation on the next iteration to clamp the
+                  // effective token budget. state.messages is left untouched
+                  // here — single-author discipline.
                   const p = patch as { kind: "compress-messages"; targetTokens: number };
-                  const keepCount = Math.max(1, Math.ceil(p.targetTokens / 200));
-                  const compressed = s.messages.slice(Math.max(0, s.messages.length - keepCount));
-                  s = transitionState(s, { messages: compressed });
+                  const reason =
+                    typeof (patch as Record<string, unknown>).reason === "string"
+                      ? ((patch as Record<string, unknown>).reason as string)
+                      : "context-pressure";
+                  s = transitionState(s, {
+                    meta: {
+                      ...s.meta,
+                      pendingCompressionRecommendation: {
+                        targetTokens: p.targetTokens,
+                        reason,
+                        recommendedAtIteration: s.iteration,
+                      },
+                    },
+                  });
+                  // Advisory trace event via ObservableLogger. event-bus.ts
+                  // schema gap for a typed CompressionRecommendation event is
+                  // surfaced as a followup (out-of-scope per authority).
+                  yield* Effect.serviceOption(ObservableLogger).pipe(
+                    Effect.flatMap((opt) =>
+                      opt._tag === "Some"
+                        ? opt.value.emit({
+                            _tag: "metric",
+                            name: "compression-recommendation",
+                            value: p.targetTokens,
+                            unit: "tokens",
+                            timestamp: new Date(),
+                          }).pipe(Effect.catchAll(() => Effect.void))
+                        : Effect.void,
+                    ),
+                  );
                   break
                 }
                 case "append-system-nudge": {

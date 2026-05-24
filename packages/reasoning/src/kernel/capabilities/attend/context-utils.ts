@@ -133,12 +133,41 @@ export function buildConversationMessages(
   profile: ContextProfile,
   adapter: ProviderAdapter,
 ): LLMMessage[] {
+  // Issue #119 — Curator as sole prompt author. The reactive-observer's
+  // compress-messages patch demoted to advisory: it records a
+  // CompressionRecommendation on state.meta.pendingCompressionRecommendation.
+  // Here we consume that recommendation by clamping the effective budget to
+  // min(profile.maxTokens, recommendation.targetTokens) for THIS iteration's
+  // render. The recommendation must be fresh (this iteration or last
+  // iteration); stale recommendations are ignored.
+  const profileBudget = profile.maxTokens ?? Number.MAX_SAFE_INTEGER;
+  // state.meta is structurally typed but defensive lookup keeps the curator
+  // robust to call sites that synthesize partial states (tests, snapshot
+  // restore).
+  const rec = state.meta?.pendingCompressionRecommendation;
+  const recFresh = rec !== undefined && state.iteration - rec.recommendedAtIteration <= 1;
+  const effectiveBudget = recFresh ? Math.min(profileBudget, rec.targetTokens) : profileBudget;
+
   const compactedMessages = applyMessageWindowWithCompact(
     state.messages,
     profile.tier ?? "mid",
-    profile.maxTokens ?? Number.MAX_SAFE_INTEGER,
+    effectiveBudget,
   );
   let workingMessages = compactedMessages;
+
+  // Emit advisory compression-applied log when a fresh recommendation was
+  // consumed. event-bus.ts schema gap for a typed CompressionApplied event
+  // is surfaced as a followup (out-of-scope per authority).
+  if (recFresh && rec !== undefined) {
+    // Synchronous fallback — buildConversationMessages is a pure function and
+    // can't open an Effect context here. console.debug is the sanctioned
+    // surface per mission brief out-of-scope-surface clause for the applied
+    // side until event-bus.ts gains CompressionApplied.
+    // eslint-disable-next-line no-console
+    console.debug(
+      `[compression-applied] iteration=${state.iteration} target=${rec.targetTokens} actual=${compactedMessages.length} reason="${rec.reason}"`,
+    );
+  }
 
   // taskFraming hook — on first iteration, let adapter annotate the task message
   // to help local models understand the full sequence of steps required.

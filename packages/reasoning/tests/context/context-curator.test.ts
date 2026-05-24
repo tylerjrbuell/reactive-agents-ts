@@ -139,20 +139,28 @@ describe("defaultContextCurator", () => {
 
 // ── W6 (FIX-4 / FIX-20) — compression coordination invariant ─────────────
 //
-// Three-stage pipeline: (a) tool-execution.ts compresses + stashes full
-// content in scratchpad keyed by storedKey, (b) curator renders by reading
-// scratchpad via storedKey, (c) RI dispatcher's `compress-messages` patch
-// trims state.messages but leaves state.steps + state.scratchpad untouched.
+// HISTORICAL NOTE: as of Issue #119 (May 2026), the RI dispatcher's
+// `compress-messages` patch NO LONGER mutates state.messages directly. The
+// patch is demoted to advisory — it records a CompressionRecommendation on
+// state.meta.pendingCompressionRecommendation; the curator (via
+// applyMessageWindowWithCompact) consumes that recommendation on the next
+// iteration and authors the rendered Prompt.messages. Curator-as-sole-
+// prompt-author (North Star v5.0 §4.3) is now enforced structurally, not
+// just by timing.
 //
-// The audit's M5 framing of "delete tool-execution.ts compression" was
-// based on the misreading that systems (a) and (c) duplicate each other.
-// They don't — (a) is per-tool-result content compression for context
-// budget, (c) is thread-level message trim. Curator bridges them.
+// Two-stage pipeline (post-#119):
+//   (a) tool-execution.ts compresses + stashes full content in scratchpad
+//       keyed by storedKey
+//   (b) curator renders by reading scratchpad via storedKey + clamps the
+//       conversation thread budget when a CompressionRecommendation is
+//       pending — state.messages is never mutated by the patch path
 //
-// This test pins the invariant: even after compress-messages drops oldest
-// messages, curator still renders full observation content via scratchpad
-// lookup. If a future patch handler starts touching state.steps or
-// state.scratchpad on compress-messages, this test will fail.
+// This test pins the (a)+(b) bridge: tool-execution writes the compressed
+// preview as observation displayText, but the curator's recent-observations
+// section resolves the FULL content via storedKey lookup. The simulated
+// .slice(-1) below remains valid because Prompt.messages (what the LLM
+// sees) is a derived view; trimming the rendered view never touches state
+// or scratchpad.
 describe("compression coordination (W6 / FIX-4 / FIX-20)", () => {
   it("curator renders full tool-result via storedKey after thread-level compress-messages would trim state.messages", () => {
     const FULL_CONTENT = "FULL_TOOL_RESULT: " + "x".repeat(2500);
@@ -190,10 +198,11 @@ describe("compression coordination (W6 / FIX-4 / FIX-20)", () => {
       ],
     });
 
-    // Simulate the compress-messages patch path (mirrors patch-applier.ts:52-59
-    // and reactive-observer.ts:357-365): trim messages to keep only the last 1.
-    // Steps + scratchpad are intentionally untouched — that's the invariant
-    // patch-applier maintains.
+    // Simulate a thread-trimmed prompt view: post-#119 the patch handler
+    // no longer mutates state.messages, but the curator's
+    // applyMessageWindowWithCompact may still slim the rendered view when
+    // a CompressionRecommendation is pending. The trim below stands in for
+    // the rendered Prompt.messages — never written back to state.
     const stateAfter = {
       ...stateBefore,
       messages: stateBefore.messages.slice(-1),

@@ -201,6 +201,28 @@ export interface KernelMeta {
     readonly tokensSpentOnInterventions: number;
   };
 
+  // ── Issue #119 — Curator-as-sole-prompt-author (compression handoff) ────
+  /**
+   * Advisory compression recommendation set by the reactive-observer's
+   * `compress-messages` patch handler. The handler no longer mutates
+   * `state.messages` directly (that would create a parallel substrate that
+   * competes with the curator). Instead it publishes a recommendation here,
+   * and the curator (via `applyMessageWindowWithCompact` in
+   * `kernel/capabilities/attend/context-utils.ts`) consumes the recommendation
+   * to clamp the effective token budget on the NEXT iteration's prompt.
+   *
+   * `recommendedAtIteration` lets the curator drop stale recommendations if
+   * the patch has stopped firing — the recommendation only applies when
+   * `state.iteration - recommendedAtIteration <= 1`.
+   *
+   * Issue #119 / North Star v5.0 §4.3.
+   */
+  readonly pendingCompressionRecommendation?: {
+    readonly targetTokens: number;
+    readonly reason: string;
+    readonly recommendedAtIteration: number;
+  };
+
   // ── Issue #128 — Arbitrator BudgetSignal limits (North Star v5.0 Pillar 6) ─
   /**
    * Declarative budget limits consulted by the Arbitrator's pre-intent guard.
