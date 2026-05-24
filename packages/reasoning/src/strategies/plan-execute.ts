@@ -124,6 +124,13 @@ export const executePlanExecute = (
     const start = Date.now();
     let totalTokens = 0;
     let totalCost = 0;
+    // Most recent sub-kernel raw termination reason. Sub-kernels (composite
+    // steps) carry `rawTerminatedBy` on their result; aggregating the last
+    // one observed lets plan-execute participate in the same
+    // `rawTerminatedBy` → ctx.metadata → AgentCompleted.terminationReason
+    // chain reactive uses. Direct-dispatch and analysis steps do not produce
+    // a raw reason, so this stays `undefined` for pure tool/analysis plans.
+    let lastRawTerminatedBy: string | undefined;
 
     // W3 FIX-23: per-strategy RI budget. Accumulates across refinement
     // iterations so dispatcher suppression gates (maxFiresPerRun,
@@ -488,7 +495,18 @@ export const executePlanExecute = (
               if (Exit.isSuccess(exit)) {
                 stepResult = exit.value.output;
                 stepSucceeded = true;
-                return { step, stepIndex, success: true, output: stepResult, tokens: exit.value.tokens, cost: exit.value.cost, error: undefined };
+                return {
+                  step,
+                  stepIndex,
+                  success: true,
+                  output: stepResult,
+                  tokens: exit.value.tokens,
+                  cost: exit.value.cost,
+                  error: undefined,
+                  ...(exit.value.rawTerminatedBy !== undefined
+                    ? { rawTerminatedBy: exit.value.rawTerminatedBy }
+                    : {}),
+                };
               }
               const squashed = Cause.squash(exit.cause);
               lastError = squashed instanceof Error ? squashed.message : String(squashed);
@@ -506,6 +524,17 @@ export const executePlanExecute = (
           const { step, stepIndex } = result;
           totalTokens += result.tokens;
           totalCost += result.cost;
+          // Track the most recent composite sub-kernel termination reason —
+          // surfaced on the strategy result so runtime can propagate it to
+          // AgentCompleted.terminationReason. Tool-dispatch and analysis
+          // steps omit this field, so it only updates when a real sub-kernel
+          // ran. Sequential update mirrors execution order; the final value
+          // reflects the last step's kernel.
+          const stepRawTerminatedBy = (result as { rawTerminatedBy?: string })
+            .rawTerminatedBy;
+          if (stepRawTerminatedBy !== undefined) {
+            lastRawTerminatedBy = stepRawTerminatedBy;
+          }
 
           if (result.success) {
             step.status = "completed";
@@ -1030,6 +1059,16 @@ export const executePlanExecute = (
       start,
       totalTokens,
       totalCost,
+      ...(lastRawTerminatedBy !== undefined
+        ? {
+            extraMetadata: {
+              // Parallel open-string channel mirroring reactive strategy.
+              // Drops through to AgentCompleted.terminationReason via
+              // execution-engine ctx.metadata.rawTerminatedBy.
+              rawTerminatedBy: lastRawTerminatedBy,
+            },
+          }
+        : {}),
     });
   });
 
@@ -1040,6 +1079,14 @@ interface StepExecResult {
   tokens: number;
   cost: number;
   success: boolean;
+  /**
+   * Raw termination reason from a composite step's sub-kernel.
+   * Tool-dispatch + analysis steps do not produce one and leave this
+   * undefined. Aggregated by the outer loop so dynamic killswitch reasons
+   * (e.g. "budget-limit:tokens:1/0") survive narrowing through to
+   * AgentCompleted.terminationReason.
+   */
+  rawTerminatedBy?: string;
 }
 
 function enforceOutputQualityGate(input: {
@@ -1341,6 +1388,9 @@ function executeStep(
       tokens: kernelResult.totalTokens,
       cost: kernelResult.totalCost,
       success: true,
+      ...(kernelResult.rawTerminatedBy !== undefined
+        ? { rawTerminatedBy: kernelResult.rawTerminatedBy }
+        : {}),
     })),
     Effect.mapError(
       (err) =>
