@@ -17,7 +17,6 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { PlanStoreService } from "@reactive-agents/memory";
 import {
   LLMPlanOutputSchema,
@@ -36,9 +35,11 @@ import {
 } from "./plan-prompts.js";
 import type { ToolSummary, StepResult } from "./plan-prompts.js";
 import { executeReActKernel } from "../kernel/loop/react-kernel.js";
+import type { LogEvent } from "@reactive-agents/observability";
 import {
   resolveStrategyServices,
   publishReasoningStep,
+  makeStrategyEmitLog,
 } from "../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
@@ -99,14 +100,7 @@ export const executePlanExecute = (
     const services = yield* resolveStrategyServices;
     const { llm, toolService, eventBus } = services;
 
-    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
-      Effect.serviceOption(ObservableLogger).pipe(
-        Effect.flatMap((opt) =>
-          opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/plan-execute.ts:101", tag: errorTag(err) })))
-            : Effect.void
-        )
-      );
+    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/plan-execute.ts:emitLog");
 
     // Optional PlanStore for persistence (available when memory layer is enabled)
     const planStoreOpt = yield* Effect.serviceOption(PlanStoreService).pipe(

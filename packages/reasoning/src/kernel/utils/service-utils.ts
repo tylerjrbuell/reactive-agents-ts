@@ -9,6 +9,7 @@ import { Context, Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import { EventBus, EntropySensorService, AgentMemory } from "@reactive-agents/core";
+import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 
 // ── Narrow types — shared types from kernel-state, prompt type local ─────────
 
@@ -250,4 +251,36 @@ export function publishReasoningStep(
 ): Effect.Effect<void, never> {
   if (eventBus._tag === "None") return Effect.void;
   return eventBus.value.publish(payload).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/utils/service-utils.ts:216", tag: errorTag(err) })));
+}
+
+/**
+ * Strategy-level structured log emitter.
+ *
+ * Resolves `ObservableLogger` from context (optional), forwards the event,
+ * and swallows any emit failures into the canonical `ErrorSwallowed` channel
+ * so logging never breaks the strategy.
+ *
+ * Centralizes the identical 14-line `emitLog = (event) => ...` block that
+ * was copy-pasted across all 6 strategy files (direct, reactive, adaptive,
+ * reflexion, plan-execute, tree-of-thought) — GH #90 partial dedup
+ * (direct/reactive merge declined; the truly shared scaffolding lives
+ * here instead).
+ *
+ * @param site Caller-provided identifier (file:line or symbolic) for the
+ *             swallow report. Keep stable so log correlation across builds
+ *             stays meaningful.
+ */
+export function makeStrategyEmitLog(site: string): (event: LogEvent) => Effect.Effect<void, never> {
+  return (event: LogEvent) =>
+    Effect.serviceOption(ObservableLogger).pipe(
+      Effect.flatMap((opt) =>
+        opt._tag === "Some"
+          ? opt.value.emit(event).pipe(
+              Effect.catchAll((err) =>
+                emitErrorSwallowed({ site, tag: errorTag(err) }),
+              ),
+            )
+          : Effect.void,
+      ),
+    );
 }

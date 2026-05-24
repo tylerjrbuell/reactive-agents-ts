@@ -14,10 +14,9 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -26,7 +25,6 @@ import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
 import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
 import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
@@ -117,14 +115,7 @@ export const executeTreeOfThought = (
     const services = yield* resolveStrategyServices;
     const { llm, promptService, eventBus } = services;
 
-    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
-      Effect.serviceOption(ObservableLogger).pipe(
-        Effect.flatMap((opt) =>
-          opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/tree-of-thought.ts:112", tag: errorTag(err) })))
-            : Effect.void
-        )
-      );
+    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/tree-of-thought.ts:emitLog");
 
     const { breadth, depth, pruningThreshold } =
       input.config.strategies.treeOfThought;

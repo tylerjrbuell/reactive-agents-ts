@@ -19,7 +19,6 @@ import type { ReasoningResult, ReasoningStrategy } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -28,7 +27,7 @@ import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
 
 // ── DirectInput ───────────────────────────────────────────────────────────────
 
@@ -101,21 +100,7 @@ export const executeDirect = (
   Effect.gen(function* () {
     const start = Date.now();
 
-    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
-      Effect.serviceOption(ObservableLogger).pipe(
-        Effect.flatMap((opt) =>
-          opt._tag === "Some"
-            ? opt.value.emit(event).pipe(
-                Effect.catchAll((err) =>
-                  emitErrorSwallowed({
-                    site: "reasoning/src/strategies/direct.ts:emitLog",
-                    tag: errorTag(err),
-                  }),
-                ),
-              )
-            : Effect.void,
-        ),
-      );
+    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/direct.ts:emitLog");
 
     yield* emitLog({ _tag: "phase_started", phase: "direct:kernel", timestamp: new Date() });
 

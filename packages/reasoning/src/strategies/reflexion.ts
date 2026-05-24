@@ -16,7 +16,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
+import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import {
@@ -37,7 +37,6 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
 
 interface ReflexionInput {
@@ -93,14 +92,7 @@ export const executeReflexion = (
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
       yield* resolveStrategyServices;
 
-    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
-      Effect.serviceOption(ObservableLogger).pipe(
-        Effect.flatMap((opt) =>
-          opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/reflexion.ts:95", tag: errorTag(err) })))
-            : Effect.void
-        )
-      );
+    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/reflexion.ts:emitLog");
 
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];

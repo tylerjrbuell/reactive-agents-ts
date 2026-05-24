@@ -13,7 +13,7 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { ObservableLogger, type LogEvent } from "@reactive-agents/observability";
+import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
@@ -25,7 +25,6 @@ import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.j
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
 import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
 
@@ -101,14 +100,7 @@ export const executeAdaptive = (
     const { llm, promptService: promptServiceOpt, eventBus: ebOpt } =
       yield* resolveStrategyServices;
 
-    const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
-      Effect.serviceOption(ObservableLogger).pipe(
-        Effect.flatMap((opt) =>
-          opt._tag === "Some"
-            ? opt.value.emit(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/strategies/adaptive.ts:98", tag: errorTag(err) })))
-            : Effect.void
-        )
-      );
+    const emitLog = makeStrategyEmitLog("reasoning/src/strategies/adaptive.ts:emitLog");
 
     const steps: ReasoningStep[] = [];
     const start = Date.now();
