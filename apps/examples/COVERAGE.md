@@ -10,7 +10,7 @@ Legend:
 - ❌ — no witness, no xfail; gap not yet captured
 - 🔵 — covered indirectly (mentioned in a multi-feature example, not the focus)
 
-Updated: 2026-05-24. Smoke run: 41 examples, 6 xfail, 0 fail.
+Updated: 2026-05-24. Smoke run: 42 examples, 6 xfail, 0 fail.
 
 ---
 
@@ -126,7 +126,7 @@ Updated: 2026-05-24. Smoke run: 41 examples, 6 xfail, 0 fail.
 | `withTraceRecorder({path})` | 🟡 | AX1 (xfail) | builder hook missing |
 | Snapshot/Replay | ✅ | A21 | identity-replay + diff witness |
 | RunHandle / terminate | ✅ | S25 | |
-| `withEvents()` | ❌ | — | |
+| `withEvents()` + agent.subscribe | ✅ | A24 | catch-all + tag-filtered subscriptions verified, 15 unique tags observed |
 | `withHealthCheck()` | ✅ | F8 | builder-state fingerprint |
 | `withCircuitBreaker(...)` | ❌ | — | |
 | `withRateLimiting(...)` | ❌ | — | |

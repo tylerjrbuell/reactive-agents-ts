@@ -287,6 +287,13 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/advanced/diagnose-probe.ts',
     },
+    {
+        num: 'A24',
+        label: 'event-bus-subscribe',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/event-bus-subscribe.ts',
+    },
     // reasoning — 20 offline
     {
         num: '19',
