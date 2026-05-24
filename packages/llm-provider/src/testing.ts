@@ -4,6 +4,7 @@ import type {
   CompletionResponse,
   StreamEvent,
   LLMMessage,
+  TokenLogprob,
 } from "./types.js";
 import type { LLMErrors } from "./errors.js";
 import { DEFAULT_CAPABILITIES } from "./capabilities.js";
@@ -17,8 +18,18 @@ export interface ToolCallSpec {
 }
 
 export type TestTurn =
-  | { text: string; match?: string; delayMs?: number }
-  | { json: unknown; match?: string; delayMs?: number }
+  | {
+      text: string;
+      match?: string;
+      delayMs?: number;
+      logprobs?: readonly TokenLogprob[];
+    }
+  | {
+      json: unknown;
+      match?: string;
+      delayMs?: number;
+      logprobs?: readonly TokenLogprob[];
+    }
   | { toolCall: ToolCallSpec; match?: string; delayMs?: number }
   | { toolCalls: ToolCallSpec[]; match?: string; delayMs?: number }
   | { error: string; match?: string; delayMs?: number };
@@ -138,11 +149,16 @@ export const TestLLMService = (
         }
 
         const content = "json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "";
+        const logprobs =
+          ("text" in turn || "json" in turn) && turn.logprobs
+            ? turn.logprobs
+            : undefined;
         return {
           content,
           stopReason: "end_turn" as const,
           usage: fakeUsage(searchText.length, content.length),
           model: "test-model",
+          ...(logprobs ? { logprobs } : {}),
         } satisfies CompletionResponse;
       }),
 
@@ -201,23 +217,37 @@ export const TestLLMService = (
       const content = "json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "";
       const inputTokens = Math.ceil(searchText.length / 4);
       const outputTokens = Math.ceil(content.length / 4);
+      const streamLogprobs =
+        ("text" in turn || "json" in turn) && turn.logprobs
+          ? turn.logprobs
+          : undefined;
+
+      const baseEvents: StreamEvent[] = [
+        { type: "text_delta" as const, text: content },
+        { type: "content_complete" as const, content },
+        ...(streamLogprobs
+          ? [
+              {
+                type: "logprobs" as const,
+                logprobs: streamLogprobs,
+              } satisfies StreamEvent,
+            ]
+          : []),
+        {
+          type: "usage" as const,
+          usage: {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            estimatedCost: 0,
+          },
+        },
+      ];
 
       return Effect.succeed(
         Stream.concat(
           delayStream,
-          Stream.make(
-            { type: "text_delta" as const, text: content } satisfies StreamEvent,
-            { type: "content_complete" as const, content } satisfies StreamEvent,
-            {
-              type: "usage" as const,
-              usage: {
-                inputTokens,
-                outputTokens,
-                totalTokens: inputTokens + outputTokens,
-                estimatedCost: 0,
-              },
-            } satisfies StreamEvent,
-          ),
+          Stream.fromIterable(baseEvents),
         ) as Stream.Stream<StreamEvent, LLMErrors>,
       );
     },

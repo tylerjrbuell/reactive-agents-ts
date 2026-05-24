@@ -6,12 +6,17 @@
  *
  *   - M3 Verifier+Retry — needs a failure-then-success cassette
  *   - M7 Calibration    — needs entropy-history accumulation across runs
- *   - M9 Termination Oracle (focused) — needs every termination path to
- *     route through `kernel/loop/terminate.ts:terminate()` and the
- *     reason code surface to be enumerable
  *   - M12 Provider Adapters (matrix) — only 2 of 6 adapters can run
  *     under offline mode (ollama needs a server; anthropic/openai/gemini
  *     need API keys; litellm needs a proxy)
+ *
+ * Closed 2026-05-23:
+ *   - M9 Termination Oracle: TerminateReason union now exported from
+ *     `packages/reasoning/src/kernel/loop/terminate.ts` (19 members).
+ *     R23 no longer reports M9 as blocked. M9 reason-code enumeration
+ *     can now be asserted by consumers; remaining work is the arbitrator
+ *     Verdict.terminatedBy tightening + runner.ts:696 lint fix (followups
+ *     filed by the kernel-warden dispatch on 2026-05-23).
  *
  * Each assertion below is the "spec" — when the cassette/replay
  * infrastructure makes the mechanism witnessable offline, drop that
@@ -52,11 +57,7 @@ export async function run(): Promise<ExampleResult> {
     findings.push("M7 calibration: not wired in defaultReactiveIntelligenceConfig");
   }
 
-  // M9: termination oracle focused witness. The framework asserts every
-  // termination flows through kernel/loop/terminate.ts:terminate() (W4
-  // single-owner), but the reason-code surface is not enumerated as a
-  // closed union for examples to assert against.
-  findings.push("M9 termination oracle: no enumerable reason-code union exported; live runs surface divergent reason codes (final_answer vs final_answer_tool — see COVERAGE.md L3)");
+  // M9 closed 2026-05-23 — TerminateReason union now exported.
 
   // M12: provider adapter matrix. 6 adapters declared, only 'test' and
   // 'ollama' exercised offline. A passing witness would run a small task
@@ -74,7 +75,7 @@ export async function run(): Promise<ExampleResult> {
     passed,
     output: passed
       ? "All 4 cassette-blocked mechanisms now have offline witnesses — drop expectsFail flag and split each into its own focused witness."
-      : `${findings.length} mechanism(s) await cassette infrastructure: M3, M7, M9, M12.`,
+      : `${findings.length} mechanism(s) await further infrastructure: M3 (failure-then-success cassette), M7 (sample-accumulation), M12 (provider-matrix cassettes).`,
     steps: 1,
     tokens: 0,
     durationMs: Date.now() - start,

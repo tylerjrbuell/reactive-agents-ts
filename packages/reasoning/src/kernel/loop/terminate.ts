@@ -21,13 +21,33 @@ import type { Rationale } from "@reactive-agents/core";
 import type { KernelMeta, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
 
+/**
+ * Enumerable union of kernel-emitted termination reason codes (R23 surface).
+ * Sources: runner.ts `terminate()` callers, arbitrator.ts `applyTermination()`
+ * literal `terminatedBy` values, oracle-decision passthrough reasons, and
+ * dispatcher intermediates observed on `state.meta.terminatedBy`. Templated
+ * reasons (`controller_early_stop:<reason>`, `loop_detected:<reason>`) are
+ * omitted — callers should prefix-match. Enforces only `TerminateOptions.reason`;
+ * `Verdict.terminatedBy` in arbitrator.ts is still `string` (followup).
+ */
+export type TerminateReason =
+  | "low_delta_guard" | "switching_exhausted" | "harness_deliverable"
+  | "oracle_forced" | "loop_graceful" | "budget_exceeded" | "max_iterations"
+  | "kernel_error" | "controller_signal_veto" | "loop_detected_with_veto"
+  | "end_turn" | "final_answer_tool" | "final_answer" | "llm_end_turn"
+  | "content_stable" | "final_answer_regex" | "entropy_converged"
+  | "dispatcher-early-stop" | "dispatcher-strategy-switch";
+
 export type TerminateOptions = {
   /**
    * The `terminatedBy` reason. REQUIRED — every termination must declare why.
    * Common values: `"low_delta_guard"`, `"harness_deliverable"`, `"oracle_forced"`,
    * `"loop_graceful"`, `"dispatcher-early-stop"`, `"dispatcher-strategy-switch"`.
+   *
+   * Constrained to `TerminateReason` so the kernel-emitted termination surface
+   * stays enumerable for downstream assertions (R23 / M9 oracle witness).
    */
-  readonly reason: string;
+  readonly reason: TerminateReason;
   /**
    * The user-visible output. Empty string is valid (e.g. "deliver what we
    * have" exits before any synthesis). Callers should pass the assembled

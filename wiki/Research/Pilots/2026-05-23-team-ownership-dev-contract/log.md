@@ -240,6 +240,63 @@ created: 2026-05-23
     - packages/reasoning/src/kernel/utils/diagnostics.ts:23-46 (KernelStateLike)
     - packages/reasoning/src/kernel/utils/diagnostics.ts:80 (signature)
     - packages/core/src/services/event-bus.ts:980-991 (schema fields)
+
+- task: terminate-reason-union-export
+  date: 2026-05-23
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 1
+  tokens-est: ~69K
+  regression-prevented: open-string-reason-surface
+  notes: >
+    Single kernel-warden dispatch exported TerminateReason union from
+    packages/reasoning/src/kernel/loop/terminate.ts (19 members
+    empirically enumerated from runner.ts + arbitrator.ts call sites).
+    Narrowed TerminateOptions.reason from `string` to TerminateReason.
+    Confidence 0.85 — typecheck green + 98 termination tests green; full
+    @reactive-agents/reasoning suite not re-run in warden scope.
+    Surprises: 8 imperative callers (not 9 — line 882 is arbitrateAndApply
+    not terminate), pre-existing runner.ts:696 termination-paths lint
+    violation (out of authority), naming inconsistency between
+    dispatcher_early_stop (underscore) vs dispatcher-early-stop (hyphen).
+    Authority bounds respected (refused arbitrator Verdict.terminatedBy
+    tightening + runner.ts edits + wiki log append — all flagged as
+    followups). Closed M9 finding in R23 (apps/examples xfail).
+  evidence-anchors:
+    - packages/reasoning/src/kernel/loop/terminate.ts:23-50 (union + narrowed type)
+    - apps/examples/src/reasoning/24-mechanisms-cassette-xfail.ts (M9 removed)
+    - bun test packages/reasoning/tests/{terminate-rationale,m9-termination-oracle,shared/termination-oracle} 98/98
+
+- task: test-provider-logprobs
+  date: 2026-05-23
+  warden: provider-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 1
+  tokens-est: ~47K
+  regression-prevented: open-entropy-pipeline-test-gap
+  notes: >
+    Single provider-warden dispatch extended TestTurn.text and
+    TestTurn.json with optional `logprobs?: readonly TokenLogprob[]`.
+    Wired pass-through in complete() and stream() (StreamEvent of type
+    "logprobs" already declared at types.ts:879 — purely consumer-side).
+    +29 LOC testing.ts + 4 new round-trip tests in
+    test-provider-logprobs.test.ts (258/258 pass, was 254). Surprises:
+    StreamEvent already had the variant; CompletionResponseSchema
+    already declared logprobs as Schema.optional — zero types.ts edit.
+    Conditional spread keeps undefined off response object, matching
+    Ollama adapter precedent. Authority bounds respected (READ-only
+    on types.ts, no real-adapter edits, no entropy-pipeline edits).
+    Unblocks the surface needed to drive M2/M3/M5 in-loop firing
+    under the test provider; consumer-side witness still pending
+    because entropy events flow through EventBus not Compose harness
+    (separate finding — needs RI-aware tap surface or direct
+    EventBus subscription in examples).
+  evidence-anchors:
+    - packages/llm-provider/src/testing.ts (TestTurn extended; logprobs pass-through)
+    - packages/llm-provider/tests/test-provider-logprobs.test.ts (+4 tests)
+    - bun test packages/llm-provider 258/258 (was 254)
 ```
 
 
