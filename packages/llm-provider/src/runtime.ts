@@ -46,13 +46,26 @@ const makeCircuitBreakerLayer = (config?: Partial<CircuitBreakerConfig>) =>
 /**
  * Create the LLM provider layer for a specific provider.
  * Uses env vars for configuration by default.
+ *
+ * Circuit breaker behavior:
+ *   - undefined (default) → enabled with `defaultCircuitBreakerConfig`
+ *     (5 consecutive failures → OPEN, 30s cooldown). The framework's stance
+ *     is that critical resilience primitives ship default-on; users who
+ *     observe their provider during chaos tests can opt out.
+ *   - `false` → disabled entirely (use for tests that intentionally fault
+ *     the provider in tight loops).
+ *   - `Partial<CircuitBreakerConfig>` → enabled with the supplied overrides
+ *     merged into the defaults.
+ *
+ * Test provider (`provider === "test"`) never reaches the circuit-breaker
+ * wrapper — it short-circuits earlier in this function.
  */
 export const createLLMProviderLayer = (
   provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "anthropic",
   testScenario?: TestTurn[],
   model?: string,
   modelParams?: { thinking?: boolean; temperature?: number; maxTokens?: number },
-  circuitBreaker?: Partial<CircuitBreakerConfig>,
+  circuitBreaker?: Partial<CircuitBreakerConfig> | false,
   pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>,
 ) => {
   if (provider === "test") {
@@ -86,13 +99,22 @@ export const createLLMProviderLayer = (
 
   const baseProviderLayer = providerLayer.pipe(Layer.provide(configLayer));
 
-  // Stack: provider → circuit breaker (optional) → embedding cache
-  let llmLayer = EmbeddingCacheLayer.pipe(Layer.provide(baseProviderLayer));
-  if (circuitBreaker) {
-    llmLayer = EmbeddingCacheLayer.pipe(
-      Layer.provide(makeCircuitBreakerLayer(circuitBreaker).pipe(Layer.provide(baseProviderLayer))),
-    );
-  }
+  // Stack: provider → circuit breaker (default-on) → embedding cache.
+  // Explicit `false` opts out; any other value enables with defaults +
+  // user-supplied overrides merged on top.
+  const circuitBreakerEnabled = circuitBreaker !== false;
+  const breakerConfig: Partial<CircuitBreakerConfig> | undefined =
+    typeof circuitBreaker === "object" ? circuitBreaker : undefined;
+
+  const llmLayer = circuitBreakerEnabled
+    ? EmbeddingCacheLayer.pipe(
+        Layer.provide(
+          makeCircuitBreakerLayer(breakerConfig).pipe(
+            Layer.provide(baseProviderLayer),
+          ),
+        ),
+      )
+    : EmbeddingCacheLayer.pipe(Layer.provide(baseProviderLayer));
 
   return Layer.mergeAll(llmLayer, PromptManagerLive);
 };

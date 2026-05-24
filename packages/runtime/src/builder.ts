@@ -351,9 +351,9 @@ export class ReactiveAgentBuilder {
     private _costTrackingOptions?: CostTrackingOptions
     private _guardrailsOptions?: GuardrailsOptions
     private _verificationOptions?: VerificationOptions
-    private _circuitBreakerConfig?: Partial<
-        import('@reactive-agents/llm-provider').CircuitBreakerConfig
-    >
+    private _circuitBreakerConfig?:
+        | Partial<import('@reactive-agents/llm-provider').CircuitBreakerConfig>
+        | false
     private _rateLimiterConfig?: import('@reactive-agents/llm-provider').RateLimiterConfig
     private _fallbackConfig?: {
         providers?: string[]
@@ -1036,6 +1036,20 @@ export class ReactiveAgentBuilder {
         >
     ): this {
         this._circuitBreakerConfig = config ?? {}
+        return this
+    }
+
+    /**
+     * Disable the default-on circuit breaker for non-test providers. Useful for
+     * chaos tests that intentionally fault the provider in tight loops (otherwise
+     * the breaker would trip after 5 consecutive failures and the test would see
+     * fast-fail errors instead of the underlying fault).
+     *
+     * @returns `this` for chaining
+     * @example .withoutCircuitBreaker()
+     */
+    withoutCircuitBreaker(): this {
+        this._circuitBreakerConfig = false
         return this
     }
 

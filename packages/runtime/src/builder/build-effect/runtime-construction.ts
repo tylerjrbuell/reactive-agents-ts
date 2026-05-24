@@ -88,9 +88,9 @@ export interface BuilderRuntimeStateView {
   readonly _guardrailsOptions?: GuardrailsOptions;
   readonly _verificationOptions?: VerificationOptions;
   readonly _costTrackingOptions?: CostTrackingOptions;
-  readonly _circuitBreakerConfig?: Partial<
-    import("@reactive-agents/llm-provider").CircuitBreakerConfig
-  >;
+  readonly _circuitBreakerConfig?:
+    | Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>
+    | false;
   readonly _rateLimiterConfig?: import("@reactive-agents/llm-provider").RateLimiterConfig;
   readonly _requiredToolsConfig?: {
     tools?: readonly string[];

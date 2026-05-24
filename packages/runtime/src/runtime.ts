@@ -554,9 +554,11 @@ export interface RuntimeOptions {
    * Circuit breaker configuration for LLM provider calls.
    * When provided, wraps LLM complete/stream with circuit breaker protection.
    *
-   * Default: undefined (no circuit breaker)
+   * Default: enabled with `defaultCircuitBreakerConfig` (5 failures → 30s
+   * cooldown). Pass `false` to disable entirely; pass a partial config to
+   * override specific thresholds while keeping the breaker active.
    */
-  circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig>;
+  circuitBreakerConfig?: Partial<import("@reactive-agents/llm-provider").CircuitBreakerConfig> | false;
 
   /**
    * Required tools configuration — tools that MUST be called before the agent
