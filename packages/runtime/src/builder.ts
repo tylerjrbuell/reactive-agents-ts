@@ -277,7 +277,25 @@ export class ReactiveAgentBuilder {
     private _temperature?: number
     private _maxTokens?: number
     private _memoryTier: '1' | '2' = '1'
-    private _enableMemory: boolean = false
+    /**
+     * Memory + skill persistence default-on (GH #122). Lightweight tier-1
+     * working memory + SQLite cross-session store ship by default so the
+     * compounding-intelligence promise activates without explicit opt-in.
+     * Clear control via `.withoutMemory()` (explicit disable) or
+     * `.withLeanHarness()` (force-disables memory as part of the
+     * latency/cost-sensitive bundle). When the user calls `.withMemory()`
+     * explicitly, the option preserves the project-local cwd dbPath; only
+     * default-on builds resolve to `~/.reactive-agents/<agentId>/memory.db`.
+     */
+    private _enableMemory: boolean = true
+    /**
+     * Explicit-disable flag set by `.withoutMemory()` / `.withLeanHarness()`.
+     * Distinguishes "user opted out" from "user did not specify". Wardens
+     * and downstream auto-enable rules (e.g. `.withLearning()` re-enable
+     * after a lean opt-out) consult this to avoid silently re-enabling
+     * something the user explicitly turned off.
+     */
+    private _memoryExplicitlyDisabled: boolean = false
     private _hooks: LifecycleHook[] = []
     /**
      * Max kernel iterations override. `undefined` means "honor the
@@ -843,6 +861,82 @@ export class ReactiveAgentBuilder {
         return this
     }
 
+    /**
+     * Explicit opt-out from default-on memory + cross-session skill persistence
+     * (GH #122 control surface).
+     *
+     * As of v0.12, agent builds include lightweight SQLite memory + skill
+     * persistence by default — the compounding-intelligence promise activates
+     * without explicit `.withMemory()`. Call `.withoutMemory()` to disable
+     * the full memory stack (memory layer, skill persistence, session store,
+     * experience learning, memory consolidation) and prevent the runtime
+     * from touching the OS-default memory database.
+     *
+     * Common reasons to call this:
+     *   - stateless agents (chat-only, no learning needed)
+     *   - tests that mock LLMs and don't want SQLite side effects
+     *   - environments without a writable home directory
+     *   - workloads where the ~100ms-per-task memory overhead matters
+     *
+     * Composes cleanly with `.withLeanHarness()` — both force memory off.
+     *
+     * @returns `this` for chaining
+     * @example
+     * ```typescript
+     * const stateless = ReactiveAgents
+     *   .create({ agentId: "stateless-bot" })
+     *   .withReasoning()
+     *   .withoutMemory()  // opt out — no SQLite, no skill store, no session log
+     * ```
+     */
+    withoutMemory(): this {
+        this._enableMemory = false
+        this._memoryExplicitlyDisabled = true
+        this._skillPersistence = false
+        this._sessionPersist = false
+        this._enableExperienceLearning = false
+        this._enableMemoryConsolidation = false
+        return this
+    }
+
+    /**
+     * Bundle helper: enable the full compounding-intelligence stack — memory
+     * + skill persistence + reactive intelligence — with sensible defaults
+     * (GH #122 recommended path).
+     *
+     * Equivalent to:
+     * ```typescript
+     *   .withMemory({ tier: 'standard' })
+     *   .withSkillPersistence(true)
+     *   .withReactiveIntelligence()  // already on by default
+     * ```
+     *
+     * The OS-default dbPath (`~/.reactive-agents/<agentId>/memory.db`)
+     * applies when no explicit `opts.dbPath` is provided. Useful as a
+     * single-line opt-in to make `agent.skills()` cross-session by default
+     * even when the user wants to be explicit about it.
+     *
+     * @param opts - Memory tier + path overrides
+     * @returns `this` for chaining
+     * @example
+     * ```typescript
+     * const learner = ReactiveAgents
+     *   .create({ agentId: "research-bot" })
+     *   .withReasoning()
+     *   .withLearning({ tier: "enhanced" })  // full stack, semantic + skill
+     * ```
+     */
+    withLearning(opts?: { tier?: 'standard' | 'enhanced'; dbPath?: string }): this {
+        this._enableMemory = true
+        this._memoryExplicitlyDisabled = false
+        this._memoryTier = opts?.tier === 'enhanced' ? '2' : '1'
+        if (opts?.dbPath) {
+            this._memoryOptions = { ...this._memoryOptions, dbPath: opts.dbPath }
+        }
+        this._skillPersistence = true
+        return this
+    }
+
     // ─── Execution ───
 
     /**
@@ -1119,6 +1213,14 @@ export class ReactiveAgentBuilder {
      */
     withLeanHarness(): this {
         this._leanHarness = true
+        // Memory v2 spec §lean-mode-interaction: lean mode forces memory
+        // off. Latency- + cost-sensitive workloads do not pay for the
+        // memory stack. User can re-enable explicitly via `.withMemory()`
+        // / `.withLearning()` AFTER `.withLeanHarness()` if they want a
+        // non-standard hybrid.
+        this._enableMemory = false
+        this._memoryExplicitlyDisabled = true
+        this._skillPersistence = false
         return this
     }
 

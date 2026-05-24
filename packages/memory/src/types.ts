@@ -468,6 +468,23 @@ export const defaultMemoryConfig = (agentId: string): MemoryConfig => ({
   },
 });
 
+/**
+ * Resolve the user-scope SQLite db path used by the builder when memory is
+ * default-on (GH #122). Distinguished from `defaultMemoryConfig().dbPath`
+ * (cwd-relative) so explicit `.withMemory()` consumers keep their existing
+ * project-local default while auto-enabled memory lands in a stable
+ * cross-project location.
+ *
+ * Resolution: `$HOME/.reactive-agents/<agentId>/memory.db`. Falls back to
+ * `.reactive-agents/memory/<agentId>/memory.db` (cwd) when `$HOME` is
+ * unavailable (sandboxed/non-POSIX runtimes).
+ */
+export const defaultUserMemoryPath = (agentId: string): string => {
+  const home = process.env.HOME ?? process.env.USERPROFILE;
+  if (!home) return `.reactive-agents/memory/${agentId}/memory.db`;
+  return `${home}/.reactive-agents/${agentId}/memory.db`;
+};
+
 // ─── Memory LLM Interface ───
 
 /** Decoupled LLM interface for Tier 2 memory services (importance scoring, tag extraction, embeddings). */

@@ -20,6 +20,7 @@ import type { Context } from "effect";
 import { createRuntime } from "../../runtime.js";
 import type { MCPServerConfig } from "../../runtime.js";
 import { RegistrationHarness, HarnessPipeline } from "@reactive-agents/core";
+import { defaultUserMemoryPath } from "@reactive-agents/memory";
 import { ExecutionEngine } from "../../execution-engine.js";
 import type {
   ContextProfile,
@@ -325,7 +326,20 @@ export const buildBaseRuntimeAndEngine = (
       contextProfile: state._contextProfile,
       resultCompression: state._resultCompression,
       telemetryConfig: state._telemetryConfig,
-      memoryOptions: state._memoryOptions,
+      // GH #122 — when memory is default-on (i.e. user did not call
+      // `.withMemory({ dbPath })` explicitly and did not opt out via
+      // `.withoutMemory()` / `.withLeanHarness()`) resolve a stable
+      // user-scope db path (`~/.reactive-agents/<agentId>/memory.db`).
+      // Explicit `.withMemory({ dbPath: ... })` consumers keep their
+      // configured path; explicit-disable paths bypass this entirely.
+      memoryOptions:
+        state._enableMemory &&
+        (!state._memoryOptions || !state._memoryOptions.dbPath)
+          ? {
+              ...(state._memoryOptions ?? {}),
+              dbPath: defaultUserMemoryPath(agentId),
+            }
+          : state._memoryOptions,
       guardrailsOptions: state._guardrailsOptions,
       verificationOptions: state._verificationOptions,
       costTrackingOptions: state._costTrackingOptions,

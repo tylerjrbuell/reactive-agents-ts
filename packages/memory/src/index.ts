@@ -40,6 +40,7 @@ export {
   EvictionPolicy as EvictionPolicySchema,
   MemoryConfigSchema,
   defaultMemoryConfig,
+  defaultUserMemoryPath,
 } from "./types.js";
 
 // ─── Errors ───

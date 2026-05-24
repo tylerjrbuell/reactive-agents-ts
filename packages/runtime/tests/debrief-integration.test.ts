@@ -37,12 +37,16 @@ describe("AgentResult enrichment", () => {
     await agent.dispose();
   });
 
-  it("result.debrief is undefined when memory is NOT enabled", async () => {
+  it("result.debrief is undefined when memory is explicitly disabled (.withoutMemory)", async () => {
+    // GH #122 — memory is default-on as of v0.12. To assert the no-memory
+    // path we must explicitly opt out via `.withoutMemory()`. Prior to
+    // GH #122 a build without `.withMemory()` was equivalent; that is no
+    // longer the case.
     const agent = await ReactiveAgents.create()
       .withName("no-memory-agent")
       .withProvider("test")
       .withReasoning({ defaultStrategy: "reactive" })
-      // No .withMemory() call
+      .withoutMemory()
       .build();
 
     const result = await agent.run("Simple task without memory");

@@ -116,10 +116,18 @@ describe("Error reporting chain", () => {
   it("hard LLM failure surfaces as success:false result (not silent swallow)", async () => {
     // When the LLM stream emits an error event, agent.run() returns a failed result.
     // The API contract is: run() always returns AgentResult — check result.success.
+    //
+    // GH #122 — disable memory explicitly so the test scenario's single
+    // error response is consumed by the kernel LLM call rather than by
+    // memory-bootstrap embedding init. Without `.withoutMemory()` the
+    // default-on semantic memory layer eats the error response first and
+    // surfaces a memory bootstrap exception instead of the intended
+    // `success: false` contract for the reasoning path.
     const agent = await ReactiveAgents.create()
       .withName("hard-fail-test")
       .withTestScenario([{ error: "Connection refused" }])
       .withReasoning({ defaultStrategy: "reactive" })
+      .withoutMemory()
       .build();
 
     const result = await agent.run("Test task");
