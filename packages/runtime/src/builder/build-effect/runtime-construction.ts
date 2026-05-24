@@ -332,12 +332,26 @@ export const buildBaseRuntimeAndEngine = (
       // user-scope db path (`~/.reactive-agents/<agentId>/memory.db`).
       // Explicit `.withMemory({ dbPath: ... })` consumers keep their
       // configured path; explicit-disable paths bypass this entirely.
+      //
+      // Test environment isolation: when `_provider === "test"` OR
+      // `NODE_ENV === "test"` (bun:test sets the latter automatically)
+      // auto-resolve to SQLite's `:memory:` in-process db instead of the
+      // OS-scope path. Catches both the TestLLMServiceLayer convention
+      // AND builder-contracts tests that use `.withProvider("anthropic")`
+      // for shape-only validation without real LLM calls. Avoids
+      // accumulating `~/.reactive-agents/<agentId>/memory.db` files on
+      // dev machines + CI runners; tests still exercise the full memory
+      // stack but discard state on process exit.
       memoryOptions:
         state._enableMemory &&
         (!state._memoryOptions || !state._memoryOptions.dbPath)
           ? {
               ...(state._memoryOptions ?? {}),
-              dbPath: defaultUserMemoryPath(agentId),
+              dbPath:
+                state._provider === "test" ||
+                process.env.NODE_ENV === "test"
+                  ? ":memory:"
+                  : defaultUserMemoryPath(agentId),
             }
           : state._memoryOptions,
       guardrailsOptions: state._guardrailsOptions,
