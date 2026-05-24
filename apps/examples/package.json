@@ -38,7 +38,8 @@
     "@reactive-agents/a2a": "workspace:*",
     "@reactive-agents/runtime": "workspace:*",
     "@reactive-agents/replay": "workspace:*",
-    "@reactive-agents/trace": "workspace:*"
+    "@reactive-agents/trace": "workspace:*",
+    "@reactive-agents/diagnose": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

@@ -10,7 +10,7 @@ Legend:
 - ❌ — no witness, no xfail; gap not yet captured
 - 🔵 — covered indirectly (mentioned in a multi-feature example, not the focus)
 
-Updated: 2026-05-23. Smoke run: 37 examples, 5 xfail, 0 fail.
+Updated: 2026-05-23. Smoke run: 39 examples, 5 xfail, 0 fail.
 
 ---
 
@@ -29,19 +29,19 @@ Updated: 2026-05-23. Smoke run: 37 examples, 5 xfail, 0 fail.
 | `withSkillPersistence(enabled)` | ✅ | F7 | HS-122 |
 | `withSessionPersistence()` | 🟡 | FX1 (xfail) | builder hook missing — SessionStoreServiceLive wired in runtime.ts:1354 |
 | `withMaxIterations(n)` | ✅ | 04, 15, A22-archived | |
-| `withMinIterations(n)` | ❌ | — | rarely used; defer |
-| `withBudget(limits)` | ❌ | — | needs budget-aware witness |
-| `withTimeout(ms)` | ❌ | — | needs slow scenario |
-| `withRetryPolicy(policy)` | ❌ | — | |
-| `withErrorHandler(fn)` | ❌ | — | |
+| `withMinIterations(n)` | ✅ | F8 | builder-state fingerprint |
+| `withBudget(limits)` | ✅ | F8 | builder-state fingerprint |
+| `withTimeout(ms)` | ✅ | F8 | builder-state fingerprint |
+| `withRetryPolicy(policy)` | ❌ | — | needs failure-then-success scenario |
+| `withErrorHandler(fn)` | ❌ | — | needs error scenario |
 | `withHook(hook)` | ✅ | 02 | lifecycle hooks |
 | `withHarness(fn)` | ✅ | A20 | compose API |
 | `withLeanHarness()` | ❌ | (archived A22) | witness needs verifier prompts test provider doesn't generate |
-| `withSystemPrompt(s)` | ❌ | — | |
-| `withPersona(p)` | ❌ | — | |
-| `withTaskContext(ctx)` | ❌ | — | |
-| `withEnvironment(env)` | ❌ | — | |
-| `withDocuments(docs)` | ❌ | — | RAG-style |
+| `withSystemPrompt(s)` | ✅ | F5 | exercised inline |
+| `withPersona(p)` | ✅ | F5 | exercised inline |
+| `withTaskContext(ctx)` | ✅ | F8 | builder-state fingerprint |
+| `withEnvironment(env)` | ✅ | F8 | builder-state fingerprint |
+| `withDocuments(docs)` | ✅ | F8 | builder-state fingerprint |
 | `withStreaming(opts)` | ✅ | 23, 24, S25 | |
 
 ## Tier 2 — Mechanism witnesses (M1–M13)
@@ -58,7 +58,7 @@ Updated: 2026-05-23. Smoke run: 37 examples, 5 xfail, 0 fail.
 | M8 Sub-agent delegation | ✅ | 04, 09, 10 | 04 + 09 + 10 now offline (flipped requiresKey) |
 | M9 Termination oracle | 🔵 | every run | no focused witness; observe termination reason codes |
 | M10 Memory system | ✅ | 03, F7 | |
-| M11 Diagnostic system (rax-diagnose) | ❌ | — | programmatic API + CLI witness |
+| M11 Diagnostic system (rax-diagnose) | ✅ | A23 | programmatic API exports witnessed |
 | M12 Provider adapters | 🔵 | 01 (ollama+test) | only 2 of 6 providers exercised offline |
 | M13 Guards + meta-tools | ✅ | 12 | guardrails offline now witnessed |
 
@@ -157,7 +157,7 @@ Updated: 2026-05-23. Smoke run: 37 examples, 5 xfail, 0 fail.
 |---|---|---|---|
 | `@reactive-agents/replay` | ✅ | A21 | |
 | `@reactive-agents/trace` | 🟡 | AX1 (xfail) | builder hook missing |
-| `@reactive-agents/diagnose` | ❌ | — | rax-diagnose CLI + JS API |
+| `@reactive-agents/diagnose` | ✅ | A23 | programmatic API witness (DEFAULT_TRACE_DIR, listTraces, resolveTracePath, 6 cmd exports) |
 | `@reactive-agents/observe` | ❌ | — | OTLP export |
 | `@reactive-agents/eval` | 🟡 | 16 (xfail L1) | JudgeLLMService unbound w/ single provider |
 | `@reactive-agents/compose` | ✅ | A20 | killswitch witness missing |
@@ -167,15 +167,15 @@ Updated: 2026-05-23. Smoke run: 37 examples, 5 xfail, 0 fail.
 
 ## Roll-up
 
-- **Tier 1 (core builder):** 16 ✅, 1 🟡, 11 ❌ → ~57% covered
-- **Tier 2 (M1–M13 mechanisms):** 7 ✅, 6 ❌ → ~54% covered (most remaining gaps are cassette-driven)
+- **Tier 1 (core builder):** 24 ✅, 1 🟡, 5 ❌ → ~80% covered
+- **Tier 2 (M1–M13 mechanisms):** 8 ✅, 5 ❌ → ~62% covered (most remaining gaps are cassette-driven)
 - **Tier 3 (controller variants):** 1 ✅, 1 🟡, 11 ❌ → ~15% covered
 - **Tier 4 (trust/safety):** 4 ✅, 2 ❌
 - **Tier 5 (multi-agent):** 4 ✅, 2 ❌
 - **Tier 7 (obs/cost/lifecycle):** 5 ✅, 1 🟡, 11 ❌
-- **Tier 9 (packages):** 4 ✅, 2 🟡, 1 ❌
+- **Tier 9 (packages):** 5 ✅, 2 🟡, 0 ❌ → **100% covered**
 
-**Suite:** 37 examples, 5 xfail, 0 fail offline. Up from 28/4/0 prior to flip-and-witness pass.
+**Suite:** 39 examples, 5 xfail, 0 fail offline. Up from 28/4/0 prior to W3.
 
 ## W3 priority list (close-out, by leverage)
 

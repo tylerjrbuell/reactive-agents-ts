@@ -103,6 +103,13 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/foundations/07-cross-session-skill-recall.ts',
     },
     {
+        num: 'F8',
+        label: 'config-surfaces',
+        category: 'foundations',
+        requiresKey: false,
+        path: './src/foundations/08-config-surfaces.ts',
+    },
+    {
         // xfail: targets a chainable `.withSessionPersistence()` builder method
         // that does not yet exist; SessionStoreServiceLive is wired in
         // runtime.ts:1354-1362 but has no builder surface. Mirror HS-122.
@@ -278,6 +285,13 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/advanced/with-trace-recorder.ts',
         expectsFail: true,
+    },
+    {
+        num: 'A23',
+        label: 'diagnose-probe',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/diagnose-probe.ts',
     },
     // reasoning — 20 offline
     {
