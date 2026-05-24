@@ -1,10 +1,6 @@
 import { Effect } from "effect";
 import { CostTrackingError } from "../errors.js";
-
-// Type-only interface for optional LLM dependency (avoids import coupling)
-type LLMServiceLike = {
-  complete: (req: any) => Effect.Effect<{ content: string }, any>;
-};
+import type { CostLLM } from "../types.js";
 
 export interface PromptCompressor {
   readonly compress: (
@@ -34,7 +30,7 @@ function heuristicCompress(prompt: string): { compressed: string; savedTokens: n
  *   `maxTokens`, calls an LLM to further summarize/compress while preserving
  *   key information. Falls back to heuristic result on any LLM error.
  */
-export const makePromptCompressor = (llm?: LLMServiceLike): Effect.Effect<PromptCompressor, never> =>
+export const makePromptCompressor = (llm?: CostLLM): Effect.Effect<PromptCompressor, never> =>
   Effect.succeed({
     compress: (
       prompt: string,

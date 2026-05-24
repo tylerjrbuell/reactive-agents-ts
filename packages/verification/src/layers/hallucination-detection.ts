@@ -1,12 +1,9 @@
 import { Effect } from "effect";
-import type { LayerResult } from "../types.js";
-import type { HallucinationClaim } from "../types.js";
+import type { LayerResult, HallucinationClaim, VerificationLLM } from "../types.js";
 
-// ─── LLM Service Interface (type-only, no import coupling) ───
-
-type LLMServiceLike = {
-  complete: (req: any) => Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
-};
+// HS-04 (GH #70): consume the single centralized VerificationLLM interface
+// (hallucination-detection only uses `complete`).
+type LLMServiceLike = VerificationLLM;
 
 // ─── Claim Extraction ───
 

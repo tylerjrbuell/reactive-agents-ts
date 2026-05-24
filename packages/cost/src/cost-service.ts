@@ -1,5 +1,5 @@
 import { Effect, Context, Layer } from "effect";
-import type { ModelCostConfig, CostEntry, BudgetLimits, BudgetStatus, CostReport } from "./types.js";
+import type { ModelCostConfig, CostEntry, BudgetLimits, BudgetStatus, CostReport, CostLLM } from "./types.js";
 import { DEFAULT_BUDGET_LIMITS } from "./types.js";
 import type { BudgetExceededError, CostTrackingError, CacheError, RoutingError } from "./errors.js";
 import { routeToModel } from "./routing/complexity-router.js";
@@ -60,16 +60,14 @@ export class CostService extends Context.Tag("CostService")<
 // ─── Live Implementation ───
 
 // ─── Optional dependency types ───
-
-type LLMForCost = {
-  complete: (req: any) => Effect.Effect<{ content: string }, any>;
-};
+// HS-04 (GH #70): `CostLLM` lives in ./types.ts as the single centralized
+// shape — keep both cost-service and prompt-compressor consuming it.
 
 export type CostServiceOptions = {
   /** Optional embed function for semantic similarity cache (Tier 2). */
   readonly embedFn?: EmbedFn;
   /** Optional LLM for prompt compression second pass (Tier 2). */
-  readonly llm?: LLMForCost;
+  readonly llm?: CostLLM;
   /** SQLite path for persisting daily/monthly budget state across restarts. */
   readonly dbPath?: string;
 };

@@ -72,10 +72,27 @@ export const VerificationConfigSchema = Schema.Struct({
 });
 export type VerificationConfig = typeof VerificationConfigSchema.Type;
 
-/** LLM interface for tier-2 verification layers. Decoupled from @reactive-agents/llm-provider. */
+/**
+ * LLM interface for tier-2 verification layers.
+ *
+ * HS-04 (GH #70): centralized single interface — semantic-entropy,
+ * fact-decomposition, multi-source, and hallucination-detection layers
+ * all import this rather than redeclaring. Decoupled from
+ * @reactive-agents/llm-provider on purpose: verification ships as a
+ * peer package with optional LLM augmentation, so an llm-provider
+ * import would invert the dependency direction.
+ *
+ * `req` is `unknown` (callers thread an `LLMRequest` from llm-provider
+ * but verification never inspects its shape — adapter forwards).
+ */
 export type VerificationLLM = {
-  complete: (req: any) => import("effect").Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
-  embed: (texts: readonly string[], model?: string) => import("effect").Effect.Effect<readonly (readonly number[])[], any>;
+  complete: (
+    req: unknown,
+  ) => import("effect").Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, unknown>;
+  embed: (
+    texts: readonly string[],
+    model?: string,
+  ) => import("effect").Effect.Effect<readonly (readonly number[])[], unknown>;
 };
 
 export const defaultVerificationConfig: VerificationConfig = {

@@ -1,11 +1,10 @@
 import { Effect } from "effect";
-import type { LayerResult, Claim } from "../types.js";
+import type { LayerResult, Claim, VerificationLLM } from "../types.js";
 
-// ─── LLM Service Interface (type-only, no import coupling) ───
-
-type LLMServiceLike = {
-  complete: (req: any) => Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
-};
+// HS-04 (GH #70): consume the single centralized VerificationLLM interface
+// (multi-source only uses `complete`, but accepting the full shape keeps
+// the dependency surface consistent across layers).
+type LLMServiceLike = VerificationLLM;
 
 // ─── Tavily Search Helper ───
 

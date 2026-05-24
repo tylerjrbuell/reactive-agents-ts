@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema, type Effect } from "effect";
 
 // ─── Model Tier ───
 
@@ -106,4 +106,15 @@ export const DEFAULT_BUDGET_LIMITS: BudgetLimits = {
   perSession: 5.0,
   daily: 25.0,
   monthly: 200.0,
+};
+
+// ─── Optional LLM dependency (decoupled from @reactive-agents/llm-provider) ───
+//
+// HS-04 (GH #70): centralized single interface for the optional LLM hook
+// used by cost-service prompt compression. Both cost-service.ts and
+// compression/prompt-compressor.ts consume this — keep them in lockstep.
+export type CostLLM = {
+  complete: (
+    req: unknown,
+  ) => Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, unknown>;
 };

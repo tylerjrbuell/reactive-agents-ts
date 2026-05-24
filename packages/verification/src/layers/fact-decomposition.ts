@@ -1,12 +1,8 @@
 import { Effect } from "effect";
-import type { LayerResult, Claim } from "../types.js";
+import type { LayerResult, Claim, VerificationLLM } from "../types.js";
 
-// ─── LLM Service Interface (type-only, no import coupling) ───
-
-type LLMServiceLike = {
-  complete: (req: any) => Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
-  embed: (texts: readonly string[], model?: string) => Effect.Effect<readonly (readonly number[])[], any>;
-};
+// HS-04 (GH #70): consume the single centralized VerificationLLM interface.
+type LLMServiceLike = VerificationLLM;
 
 // ─── Types for LLM-based decomposition ───
 

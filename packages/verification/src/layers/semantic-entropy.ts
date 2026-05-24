@@ -1,12 +1,9 @@
 import { Effect } from "effect";
-import type { LayerResult } from "../types.js";
+import type { LayerResult, VerificationLLM } from "../types.js";
 
-// ─── LLM Service Interface (type-only, no import coupling) ───
-
-type LLMServiceLike = {
-  complete: (req: any) => Effect.Effect<{ content: string; usage?: { totalTokens?: number } }, any>;
-  embed: (texts: readonly string[], model?: string) => Effect.Effect<readonly (readonly number[])[], any>;
-};
+// HS-04 (GH #70): consume the single centralized VerificationLLM interface
+// from ../types.js — local redeclaration removed.
+type LLMServiceLike = VerificationLLM;
 
 // ─── Cosine Similarity Helper ───
 

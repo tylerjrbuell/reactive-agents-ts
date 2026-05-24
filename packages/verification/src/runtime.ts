@@ -1,5 +1,5 @@
 import { Effect, Layer } from "effect";
-import { LLMService } from "@reactive-agents/llm-provider";
+import { LLMService, type CompletionRequest } from "@reactive-agents/llm-provider";
 import type { VerificationConfig, VerificationLLM } from "./types.js";
 import { defaultVerificationConfig } from "./types.js";
 import { VerificationService, VerificationServiceLive, makeVerificationService } from "./verification-service.js";
@@ -27,9 +27,13 @@ export const createVerificationLayerWithRuntimeLlm = (
         ...config,
         useLLMTier: true,
       };
+      // Adapter boundary: VerificationLLM treats `req` as `unknown` so the
+      // verification package stays decoupled from llm-provider's request
+      // shape (HS-04 / GH #70). Inside this adapter we know the runtime
+      // threads a `CompletionRequest` through — cast at the boundary only.
       const adapter: VerificationLLM = {
         complete: (req) =>
-          llm.complete(req).pipe(
+          llm.complete(req as CompletionRequest).pipe(
             Effect.map((r) => ({
               content: r.content,
               usage: r.usage ? { totalTokens: r.usage.totalTokens } : undefined,
