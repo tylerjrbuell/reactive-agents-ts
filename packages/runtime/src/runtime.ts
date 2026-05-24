@@ -51,6 +51,29 @@ import {
   type SkillLayerConfig,
 } from "@reactive-agents/reactive-intelligence";
 
+// ─── Composable Layer Helper (HS-03 / GH #69) ───
+
+/**
+ * `Layer.merge` chains produce nested `Layer.Layer<Out1|Out2, Err1|Err2, In1|In2>`
+ * union types. After ~15 conditional optional layers the union explodes and
+ * TS either bails on inference ("type instantiation excessively deep") or
+ * stamps out a >10KB type display that slows the editor to a crawl.
+ *
+ * The pre-existing workaround was `Layer.merge(runtime, X) as any` at every
+ * site (~33 across `createRuntime` + `createLightRuntime` + `A2aExtraLayer`).
+ * `as any` is dishonest — every consumer downstream had to re-narrow.
+ *
+ * `ComposableLayer` is the single erasure boundary: `unknown` instead of
+ * `any` so the type system still enforces an explicit `Effect.provide(...)`
+ * or `ManagedRuntime.make(...)` to materialise a concrete service. The
+ * runtime is dynamically composed (~25 optional layers); the union it
+ * produces is meaningful only at the `ManagedRuntime.make()` boundary that
+ * comes from {@link BuildBaseRuntimeResult} in
+ * `builder/build-effect/runtime-construction.ts:180`. Both boundaries
+ * agreed on this widening in W25 — `unknown` here keeps them in lockstep.
+ */
+type ComposableLayer = Layer.Layer<unknown, unknown, unknown>;
+
 // ─── Runtime Options ───
 
 /**
@@ -1215,14 +1238,14 @@ export const createRuntime = (options: RuntimeOptions) => {
     Layer.provide(metricsCollectorLayer), // Now has EventBusLive already provided
   );
 
-  let runtime = Layer.mergeAll(
+  let runtime: ComposableLayer = Layer.mergeAll(
     coreLayer,
     eventBusLayer,
     observableLlmLayer,
     memoryLayer,
     hookLayer,
     engineLayer,
-  );
+  ) as ComposableLayer;
 
   // ── Optional layers ──
 
@@ -1238,7 +1261,7 @@ export const createRuntime = (options: RuntimeOptions) => {
             : {}),
         }
       : undefined;
-    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as any;
+    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as ComposableLayer;
   }
 
   if (options.enableKillSwitch) {
@@ -1249,7 +1272,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       KillSwitchServiceLive().pipe(Layer.provide(eventBusLayer)),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   if (options.enableBehavioralContracts && options.behavioralContract) {
@@ -1258,7 +1281,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       BehavioralContractServiceLive(options.behavioralContract),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   if (options.enableVerification) {
@@ -1283,16 +1306,16 @@ export const createRuntime = (options: RuntimeOptions) => {
             Layer.provide(observableLlmLayer as Layer.Layer<LLMService>),
           )
         : createVerificationLayer({ ...verificationConfig, useLLMTier: false });
-    runtime = Layer.merge(runtime, verificationLayer) as any;
+    runtime = Layer.merge(runtime, verificationLayer) as ComposableLayer;
   }
 
   if (options.enableCostTracking) {
-    runtime = Layer.merge(runtime, createCostLayer(options.costTrackingOptions)) as any;
+    runtime = Layer.merge(runtime, createCostLayer(options.costTrackingOptions)) as ComposableLayer;
   }
 
   // Build tools layer first — reasoning may depend on it
   // MCP servers implicitly enable tools
-  let toolsLayer: Layer.Layer<any, any> | null = null;
+  let toolsLayer: ComposableLayer | null = null;
   const shouldEnableTools =
     options.enableTools ||
     (options.mcpServers && options.mcpServers.length > 0);
@@ -1357,14 +1380,16 @@ export const createRuntime = (options: RuntimeOptions) => {
             unregisterTool: base.unregisterTool,
           };
         }),
-      ).pipe(Layer.provide(baseToolsLayer));
+      ).pipe(Layer.provide(baseToolsLayer)) as unknown as ComposableLayer;
     } else {
-      toolsLayer = baseToolsLayer;
+      // Effect-TS Layer<ROut> is invariant; cross-invariance widening is the
+      // documented escape hatch at composition boundaries.
+      toolsLayer = baseToolsLayer as unknown as ComposableLayer;
     }
 
     const toolResultCacheLayer = ToolResultCacheLive();
-    runtime = Layer.merge(runtime, toolsLayer) as any;
-    runtime = Layer.merge(runtime, toolResultCacheLayer) as any;
+    runtime = Layer.merge(runtime, toolsLayer) as ComposableLayer;
+    runtime = Layer.merge(runtime, toolResultCacheLayer as unknown as ComposableLayer) as ComposableLayer;
   }
 
   // ── Experience learning layer (requires MemoryDatabase from memoryLayer) ──
@@ -1372,7 +1397,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       ExperienceStoreLive.pipe(Layer.provide(memoryLayer)),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   // ── Memory consolidation layer (requires MemoryDatabase from memoryLayer) ──
@@ -1380,7 +1405,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       MemoryConsolidatorServiceLive(options.consolidationConfig).pipe(Layer.provide(memoryLayer)),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   // ── Session persistence layer (requires MemoryDatabase from memoryLayer) ──
@@ -1390,7 +1415,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       SessionStoreLive.pipe(Layer.provide(memoryLayer)),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   // ── Skill persistence layer (requires MemoryDatabase from memoryLayer) ──
@@ -1404,7 +1429,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       SkillStoreServiceLive.pipe(Layer.provide(memoryLayer)),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   // Create PromptLayer once — shared by reasoning deps and the main runtime
@@ -1450,21 +1475,21 @@ export const createRuntime = (options: RuntimeOptions) => {
       : defaultReasoningConfig;
 
     // ReasoningService requires LLMService, optionally ToolService + PromptService
-    let reasoningDeps = observableLlmLayer;
+    let reasoningDeps: ComposableLayer = observableLlmLayer as ComposableLayer;
     if (toolsLayer) {
-      reasoningDeps = Layer.merge(observableLlmLayer, toolsLayer) as any;
+      reasoningDeps = Layer.merge(observableLlmLayer, toolsLayer) as ComposableLayer;
     }
     if (promptLayer) {
-      reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as any;
+      reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as ComposableLayer;
     }
     const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
       Layer.provide(reasoningDeps),
     );
-    runtime = Layer.merge(runtime, reasoningLayer) as any;
+    runtime = Layer.merge(runtime, reasoningLayer) as ComposableLayer;
   }
 
   if (options.enableIdentity) {
-    runtime = Layer.merge(runtime, createIdentityLayer()) as any;
+    runtime = Layer.merge(runtime, createIdentityLayer()) as ComposableLayer;
   }
 
   if (options.enableObservability) {
@@ -1484,14 +1509,14 @@ export const createRuntime = (options: RuntimeOptions) => {
       obsExporterConfig,
       metricsCollectorLayer,
     );
-    runtime = Layer.merge(runtime, obsLayer) as any;
+    runtime = Layer.merge(runtime, obsLayer) as ComposableLayer;
   }
 
   if (options.telemetryConfig) {
     const telemetryLayer = TelemetryCollectorLive(options.telemetryConfig).pipe(
       Layer.provide(eventBusLayer),
     );
-    runtime = Layer.merge(runtime, telemetryLayer) as any;
+    runtime = Layer.merge(runtime, telemetryLayer) as ComposableLayer;
   }
 
   // ── Structured logging tap — subscribes to EventBus and writes to configured output ──
@@ -1577,7 +1602,7 @@ export const createRuntime = (options: RuntimeOptions) => {
         );
       }),
     ).pipe(Layer.provide(eventBusLayer));
-    runtime = Layer.merge(runtime, loggerTapLayer) as any;
+    runtime = Layer.merge(runtime, loggerTapLayer) as ComposableLayer;
   }
 
   // ── Health check service ──
@@ -1588,7 +1613,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       Health,
       makeHealthService({ port: 0, agentName: options.agentId }),
     );
-    runtime = Layer.merge(runtime, healthLayer) as any;
+    runtime = Layer.merge(runtime, healthLayer) as ComposableLayer;
   }
 
   // ── Reactive Intelligence (entropy sensing) + optional skill resolver ──
@@ -1615,9 +1640,9 @@ export const createRuntime = (options: RuntimeOptions) => {
         undefined,
         skillLayerForRi,
       ),
-    ) as any;
+    ) as ComposableLayer;
   } else if (skillLayerForRi?.resolver) {
-    runtime = Layer.merge(runtime, makeSkillResolverService(skillLayerForRi.resolver)) as any;
+    runtime = Layer.merge(runtime, makeSkillResolverService(skillLayerForRi.resolver)) as ComposableLayer;
   }
 
   if (options.enableInteraction) {
@@ -1625,15 +1650,15 @@ export const createRuntime = (options: RuntimeOptions) => {
     const interactionLayer = createInteractionLayer().pipe(
       Layer.provide(eventBusLayer),
     );
-    runtime = Layer.merge(runtime, interactionLayer) as any;
+    runtime = Layer.merge(runtime, interactionLayer) as ComposableLayer;
   }
 
   if (promptLayer) {
-    runtime = Layer.merge(runtime, promptLayer) as any;
+    runtime = Layer.merge(runtime, promptLayer) as ComposableLayer;
   }
 
   if (options.enableOrchestration) {
-    runtime = Layer.merge(runtime, createOrchestrationLayer()) as any;
+    runtime = Layer.merge(runtime, createOrchestrationLayer()) as ComposableLayer;
   }
 
   // A2A support - use extraLayers pattern for optional A2A
@@ -1641,7 +1666,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       A2aExtraLayer(options.agentId, options.a2aPort ?? 3000),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   // Gateway — compose GatewayService + SchedulerService when enabled.
@@ -1690,11 +1715,11 @@ export const createRuntime = (options: RuntimeOptions) => {
     runtime = Layer.merge(
       runtime,
       gatewayLayer.pipe(Layer.provide(eventBusLayer)),
-    ) as any;
+    ) as ComposableLayer;
   }
 
   if (options.extraLayers) {
-    runtime = Layer.merge(runtime, options.extraLayers) as any;
+    runtime = Layer.merge(runtime, options.extraLayers) as ComposableLayer;
   }
 
   return runtime;
@@ -1856,17 +1881,17 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     Layer.provide(metricsCollectorLayer),
   );
 
-  let runtime = Layer.mergeAll(
+  let runtime: ComposableLayer = Layer.mergeAll(
     coreLayer,
     eventBusLayer,
     llmLayer,
     memoryLayer,
     hookLayer,
     engineLayer,
-  );
+  ) as ComposableLayer;
 
   // ── Optional tools layer ──
-  let toolsLayer: Layer.Layer<any, any> | null = null;
+  let toolsLayer: ComposableLayer | null = null;
   if (options.enableTools) {
     const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
     if (options.allowedTools && options.allowedTools.length > 0) {
@@ -1917,13 +1942,13 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
             unregisterTool: base.unregisterTool,
           };
         }),
-      ).pipe(Layer.provide(baseToolsLayer));
+      ).pipe(Layer.provide(baseToolsLayer)) as unknown as ComposableLayer;
     } else {
-      toolsLayer = baseToolsLayer;
+      toolsLayer = baseToolsLayer as unknown as ComposableLayer;
     }
     const toolResultCacheLayer = ToolResultCacheLive();
-    runtime = Layer.merge(runtime, toolsLayer) as any;
-    runtime = Layer.merge(runtime, toolResultCacheLayer) as any;
+    runtime = Layer.merge(runtime, toolsLayer) as ComposableLayer;
+    runtime = Layer.merge(runtime, toolResultCacheLayer as unknown as ComposableLayer) as ComposableLayer;
   }
 
   // ── Optional reasoning layer ──
@@ -1965,14 +1990,14 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
         }
       : defaultReasoningConfig;
 
-    let reasoningDeps = llmLayer as Layer.Layer<any>;
+    let reasoningDeps: ComposableLayer = llmLayer as ComposableLayer;
     if (toolsLayer) {
-      reasoningDeps = Layer.merge(llmLayer, toolsLayer) as any;
+      reasoningDeps = Layer.merge(llmLayer, toolsLayer) as ComposableLayer;
     }
     const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
       Layer.provide(reasoningDeps),
     );
-    runtime = Layer.merge(runtime, reasoningLayer) as any;
+    runtime = Layer.merge(runtime, reasoningLayer) as ComposableLayer;
   }
 
   // ── Optional heavy layers (parent-toggleable) ──
@@ -1986,11 +2011,11 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
           enableToxicityDetection: gc.toxicity ?? true,
         }
       : undefined;
-    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as any;
+    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as ComposableLayer;
   }
 
   if (options.enableCostTracking) {
-    runtime = Layer.merge(runtime, createCostLayer()) as any;
+    runtime = Layer.merge(runtime, createCostLayer()) as ComposableLayer;
   }
 
   if (options.enableObservability) {
@@ -2005,7 +2030,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       obsExporterConfig,
       metricsCollectorLayer,
     );
-    runtime = Layer.merge(runtime, obsLayer) as any;
+    runtime = Layer.merge(runtime, obsLayer) as ComposableLayer;
   }
 
   return runtime;
@@ -2028,7 +2053,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
 const A2aExtraLayer = (
   agentId: string,
   port: number,
-): Layer.Layer<any, any> => {
+): ComposableLayer => {
   // Use dynamic import() so Bun's mock.module() can intercept it in tests.
   // Layer.unwrapEffect lets us return a Layer from inside an async Effect.
   return Layer.unwrapEffect(
@@ -2048,10 +2073,10 @@ const A2aExtraLayer = (
             stateTransitionHistory: false,
           },
         };
-        return createA2AServerLayer(agentCard, port) as Layer.Layer<any, any>;
+        return createA2AServerLayer(agentCard, port) as ComposableLayer;
       } catch {
         // A2A package not installed — return empty layer
-        return Layer.empty as unknown as Layer.Layer<any, any>;
+        return Layer.empty as unknown as ComposableLayer;
       }
     }),
   );

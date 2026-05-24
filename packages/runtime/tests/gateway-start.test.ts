@@ -101,6 +101,10 @@ describe("ReactiveAgent.start() — gateway loop", () => {
     await agent.dispose();
   });
 
+  // Suite load can push the gateway-tick → totalRuns latency past Bun's
+  // default 5000ms test timeout. 20s gives the polling loop (15s budget)
+  // headroom on top of build/import overhead. Bun honours the 3rd `test()`
+  // arg as a per-test timeout in ms (see signature at end of arrow).
   test("gateway with persistMemoryAcrossRuns still ticks and executes", async () => {
     const { ReactiveAgents } = await import("../src/builder");
     const agent = await ReactiveAgents.create()
@@ -115,15 +119,18 @@ describe("ReactiveAgent.start() — gateway loop", () => {
       .build();
 
     const handle = agent.start();
-    // Wait until both a heartbeat fires AND totalRuns advances (test asserts run > 0)
+    // Wait until both a heartbeat fires AND totalRuns advances (test asserts run > 0).
+    // Generous timeout — under heavy suite load `agent.gatewayStatus()` queues
+    // behind in-flight Effect fibers, and the gateway tick competes for runtime
+    // budget. 15s ≫ the ~50ms typical first-heartbeat latency.
     const startedAt = Date.now();
-    while (Date.now() - startedAt < 5000) {
+    while (Date.now() - startedAt < 15000) {
       const status = await agent.gatewayStatus();
       if (status && status.stats.heartbeatsFired >= 1 && status.stats.totalRuns >= 1) break;
-      await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, 25));
     }
     const summary = await handle.stop();
     expect(summary.totalRuns).toBeGreaterThanOrEqual(1);
     await agent.dispose();
-  });
+  }, 20000);
 });

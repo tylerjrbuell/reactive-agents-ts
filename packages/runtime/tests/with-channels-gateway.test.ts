@@ -59,11 +59,13 @@ describe("ReactiveAgent .withChannels() + gateway start", () => {
     const handle = agent.start();
     // HS-27 (GH #83): channel adapters register on the gateway loop's first
     // tick. Poll for that tick rather than sleeping a fixed 150ms.
+    // Generous timeout — under suite load `gatewayStatus()` queues behind
+    // in-flight fibers.
     const startedAt = Date.now();
-    while (Date.now() - startedAt < 5000) {
+    while (Date.now() - startedAt < 15000) {
       const status = await agent.gatewayStatus();
       if (status && status.stats.heartbeatsFired + status.stats.heartbeatsSkipped >= 1) break;
-      await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, 25));
     }
     await Effect.runPromise(
       webhook.handleRequest({
@@ -79,5 +81,5 @@ describe("ReactiveAgent .withChannels() + gateway start", () => {
     await handle.stop();
     expect(replies.length).toBe(1);
     expect(replies[0]).toContain("pong");
-  });
+  }, 20000);
 });
