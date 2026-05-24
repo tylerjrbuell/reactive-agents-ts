@@ -287,7 +287,10 @@ Rules:
       systemPrompt: "You are a tool classifier. Output only valid JSON. Be precise.",
       maxRetries: 1,
       temperature: 0,
-      maxTokens: 500,
+      // 2048 covers thinking-model budgets (qwen3:4b emits <think>...</think> blocks
+      // that can eat 500 tokens before JSON starts). Non-thinking models naturally
+      // finish early; this is a ceiling, not a quota.
+      maxTokens: 2048,
     });
 
     // Normalize: collapse string | { name, minCalls? } union to { name, minCalls } objects.

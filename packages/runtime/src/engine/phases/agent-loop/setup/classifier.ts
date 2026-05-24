@@ -78,9 +78,30 @@ export const classifyTools = (
     let classifiedRelevantTools: readonly string[] | undefined;
 
     const classifierReliability = resolvedCalibration?.classifierReliability;
+
+    // Default-on when reasoning is enabled and the user hasn't explicitly opted
+    // out. The classifier is gate-protected by `classifierReliability` below —
+    // unreliable models fall through to the literal-mention fallback, so a
+    // single LLM round-trip ($small for frontier, free for local) becomes the
+    // standard pipeline for any agent that has tools.
+    //
+    // Opt-out path (preserved): `.withRequiredTools({ adaptive: false })` or
+    // `.withAdaptiveToolFiltering(false)`. Static `tools: [...]` lists still
+    // suppress adaptive inference (caller stated their requirements).
+    const reasoningEnabled = Boolean(config.reasoningOptions);
+    const explicitlyOptedOut =
+      config.requiredTools?.adaptive === false ||
+      config.adaptiveToolFiltering === false;
+    const hasStaticRequiredList =
+      (config.requiredTools?.tools?.length ?? 0) > 0;
+
     const wantsClassification =
-      (config.requiredTools?.adaptive && !config.requiredTools?.tools?.length) ||
-      config.adaptiveToolFiltering;
+      // Explicit opt-in (back-compat path)
+      (config.requiredTools?.adaptive === true && !hasStaticRequiredList) ||
+      config.adaptiveToolFiltering === true ||
+      // Default-on when reasoning is enabled and nothing explicit overrides
+      (reasoningEnabled && !explicitlyOptedOut && !hasStaticRequiredList);
+
     const needsClassification =
       classifierReliability !== "low" &&
       classifierReliability !== "skip" &&
@@ -144,15 +165,45 @@ export const classifyTools = (
       })),
       systemPrompt: config.systemPrompt,
     }).pipe(
-      // Degrade gracefully if LLM call fails — empty arrays = no filtering
-      Effect.catchAll(() =>
-        Effect.succeed({
-          required: [] as readonly string[],
-          relevant: [] as readonly string[],
-          requiredToolQuantities: {} as Readonly<Record<string, number>>,
+      // Degrade gracefully if LLM call fails — empty arrays = no filtering.
+      // Surface the failure so silent fallback doesn't hide model/prompt issues.
+      Effect.catchAll((err) =>
+        Effect.gen(function* () {
+          if (obs && isNormal) {
+            yield* obs
+              .info(`◉ [classify]   LLM call failed — falling back to empty (${String(err).slice(0, 120)})`)
+              .pipe(
+                Effect.catchAll((logErr) =>
+                  emitErrorSwallowed({
+                    site: "runtime/src/engine/phases/agent-loop/setup/classifier.ts:llm-fallback",
+                    tag: errorTag(logErr),
+                  }),
+                ),
+              );
+          }
+          return {
+            required: [] as readonly string[],
+            relevant: [] as readonly string[],
+            requiredToolQuantities: {} as Readonly<Record<string, number>>,
+          };
         }),
       ),
     );
+
+    if (obs && isNormal && classifyResult.required.length === 0) {
+      yield* obs
+        .info(
+          `◉ [classify]   LLM returned no required tools (relevant=${classifyResult.relevant.length})`,
+        )
+        .pipe(
+          Effect.catchAll((err) =>
+            emitErrorSwallowed({
+              site: "runtime/src/engine/phases/agent-loop/setup/classifier.ts:empty-required-log",
+              tag: errorTag(err),
+            }),
+          ),
+        );
+    }
 
     // Sanity-check classifier "required" against task text. Hallucinated tools
     // (not literally mentioned) are demoted to "relevant" — visible/usable
