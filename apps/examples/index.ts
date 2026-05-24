@@ -38,6 +38,17 @@ interface ExampleMeta {
     category: string
     requiresKey: boolean
     path: string
+    /**
+     * Aspirational failing-example flag. When true, this example documents a
+     * capability gap or unimplemented surface — it is expected to fail (xfail)
+     * under the current build. Runner inverts the verdict:
+     *   - expectsFail && !passed  → counted as PASS (xfail OK)
+     *   - expectsFail && passed   → counted as FAIL (unexpected pass — feature
+     *     now exists; demote this flag and tighten witness).
+     * When the targeted feature ships, remove the flag in the same commit so
+     * regression is caught immediately.
+     */
+    expectsFail?: boolean
 }
 
 const EXAMPLES: ExampleMeta[] = [
@@ -84,6 +95,13 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/foundations/06-composition.ts',
     },
+    {
+        num: 'F7',
+        label: 'cross-session-skill-recall',
+        category: 'foundations',
+        requiresKey: false,
+        path: './src/foundations/07-cross-session-skill-recall.ts',
+    },
     // tools — 05 offline, 06-07 real
     {
         num: '05',
@@ -112,6 +130,13 @@ const EXAMPLES: ExampleMeta[] = [
         category: 'tools',
         requiresKey: false,
         path: './src/tools/dynamic-registration.ts',
+    },
+    {
+        num: 'T8',
+        label: 'healing-malformed-tool-call',
+        category: 'tools',
+        requiresKey: false,
+        path: './src/tools/healing-malformed-tool-call.ts',
     },
     // multi-agent — real
     {
@@ -200,6 +225,20 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/advanced/20-compose-harness.ts',
     },
+    {
+        num: 'A21',
+        label: 'snapshot-replay-determinism',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/snapshot-replay-determinism.ts',
+    },
+    {
+        num: 'A22',
+        label: 'with-lean-harness',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/with-lean-harness.ts',
+    },
     // reasoning — 20 offline
     {
         num: '19',
@@ -214,6 +253,20 @@ const EXAMPLES: ExampleMeta[] = [
         category: 'reasoning',
         requiresKey: false,
         path: './src/reasoning/20-context-profiles.ts',
+    },
+    {
+        num: 'R21',
+        label: 'strategy-switch-live',
+        category: 'reasoning',
+        requiresKey: false,
+        path: './src/reasoning/21-strategy-switch-live.ts',
+    },
+    {
+        num: 'R22',
+        label: 'long-context-curation',
+        category: 'reasoning',
+        requiresKey: false,
+        path: './src/reasoning/22-long-context-curation.ts',
     },
     // interaction — offline
     {
@@ -260,6 +313,13 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/streaming/24-streaming-sse-server.ts',
     },
+    {
+        num: 'S25',
+        label: 'run-handle-cancel',
+        category: 'streaming',
+        requiresKey: false,
+        path: './src/streaming/run-handle-cancel.ts',
+    },
     // messaging — requires Docker (Signal MCP) + Telegram session
     {
         num: 'M28',
@@ -274,6 +334,7 @@ const EXAMPLES: ExampleMeta[] = [
 
 const args = process.argv.slice(2)
 const offlineOnly = args.includes('--offline')
+const strictMode = args.includes('--strict')
 
 // --filter <category> or --filter=<category>
 let filterCategory: string | null = null
@@ -326,7 +387,8 @@ type RunRecord = {
 const results: RunRecord[] = []
 
 for (const meta of toRun) {
-    const label = `[${meta.num}] ${meta.category}/${meta.label}`.padEnd(44)
+    const xfailTag = meta.expectsFail ? ' [xfail]' : ''
+    const label = `[${meta.num}] ${meta.category}/${meta.label}${xfailTag}`.padEnd(50)
     process.stdout.write(`${label} `)
     const wallStart = Date.now()
     try {
@@ -339,34 +401,83 @@ for (const meta of toRun) {
             model: DEFAULT_MODEL,
         })
         const elapsed = Date.now() - wallStart
-        const icon = result.passed ? '✅' : '❌'
+        // xfail logic: when expectsFail is set, an example failing is the
+        // expected outcome (counted as PASS). An example unexpectedly passing
+        // is counted as FAIL — the targeted feature has shipped and the flag
+        // must be removed to lock in the new behaviour as a regression gate.
+        const xfailUnexpectedPass = meta.expectsFail === true && result.passed
+        const xfailOk = meta.expectsFail === true && !result.passed
+        const effectivePassed = xfailOk || (!meta.expectsFail && result.passed)
+        const icon = xfailUnexpectedPass
+            ? '⚠️ '
+            : xfailOk
+            ? '🟡'
+            : result.passed
+            ? '✅'
+            : '❌'
+        const tag = xfailUnexpectedPass
+            ? '  UNEXPECTED PASS (drop expectsFail!)'
+            : xfailOk
+            ? '  xfail OK'
+            : ''
         console.log(
-            `${icon}  ${result.steps}st  ${result.tokens}tk  ${elapsed}ms`
+            `${icon}  ${result.steps}st  ${result.tokens}tk  ${elapsed}ms${tag}`
         )
         results.push({ meta, result, error: null })
     } catch (err) {
         const elapsed = Date.now() - wallStart
         const msg = String(err).slice(0, 55)
-        console.log(`❌  ERROR: ${msg}  ${elapsed}ms`)
+        // Thrown error in an xfail example is also an expected outcome.
+        const xfailOk = meta.expectsFail === true
+        const icon = xfailOk ? '🟡' : '❌'
+        const tag = xfailOk ? '  xfail OK (threw)' : ''
+        console.log(`${icon}  ERROR: ${msg}  ${elapsed}ms${tag}`)
         results.push({ meta, result: null, error: String(err) })
     }
 }
 
-const passed = results.filter((r) => r.result?.passed === true).length
+// Compute verdicts under xfail semantics.
+// In --strict mode, xfail tolerance is disabled (every example must truly
+// pass). Strict mode is intended as the final release-gate target once all
+// failing-spec witnesses have been closed; until then it will surface those
+// gaps as hard failures.
+function effectivePassed(r: RunRecord): boolean {
+    if (r.meta.expectsFail && !strictMode) {
+        if (r.error !== null) return true
+        return r.result !== null && r.result.passed === false
+    }
+    return r.result?.passed === true
+}
+
+function unexpectedPass(r: RunRecord): boolean {
+    return r.meta.expectsFail === true && r.result?.passed === true
+}
+
+const passed = results.filter(effectivePassed).length
 const failed = results.length - passed
+const xfails = results.filter((r) => r.meta.expectsFail).length
+const unexpectedPasses = results.filter(unexpectedPass).length
 
 console.log(`\n${'━'.repeat(70)}`)
-console.log(`Passed: ${passed}/${results.length}   Failed: ${failed}`)
+console.log(
+    `Passed: ${passed}/${results.length}   Failed: ${failed}   xfail: ${xfails}   unexpected-pass: ${unexpectedPasses}`
+)
 if (failed > 0) {
     console.log('\nFailed examples:')
-    for (const r of results.filter((r) => !r.result?.passed)) {
-        console.log(
-            `  [${r.meta.num}] ${r.meta.label}: ${
-                r.error ?? r.result?.output.slice(0, 80) ?? 'unknown'
-            }`
-        )
+    for (const r of results.filter((r) => !effectivePassed(r))) {
+        const reason = unexpectedPass(r)
+            ? 'UNEXPECTED PASS — drop expectsFail flag and tighten witness'
+            : r.error ?? r.result?.output.slice(0, 80) ?? 'unknown'
+        console.log(`  [${r.meta.num}] ${r.meta.label}: ${reason}`)
     }
+}
+if (xfails > 0) {
+    console.log(
+        `\n${xfails} xfail example(s) — capability gap(s) documented as failing-spec witnesses.`
+    )
 }
 console.log()
 
+// Strict mode treats any failure (including unexpected xfail passes) as fatal.
+// Default mode: fail iff there is at least one non-xfail failure.
 process.exit(failed > 0 ? 1 : 0)

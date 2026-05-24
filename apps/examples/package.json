@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "smoke": "bun run index.ts --offline",
+    "smoke:strict": "bun run index.ts --offline --strict",
     "run-all": "bun run index.ts",
     "run-all:offline": "bun run index.ts --offline",
     "foundations": "bun run index.ts --filter foundations",
@@ -34,7 +36,9 @@
     "@reactive-agents/eval": "workspace:*",
     "@reactive-agents/interaction": "workspace:*",
     "@reactive-agents/a2a": "workspace:*",
-    "@reactive-agents/runtime": "workspace:*"
+    "@reactive-agents/runtime": "workspace:*",
+    "@reactive-agents/replay": "workspace:*",
+    "@reactive-agents/trace": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
