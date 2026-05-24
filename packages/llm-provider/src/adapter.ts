@@ -96,65 +96,34 @@ export interface ProviderAdapter {
   }): string | undefined;
 
   /**
-   * (M12 Hook 1/7) Normalize malformed tool calls from provider response.
-   * E.g., qwen3 sometimes returns tool_calls with stringified arguments.
-   * Called after LLM response parsing. Return undefined for no normalization.
+   * Tool-call normalization hook. Adapter sees the raw provider response and
+   * returns a normalized `Array<{ name, arguments }>`, or undefined to fall
+   * through to the provider's default extraction.
+   *
+   * Use cases: qwen3 stringified-arguments coercion, OpenAI nullable-input
+   * defenses, Gemini args-as-string variants.
+   *
+   * Wired into every provider's `complete()` and `stream()` paths via the
+   * `selectAdapter` call in `packages/llm-provider/src/providers/*.ts`.
    */
   parseToolCalls?(
     response: unknown,
     modelId?: string
   ): Array<{ name: string; arguments: Record<string, unknown> }> | undefined;
-
-  /**
-   * (M12 Hook 2/7) Extract text from streaming parts (e.g., Gemini streaming).
-   * Called during streaming to reassemble text-only output from mixed parts.
-   * Return undefined if not applicable.
-   */
-  extractText?(parts: unknown, modelId?: string): string | undefined;
-
-  /**
-   * (M12 Hook 3/7) Compute token cost from input/output token counts.
-   * Called after completion. Return USD cost or 0 if unknown.
-   */
-  computeCost?(tokens: { inputTokens: number; outputTokens: number }, modelId?: string): number;
-
-  /**
-   * (M12 Hook 4/7) Validate provider response structure.
-   * Called after parsing. Return validation result or undefined if not applicable.
-   */
-  validateResponse?(
-    response: unknown,
-    modelId?: string
-  ): { valid: boolean; error?: string } | undefined;
-
-  /**
-   * (M12 Hook 5/7) Optimize prompt with provider-specific guidance.
-   * Called when building system prompt. Return enhanced prompt or undefined.
-   */
-  optimizePrompt?(
-    basePrompt: string,
-    toolNames: readonly string[],
-    modelId?: string
-  ): string | undefined;
-
-  /**
-   * (M12 Hook 6/7) Classify and map provider errors to standard error types.
-   * Called on error. Return classification {retryable, errorType} or undefined.
-   */
-  handleError?(
-    error: unknown,
-    modelId?: string
-  ): { retryable: boolean; errorType: string } | undefined;
-
-  /**
-   * (M12 Hook 7/7) Parse streaming chunk into standard StreamEvent[].
-   * Called during streaming. Return StreamEvent[] or undefined if not streaming.
-   */
-  streamSupport?(
-    chunk: unknown,
-    modelId?: string
-  ): Array<{ type: "text_delta" | "tool_call_start" | "tool_call_delta"; text?: string }> | undefined;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// History note: an earlier surface declared 7 numbered "M12 hooks"
+// (parseToolCalls + extractText + computeCost + validateResponse +
+// optimizePrompt + handleError + streamSupport). Audit (2026-05-24) found 6
+// of those 7 had zero call sites AND zero built-in implementations — they
+// were declarative debt, not extension points anyone could rely on. The
+// surface was narrowed to `parseToolCalls`, which IS wired across all five
+// providers (see `selectAdapter` calls in each provider). Custom adapters
+// that need additional plumbing (cost computation, error classification,
+// stream-event reshaping) should extend the provider implementation
+// directly rather than relying on un-invoked interface fields.
+// ────────────────────────────────────────────────────────────────────────────
 
 // ─── Default adapter (all tiers) ─────────────────────────────────────────────
 
