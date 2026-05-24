@@ -711,6 +711,22 @@ export function handleThinking(
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;
     const newCost = state.cost + thoughtResponse.usage.estimatedCost;
 
+    // HS-128 — Per-iteration token snapshot for the verbosity detector.
+    // Append `usage.totalTokens` (NOT the running total) to a rolling window
+    // capped at 5 entries on state.meta.lastIterationTokens. Guarded by a
+    // truthy check: undefined `usage` (test providers that don't emit usage)
+    // AND zero-token usage both skip the append so the window only contains
+    // real-LLM measurements. Downstream transitionState calls in this turn
+    // pick up the updated meta via their `...state.meta` spreads.
+    // See kernel/capabilities/reflect/verbosity-detector.ts.
+    if (thoughtResponse.usage?.totalTokens) {
+      const priorWindow = state.meta.lastIterationTokens ?? [];
+      const nextWindow = [...priorWindow, thoughtResponse.usage.totalTokens].slice(-5);
+      state = transitionState(state, {
+        meta: { ...state.meta, lastIterationTokens: nextWindow },
+      });
+    }
+
     // Strip <think>...</think> blocks before parsing
     const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);
     const providerThinking = (thoughtResponse as Record<string, unknown>).thinking as string | undefined;

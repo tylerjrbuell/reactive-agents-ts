@@ -268,6 +268,49 @@ created: 2026-05-23
     - apps/examples/src/reasoning/24-mechanisms-cassette-xfail.ts (M9 removed)
     - bun test packages/reasoning/tests/{terminate-rationale,m9-termination-oracle,shared/termination-oracle} 98/98
 
+- task: hs-128-verbosity-detector
+  date: 2026-05-24
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 2  # first refused on schema gap (correct discipline); re-dispatch with Option A schema shipped
+  tokens-est: ~156K (combined two dispatches)
+  regression-prevented: verbosity-induced-token-waste
+  notes: >
+    Two-dispatch sequence: first kernel-warden dispatch correctly refused
+    on a pre-declared schema blocker (state.steps[].tokens does not exist
+    — only cumulative state.tokens). Surfaced three adaptation options;
+    recommended Option A (state.meta.lastIterationTokens snapshot at
+    think.ts:711). Re-dispatch with Option A explicit shipped end-to-end:
+    new KernelMeta.lastIterationTokens field (capped at 5 entries),
+    snapshot append in think.ts:715-728 (truthy guard for test-provider
+    zero-usage), new pure helper verbosity-detector.ts (88 LOC), new
+    detector block in reactive-observer.ts placed outside RI gate so it
+    fires on runs without reactive-controller wired. Mirrors #119
+    advisor→single-mutator pattern: detector emits
+    pendingCompressionRecommendation with `reason: "verbosity-detected"`
+    and `targetTokens = profile.maxTokens / 4`; curator consumes via
+    existing #119 freshness gate. Confidence 0.85 — math-pinned across 5
+    new tests + 1206/1206 full reasoning suite green; production claim
+    (qwen3 ratio drop) unverified against live trace at the time of
+    dispatch (deferred to post-merge revalidation).
+  evidence-anchors:
+    - packages/reasoning/src/kernel/state/kernel-state.ts:226-244 (lastIterationTokens typed field)
+    - packages/reasoning/src/kernel/capabilities/reason/think.ts:715-728 (snapshot append with truthy guard + slice(-5) cap)
+    - packages/reasoning/src/kernel/capabilities/reflect/verbosity-detector.ts (new pure helper, freshness gate iter delta ≤1)
+    - packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:492-523 (detector block placed before return, independent of RI)
+    - packages/reasoning/tests/kernel/capabilities/reflect/reactive-observer-verbosity.test.ts (+5 tests)
+    - bun test packages/reasoning 1206/1206 green (was 1201; +5 from new tests)
+  followups:
+    - "FOLLOWUP-A: Plumb ContextProfile.maxTokens into reactive-observer (either via KernelMeta.profileMaxTokens seeded at kernel-start in loop/runner.ts, or by threading profile through runReactiveObserver's signature). Currently detector uses a hardcoded 32_768 local default — frontier-tier providers will trip overly aggressively."
+    - "FOLLOWUP-B: Wire typed CompressionRecommendation event onto event-bus.ts with `source: 'verbosity-detector'` vs `'dispatcher'` discriminant — observability followup unchanged from #119."
+    - "FOLLOWUP-C: Cross-tier matrix re-run on context-profiles task post-merge to confirm trace shows reason='verbosity-detected' surfaces on qwen3 but not cogito."
+  pilot-signal:
+    re-dispatch-pattern: clean
+    first-attempt-success: yes
+    re-spawn-count: 1
+    regression-catch: none
+
 - task: hs-119-curator-sole-prompt-author
   date: 2026-05-24
   warden: kernel-warden

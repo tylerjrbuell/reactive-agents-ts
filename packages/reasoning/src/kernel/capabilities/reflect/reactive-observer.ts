@@ -14,6 +14,7 @@ import { transitionState } from "../../../kernel/state/kernel-state.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../../kernel/state/kernel-state.js";
 import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
+import { evaluateVerbosity } from "./verbosity-detector.js";
 
 /**
  * Compute the adaptive entropy floor for the intervention suppression gate.
@@ -485,6 +486,39 @@ export function runReactiveObserver(
             }
           }
         }
+      }
+    }
+
+    // ── HS-128 — Verbosity detector (independent of RI dispatcher) ───────
+    // Placed OUTSIDE the reactiveController/dispatcher block so the
+    // detector fires even on runs without RI configured. The detector reads
+    // the rolling token window snapshotted by think.ts at
+    // `state.meta.lastIterationTokens` and publishes a
+    // pendingCompressionRecommendation when the running average exceeds
+    // 2× the tier-derived baseline (~maxTokens/64).
+    //
+    // Freshness gate (mirrors curator-side at context-utils.ts:140 and the
+    // dispatcher's compress-messages branch above) prevents this detector
+    // from overwriting a peer recommendation that already fired this turn
+    // or last.
+    //
+    // No ContextProfile in scope here — the helper falls back to the local
+    // tier default (32_768) when profileMaxTokens is absent. Curator-side
+    // applies its own profile clamp so a too-generous target still gets
+    // bounded.
+    {
+      const verbosityRec = evaluateVerbosity({
+        lastIterationTokens: s.meta.lastIterationTokens,
+        iteration: s.iteration,
+        existingRecommendation: s.meta.pendingCompressionRecommendation,
+      });
+      if (verbosityRec) {
+        s = transitionState(s, {
+          meta: {
+            ...s.meta,
+            pendingCompressionRecommendation: verbosityRec,
+          },
+        });
       }
     }
 

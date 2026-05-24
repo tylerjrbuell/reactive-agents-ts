@@ -223,6 +223,26 @@ export interface KernelMeta {
     readonly recommendedAtIteration: number;
   };
 
+  // ── HS-128 — Per-iteration token snapshot (verbosity detector input) ────
+  /**
+   * Rolling window of `usage.totalTokens` from the last N (≤5) LLM
+   * responses, appended by `kernel/capabilities/reason/think.ts` immediately
+   * after the streaming response resolves. Consumed by the verbosity-detector
+   * in `kernel/capabilities/reflect/verbosity-detector.ts`, which compares the
+   * running average against a tier-derived baseline (~maxTokens/64) and
+   * publishes a `pendingCompressionRecommendation` with reason
+   * `"verbosity-detected"` when avg > 2× baseline.
+   *
+   * Only real-LLM runs populate this — the think.ts append is guarded by a
+   * truthy `usage.totalTokens` check, so test-provider runs with 0-token
+   * usage do not poison the rolling window. Detector requires ≥3 samples
+   * before evaluating to avoid false-positives on warmup iterations.
+   *
+   * HS-128 / L4 production signal — qwen3:14b vs cogito:14b 390% verbosity
+   * ratio on identical context-profiles task. Goal: ratio ≤ 200%.
+   */
+  readonly lastIterationTokens?: readonly number[];
+
   // ── Issue #128 — Arbitrator BudgetSignal limits (North Star v5.0 Pillar 6) ─
   /**
    * Declarative budget limits consulted by the Arbitrator's pre-intent guard.
