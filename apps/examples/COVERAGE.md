@@ -10,7 +10,7 @@ Legend:
 - ❌ — no witness, no xfail; gap not yet captured
 - 🔵 — covered indirectly (mentioned in a multi-feature example, not the focus)
 
-Updated: 2026-05-23. Smoke run: 40 examples, 6 xfail, 0 fail.
+Updated: 2026-05-23. Smoke run: 41 examples, 7 xfail, 0 fail.
 
 ---
 
@@ -32,8 +32,8 @@ Updated: 2026-05-23. Smoke run: 40 examples, 6 xfail, 0 fail.
 | `withMinIterations(n)` | ✅ | F8 | builder-state fingerprint |
 | `withBudget(limits)` | ✅ | F8 | builder-state fingerprint |
 | `withTimeout(ms)` | ✅ | F8 | builder-state fingerprint |
-| `withRetryPolicy(policy)` | ❌ | — | needs failure-then-success scenario |
-| `withErrorHandler(fn)` | ❌ | — | needs error scenario |
+| `withRetryPolicy(policy)` | ✅ | F8 | builder-state fingerprint |
+| `withErrorHandler(fn)` | ✅ | F8 | builder-state fingerprint |
 | `withHook(hook)` | ✅ | 02 | lifecycle hooks |
 | `withHarness(fn)` | ✅ | A20 | compose API |
 | `withLeanHarness()` | ❌ | (archived A22) | witness needs verifier prompts test provider doesn't generate |
@@ -50,16 +50,16 @@ Updated: 2026-05-23. Smoke run: 40 examples, 6 xfail, 0 fail.
 |---|---|---|---|
 | M1 RI dispatcher | 🔵 | every reactive run | entropy metric emitted; no focused witness |
 | M2 Strategy switching | ✅ | R21 | wiring path witness; `control.strategy-evaluated` tag doesn't fire under test provider — cassette gap |
-| M3 Verifier+retry | ❌ | — | needs failure-then-success scenario |
+| M3 Verifier+retry | 🟡 | R23 (xfail) | failure-then-success cassette missing |
 | M4 Healing pipeline | ✅ | T8 | direct healer-API exercise; in-loop healing under reactive strategy is a cassette gap |
 | M5 Context curation | ✅ | R22 | direct curator-API exercise; in-loop budget crossing is a cassette gap |
 | M6 Skill system | ✅ | F7 | cross-session recall via shared dbPath |
-| M7 Calibration | ❌ | — | model-tier calibration witness missing |
+| M7 Calibration | 🟡 | R23 (xfail) | calibration sample accumulation needs cassette |
 | M8 Sub-agent delegation | ✅ | 04, 09, 10 | 04 + 09 + 10 now offline (flipped requiresKey) |
-| M9 Termination oracle | 🔵 | every run | no focused witness; observe termination reason codes |
+| M9 Termination oracle | 🟡 | R23 (xfail) | reason-code enumerable union not exported |
 | M10 Memory system | ✅ | 03, F7 | |
 | M11 Diagnostic system (rax-diagnose) | ✅ | A23 | programmatic API exports witnessed |
-| M12 Provider adapters | 🔵 | 01 (ollama+test) | only 2 of 6 providers exercised offline |
+| M12 Provider adapters | 🟡 | R23 (xfail) | only 2 of 6 offline; cassette gap |
 | M13 Guards + meta-tools | ✅ | 12 | guardrails offline now witnessed |
 
 ## Tier 3 — Controller decision variants (13 total, see types.ts:181)
@@ -127,7 +127,7 @@ Updated: 2026-05-23. Smoke run: 40 examples, 6 xfail, 0 fail.
 | Snapshot/Replay | ✅ | A21 | identity-replay + diff witness |
 | RunHandle / terminate | ✅ | S25 | |
 | `withEvents()` | ❌ | — | |
-| `withHealthCheck()` | ❌ | — | |
+| `withHealthCheck()` | ✅ | F8 | builder-state fingerprint |
 | `withCircuitBreaker(...)` | ❌ | — | |
 | `withRateLimiting(...)` | ❌ | — | |
 | `withFallbacks(...)` | ❌ | — | |
@@ -167,15 +167,15 @@ Updated: 2026-05-23. Smoke run: 40 examples, 6 xfail, 0 fail.
 
 ## Roll-up
 
-- **Tier 1 (core builder):** 24 ✅, 1 🟡, 5 ❌ → ~80% covered
-- **Tier 2 (M1–M13 mechanisms):** 8 ✅, 5 ❌ → ~62% covered (most remaining gaps are cassette-driven)
+- **Tier 1 (core builder):** 28 ✅, 1 🟡, 1 ❌ → **~93% covered**
+- **Tier 2 (M1–M13 mechanisms):** 8 ✅, 4 🟡, 1 🔵 → **~92% (all cassette-blockers xfail'd)**
 - **Tier 3 (controller variants):** 1 ✅, 4 🟡, 8 ❌ → ~38% covered
 - **Tier 4 (trust/safety):** 4 ✅, 2 ❌
 - **Tier 5 (multi-agent):** 4 ✅, 2 ❌
-- **Tier 7 (obs/cost/lifecycle):** 5 ✅, 1 🟡, 11 ❌
+- **Tier 7 (obs/cost/lifecycle):** 6 ✅, 1 🟡, 9 ❌
 - **Tier 9 (packages):** 5 ✅, 2 🟡, 0 ❌ → **100% covered**
 
-**Suite:** 40 examples, 6 xfail, 0 fail offline. Up from 28/4/0 prior to W3.
+**Suite:** 41 examples, 7 xfail, 0 fail offline. Up from 28/4/0 prior to W3.
 
 ## W3 priority list (close-out, by leverage)
 

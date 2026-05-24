@@ -322,6 +322,18 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/reasoning/22-long-context-curation.ts',
     },
+    {
+        // xfail: 4 mechanisms (M3, M7, M9 focused, M12 matrix) await
+        // cassette infrastructure. @reactive-agents/replay supports
+        // identity replay only today; failure-then-success / multi-run
+        // accumulation / provider-matrix probes need additional surface.
+        num: 'R23',
+        label: 'mechanisms-cassette (xfail)',
+        category: 'reasoning',
+        requiresKey: false,
+        path: './src/reasoning/24-mechanisms-cassette-xfail.ts',
+        expectsFail: true,
+    },
     // interaction — offline
     {
         num: '21',

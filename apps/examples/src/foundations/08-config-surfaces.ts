@@ -5,12 +5,17 @@
  * witness. Each surface is exercised as a builder chain that compiles +
  * builds successfully under the test provider:
  *
- *   - .withBudget({ maxTokens, maxCostUSD })
+ *   - .withBudget({ tokenLimit, costLimit, warningRatio })
  *   - .withTimeout(ms)
  *   - .withMinIterations(n)
  *   - .withTaskContext({ ... })
  *   - .withEnvironment({ ... })
  *   - .withDocuments([{ content, source }])
+ *   - .withRetryPolicy({ maxRetries, backoffMs })
+ *   - .withErrorHandler(fn)
+ *   - .withHealthCheck()
+ *   - .withCortex(url?)
+ *   - .withGateway()
  *
  * Pass criterion: agent builds without throwing, then runs the test
  * scenario to completion (success=true). Surface coverage is asserted
@@ -49,7 +54,13 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withDocuments([
       { content: "Paris is the capital of France.", source: "facts.txt" },
       { content: "The Eiffel Tower is in Paris.", source: "facts.txt" },
-    ]);
+    ])
+    .withRetryPolicy({ maxRetries: 2, backoffMs: 100 })
+    .withErrorHandler(async (err) => {
+      console.log("  error handler invoked:", String(err).slice(0, 40));
+    })
+    .withHealthCheck()
+    .withCortex();
 
   if (opts?.model) b = b.withModel(opts.model);
   if (provider === "test") {
@@ -70,6 +81,10 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     environment: bs._environmentContext !== undefined,
     documents: Array.isArray(bs._documents) && (bs._documents as unknown[]).length >= 2,
     minIterations: bs._minIterations === 1,
+    retryPolicy: bs._retryPolicy !== undefined,
+    errorHandler: typeof bs._errorHandler === "function",
+    healthCheck: bs._enableHealthCheck === true,
+    cortex: bs._cortexUrl !== undefined || bs._enableCortex === true,
   };
 
   const agent = await b.build();
@@ -84,7 +99,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   return {
     passed,
     output: passed
-      ? `6 declarative builder surfaces left fingerprints on builder state: ${Object.keys(surfaces).join(", ")}`
+      ? `${Object.keys(surfaces).length} declarative builder surfaces left fingerprints on builder state: ${Object.keys(surfaces).join(", ")}`
       : `config-surfaces witness FAILED — success=${result.success} surfaces=${JSON.stringify(surfaces)}`,
     steps: result.metadata.stepsCount,
     tokens: result.metadata.tokensUsed,
