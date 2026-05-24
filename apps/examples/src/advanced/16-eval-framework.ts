@@ -16,6 +16,7 @@ import { ReactiveAgents } from "reactive-agents";
 import {
   EvalService,
   EvalServiceLive,
+  JudgeFromLLMServiceLive,
 } from "@reactive-agents/eval";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
@@ -82,14 +83,18 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     return result;
   });
 
-  // EvalServiceLive requires LLMService for LLM-as-judge scoring
-  // In test mode, provide TestLLMServiceLayer which returns deterministic responses
+  // EvalServiceLive requires JudgeLLMService for LLM-as-judge scoring.
+  // Rule 4 of 00-RESEARCH-DISCIPLINE.md mandates the judge be isolated from
+  // the SUT in production eval. For smoke witness purposes we use the
+  // JudgeFromLLMServiceLive helper which derives the judge from an in-scope
+  // LLMService — acceptable here because the test scenario is deterministic.
   const testLLMLayer = TestLLMServiceLayer([
     { match: "accuracy", text: "SCORE: 0.9\nRATIONALE: The output correctly identifies Paris as the capital of France." },
     { match: "relevance", text: "SCORE: 1.0\nRATIONALE: The answer is directly relevant to the question asked." },
     { text: "SCORE: 0.85\nRATIONALE: Good response." },
   ]);
-  const evalLayer = EvalServiceLive.pipe(Layer.provide(testLLMLayer));
+  const judgeLayer = JudgeFromLLMServiceLive.pipe(Layer.provide(testLLMLayer));
+  const evalLayer = EvalServiceLive.pipe(Layer.provide(judgeLayer));
 
   const evalResult = await Effect.runPromise(
     evalProgram.pipe(Effect.provide(evalLayer)),

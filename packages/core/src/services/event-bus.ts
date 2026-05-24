@@ -699,6 +699,32 @@ export type AgentEvent =
       readonly entropyBefore: number;
       readonly entropyAfter?: number;
     }
+  // ─── Compression coordination (GH #119 + HS-128) ───
+  // Curator-as-sole-prompt-author contract has TWO surfaces: advisors that
+  // RECOMMEND compression (dispatcher compress-messages handler, verbosity
+  // detector) and the SINGLE applier (curator). These events make the
+  // recommendation→application chain auditable end-to-end. Source
+  // discriminant lets observers distinguish dispatcher-driven vs detector-
+  // driven recommendations without colliding their thresholds.
+  | {
+      readonly _tag: "CompressionRecommendation";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly source: "dispatcher" | "verbosity-detector";
+      readonly targetTokens: number;
+      readonly reason: string;
+    }
+  | {
+      readonly _tag: "CompressionApplied";
+      readonly taskId: string;
+      readonly iteration: number;
+      /** Iteration on which the consumed recommendation was emitted. */
+      readonly recommendedAtIteration: number;
+      readonly targetTokens: number;
+      /** Actual message count in the rendered Prompt after curator applied compression. */
+      readonly actualMessageCount: number;
+      readonly reason: string;
+    }
   // ─── Channel / messaging events ───
   | {
       /**

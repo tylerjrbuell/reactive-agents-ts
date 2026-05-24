@@ -14,7 +14,8 @@
 // at a different provider/model entirely (e.g. claude-haiku scoring a cogito
 // run).
 
-import { Context, Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
+import { LLMService } from "@reactive-agents/llm-provider";
 import type { CompletionRequest, CompletionResponse, LLMErrors } from "@reactive-agents/llm-provider";
 
 export interface JudgeLLMServiceShape {
@@ -30,3 +31,25 @@ export class JudgeLLMService extends Context.Tag("JudgeLLMService")<
   JudgeLLMService,
   JudgeLLMServiceShape
 >() {}
+
+/**
+ * Convenience Layer that derives a `JudgeLLMService` from the in-scope
+ * `LLMService`. Use this in DEMOS, SMOKE WITNESSES, and TEST runs where
+ * Rule 4 isolation isn't required (e.g. example 16 eval-framework smoke
+ * uses the same test-provider scenario for both the SUT and the judge).
+ *
+ * Production eval that must respect Rule 4 (judge isolated from SUT)
+ * should provide its own `JudgeLLMService` Layer pointed at a different
+ * provider/model — do NOT use this helper.
+ *
+ * Closes smoke L1 finding (`Service not found: JudgeLLMService` when a
+ * single-provider build is used for both SUT and judge).
+ */
+export const JudgeFromLLMServiceLive: Layer.Layer<JudgeLLMService, never, LLMService> =
+  Layer.effect(
+    JudgeLLMService,
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      return JudgeLLMService.of({ complete: llm.complete });
+    }),
+  );

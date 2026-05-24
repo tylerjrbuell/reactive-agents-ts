@@ -227,17 +227,11 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/advanced/15-prompt-experiments.ts',
     },
     {
-        // xfail (framework gap L1): @reactive-agents/eval throws
-        // "Service not found: JudgeLLMService" when an agent is built with
-        // a single provider — the judge LLM service is not auto-resolved.
-        // Promote when withEvalJudge(provider) builder hook ships OR judge
-        // service is auto-bound from the default provider.
         num: '16',
-        label: 'eval-framework (xfail)',
+        label: 'eval-framework',
         category: 'advanced',
         requiresKey: false,
         path: './src/advanced/16-eval-framework.ts',
-        expectsFail: true,
     },
     {
         num: '17',

@@ -10,7 +10,7 @@ Legend:
 - ❌ — no witness, no xfail; gap not yet captured
 - 🔵 — covered indirectly (mentioned in a multi-feature example, not the focus)
 
-Updated: 2026-05-23. Smoke run: 41 examples, 7 xfail, 0 fail.
+Updated: 2026-05-24. Smoke run: 41 examples, 6 xfail, 0 fail.
 
 ---
 
@@ -159,7 +159,7 @@ Updated: 2026-05-23. Smoke run: 41 examples, 7 xfail, 0 fail.
 | `@reactive-agents/trace` | 🟡 | AX1 (xfail) | builder hook missing |
 | `@reactive-agents/diagnose` | ✅ | A23 | programmatic API witness (DEFAULT_TRACE_DIR, listTraces, resolveTracePath, 6 cmd exports) |
 | `@reactive-agents/observe` | ❌ | — | OTLP export |
-| `@reactive-agents/eval` | 🟡 | 16 (xfail L1) | JudgeLLMService unbound w/ single provider |
+| `@reactive-agents/eval` | ✅ | 16 | JudgeFromLLMServiceLive helper closes L1 |
 | `@reactive-agents/compose` | ✅ | A20 | killswitch witness missing |
 | `@reactive-agents/interaction` | ✅ | 21 + IX1 xfail | offline mode covered; approval-gate gap |
 
@@ -205,7 +205,7 @@ not synthetic gaps. They belong in the ranked work queue.
 
 | # | Example | Mode | Symptom | Hypothesis | Severity |
 |---|---|---|---|---|---|
-| L1 | 16 eval-framework | ollama live | `Service not found: JudgeLLMService` mid-eval | `@reactive-agents/eval` requires a judge LLM service that is not auto-resolved when the agent is built with a single provider; eval-framework example uses ollama for both the subject and the judge but JudgeLLMService is never bound. Needs explicit `.withEvalJudge(provider)` builder hook OR auto-bind from default provider. | high |
+| L1 | 16 eval-framework | ollama live | ✅ CLOSED 2026-05-24 — JudgeFromLLMServiceLive helper layer added to @reactive-agents/eval; derives JudgeLLMService from in-scope LLMService for demo/smoke/test contexts. Production eval that must respect Rule 4 (judge ≠ SUT) still provides its own Layer pointed at a different provider. Example 16 dropped from xfail. | closed |
 | L2 | tools/05 cogito | ollama live | `output-gate Synthesized output to match requested format: prose` — silent format coercion | Output-gate rewrites without emitting a decisionType telemetry event; observers cannot distinguish a real LLM answer from a coerced one. | medium |
 | L3 | tools/05 termination divergence | ollama live | cogito terminates `final_answer`, qwen3 `final_answer_tool` — divergent reason codes for same task | Two paths into `terminate.ts`; reason-code surface uncalibrated. | low |
 | L4 | reasoning/20 qwen3 vs cogito | ollama live | qwen3 ratio 349% over cogito (was 390% pre-HS-128 / 264% pre-#119) | HS-128 shipped verbosity-detector mechanism (5/5 unit tests). Mechanism does NOT exercise on reasoning/20 because the task runs each tier as a single agent.run() call — fresh state per tier, lastIterationTokens never accumulates ≥3 samples. Need a multi-iteration L4 harness to validate detector firing under live conditions. Detector itself is correct + tested; benchmark design limitation. | medium |
