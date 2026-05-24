@@ -20,6 +20,7 @@ import { probeOllamaCapability } from './local-probe.js'
 import { warnCapabilityFallback } from '../capability-resolver.js'
 import type { Capability } from '../capability.js'
 import { emitToolCallComplete } from '../streaming-helpers.js'
+import { selectAdapter } from '../adapter.js'
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
 // per process. CalibrationStore write-through (cross-process) lands in S2.4.
@@ -348,6 +349,23 @@ export const LocalProviderLive = Layer.effect(
                             ? request.model
                             : request.model?.model ?? defaultModel
 
+                    // Resolve capability up-front so we can use its tier for
+                    // adapter selection (M12 Hook 1/7) and num_ctx wiring.
+                    const capability = yield* Effect.tryPromise({
+                        try: () =>
+                            resolveOllamaCapability(
+                                model,
+                                endpoint,
+                                config.ollamaApiKey
+                            ),
+                        catch: () =>
+                            new Error('capability resolution failed'),
+                    }).pipe(
+                        Effect.catchAll(() =>
+                            Effect.succeed(resolveCapability('ollama', model))
+                        )
+                    )
+
                     const response = yield* Effect.tryPromise({
                         try: async () => {
                             const client = await getClient()
@@ -366,18 +384,8 @@ export const LocalProviderLive = Layer.effect(
                                 config.thinking
                             )
 
-                            // Phase 1 S2.4 — Probe-on-first-use Capability resolution.
-                            // Order: in-process cache → static table → /api/show probe →
-                            // conservative fallback. Static table is now an optional
-                            // fast-path; probe handles the long tail of community models
-                            // without anyone editing capability.ts.
-                            // Precedence on num_ctx: request.numCtx → capability.recommendedNumCtx
-                            // → config.defaultNumCtx (deprecated).
-                            const capability = await resolveOllamaCapability(
-                                model,
-                                endpoint,
-                                config.ollamaApiKey
-                            )
+                            // Precedence on num_ctx: request.numCtx →
+                            // capability.recommendedNumCtx → config.defaultNumCtx.
                             const numCtx =
                                 request.numCtx ??
                                 capability.recommendedNumCtx ??
@@ -422,13 +430,38 @@ export const LocalProviderLive = Layer.effect(
                             ?.thinking || undefined
                     const inputTokens = response.prompt_eval_count ?? 0
                     const outputTokens = response.eval_count ?? 0
-                    const toolCalls = parseToolCalls(
-                        response.message?.tool_calls as
-                            | Array<{
-                                  function: { name: string; arguments: unknown }
-                              }>
-                            | undefined
+
+                    // M12 Hook 1/7 — give the provider adapter first crack at
+                    // normalizing tool_calls from the raw response (e.g., qwen3
+                    // stringified arguments). When the adapter declines or no
+                    // calibration is registered, fall back to the default
+                    // Ollama-shaped parser. Adapter selection is per-request
+                    // because (model, tier) varies per CompletionRequest.
+                    const { adapter: providerAdapter } = selectAdapter(
+                        { supportsToolCalling: true },
+                        capability.tier,
+                        model
                     )
+                    const adapterParsed = providerAdapter.parseToolCalls?.(
+                        response,
+                        model
+                    )
+                    const toolCalls = adapterParsed
+                        ? adapterParsed.map((tc, i) => ({
+                              id: `ollama-tc-${Date.now()}-${i}`,
+                              name: tc.name,
+                              input: tc.arguments,
+                          }))
+                        : parseToolCalls(
+                              response.message?.tool_calls as
+                                  | Array<{
+                                        function: {
+                                            name: string
+                                            arguments: unknown
+                                        }
+                                    }>
+                                  | undefined
+                          )
 
                     const hasToolCalls = toolCalls && toolCalls.length > 0
 
@@ -537,6 +570,15 @@ export const LocalProviderLive = Layer.effect(
                                     capability.recommendedNumCtx ??
                                     config.defaultNumCtx
 
+                                // M12 Hook 1/7 — adapter selection for the
+                                // streaming tool-call normalization site.
+                                const { adapter: streamAdapter } =
+                                    selectAdapter(
+                                        { supportsToolCalling: true },
+                                        capability.tier,
+                                        model
+                                    )
+
                                 const stream = await client.chat({
                                     model,
                                     messages: msgs,
@@ -573,32 +615,69 @@ export const LocalProviderLive = Layer.effect(
                                         })
                                     }
 
-                                    // Handle tool calls in stream chunks (native function calling)
+                                    // Handle tool calls in stream chunks (native function calling).
+                                    // M12 Hook 1/7 — give the adapter first
+                                    // crack at normalization (e.g., qwen3
+                                    // stringified args). When the adapter
+                                    // declines, fall through to default Ollama
+                                    // shape extraction.
                                     if (
                                         chunk.message?.tool_calls &&
                                         Array.isArray(chunk.message.tool_calls)
                                     ) {
-                                        for (const tc of chunk.message
+                                        const rawToolCalls = chunk.message
                                             .tool_calls as Array<{
                                             function: {
                                                 name: string
                                                 arguments: unknown
                                             }
-                                        }>) {
-                                            const toolCall: ToolCall = {
-                                                id: `ollama-tc-${Date.now()}-${
-                                                    accumulatedToolCalls.length
-                                                }`,
-                                                name: tc.function.name,
-                                                input: tc.function.arguments,
-                                            }
-                                            accumulatedToolCalls.push(toolCall)
-                                            emitToolCallComplete(
-                                                emit,
-                                                toolCall.id,
-                                                toolCall.name,
-                                                tc.function.arguments,
+                                        }>
+                                        // Synthesize a response-shaped wrapper
+                                        // so the adapter sees the same shape it
+                                        // sees in complete().
+                                        const adapterNormalized =
+                                            streamAdapter.parseToolCalls?.(
+                                                { message: chunk.message },
+                                                model
                                             )
+                                        if (adapterNormalized) {
+                                            for (const tc of adapterNormalized) {
+                                                const toolCall: ToolCall = {
+                                                    id: `ollama-tc-${Date.now()}-${
+                                                        accumulatedToolCalls.length
+                                                    }`,
+                                                    name: tc.name,
+                                                    input: tc.arguments,
+                                                }
+                                                accumulatedToolCalls.push(
+                                                    toolCall
+                                                )
+                                                emitToolCallComplete(
+                                                    emit,
+                                                    toolCall.id,
+                                                    toolCall.name,
+                                                    tc.arguments
+                                                )
+                                            }
+                                        } else {
+                                            for (const tc of rawToolCalls) {
+                                                const toolCall: ToolCall = {
+                                                    id: `ollama-tc-${Date.now()}-${
+                                                        accumulatedToolCalls.length
+                                                    }`,
+                                                    name: tc.function.name,
+                                                    input: tc.function.arguments,
+                                                }
+                                                accumulatedToolCalls.push(
+                                                    toolCall
+                                                )
+                                                emitToolCallComplete(
+                                                    emit,
+                                                    toolCall.id,
+                                                    toolCall.name,
+                                                    tc.function.arguments
+                                                )
+                                            }
                                         }
                                     }
 

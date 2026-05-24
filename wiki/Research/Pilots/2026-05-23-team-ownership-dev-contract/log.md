@@ -307,7 +307,48 @@ created: 2026-05-23
     re-spawn-count: 0
     regression-catch: none
 
-- task: gh-46-per-provider-tool-call-parser-hook
+- task: gh-46-per-provider-tool-call-parser-hook-attempt2
+  date: 2026-05-24
+  warden: provider-warden
+  routed: warden
+  commits: 0  # warden does not commit; main-thread bundles
+  agent-spawns: 1
+  tokens-est: ~94K
+  regression-prevented: false-green-via-recursive-mock-binding
+  notes: >
+    Provider-warden re-dispatch after parent's empirical spike (zero
+    production callers across all 7 M12 Hooks 1-7) revealed the cleanest
+    architecture: `selectAdapter()` at adapter.ts:345 is a pure stateless
+    function — provider invokes it per-CompletionRequest internally with
+    the request's modelId + resolved tier. Zero threading, zero schema
+    changes, zero new tags. Both complete() and stream() paths in
+    local.ts now consume `adapter.parseToolCalls` when supplied;
+    default Ollama-shaped parser preserved as fallback. +3 tests;
+    261/261 llm-provider tests green (was 254 baseline). LOC delta
+    +79/-34 net = within ≤80 budget (tight). Authority discipline:
+    zero edits to adapter.ts, calibration.ts, types.ts, or any other
+    provider. Mocking lesson surfaced empirically: delegating mock
+    `selectAdapter` back to real `selectAdapter` recurses through the
+    mocked binding — must build the tier-based fallback inline in the
+    mock factory. Used 1 of 2 retries.
+  evidence-anchors:
+    - packages/llm-provider/src/providers/local.ts:380-490 (complete() — capability lifted out of Effect.tryPromise; selectAdapter() + parseToolCalls)
+    - packages/llm-provider/src/providers/local.ts:550-650 (stream() — same pattern)
+    - packages/llm-provider/tests/local-adapter-parser-hook.test.ts (+3 tests pinning the consumption seam)
+    - bun test packages/llm-provider 261/261 (was 254)
+  followups:
+    - "buildCalibratedAdapter (calibration.ts:168) emits only systemPromptPatch + toolGuidance today; extend to emit parseToolCalls from calibration data so the JSON-load path is end-to-end testable. New ModelCalibration field e.g. `toolCallNormalization: 'qwen3-stringified-args' | 'none'`."
+    - "+1 streaming-path test for adapter parseToolCalls coverage parity with complete() — current tests cover wiring by inspection only on the stream side."
+    - "complete() vs stream() capability-error symmetry — complete() now has explicit Effect.catchAll(resolveCapability('ollama', model)); stream() relies on resolveOllamaCapability's internal fallback. Worth normalizing."
+    - "Other 5 M12 hooks (extractText, computeCost, validateResponse, optimizePrompt, handleError, streamSupport) remain unconsumed in production for all providers per parent-thread audit. Each is its own future dispatch."
+    - "Same selectAdapter() consumption pattern should apply to anthropic.ts, gemini.ts, openai.ts, litellm.ts — out of #46 scope; future dispatches."
+  pilot-signal:
+    re-dispatch-pattern: clean
+    first-attempt-success: yes
+    re-spawn-count: 1  # 1 within-dispatch retry consumed on mock recursion discovery
+    regression-catch: prevented-infinite-recursion-on-mock-binding
+
+- task: gh-46-per-provider-tool-call-parser-hook-attempt1
   date: 2026-05-24
   warden: provider-warden
   routed: warden
