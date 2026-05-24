@@ -1,7 +1,8 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, afterAll, beforeAll } from "bun:test";
 import { Effect } from "effect";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { Server } from "bun";
 
 import { httpGetHandler } from "../src/skills/http-client.js";
 import {
@@ -24,6 +25,41 @@ const cleanup = async () => {
 };
 
 afterAll(cleanup);
+
+// GH #103: local fixture replaces httpbin.org. The hosted endpoint was a
+// recurring CI flake (network jitter / cold start / rate limit / TLS
+// handshake variance routinely exceeded the 5s test timeout). A tiny
+// in-process server is deterministic (~1ms latency) and removes the
+// third-party dependency.
+let httpFixture: Server | undefined;
+let fixtureBaseUrl = "";
+
+beforeAll(() => {
+  httpFixture = Bun.serve({
+    port: 0, // OS-assigned ephemeral port
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/html") {
+        return new Response(
+          "<!DOCTYPE html><html><body><h1>fixture</h1></body></html>",
+          { status: 200, headers: { "Content-Type": "text/html" } },
+        );
+      }
+      if (url.pathname === "/get") {
+        return new Response(JSON.stringify({ url: req.url, ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  fixtureBaseUrl = `http://localhost:${httpFixture.port}`;
+});
+
+afterAll(() => {
+  httpFixture?.stop();
+});
 
 // ═══════════════════════════════════════════════════════════════════════
 // http-get handler
@@ -49,9 +85,9 @@ describe("httpGetHandler — error cases", () => {
   });
 
   it("should handle non-JSON response bodies as text", async () => {
-    // httpbin returns HTML for /html endpoint
+    // Local Bun.serve fixture (see beforeAll) returns HTML at /html.
     const result = await Effect.runPromise(
-      httpGetHandler({ url: "https://httpbin.org/html" }),
+      httpGetHandler({ url: `${fixtureBaseUrl}/html` }),
     );
     const typed = result as { status: number; body: unknown };
     expect(typed.status).toBe(200);

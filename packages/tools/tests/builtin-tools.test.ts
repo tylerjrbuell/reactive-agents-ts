@@ -1,7 +1,8 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, afterAll, beforeAll } from "bun:test";
 import { Effect } from "effect";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { Server } from "bun";
 
 import { httpGetHandler } from "../src/skills/http-client.js";
 import { fileReadHandler, fileWriteHandler } from "../src/skills/file-operations.js";
@@ -49,10 +50,35 @@ const cleanup = async () => {
 
 afterAll(cleanup);
 
+// GH #103: local in-process server replaces httpbin.org (recurring CI flake).
+let httpFixture: Server | undefined;
+let fixtureBaseUrl = "";
+
+beforeAll(() => {
+  httpFixture = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const url = new URL(req.url);
+      if (url.pathname === "/get") {
+        return new Response(JSON.stringify({ url: req.url, ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  fixtureBaseUrl = `http://localhost:${httpFixture.port}`;
+});
+
+afterAll(() => {
+  httpFixture?.stop();
+});
+
 describe("Built-in Tool Handlers", () => {
-  it("httpGetHandler makes a real HTTP call", async () => {
+  it("httpGetHandler makes an HTTP call against the local fixture", async () => {
     const result = await Effect.runPromise(
-      httpGetHandler({ url: "https://httpbin.org/get" }),
+      httpGetHandler({ url: `${fixtureBaseUrl}/get` }),
     );
 
     const typed = result as { status: number; body: unknown };
