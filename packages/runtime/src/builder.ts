@@ -28,6 +28,7 @@ import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
+import { fetchAndMergePricing } from './builder/build-effect/pricing-fetch.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -2122,23 +2123,15 @@ export class ReactiveAgentBuilder {
                 }
             }
 
-            // Automatically fetch remote pricing if a provider was configured
-            if (self._pricingProvider) {
-                try {
-                    const remotePricing =
-                        yield* self._pricingProvider.fetchPricing()
-                    self._pricingRegistry = {
-                        ...self._pricingRegistry,
-                        ...remotePricing,
-                    }
-                } catch (e) {
-                    if (self._strictValidation) {
-                        return yield* Effect.fail(e as Error)
-                    }
-                    console.warn(
-                        `[Pricing] Failed to fetch dynamic pricing — falling back to static map. ${e}`
-                    )
-                }
+            // Automatically fetch remote pricing if a provider was configured.
+            // Extracted to ./builder/build-effect/pricing-fetch.ts (W26-B step 1).
+            {
+                const { registry } = yield* fetchAndMergePricing({
+                    pricingProvider: self._pricingProvider,
+                    pricingRegistry: self._pricingRegistry,
+                    strict: self._strictValidation,
+                })
+                self._pricingRegistry = registry
             }
 
             const agentId = self._stableAgentId ?? `${self._name}-${Date.now()}`
