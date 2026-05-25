@@ -20,7 +20,10 @@ import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
-import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -177,10 +180,11 @@ export const executeAdaptive = (
         ),
       );
 
-    // Strip <think> blocks from classification to prevent thinking from
-    // being parsed as a strategy name.
+    // Thinking-safe extraction prevents thinking blocks from being parsed
+    // as strategy names AND rescues classifications trapped inside <think>
+    // (strict upgrade vs bare stripThinking).
     selectedStrategy = parseStrategySelection(
-      stripThinking(analysisResponse.content),
+      extractThinkingSafeContent(analysisResponse).content,
     );
     analysisTokens = analysisResponse.usage.totalTokens;
     analysisCost = analysisResponse.usage.estimatedCost;

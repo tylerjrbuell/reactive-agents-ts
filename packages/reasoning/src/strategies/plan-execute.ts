@@ -45,7 +45,10 @@ import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
-import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../kernel/capabilities/reason/stream-parser.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -920,7 +923,9 @@ export const executePlanExecute = (
 
         totalTokens += synthLlmResponse.usage.totalTokens;
         totalCost += synthLlmResponse.usage.estimatedCost;
-        finalOutput = stripThinking(synthLlmResponse.content);
+        // Strict upgrade vs bare stripThinking: rescues synthesized answers
+        // trapped inside <think> blocks (would have silently returned empty).
+        finalOutput = extractThinkingSafeContent(synthLlmResponse).content;
 
         steps.push(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
 
@@ -1256,7 +1261,9 @@ function executeStep(
       })
       .pipe(
         Effect.flatMap((response) => {
-          const output = stripFinalAnswerPrefix(stripThinking(response.content));
+          const output = stripFinalAnswerPrefix(
+            extractThinkingSafeContent(response).content,
+          );
           if (!output.trim()) {
             return Effect.fail(
               new ExecutionError({

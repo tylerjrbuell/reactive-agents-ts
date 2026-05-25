@@ -18,7 +18,10 @@ import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
-import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -331,9 +334,12 @@ export const executeTreeOfThought = (
         totalTokens += expansionResponse.usage.totalTokens;
         totalCost += expansionResponse.usage.estimatedCost;
 
-        // Strip <think> blocks from expansion to prevent thinking from
-        // being parsed as candidate thoughts.
-        const candidates = parseCandidates(stripThinking(expansionResponse.content), breadth);
+        // Thinking-safe extraction: rescues candidates trapped inside <think>
+        // (strict upgrade vs bare stripThinking).
+        const candidates = parseCandidates(
+          extractThinkingSafeContent(expansionResponse).content,
+          breadth,
+        );
 
         // Score each candidate
         for (const candidate of candidates) {
@@ -381,7 +387,9 @@ export const executeTreeOfThought = (
           totalTokens += scoreResponse.usage.totalTokens;
           totalCost += scoreResponse.usage.estimatedCost;
 
-          const score = parseScore(stripThinking(scoreResponse.content));
+          const score = parseScore(
+            extractThinkingSafeContent(scoreResponse).content,
+          );
 
           const node: ThoughtNode = {
             id: ulid(),
