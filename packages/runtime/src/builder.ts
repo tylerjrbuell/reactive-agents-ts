@@ -1,8 +1,4 @@
-import {
-    Effect,
-    Layer,
-    ManagedRuntime,
-} from 'effect'
+import { Effect, Layer } from 'effect'
 // createRuntime usage extracted to ./builder/build-effect/runtime-construction.ts (W25-B step 7)
 // createLightRuntime is no longer used directly from builder.ts.
 import type { MCPServerConfig } from './runtime.js'
@@ -15,16 +11,6 @@ import {
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
 export { deriveGoalAchieved } from './builder/helpers.js'
 import { serializeBuilder } from './builder/to-config.js'
-import {
-    buildSubAgentTask,
-    type SubAgentTaskArgs as ExtractedSubAgentTaskArgs,
-} from './builder/build-effect/sub-agent-executor.js'
-import { createRemoteAgentToolRegistration } from './builder/build-effect/remote-agent-tools.js'
-import {
-    createLocalAgentToolRegistration,
-    createDynamicSpawnRegistrations,
-} from './builder/build-effect/local-agent-tools.js'
-import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
@@ -50,11 +36,9 @@ import type { ContextProfile } from '@reactive-agents/reasoning'
 import type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 import type { CalibrationMode } from './types.js'
 import type {
-    ToolDefinition,
     ResultCompressionConfig,
     ShellExecuteConfig,
 } from '@reactive-agents/tools'
-import { shellExecuteTool, shellExecuteHandler } from '@reactive-agents/tools'
 import type { RemoteAgentClient } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
 import type { StreamDensity } from './stream-types.js'
