@@ -18,6 +18,11 @@ import { fetchAndMergePricing } from './builder/build-effect/pricing-fetch.js'
 import { setupParentContext } from './builder/build-effect/parent-context.js'
 import { buildToolMcpRegistrations } from './builder/build-effect/tool-mcp-registrations.js'
 import { instantiateAgent } from './builder/build-effect/agent-instantiation.js'
+import {
+    reactiveAgentsFromConfig,
+    reactiveAgentsFromJSON,
+    invokeUserHookSafely,
+} from './builder/api-surface.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -121,93 +126,12 @@ export const ReactiveAgents = {
     /**
      * Create a new agent builder with defaults.
      * All builder methods are optional; no configuration is required at creation time.
-     *
-     * @returns A new `ReactiveAgentBuilder` instance
      */
     create: (): ReactiveAgentBuilder => new ReactiveAgentBuilder(),
-
-    /**
-     * Reconstruct a builder from an AgentConfig object.
-     *
-     * The returned builder is fully configured and can be further customized
-     * with additional builder methods before calling `.build()`.
-     *
-     * @param config - AgentConfig to reconstruct from
-     * @returns A configured ReactiveAgentBuilder
-     * @example
-     * ```typescript
-     * const builder = ReactiveAgents.fromConfig(savedConfig);
-     * const agent = await builder.build();
-     * ```
-     */
-    fromConfig: async (
-        config: import('./agent-config.js').AgentConfig
-    ): Promise<ReactiveAgentBuilder> => {
-        const { agentConfigToBuilder } = await import('./agent-config.js')
-        return agentConfigToBuilder(config)
-    },
-
-    /**
-     * Reconstruct a builder from a JSON string containing an AgentConfig.
-     *
-     * Parses and validates the JSON before reconstructing the builder.
-     * Throws a ParseError if the JSON is invalid.
-     *
-     * @param json - JSON string containing a serialized AgentConfig
-     * @returns A configured ReactiveAgentBuilder
-     * @example
-     * ```typescript
-     * const builder = await ReactiveAgents.fromJSON(configJson);
-     * const agent = await builder.build();
-     * ```
-     */
-    fromJSON: async (json: string): Promise<ReactiveAgentBuilder> => {
-        const { agentConfigFromJSON, agentConfigToBuilder } = await import(
-            './agent-config.js'
-        )
-        const config = agentConfigFromJSON(json)
-        return agentConfigToBuilder(config)
-    },
-}
-
-/**
- * Run a user lifecycle hook and route any escaping error to the builder's
- * `_errorHandler` (when set) or `console.warn` (fallback). Resolves HS-14 (#74):
- * hook errors are no longer silently discarded.
- */
-async function invokeUserHookSafely(
-    self: ReactiveAgentBuilder,
-    hook: LifecycleHook,
-    ctx: { phase: string; iteration: number },
-): Promise<void> {
-    const surface = (err: unknown): void => {
-        const handler = (self as unknown as { _errorHandler?: (e: RuntimeErrors | Error, c: { taskId: string; phase: string; iteration: number; lastStep?: string }) => void })._errorHandler
-        const normalized = err instanceof Error ? err : new Error(String(err))
-        if (handler) {
-            try {
-                handler(normalized, { taskId: '', phase: ctx.phase, iteration: ctx.iteration })
-            } catch {
-                // Handler-of-handler crash: swallow to avoid recursion; preserve original via console.warn
-                console.warn('[reactive-agents] error handler crashed while reporting lifecycle hook failure:', normalized)
-            }
-            return
-        }
-        console.warn('[reactive-agents] lifecycle hook threw (no errorHandler registered):', normalized)
-    }
-    let result: unknown
-    try {
-        result = hook.handler({ phase: ctx.phase, iteration: ctx.iteration } as ExecutionContext)
-    } catch (err) {
-        surface(err)
-        return
-    }
-    if (result && typeof (result as { then?: unknown }).then === 'function') {
-        try {
-            await (result as Promise<unknown>)
-        } catch (err) {
-            surface(err)
-        }
-    }
+    /** Reconstruct a builder from an AgentConfig object. */
+    fromConfig: reactiveAgentsFromConfig,
+    /** Reconstruct a builder from a JSON string containing an AgentConfig. */
+    fromJSON: reactiveAgentsFromJSON,
 }
 
 /**
