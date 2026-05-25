@@ -1,8 +1,4 @@
-import {
-    Effect,
-    Layer,
-    ManagedRuntime,
-} from 'effect'
+import { Effect, Layer } from 'effect'
 // createRuntime usage extracted to ./builder/build-effect/runtime-construction.ts (W25-B step 7)
 // createLightRuntime is no longer used directly from builder.ts.
 import type { MCPServerConfig } from './runtime.js'
@@ -15,19 +11,13 @@ import {
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
 export { deriveGoalAchieved } from './builder/helpers.js'
 import { serializeBuilder } from './builder/to-config.js'
-import {
-    buildSubAgentTask,
-    type SubAgentTaskArgs as ExtractedSubAgentTaskArgs,
-} from './builder/build-effect/sub-agent-executor.js'
-import { createRemoteAgentToolRegistration } from './builder/build-effect/remote-agent-tools.js'
-import {
-    createLocalAgentToolRegistration,
-    createDynamicSpawnRegistrations,
-} from './builder/build-effect/local-agent-tools.js'
-import { buildToolInitLayer } from './builder/build-effect/tool-init-layer.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
+import { fetchAndMergePricing } from './builder/build-effect/pricing-fetch.js'
+import { setupParentContext } from './builder/build-effect/parent-context.js'
+import { buildToolMcpRegistrations } from './builder/build-effect/tool-mcp-registrations.js'
+import { instantiateAgent } from './builder/build-effect/agent-instantiation.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -46,11 +36,9 @@ import type { ContextProfile } from '@reactive-agents/reasoning'
 import type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 import type { CalibrationMode } from './types.js'
 import type {
-    ToolDefinition,
     ResultCompressionConfig,
     ShellExecuteConfig,
 } from '@reactive-agents/tools'
-import { shellExecuteTool, shellExecuteHandler } from '@reactive-agents/tools'
 import type { RemoteAgentClient } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
 import type { StreamDensity } from './stream-types.js'
@@ -2122,23 +2110,15 @@ export class ReactiveAgentBuilder {
                 }
             }
 
-            // Automatically fetch remote pricing if a provider was configured
-            if (self._pricingProvider) {
-                try {
-                    const remotePricing =
-                        yield* self._pricingProvider.fetchPricing()
-                    self._pricingRegistry = {
-                        ...self._pricingRegistry,
-                        ...remotePricing,
-                    }
-                } catch (e) {
-                    if (self._strictValidation) {
-                        return yield* Effect.fail(e as Error)
-                    }
-                    console.warn(
-                        `[Pricing] Failed to fetch dynamic pricing — falling back to static map. ${e}`
-                    )
-                }
+            // Automatically fetch remote pricing if a provider was configured.
+            // Extracted to ./builder/build-effect/pricing-fetch.ts (W26-B step 1).
+            {
+                const { registry } = yield* fetchAndMergePricing({
+                    pricingProvider: self._pricingProvider,
+                    pricingRegistry: self._pricingRegistry,
+                    strict: self._strictValidation,
+                })
+                self._pricingRegistry = registry
             }
 
             const agentId = self._stableAgentId ?? `${self._name}-${Date.now()}`
@@ -2191,60 +2171,13 @@ export class ReactiveAgentBuilder {
                 yield* engine.registerHook(hook)
             }
 
-            // Mutable ref for parent execution context — updated by the execution
-            // engine during the ACT phase so sub-agent handlers can read the parent's
-            // accumulated tool results and forward them as context.
-            let parentExecutionContextRef: {
-                toolResults: Array<{ toolName: string; result: string }>
-                taskDescription?: string
-            } | null = null
+            // Parent-context wiring for sub-agent registrations.
+            // Extracted to ./builder/build-effect/parent-context.ts (W26-B step 2).
+            const parentCtx = setupParentContext()
+            const getParentContext = parentCtx.getParentContext
 
-            /** Lazily read parent context from the mutable ref. */
-            const getParentContext = ():
-                | import('@reactive-agents/tools').ParentContext
-                | undefined => {
-                if (!parentExecutionContextRef) return undefined
-                const ctx = parentExecutionContextRef
-                const items: Array<{ toolName: string; result: string }> =
-                    ctx.toolResults ?? []
-                if (items.length === 0 && !ctx.taskDescription) return undefined
-                return {
-                    toolResults: items.map((tr) => ({
-                        toolName: tr.toolName,
-                        result: tr.result,
-                    })),
-                    taskDescription: ctx.taskDescription,
-                }
-            }
-
-            // Register internal hook to capture parent context for sub-agent forwarding.
-            // Task description is pre-set by runEffect() before execution starts.
-            // This hook updates tool results after each ACT phase.
             if (agentTools.length > 0 || allowDynamicSubAgents) {
-                yield* engine.registerHook({
-                    phase: 'act' as const,
-                    timing: 'after' as const,
-                    handler: (ctx: ExecutionContext) =>
-                        Effect.sync(() => {
-                            const toolResults = (ctx.toolResults ?? []).map(
-                                (tr: any) => ({
-                                    toolName: String(
-                                        tr.toolName ?? tr.name ?? 'unknown'
-                                    ),
-                                    result: String(
-                                        tr.result ?? tr.output ?? ''
-                                    ).slice(0, 200),
-                                })
-                            )
-                            // Preserve task description set by runEffect(), update tool results
-                            parentExecutionContextRef = {
-                                toolResults,
-                                taskDescription:
-                                    parentExecutionContextRef?.taskDescription,
-                            }
-                            return ctx
-                        }),
-                })
+                yield* parentCtx.registerCaptureHook(engine)
             }
 
             // Register custom prompt templates if configured
@@ -2264,167 +2197,27 @@ export class ReactiveAgentBuilder {
             }
 
             // ── MCP servers, custom tools, agent tools: bake into the runtime layer ────
-            //
-            // Root cause of the scope bug: registrations done via `Effect.provide(runtime)`
-            // inside buildEffect() wrote into a ToolService from a throwaway scope. The
-            // ManagedRuntime used by run()/subscribe() creates a fresh scope on first use —
-            // so those registrations were invisible at execution time.
-            //
-            // Fix: Compose a Layer.effectDiscard into the runtime. The effectDiscard runs
-            // connectMCPServer() / register() during layer evaluation, INSIDE the
-            // ManagedRuntime scope. Because Layer.merge uses reference-identity memoization,
-            // the same ToolService instance (from baseRuntime) receives all registrations
-            // AND serves the engine — MCP tools are visible to the LLM.
-            let fullRuntime: Layer.Layer<unknown, unknown, unknown> =
-                runtimeWithCortex
-
-            if (
-                agentTools.length > 0 ||
-                allowDynamicSubAgents ||
-                mcpServers.length > 0 ||
-                (toolsOptions?.tools?.length ?? 0) > 0 ||
-                toolsOptions?.terminal !== undefined
-            ) {
-                const toolsMod = yield* Effect.promise(
-                    () => import('@reactive-agents/tools')
-                )
-
-                const {
-                    createAgentTool,
-                    createRemoteAgentTool,
-                    executeRemoteAgentTool,
-                } = toolsMod
-
-                // Collect (definition, handler) pairs — no registration yet.
-                type RegEntry = {
-                    def: ToolDefinition
-                    handler: (
-                        args: Record<string, unknown>
-                    ) => Effect.Effect<unknown, Error>
-                }
-                const registrations: RegEntry[] = []
-
-                for (const agentTool of agentTools) {
-                    if (agentTool.remoteUrl) {
-                        registrations.push(
-                            createRemoteAgentToolRegistration(
-                                {
-                                    name: agentTool.name,
-                                    remoteUrl: agentTool.remoteUrl,
-                                },
-                                {
-                                    createRemoteAgentTool,
-                                    executeRemoteAgentTool,
-                                }
-                            )
-                        )
-                    } else if (agentTool.agent) {
-                        registrations.push(
-                            createLocalAgentToolRegistration(agentTool, {
-                                toolsMod: {
-                                    createAgentTool,
-                                    createSubAgentExecutor:
-                                        toolsMod.createSubAgentExecutor,
-                                },
-                                agentId,
-                                getParentContext,
-                            })
-                        )
-                    }
-                }
-
-                // Mutable ref for the parent's ToolService — set during agentToolInitEffect,
-                // read by spawn handler at call time. This avoids duplicate MCP containers
-                // by letting sub-agents proxy tool calls through the parent's live connections.
-                let parentToolServiceRef: any = null
-
-                /** Per-task arguments for a single sub-agent dispatch. */
-                type SubAgentTaskArgs = {
-                    task: string
-                    name: string
-                    role?: string
-                    instructions?: string
-                    tone?: string
-                    tools?: string[]
-                }
-
-                // Register the built-in spawn-agent tool when dynamic sub-agents are enabled.
-                // The handler captures parentProvider/parentModel so spawned agents inherit
-                // the parent's LLM config without any extra wiring required.
-                if (allowDynamicSubAgents) {
-                    const defaultMaxIter =
-                        dynamicSubAgentOptions?.maxIterations ?? 4
-
-                    /**
-                     * Build and execute a single sub-agent task.
-                     * Shared by spawnHandler (singular) and spawnAgentsHandler (batch).
-                     *
-                     * Body lifted to ./builder/build-effect/sub-agent-executor.ts
-                     * (W25-T4). This wrapper captures local closure refs and
-                     * delegates — no behavior change.
-                     */
-                    const buildSingleSubAgentTask = (
-                        t: SubAgentTaskArgs
-                    ): Promise<
-                        import('@reactive-agents/tools').SubAgentResult
-                    > =>
-                        buildSubAgentTask(
-                            t as ExtractedSubAgentTaskArgs,
-                            {
-                                parentProvider,
-                                parentModel,
-                                defaultMaxIter,
-                                getParentToolService: () =>
-                                    parentToolServiceRef,
-                                mcpServers,
-                                parentReasoningOptions,
-                                parentEnableGuardrails,
-                                parentEnableObservability,
-                                parentObservabilityOptions,
-                                parentContextProfile,
-                                parentEnableCostTracking,
-                                getParentContext,
-                                toolsMod: {
-                                    createSubAgentExecutor:
-                                        toolsMod.createSubAgentExecutor,
-                                    ALWAYS_INCLUDE_TOOLS:
-                                        toolsMod.ALWAYS_INCLUDE_TOOLS,
-                                },
-                            }
-                        )
-
-                    for (const reg of createDynamicSpawnRegistrations({
-                        toolsMod: {
-                            createSpawnAgentTool: toolsMod.createSpawnAgentTool,
-                            createSpawnAgentsTool:
-                                toolsMod.createSpawnAgentsTool,
-                        },
-                        buildSubAgentTask: buildSingleSubAgentTask,
-                    })) {
-                        registrations.push(reg)
-                    }
-                }
-
-                // agentToolInitEffect body extracted to ./builder/build-effect/tool-init-layer.ts (W25-B step 3c)
-                const toolInitLayer = buildToolInitLayer(
+            // Extracted to ./builder/build-effect/tool-mcp-registrations.ts (W26-B step 3).
+            const { fullRuntime: fullRuntimeAfterTools } =
+                yield* buildToolMcpRegistrations({
                     runtimeWithCortex,
-                    {
-                        toolsMod: {
-                            ToolService: toolsMod.ToolService,
-                        },
-                        mcpServers,
-                        toolsOptions,
-                        registrations,
-                        shellExecuteTool,
-                        shellExecuteHandler,
-                        onToolServiceResolved: (ts) => {
-                            parentToolServiceRef = ts
-                        },
-                    }
-                )
-
-                fullRuntime = Layer.merge(runtimeWithCortex, toolInitLayer)
-            }
+                    mcpServers,
+                    toolsOptions,
+                    agentTools,
+                    allowDynamicSubAgents,
+                    dynamicSubAgentOptions,
+                    agentId,
+                    getParentContext,
+                    parentProvider,
+                    parentModel,
+                    parentReasoningOptions,
+                    parentEnableGuardrails,
+                    parentEnableObservability,
+                    parentObservabilityOptions,
+                    parentContextProfile,
+                    parentEnableCostTracking,
+                })
+            let fullRuntime: Layer.Layer<unknown, unknown, unknown> = fullRuntimeAfterTools
 
             // RAG ingestion + meta-tool back-fill — extracted to ./builder/build-effect/rag-ingestion.ts (W25-B step 4)
             const ragStore = yield* ingestRagDocuments({
@@ -2447,57 +2240,23 @@ export class ReactiveAgentBuilder {
                 tracingConfig: self._tracingConfig,
             })
 
-            // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
-            // share the same layer scope and the same service instances
-            // (EventBus, KillSwitch, etc.).
-            //
-            // The cast to `Layer<any, never, never>` collapses three boundary
-            // facts that TS can't see through the `unknown` triple:
-            //   • RIn = never — every dynamically-merged sub-layer in
-            //     createRuntime has had its requirements satisfied internally
-            //     (see runtime.ts), so the composed layer has no unprovided
-            //     deps.
-            //   • E   = never — layer construction is total at this point;
-            //     init failures throw, not flow through E.
-            //   • ROut = any — the materialised service union is opaque (15+
-            //     conditional optional services). ReactiveAgent stores it as
-            //     `ManagedRuntime<any, never>` and resolves services
-            //     on-demand at the `runPromise` boundary.
-            // This single cast replaces the 6× `Layer<any, any>` casts that
-            // previously papered over the same boundary mismatch.
-            const managedRuntime = ManagedRuntime.make(
-                fullRuntime as unknown as Layer.Layer<any, never, never>,
-            )
-            return new ReactiveAgent(
+            // ManagedRuntime + ReactiveAgent construction extracted to
+            // ./builder/build-effect/agent-instantiation.ts (W26-B step 4).
+            return instantiateAgent({
                 engine,
+                fullRuntime,
                 agentId,
-                managedRuntime,
-                mcpServers.map((s) => s.name),
-                !!gatewayOptions,
-                gatewayOptions?.heartbeat?.intervalMs,
-                !!gatewayOptions?.heartbeat?.instruction,
-                gatewayOptions?.persistMemoryAcrossRuns === true,
+                mcpServerNames: mcpServers.map((s) => s.name),
+                gatewayOptions,
                 streamDensity,
-                // Pass a callback so run() can set the task description before execution starts.
-                // This ensures sub-agents spawned on the very first iteration have the full user prompt.
-                agentTools.length > 0 || allowDynamicSubAgents
-                    ? (desc: string) => {
-                          if (parentExecutionContextRef) {
-                              parentExecutionContextRef.taskDescription = desc
-                          } else {
-                              parentExecutionContextRef = {
-                                  toolResults: [],
-                                  taskDescription: desc,
-                              }
-                          }
-                      }
-                    : undefined,
+                hasParentCallbacks: agentTools.length > 0 || allowDynamicSubAgents,
+                parentCtxRef: parentCtx.ref,
                 errorHandler,
                 sessionPersist,
                 sessionMaxAgeDays,
                 ragStore,
-                self._channelsConfig,
-                {
+                channelsConfig: self._channelsConfig,
+                capabilities: {
                     minIterations: self._minIterations,
                     taskContext: self._taskContext,
                     progressCheckpoint: self._progressCheckpoint,
@@ -2505,8 +2264,8 @@ export class ReactiveAgentBuilder {
                     outputValidator: self._outputValidator,
                     outputValidatorOptions: self._outputValidatorOptions,
                     customTermination: self._customTermination,
-                }
-            )
+                },
+            })
         }) as Effect.Effect<ReactiveAgent, Error>
     }
 }
