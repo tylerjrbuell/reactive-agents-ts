@@ -250,7 +250,14 @@ Breakdown of new tests:
 
 - Reasoning test suite: 1328 → 1338 pass, 0 fail (no regressions; 10 net new).
 - Build: 38/38 cached + new, 34.6s end-to-end.
-- LLM spot-test parity probe deferred — not runnable in this session (no API/Ollama context). All deterministic test paths (TestLLMServiceLayer) green; the 6 migrated `decideSynthesisInput` tests already cover the placeholder-fix regression class. Sufficient to declare correctness held; live spot-test verification recommended before merge if/when an LLM endpoint is available.
+- **Live Ollama probe (qwen3.5:latest, 2026-05-25):** `apps/examples/src/reasoning/finalize-probe.ts`. Format-driven markdown-table task. Both strategies completed without crash, produced valid markdown tables with real values, zero placeholder leakage.
+
+  | Strategy | Status | hasTable | hasPlaceholder | Tokens | Duration |
+  |---|---|---|---|---|---|
+  | `reflexion` | completed | ✅ | ❌ none | 2797 | 30.3s |
+  | `plan-execute-reflect` | completed | ✅ | ❌ none | 7252 | 84.2s |
+
+  Output content matched (Mercury 4880, Venus 12104, Earth 12742, Mars 6779). Shared finalize.ts pipeline verified end-to-end on live LLM.
 
 ### E2 (drift-prevention contract)
 
