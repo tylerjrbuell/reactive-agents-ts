@@ -31,7 +31,7 @@ export function isSatisfied(text: string): boolean {
  * Uses normalized substring matching (no heavy Levenshtein needed).
  */
 export function isCritiqueStagnant(
-  previousCritiques: string[],
+  previousCritiques: readonly string[],
   newCritique: string,
 ): boolean {
   if (previousCritiques.length === 0) return false;
