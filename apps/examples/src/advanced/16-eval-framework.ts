@@ -16,8 +16,9 @@ import { ReactiveAgents } from "reactive-agents";
 import {
   EvalService,
   EvalServiceLive,
+  JudgeLLMService,
 } from "@reactive-agents/eval";
-import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
 export interface ExampleResult {
   passed: boolean;
@@ -81,14 +82,22 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     return result;
   });
 
-  // EvalServiceLive requires LLMService for LLM-as-judge scoring
-  // In test mode, provide TestLLMServiceLayer which returns deterministic responses
+  // EvalServiceLive requires JudgeLLMService (Rule 4 — frozen judge, separate
+  // code path from the SUT's LLMService). In test mode we build a deterministic
+  // JudgeLLMService by reusing TestLLMService's complete() through a thin adapter.
   const testLLMLayer = TestLLMServiceLayer([
     { match: "accuracy", text: "SCORE: 0.9\nRATIONALE: The output correctly identifies Paris as the capital of France." },
     { match: "relevance", text: "SCORE: 1.0\nRATIONALE: The answer is directly relevant to the question asked." },
     { text: "SCORE: 0.85\nRATIONALE: Good response." },
   ]);
-  const evalLayer = EvalServiceLive.pipe(Layer.provide(testLLMLayer));
+  const judgeLayer = Layer.effect(
+    JudgeLLMService,
+    Effect.gen(function* () {
+      const llm = yield* LLMService;
+      return { complete: llm.complete };
+    }),
+  ).pipe(Layer.provide(testLLMLayer));
+  const evalLayer = EvalServiceLive.pipe(Layer.provide(judgeLayer));
 
   const evalResult = await Effect.runPromise(
     evalProgram.pipe(Effect.provide(evalLayer)),
