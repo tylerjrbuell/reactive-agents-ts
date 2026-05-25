@@ -31,6 +31,7 @@ import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
 import { fetchAndMergePricing } from './builder/build-effect/pricing-fetch.js'
 import { setupParentContext } from './builder/build-effect/parent-context.js'
 import { buildToolMcpRegistrations } from './builder/build-effect/tool-mcp-registrations.js'
+import { instantiateAgent } from './builder/build-effect/agent-instantiation.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -2255,57 +2256,23 @@ export class ReactiveAgentBuilder {
                 tracingConfig: self._tracingConfig,
             })
 
-            // Create a ManagedRuntime so all facade calls (run, subscribe, pause, etc.)
-            // share the same layer scope and the same service instances
-            // (EventBus, KillSwitch, etc.).
-            //
-            // The cast to `Layer<any, never, never>` collapses three boundary
-            // facts that TS can't see through the `unknown` triple:
-            //   • RIn = never — every dynamically-merged sub-layer in
-            //     createRuntime has had its requirements satisfied internally
-            //     (see runtime.ts), so the composed layer has no unprovided
-            //     deps.
-            //   • E   = never — layer construction is total at this point;
-            //     init failures throw, not flow through E.
-            //   • ROut = any — the materialised service union is opaque (15+
-            //     conditional optional services). ReactiveAgent stores it as
-            //     `ManagedRuntime<any, never>` and resolves services
-            //     on-demand at the `runPromise` boundary.
-            // This single cast replaces the 6× `Layer<any, any>` casts that
-            // previously papered over the same boundary mismatch.
-            const managedRuntime = ManagedRuntime.make(
-                fullRuntime as unknown as Layer.Layer<any, never, never>,
-            )
-            return new ReactiveAgent(
+            // ManagedRuntime + ReactiveAgent construction extracted to
+            // ./builder/build-effect/agent-instantiation.ts (W26-B step 4).
+            return instantiateAgent({
                 engine,
+                fullRuntime,
                 agentId,
-                managedRuntime,
-                mcpServers.map((s) => s.name),
-                !!gatewayOptions,
-                gatewayOptions?.heartbeat?.intervalMs,
-                !!gatewayOptions?.heartbeat?.instruction,
-                gatewayOptions?.persistMemoryAcrossRuns === true,
+                mcpServerNames: mcpServers.map((s) => s.name),
+                gatewayOptions,
                 streamDensity,
-                // Pass a callback so run() can set the task description before execution starts.
-                // This ensures sub-agents spawned on the very first iteration have the full user prompt.
-                agentTools.length > 0 || allowDynamicSubAgents
-                    ? (desc: string) => {
-                          if (parentCtx.ref.current) {
-                              parentCtx.ref.current.taskDescription = desc
-                          } else {
-                              parentCtx.ref.current = {
-                                  toolResults: [],
-                                  taskDescription: desc,
-                              }
-                          }
-                      }
-                    : undefined,
+                hasParentCallbacks: agentTools.length > 0 || allowDynamicSubAgents,
+                parentCtxRef: parentCtx.ref,
                 errorHandler,
                 sessionPersist,
                 sessionMaxAgeDays,
                 ragStore,
-                self._channelsConfig,
-                {
+                channelsConfig: self._channelsConfig,
+                capabilities: {
                     minIterations: self._minIterations,
                     taskContext: self._taskContext,
                     progressCheckpoint: self._progressCheckpoint,
@@ -2313,8 +2280,8 @@ export class ReactiveAgentBuilder {
                     outputValidator: self._outputValidator,
                     outputValidatorOptions: self._outputValidatorOptions,
                     customTermination: self._customTermination,
-                }
-            )
+                },
+            })
         }) as Effect.Effect<ReactiveAgent, Error>
     }
 }
