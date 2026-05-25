@@ -15,7 +15,7 @@
 // For multi-iteration agent behavior (the typical case), use `reactive` or
 // `adaptive` strategies. `direct` is intentionally minimal.
 import { Effect } from "effect";
-import type { ReasoningResult, ReasoningStrategy } from "../types/index.js";
+import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -27,7 +27,7 @@ import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
-import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
+import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 
 // ── DirectInput ───────────────────────────────────────────────────────────────
 
@@ -174,10 +174,10 @@ export const executeDirect = (
 
     const output = state.output ?? null;
 
-    yield* emitLog({
-      _tag: "phase_complete",
+    yield* emitPhaseEnd({
+      emitLog,
       phase: "direct:kernel",
-      duration: Date.now() - start,
+      startedAt: start,
       status: state.status === "failed" ? "error" : "success",
     });
 
@@ -189,13 +189,8 @@ export const executeDirect = (
     });
 
     return buildStrategyResult({
-      // Cast to bypass a TS resolution quirk: when the reasoning package
-      // resolves @reactive-agents/core to its dist d.ts under certain build
-      // contexts, the cached "5-strategy" literal can shadow the source's
-      // 6-strategy one. The literal value is correct ("direct" exists in
-      // ReasoningStrategy); test suite confirms runtime behavior.
-      strategy: "direct" as ReasoningStrategy,
-      steps: [...state.steps],
+      strategy: "direct",
+      steps: state.steps,
       output,
       status: state.status === "failed" ? "failed" : state.status === "done" ? "completed" : "partial",
       start,

@@ -16,24 +16,29 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
-import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { runPass } from "../kernel/loop/run-pass.js";
+import {
+  iterateUntil,
+  continueWith,
+  terminateWith,
+} from "../kernel/loop/iterate-until.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
 import {
+  makeStrategyEmitLog,
+  emitPhaseEnd,
   resolveStrategyServices,
   compilePromptOrFallback,
   publishReasoningStep,
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
-import { extractThinking, extractThinkingSafeContent, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
-import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
 import {
-  validateOutputFormat,
-  validateContentCompleteness,
-  buildSynthesisPrompt,
-} from "../kernel/loop/output-synthesis.js";
+  enforceQualityGate,
+  collectToolData,
+  decideSynthesisInput,
+} from "../kernel/loop/finalize.js";
+import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -99,10 +104,7 @@ export const executeReflexion = (
     const { maxRetries, selfCritiqueDepth } = input.config.strategies.reflexion;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
-    let totalTokens = 0;
-    let totalCost = 0;
-    let attempt = 0;
-    let previousCritiques: string[] = input.priorCritiques
+    const seedCritiques: readonly string[] = input.priorCritiques
       ? [...input.priorCritiques]
       : [];
     const capabilitySnapshot = yield* resolveExecutableToolCapabilities({
@@ -130,7 +132,7 @@ export const executeReflexion = (
       ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
       : undefined;
 
-    const genState = yield* runKernel(reactKernel, {
+    const genPass = yield* runPass(reactKernel, {
       task: buildGenerationPrompt(input, null),
       systemPrompt: genSystemPrompt,
       priorContext: genPriorContext,
@@ -156,35 +158,11 @@ export const executeReflexion = (
       temperature: 0.7,
     });
 
-    let currentResponse = genState.output
-      ?? [...genState.steps].filter((s) => s.type === "thought").pop()?.content
-      ?? "";
-    let lastKernelSteps = [...genState.steps]; // Track kernel steps for critique context
-    let allSideEffectSteps = [...genState.steps]; // Accumulate ALL steps for side-effect tracking
-    // Conversation thread carried across passes. Kernel's `initialMessages`
-    // input is the native carrier for tool_result evidence — threading it into
-    // improve passes lets the model synthesize from real values rather than
-    // re-stating placeholders from a stringified summary.
-    let runningMessages: readonly KernelMessage[] = genState.messages;
-    totalTokens += genState.tokens;
-    totalCost += genState.cost;
+    const initialResponse = genPass.output ?? "";
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "reflexion:generate",
-      duration: Date.now() - start,
-      status: "success",
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "reflexion:generate", startedAt: start, totalTokens: genPass.tokens });
 
-    yield* emitLog({
-      _tag: "metric",
-      name: "tokens_used",
-      value: totalTokens,
-      unit: "tokens",
-      timestamp: new Date(),
-    });
-
-    steps.push(makeStep("thought", `[ATTEMPT 1] ${currentResponse}`));
+    steps.push(makeStep("thought", `[ATTEMPT 1] ${initialResponse}`));
 
     yield* publishReasoningStep(ebOpt, {
       _tag: "ReasoningStepCompleted",
@@ -192,327 +170,272 @@ export const executeReflexion = (
       strategy: "reflexion",
       step: steps.length,
       totalSteps: maxRetries + 1,
-      thought: `[ATTEMPT 1] ${currentResponse}`,
+      thought: `[ATTEMPT 1] ${initialResponse}`,
       kernelPass: "reflexion:generate",
     });
 
-    // ── LOOP: Reflect → Improve ──
-    while (attempt < maxRetries) {
-      attempt++;
-
-      yield* emitLog({
-        _tag: "iteration",
-        iteration: attempt,
-        phase: "thought",
-        summary: `Reflexion attempt ${attempt}`,
-        timestamp: new Date(),
-      });
-
-      // HS-113 / E2: outer-loop snapshot at each reflexion-improve boundary.
-      yield* emitKernelStateSnapshot({
-        state: {
-          status: "evaluating" as const,
-          steps: steps.map((s) => ({ type: s.type })),
-          toolsUsed: new Set<string>(),
-          tokens: totalTokens,
-          cost: totalCost,
-        },
-        taskId: input.taskId ?? "reflexion",
-        iteration: attempt,
-        outerLoopName: "reflexion:improve",
-        outerIter: attempt,
-      });
-
-      yield* emitLog({ _tag: "phase_started", phase: "reflexion:critique", timestamp: new Date() });
-
-      // ── Reflect: self-critique the current response (pure LLM — no tools) ──
-      const critiqueDefaultFallback = input.systemPrompt
-        ? `${input.systemPrompt}\n\nYou are a critical evaluator. Analyze responses for accuracy, completeness, and quality.`
-        : "You are a critical evaluator. Analyze responses for accuracy, completeness, and quality.";
-
-      const critiqueSystemPrompt = yield* compilePromptOrFallback(
-        promptServiceOpt,
-        "reasoning.reflexion-critique",
-        {},
-        critiqueDefaultFallback,
-      );
-
-      const critiqueResponse = yield* llm
-        .complete({
-          messages: [
-            {
-              role: "user",
-              content: buildCritiquePrompt(
-                input.taskDescription,
-                currentResponse,
-                selfCritiqueDepth,
-                previousCritiques,
-                lastKernelSteps,
-              ),
-            },
-          ],
-          systemPrompt: withEnvContext(critiqueSystemPrompt),
-          maxTokens: selfCritiqueDepth === "deep" ? 2500 : THINKING_SAFE_MIN_TOKENS,
-          temperature: 0.3, // low temp for objective critique
-        })
-        .pipe(
-          Effect.mapError(
-            (err) =>
-              new ExecutionError({
-                strategy: "reflexion",
-                message: `Self-critique failed at attempt ${attempt}`,
-                step: attempt,
-                cause: err,
-              }),
-          ),
-        );
-
-      // Strip <think> blocks from critique. If the model put the entire
-      // critique inside <think>, fall back to the thinking content so
-      // satisfaction/stagnation detection still works.
-      // When Ollama's think:true is active, the provider separates thinking
-      // into response.thinking — content may already be empty.
-      const { thinking: critiqueThinking, content: cleanCritique } =
-        extractThinking(critiqueResponse.content);
-      const providerThinking = (critiqueResponse as any).thinking as string | undefined;
-      const critique = cleanCritique || critiqueThinking || providerThinking || critiqueResponse.content;
-      totalTokens += critiqueResponse.usage.totalTokens;
-      totalCost += critiqueResponse.usage.estimatedCost;
-
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "reflexion:critique",
-        duration: Date.now() - start,
-        status: "success",
-      });
-
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
-
-      // HS-cleanup-1: framework instrumentation — tag so output-assembly +
-      // arbitrator skip this step when assembling user-facing answer.
-      steps.push(
-        makeStep("observation", `[CRITIQUE ${attempt}] ${critique}`, {
-          frameworkInstrumentation: "critique-marker",
-        }),
-      );
-
-      yield* publishReasoningStep(ebOpt, {
-        _tag: "ReasoningStepCompleted",
-        taskId: input.taskId ?? "reflexion",
-        strategy: "reflexion",
-        step: steps.length,
-        totalSteps: maxRetries + 1,
-        observation: `[CRITIQUE ${attempt}] ${critique}`,
-        kernelPass: `reflexion:critique-${attempt}`,
-      });
-
-      // ── Stagnation check: exit early if critique isn't changing ──
-      if (isCritiqueStagnant(previousCritiques, critique)) {
-        yield* emitLog({
-          _tag: "warning",
-          message: `Critique stagnant after ${attempt} attempts, exiting early`,
-          context: "reflexion",
-          timestamp: new Date(),
-        });
-        const gated = yield* enforceOutputQualityGate({
-          llm,
-          taskDescription: input.taskDescription,
-          output: currentResponse,
-          toolData: collectToolData(runningMessages),
-        });
-        totalTokens += gated.tokens;
-        totalCost += gated.cost;
-        return buildStrategyResult({
-          strategy: "reflexion",
-          steps,
-          output: gated.output,
-          status: "partial",
-          start,
-          totalTokens,
-          totalCost,
-          extraMetadata: { confidence: 0.4, reflexionCritiques: previousCritiques },
-        });
-      }
-
-      // ── Check if satisfied ──
-      if (isSatisfied(critique)) {
-        const gated = yield* enforceOutputQualityGate({
-          llm,
-          taskDescription: input.taskDescription,
-          output: currentResponse,
-          toolData: collectToolData(runningMessages),
-        });
-        totalTokens += gated.tokens;
-        totalCost += gated.cost;
-
-        yield* emitLog({
-          _tag: "completion",
-          success: true,
-          summary: `Reflexion completed successfully after ${attempt} attempts`,
-          timestamp: new Date(),
-        });
-
-        yield* publishReasoningStep(ebOpt, {
-          _tag: "FinalAnswerProduced",
-          taskId: input.taskId ?? "reflexion",
-          strategy: "reflexion",
-          answer: gated.output,
-          iteration: attempt,
-          totalTokens,
-          kernelPass: `reflexion:improve-${attempt}`,
-        });
-        return buildStrategyResult({
-          strategy: "reflexion",
-          steps,
-          output: gated.output,
-          status: "completed",
-          start,
-          totalTokens,
-          totalCost,
-          extraMetadata: {
-            confidence: Math.max(0.6, 1 - (attempt / 3) * 0.3),
-            reflexionCritiques: previousCritiques,
-          },
-        });
-      }
-
-      previousCritiques.push(critique);
-
-      yield* emitLog({ _tag: "phase_started", phase: "reflexion:improve", timestamp: new Date() });
-
-      // ── Improve: generate a refined response (tool-aware via ReAct kernel) ──
-      const improveDefaultFallback = input.systemPrompt
-        ? `${input.systemPrompt}\n\nYour previous attempt had issues. Fix them by using the EXACT tool parameters from the task. Complete ALL required actions.`
-        : buildSystemPrompt(input.taskDescription);
-
-      const improveSystemPrompt = yield* compilePromptOrFallback(
-        promptServiceOpt,
-        "reasoning.reflexion-generate",
-        { task: input.taskDescription },
-        improveDefaultFallback,
-      );
-
-      // Build focused improvement task based on what was already done
-      const completedActions = buildCompletedActionsContext(lastKernelSteps);
-      const improvementTask = buildImprovementTask(input, previousCritiques, completedActions);
-      const improvePriorContext = paramHints
-        ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
-        : undefined;
-
-      // Hard side-effect guard: identify tools with side effects that already
-      // succeeded in ANY prior pass. The kernel will refuse to execute these.
-      const blockedTools = extractSuccessfulSideEffectTools(allSideEffectSteps);
-
-      const improveState = yield* runKernel(reactKernel, {
-        task: improvementTask,
-        systemPrompt: improveSystemPrompt,
-        priorContext: improvePriorContext,
-        // Carry the conversation thread (incl. tool_result messages) from the
-        // prior pass so the model can synthesize from already-retrieved values
-        // instead of re-stating placeholders. blockedTools still prevents
-        // re-execution of side-effect tools.
-        initialMessages: runningMessages,
-        availableToolSchemas: capabilitySnapshot.availableToolSchemas,
-        allToolSchemas: capabilitySnapshot.allToolSchemas,
-        resultCompression: input.resultCompression,
-        temperature: 0.6,
-        agentId: input.agentId,
-        sessionId: input.sessionId,
-        blockedTools,
-        requiredTools: input.requiredTools,
-        maxRequiredToolRetries: input.maxRequiredToolRetries,
-        synthesisConfig: input.synthesisConfig,
-        metaTools: input.metaTools,
-        briefResolvedSkills: input.briefResolvedSkills,
-      }, {
-        maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
-        strategy: "reflexion",
-        kernelType: "react",
-        taskId: input.taskId,
-        kernelPass: `reflexion:improve-${attempt}`,
-        modelId: input.modelId,
-        taskDescription: input.taskDescription,
-        temperature: 0.6,
-      });
-
-      const improveOutput = improveState.output
-        ?? [...improveState.steps].filter((s) => s.type === "thought").pop()?.content
-        ?? "";
-      currentResponse = improveOutput || currentResponse;
-      // Only replace critique evidence if improvement actually called tools;
-      // otherwise keep prior evidence so critique sees what was already done.
-      const improvementHadToolCalls = [...improveState.steps].some((s) => s.type === "action");
-      if (improvementHadToolCalls) {
-        lastKernelSteps = [...improveState.steps];
-      }
-      // Always accumulate all steps for side-effect tracking across passes
-      allSideEffectSteps = [...allSideEffectSteps, ...improveState.steps];
-      // Carry forward the full conversation thread (now includes this pass's
-      // new tool_result messages) for the next improve pass.
-      runningMessages = improveState.messages;
-      totalTokens += improveState.tokens;
-      totalCost += improveState.cost;
-
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "reflexion:improve",
-        duration: Date.now() - start,
-        status: "success",
-      });
-
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
-
-      steps.push(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${currentResponse}`));
-
-      yield* publishReasoningStep(ebOpt, {
-        _tag: "ReasoningStepCompleted",
-        taskId: input.taskId ?? "reflexion",
-        strategy: "reflexion",
-        step: steps.length,
-        totalSteps: maxRetries + 1,
-        thought: `[ATTEMPT ${attempt + 1}] ${currentResponse}`,
-        kernelPass: `reflexion:improve-${attempt}`,
-      });
+    // ── LOOP: Reflect → Improve (via iterateUntil combinator) ──
+    //
+    // State carried across iterations. Outer-scope `steps` (mutable
+    // accumulator), `emitLog`, `start`, `paramHints`, `capabilitySnapshot`,
+    // etc. are captured by closure — only iteration-mutating state lives in S.
+    interface ReflexionIterState {
+      readonly response: string;
+      readonly lastKernelSteps: readonly ReasoningStep[];
+      readonly allSideEffectSteps: readonly ReasoningStep[];
+      readonly runningMessages: readonly KernelMessage[];
+      readonly previousCritiques: readonly string[];
+      readonly totalTokens: number;
+      readonly totalCost: number;
     }
 
-    // Max retries reached — return the best response so far
-    const gated = yield* enforceOutputQualityGate({
+    const loopResult = yield* iterateUntil<ReflexionIterState, ExecutionError, LLMService>({
+      initial: {
+        response: initialResponse,
+        lastKernelSteps: genPass.steps,
+        allSideEffectSteps: genPass.steps,
+        runningMessages: genPass.messages,
+        previousCritiques: seedCritiques,
+        totalTokens: genPass.tokens,
+        totalCost: genPass.cost,
+      },
+      maxIters: maxRetries,
+      step: (s, attempt) =>
+        Effect.gen(function* () {
+          yield* emitLog({
+            _tag: "iteration",
+            iteration: attempt,
+            phase: "thought",
+            summary: `Reflexion attempt ${attempt}`,
+            timestamp: new Date(),
+          });
+
+          // HS-113 / E2: outer-loop snapshot at each reflexion-improve boundary.
+          yield* emitKernelStateSnapshot({
+            state: {
+              status: "evaluating" as const,
+              steps: steps.map((st) => ({ type: st.type })),
+              toolsUsed: new Set<string>(),
+              tokens: s.totalTokens,
+              cost: s.totalCost,
+            },
+            taskId: input.taskId ?? "reflexion",
+            iteration: attempt,
+            outerLoopName: "reflexion:improve",
+            outerIter: attempt,
+          });
+
+          yield* emitLog({ _tag: "phase_started", phase: "reflexion:critique", timestamp: new Date() });
+
+          // ── Reflect: self-critique the current response (pure LLM — no tools) ──
+          const critiqueDefaultFallback = input.systemPrompt
+            ? `${input.systemPrompt}\n\nYou are a critical evaluator. Analyze responses for accuracy, completeness, and quality.`
+            : "You are a critical evaluator. Analyze responses for accuracy, completeness, and quality.";
+
+          const critiqueSystemPrompt = yield* compilePromptOrFallback(
+            promptServiceOpt,
+            "reasoning.reflexion-critique",
+            {},
+            critiqueDefaultFallback,
+          );
+
+          const critiqueResult = yield* runCritiquePass({
+            llm,
+            systemPrompt: critiqueSystemPrompt,
+            promptBody: buildCritiquePrompt(
+              input.taskDescription,
+              s.response,
+              selfCritiqueDepth,
+              s.previousCritiques,
+              s.lastKernelSteps,
+            ),
+            depth: selfCritiqueDepth,
+            strategyName: "reflexion",
+            step: attempt,
+          });
+
+          const critique = critiqueResult.content || critiqueResult.thinking || "";
+          const tokensAfterCritique = s.totalTokens + critiqueResult.tokens;
+          const costAfterCritique = s.totalCost + critiqueResult.cost;
+
+          yield* emitPhaseEnd({ emitLog, phase: "reflexion:critique", startedAt: start, totalTokens: tokensAfterCritique });
+
+          // HS-cleanup-1: framework instrumentation — tag so output-assembly +
+          // arbitrator skip this step when assembling user-facing answer.
+          steps.push(
+            makeStep("observation", `[CRITIQUE ${attempt}] ${critique}`, {
+              frameworkInstrumentation: "critique-marker",
+            }),
+          );
+
+          yield* publishReasoningStep(ebOpt, {
+            _tag: "ReasoningStepCompleted",
+            taskId: input.taskId ?? "reflexion",
+            strategy: "reflexion",
+            step: steps.length,
+            totalSteps: maxRetries + 1,
+            observation: `[CRITIQUE ${attempt}] ${critique}`,
+            kernelPass: `reflexion:critique-${attempt}`,
+          });
+
+          // ── Stagnation check: exit early if critique isn't changing ──
+          if (isCritiqueStagnant(s.previousCritiques, critique)) {
+            yield* emitLog({
+              _tag: "warning",
+              message: `Critique stagnant after ${attempt} attempts, exiting early`,
+              context: "reflexion",
+              timestamp: new Date(),
+            });
+            return terminateWith(
+              { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
+              { kind: "stagnant", detail: `after ${attempt} attempts` },
+            );
+          }
+
+          if (isSatisfied(critique)) {
+            return terminateWith(
+              { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
+              { kind: "satisfied", detail: `after ${attempt} attempts` },
+            );
+          }
+
+          const updatedCritiques = [...s.previousCritiques, critique];
+
+          yield* emitLog({ _tag: "phase_started", phase: "reflexion:improve", timestamp: new Date() });
+
+          // ── Improve: generate a refined response (tool-aware via ReAct kernel) ──
+          const improveDefaultFallback = input.systemPrompt
+            ? `${input.systemPrompt}\n\nYour previous attempt had issues. Fix them by using the EXACT tool parameters from the task. Complete ALL required actions.`
+            : buildSystemPrompt(input.taskDescription);
+
+          const improveSystemPrompt = yield* compilePromptOrFallback(
+            promptServiceOpt,
+            "reasoning.reflexion-generate",
+            { task: input.taskDescription },
+            improveDefaultFallback,
+          );
+
+          const completedActions = buildCompletedActionsContext(s.lastKernelSteps);
+          const improvementTask = buildImprovementTask(input, updatedCritiques, completedActions);
+          const improvePriorContext = paramHints
+            ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
+            : undefined;
+
+          const blockedTools = extractSuccessfulSideEffectTools(s.allSideEffectSteps);
+
+          const improvePass = yield* runPass(reactKernel, {
+            task: improvementTask,
+            systemPrompt: improveSystemPrompt,
+            priorContext: improvePriorContext,
+            initialMessages: s.runningMessages,
+            availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+            allToolSchemas: capabilitySnapshot.allToolSchemas,
+            resultCompression: input.resultCompression,
+            temperature: 0.6,
+            agentId: input.agentId,
+            sessionId: input.sessionId,
+            blockedTools,
+            requiredTools: input.requiredTools,
+            maxRequiredToolRetries: input.maxRequiredToolRetries,
+            synthesisConfig: input.synthesisConfig,
+            metaTools: input.metaTools,
+            briefResolvedSkills: input.briefResolvedSkills,
+          }, {
+            maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
+            strategy: "reflexion",
+            kernelType: "react",
+            taskId: input.taskId,
+            kernelPass: `reflexion:improve-${attempt}`,
+            modelId: input.modelId,
+            taskDescription: input.taskDescription,
+            temperature: 0.6,
+          });
+
+          const newResponse = improvePass.output || s.response;
+          // Only replace critique evidence if improvement actually called tools.
+          const newLastKernelSteps = improvePass.hadToolCalls ? improvePass.steps : s.lastKernelSteps;
+          const newAllSideEffectSteps = [...s.allSideEffectSteps, ...improvePass.steps];
+          const tokensAfterImprove = tokensAfterCritique + improvePass.tokens;
+          const costAfterImprove = costAfterCritique + improvePass.cost;
+
+          yield* emitPhaseEnd({ emitLog, phase: "reflexion:improve", startedAt: start, totalTokens: tokensAfterImprove });
+
+          steps.push(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${newResponse}`));
+
+          yield* publishReasoningStep(ebOpt, {
+            _tag: "ReasoningStepCompleted",
+            taskId: input.taskId ?? "reflexion",
+            strategy: "reflexion",
+            step: steps.length,
+            totalSteps: maxRetries + 1,
+            thought: `[ATTEMPT ${attempt + 1}] ${newResponse}`,
+            kernelPass: `reflexion:improve-${attempt}`,
+          });
+
+          return continueWith<ReflexionIterState>({
+            response: newResponse,
+            lastKernelSteps: newLastKernelSteps,
+            allSideEffectSteps: newAllSideEffectSteps,
+            runningMessages: improvePass.messages,
+            previousCritiques: updatedCritiques,
+            totalTokens: tokensAfterImprove,
+            totalCost: costAfterImprove,
+          });
+        }),
+    });
+
+    // ── Single finalize path — replaces 3 duplicated build-result branches ──
+    const { final, reason, iters } = loopResult;
+    const gated = yield* enforceQualityGate({
       llm,
       taskDescription: input.taskDescription,
-      output: currentResponse,
-      toolData: collectToolData(runningMessages),
+      output: final.response,
+      toolData: collectToolData(final.runningMessages),
     });
-    totalTokens += gated.tokens;
-    totalCost += gated.cost;
+    const finalTokens = final.totalTokens + gated.tokens;
+    const finalCost = final.totalCost + gated.cost;
 
-    yield* emitLog({
-      _tag: "completion",
-      success: false,
-      summary: `Reflexion reached max retries (${maxRetries}) without full satisfaction`,
-      timestamp: new Date(),
-    });
+    if (reason.kind === "satisfied") {
+      yield* emitLog({
+        _tag: "completion",
+        success: true,
+        summary: `Reflexion completed successfully after ${iters} attempts`,
+        timestamp: new Date(),
+      });
+      yield* publishReasoningStep(ebOpt, {
+        _tag: "FinalAnswerProduced",
+        taskId: input.taskId ?? "reflexion",
+        strategy: "reflexion",
+        answer: gated.output,
+        iteration: iters,
+        totalTokens: finalTokens,
+        kernelPass: `reflexion:improve-${iters}`,
+      });
+    } else if (reason.kind === "max-iters") {
+      yield* emitLog({
+        _tag: "completion",
+        success: false,
+        summary: `Reflexion reached max retries (${maxRetries}) without full satisfaction`,
+        timestamp: new Date(),
+      });
+    }
+    // stagnant path already emitted its own warning inside the step body.
+
+    const status = reason.kind === "satisfied" ? "completed" : "partial";
+    const confidence =
+      reason.kind === "satisfied"
+        ? Math.max(0.6, 1 - (iters / 3) * 0.3)
+        : 0.4;
 
     return buildStrategyResult({
       strategy: "reflexion",
       steps,
       output: gated.output,
-      status: "partial",
+      status,
       start,
-      totalTokens,
-      totalCost,
-      extraMetadata: { confidence: 0.4, reflexionCritiques: previousCritiques },
+      totalTokens: finalTokens,
+      totalCost: finalCost,
+      extraMetadata: { confidence, reflexionCritiques: final.previousCritiques },
     });
   });
 
@@ -529,100 +452,6 @@ function buildSystemPrompt(taskDescription: string): string {
     `- Produce output directly — no offers, no "would you like me to...".\n\n` +
     `Task: ${taskDescription}`
   );
-}
-
-/**
- * Pure decision: does the gate need to invoke synthesis, and what raw
- * input should synthesis operate on?
- *
- * Exported for unit testing. Architectural rule: synthesis is a DATA → FORMAT
- * operation, not a "patch the draft" operation. When tool data is available,
- * synthesis sees the tool data (mirrors plan-execute). When it's not (pure
- * reasoning task), synthesis falls back to the draft.
- *
- * Synthesis fires when EITHER the format is wrong OR semantic completeness
- * fails (e.g. format-valid markdown with unfilled placeholders like
- * "[Insert BTC Price Here]" — common reflexion failure mode).
- */
-export function decideSynthesisInput(
-  output: string,
-  taskDescription: string,
-  toolData: string | undefined,
-): { needsSynthesis: boolean; rawForSynthesis: string } {
-  const intent = extractOutputFormat(taskDescription);
-  if (!intent.format) {
-    return { needsSynthesis: false, rawForSynthesis: output };
-  }
-  const validation = validateOutputFormat(output, intent.format);
-  const completeness = validateContentCompleteness(output, intent);
-  if (validation.valid && completeness.complete) {
-    return { needsSynthesis: false, rawForSynthesis: output };
-  }
-  const rawForSynthesis = toolData && toolData.length > 0 ? toolData : output;
-  return { needsSynthesis: true, rawForSynthesis };
-}
-
-function enforceOutputQualityGate(input: {
-  llm: LLMService["Type"];
-  taskDescription: string;
-  output: string;
-  /** Raw tool-result content extracted from the conversation thread. When
-   *  present, synthesis sees real retrieved values (not just the draft). */
-  toolData?: string;
-}): Effect.Effect<
-  { output: string; tokens: number; cost: number },
-  never,
-  never
-> {
-  const decision = decideSynthesisInput(
-    input.output,
-    input.taskDescription,
-    input.toolData,
-  );
-  if (!decision.needsSynthesis) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-  const intent = extractOutputFormat(input.taskDescription);
-  // intent.format guaranteed non-null when needsSynthesis=true
-  const synthesisPrompt = buildSynthesisPrompt(
-    decision.rawForSynthesis,
-    intent.format!,
-    input.taskDescription,
-  );
-
-  return input.llm
-    .complete({
-      messages: [{ role: "user", content: synthesisPrompt }],
-      systemPrompt: withEnvContext(undefined),
-      maxTokens: THINKING_SAFE_MIN_TOKENS,
-      temperature: 0.2,
-    })
-    .pipe(
-      Effect.map((response) => {
-        // Thinking-safe extraction prevents <think> blocks leaking into the
-        // user-facing synthesized output. Cascading fallback rescues responses
-        // that put the whole answer inside the thinking block.
-        const { content: safeContent } = extractThinkingSafeContent(response);
-        const candidate = safeContent.trim();
-        if (!candidate) {
-          return {
-            output: input.output,
-            tokens: response.usage.totalTokens,
-            cost: response.usage.estimatedCost,
-          };
-        }
-
-        const revalidation = validateOutputFormat(candidate, intent.format!);
-        return {
-          output: revalidation.valid ? candidate : input.output,
-          tokens: response.usage.totalTokens,
-          cost: response.usage.estimatedCost,
-        };
-      }),
-      Effect.catchAll(() =>
-        Effect.succeed({ output: input.output, tokens: 0, cost: 0 })
-      ),
-    );
 }
 
 function buildGenerationPrompt(
@@ -688,7 +517,7 @@ function extractToolParamHints(taskDescription: string): string | null {
  * Extract actionable fix instructions from critique text.
  * Turns verbose critique prose into concise bullet points.
  */
-function extractActionableFixes(critiques: string[]): string {
+function extractActionableFixes(critiques: readonly string[]): string {
   const lastCritique = critiques[critiques.length - 1] ?? "";
   const fixes: string[] = [];
 
@@ -718,7 +547,7 @@ function extractActionableFixes(critiques: string[]): string {
  */
 function buildImprovementTask(
   input: ReflexionInput,
-  previousCritiques: string[],
+  previousCritiques: readonly string[],
   completedActions: string,
 ): string {
   const parts: string[] = [];
@@ -814,7 +643,7 @@ function buildCritiquePrompt(
   taskDescription: string,
   response: string,
   depth: "shallow" | "deep",
-  previousCritiques: string[],
+  previousCritiques: readonly string[],
   executionSteps?: readonly ReasoningStep[],
 ): string {
   const deepInstructions =
@@ -922,7 +751,7 @@ function extractSuccessfulSideEffectTools(
   return [...blocked];
 }
 
-function buildCompactedCritiqueHistory(critiques: string[]): string {
+function buildCompactedCritiqueHistory(critiques: readonly string[]): string {
   if (critiques.length <= 3) {
     return critiques.map((c, i) => `${i + 1}. ${c}`).join("\n");
   }
@@ -931,17 +760,3 @@ function buildCompactedCritiqueHistory(critiques: string[]): string {
   return [...older, ...recent].join("\n");
 }
 
-/**
- * Extract raw tool_result content from the kernel conversation thread.
- * Used to feed the synthesis quality gate so it can fill template placeholders
- * with actual retrieved values instead of re-emitting the draft.
- */
-function collectToolData(messages: readonly KernelMessage[]): string {
-  const parts: string[] = [];
-  for (const m of messages) {
-    if (m.role === "tool_result" && !m.isError && m.content) {
-      parts.push(`[${m.toolName}] ${m.content}`);
-    }
-  }
-  return parts.join("\n");
-}

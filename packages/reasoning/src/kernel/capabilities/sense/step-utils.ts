@@ -43,7 +43,7 @@ export function makeStep(
  */
 export function buildStrategyResult(params: {
   strategy: ReasoningStrategy;
-  steps: ReasoningStep[];
+  steps: readonly ReasoningStep[];
   output: unknown;
   status: "completed" | "partial" | "failed";
   /** Date.now() captured at strategy start */

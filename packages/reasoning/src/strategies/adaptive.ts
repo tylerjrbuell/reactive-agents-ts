@@ -13,14 +13,17 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
+import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
-import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -177,10 +180,11 @@ export const executeAdaptive = (
         ),
       );
 
-    // Strip <think> blocks from classification to prevent thinking from
-    // being parsed as a strategy name.
+    // Thinking-safe extraction prevents thinking blocks from being parsed
+    // as strategy names AND rescues classifications trapped inside <think>
+    // (strict upgrade vs bare stripThinking).
     selectedStrategy = parseStrategySelection(
-      stripThinking(analysisResponse.content),
+      extractThinkingSafeContent(analysisResponse).content,
     );
     analysisTokens = analysisResponse.usage.totalTokens;
     analysisCost = analysisResponse.usage.estimatedCost;
@@ -201,12 +205,7 @@ export const executeAdaptive = (
     });
     } // end else (LLM classification path)
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "adaptive:select",
-      duration: Date.now() - start,
-      status: "success",
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "adaptive:select", startedAt: start });
 
     // ── HS-111 / M5 cost-aware downgrade ──
     //
@@ -284,12 +283,7 @@ export const executeAdaptive = (
     // ── Combine results ──
     const allSteps = [...steps, ...finalSubResult.steps];
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "adaptive:dispatch",
-      duration: Date.now() - start,
-      status: "success",
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "adaptive:dispatch", startedAt: start });
 
     // strategy: "adaptive" preserved for API consumers.
     // selectedStrategy in metadata surfaces what actually ran (e.g. "reactive")

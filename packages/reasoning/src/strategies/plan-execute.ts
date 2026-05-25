@@ -40,17 +40,18 @@ import {
   resolveStrategyServices,
   publishReasoningStep,
   makeStrategyEmitLog,
+  emitPhaseEnd,
 } from "../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
-import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
-import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
 import {
-  validateOutputFormat,
-  buildSynthesisPrompt,
-} from "../kernel/loop/output-synthesis.js";
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../kernel/capabilities/reason/stream-parser.js";
+import { enforceQualityGate } from "../kernel/loop/finalize.js";
+import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -190,20 +191,7 @@ export const executePlanExecute = (
       Math.ceil(planPrompt.length / 4);
     totalTokens += planTokenEst;
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "plan-execute:plan",
-      duration: Date.now() - start,
-      status: "success",
-    });
-
-    yield* emitLog({
-      _tag: "metric",
-      name: "tokens_used",
-      value: totalTokens,
-      unit: "tokens",
-      timestamp: new Date(),
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens });
 
     let plan: Plan = hydratePlan(planResult.data, {
       taskId: input.taskId ?? "plan-execute",
@@ -628,20 +616,7 @@ export const executePlanExecute = (
         }
       }
 
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "plan-execute:execute",
-        duration: Date.now() - start,
-        status: "success",
-      });
-
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
+      yield* emitPhaseEnd({ emitLog, phase: "plan-execute:execute", startedAt: start, totalTokens });
 
       yield* emitLog({ _tag: "phase_started", phase: "plan-execute:reflect", timestamp: new Date() });
 
@@ -679,49 +654,28 @@ export const executePlanExecute = (
         stepResults,
       );
 
-      const reflectResponse = yield* llm
-        .complete({
-          messages: [{ role: "user", content: reflectionPrompt }],
-          systemPrompt: withEnvContext(
-            input.systemPrompt
-              ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
-              : "You are evaluating plan execution. Determine if the task has been adequately addressed.",
-          ),
-          maxTokens: reflectionDepth === "deep" ? 2500 : THINKING_SAFE_MIN_TOKENS,
-          temperature: 0.3,
-        })
-        .pipe(
-          Effect.mapError(
-            (err) =>
-              new ExecutionError({
-                strategy: "plan-execute-reflect",
-                message: `Reflection failed at refinement ${refinement}`,
-                step: refinement,
-                cause: err,
-              }),
-          ),
-        );
+      const reflectSystemPrompt = input.systemPrompt
+        ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
+        : "You are evaluating plan execution. Determine if the task has been adequately addressed.";
 
-      totalTokens += reflectResponse.usage.totalTokens;
-      totalCost += reflectResponse.usage.estimatedCost;
-
-      // Strip <think> blocks from reflection before satisfaction check
-      const reflectionContent = stripThinking(reflectResponse.content);
-
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "plan-execute:reflect",
-        duration: Date.now() - start,
-        status: "success",
+      // Migrated to shared critique primitive — strict upgrade vs prior
+      // bare stripThinking: thinking-safe extraction now rescues reflections
+      // trapped inside <think> blocks (would have silently returned empty).
+      const reflectResult = yield* runCritiquePass({
+        llm,
+        systemPrompt: reflectSystemPrompt,
+        promptBody: reflectionPrompt,
+        depth: reflectionDepth,
+        strategyName: "plan-execute-reflect",
+        step: refinement,
       });
 
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
+      totalTokens += reflectResult.tokens;
+      totalCost += reflectResult.cost;
+
+      const reflectionContent = reflectResult.content;
+
+      yield* emitPhaseEnd({ emitLog, phase: "plan-execute:reflect", startedAt: start, totalTokens });
 
       // ── Entropy scoring + reactive controller for PER reflection iterations ──
       // Scores the reflection content as the "thought" of this iteration so the
@@ -931,7 +885,9 @@ export const executePlanExecute = (
 
         totalTokens += synthLlmResponse.usage.totalTokens;
         totalCost += synthLlmResponse.usage.estimatedCost;
-        finalOutput = stripThinking(synthLlmResponse.content);
+        // Strict upgrade vs bare stripThinking: rescues synthesized answers
+        // trapped inside <think> blocks (would have silently returned empty).
+        finalOutput = extractThinkingSafeContent(synthLlmResponse).content;
 
         steps.push(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
 
@@ -1028,7 +984,11 @@ export const executePlanExecute = (
     }
 
     if (finalOutput) {
-      const gated = yield* enforceOutputQualityGate({
+      // plan-execute's `finalOutput` already concatenates raw `[EXEC` tool
+      // observations, so the gate operates on the draft directly (no separate
+      // toolData harvest needed). Shared module upgrades synthesis to use
+      // thinking-safe extraction, rescuing answers trapped inside <think>.
+      const gated = yield* enforceQualityGate({
         llm,
         taskDescription: input.taskDescription,
         output: finalOutput,
@@ -1081,62 +1041,6 @@ interface StepExecResult {
    * AgentCompleted.terminationReason.
    */
   rawTerminatedBy?: string;
-}
-
-function enforceOutputQualityGate(input: {
-  llm: LLMService["Type"];
-  taskDescription: string;
-  output: string;
-}): Effect.Effect<
-  { output: string; tokens: number; cost: number },
-  never,
-  never
-> {
-  const intent = extractOutputFormat(input.taskDescription);
-  if (!intent.format) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-
-  const validation = validateOutputFormat(input.output, intent.format);
-  if (validation.valid) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-
-  const synthesisPrompt = buildSynthesisPrompt(
-    input.output,
-    intent.format,
-    input.taskDescription,
-  );
-
-  return input.llm
-    .complete({
-      messages: [{ role: "user", content: synthesisPrompt }],
-      systemPrompt: withEnvContext(undefined),
-      maxTokens: THINKING_SAFE_MIN_TOKENS,
-      temperature: 0.2,
-    })
-    .pipe(
-      Effect.map((response) => {
-        const candidate = stripThinking(response.content).trim();
-        if (!candidate) {
-          return {
-            output: input.output,
-            tokens: response.usage.totalTokens,
-            cost: response.usage.estimatedCost,
-          };
-        }
-
-        const revalidation = validateOutputFormat(candidate, intent.format);
-        return {
-          output: revalidation.valid ? candidate : input.output,
-          tokens: response.usage.totalTokens,
-          cost: response.usage.estimatedCost,
-        };
-      }),
-      Effect.catchAll(() =>
-        Effect.succeed({ output: input.output, tokens: 0, cost: 0 })
-      ),
-    );
 }
 
 /**
@@ -1319,7 +1223,9 @@ function executeStep(
       })
       .pipe(
         Effect.flatMap((response) => {
-          const output = stripFinalAnswerPrefix(stripThinking(response.content));
+          const output = stripFinalAnswerPrefix(
+            extractThinkingSafeContent(response).content,
+          );
           if (!output.trim()) {
             return Effect.fail(
               new ExecutionError({

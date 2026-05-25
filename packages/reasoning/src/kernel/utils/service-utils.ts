@@ -284,3 +284,43 @@ export function makeStrategyEmitLog(site: string): (event: LogEvent) => Effect.E
       ),
     );
 }
+
+/**
+ * Strategy phase-lifecycle emit helper.
+ *
+ * Replaces the duplicated `emitLog phase_complete (+ emitLog metric
+ * tokens_used)` block that appears at 12+ sites across 6 strategies. One
+ * call, no drift between sites on field names / shapes.
+ *
+ * - `status` defaults to "success" (historical default for most sites; pass
+ *   `"error"` for failure paths like `state.status === "failed" ? "error" : "success"`).
+ * - When `totalTokens` is provided, also emits the conventional
+ *   `metric:tokens_used` event right after — the recipe ~half the sites use.
+ *   Omit `totalTokens` for sites that only emit `phase_complete`.
+ * - `unit` is hard-coded to "tokens" (only value ever used; prevents typo drift).
+ */
+export function emitPhaseEnd(opts: {
+  readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
+  readonly phase: string;
+  readonly startedAt: number;
+  readonly totalTokens?: number;
+  readonly status?: "success" | "error";
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    yield* opts.emitLog({
+      _tag: "phase_complete",
+      phase: opts.phase,
+      duration: Date.now() - opts.startedAt,
+      status: opts.status ?? "success",
+    });
+    if (opts.totalTokens !== undefined) {
+      yield* opts.emitLog({
+        _tag: "metric",
+        name: "tokens_used",
+        value: opts.totalTokens,
+        unit: "tokens",
+        timestamp: new Date(),
+      });
+    }
+  });
+}

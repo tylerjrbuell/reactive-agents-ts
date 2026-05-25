@@ -16,9 +16,12 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
-import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
+import {
+  extractThinkingSafeContent,
+  THINKING_SAFE_MIN_TOKENS,
+} from "../kernel/capabilities/reason/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -331,9 +334,12 @@ export const executeTreeOfThought = (
         totalTokens += expansionResponse.usage.totalTokens;
         totalCost += expansionResponse.usage.estimatedCost;
 
-        // Strip <think> blocks from expansion to prevent thinking from
-        // being parsed as candidate thoughts.
-        const candidates = parseCandidates(stripThinking(expansionResponse.content), breadth);
+        // Thinking-safe extraction: rescues candidates trapped inside <think>
+        // (strict upgrade vs bare stripThinking).
+        const candidates = parseCandidates(
+          extractThinkingSafeContent(expansionResponse).content,
+          breadth,
+        );
 
         // Score each candidate
         for (const candidate of candidates) {
@@ -381,7 +387,9 @@ export const executeTreeOfThought = (
           totalTokens += scoreResponse.usage.totalTokens;
           totalCost += scoreResponse.usage.estimatedCost;
 
-          const score = parseScore(stripThinking(scoreResponse.content));
+          const score = parseScore(
+            extractThinkingSafeContent(scoreResponse).content,
+          );
 
           const node: ThoughtNode = {
             id: ulid(),
@@ -570,20 +578,7 @@ export const executeTreeOfThought = (
 
     steps.push(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`, { frameworkInstrumentation: "tot-marker" }));
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "tree-of-thought:explore",
-      duration: Date.now() - start,
-      status: "success",
-    });
-
-    yield* emitLog({
-      _tag: "metric",
-      name: "tokens_used",
-      value: totalTokens,
-      unit: "tokens",
-      timestamp: new Date(),
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:explore", startedAt: start, totalTokens });
 
     yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:execute", timestamp: new Date() });
 
@@ -624,12 +619,7 @@ export const executeTreeOfThought = (
       ?? [...execState.steps].filter((s) => s.type === "thought").pop()?.content
       ?? null;
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "tree-of-thought:execute",
-      duration: Date.now() - start,
-      status: "success",
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:execute", startedAt: start });
 
     yield* emitLog({
       _tag: "completion",
