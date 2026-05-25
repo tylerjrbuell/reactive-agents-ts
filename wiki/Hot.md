@@ -1,12 +1,26 @@
 ---
 aliases: [Recent Context]
 tags: [meta, session-start]
-updated: 2026-05-23
+updated: 2026-05-25
 ---
 
 # Hot (Recent Context Cache)
 
 **Purpose:** Quick lookup of last session state. Read this first at session start.
+
+---
+
+## Latest Session (2026-05-25) — execute-backlog HS-16 + PR #138
+
+**Bundle: providers-retry-error-accumulation** (commit `f3728a90`, PR #138 open)
+
+- ✅ #75 (HS-16) shipped — 5 LLM providers (anthropic, openai, gemini, local, litellm) now accumulate parse retry errors into `LLMParseError.attempts: ReadonlyArray<ParseAttemptError>` instead of overwriting `lastError = e`. `rawOutput` preserved for back-compat.
+- Verified-by: `grep -c parseAttempts.push` → 10 (5 × 2 sites). Workspace gate: build 38/38 + 5648 pass / 0 fail / +3 tests.
+- Drift report: all 5 cited line numbers drifted +58 to +190 lines; semantic pattern intact at every site.
+
+**Backlog hygiene (verification-comment-only, no code):**
+- #84 (4 `@internal` OpenAI exports leak) — barrel re-export only contains `OpenAIProviderLive`, doesn't leak the cited symbols. Recommended close pending reframe.
+- #93 (`focusedTools` typecheck red) — original `RuntimeOptions` error not present; current `@reactive-agents/runtime` typecheck red is now in test files (`unknown→never`), unrelated to original claim. Recommended close or rescope.
 
 ---
 
