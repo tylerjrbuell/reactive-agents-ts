@@ -231,6 +231,24 @@ REVIEW → run review-patterns; address findings
 COMMIT → conventional commit, citing GH issue numbers
 ```
 
+**RED authority check (added 2026-05-25 v10).** Before relying on a RED test to pin a missing type or field, check **two harness conditions** that can silently mask the RED:
+
+1. **Tests excluded from typecheck.** Run `rtk grep -A2 '"exclude"' packages/<X>/tsconfig.json` — if `"tests/**/*"` is excluded, missing-type errors in the RED test will NOT fail typecheck. The "RED" passes against pre-fix state at type level.
+2. **TaggedError / structural-type leniency.** Effect's `Data.TaggedError` stores any field passed to its constructor, even if the payload type doesn't declare it. `expect(err.newField).toBeDefined()` will pass against pre-fix state if the test constructs the error with `newField`. Same for plain TS structural types — passing extra properties to a struct constructor is accepted at runtime.
+
+When either holds, the RED is post-hoc regression coverage only — it doesn't prove the pre-fix state was broken. Acceptable; just note in the plan's risk register and don't claim "test failed before fix, passes after" in the retro unless you confirmed it. To strengthen RED authority for type fields: write a temporary `src/.test-types.ts` smoke file that imports and destructures the new field, run `tsc --noEmit` on src/, then delete the smoke file before commit. Overkill for most fixes; flag only when the pre-fix RED must be authoritative.
+
+(Reason: 2026-05-25 #75 spawn — RED test `parse-error-attempts.test.ts` was written expecting typecheck failure on `ParseAttemptError` not-yet-exported and `LLMParseError.attempts` not-yet-declared. Both conditions held: `packages/llm-provider/tsconfig.json` excludes tests; `Data.TaggedError` stored `attempts` field at runtime regardless of type declaration. The "RED" passed against pre-fix state. Fix still landed clean; lesson is to not over-claim RED→GREEN narrative in retros when these conditions hold.)
+
+**Single-area mechanical-scaffold bundle template (added 2026-05-25 v10).** When N sites in **one package** share an identical scaffold (same imports, same control flow, same fix shape), prefer **mechanical in-place edit** over helper extraction. Heuristic:
+
+| Condition | Action |
+|-----------|--------|
+| N ≤ 10 sites, same package, identical scaffold | Mechanical push/edit at each site. Verified-by = `grep -c '<new-pattern>'` returns N. |
+| N > 10 sites, OR scaffold spans packages, OR scaffold has 3+ divergent variants | Extract helper. Test helper directly with mocked inputs. |
+
+Mechanical edit wins on review surface (one shape to verify N times) and ships faster. Helper extraction trades that for de-duplication; only worth it when the dup cost exceeds the abstraction cost. (Reason: 2026-05-25 #75 — 5 providers × ~50 LOC identical retry loop. In-place push of 2 lines per provider beat extracting `parseStructuredWithRetry` helper on budget AND eliminated SDK-mock test complexity. Verified-by `grep -c parseAttempts.push` → 10 caught all sites in one check.)
+
 **Dead-cast sweep (added 2026-05-21 v5).** Before migrating each cited `as any` site through a new helper, check whether the underlying type already supports the access pattern (the schema may have been tightened since the cast was added; the cast was historic). Delete dead casts outright — lighter diff, no helper indirection, less maintenance. Procedure for each site:
 
 ```bash

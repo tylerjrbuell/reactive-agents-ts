@@ -29,12 +29,24 @@ export class LLMTimeoutError extends Data.TaggedError("LLMTimeoutError")<{
 }> {}
 
 /**
- * Structured output parse failure.
+ * One attempt's parse failure inside the structured-output retry loop.
+ * Carried by {@link LLMParseError.attempts}.
+ */
+export interface ParseAttemptError {
+  readonly attempt: number;
+  readonly error: unknown;
+}
+
+/**
+ * Structured output parse failure. `rawOutput` is the final attempt's error
+ * stringified (back-compat); `attempts` carries every attempt's error in order
+ * so the original parse failure is recoverable when retries mask later ones.
  */
 export class LLMParseError extends Data.TaggedError("LLMParseError")<{
   readonly message: string;
   readonly rawOutput: string;
   readonly expectedSchema: string;
+  readonly attempts?: ReadonlyArray<ParseAttemptError>;
 }> {}
 
 /**

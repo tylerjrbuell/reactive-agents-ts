@@ -108,7 +108,7 @@ export {
   LLMParseError,
   LLMContextOverflowError,
 } from "./errors.js";
-export type { LLMErrors } from "./errors.js";
+export type { LLMErrors, ParseAttemptError } from "./errors.js";
 
 // ─── Service Tags ───
 export { LLMService } from "./llm-service.js";
