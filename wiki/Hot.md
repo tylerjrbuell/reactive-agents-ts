@@ -10,17 +10,22 @@ updated: 2026-05-25
 
 ---
 
-## Latest Session (2026-05-25) — execute-backlog HS-16 + PR #138
+## Latest Session (2026-05-25) — execute-backlog double-shot: PRs #138 + #139
 
-**Bundle: providers-retry-error-accumulation** (commit `f3728a90`, PR #138 open)
+**Bundle 1 — providers-retry-error-accumulation** (PR [#138](https://github.com/tylerjrbuell/reactive-agents-ts/pull/138))
 
-- ✅ #75 (HS-16) shipped — 5 LLM providers (anthropic, openai, gemini, local, litellm) now accumulate parse retry errors into `LLMParseError.attempts: ReadonlyArray<ParseAttemptError>` instead of overwriting `lastError = e`. `rawOutput` preserved for back-compat.
-- Verified-by: `grep -c parseAttempts.push` → 10 (5 × 2 sites). Workspace gate: build 38/38 + 5648 pass / 0 fail / +3 tests.
-- Drift report: all 5 cited line numbers drifted +58 to +190 lines; semantic pattern intact at every site.
+- ✅ #75 (HS-16) — 5 LLM providers accumulate parse retry errors into `LLMParseError.attempts: ReadonlyArray<ParseAttemptError>` instead of overwriting `lastError = e`. `rawOutput` back-compat preserved.
 
-**Backlog hygiene (verification-comment-only, no code):**
-- #84 (4 `@internal` OpenAI exports leak) — barrel re-export only contains `OpenAIProviderLive`, doesn't leak the cited symbols. Recommended close pending reframe.
-- #93 (`focusedTools` typecheck red) — original `RuntimeOptions` error not present; current `@reactive-agents/runtime` typecheck red is now in test files (`unknown→never`), unrelated to original claim. Recommended close or rescope.
+**Bundle 2 — ri-handler-types-and-skill-resolver-tests** (PR [#139](https://github.com/tylerjrbuell/reactive-agents-ts/pull/139))
+
+- ✅ #85 (HS-29) — typed `asInterventionHandler<T>` helper in `intervention.ts`; 9 cast sites in `handlers/index.ts` + 9 adjacent sites in `dispatcher-compose-bridge.test.ts` wrapped. 5 baseline typecheck errors silenced.
+- ✅ #81 (HS-25) — `SkillResolverConfig.skipGlobalPaths?: boolean` plumbed to `discoverSkills()`; tests opt-in keeps fixtures hermetic; 2 `it.skip` blocks un-skipped (474 → 476 pass in RI).
+
+**Backlog hygiene (verification comments, no code):**
+- #84 (4 `@internal` OpenAI exports leak) — barrel doesn't re-export the cited symbols; recommended close pending reframe.
+- #93 (`focusedTools` typecheck red) — original error not reproducible; current RI typecheck red is unrelated test-file `unknown→never`; recommended close or rescope.
+
+**Skill amendments to `.agents/skills/execute-backlog/SKILL.md`:** v10 RED authority check (tests-excluded-from-typecheck + TaggedError leniency) + single-area mechanical-scaffold template. v11 adjacent-improvement detection at baseline + sed-after-Edit hazard.
 
 ---
 
