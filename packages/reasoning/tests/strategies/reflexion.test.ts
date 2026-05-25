@@ -1,7 +1,8 @@
 // File: tests/strategies/reflexion.test.ts
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import { executeReflexion, decideSynthesisInput } from "../../src/strategies/reflexion.js";
+import { executeReflexion } from "../../src/strategies/reflexion.js";
+import { decideSynthesisInput } from "../../src/kernel/loop/finalize.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 

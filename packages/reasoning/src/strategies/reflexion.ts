@@ -27,13 +27,12 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
-import { extractThinking, extractThinkingSafeContent, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
-import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
+import { extractThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import {
-  validateOutputFormat,
-  validateContentCompleteness,
-  buildSynthesisPrompt,
-} from "../kernel/loop/output-synthesis.js";
+  enforceQualityGate,
+  collectToolData,
+  decideSynthesisInput,
+} from "../kernel/loop/finalize.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -320,7 +319,7 @@ export const executeReflexion = (
           context: "reflexion",
           timestamp: new Date(),
         });
-        const gated = yield* enforceOutputQualityGate({
+        const gated = yield* enforceQualityGate({
           llm,
           taskDescription: input.taskDescription,
           output: currentResponse,
@@ -342,7 +341,7 @@ export const executeReflexion = (
 
       // ── Check if satisfied ──
       if (isSatisfied(critique)) {
-        const gated = yield* enforceOutputQualityGate({
+        const gated = yield* enforceQualityGate({
           llm,
           taskDescription: input.taskDescription,
           output: currentResponse,
@@ -488,7 +487,7 @@ export const executeReflexion = (
     }
 
     // Max retries reached — return the best response so far
-    const gated = yield* enforceOutputQualityGate({
+    const gated = yield* enforceQualityGate({
       llm,
       taskDescription: input.taskDescription,
       output: currentResponse,
@@ -529,100 +528,6 @@ function buildSystemPrompt(taskDescription: string): string {
     `- Produce output directly — no offers, no "would you like me to...".\n\n` +
     `Task: ${taskDescription}`
   );
-}
-
-/**
- * Pure decision: does the gate need to invoke synthesis, and what raw
- * input should synthesis operate on?
- *
- * Exported for unit testing. Architectural rule: synthesis is a DATA → FORMAT
- * operation, not a "patch the draft" operation. When tool data is available,
- * synthesis sees the tool data (mirrors plan-execute). When it's not (pure
- * reasoning task), synthesis falls back to the draft.
- *
- * Synthesis fires when EITHER the format is wrong OR semantic completeness
- * fails (e.g. format-valid markdown with unfilled placeholders like
- * "[Insert BTC Price Here]" — common reflexion failure mode).
- */
-export function decideSynthesisInput(
-  output: string,
-  taskDescription: string,
-  toolData: string | undefined,
-): { needsSynthesis: boolean; rawForSynthesis: string } {
-  const intent = extractOutputFormat(taskDescription);
-  if (!intent.format) {
-    return { needsSynthesis: false, rawForSynthesis: output };
-  }
-  const validation = validateOutputFormat(output, intent.format);
-  const completeness = validateContentCompleteness(output, intent);
-  if (validation.valid && completeness.complete) {
-    return { needsSynthesis: false, rawForSynthesis: output };
-  }
-  const rawForSynthesis = toolData && toolData.length > 0 ? toolData : output;
-  return { needsSynthesis: true, rawForSynthesis };
-}
-
-function enforceOutputQualityGate(input: {
-  llm: LLMService["Type"];
-  taskDescription: string;
-  output: string;
-  /** Raw tool-result content extracted from the conversation thread. When
-   *  present, synthesis sees real retrieved values (not just the draft). */
-  toolData?: string;
-}): Effect.Effect<
-  { output: string; tokens: number; cost: number },
-  never,
-  never
-> {
-  const decision = decideSynthesisInput(
-    input.output,
-    input.taskDescription,
-    input.toolData,
-  );
-  if (!decision.needsSynthesis) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-  const intent = extractOutputFormat(input.taskDescription);
-  // intent.format guaranteed non-null when needsSynthesis=true
-  const synthesisPrompt = buildSynthesisPrompt(
-    decision.rawForSynthesis,
-    intent.format!,
-    input.taskDescription,
-  );
-
-  return input.llm
-    .complete({
-      messages: [{ role: "user", content: synthesisPrompt }],
-      systemPrompt: withEnvContext(undefined),
-      maxTokens: THINKING_SAFE_MIN_TOKENS,
-      temperature: 0.2,
-    })
-    .pipe(
-      Effect.map((response) => {
-        // Thinking-safe extraction prevents <think> blocks leaking into the
-        // user-facing synthesized output. Cascading fallback rescues responses
-        // that put the whole answer inside the thinking block.
-        const { content: safeContent } = extractThinkingSafeContent(response);
-        const candidate = safeContent.trim();
-        if (!candidate) {
-          return {
-            output: input.output,
-            tokens: response.usage.totalTokens,
-            cost: response.usage.estimatedCost,
-          };
-        }
-
-        const revalidation = validateOutputFormat(candidate, intent.format!);
-        return {
-          output: revalidation.valid ? candidate : input.output,
-          tokens: response.usage.totalTokens,
-          cost: response.usage.estimatedCost,
-        };
-      }),
-      Effect.catchAll(() =>
-        Effect.succeed({ output: input.output, tokens: 0, cost: 0 })
-      ),
-    );
 }
 
 function buildGenerationPrompt(
@@ -931,17 +836,3 @@ function buildCompactedCritiqueHistory(critiques: string[]): string {
   return [...older, ...recent].join("\n");
 }
 
-/**
- * Extract raw tool_result content from the kernel conversation thread.
- * Used to feed the synthesis quality gate so it can fill template placeholders
- * with actual retrieved values instead of re-emitting the draft.
- */
-function collectToolData(messages: readonly KernelMessage[]): string {
-  const parts: string[] = [];
-  for (const m of messages) {
-    if (m.role === "tool_result" && !m.isError && m.content) {
-      parts.push(`[${m.toolName}] ${m.content}`);
-    }
-  }
-  return parts.join("\n");
-}
