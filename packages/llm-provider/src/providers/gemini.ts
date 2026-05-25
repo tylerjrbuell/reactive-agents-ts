@@ -8,7 +8,7 @@ import {
   LLMParseError,
   LLMRateLimitError,
 } from "../errors.js";
-import type { LLMErrors } from "../errors.js";
+import type { LLMErrors, ParseAttemptError } from "../errors.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -609,6 +609,7 @@ export const GeminiProviderLive = Layer.effect(
           ];
 
           let lastError: unknown = null;
+          const parseAttempts: ParseAttemptError[] = [];
           const maxRetries = request.maxParseRetries ?? 2;
 
           for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -655,8 +656,10 @@ export const GeminiProviderLive = Layer.effect(
                 return decoded.right;
               }
               lastError = decoded.left;
+              parseAttempts.push({ attempt, error: decoded.left });
             } catch (e) {
               lastError = e;
+              parseAttempts.push({ attempt, error: e });
             }
           }
 
@@ -665,6 +668,7 @@ export const GeminiProviderLive = Layer.effect(
               message: `Failed to parse structured output after ${maxRetries + 1} attempts`,
               rawOutput: String(lastError),
               expectedSchema: schemaStr,
+              attempts: parseAttempts,
             }),
           );
         }),

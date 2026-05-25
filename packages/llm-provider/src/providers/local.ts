@@ -3,7 +3,7 @@ import { LLMService } from '../llm-service.js'
 import { LLMConfig } from '../llm-config.js'
 import type { ProviderCapabilities } from '../capabilities.js'
 import { LLMError, LLMTimeoutError, LLMParseError } from '../errors.js'
-import type { LLMErrors } from '../errors.js'
+import type { LLMErrors, ParseAttemptError } from '../errors.js'
 import type {
     CompletionResponse,
     StreamEvent,
@@ -785,6 +785,7 @@ export const LocalProviderLive = Layer.effect(
                             : request.model?.model ?? defaultModel
 
                     let lastError: unknown = null
+                    const parseAttempts: ParseAttemptError[] = []
                     const maxRetries = request.maxParseRetries ?? 2
 
                     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -877,8 +878,10 @@ export const LocalProviderLive = Layer.effect(
                                 return decoded.right
                             }
                             lastError = decoded.left
+                            parseAttempts.push({ attempt, error: decoded.left })
                         } catch (e) {
                             lastError = e
+                            parseAttempts.push({ attempt, error: e })
                         }
                     }
 
@@ -889,6 +892,7 @@ export const LocalProviderLive = Layer.effect(
                             } attempts`,
                             rawOutput: String(lastError),
                             expectedSchema: schemaStr,
+                            attempts: parseAttempts,
                         })
                     )
                 }),
