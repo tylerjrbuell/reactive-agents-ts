@@ -10,8 +10,8 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
-import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { runPass } from "../kernel/loop/run-pass.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
@@ -216,7 +216,7 @@ export const executeReactive = (
       budgetLimits: input.budgetLimits,
     };
 
-    const state = yield* runKernel(reactKernel, kernelInput, {
+    const pass = yield* runPass(reactKernel, kernelInput, {
       maxIterations: maxIter,
       strategy: "reactive",
       kernelType: "react",
@@ -236,12 +236,10 @@ export const executeReactive = (
         : undefined,
     });
 
-    // Output ownership rule (Sprint 3.5):
-    // The kernel is single source of truth for state.output. runner.ts §8.7
-    // synthesizes lastThought into state.output before the verifier gate, so
-    // strategy adapters return state.output verbatim. Failed runs have
-    // output=null per the transitionState invariant.
-    const output = state.output ?? null;
+    // Raw state retained for meta-field access (terminatedBy, finalAnswerCapture,
+    // etc.) — runPass owns the conventional output/tokens/cost/steps derivation.
+    const state = pass.state;
+    const output = pass.output;
 
     // Derive terminatedBy from kernel state — map oracle reasons to canonical types
     const rawTerminatedBy = state.meta.terminatedBy as string | undefined;
@@ -274,7 +272,7 @@ export const executeReactive = (
 
     return buildStrategyResult({
       strategy: "reactive",
-      steps: [...state.steps],
+      steps: [...pass.steps],
       output,
       status:
         state.status === "done"
@@ -283,8 +281,8 @@ export const executeReactive = (
             ? "failed"
             : "partial",
       start,
-      totalTokens: state.tokens,
-      totalCost: state.cost,
+      totalTokens: pass.tokens,
+      totalCost: pass.cost,
       extraMetadata: {
         terminatedBy,
         // Parallel open-string channel preserving raw kernel meta.

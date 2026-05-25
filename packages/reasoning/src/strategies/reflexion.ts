@@ -17,8 +17,8 @@ import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
-import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { runPass } from "../kernel/loop/run-pass.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
 import {
   resolveStrategyServices,
@@ -129,7 +129,7 @@ export const executeReflexion = (
       ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
       : undefined;
 
-    const genState = yield* runKernel(reactKernel, {
+    const genPass = yield* runPass(reactKernel, {
       task: buildGenerationPrompt(input, null),
       systemPrompt: genSystemPrompt,
       priorContext: genPriorContext,
@@ -155,18 +155,16 @@ export const executeReflexion = (
       temperature: 0.7,
     });
 
-    let currentResponse = genState.output
-      ?? [...genState.steps].filter((s) => s.type === "thought").pop()?.content
-      ?? "";
-    let lastKernelSteps = [...genState.steps]; // Track kernel steps for critique context
-    let allSideEffectSteps = [...genState.steps]; // Accumulate ALL steps for side-effect tracking
+    let currentResponse = genPass.output ?? "";
+    let lastKernelSteps: readonly ReasoningStep[] = genPass.steps; // critique context
+    let allSideEffectSteps: readonly ReasoningStep[] = genPass.steps; // side-effect tracking
     // Conversation thread carried across passes. Kernel's `initialMessages`
     // input is the native carrier for tool_result evidence — threading it into
     // improve passes lets the model synthesize from real values rather than
     // re-stating placeholders from a stringified summary.
-    let runningMessages: readonly KernelMessage[] = genState.messages;
-    totalTokens += genState.tokens;
-    totalCost += genState.cost;
+    let runningMessages: readonly KernelMessage[] = genPass.messages;
+    totalTokens += genPass.tokens;
+    totalCost += genPass.cost;
 
     yield* emitLog({
       _tag: "phase_complete",
@@ -388,7 +386,7 @@ export const executeReflexion = (
       // succeeded in ANY prior pass. The kernel will refuse to execute these.
       const blockedTools = extractSuccessfulSideEffectTools(allSideEffectSteps);
 
-      const improveState = yield* runKernel(reactKernel, {
+      const improvePass = yield* runPass(reactKernel, {
         task: improvementTask,
         systemPrompt: improveSystemPrompt,
         priorContext: improvePriorContext,
@@ -420,23 +418,19 @@ export const executeReflexion = (
         temperature: 0.6,
       });
 
-      const improveOutput = improveState.output
-        ?? [...improveState.steps].filter((s) => s.type === "thought").pop()?.content
-        ?? "";
-      currentResponse = improveOutput || currentResponse;
+      currentResponse = improvePass.output || currentResponse;
       // Only replace critique evidence if improvement actually called tools;
       // otherwise keep prior evidence so critique sees what was already done.
-      const improvementHadToolCalls = [...improveState.steps].some((s) => s.type === "action");
-      if (improvementHadToolCalls) {
-        lastKernelSteps = [...improveState.steps];
+      if (improvePass.hadToolCalls) {
+        lastKernelSteps = improvePass.steps;
       }
       // Always accumulate all steps for side-effect tracking across passes
-      allSideEffectSteps = [...allSideEffectSteps, ...improveState.steps];
+      allSideEffectSteps = [...allSideEffectSteps, ...improvePass.steps];
       // Carry forward the full conversation thread (now includes this pass's
       // new tool_result messages) for the next improve pass.
-      runningMessages = improveState.messages;
-      totalTokens += improveState.tokens;
-      totalCost += improveState.cost;
+      runningMessages = improvePass.messages;
+      totalTokens += improvePass.tokens;
+      totalCost += improvePass.cost;
 
       yield* emitLog({
         _tag: "phase_complete",
