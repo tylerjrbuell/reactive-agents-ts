@@ -16,6 +16,13 @@ export type SkillResolverConfig = {
   readonly customPaths: readonly string[];
   readonly agentId: string;
   readonly projectRoot?: string;
+  /**
+   * When true, suppress scanning of `~/.agents/skills` and `~/.reactive-agents/skills`.
+   * Used by tests to keep resolution hermetic to the configured `customPaths` and
+   * `projectRoot`. Defaults to `false` (global skills merge into resolver output).
+   * Resolves HS-25.
+   */
+  readonly skipGlobalPaths?: boolean;
 };
 
 // ─── Service Tag ───
@@ -177,6 +184,7 @@ export const makeSkillResolverService = (config: SkillResolverConfig) =>
               config.customPaths as string[],
               agentId,
               config.projectRoot,
+              config.skipGlobalPaths,
             );
 
             // 3. Convert InstalledSkill → SkillRecord
