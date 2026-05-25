@@ -124,9 +124,10 @@ This is the live extraction roadmap. Each row = one primitive. Order is **trigge
 | 1 | `finalize` (`enforceQualityGate` / `decideSynthesisInput` / `collectToolData`) | `kernel/loop/finalize.ts` | reflexion, plan-execute, (future ToT, code-action) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
 | 2 | `critique` (LLM-as-judge pass: prompt + thinking-safe extraction + cost tally) | `kernel/capabilities/verify/critique.ts` | reflexion (self-critique), plan-execute-reflect (reflection pass) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
 | 3 | `runPass` (kernel-invoke + ergonomic harvest: output, tokens, cost, steps, messages, hadToolCalls) | `kernel/loop/run-pass.ts` | reflexion (2 sites), reactive (1 site), (future direct, ToT, code-action) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
-| 4 | `decompose` (Task → Plan/Branches) | `kernel/capabilities/comprehend/decompose.ts` | plan-execute (`buildPlanGenerationPrompt`), ToT (expand), sub-agent delegation | plan-prompts.ts; ToT branching | next time plan generation prompt edited | pending trigger |
-| 5 | `costAccumulator` (tokens + USD across passes) | likely subsumed by #3 | all strategies | inline `let totalTokens = 0; totalCost = 0;` in 7 files | extract as part of #3 | pending trigger |
-| 6 | `thinkingExtraction` contract (single helper, documented when-to-use rules for `stripThinking` / `extractThinking` / `extractThinkingSafeContent`) | `kernel/capabilities/reason/stream-parser.ts` (consolidate) | 5 call sites today across 3 strategies | grep `stripThinking\|extractThinking\|extractThinkingSafeContent` | next thinking-model regression OR next time a helper is added | pending trigger |
+| ~~4a~~ | ~~`decompose` (Task → Plan/Branches)~~ | — | — | — | — | ❌ **SKIPPED 2026-05-25** — empirical: plan-execute (structured: `extractStructuredOutput + LLMPlanOutputSchema`) and ToT (free-form: `llm.complete + parseCandidates`) use different recipes. Catalog speculation did not hold up. |
+| 4 | `emitPhaseEnd` (phase-lifecycle emit: `phase_complete + metric tokens_used`) | `kernel/utils/service-utils.ts` | all 6 strategies (12 sites) | shipped — single helper | — | ✅ **shipped 2026-05-25** |
+| 5 | `costAccumulator` (tokens + USD across passes) | possibly subsumed by #3 / `PassResult` already exposes per-pass cost | all strategies still maintain `let totalTokens = 0; totalCost = 0;` and `+=` at every site | extract only if a 2-consumer pattern emerges around the accumulator itself (vs the per-pass cost which #3 owns) | low priority — `PassResult` already centralizes per-pass cost shape |
+| 6 | ~~`thinkingExtraction` contract~~ | `kernel/capabilities/reason/stream-parser.ts` | — | grep | ✅ **DE-FACTO SHIPPED 2026-05-25** — all 5 `stripThinking` sites in `strategies/` migrated to `extractThinkingSafeContent` (smell-fix PR). `stripThinking` no longer used in `strategies/`. Primitive #2 drift contract already enforces routing through `runCritiquePass`. Only remaining `stripThinking` use is in `structured-output/pipeline.ts` (outside strategies scope). No further extraction needed. |
 
 ### Per-primitive evidence gate (mandatory template)
 
@@ -257,6 +258,86 @@ Scope discipline: documenting these here so they aren't lost; each becomes its o
 ### Primitive #3 verdict
 
 **Shipped.** Cumulative branch state: 15 commits, 3 primitives, drift-locked across all three surfaces. Reflexion thinned 14.3% from baseline; reactive marginally; plan-execute primarily benefited from primitives 1+2.
+
+## Smell-Fix Sweep Outcomes (2026-05-25)
+
+Between primitives #3 and #4, ran a smell-fix sweep targeting the 5 architectural smells logged during primitive #3 extraction.
+
+### Smells resolved
+
+1. **#5 `stripThinking` lingering in strategies** ✅ **all 5 sites eliminated**.
+   - `plan-execute.ts:923` synthesis → `extractThinkingSafeContent`
+   - `plan-execute.ts:1259` analysis-step → `extractThinkingSafeContent`
+   - `adaptive.ts:183` classification → `extractThinkingSafeContent` (BUG-PRONE: silent empty would route to wrong default strategy)
+   - `tree-of-thought.ts:336` expansion candidates → `extractThinkingSafeContent`
+   - `tree-of-thought.ts:384` scoring → `extractThinkingSafeContent`
+   No `strategies/` file uses `stripThinking` anymore. Last remaining use in `structured-output/pipeline.ts` deferred (outside strategies scope).
+2. **#1 `direct.ts:197` `as ReasoningStrategy` cast** ✅ **removed**.
+   - Cast was load-bearing pre-Phase-D but `ReasoningStrategy` schema at `packages/core/src/types/agent.ts:36` now includes `"direct"`. Tests + build green without the cast. Unused `ReasoningStrategy` import also dropped from `direct.ts`. -7 LOC of stale comments + dead workaround.
+3. **#4 `[...state.steps]` defensive copy pattern** ✅ **tightened**.
+   - `buildStrategyResult` signature changed from `steps: ReasoningStep[]` to `steps: readonly ReasoningStep[]`. Function body already spreads internally (step-utils.ts:81), so caller-side `[...state.steps]` was a double-copy. Dropped at `direct.ts` and `reactive.ts` call sites. Other strategies still pass local mutable arrays (no change needed there).
+
+### Smells deferred
+
+4. **#2 `reactive.ts:214` env-var test override leaking into prod path.** Investigated. Fix requires builder API change (`.withVerifier()` or similar) + benchmark runner refactor at `packages/benchmarks/src/runner.ts:605-609`. Non-trivial scope + benchmark regression risk → deferred to own PR. Documented in spec for future trigger.
+5. **#3 Synthetic-state construction** for entropy sensor (`steps.map(rs => ({ type: rs.type, ...(rs.content != null ? { content: rs.content } : {}) }))`). 1-line pattern, 2 consumers (reflexion + plan-execute). Per §9 anti-scaffold, deferred until 3rd consumer appears.
+
+### Smell-fix verdict
+
+3 of 5 fixed, 2 deferred with rationale. Live `run-pass-probe.ts` re-run post-fixes confirmed no behavioral regression (ETH $2124.85 produced cleanly by both reflexion + reactive). Smells fixed are now architectural improvements, not just code-style ones.
+
+## Primitive #4 Outcomes (2026-05-25)
+
+Primitive #4 (`emitPhaseEnd`) shipped on `bundle/strategy-finalize-extraction` in 1 commit + 1 test commit + 1 spec commit. All 6 gates cleared.
+
+### Catalog revision (honest empirical finding)
+
+Original catalog #4 was `decompose` (Task → Plan/Branches). Empirical inspection showed plan-execute and ToT use **fundamentally different recipes** (structured-output vs free-form), so no shared cross-strategy shape exists. Skipped per §9. Replaced with `emitPhaseEnd` — a real cross-strategy pattern with 12 duplicate sites across all 6 strategies.
+
+**Methodological learning:** Catalog candidates are speculative until verified by grep + inspection. Future primitive #N decisions should verify ≥2-consumer shape **before** writing the design spec, not after. Updated [[#Per-primitive evidence gate]] gate #1 wording to make this explicit.
+
+### LOC delta (cumulative across all primitives + smell fixes)
+
+| File | Pre-Phase-0 | After all primitives + smells | Δ cumulative |
+|---|---|---|---|
+| `strategies/reflexion.ts` | 947 | **774** | **-173 (-18.3%)** |
+| `strategies/plan-execute.ts` | 1642 | **1548** | **-94 (-5.7%)** |
+| `strategies/tree-of-thought.ts` | 737 | **727** | -10 |
+| `strategies/adaptive.ts` | 523 | **517** | -6 |
+| `strategies/direct.ts` | 205 | **200** | -5 |
+| `strategies/reactive.ts` | 306 | **304** | -2 |
+| **Strategies total** | **4360** | **4070** | **-290 (-6.7%)** |
+| Primitives (new) | 0 | 4 (finalize 159 + critique 112 + run-pass 118 + emitPhaseEnd ~50) | +439 |
+
+Strategy thinning is real and compounding. Reflexion alone -18.3%. Total strategy LOC down 290 lines (-6.7%) replaced by 4 reusable primitives.
+
+### Test delta
+
+| Metric | Pre-Phase-0 | Now |
+|---|---|---|
+| Reasoning suite total | 1328 pass / 0 fail | **1362 pass / 0 fail** |
+| New invariant tests (all primitives) | — | **+34** |
+| Drift contracts (CI-enforced) | 0 | **4** (finalize, critique, run-pass, emitPhaseEnd) |
+| Build | green | **green** |
+
+### Drift contract (the durable win for #4)
+
+Signature: any `_tag: "phase_complete"` literal inside a `strategies/*.ts` file (not in a comment) is a CI fail. Single regex catches all 12 prior sites. Opt-out via `// emit-phase-end-exempt`. Today: 0 violations.
+
+### Live LLM verification (post smell-fix + primitive #4)
+
+`apps/examples/src/reasoning/run-pass-probe.ts` re-run on qwen3.5:latest + crypto-price tool, 2026-05-25:
+
+| Strategy | Real price | Crash | Placeholder | Tokens | Duration |
+|---|---|---|---|---|---|
+| `reflexion` | ✅ $2124.24 | ❌ | ❌ | 6851 | 29s |
+| `reactive` | ✅ $2124.24 | ❌ | ❌ | 5221 | 18s |
+
+Both strategies clean across all primitives + smell fixes. Phase-emit pattern (visible in trace as `phase_complete` events) flows through the helper identically.
+
+### Primitive #4 verdict
+
+**Shipped.** Cumulative branch state: 19 commits, **4 primitives shipped, 1 catalog candidate honestly skipped, 3 smells fixed, 2 smells deferred with documented rationale**.
 
 ## Speculative emergence (the framework that may never need to ship)
 
