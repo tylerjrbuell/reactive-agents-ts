@@ -29,6 +29,7 @@ import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
 import { fetchAndMergePricing } from './builder/build-effect/pricing-fetch.js'
+import { setupParentContext } from './builder/build-effect/parent-context.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -2184,60 +2185,13 @@ export class ReactiveAgentBuilder {
                 yield* engine.registerHook(hook)
             }
 
-            // Mutable ref for parent execution context — updated by the execution
-            // engine during the ACT phase so sub-agent handlers can read the parent's
-            // accumulated tool results and forward them as context.
-            let parentExecutionContextRef: {
-                toolResults: Array<{ toolName: string; result: string }>
-                taskDescription?: string
-            } | null = null
+            // Parent-context wiring for sub-agent registrations.
+            // Extracted to ./builder/build-effect/parent-context.ts (W26-B step 2).
+            const parentCtx = setupParentContext()
+            const getParentContext = parentCtx.getParentContext
 
-            /** Lazily read parent context from the mutable ref. */
-            const getParentContext = ():
-                | import('@reactive-agents/tools').ParentContext
-                | undefined => {
-                if (!parentExecutionContextRef) return undefined
-                const ctx = parentExecutionContextRef
-                const items: Array<{ toolName: string; result: string }> =
-                    ctx.toolResults ?? []
-                if (items.length === 0 && !ctx.taskDescription) return undefined
-                return {
-                    toolResults: items.map((tr) => ({
-                        toolName: tr.toolName,
-                        result: tr.result,
-                    })),
-                    taskDescription: ctx.taskDescription,
-                }
-            }
-
-            // Register internal hook to capture parent context for sub-agent forwarding.
-            // Task description is pre-set by runEffect() before execution starts.
-            // This hook updates tool results after each ACT phase.
             if (agentTools.length > 0 || allowDynamicSubAgents) {
-                yield* engine.registerHook({
-                    phase: 'act' as const,
-                    timing: 'after' as const,
-                    handler: (ctx: ExecutionContext) =>
-                        Effect.sync(() => {
-                            const toolResults = (ctx.toolResults ?? []).map(
-                                (tr: any) => ({
-                                    toolName: String(
-                                        tr.toolName ?? tr.name ?? 'unknown'
-                                    ),
-                                    result: String(
-                                        tr.result ?? tr.output ?? ''
-                                    ).slice(0, 200),
-                                })
-                            )
-                            // Preserve task description set by runEffect(), update tool results
-                            parentExecutionContextRef = {
-                                toolResults,
-                                taskDescription:
-                                    parentExecutionContextRef?.taskDescription,
-                            }
-                            return ctx
-                        }),
-                })
+                yield* parentCtx.registerCaptureHook(engine)
             }
 
             // Register custom prompt templates if configured
@@ -2475,10 +2429,10 @@ export class ReactiveAgentBuilder {
                 // This ensures sub-agents spawned on the very first iteration have the full user prompt.
                 agentTools.length > 0 || allowDynamicSubAgents
                     ? (desc: string) => {
-                          if (parentExecutionContextRef) {
-                              parentExecutionContextRef.taskDescription = desc
+                          if (parentCtx.ref.current) {
+                              parentCtx.ref.current.taskDescription = desc
                           } else {
-                              parentExecutionContextRef = {
+                              parentCtx.ref.current = {
                                   toolResults: [],
                                   taskDescription: desc,
                               }
