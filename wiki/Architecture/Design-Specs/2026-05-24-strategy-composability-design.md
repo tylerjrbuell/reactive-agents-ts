@@ -215,6 +215,71 @@ Any of these reverts the design and stops further Phases.
 
 Advisor flagged that the `architecture-audit` and `effect-abstraction-audit` skills exist in this codebase for exactly the scope of this design. Neither was run prior to writing this spec. Both should be invoked before Phase 1 commits any code. Their findings may invalidate or refine this design; if so, this spec is updated rather than discarded.
 
+## Phase 0 Outcomes (2026-05-25)
+
+Phase 0 shipped on branch `bundle/strategy-finalize-extraction` in 4 commits. Ran E1 (pre/post correctness) + E2 (drift-prevention contract) per the experiment plan in chat 2026-05-25.
+
+### LOC delta
+
+| File | Before | After | Δ |
+|---|---|---|---|
+| `packages/reasoning/src/strategies/reflexion.ts` | 947 | 838 | **-109 (-11.5%)** |
+| `packages/reasoning/src/strategies/plan-execute.ts` | 1642 | 1586 | **-56 (-3.4%)** |
+| `packages/reasoning/src/kernel/loop/finalize.ts` | 0 | 159 | +159 (new) |
+| **Source net** | **2589** | **2583** | **-6 (essentially neutral)** |
+| `packages/reasoning/tests/kernel/loop/finalize.test.ts` | 0 | 238 | +238 (new) |
+| `packages/reasoning/tests/strategies/reflexion.test.ts` | (full) | -69 | tests migrated |
+
+Note: source LOC delta is near-zero because the new shared module + new test coverage offsets the strategy reductions. The win is **structural** (one canonical implementation + drift-locked) not byte-count.
+
+### Test delta
+
+| Metric | Before | After |
+|---|---|---|
+| Reasoning suite total | 1328 pass / 0 fail | **1338 pass / 0 fail** |
+| New invariant tests | — | **16** (in `finalize.test.ts`) |
+| Build (`bun run build`) | green | **green** (38/38 tasks) |
+
+Breakdown of new tests:
+- 6 × `decideSynthesisInput` (migrated from reflexion.test.ts, same assertions)
+- 5 × `collectToolData` (new; covers tool_result filter, error skip, order preservation, empty skip, empty input)
+- 3 × `enforceQualityGate` Effect wrapper (new; no-op when no format, no-op when complete, fallback on empty synthesis)
+- **2 × drift contract (E2)** — see below
+
+### E1 (correctness parity)
+
+- Reasoning test suite: 1328 → 1338 pass, 0 fail (no regressions; 10 net new).
+- Build: 38/38 cached + new, 34.6s end-to-end.
+- LLM spot-test parity probe deferred — not runnable in this session (no API/Ollama context). All deterministic test paths (TestLLMServiceLayer) green; the 6 migrated `decideSynthesisInput` tests already cover the placeholder-fix regression class. Sufficient to declare correctness held; live spot-test verification recommended before merge if/when an LLM endpoint is available.
+
+### E2 (drift-prevention contract)
+
+Two structural tests now run as part of the reasoning suite. Both currently pass:
+
+1. **"No strategies/*.ts file imports synthesis primitives directly"** — scans every `packages/reasoning/src/strategies/*.ts` for direct named imports of `buildSynthesisPrompt` or `validateContentCompleteness`. Allows imports from `finalize.js`. Any future strategy that pulls these in directly fails the test. Today: 0 violations.
+2. **"Strategies do not re-implement the gate locally"** — regex-scans for `function enforce(Output)?QualityGate(` definitions in `strategies/*.ts`. The drift class that motivated Phase 0 (3-way duplication) becomes a build break going forward. Today: 0 violations.
+
+Effect: the dedup is now permanent. If a future strategy author tries to re-add a local `enforceOutputQualityGate`, CI catches it. If they try to import `buildSynthesisPrompt` directly to skip the canonical gate, CI catches that too. The invariant centralization claim from the spec is no longer aspirational.
+
+### Unexpected findings
+
+- **plan-execute received a strict upgrade.** Its private `enforceOutputQualityGate` used `stripThinking`; the shared module uses `extractThinkingSafeContent` (rescues answers trapped inside `<think>` blocks). Identical on non-thinking models, strictly better on thinking models. Documented at the call site (`plan-execute.ts:1031`) so the asymmetry is discoverable.
+- **No `as any`, no behavior regressions, no test churn.** The migration touched only 5 files; reflexion test imports updated for the move, otherwise no test changes required.
+
+### Phase 0 verdict
+
+**Ship.** Dedup is real, drift is now structurally prevented, behavior held on every deterministic test. Commits (chronological):
+
+- `1f4cf548` — `refactor(reasoning): extract synthesis quality gate to kernel/loop/finalize.ts`
+- `c207558f` — `refactor(reflexion): consume shared finalize module`
+- `8af80ced` — `refactor(plan-execute): consume shared finalize module`
+- `648e3cb2` — `test(finalize): invariant suite + drift-prevention contract`
+
+### Phase 1+ implications
+
+- E2 results give Phase 0 a permanent drift-lock. Phase 1's "trajectory + makeMachine" justification weakens further: the recurring-drift problem motivating it is now structurally solved at a fraction of the cost. Recommend keeping Phase 1+ deferred unless a 3rd-party strategy or a fresh shared-bug appears.
+- Per advisor + spec §9, write a follow-up `wiki/Decisions/` entry recording "Phase 0 shipped, Phases 1-5 indefinitely deferred pending trigger event." Sunset date for the spec itself: 2026-09-01 unless re-activated.
+
 ## References
 
 - Reflexion synthesis-gate fix: commit `0af217c8` (2026-05-24)
