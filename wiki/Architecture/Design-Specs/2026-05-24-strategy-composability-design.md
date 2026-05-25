@@ -122,7 +122,7 @@ This is the live extraction roadmap. Each row = one primitive. Order is **trigge
 | # | Primitive | Home (proposed) | Candidate consumers | Today's call sites | Trigger to extract | Status |
 |---|---|---|---|---|---|---|
 | 1 | `finalize` (`enforceQualityGate` / `decideSynthesisInput` / `collectToolData`) | `kernel/loop/finalize.ts` | reflexion, plan-execute, (future ToT, code-action) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
-| 2 | `critique` (LLM-as-judge pass: prompt + thinking extraction + stagnation check) | `kernel/capabilities/verify/critique.ts` | reflexion (`buildCritiquePrompt` + `extractThinking`), plan-execute-reflect (`buildReflectionPrompt` + `stripThinking`) | reflexion.ts ~line 250-280; plan-execute.ts ~line 690-720 | next time either reflect/critique prompt edited | pending trigger |
+| 2 | `critique` (LLM-as-judge pass: prompt + thinking-safe extraction + cost tally) | `kernel/capabilities/verify/critique.ts` | reflexion (self-critique), plan-execute-reflect (reflection pass) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
 | 3 | `runPass` (kernel-invoke + cost accumulation + step harvest into a pass record) | `kernel/loop/run-pass.ts` | reflexion (3 invocations), plan-execute (per-step), ToT (per branch), code-action (verifier loop) | duplicated cost/step accumulation in every strategy | next time a strategy adds another invocation point | pending trigger |
 | 4 | `decompose` (Task → Plan/Branches) | `kernel/capabilities/comprehend/decompose.ts` | plan-execute (`buildPlanGenerationPrompt`), ToT (expand), sub-agent delegation | plan-prompts.ts; ToT branching | next time plan generation prompt edited | pending trigger |
 | 5 | `costAccumulator` (tokens + USD across passes) | likely subsumed by #3 | all strategies | inline `let totalTokens = 0; totalCost = 0;` in 7 files | extract as part of #3 | pending trigger |
@@ -150,6 +150,57 @@ Every primitive extraction MUST clear all 6 gates below before merging. The Phas
 | any helper used in only 1 strategy | §9 — single-consumer extraction creates premature primitives |
 
 Rule: a primitive earns extraction only when ≥2 real strategies have the SAME shape. Conceptual similarity doesn't count.
+
+## Primitive #2 Outcomes (2026-05-25)
+
+Primitive #2 (`runCritiquePass`) shipped on `bundle/strategy-finalize-extraction` in 3 additional commits. All 6 gates from the per-primitive template cleared.
+
+### LOC delta (cumulative, since Phase 0 ship)
+
+| File | Phase 0 end | Primitive #2 end | Δ this primitive | Δ cumulative since pre-Phase-0 |
+|---|---|---|---|---|
+| `packages/reasoning/src/strategies/reflexion.ts` | 838 | **818** | **-20** | **-129 (-13.6%)** |
+| `packages/reasoning/src/strategies/plan-execute.ts` | 1586 | **1579** | **-7** | **-63 (-3.8%)** |
+| `kernel/capabilities/verify/critique.ts` | — | 112 | +112 (new) | +112 |
+| `kernel/loop/finalize.ts` | 159 | 159 | — | 159 |
+
+Strategy thinning continues — small but real. Each primitive shrinks adjacent strategies; cumulative effect will compound as primitives 3-6 land.
+
+### Test delta
+
+| Metric | Phase 0 end | Primitive #2 end |
+|---|---|---|
+| Reasoning suite total | 1338 pass / 0 fail | **1346 pass / 0 fail** |
+| New invariant tests for primitive #2 | — | **8** in `critique.test.ts` |
+| Build (`bun run build`) | green | **green** (38/38) |
+
+8 new tests: 2 × `critiqueMaxTokens` depth mapping, 2 × happy-path content extraction, 2 × thinking-safe fallback (including the strict-upgrade case), 1 × error wrapping type sanity, **1 × drift contract**.
+
+### Drift contract (the durable win for #2)
+
+Tightened signature scan: any `strategies/*.ts` file with a `llm.complete` call followed within 40 lines by `extractThinking` / `extractThinkingSafeContent` is flagged. Signature is precise — synthesizer + planner LLM calls (both common in plan-execute) do NOT match because they use `extractStructuredOutput` or skip thinking-extraction. False-positive rate during dev: 0 after tightening (initial loose `temperature: 0.3` heuristic caught synthesizer/planner — bug; fixed).
+
+Opt-out via `// critique-primitive-exempt` comment above the `llm.complete` call if a strategy genuinely needs a one-off shape.
+
+### Live LLM probe (Ollama, real tool)
+
+`apps/examples/src/reasoning/critique-probe.ts` on qwen3.5:latest + `crypto-price` tool, 2026-05-25:
+
+| Strategy | Tool called | Real price | Crash | Placeholder | Tokens | Duration |
+|---|---|---|---|---|---|---|
+| `reflexion` | yes (auto) | ✅ $77,703 | ❌ | ❌ | 7223 | 25.4s |
+| `plan-execute-reflect` | yes (auto) | ✅ $77,703 | ❌ | ❌ | 8967 | 95.2s |
+
+plan-execute reflected twice (visible in trace `phase:plan-execute:reflect` 2×) — proves shared `runCritiquePass` invoked end-to-end on real LLM + real tool. Reflexion satisfied on first attempt (no critique fire); deterministic tests cover that branch.
+
+### Unexpected findings
+
+- **Drift contract had to be refined mid-PR.** First version flagged synthesizer + planner LLM calls (temperature 0.3 too coarse). Tightened to `llm.complete + thinking-extraction within 40 lines` — caught only the true critique recipe. Pattern: drift contract signatures need to be **specific to the recipe being primitive-ized**, not generic LLM-call markers. Documented for primitives 3-6.
+- **plan-execute strict upgrade #2.** Previously bare `stripThinking` on the reflection content; now `extractThinkingSafeContent` (same upgrade pattern as Phase 0's synthesis call). Reflections trapped inside `<think>` blocks would have silently returned empty; now rescued. Identical on non-thinking models.
+
+### Primitive #2 verdict
+
+**Shipped.** Cumulative branch state: 11 commits on `bundle/strategy-finalize-extraction`. Two primitives down (`finalize`, `critique`). Strategies measurably thinning. Drift locked across both surfaces.
 
 ## Speculative emergence (the framework that may never need to ship)
 
