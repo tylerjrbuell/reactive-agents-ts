@@ -21,8 +21,12 @@ import { instantiateAgent } from './builder/build-effect/agent-instantiation.js'
 import {
     reactiveAgentsFromConfig,
     reactiveAgentsFromJSON,
-    invokeUserHookSafely,
 } from './builder/api-surface.js'
+import {
+    applyReactiveIntelligenceOptions,
+    applyMemoryOptions,
+    applyHookRegistration,
+} from './builder/wither-applies.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -673,22 +677,7 @@ export class ReactiveAgentBuilder {
      * ```
      */
     withMemory(tierOrOptions?: '1' | '2' | MemoryOptions): this {
-        this._enableMemory = true
-        if (typeof tierOrOptions === 'string') {
-            const newForm =
-                tierOrOptions === '2'
-                    ? '.withMemory({ tier: "enhanced" })'
-                    : '.withMemory()'
-            console.warn(
-                `⚠ withMemory("${tierOrOptions}") is deprecated. Use ${newForm} instead.`
-            )
-            this._memoryTier = tierOrOptions
-        } else if (tierOrOptions) {
-            if (tierOrOptions.tier) {
-                this._memoryTier = tierOrOptions.tier === 'enhanced' ? '2' : '1'
-            }
-            this._memoryOptions = tierOrOptions
-        }
+        applyMemoryOptions(this, tierOrOptions)
         return this
     }
 
@@ -736,23 +725,7 @@ export class ReactiveAgentBuilder {
      * ```
      */
     withHook(hook: LifecycleHook): this {
-        this._hooks.push(hook)
-        const self = this
-        // Also register as harness phase hook for compose-side observability
-        if (hook.timing === 'on-error') {
-            return this.withHarness((h) => {
-                h.onError(hook.phase as import('@reactive-agents/core').Phase, async (_err, ctx) => {
-                    await invokeUserHookSafely(self, hook, ctx)
-                })
-            })
-        }
-        // For 'before' and 'after' timings
-        const kind = hook.timing === 'before' ? 'before' : 'after'
-        return this.withHarness((h) => {
-            h[kind](hook.phase as import('@reactive-agents/core').Phase, async (ctx) => {
-                await invokeUserHookSafely(self, hook, ctx)
-            })
-        })
+        return this.withHarness(applyHookRegistration(this, hook))
     }
 
     // ─── Optional Features ───
@@ -1690,44 +1663,7 @@ export class ReactiveAgentBuilder {
               > &
                   Record<string, any>)
     ): this {
-        if (typeof arg === 'boolean') {
-            this._enableReactiveIntelligence = arg
-            return this
-        }
-        this._enableReactiveIntelligence = true
-        if (arg) {
-            const {
-                onEntropyScored,
-                onControllerDecision,
-                onSkillActivated,
-                onSkillRefined,
-                onSkillConflict,
-                onMidRunAdjustment,
-                constraints,
-                autonomy,
-                ...riConfig
-            } = arg as any
-            this._reactiveIntelligenceOptions = riConfig
-            if (
-                onEntropyScored ||
-                onControllerDecision ||
-                onSkillActivated ||
-                onSkillRefined ||
-                onSkillConflict ||
-                onMidRunAdjustment
-            ) {
-                this._riHooks = {
-                    onEntropyScored,
-                    onControllerDecision,
-                    onSkillActivated,
-                    onSkillRefined,
-                    onSkillConflict,
-                    onMidRunAdjustment,
-                }
-            }
-            if (constraints) this._riConstraints = constraints
-            if (autonomy) this._riAutonomy = autonomy
-        }
+        applyReactiveIntelligenceOptions(this, arg)
         return this
     }
 
