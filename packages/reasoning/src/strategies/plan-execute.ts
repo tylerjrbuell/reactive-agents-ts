@@ -46,11 +46,7 @@ import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
-import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
-import {
-  validateOutputFormat,
-  buildSynthesisPrompt,
-} from "../kernel/loop/output-synthesis.js";
+import { enforceQualityGate } from "../kernel/loop/finalize.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -1028,7 +1024,11 @@ export const executePlanExecute = (
     }
 
     if (finalOutput) {
-      const gated = yield* enforceOutputQualityGate({
+      // plan-execute's `finalOutput` already concatenates raw `[EXEC` tool
+      // observations, so the gate operates on the draft directly (no separate
+      // toolData harvest needed). Shared module upgrades synthesis to use
+      // thinking-safe extraction, rescuing answers trapped inside <think>.
+      const gated = yield* enforceQualityGate({
         llm,
         taskDescription: input.taskDescription,
         output: finalOutput,
@@ -1081,62 +1081,6 @@ interface StepExecResult {
    * AgentCompleted.terminationReason.
    */
   rawTerminatedBy?: string;
-}
-
-function enforceOutputQualityGate(input: {
-  llm: LLMService["Type"];
-  taskDescription: string;
-  output: string;
-}): Effect.Effect<
-  { output: string; tokens: number; cost: number },
-  never,
-  never
-> {
-  const intent = extractOutputFormat(input.taskDescription);
-  if (!intent.format) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-
-  const validation = validateOutputFormat(input.output, intent.format);
-  if (validation.valid) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-
-  const synthesisPrompt = buildSynthesisPrompt(
-    input.output,
-    intent.format,
-    input.taskDescription,
-  );
-
-  return input.llm
-    .complete({
-      messages: [{ role: "user", content: synthesisPrompt }],
-      systemPrompt: withEnvContext(undefined),
-      maxTokens: THINKING_SAFE_MIN_TOKENS,
-      temperature: 0.2,
-    })
-    .pipe(
-      Effect.map((response) => {
-        const candidate = stripThinking(response.content).trim();
-        if (!candidate) {
-          return {
-            output: input.output,
-            tokens: response.usage.totalTokens,
-            cost: response.usage.estimatedCost,
-          };
-        }
-
-        const revalidation = validateOutputFormat(candidate, intent.format);
-        return {
-          output: revalidation.valid ? candidate : input.output,
-          tokens: response.usage.totalTokens,
-          cost: response.usage.estimatedCost,
-        };
-      }),
-      Effect.catchAll(() =>
-        Effect.succeed({ output: input.output, tokens: 0, cost: 0 })
-      ),
-    );
 }
 
 /**
