@@ -42,7 +42,7 @@ import { formatTaskContextForChat } from "./chat.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ─── Phase pipeline (W23 decomposition) ───
-import { runGuardedPhase } from "./engine/pipeline.js";
+import { runGuardedPhase, runObservablePhase } from "./engine/pipeline.js";
 import type { PhaseDeps } from "./engine/runtime-context.js";
 import { audit } from "./engine/phases/audit.js";
 import { bootstrap } from "./engine/phases/bootstrap.js";
@@ -157,134 +157,10 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
       // Track cancelled task IDs
       const cancelledTasks = yield* Ref.make<Set<string>>(new Set());
 
-      /**
-       * Run a phase: fire before hooks, execute phase body, fire after hooks.
-       * On error: fire on-error hooks, then propagate.
-       */
-      const runPhase = <E>(
-        ctx: ExecutionContext,
-        phase: ExecutionContext["phase"],
-        body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
-        eb?: EbLike | null,
-      ): Effect.Effect<ExecutionContext, E | RuntimeErrors> =>
-        Effect.gen(function* () {
-          const ctxBefore = { ...ctx, phase };
-
-          // Before hooks
-          const ctxAfterBefore = yield* hookRegistry
-            .run(phase, "before", ctxBefore)
-            .pipe(Effect.catchAll(() => Effect.succeed(ctxBefore)));
-
-          if (eb) {
-            yield* eb.publish({ _tag: "ExecutionHookFired", taskId: ctx.taskId, phase: String(phase), timing: "before" })
-              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:387", tag: errorTag(err) })));
-          }
-
-          // Check cancellation
-          const cancelled = yield* Ref.get(cancelledTasks);
-          if (cancelled.has(ctx.taskId)) {
-            if (eb) {
-              yield* eb.publish({ _tag: "ExecutionCancelled", taskId: ctx.taskId })
-                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:395", tag: errorTag(err) })));
-            }
-            return yield* Effect.fail(
-              new ExecutionError({
-                message: `Task ${ctx.taskId} was cancelled`,
-                taskId: ctx.taskId,
-                phase,
-              }),
-            );
-          }
-
-          // Phase body
-          const ctxAfterBody = yield* body(ctxAfterBefore).pipe(
-            Effect.tapError((e) =>
-              hookRegistry
-                .run(phase, "on-error", {
-                  ...ctxAfterBefore,
-                  metadata: { ...ctxAfterBefore.metadata, error: e },
-                })
-                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:414", tag: errorTag(err) }))),
-            ),
-          );
-
-          // After hooks
-          const ctxFinal = yield* hookRegistry
-            .run(phase, "after", ctxAfterBody)
-            .pipe(Effect.catchAll(() => Effect.succeed(ctxAfterBody)));
-
-          if (eb) {
-            yield* eb.publish({ _tag: "ExecutionHookFired", taskId: ctx.taskId, phase: String(phase), timing: "after" })
-              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:425", tag: errorTag(err) })));
-          }
-
-          return ctxFinal;
-        });
-
-      /**
-       * H1 + Phase 0.2 + Phase 0.5: Observable phase wrapper
-       * Wraps runPhase with observability span, phase event publishing, and metrics.
-       */
-      const runObservablePhase = <E>(
-        obs: ObsLike | null,
-        eb: EbLike | null,
-        ctx: ExecutionContext,
-        phase: ExecutionContext["phase"],
-        body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
-      ): Effect.Effect<ExecutionContext, E | RuntimeErrors> => {
-        const startMs = performance.now();
-
-        // Publish phase entered event (fire and forget)
-        const publishEntered = eb
-          ? eb.publish({ _tag: "ExecutionPhaseEntered", taskId: ctx.taskId, phase })
-              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:447", tag: errorTag(err) })))
-          : Effect.void;
-
-        const phaseEffect = runPhase(ctx, phase, body, eb).pipe(
-          // After phase completes: emit metrics + phase completed event
-          Effect.tap((_result) => {
-            const durationMs = performance.now() - startMs;
-            const sideEffects: Effect.Effect<void, never>[] = [];
-
-            if (obs) {
-              sideEffects.push(
-                obs.incrementCounter("execution.phase.count", 1, { phase })
-                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:459", tag: errorTag(err) }))),
-              );
-              sideEffects.push(
-                obs.recordHistogram("execution.phase.duration_ms", durationMs, { phase })
-                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:463", tag: errorTag(err) }))),
-              );
-            }
-            if (eb) {
-              sideEffects.push(
-                eb.publish({ _tag: "ExecutionPhaseCompleted", taskId: ctx.taskId, phase, durationMs })
-                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:469", tag: errorTag(err) }))),
-              );
-            }
-
-            return Effect.all(sideEffects, { concurrency: "unbounded" }).pipe(Effect.asVoid);
-          }),
-        );
-
-        const withEntered = publishEntered.pipe(Effect.zipRight(phaseEffect));
-
-        if (!obs) return withEntered;
-
-        return obs.withSpan(
-          `execution.phase.${phase}`,
-          withEntered.pipe(
-            Effect.tap((result) =>
-              obs.withSpan(`phase.${phase}.metrics`, Effect.void, {
-                iteration: result.iteration,
-                tokensUsed: result.tokensUsed,
-                cost: result.cost,
-              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:489", tag: errorTag(err) }))),
-            ),
-          ),
-          { taskId: ctx.taskId, agentId: ctx.agentId, phase },
-        ) as Effect.Effect<ExecutionContext, E | RuntimeErrors>;
-      };
+      // (W26-A step 1) Removed duplicate `runPhase` + `runObservablePhase` closures —
+      // the equivalents live in `./engine/pipeline.ts` and are reused via the local
+      // `guardedPhase` wrapper at the executeCore site (which now calls into
+      // `runObservablePhase` with the already-constructed `PhaseDeps`).
 
       let execute = (task: Task): Effect.Effect<TaskResult, RuntimeErrors> =>
         (
@@ -663,13 +539,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   });
 
                 // ── Guarded phase wrapper: lifecycle check before every phase ──
+                // (W26-A step 1) Reuses runObservablePhase from engine/pipeline.ts
+                // with the already-constructed PhaseDeps `deps` (line 547 above).
                 const guardedPhase = <E>(
                   gCtx: ExecutionContext,
                   phase: ExecutionContext["phase"],
                   body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
                 ): Effect.Effect<ExecutionContext, E | RuntimeErrors> =>
                   checkLifecycle(gCtx.taskId).pipe(
-                    Effect.zipRight(runObservablePhase(obs, eb, gCtx, phase, body)),
+                    Effect.zipRight(runObservablePhase(gCtx, phase, body, deps)),
                   );
 
                 if (obs) {

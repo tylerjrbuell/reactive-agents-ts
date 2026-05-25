@@ -190,8 +190,11 @@ const runPhase = <E>(
 /**
  * Wrap `runPhase` with observability span + phase event publishing + metrics.
  * Mirrors `execution-engine.ts:runObservablePhase`.
+ *
+ * Exported (W26-A step 1) so the engine's inline `guardedPhase` can reuse this
+ * helper instead of maintaining a duplicate closure.
  */
-const runObservablePhase = <E>(
+export const runObservablePhase = <E>(
   ctx: ExecutionContext,
   phase: ExecutionContext["phase"],
   body: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, E>,
