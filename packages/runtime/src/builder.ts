@@ -142,16 +142,6 @@ export { ReactiveAgent } from './reactive-agent.js'
  * Factory for creating agent builders.
  * Entry point for the Reactive Agents builder API.
  *
- * @example
- * ```typescript
- * const agent = await ReactiveAgents.create()
- *   .withName("my-assistant")
- *   .withProvider("anthropic")
- *   .withModel("claude-opus-4-20250514")
- *   .withReasoning()
- *   .withTools()
- *   .build();
- * ```
  */
 export const ReactiveAgents = {
     /**
@@ -171,18 +161,6 @@ export const ReactiveAgents = {
  * All builder methods return `this` for method chaining. Call `.build()` or `.buildEffect()`
  * when configuration is complete to instantiate the agent.
  *
- * @example
- * ```typescript
- * const agent = await ReactiveAgents.create()
- *   .withName("analyzer")
- *   .withProvider("anthropic")
- *   .withModel("claude-opus-4-20250514")
- *   .withReasoning({ defaultStrategy: "tree-of-thought" })
- *   .withTools()
- *   .withGuardrails()
- *   .withObservability({ verbosity: "normal", live: true })
- *   .build();
- * ```
  */
 export class ReactiveAgentBuilder {
     private _name: string = 'agent'
@@ -376,14 +354,6 @@ export class ReactiveAgentBuilder {
      * - `ModelCalibration` object: provide calibration data directly (e.g. after running
      *   the calibration probe suite).
      *
-     * @example
-     * ```typescript
-     * // Auto-load from pre-baked calibrations (best for supported local models)
-     * builder.withCalibration("auto")
-     *
-     * // Provide custom calibration data
-     * builder.withCalibration({ modelId: "my-model", steeringCompliance: "hybrid", ... })
-     * ```
      */
     withCalibration(mode: CalibrationMode): this {
         this._calibration = mode
@@ -401,13 +371,6 @@ export class ReactiveAgentBuilder {
      * and attached to the agent's kernel input. Wave B wires the pipeline into
      * kernel chokepoints; Wave A makes the infrastructure available.
      *
-     * @example
-     * ```typescript
-     * builder.withHarness((harness) => {
-     *   harness.on('prompt.system', (prompt, ctx) => `${prompt}\n\n[iteration ${ctx.iteration}]`)
-     *   harness.tap('lifecycle.failure', (payload) => console.error('failure:', payload))
-     * })
-     * ```
      */
     withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this {
         this._harnessRegistrations = [...this._harnessRegistrations, fn]
@@ -435,10 +398,6 @@ export class ReactiveAgentBuilder {
      *
      * @param name - Display name for the agent
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withName("my-assistant")
-     * ```
      */
     withName(name: string): this {
         this._name = name
@@ -468,15 +427,6 @@ export class ReactiveAgentBuilder {
      *
      * @param persona - AgentPersona with role, background, instructions, and/or tone
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withPersona({
-     *   role: "Data Scientist",
-     *   background: "Expert in statistical analysis",
-     *   instructions: "Always validate assumptions",
-     *   tone: "professional and rigorous"
-     * })
-     * ```
      */
     withPersona(persona: AgentPersona): this {
         this._persona = persona
@@ -493,10 +443,6 @@ export class ReactiveAgentBuilder {
      *
      * @param prompt - Custom system prompt text
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withSystemPrompt("You are a helpful coding assistant...")
-     * ```
      */
     withSystemPrompt(prompt: string): this {
         this._systemPrompt = prompt
@@ -514,14 +460,6 @@ export class ReactiveAgentBuilder {
      *
      * @param context - Key-value pairs (e.g., `{ "User Location": "San Francisco, CA" }`)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withEnvironment({
-     *   "User Location": "San Francisco, CA",
-     *   "Locale": "en-US",
-     *   "Project": "reactive-agents",
-     * })
-     * ```
      */
     withEnvironment(context: Record<string, string>): this {
         this._environmentContext = { ...this._environmentContext, ...context }
@@ -538,10 +476,6 @@ export class ReactiveAgentBuilder {
      *
      * @param options - A2A configuration (port, basePath)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withA2A({ port: 8000 })
-     * ```
      */
     withA2A(options?: A2AOptions): this {
         this._a2aOptions = options ?? { port: 3000 }
@@ -559,14 +493,6 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Gateway configuration (heartbeat, crons, webhooks, policies)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withGateway({
-     *   heartbeat: { intervalMs: 1800000, policy: "adaptive" },
-     *   crons: [{ schedule: "0 9 * * MON", instruction: "Review PRs" }],
-     *   policies: { dailyTokenBudget: 50000 },
-     * })
-     * ```
      */
     withGateway(options?: GatewayOptions): this {
         this._gatewayOptions = options ?? {}
@@ -600,14 +526,6 @@ export class ReactiveAgentBuilder {
      * @param name - Name of the tool (how the LLM invokes it)
      * @param agent - Sub-agent configuration
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withAgentTool("researcher", {
-     *   name: "Research Agent",
-     *   description: "Gathers and synthesizes information",
-     *   maxIterations: 15
-     * })
-     * ```
      */
     withAgentTool(
         name: string,
@@ -636,10 +554,6 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Optional configuration (maxIterations for spawned agents)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withDynamicSubAgents({ maxIterations: 8 })
-     * ```
      */
     withDynamicSubAgents(options?: { maxIterations?: number }): this {
         this._allowDynamicSubAgents = true
@@ -656,10 +570,6 @@ export class ReactiveAgentBuilder {
      * @param name - Name of the tool (how the LLM invokes it)
      * @param remoteUrl - Base URL of the remote A2A agent (e.g., `http://localhost:8000`)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withRemoteAgent("remote-analyst", "http://remote-agent:8000")
-     * ```
      */
     withRemoteAgent(name: string, remoteUrl: string): this {
         this._agentTools.push({ name, remoteUrl })
@@ -675,11 +585,6 @@ export class ReactiveAgentBuilder {
      *
      * @param modelOrParams - Model identifier string, or ModelParams object with model + thinking/temperature/maxTokens
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withModel("claude-opus-4-20250514")
-     * builder.withModel({ model: "qwen3.5", thinking: true, temperature: 0.5 })
-     * ```
      */
     withModel(model: string): this
     withModel(params: ModelParams): this
@@ -703,10 +608,6 @@ export class ReactiveAgentBuilder {
      *
      * @param provider - One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, or `"test"`
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withProvider("anthropic")
-     * ```
      */
     withProvider(provider: ProviderName): this {
         this._provider = provider
@@ -723,11 +624,6 @@ export class ReactiveAgentBuilder {
      *
      * @param tier - Memory tier (`"1"` or `"2"`)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withMemory("2")
-     * builder.withMemory({ tier: "enhanced", dbPath: "./data/memory.db", capacity: 12 })
-     * ```
      */
     withMemory(tierOrOptions?: '1' | '2' | MemoryOptions): this {
         applyMemoryOptions(this, tierOrOptions)
@@ -750,12 +646,6 @@ export class ReactiveAgentBuilder {
      * @param enabled - When `true` (default), wire `SkillStoreServiceLive`;
      *                  when `false`, explicitly disable even if memory is on.
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder
-     *   .withMemory({ tier: "enhanced", dbPath: "./data/agent.db" })
-     *   .withSkillPersistence()
-     * ```
      */
     withSkillPersistence(enabled: boolean = true): this {
         this._skillPersistence = enabled
@@ -782,13 +672,6 @@ export class ReactiveAgentBuilder {
      * Composes cleanly with `.withLeanHarness()` — both force memory off.
      *
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const stateless = ReactiveAgents
-     *   .create({ agentId: "stateless-bot" })
-     *   .withReasoning()
-     *   .withoutMemory()  // opt out — no SQLite, no skill store, no session log
-     * ```
      */
     withoutMemory(): this {
         this._enableMemory = false
@@ -819,13 +702,6 @@ export class ReactiveAgentBuilder {
      *
      * @param opts - Memory tier + path overrides
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const learner = ReactiveAgents
-     *   .create({ agentId: "research-bot" })
-     *   .withReasoning()
-     *   .withLearning({ tier: "enhanced" })  // full stack, semantic + skill
-     * ```
      */
     withLearning(opts?: { tier?: 'standard' | 'enhanced'; dbPath?: string }): this {
         this._enableMemory = true
@@ -848,10 +724,6 @@ export class ReactiveAgentBuilder {
      *
      * @param n - Maximum iterations (typically 5-15)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withMaxIterations(20)
-     * ```
      * @default 10
      */
     withMaxIterations(n: number): this {
@@ -875,10 +747,6 @@ export class ReactiveAgentBuilder {
      *                 is required; `warningRatio` is optional (default 0.80).
      * @returns `this` for chaining
      * @throws When neither `tokenLimit` nor `costLimit` is supplied.
-     * @example
-     * ```typescript
-     * builder.withBudget({ costLimit: 0.01, warningRatio: 0.75 })
-     * ```
      */
     withBudget(limits: BudgetLimits): this {
         if (limits.tokenLimit === undefined && limits.costLimit === undefined) {
@@ -904,17 +772,6 @@ export class ReactiveAgentBuilder {
      *
      * @param hook - Lifecycle hook configuration
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withHook({
-     *   phase: "think",
-     *   timing: "after",
-     *   handler: (ctx) => Effect.sync(() => {
-     *     console.log(`Thought: ${ctx.metadata.thinking}`);
-     *     return ctx;
-     *   })
-     * })
-     * ```
      */
     withHook(hook: LifecycleHook): this {
         return this.withHarness(applyHookRegistration(this, hook))
@@ -987,10 +844,6 @@ export class ReactiveAgentBuilder {
      *
      * @param provider - PricingProvider implementation (e.g., `openRouterPricingProvider`)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withDynamicPricing(openRouterPricingProvider)
-     * ```
      */
     withDynamicPricing(
         provider: import('@reactive-agents/llm-provider').PricingProvider
@@ -1070,12 +923,6 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Reasoning configuration overrides
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withReasoning({
-     *   defaultStrategy: "tree-of-thought"
-     * })
-     * ```
      */
     withReasoning(options?: ReasoningOptions): this {
         this._enableReasoning = true
@@ -1117,17 +964,6 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Custom tool definitions and handlers
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withTools({
-     *   tools: [
-     *     {
-     *       definition: { name: "my-tool", description: "...", parameters: [...] },
-     *       handler: async (args) => ({ result: "..." })
-     *     }
-     *   ]
-     * })
-     * ```
      */
     withTools(options?: ToolsOptions): this {
         this._enableTools = true
@@ -1159,13 +995,6 @@ export class ReactiveAgentBuilder {
      * Equivalent to calling `.withTools({ terminal: options ?? true })`.
      *
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withTerminalTools()
-     *   .build();
-     * ```
      */
     withTerminalTools(options?: ShellExecuteConfig): this {
         this._enableTools = true
@@ -1186,16 +1015,6 @@ export class ReactiveAgentBuilder {
      * @param docs - Array of document specifications to ingest
      * @returns `this` for chaining
      *
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withDocuments([
-     *     { content: "Paris is the capital of France.", source: "facts.txt" },
-     *     { content: "# API\n\n## Endpoints\n...", source: "api.md", format: "markdown" },
-     *   ])
-     *   .build();
-     * ```
      */
     withDocuments(docs: DocumentSpec[]): this {
         this._documents = [...this._documents, ...docs]
@@ -1214,17 +1033,6 @@ export class ReactiveAgentBuilder {
      * @param config - Required tools configuration
      * @returns `this` for chaining
      *
-     * @example
-     * ```typescript
-     * // Explicit required tools
-     * builder.withRequiredTools({ tools: ["web_search", "file_write"] })
-     *
-     * // Adaptive — LLM infers which tools are required
-     * builder.withRequiredTools({ adaptive: true })
-     *
-     * // Both — explicit tools + LLM infers additional ones
-     * builder.withRequiredTools({ adaptive: true, tools: ["send_message"], maxRetries: 3 })
-     * ```
      */
     withRequiredTools(config: {
         /** Tool names that must be called during execution */
@@ -1258,13 +1066,6 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Observability configuration (verbosity, live, file)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withObservability({
-     *   verbosity: "normal",
-     *   live: true
-     * })
-     * ```
      */
     withObservability(options?: ObservabilityOptions): this {
         this._enableObservability = true
@@ -1319,11 +1120,6 @@ export class ReactiveAgentBuilder {
      * @param config - Telemetry mode and privacy settings
      * @returns `this` for chaining
      *
-     * @example
-     * ```typescript
-     * builder.withTelemetry({ mode: "contribute" })
-     * builder.withTelemetry({ mode: "isolated" }) // local-only, no sharing
-     * ```
      */
     withTelemetry(config?: TelemetryConfig): this {
         this._telemetryConfig = config ?? { mode: 'isolated' }
@@ -1344,11 +1140,6 @@ export class ReactiveAgentBuilder {
      * @param config.maxFileSizeBytes - Max file size before rotation (default: 10MB)
      * @param config.maxFiles - Max rotated files to keep (default: 5)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withLogging({ level: "info", format: "json", output: "file", filePath: "./logs/agent.log" })
-     * builder.withLogging({ level: "debug", format: "text", output: "console" })
-     * ```
      */
     withLogging(config: {
         level?: 'debug' | 'info' | 'warn' | 'error'
@@ -1382,12 +1173,6 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Custom prompt template definitions
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withPrompts({
-     *   templates: [...]
-     * })
-     * ```
      */
     withPrompts(options?: PromptsOptions): this {
         this._enablePrompts = true
@@ -1428,14 +1213,6 @@ export class ReactiveAgentBuilder {
      *
      * @param contract - Behavioral contract specification
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withBehavioralContracts({
-     *   maxIterations: 10,
-     *   allowedTools: ["file-write", "web-search"],
-     *   forbiddenTools: ["code-execute"]
-     * })
-     * ```
      */
     withBehavioralContracts(
         contract: import('@reactive-agents/guardrails').BehavioralContract
@@ -1499,17 +1276,6 @@ export class ReactiveAgentBuilder {
      * whether or not `withEvents()` was called.
      *
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withEvents()  // optional — subscribe() always works
-     *   .build();
-     *
-     * agent.subscribe("ToolCallCompleted", (event) => {
-     *   console.log(`Tool ${event.toolName} took ${event.durationMs}ms`);
-     * });
-     * ```
      */
     withEvents(): this {
         this._enableEvents = true
@@ -1524,14 +1290,6 @@ export class ReactiveAgentBuilder {
      *
      * @param profile - Partial context profile with overrides
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withContextProfile({
-     *   budgetTokens: 4000,
-     *   toolResultMaxChars: 1000,
-     *   compactionLevel: "grouped"
-     * })
-     * ```
      */
     withContextProfile(profile: Partial<ContextProfile>): this {
         this._contextProfile = profile
@@ -1549,15 +1307,6 @@ export class ReactiveAgentBuilder {
      *
      * @param config - MCP server configuration(s) — can be a single config or array
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withMCP({
-     *   name: "filesystem",
-     *   transport: "stdio",
-     *   command: "mcp-server-filesystem",
-     *   args: ["/home/user/data"]
-     * })
-     * ```
      */
     withMCP(config: MCPServerConfig | MCPServerConfig[]): this {
         const configs = Array.isArray(config) ? config : [config]
@@ -1586,20 +1335,6 @@ export class ReactiveAgentBuilder {
      *
      * @param turns - Array of test turns to consume sequentially
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * // Simple text response
-     * .withTestScenario([{ text: "Paris is the capital of France." }])
-     *
-     * // Tool loop then final answer
-     * .withTestScenario([
-     *   { toolCall: { name: "web-search", args: { query: "AI news" } } },
-     *   { text: "Here is the summary." },
-     * ])
-     *
-     * // Error injection
-     * .withTestScenario([{ error: "rate_limit_exceeded" }])
-     * ```
      */
     withTestScenario(turns: TestTurn[]): this {
         this._testScenario = turns
@@ -1650,14 +1385,6 @@ export class ReactiveAgentBuilder {
      *
      * @param handler - Callback receiving the error and execution context
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * agent
-     *   .withErrorHandler((err, ctx) => {
-     *     console.error(`[${ctx.phase}] Agent error:`, err.message);
-     *     myMonitoring.capture(err);
-     *   })
-     * ```
      */
     withErrorHandler(
         handler: (
@@ -1690,15 +1417,6 @@ export class ReactiveAgentBuilder {
      * with individual check results. Useful for Kubernetes liveness/readiness probes.
      *
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withHealthCheck()
-     *   .build();
-     * const health = await agent.health();
-     * // { status: "healthy", checks: [...] }
-     * ```
      */
     withHealthCheck(): this {
         this._enableHealthCheck = true
@@ -1711,13 +1429,6 @@ export class ReactiveAgentBuilder {
      * is reached. Only iterations that include at least one tool call count.
      * @param n - Minimum number of iterations required
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withMinIterations(3)
-     *   .build();
-     * ```
      */
     withMinIterations(n: number): this {
         this._minIterations = n
@@ -1730,13 +1441,6 @@ export class ReactiveAgentBuilder {
      * data — facts about the current task, project, or environment.
      * @param context - Key-value pairs injected as a "Task Context" section
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withTaskContext({ projectName: "acme", environment: "production" })
-     *   .build();
-     * ```
      */
     withTaskContext(context: Record<string, string>): this {
         this._taskContext = context
@@ -1754,13 +1458,6 @@ export class ReactiveAgentBuilder {
      * @param every - Checkpoint interval in iterations
      * @param options.autoResume - Automatically resume from last checkpoint (default: false)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withProgressCheckpoint(5, { autoResume: true })
-     *   .build();
-     * ```
      */
     withProgressCheckpoint(
         every: number,
@@ -1777,13 +1474,6 @@ export class ReactiveAgentBuilder {
      * @param config.mode - "reflect" (default) or "loop"
      * @param config.prompt - Custom verification prompt (optional)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withVerificationStep({ mode: "reflect" })
-     *   .build();
-     * ```
      */
     withVerificationStep(
         config: { mode?: 'reflect' | 'loop'; prompt?: string } = {}
@@ -1801,16 +1491,6 @@ export class ReactiveAgentBuilder {
      * @param validator - Returns { valid, feedback? }; feedback is shown to the agent on retry
      * @param options.maxRetries - Max retry attempts on validation failure (default: 2)
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withOutputValidator(
-     *     (output) => ({ valid: output.includes("COMPLETE"), feedback: "Must include COMPLETE marker" }),
-     *     { maxRetries: 3 }
-     *   )
-     *   .build();
-     * ```
      */
     withOutputValidator(
         validator: (output: string) => { valid: boolean; feedback?: string },
@@ -1827,13 +1507,6 @@ export class ReactiveAgentBuilder {
      * with the prior output as context, up to 3 additional times.
      * @param fn - Predicate receiving { output: string }; return true to accept the result
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withCustomTermination(({ output }) => output.includes("DONE"))
-     *   .build();
-     * ```
      */
     withCustomTermination(fn: (state: { output: string }) => boolean): this {
         this._customTermination = fn
@@ -1887,14 +1560,6 @@ export class ReactiveAgentBuilder {
      * and evolved over time based on agent performance.
      *
      * @param config - Optional skills configuration
-     * @example
-     * ```typescript
-     * builder.withSkills({
-     *   paths: ["./my-skills/"],
-     *   evolution: { mode: "suggest", refinementThreshold: 10 },
-     *   overrides: { "my-critical-skill": { evolutionMode: "locked" } },
-     * })
-     * ```
      */
     withSkills(config?: {
         paths?: string[]
@@ -1914,12 +1579,6 @@ export class ReactiveAgentBuilder {
      * Enable the Conductor's Suite meta-tools: brief, find, pulse, recall.
      * Also injects the harness skill into the agent's operating context.
      *
-     * @example
-     * ```typescript
-     * builder.withMetaTools()  // Enable all with defaults
-     * builder.withMetaTools({ harnessSkill: "./my-harness.md" })
-     * builder.withMetaTools({ brief: true, pulse: true })
-     * ```
      */
     withMetaTools(config?: import('./types.js').MetaToolsConfig | false): this {
         if (config === false) {
@@ -1956,14 +1615,6 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Fallback chain configuration with provider, model, and error threshold
      * @returns `this` for chaining
-     * @example
-     * ```typescript
-     * builder.withFallbacks({
-     *   providers: ["anthropic", "openai"],
-     *   models: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
-     *   errorThreshold: 3,
-     * })
-     * ```
      */
     withFallbacks(config: {
         providers?: string[]
@@ -1997,10 +1648,6 @@ export class ReactiveAgentBuilder {
      * (entropy scores, reactive decisions, strategy switches).
      *
      * @param opts.dir - Directory to write JSONL files (default: `.reactive-agents/traces`)
-     * @example
-     * ```typescript
-     * builder.withTracing({ dir: "./traces" })
-     * ```
      */
     withTracing(opts: { dir?: string } = {}): this {
         this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` }
@@ -2030,13 +1677,6 @@ export class ReactiveAgentBuilder {
      * `ReactiveAgents.fromJSON()`.
      *
      * @returns AgentConfig representing the current builder state
-     * @example
-     * ```typescript
-     * const config = builder.toConfig();
-     * const json = JSON.stringify(config);
-     * // Later:
-     * const agent = await ReactiveAgents.fromConfig(config).build();
-     * ```
      */
     toConfig(): import('./agent-config.js').AgentConfig {
         return serializeBuilder(this as unknown as import('./builder/to-config.js').BuilderStateForSerialization)
@@ -2052,12 +1692,6 @@ export class ReactiveAgentBuilder {
      *
      * @returns Promise resolving to a ReactiveAgent instance
      * @throws Error if configuration is invalid or API keys are missing
-     * @example
-     * ```typescript
-     * const agent = await ReactiveAgents.create()
-     *   .withModel("claude-opus-4-20250514")
-     *   .build();
-     * ```
      */
     async build(): Promise<ReactiveAgent> {
         // Auto-resolve context profile from model name if not explicitly set
@@ -2129,14 +1763,6 @@ export class ReactiveAgentBuilder {
      *
      * @param input - The task prompt or question
      * @returns Promise resolving to an AgentResult
-     * @example
-     * ```typescript
-     * const result = await ReactiveAgents.create()
-     *   .withProvider("anthropic")
-     *   .withReasoning()
-     *   .runOnce("Summarize the README in one paragraph");
-     * console.log(result.output);
-     * ```
      */
     async runOnce(input: string): Promise<AgentResult> {
         const agent = await this.build()
@@ -2154,13 +1780,6 @@ export class ReactiveAgentBuilder {
      * Useful for composing agent creation into larger Effect workflows.
      *
      * @returns Effect that produces a ReactiveAgent
-     * @example
-     * ```typescript
-     * const buildEffect = ReactiveAgents.create()
-     *   .withModel("claude-opus-4-20250514")
-     *   .buildEffect();
-     * const agent = await Effect.runPromise(buildEffect);
-     * ```
      */
     buildEffect(): Effect.Effect<ReactiveAgent, Error> {
         const self = this
