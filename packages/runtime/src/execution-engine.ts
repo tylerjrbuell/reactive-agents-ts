@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Option, Queue, Stream as EStream, Duration, FiberRef, Logger } from "effect";
+import { Effect, Context, Layer, Ref, Stream as EStream, Duration, Logger } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -12,7 +12,7 @@ import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
-import { StreamingTextCallback, RunControllerRef } from "@reactive-agents/core";
+import { StreamingTextCallback } from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
