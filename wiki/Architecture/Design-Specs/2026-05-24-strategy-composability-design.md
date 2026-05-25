@@ -259,6 +259,17 @@ Breakdown of new tests:
 
   Output content matched (Mercury 4880, Venus 12104, Earth 12742, Mars 6779). Shared finalize.ts pipeline verified end-to-end on live LLM.
 
+- **Live Ollama + real-tool probe (qwen3.5:latest + crypto-price, 2026-05-25):** `apps/examples/src/reasoning/finalize-probe-tools.ts`. Hits CoinGecko via the built-in `crypto-price` tool. This is the exact failure-mode shape that motivated the 0af217c8 fix (BTC placeholder survival).
+
+  | Strategy | Tool calls | Status | hasTable | hasPlaceholder | hasRealPrice | Tokens | Duration |
+  |---|---|---|---|---|---|---|---|
+  | `reflexion` | 0 (used training) | completed | ✅ | ❌ | ✅ $77,505 | 7378 | 32s |
+  | `plan-execute-reflect` | 2 (BTC+ETH) | completed | ✅ | ❌ | ✅ $77,505 / $2,123.49 | 11084 | 132s |
+
+  **plan-execute path verified end-to-end:** called `crypto-price` twice, received real CoinGecko JSON, raw `[EXEC` harvest threaded through `enforceQualityGate`, synthesis produced format-valid markdown table with real prices. This is the data path the Phase 0 extraction governs — confirmed live.
+
+  **Reflexion caveat:** model satisfied the task from training knowledge without invoking the tool, so the placeholder-fix branch of `decideSynthesisInput` wasn't exercised live (no malformed draft → no synthesis fire). Unit tests cover that branch deterministically; integration shows no regression and no crash under the migration.
+
 ### E2 (drift-prevention contract)
 
 Two structural tests now run as part of the reasoning suite. Both currently pass:
