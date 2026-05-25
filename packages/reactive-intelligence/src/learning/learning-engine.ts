@@ -130,7 +130,15 @@ export const LearningEngineServiceLive = (
 
         // 3. Check for skill synthesis
         const calibration = calibrationStore.load(data.modelId);
-        const threshold = calibration?.highEntropyThreshold ?? 0.8;
+        // Use calibrated threshold only when conformal calibration has enough
+        // samples (sampleCount ≥ 20). With fewer samples, `computeCalibration`
+        // returns `highEntropyThreshold: 0` + `calibrated: false`, which would
+        // make `?? 0.8` collapse to `0` (since `??` only coalesces null/undef)
+        // and block skill synthesis indefinitely. Fall back to 0.8 default.
+        const threshold =
+          calibration?.calibrated && calibration.highEntropyThreshold > 0
+            ? calibration.highEntropyThreshold
+            : 0.8;
         const skillSynthesized = shouldSynthesizeSkill({
           entropyHistory: data.entropyHistory,
           outcome: data.outcome,

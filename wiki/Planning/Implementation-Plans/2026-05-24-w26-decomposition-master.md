@@ -3,7 +3,11 @@ date: 2026-05-24
 status: ready
 issue: "#76"
 owner: runtime
-sub-bundles: [w26a-execution-engine, w26b-builder, w26c-runtime, w26d-reactive-agent]
+sub-bundles:
+  - w26a-execution-engine
+  - w26b-builder
+  - w26c-runtime
+  - w26d-reactive-agent
 ---
 
 # W26 Runtime Decomposition — Master Plan

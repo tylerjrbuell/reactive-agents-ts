@@ -17,7 +17,7 @@
 // follow-up work (see upward-report). The wiring is symmetric to complete()
 // and exercised by the local provider's existing stream tests.
 
-import { describe, it, expect, mock, beforeAll, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll, afterEach } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { ProviderAdapter } from "../src/adapter.js";
 import {
@@ -162,8 +162,11 @@ let liteLLMNextResponse: LiteLLMFetchResponse = {
   model: "anthropic/claude-3-5-sonnet-20241022",
 };
 
+// Scope the fetch monkey-patch to this file's lifecycle so workspace runs
+// don't inherit the mock and break later HTTP-based suites (pricing, A2A,
+// MCP HTTP transports, health).
 const originalFetch = globalThis.fetch;
-globalThis.fetch = (async (_url: unknown, _opts?: unknown) => ({
+const mockFetch = (async (_url: unknown, _opts?: unknown) => ({
   ok: true,
   status: 200,
   json: async () => liteLLMNextResponse,
@@ -183,6 +186,7 @@ let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];
 let LLMService: (typeof import("../src/index.js"))["LLMService"];
 
 beforeAll(async () => {
+  globalThis.fetch = mockFetch;
   const mod = await import("../src/index.js");
   AnthropicProviderLive = mod.AnthropicProviderLive as Layer.Layer<LLMServiceType>;
   OpenAIProviderLive = mod.OpenAIProviderLive as Layer.Layer<LLMServiceType>;
@@ -190,6 +194,10 @@ beforeAll(async () => {
   LiteLLMProviderLive = mod.LiteLLMProviderLive as Layer.Layer<LLMServiceType>;
   LLMConfig = mod.LLMConfig;
   LLMService = mod.LLMService;
+});
+
+afterAll(() => {
+  globalThis.fetch = originalFetch;
 });
 
 afterEach(() => {

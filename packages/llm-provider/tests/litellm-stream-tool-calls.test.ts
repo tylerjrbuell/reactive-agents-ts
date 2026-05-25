@@ -13,7 +13,7 @@
 //   4. With adapter.parseToolCalls registered, per-chunk emissions are
 //      suppressed and a single pair is synthesized at finish_reason
 
-import { describe, it, expect, mock, beforeAll, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll, afterEach } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import type { ProviderAdapter } from "../src/adapter.js";
 import {
@@ -61,7 +61,12 @@ const sseStream = (frames: ReadonlyArray<string>): ReadableStream<Uint8Array> =>
 
 let nextStreamFrames: ReadonlyArray<string> = [];
 
-globalThis.fetch = (async (_url: unknown, opts?: unknown) => {
+// Module-level `globalThis.fetch` reassignment contaminates the workspace
+// test run — every subsequent suite that hits `fetch` (pricing, A2A, health,
+// MCP HTTP transports) inherits the mock. Scope it to this file via
+// beforeAll/afterAll and restore the original in afterAll.
+const originalFetch = globalThis.fetch;
+const mockFetch = (async (_url: unknown, opts?: unknown) => {
   const init = opts as { body?: string } | undefined;
   if (init?.body) {
     lastRequestBody = JSON.parse(init.body) as Record<string, unknown>;
@@ -83,10 +88,15 @@ let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];
 let LLMService: (typeof import("../src/index.js"))["LLMService"];
 
 beforeAll(async () => {
+  globalThis.fetch = mockFetch;
   const mod = await import("../src/index.js");
   LiteLLMProviderLive = mod.LiteLLMProviderLive as Layer.Layer<LLMServiceType>;
   LLMConfig = mod.LLMConfig;
   LLMService = mod.LLMService;
+});
+
+afterAll(() => {
+  globalThis.fetch = originalFetch;
 });
 
 afterEach(() => {
