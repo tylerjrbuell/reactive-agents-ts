@@ -19,6 +19,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
+import type { KernelMessage } from "../kernel/state/kernel-state.js";
 import {
   resolveStrategyServices,
   compilePromptOrFallback,
@@ -30,6 +31,7 @@ import { extractThinking, extractThinkingSafeContent, THINKING_SAFE_MIN_TOKENS }
 import { extractOutputFormat } from "../kernel/capabilities/comprehend/task-intent.js";
 import {
   validateOutputFormat,
+  validateContentCompleteness,
   buildSynthesisPrompt,
 } from "../kernel/loop/output-synthesis.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -159,6 +161,11 @@ export const executeReflexion = (
       ?? "";
     let lastKernelSteps = [...genState.steps]; // Track kernel steps for critique context
     let allSideEffectSteps = [...genState.steps]; // Accumulate ALL steps for side-effect tracking
+    // Conversation thread carried across passes. Kernel's `initialMessages`
+    // input is the native carrier for tool_result evidence — threading it into
+    // improve passes lets the model synthesize from real values rather than
+    // re-stating placeholders from a stringified summary.
+    let runningMessages: readonly KernelMessage[] = genState.messages;
     totalTokens += genState.tokens;
     totalCost += genState.cost;
 
@@ -317,6 +324,7 @@ export const executeReflexion = (
           llm,
           taskDescription: input.taskDescription,
           output: currentResponse,
+          toolData: collectToolData(runningMessages),
         });
         totalTokens += gated.tokens;
         totalCost += gated.cost;
@@ -338,6 +346,7 @@ export const executeReflexion = (
           llm,
           taskDescription: input.taskDescription,
           output: currentResponse,
+          toolData: collectToolData(runningMessages),
         });
         totalTokens += gated.tokens;
         totalCost += gated.cost;
@@ -404,6 +413,11 @@ export const executeReflexion = (
         task: improvementTask,
         systemPrompt: improveSystemPrompt,
         priorContext: improvePriorContext,
+        // Carry the conversation thread (incl. tool_result messages) from the
+        // prior pass so the model can synthesize from already-retrieved values
+        // instead of re-stating placeholders. blockedTools still prevents
+        // re-execution of side-effect tools.
+        initialMessages: runningMessages,
         availableToolSchemas: capabilitySnapshot.availableToolSchemas,
         allToolSchemas: capabilitySnapshot.allToolSchemas,
         resultCompression: input.resultCompression,
@@ -439,6 +453,9 @@ export const executeReflexion = (
       }
       // Always accumulate all steps for side-effect tracking across passes
       allSideEffectSteps = [...allSideEffectSteps, ...improveState.steps];
+      // Carry forward the full conversation thread (now includes this pass's
+      // new tool_result messages) for the next improve pass.
+      runningMessages = improveState.messages;
       totalTokens += improveState.tokens;
       totalCost += improveState.cost;
 
@@ -475,6 +492,7 @@ export const executeReflexion = (
       llm,
       taskDescription: input.taskDescription,
       output: currentResponse,
+      toolData: collectToolData(runningMessages),
     });
     totalTokens += gated.tokens;
     totalCost += gated.cost;
@@ -513,28 +531,62 @@ function buildSystemPrompt(taskDescription: string): string {
   );
 }
 
+/**
+ * Pure decision: does the gate need to invoke synthesis, and what raw
+ * input should synthesis operate on?
+ *
+ * Exported for unit testing. Architectural rule: synthesis is a DATA → FORMAT
+ * operation, not a "patch the draft" operation. When tool data is available,
+ * synthesis sees the tool data (mirrors plan-execute). When it's not (pure
+ * reasoning task), synthesis falls back to the draft.
+ *
+ * Synthesis fires when EITHER the format is wrong OR semantic completeness
+ * fails (e.g. format-valid markdown with unfilled placeholders like
+ * "[Insert BTC Price Here]" — common reflexion failure mode).
+ */
+export function decideSynthesisInput(
+  output: string,
+  taskDescription: string,
+  toolData: string | undefined,
+): { needsSynthesis: boolean; rawForSynthesis: string } {
+  const intent = extractOutputFormat(taskDescription);
+  if (!intent.format) {
+    return { needsSynthesis: false, rawForSynthesis: output };
+  }
+  const validation = validateOutputFormat(output, intent.format);
+  const completeness = validateContentCompleteness(output, intent);
+  if (validation.valid && completeness.complete) {
+    return { needsSynthesis: false, rawForSynthesis: output };
+  }
+  const rawForSynthesis = toolData && toolData.length > 0 ? toolData : output;
+  return { needsSynthesis: true, rawForSynthesis };
+}
+
 function enforceOutputQualityGate(input: {
   llm: LLMService["Type"];
   taskDescription: string;
   output: string;
+  /** Raw tool-result content extracted from the conversation thread. When
+   *  present, synthesis sees real retrieved values (not just the draft). */
+  toolData?: string;
 }): Effect.Effect<
   { output: string; tokens: number; cost: number },
   never,
   never
 > {
-  const intent = extractOutputFormat(input.taskDescription);
-  if (!intent.format) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-
-  const validation = validateOutputFormat(input.output, intent.format);
-  if (validation.valid) {
-    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
-  }
-
-  const synthesisPrompt = buildSynthesisPrompt(
+  const decision = decideSynthesisInput(
     input.output,
-    intent.format,
+    input.taskDescription,
+    input.toolData,
+  );
+  if (!decision.needsSynthesis) {
+    return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
+  }
+  const intent = extractOutputFormat(input.taskDescription);
+  // intent.format guaranteed non-null when needsSynthesis=true
+  const synthesisPrompt = buildSynthesisPrompt(
+    decision.rawForSynthesis,
+    intent.format!,
     input.taskDescription,
   );
 
@@ -560,7 +612,7 @@ function enforceOutputQualityGate(input: {
           };
         }
 
-        const revalidation = validateOutputFormat(candidate, intent.format);
+        const revalidation = validateOutputFormat(candidate, intent.format!);
         return {
           output: revalidation.valid ? candidate : input.output,
           tokens: response.usage.totalTokens,
@@ -877,4 +929,19 @@ function buildCompactedCritiqueHistory(critiques: string[]): string {
   const older = critiques.slice(0, critiques.length - 3).map((_, i) => `${i + 1}. [addressed]`);
   const recent = critiques.slice(-3).map((c, i) => `${critiques.length - 2 + i}. ${c}`);
   return [...older, ...recent].join("\n");
+}
+
+/**
+ * Extract raw tool_result content from the kernel conversation thread.
+ * Used to feed the synthesis quality gate so it can fill template placeholders
+ * with actual retrieved values instead of re-emitting the draft.
+ */
+function collectToolData(messages: readonly KernelMessage[]): string {
+  const parts: string[] = [];
+  for (const m of messages) {
+    if (m.role === "tool_result" && !m.isError && m.content) {
+      parts.push(`[${m.toolName}] ${m.content}`);
+    }
+  }
+  return parts.join("\n");
 }

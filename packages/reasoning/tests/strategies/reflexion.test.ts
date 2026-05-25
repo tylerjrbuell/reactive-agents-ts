@@ -1,7 +1,7 @@
 // File: tests/strategies/reflexion.test.ts
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
-import { executeReflexion } from "../../src/strategies/reflexion.js";
+import { executeReflexion, decideSynthesisInput } from "../../src/strategies/reflexion.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
@@ -317,5 +317,71 @@ describe("ReflexionStrategy", () => {
       const content = c.content.replace(/^\[CRITIQUE \d+\]\s*/, "");
       expect(content.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// Synthesis gate decision — architectural fix for placeholder-survival bug.
+// Reflexion previously fed its own (placeholder-laden) draft back to synthesis;
+// synthesis is now a data → format operation that prefers tool data when
+// available, matching the plan-execute pattern.
+describe("decideSynthesisInput", () => {
+  it("skips synthesis when no format requested", () => {
+    const r = decideSynthesisInput("Some text answer.", "Explain X.", undefined);
+    expect(r.needsSynthesis).toBe(false);
+    expect(r.rawForSynthesis).toBe("Some text answer.");
+  });
+
+  it("skips synthesis when output is format-valid AND content-complete", () => {
+    const task = "Get the price for BTC. Return a markdown table.";
+    const completeOutput = "| Coin | Price |\n| --- | --- |\n| BTC | $77,000.00 |";
+    const r = decideSynthesisInput(completeOutput, task, "raw tool data");
+    expect(r.needsSynthesis).toBe(false);
+  });
+
+  it("triggers synthesis on placeholder-laden markdown (the bug fix)", () => {
+    // This was the production failure mode: 4 reflexion attempts produced
+    // syntactically-valid markdown with unfilled template placeholders.
+    // Format validator passed; completeness check fails on missing numerical
+    // data → synthesis must fire.
+    const task = "Search the web for the latest news for XRP and Bitcoin and get live prices, then write a report in markdown format.";
+    const placeholderDraft =
+      "## Report\n\n| Coin | Price |\n| --- | --- |\n| BTC | [Insert BTC Price Here] |\n| XRP | [Insert XRP Price Here] |";
+    const toolData =
+      '[crypto-price] {"prices":[{"symbol":"BTC","price":77009},{"symbol":"XRP","price":1.35}]}';
+
+    const r = decideSynthesisInput(placeholderDraft, task, toolData);
+    expect(r.needsSynthesis).toBe(true);
+    // Architectural assertion: synthesis sees the RAW DATA, not the draft.
+    expect(r.rawForSynthesis).toBe(toolData);
+    expect(r.rawForSynthesis).not.toContain("[Insert BTC Price Here]");
+  });
+
+  it("falls back to draft when synthesis needed but no tool data exists", () => {
+    // Pure-reasoning task — no tool calls happened — gate has nothing else
+    // to feed synthesis. Falls back to the draft so the format-only repair
+    // path still works for non-tool tasks.
+    const task = "Explain quantum entanglement in markdown.";
+    const draft = "quantum entanglement is when particles are linked";
+    const r = decideSynthesisInput(draft, task, undefined);
+    expect(r.needsSynthesis).toBe(true);
+    expect(r.rawForSynthesis).toBe(draft);
+  });
+
+  it("prefers tool data over draft even for invalid-format output", () => {
+    // Format-invalid draft + tool data → synthesis sees tool data.
+    const task = "Get crypto prices and format as markdown.";
+    const draft = "no markdown here just plain text";
+    const toolData = '[crypto-price] {"BTC":77009}';
+    const r = decideSynthesisInput(draft, task, toolData);
+    expect(r.needsSynthesis).toBe(true);
+    expect(r.rawForSynthesis).toBe(toolData);
+  });
+
+  it("treats empty tool data string as absent (falls back to draft)", () => {
+    const task = "Get the price for BTC and XRP and return it in markdown format.";
+    const draft = "# Report\n\nBTC: [placeholder]";
+    const r = decideSynthesisInput(draft, task, "");
+    expect(r.needsSynthesis).toBe(true);
+    expect(r.rawForSynthesis).toBe(draft);
   });
 });
