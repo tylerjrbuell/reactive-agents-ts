@@ -19,7 +19,7 @@ import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
-import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
+import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
@@ -256,10 +256,10 @@ export const executeReactive = (
                 ? "final_answer"
                 : "max_iterations";
 
-    yield* emitLog({
-      _tag: "phase_complete",
+    yield* emitPhaseEnd({
+      emitLog,
       phase: "reactive:kernel",
-      duration: Date.now() - start,
+      startedAt: start,
       status: state.status === "failed" ? "error" : "success",
     });
 

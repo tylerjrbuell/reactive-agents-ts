@@ -40,6 +40,7 @@ import {
   resolveStrategyServices,
   publishReasoningStep,
   makeStrategyEmitLog,
+  emitPhaseEnd,
 } from "../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
@@ -190,20 +191,7 @@ export const executePlanExecute = (
       Math.ceil(planPrompt.length / 4);
     totalTokens += planTokenEst;
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "plan-execute:plan",
-      duration: Date.now() - start,
-      status: "success",
-    });
-
-    yield* emitLog({
-      _tag: "metric",
-      name: "tokens_used",
-      value: totalTokens,
-      unit: "tokens",
-      timestamp: new Date(),
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens });
 
     let plan: Plan = hydratePlan(planResult.data, {
       taskId: input.taskId ?? "plan-execute",
@@ -628,20 +616,7 @@ export const executePlanExecute = (
         }
       }
 
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "plan-execute:execute",
-        duration: Date.now() - start,
-        status: "success",
-      });
-
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
+      yield* emitPhaseEnd({ emitLog, phase: "plan-execute:execute", startedAt: start, totalTokens });
 
       yield* emitLog({ _tag: "phase_started", phase: "plan-execute:reflect", timestamp: new Date() });
 
@@ -700,20 +675,7 @@ export const executePlanExecute = (
 
       const reflectionContent = reflectResult.content;
 
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "plan-execute:reflect",
-        duration: Date.now() - start,
-        status: "success",
-      });
-
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
+      yield* emitPhaseEnd({ emitLog, phase: "plan-execute:reflect", startedAt: start, totalTokens });
 
       // ── Entropy scoring + reactive controller for PER reflection iterations ──
       // Scores the reflection content as the "thought" of this iteration so the

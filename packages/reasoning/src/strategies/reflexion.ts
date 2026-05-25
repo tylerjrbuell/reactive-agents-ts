@@ -16,11 +16,12 @@ import type { ReasoningResult, ReasoningStep } from "../types/index.js";
 import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
 import {
+  makeStrategyEmitLog,
+  emitPhaseEnd,
   resolveStrategyServices,
   compilePromptOrFallback,
   publishReasoningStep,
@@ -166,20 +167,7 @@ export const executeReflexion = (
     totalTokens += genPass.tokens;
     totalCost += genPass.cost;
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "reflexion:generate",
-      duration: Date.now() - start,
-      status: "success",
-    });
-
-    yield* emitLog({
-      _tag: "metric",
-      name: "tokens_used",
-      value: totalTokens,
-      unit: "tokens",
-      timestamp: new Date(),
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "reflexion:generate", startedAt: start, totalTokens });
 
     steps.push(makeStep("thought", `[ATTEMPT 1] ${currentResponse}`));
 
@@ -256,20 +244,7 @@ export const executeReflexion = (
       totalTokens += critiqueResult.tokens;
       totalCost += critiqueResult.cost;
 
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "reflexion:critique",
-        duration: Date.now() - start,
-        status: "success",
-      });
-
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
+      yield* emitPhaseEnd({ emitLog, phase: "reflexion:critique", startedAt: start, totalTokens });
 
       // HS-cleanup-1: framework instrumentation — tag so output-assembly +
       // arbitrator skip this step when assembling user-facing answer.
@@ -432,20 +407,7 @@ export const executeReflexion = (
       totalTokens += improvePass.tokens;
       totalCost += improvePass.cost;
 
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "reflexion:improve",
-        duration: Date.now() - start,
-        status: "success",
-      });
-
-      yield* emitLog({
-        _tag: "metric",
-        name: "tokens_used",
-        value: totalTokens,
-        unit: "tokens",
-        timestamp: new Date(),
-      });
+      yield* emitPhaseEnd({ emitLog, phase: "reflexion:improve", startedAt: start, totalTokens });
 
       steps.push(makeStep("thought", `[ATTEMPT ${attempt + 1}] ${currentResponse}`));
 

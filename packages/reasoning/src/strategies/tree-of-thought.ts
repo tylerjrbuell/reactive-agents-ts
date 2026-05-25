@@ -16,7 +16,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
-import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
+import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   extractThinkingSafeContent,
@@ -578,20 +578,7 @@ export const executeTreeOfThought = (
 
     steps.push(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`, { frameworkInstrumentation: "tot-marker" }));
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "tree-of-thought:explore",
-      duration: Date.now() - start,
-      status: "success",
-    });
-
-    yield* emitLog({
-      _tag: "metric",
-      name: "tokens_used",
-      value: totalTokens,
-      unit: "tokens",
-      timestamp: new Date(),
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:explore", startedAt: start, totalTokens });
 
     yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:execute", timestamp: new Date() });
 
@@ -632,12 +619,7 @@ export const executeTreeOfThought = (
       ?? [...execState.steps].filter((s) => s.type === "thought").pop()?.content
       ?? null;
 
-    yield* emitLog({
-      _tag: "phase_complete",
-      phase: "tree-of-thought:execute",
-      duration: Date.now() - start,
-      status: "success",
-    });
+    yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:execute", startedAt: start });
 
     yield* emitLog({
       _tag: "completion",

@@ -27,7 +27,7 @@ import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
-import { makeStrategyEmitLog } from "../kernel/utils/service-utils.js";
+import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 
 // ── DirectInput ───────────────────────────────────────────────────────────────
 
@@ -174,10 +174,10 @@ export const executeDirect = (
 
     const output = state.output ?? null;
 
-    yield* emitLog({
-      _tag: "phase_complete",
+    yield* emitPhaseEnd({
+      emitLog,
       phase: "direct:kernel",
-      duration: Date.now() - start,
+      startedAt: start,
       status: state.status === "failed" ? "error" : "success",
     });
 
