@@ -10,22 +10,23 @@ updated: 2026-05-25
 
 ---
 
-## Latest Session (2026-05-25) — execute-backlog double-shot: PRs #138 + #139
+## Latest Session (2026-05-25) — execute-backlog triple-shot: PRs #138 + #139 + #140
 
-**Bundle 1 — providers-retry-error-accumulation** (PR [#138](https://github.com/tylerjrbuell/reactive-agents-ts/pull/138))
+**Bundle 1 — providers-retry-error-accumulation** ([#138](https://github.com/tylerjrbuell/reactive-agents-ts/pull/138))
+- ✅ #75 (HS-16) — 5 LLM providers accumulate parse retry errors into `LLMParseError.attempts[]` instead of overwriting `lastError`. `rawOutput` back-compat preserved.
 
-- ✅ #75 (HS-16) — 5 LLM providers accumulate parse retry errors into `LLMParseError.attempts: ReadonlyArray<ParseAttemptError>` instead of overwriting `lastError = e`. `rawOutput` back-compat preserved.
+**Bundle 2 — ri-handler-types-and-skill-resolver-tests** ([#139](https://github.com/tylerjrbuell/reactive-agents-ts/pull/139))
+- ✅ #85 (HS-29) — typed `asInterventionHandler<T>` helper centralizes the one cast site; 9 cast sites in `handlers/index.ts` + 9 adjacent sites in `dispatcher-compose-bridge.test.ts` wrapped. 5 baseline typecheck errors silenced.
+- ✅ #81 (HS-25) — `SkillResolverConfig.skipGlobalPaths?: boolean` plumbed to `discoverSkills()`. 2 `it.skip` un-skipped.
 
-**Bundle 2 — ri-handler-types-and-skill-resolver-tests** (PR [#139](https://github.com/tylerjrbuell/reactive-agents-ts/pull/139))
+**Bundle 3 — examples-integration-md-conversion** ([#140](https://github.com/tylerjrbuell/reactive-agents-ts/pull/140))
+- ✅ #86 (HS-30) — 3 `.ts` integration examples (nextjs/hono/express) → `.md` snippets. Removes `@ts-nocheck` + 2 dead `(agent as any).dispose()` casts.
 
-- ✅ #85 (HS-29) — typed `asInterventionHandler<T>` helper in `intervention.ts`; 9 cast sites in `handlers/index.ts` + 9 adjacent sites in `dispatcher-compose-bridge.test.ts` wrapped. 5 baseline typecheck errors silenced.
-- ✅ #81 (HS-25) — `SkillResolverConfig.skipGlobalPaths?: boolean` plumbed to `discoverSkills()`; tests opt-in keeps fixtures hermetic; 2 `it.skip` blocks un-skipped (474 → 476 pass in RI).
+**Backlog hygiene (verification-only):**
+- #84 (4 `@internal` OpenAI exports leak) — barrel doesn't re-export them. Recommended close.
+- #93 (`focusedTools` typecheck) — original error not reproducible. Recommended close or rescope.
 
-**Backlog hygiene (verification comments, no code):**
-- #84 (4 `@internal` OpenAI exports leak) — barrel doesn't re-export the cited symbols; recommended close pending reframe.
-- #93 (`focusedTools` typecheck red) — original error not reproducible; current RI typecheck red is unrelated test-file `unknown→never`; recommended close or rescope.
-
-**Skill amendments to `.agents/skills/execute-backlog/SKILL.md`:** v10 RED authority check (tests-excluded-from-typecheck + TaggedError leniency) + single-area mechanical-scaffold template. v11 adjacent-improvement detection at baseline + sed-after-Edit hazard.
+**Skill amendments to `.agents/skills/execute-backlog/SKILL.md`:** v10 RED authority check + single-area mechanical-scaffold template. v11 adjacent-improvement detection at baseline + sed-after-Edit hazard.
 
 ---
 
