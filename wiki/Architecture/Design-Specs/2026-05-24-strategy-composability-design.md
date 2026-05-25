@@ -123,7 +123,7 @@ This is the live extraction roadmap. Each row = one primitive. Order is **trigge
 |---|---|---|---|---|---|---|
 | 1 | `finalize` (`enforceQualityGate` / `decideSynthesisInput` / `collectToolData`) | `kernel/loop/finalize.ts` | reflexion, plan-execute, (future ToT, code-action) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
 | 2 | `critique` (LLM-as-judge pass: prompt + thinking-safe extraction + cost tally) | `kernel/capabilities/verify/critique.ts` | reflexion (self-critique), plan-execute-reflect (reflection pass) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
-| 3 | `runPass` (kernel-invoke + cost accumulation + step harvest into a pass record) | `kernel/loop/run-pass.ts` | reflexion (3 invocations), plan-execute (per-step), ToT (per branch), code-action (verifier loop) | duplicated cost/step accumulation in every strategy | next time a strategy adds another invocation point | pending trigger |
+| 3 | `runPass` (kernel-invoke + ergonomic harvest: output, tokens, cost, steps, messages, hadToolCalls) | `kernel/loop/run-pass.ts` | reflexion (2 sites), reactive (1 site), (future direct, ToT, code-action) | shipped — 1 home | — | ✅ **shipped 2026-05-25** |
 | 4 | `decompose` (Task → Plan/Branches) | `kernel/capabilities/comprehend/decompose.ts` | plan-execute (`buildPlanGenerationPrompt`), ToT (expand), sub-agent delegation | plan-prompts.ts; ToT branching | next time plan generation prompt edited | pending trigger |
 | 5 | `costAccumulator` (tokens + USD across passes) | likely subsumed by #3 | all strategies | inline `let totalTokens = 0; totalCost = 0;` in 7 files | extract as part of #3 | pending trigger |
 | 6 | `thinkingExtraction` contract (single helper, documented when-to-use rules for `stripThinking` / `extractThinking` / `extractThinkingSafeContent`) | `kernel/capabilities/reason/stream-parser.ts` (consolidate) | 5 call sites today across 3 strategies | grep `stripThinking\|extractThinking\|extractThinkingSafeContent` | next thinking-model regression OR next time a helper is added | pending trigger |
@@ -201,6 +201,62 @@ plan-execute reflected twice (visible in trace `phase:plan-execute:reflect` 2×)
 ### Primitive #2 verdict
 
 **Shipped.** Cumulative branch state: 11 commits on `bundle/strategy-finalize-extraction`. Two primitives down (`finalize`, `critique`). Strategies measurably thinning. Drift locked across both surfaces.
+
+## Primitive #3 Outcomes (2026-05-25)
+
+Primitive #3 (`runPass` + `resolvePassOutput` + `stepsHadToolCalls`) shipped on `bundle/strategy-finalize-extraction` in 3 commits. All 6 gates cleared.
+
+### LOC delta (cumulative)
+
+| File | Pre-Phase-0 | Phase 0 end | #2 end | #3 end | Δ cumulative |
+|---|---|---|---|---|---|
+| `strategies/reflexion.ts` | 947 | 838 | 818 | **812** | **-135 (-14.3%)** |
+| `strategies/plan-execute.ts` | 1642 | 1586 | 1579 | 1579 | **-63 (-3.8%)** |
+| `strategies/reactive.ts` | 306 | 306 | 306 | **304** | -2 |
+| `kernel/loop/finalize.ts` | — | 159 | 159 | 159 | new |
+| `kernel/capabilities/verify/critique.ts` | — | — | 112 | 112 | new |
+| `kernel/loop/run-pass.ts` | — | — | — | **118** | new |
+
+### Test delta
+
+| Metric | #2 end | #3 end |
+|---|---|---|
+| Reasoning suite total | 1346 pass / 0 fail | **1356 pass / 0 fail** |
+| New tests for #3 | — | **10** in `run-pass.test.ts` |
+| Build | green | **green** (38/38) |
+
+10 new tests: 6 × `resolvePassOutput` (state.output non-null, fallback to thought, empty-string fallback, null when no candidates, empty steps, skip-empty-thoughts), 3 × `stepsHadToolCalls` (empty, no actions, has action), 1 × drift contract.
+
+### Drift contract (the durable win for #3)
+
+Signature: any `strategies/*.ts` file that imports `runPass` MUST NOT also import `runKernel` directly. Half-migration would create two competing kernel-invocation paths inside one strategy — exactly the drift class we want to prevent. Today: 0 violations (reflexion + reactive both fully migrated; direct/ToT/code-action import runKernel but not runPass — clean state).
+
+Opt-out: `// run-pass-mixed-exempt` comment (not used today; available for transitional migrations).
+
+### Live LLM probe (Ollama, real tool, dual control-flow shapes)
+
+`apps/examples/src/reasoning/run-pass-probe.ts` on qwen3.5:latest + `crypto-price` tool, 2026-05-25:
+
+| Strategy | Shape | Tool call | Real price | Crash | Placeholder | Tokens | Duration |
+|---|---|---|---|---|---|---|---|
+| `reflexion` | multi-pass (gen + critique + improve) | yes | ✅ $2122.21 | ❌ | ❌ | 7379 | 34s |
+| `reactive` | single-pass | yes (visible in trace) | ✅ $2122.21 | ❌ | ❌ | 5216 | 20s |
+
+Both strategies invoked runPass → runKernel → returned real ETH price. Both control-flow shapes (multi-pass + single-pass) validated.
+
+### Architectural smells flagged during extraction (not all fixed this PR)
+
+Scope discipline: documenting these here so they aren't lost; each becomes its own small PR when adjacent code is open.
+
+1. **`direct.ts:197` — `as ReasoningStrategy` cast** with `// Cast to bypass a TS resolution quirk` comment. Load-bearing today (test suite confirms runtime correctness) but type-system smell — symptom of dist d.ts shadowing source's union. Fix: either freeze the union via const-as-assertion in the strategy registry OR investigate the TS resolution path. Not blocking.
+2. **`reactive.ts:214` — `process.env.REACTIVE_AGENTS_NOOP_VERIFIER === "1"` test override** leaking into production code path. Should be a test-only hook (Layer override at test boundary). Fix: move to test-only verifier-replacement Layer, delete env check. Low risk.
+3. **Synthetic-state construction duplicated** in reflexion + plan-execute for entropy sensor: `steps.map((rs) => ({ type: rs.type, ...(rs.content != null ? { content: rs.content } : {}) }))`. Candidate for a tiny `toSyntheticState(steps)` helper — but consumer count is 2 today and the pattern is 1 line, so deferring until 3rd consumer appears. §9.
+4. **`[...state.steps]` defensive copy pattern** at 4+ call sites — readonly array → array copy. Often unnecessary (caller doesn't mutate). Smell if not justified. Investigate per call site when touching; current PR didn't touch all.
+5. **`stripThinking` still in plan-execute** at lines 709, 923 — the synthesis call at 923 should use `extractThinkingSafeContent` (strict upgrade pattern, already applied 2× in this branch). The reflection call at 709 was just migrated via primitive #2. The synthesis at 923 is primitive #1 territory but uses a different recipe (full synthesizer prompt, not the finalize gate). **Worth a follow-up smell-fix PR**: migrate the synthesis call to `extractThinkingSafeContent` independently of finalize.ts; eliminates the last `stripThinking` use in plan-execute and unblocks deleting `stripThinking` entirely once 3 other call sites in the codebase are migrated.
+
+### Primitive #3 verdict
+
+**Shipped.** Cumulative branch state: 15 commits, 3 primitives, drift-locked across all three surfaces. Reflexion thinned 14.3% from baseline; reactive marginally; plan-execute primarily benefited from primitives 1+2.
 
 ## Speculative emergence (the framework that may never need to ship)
 
