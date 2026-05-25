@@ -5,6 +5,32 @@
  */
 
 /**
+ * Resolve the effective model name for telemetry, snapshot, and capability lookup.
+ *
+ * Handles the schema's `selectedModel` field shape variance (string on the legacy/
+ * reactive paths, object with a `.model` property on the reasoning paths).
+ * Replaces the `(ctx.selectedModel as any)?.model ?? ctx.selectedModel ?? config.defaultModel ?? "unknown"`
+ * pattern that was previously inlined at execution-engine.ts:834 and :950 (W26-A step 2).
+ */
+export function resolveModelName(
+  ctx: { selectedModel?: unknown; provider?: unknown },
+  config: { defaultModel?: unknown },
+): string {
+  const sel = ctx.selectedModel;
+  if (
+    sel &&
+    typeof sel === "object" &&
+    "model" in sel &&
+    typeof (sel as { model: unknown }).model === "string"
+  ) {
+    return (sel as { model: string }).model;
+  }
+  if (typeof sel === "string") return sel;
+  if (typeof config.defaultModel === "string") return config.defaultModel;
+  return "unknown";
+}
+
+/**
  * Extract a human-readable string from a task input. The input may be:
  * - a plain string (returned as-is)
  * - an object with a `question` field (returned)

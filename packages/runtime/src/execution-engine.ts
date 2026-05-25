@@ -71,6 +71,7 @@ import { runVerificationQualityGate } from "./engine/phases/agent-loop/verificat
 import { runIterationGuards } from "./engine/phases/agent-loop/iteration-guards.js";
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
+import { captureFinalSnapshot } from "./engine/finalize/snapshot-final.js";
 import { synthesizeAndStoreDebrief } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
 import { runLocalLearning } from "./engine/finalize/local-learning.js";
@@ -135,6 +136,7 @@ import {
   classifyComplexity,
   buildAutoMaxCallsPerTool,
   normalizeReasoningResult,
+  resolveModelName,
   type TaskComplexity,
   type ExecutionReasoningResult,
   briefResolvedSkillsFromMetadata,
@@ -831,7 +833,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           isVerbose,
                           effectiveContextTokens: resolveCapability(
                             String(c.provider ?? config.provider ?? "unknown"),
-                            String((c.selectedModel as any)?.model ?? c.selectedModel ?? config.defaultModel ?? "unknown"),
+                            resolveModelName(c, config),
                           ).recommendedNumCtx,
                         }),
                     );
@@ -937,22 +939,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ctx = yield* runInlineHarnessHooks(ctx, { config, task, cacheHit, obs });
 
                   // Phase 0.5: Capture final state snapshot after agent loop
-                  if (obs) {
-                    yield* obs.captureSnapshot(ctx.agentId, {
-                      currentStrategy: ctx.selectedStrategy,
-                      activeTools: ctx.availableTools ?? [],
-                      tokenUsage: {
-                        inputTokens: 0,
-                        outputTokens: ctx.tokensUsed,
-                        contextWindowUsed: ctx.messages.length,
-                        contextWindowMax: resolveCapability(
-                          String(ctx.provider ?? config.provider ?? "unknown"),
-                          String((ctx.selectedModel as any)?.model ?? ctx.selectedModel ?? config.defaultModel ?? "unknown"),
-                        ).recommendedNumCtx,
-                      },
-                      costAccumulated: ctx.cost,
-                    }).pipe(Effect.asVoid, Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/execution-engine.ts:2992", tag: errorTag(err) })));
-                  }
+                  // Extracted to engine/finalize/snapshot-final.ts (W26-A step 2).
+                  yield* captureFinalSnapshot(ctx, config, obs);
                 }
 
                 // ── Phase 6: VERIFY (optional) ── H2
