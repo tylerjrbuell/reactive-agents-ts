@@ -27,12 +27,12 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
-import { extractThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import {
   enforceQualityGate,
   collectToolData,
   decideSynthesisInput,
 } from "../kernel/loop/finalize.js";
+import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -236,47 +236,27 @@ export const executeReflexion = (
         critiqueDefaultFallback,
       );
 
-      const critiqueResponse = yield* llm
-        .complete({
-          messages: [
-            {
-              role: "user",
-              content: buildCritiquePrompt(
-                input.taskDescription,
-                currentResponse,
-                selfCritiqueDepth,
-                previousCritiques,
-                lastKernelSteps,
-              ),
-            },
-          ],
-          systemPrompt: withEnvContext(critiqueSystemPrompt),
-          maxTokens: selfCritiqueDepth === "deep" ? 2500 : THINKING_SAFE_MIN_TOKENS,
-          temperature: 0.3, // low temp for objective critique
-        })
-        .pipe(
-          Effect.mapError(
-            (err) =>
-              new ExecutionError({
-                strategy: "reflexion",
-                message: `Self-critique failed at attempt ${attempt}`,
-                step: attempt,
-                cause: err,
-              }),
-          ),
-        );
+      const critiqueResult = yield* runCritiquePass({
+        llm,
+        systemPrompt: critiqueSystemPrompt,
+        promptBody: buildCritiquePrompt(
+          input.taskDescription,
+          currentResponse,
+          selfCritiqueDepth,
+          previousCritiques,
+          lastKernelSteps,
+        ),
+        depth: selfCritiqueDepth,
+        strategyName: "reflexion",
+        step: attempt,
+      });
 
-      // Strip <think> blocks from critique. If the model put the entire
-      // critique inside <think>, fall back to the thinking content so
-      // satisfaction/stagnation detection still works.
-      // When Ollama's think:true is active, the provider separates thinking
-      // into response.thinking — content may already be empty.
-      const { thinking: critiqueThinking, content: cleanCritique } =
-        extractThinking(critiqueResponse.content);
-      const providerThinking = (critiqueResponse as any).thinking as string | undefined;
-      const critique = cleanCritique || critiqueThinking || providerThinking || critiqueResponse.content;
-      totalTokens += critiqueResponse.usage.totalTokens;
-      totalCost += critiqueResponse.usage.estimatedCost;
+      // Thinking-safe extraction already applied inside runCritiquePass.
+      // For satisfaction/stagnation detection, prefer the clean critique;
+      // fall back to the thinking trace only when content is empty.
+      const critique = critiqueResult.content || critiqueResult.thinking || "";
+      totalTokens += critiqueResult.tokens;
+      totalCost += critiqueResult.cost;
 
       yield* emitLog({
         _tag: "phase_complete",

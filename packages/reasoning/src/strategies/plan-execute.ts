@@ -47,6 +47,7 @@ import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { stripThinking, THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
+import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -675,34 +676,26 @@ export const executePlanExecute = (
         stepResults,
       );
 
-      const reflectResponse = yield* llm
-        .complete({
-          messages: [{ role: "user", content: reflectionPrompt }],
-          systemPrompt: withEnvContext(
-            input.systemPrompt
-              ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
-              : "You are evaluating plan execution. Determine if the task has been adequately addressed.",
-          ),
-          maxTokens: reflectionDepth === "deep" ? 2500 : THINKING_SAFE_MIN_TOKENS,
-          temperature: 0.3,
-        })
-        .pipe(
-          Effect.mapError(
-            (err) =>
-              new ExecutionError({
-                strategy: "plan-execute-reflect",
-                message: `Reflection failed at refinement ${refinement}`,
-                step: refinement,
-                cause: err,
-              }),
-          ),
-        );
+      const reflectSystemPrompt = input.systemPrompt
+        ? `${input.systemPrompt}\n\nYou are evaluating plan execution. Determine if the task has been adequately addressed.`
+        : "You are evaluating plan execution. Determine if the task has been adequately addressed.";
 
-      totalTokens += reflectResponse.usage.totalTokens;
-      totalCost += reflectResponse.usage.estimatedCost;
+      // Migrated to shared critique primitive — strict upgrade vs prior
+      // bare stripThinking: thinking-safe extraction now rescues reflections
+      // trapped inside <think> blocks (would have silently returned empty).
+      const reflectResult = yield* runCritiquePass({
+        llm,
+        systemPrompt: reflectSystemPrompt,
+        promptBody: reflectionPrompt,
+        depth: reflectionDepth,
+        strategyName: "plan-execute-reflect",
+        step: refinement,
+      });
 
-      // Strip <think> blocks from reflection before satisfaction check
-      const reflectionContent = stripThinking(reflectResponse.content);
+      totalTokens += reflectResult.tokens;
+      totalCost += reflectResult.cost;
+
+      const reflectionContent = reflectResult.content;
 
       yield* emitLog({
         _tag: "phase_complete",
