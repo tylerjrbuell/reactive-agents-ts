@@ -9,6 +9,7 @@ import {
 } from "@reactive-agents/core";
 import { makeDispatcher, registerHandler } from "../../src/controller/dispatcher.js";
 import {
+  asInterventionHandler,
   defaultInterventionConfig,
   type InterventionContext,
   type InterventionHandler,
@@ -100,9 +101,9 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, fixedHandler("switch-strategy", successOutcome([
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("switch-strategy", successOutcome([
       { kind: "request-strategy-switch", to: "reflexion", reason: "stall" },
-    ])));
+    ]))));
 
     const decisions: ControllerDecision[] = [
       { decision: "switch-strategy", from: "react", to: "reflexion", reason: "stall" },
@@ -125,9 +126,9 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, fixedHandler("stall-detect", successOutcome()));
-    registerHandler(dispatcher, fixedHandler("harness-harm", successOutcome()));
-    registerHandler(dispatcher, fixedHandler("human-escalate", successOutcome()));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("stall-detect", successOutcome())));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("harness-harm", successOutcome())));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("human-escalate", successOutcome())));
 
     const decisions: ControllerDecision[] = [
       { decision: "stall-detect", reason: "no progress", stalledIterations: 4 },
@@ -150,7 +151,7 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, fixedHandler("tool-failure-redirect", successOutcome()));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("tool-failure-redirect", successOutcome())));
 
     await Effect.runPromise(dispatcher.dispatch(
       [{ decision: "tool-failure-redirect", failingTool: "web-search", streakCount: 3, reason: "404" }],
@@ -176,9 +177,9 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, fixedHandler("temp-adjust", successOutcome()));
-    registerHandler(dispatcher, fixedHandler("compress", successOutcome()));
-    registerHandler(dispatcher, fixedHandler("skill-activate", successOutcome()));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("temp-adjust", successOutcome())));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("compress", successOutcome())));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("skill-activate", successOutcome())));
 
     const decisions: ControllerDecision[] = [
       { decision: "temp-adjust", delta: 0.2, reason: "raise diversity" },
@@ -198,7 +199,7 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, fixedHandler("switch-strategy", skipOutcome("handler-deferred")));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("switch-strategy", skipOutcome("handler-deferred"))));
 
     await Effect.runPromise(dispatcher.dispatch(
       [{ decision: "switch-strategy", from: "react", to: "reflexion", reason: "x" }],
@@ -222,9 +223,9 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, fixedHandler("switch-strategy", successOutcome()));
-    registerHandler(dispatcher, fixedHandler("stall-detect", successOutcome()));
-    registerHandler(dispatcher, fixedHandler("tool-failure-redirect", successOutcome()));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("switch-strategy", successOutcome())));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("stall-detect", successOutcome())));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("tool-failure-redirect", successOutcome())));
 
     await Effect.runPromise(dispatcher.dispatch(
       [
@@ -244,7 +245,7 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
 
   it("is a no-op when no harnessPipeline is provided", async () => {
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
-    registerHandler(dispatcher, fixedHandler("switch-strategy", successOutcome()));
+    registerHandler(dispatcher, asInterventionHandler(fixedHandler("switch-strategy", successOutcome())));
 
     // No pipeline in context; dispatch still succeeds.
     const result = await Effect.runPromise(dispatcher.dispatch(

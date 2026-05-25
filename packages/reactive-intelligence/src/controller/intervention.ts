@@ -77,6 +77,22 @@ export interface InterventionHandler<
   ) => Effect.Effect<InterventionOutcome, InterventionError, never>;
 }
 
+/**
+ * Erases the per-decision generic from a typed handler so it can be stored in
+ * a heterogeneous registry typed as `InterventionHandler[]`. TypeScript's
+ * function-parameter contravariance prevents `InterventionHandler<"early-stop">`
+ * from assigning to `InterventionHandler<full-union>` directly; runtime dispatch
+ * is safe because handlers are keyed and retrieved by their `type` string.
+ *
+ * Single named-cast site for the registry pattern — see
+ * `handlers/index.ts` and `dispatcher-compose-bridge.test.ts`. Resolves HS-29.
+ */
+export function asInterventionHandler<
+  T extends ControllerDecision["decision"]
+>(handler: InterventionHandler<T>): InterventionHandler {
+  return handler as unknown as InterventionHandler;
+}
+
 export interface InterventionSuppressionConfig {
   readonly minEntropyComposite: number;
   readonly minIteration: number;

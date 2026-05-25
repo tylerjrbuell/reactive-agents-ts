@@ -194,6 +194,16 @@ rtk grep -rn "<wrapper-or-helper-name>\|<registered-fn-pattern>" packages/
 
 If reachability is uncertain, **default to direct-invocation tests** (instantiate the helper / pull from registry / call wrapper directly) rather than full-stack `agent.run()` tests. Reason: 2026-05-21 #74 spawn — initial test design called `agent.run()` with `withTestScenario` + `withReasoning()`, expecting the harness `before('think')` wrapper to fire. It never did. Probes confirmed the wrapper was registered but the kernel-loop fire site was bypassed. Direct invocation via `RegistrationHarness._collected` pinned the unit in 6 tests, 0 flakes.
 
+**Adjacent-improvement detection at baseline (added 2026-05-25 v11).** When the post-branch baseline `bun test` or `bunx turbo run typecheck` reports failures in the SAME package as the bundle, scan each failure's fix-shape against the bundle's root-cause class:
+
+| Baseline failure type | Adjacent-improvement test |
+|------------------------|---------------------------|
+| Typecheck red w/ identical anti-pattern as cited verified-by | Add to bundle. Same helper / fix shape. No scope creep. |
+| Pre-existing test fail in untouched code path | File follow-up issue; don't block bundle. |
+| Lint warning in adjacent file with shared fix recipe | Add to bundle iff ≤5 LOC delta and same package. |
+
+If adjacent improvement adopted, **update the plan doc's "Adjacent improvement found" section** AND broaden the verified-by recheck command from per-file to workspace-wide (or per-package-wide). Generalization of the v9 "test+fix combo" rule. (Reason: 2026-05-25 #85 spawn — baseline typecheck flagged 5 errors in `tests/controller/dispatcher-compose-bridge.test.ts` with identical `InterventionHandler<TDecision>` contravariance root cause as the cited 9 sites in `handlers/index.ts`. Bundling them added 9 helper applications, 0 LOC of new design, silenced all 5 errors. Excluding them would have left a follow-up bundle with one-line diff each — wasteful.)
+
 ---
 
 ## Phase 3.5 — BRANCH (mandatory)
@@ -259,6 +269,19 @@ Mechanical edit wins on review surface (one shape to verify N times) and ships f
 ```
 
 (Reason: 2026-05-21 #73 spawn — 2 of 9 cited `(c as any).selectedStrategy` casts were dead because `selectedStrategy` was already `Schema.optional(Schema.String)` on the schema. The casts were historic from a pre-typing era and could be deleted without any helper plumbing.)
+
+**sed-after-Edit hazard (added 2026-05-25 v11).** When mixing the `Edit` tool (precise per-site) with bulk `sed -i 's/A/B/g'` in the same file/session, sed's pattern may **re-match Edit-wrapped sites** when the post-wrap suffix overlaps the search pattern's tail. Example: wrapping `fixedHandler(...)` with `asInterventionHandler(fixedHandler(...))`, then running `sed 's/registerHandler(dispatcher, fixedHandler(.*));$/.../' ` will re-match Edit-wrapped sites because both pre-wrap and post-wrap lines end with `));`. Result: extra paren on already-wrapped sites, syntax break, lost minutes.
+
+Procedure:
+
+```bash
+# Before bulk sed, verify no prior-wrapped sites exist
+rtk grep -c "<post-state-tail>" <file>   # e.g., grep -c "asInterventionHandler(fixedHandler" file
+# If > 0 → DO NOT use sed. Use Edit with replace_all=true per unique site.
+# If == 0 → safe to sed; verify with typecheck immediately after.
+```
+
+(Reason: 2026-05-25 #85 spawn — 4 Edit-wrapped sites at lines 104, 129, 130, 131 ended up with extra `)` after sed re-matched them. Caught by `tsc TS1005: ';' expected` within seconds; fixed with one `replace_all` Edit. Cheap to fix, but trivially avoidable by pre-grepping post-state.)
 
 **Same-session multi-bundle protocol (added 2026-05-21 v5).** When chaining bundles in one session, **each subsequent branch MUST be created from `origin/main`, not from the previous bundle's branch.** Stacking bundles undermines the verified-by gate — a subtle regression in bundle 1 would mask in bundle 2's tests (or worse: cause bundle 2 to attribute its failures incorrectly). Each bundle:
 

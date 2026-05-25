@@ -7,21 +7,18 @@ import { skillActivateHandler } from "./skill-activate.js";
 import { toolFailureRedirectHandler } from "./tool-failure-redirect.js";
 import { stallDetectorHandler } from "./stall-detector.js";
 import { harnessHarmDetectorHandler } from "./harness-harm-detector.js";
-import type { InterventionHandler } from "../intervention.js";
+import { asInterventionHandler, type InterventionHandler } from "../intervention.js";
 
-// Type cast required: TypeScript's contravariant function params prevent
-// InterventionHandler<"specific"> from assigning to InterventionHandler<fullUnion>.
-// Runtime dispatch is safe — handlers are keyed and retrieved by `type` string.
 export const defaultInterventionRegistry: readonly InterventionHandler[] = [
-  earlyStopHandler as unknown as InterventionHandler,
-  tempAdjustHandler as unknown as InterventionHandler,
-  switchStrategyHandler as unknown as InterventionHandler,
-  contextCompressHandler as unknown as InterventionHandler,
-  toolInjectHandler as unknown as InterventionHandler,
-  skillActivateHandler as unknown as InterventionHandler,
-  toolFailureRedirectHandler as unknown as InterventionHandler,
-  stallDetectorHandler as unknown as InterventionHandler,
-  harnessHarmDetectorHandler as unknown as InterventionHandler,
+  asInterventionHandler(earlyStopHandler),
+  asInterventionHandler(tempAdjustHandler),
+  asInterventionHandler(switchStrategyHandler),
+  asInterventionHandler(contextCompressHandler),
+  asInterventionHandler(toolInjectHandler),
+  asInterventionHandler(skillActivateHandler),
+  asInterventionHandler(toolFailureRedirectHandler),
+  asInterventionHandler(stallDetectorHandler),
+  asInterventionHandler(harnessHarmDetectorHandler),
 ];
 
 export { earlyStopHandler, tempAdjustHandler, switchStrategyHandler, contextCompressHandler, toolInjectHandler, skillActivateHandler, toolFailureRedirectHandler, stallDetectorHandler, harnessHarmDetectorHandler };

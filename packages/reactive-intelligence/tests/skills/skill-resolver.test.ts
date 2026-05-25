@@ -33,9 +33,12 @@ describe("SkillResolverService", () => {
   beforeEach(() => fs.mkdirSync(TMP_DIR, { recursive: true }));
   afterEach(() => fs.rmSync(TMP_DIR, { recursive: true, force: true }));
 
-  // Layer without SkillStoreService (no SQLite, only filesystem)
+  // Layer without SkillStoreService (no SQLite, only filesystem).
+  // `skipGlobalPaths: true` keeps resolution hermetic (HS-25): otherwise the
+  // user's `~/.agents/skills` and `~/.reactive-agents/skills` directories
+  // leak into test fixtures.
   const makeLayer = (customPaths: string[]) =>
-    makeSkillResolverService({ customPaths, agentId: "agent-1", projectRoot: TMP_DIR });
+    makeSkillResolverService({ customPaths, agentId: "agent-1", projectRoot: TMP_DIR, skipGlobalPaths: true });
 
   const run = <A>(
     layer: Layer.Layer<SkillResolverService, unknown, never>,
@@ -245,12 +248,7 @@ describe("SkillResolverService", () => {
     );
   });
 
-  // HS-25 (2026-05-20 sweep): skipped because resolver now returns +1
-  // skill from the bundled defaults; assertion `result.all.length === 2`
-  // expects only the two test-written skills (counts 3). Needs either a
-  // filter on the resolver call or an updated assertion that tolerates
-  // bundled skills. Tracked under HS-25 in Running Issues Log.
-  it.skip("resolve() sorts by confidence then score", async () => {
+  it("resolve() sorts by confidence then score", async () => {
     const skillsDir = path.join(TMP_DIR, "multi-skills");
     writeSkill(skillsDir, "skill-a", "A");
     writeSkill(skillsDir, "skill-b", "B");
@@ -271,13 +269,7 @@ describe("SkillResolverService", () => {
     );
   });
 
-  // HS-25 (2026-05-20 sweep): skipped because resolver returns 1 bundled
-  // skill even with no paths and no store; assertion `result.all.length
-  // === 0` expects strict empty (counts 1). Same drift as the test
-  // above. Either change the assertion to filter out bundled skills, or
-  // add an `excludeBundled` option to the resolver call. Tracked under
-  // HS-25 in Running Issues Log.
-  it.skip("resolve() returns empty when no paths and no store", async () => {
+  it("resolve() returns empty when no paths and no store", async () => {
     const layer = makeLayer([]);
     await run(
       layer,
