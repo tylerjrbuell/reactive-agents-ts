@@ -272,7 +272,7 @@ export const executeReactive = (
 
     return buildStrategyResult({
       strategy: "reactive",
-      steps: [...pass.steps],
+      steps: pass.steps,
       output,
       status:
         state.status === "done"

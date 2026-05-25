@@ -15,7 +15,7 @@
 // For multi-iteration agent behavior (the typical case), use `reactive` or
 // `adaptive` strategies. `direct` is intentionally minimal.
 import { Effect } from "effect";
-import type { ReasoningResult, ReasoningStrategy } from "../types/index.js";
+import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -189,13 +189,8 @@ export const executeDirect = (
     });
 
     return buildStrategyResult({
-      // Cast to bypass a TS resolution quirk: when the reasoning package
-      // resolves @reactive-agents/core to its dist d.ts under certain build
-      // contexts, the cached "5-strategy" literal can shadow the source's
-      // 6-strategy one. The literal value is correct ("direct" exists in
-      // ReasoningStrategy); test suite confirms runtime behavior.
-      strategy: "direct" as ReasoningStrategy,
-      steps: [...state.steps],
+      strategy: "direct",
+      steps: state.steps,
       output,
       status: state.status === "failed" ? "failed" : state.status === "done" ? "completed" : "partial",
       start,
