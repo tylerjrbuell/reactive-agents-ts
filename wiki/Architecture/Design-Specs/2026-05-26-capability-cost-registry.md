@@ -1,7 +1,7 @@
 ---
 title: Capability Cost Registry (MOVE-2)
 date: 2026-05-26
-status: DRAFT (design spec for impl on `overhaul/foundation-2026-05-26`)
+status: SHIPPED — M2.1+M2.2 commit `3752a43e`, M2.3 commit `344c0910`, M2.4 (this commit). Only future M2.5+ (runtime-cost merge, audit() UI surface) deferred to v0.12+.
 owner: Architecture
 related-spec:
   - "wiki/Architecture/Design-Specs/2026-05-26-master-optimization-plan.md"
@@ -404,8 +404,9 @@ No "scaffold without callers" — every type or method introduced has a wired co
 
 | Date | Status | Note |
 |---|---|---|
-| 2026-05-26 | DRAFT | this commit |
-| TBD | IMPL M2.1 | registry + bootstrap |
-| TBD | IMPL M2.2 | audit() surface |
-| TBD | IMPL M2.3 | ablation-warden gate |
-| TBD | SHIPPED | all four sub-phases landed; section `9. Status` flips |
+| 2026-05-26 | DRAFT | commit `d26e9616` — initial spec |
+| 2026-05-26 | IMPL M2.1 + M2.2 | commit `3752a43e` — registry + bootstrap + agent.capabilities.audit() (bundled per Anti-Scaffold) |
+| 2026-05-26 | IMPL M2.3 | commit `344c0910` — cf-25 gate scenario; baseline updated; load-bearing pin live |
+| 2026-05-26 | SHIPPED | M2.4 — this commit flips status; ablation-warden gate enforces violations.length === 1 in CI |
+| FUTURE | M2.5 | runtime cost merging (audit() merges static costSignature + cost-track.ts actuals) |
+| FUTURE | M2.6 | UI / docs site rendering of audit() output |

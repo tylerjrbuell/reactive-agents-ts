@@ -34,14 +34,14 @@ supersedes-frame: "perf wins as one-off levers" → "perf wins as derived conseq
 
 **Six architectural moves (sequenced by leverage):**
 
-| # | Move | Unlocks | Effort | Status (2026-05-26 EOD) |
+| # | Move | Unlocks | Effort | Status (2026-05-26 EOD v2) |
 |---|---|---|---|---|
-| **MOVE-1** | Stage Telemetry Bus | All measurable lift work | 2 d | ✅ **SHIPPED** pre-plan via #117 (`2b015546` emitLLMExchange wire) — was already DONE when this plan was drafted |
-| **MOVE-2** | Capability Cost Registry | Ablation-warden + auto-skip + auto-document | 3 d | 🟡 **DESIGN SPEC SHIPPED** `d26e9616` on `overhaul/foundation-2026-05-26`; impl pending (M2.1 → M2.4 in spec) |
-| **MOVE-3** | Task-Signature Profile at bootstrap | Replaces 5+ scattered gates with 1 decision | 1 wk | 🟢 **Phase 1 + 2 SHIPPED** `fa831f44` (honest debrief gate) + `4fa057ea` (memory-flush snapshot consume); type-unification + reactive-intelligence/learning audit deferred to Phase 3 |
-| **MOVE-4** | Combinator-shaped strategies (LEVERAGE-1 from Strategic Memo) | Pillar 3 + Pillar 4 + ≤200 LOC strategy ceiling | 2 wk | 🟡 primitives + iterateUntil combinator shipped pre-plan via PR #137 (`253e50a0`); full combinator migration not started |
-| **MOVE-5** | Capability emit-at-boundary (G-10) | Pillar 2 + observability completeness | 1 wk | ✅ **SHIPPED** pre-plan via #113 (`bd0fba81` capability-scoped instrumentation) — was already DONE when this plan was drafted |
-| **MOVE-6** | Composition presets (`HarnessProfile`) replace leaky `withLeanHarness()` | Pillar 1 + Pillar 6 + vision claim "control over magic" | 3 d | ⛔ blocked on MOVE-2 impl (M2.1 minimum); spec for MOVE-2 in `2026-05-26-capability-cost-registry.md` |
+| **MOVE-1** | Stage Telemetry Bus | All measurable lift work | 2 d | ✅ **SHIPPED** pre-plan via #117 (`2b015546` emitLLMExchange wire) |
+| **MOVE-2** | Capability Cost Registry | Ablation-warden + auto-skip + auto-document | 3 d | ✅ **SHIPPED** — design `d26e9616` + M2.1+M2.2 `3752a43e` + M2.3 gate `344c0910` (only M2.4 docs-flip remains; in this commit) |
+| **MOVE-3** | Task-Signature Profile at bootstrap | Replaces 5+ scattered gates with 1 decision | 1 wk | 🟢 **Phase 1 + 2 SHIPPED** `fa831f44` (honest debrief gate) + `4fa057ea` (memory-flush snapshot consume); Phase 3 (TaskComplexity type unification + reactive-intelligence/learning 4th classifier audit) NEXT |
+| **MOVE-4** | Combinator-shaped strategies (LEVERAGE-1 from Strategic Memo) | Pillar 3 + Pillar 4 + ≤200 LOC strategy ceiling | 2 wk | 🟡 primitives + iterateUntil combinator shipped pre-plan via PR #137 (`253e50a0`); full combinator migration not started; deprioritized per §0.5 user decision |
+| **MOVE-5** | Capability emit-at-boundary (G-10) | Pillar 2 + observability completeness | 1 wk | ✅ **SHIPPED** pre-plan via #113 (`bd0fba81` capability-scoped instrumentation) |
+| **MOVE-6** | Composition presets (`HarnessProfile`) replace leaky `withLeanHarness()` | Pillar 1 + Pillar 6 + vision claim "control over magic" | 3 d | ✅ **SHIPPED** `af32860e` — `HarnessProfile.{lean,balanced,intelligent}()` + `builder.withProfile()` + registry-drift-guard test. Closes Lever-8 leak (lean now truly disables RI). |
 | **GH #127** | (Adjacent) Thread `harnessPipeline` through PlanExecute + ToT inputs | Compose-tag emission on outer-loop strategies | ~30 LOC | ✅ **SHIPPED** `d8817985` on overhaul branch (warmup bundle) |
 
 **Outcome at full landing:** Every Lever-N PR going forward is *a config addition to the registry*, not a new conditional in a kernel module. New strategies are array literals ≤200 LOC. `agent.metrics.stages` becomes first-class. Users see exactly what's active and pay nothing for what they didn't ask for. The architecture *is* the optimization, not a substrate that resists it.
