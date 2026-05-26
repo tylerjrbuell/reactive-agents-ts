@@ -11,6 +11,7 @@ import {
 // Re-export deriveGoalAchieved (public surface — was exported from builder.ts pre-W25).
 export { deriveGoalAchieved } from './builder/helpers.js'
 import { serializeBuilder } from './builder/to-config.js'
+import type { HarnessProfilePatch } from './capabilities/profile.js'
 import { composeHealthLayer } from './builder/build-effect/health-layer.js'
 import { composeTracingLayer } from './builder/build-effect/tracing-layer.js'
 import { ingestRagDocuments } from './builder/build-effect/rag-ingestion.js'
@@ -953,6 +954,68 @@ export class ReactiveAgentBuilder {
         this._enableMemory = false
         this._memoryExplicitlyDisabled = true
         this._skillPersistence = false
+        return this
+    }
+
+    /**
+     * Apply a `HarnessProfile` composition preset (MOVE-6).
+     *
+     * Three named presets compose default-on capability sets from the
+     * `CapabilityRegistry` (MOVE-2):
+     *
+     *   - `HarnessProfile.lean()` — disable ALL default-on capabilities
+     *     (memory + RI + verifier + strategy-switching + skill
+     *     persistence). Closes the historical `.withLeanHarness()` leak
+     *     that did not disable RI.
+     *   - `HarnessProfile.balanced()` — today's production defaults
+     *     (no-op patch).
+     *   - `HarnessProfile.intelligent()` — balanced + skill persistence
+     *     (compounding cross-session learning).
+     *
+     * Patch fields are applied additively; `undefined` means "no change",
+     * boolean values explicitly set the corresponding capability. Later
+     * `.withX()` calls override patch fields (e.g.,
+     * `.withProfile(HarnessProfile.lean()).withMemory()` re-enables
+     * memory on the lean base).
+     *
+     * @example
+     * ```typescript
+     * import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
+     *
+     * const lean = await ReactiveAgents.create()
+     *   .withName('lean')
+     *   .withProvider('anthropic')
+     *   .withProfile(HarnessProfile.lean())  // model + nothing else
+     *   .build()
+     * ```
+     */
+    withProfile(profile: HarnessProfilePatch): this {
+        // Lean implies the `_leanHarness` infrastructure flag too —
+        // runtime.ts:206 substitutes `leanModeVerifier` and disables
+        // strategy switching off this flag (existing wire path).
+        if (profile.enableVerifier === false || profile.enableStrategySwitching === false) {
+            this._leanHarness = true
+        }
+        if (profile.enableMemory === false) {
+            this._enableMemory = false
+            this._memoryExplicitlyDisabled = true
+        } else if (profile.enableMemory === true) {
+            this._enableMemory = true
+            this._memoryExplicitlyDisabled = false
+        }
+        if (profile.enableReactiveIntelligence === false) {
+            this._enableReactiveIntelligence = false
+        } else if (profile.enableReactiveIntelligence === true) {
+            this._enableReactiveIntelligence = true
+        }
+        if (profile.enableSkillPersistence === false) {
+            this._skillPersistence = false
+        } else if (profile.enableSkillPersistence === true) {
+            this._skillPersistence = true
+        }
+        // `enableStrategySwitching: true` is the default; `false` is
+        // covered by the `_leanHarness` branch above. No separate field
+        // to flip — runtime.ts gates on the leanHarness flag.
         return this
     }
 
