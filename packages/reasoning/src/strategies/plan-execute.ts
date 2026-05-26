@@ -88,6 +88,17 @@ interface PlanExecuteInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** HS-cleanup-2: upstream task classification snapshot (currently unused, kept for forward compat). */
   readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
+  /**
+   * GH #127 — Compose harness pipeline threaded through plan-execute's
+   * refinement-loop RI dispatchContext so applied decisions emit bridged
+   * Compose tags (`control.strategy-evaluated`, `lifecycle.failure`,
+   * `nudge.healing-failure`) under this outer strategy. Without this thread,
+   * users who register `.withHarness(h => h.tap('control.strategy-evaluated', …))`
+   * see kernel-path emissions (reactive) but plan-execute remains dark.
+   * Mirrors the kernel-side wire at
+   * `kernel/capabilities/reflect/reactive-observer.ts:306` (HS-112).
+   */
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
 }
 
 export const executePlanExecute = (
@@ -777,6 +788,9 @@ export const executePlanExecute = (
                   interventionsFiredThisRun: perStrategyRiBudget.interventionsFiredThisRun,
                   tokensSpentOnInterventions: perStrategyRiBudget.tokensSpentOnInterventions,
                 },
+                // GH #127 — bridge applied RI decisions into Compose tags on
+                // plan-execute's outer refinement loop. No-op when absent.
+                harnessPipeline: input.harnessPipeline,
               };
               const dispatchResult = yield* services.dispatcher.value
                 .dispatch(decisions as readonly { readonly decision: string; readonly reason: string }[], {}, dispatchContext)
