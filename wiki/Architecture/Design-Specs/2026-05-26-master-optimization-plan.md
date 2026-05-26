@@ -76,7 +76,22 @@ d8817985 fix(reasoning): thread harnessPipeline through PlanExecute + ToT inputs
 
 Workspace test count: 5650 (baseline) → 5657 (+7 net, zero regressions). Build 38/38 green throughout.
 
-**Ablation-warden status (background dispatch 2026-05-26):** verifying MOVE-3 Phase 1 lift claim (~825 tok/task saved on local-tier trivial; zero accuracy regression). Verdict pending → will land in `wiki/Research/Harness-Reports/`; this section updates when verdict arrives.
+**Ablation-warden verdict (2026-05-26, dispatch `aa869310bafb72942`): ✅ PASS — keep default-on.**
+
+| Probe | N | Result |
+|---|---|---|
+| Local qwen3.5:latest × {k1, k3, f2} × {before, after} × N=3 | 18 | −1 Ollama POST per trivial task (100% of runs); 18/18 success; debrief presence flips 100% → 0% as designed; mean wall-clock saved 5.5–6.9s/task |
+| Frontier claude-sonnet-4-6 × {k1, k3, f2} × {before, after} × N=1 | 6 | 6/6 success; debrief presence flips 100% → 0%; zero accuracy regression |
+
+**Note on measurement:** bench's `result.metadata.tokensUsed` does NOT aggregate finalize-phase debrief LLM call (per warden + GH #143). Warden instrumented `fetch` monkey-patch to count Ollama POSTs as honest cross-tier instrument. Wall-clock corroborates direction.
+
+**Evidence artifact:** `wiki/Research/Ablations/2026-05-26-debrief-trivial-skip-gate.md` (full warden report + raw data tables). Probe source + raw JSON under `bench/mastra-vs-ra/ablation/`.
+
+**Recommended follow-ups from warden (filed as separate GH issues, not blocking):**
+1. Cross-session prior-debrief-injection path at `reasoning-think.ts:130-147` — verify behavior after trivial predecessors leave no persisted row. Almost certainly net-positive (skipped debriefs were 47% truncated, 52% empty per #143), but uncovered by this probe.
+2. GH #143 not-yet-fully-resolved: `result.metadata.tokensUsed` excludes finalize-phase LLM calls — bench remains skewed against RA until fixed.
+
+**Gate effect on planning:** MOVE-2 M2.1 impl was self-described as "impl waits on ablation-warden Phase 1 verdict" — now unblocked.
 
 ---
 

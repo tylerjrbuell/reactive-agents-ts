@@ -1,0 +1,50 @@
+[
+  {
+    "arm": "after",
+    "tier": "frontier",
+    "task": "k1-france-capital",
+    "iter": 1,
+    "success": true,
+    "reason": "matched \"paris\"",
+    "ollamaCalls": 0,
+    "reportedTokens": 431,
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "durationMs": 1573,
+    "debriefPresent": false,
+    "taskComplexity": "trivial",
+    "outputPreview": "Paris"
+  },
+  {
+    "arm": "after",
+    "tier": "frontier",
+    "task": "k3-rgb-colors",
+    "iter": 1,
+    "success": true,
+    "reason": "all substrings present",
+    "ollamaCalls": 0,
+    "reportedTokens": 461,
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "durationMs": 2419,
+    "debriefPresent": false,
+    "taskComplexity": "trivial",
+    "outputPreview": "The three primary colors of light (RGB) are:  1. **Red** 2. **Green** 3. **Blue*"
+  },
+  {
+    "arm": "after",
+    "tier": "frontier",
+    "task": "f2-no-tool-knowledge-recovery",
+    "iter": 1,
+    "success": true,
+    "reason": "all substrings present",
+    "ollamaCalls": 0,
+    "reportedTokens": 497,
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "durationMs": 2612,
+    "debriefPresent": false,
+    "taskComplexity": "trivial",
+    "outputPreview": "Here are the seven days of the week in order, starting with Monday:  1. Monday 2"
+  }
+]
