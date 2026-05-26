@@ -57,9 +57,26 @@ export const memoryFlush: Phase = {
         return { ...ctx, agentState: "flushing" as const };
       }
 
-      // Skip on trivial runs (≤1 iteration, no tool calls)
+      // Skip on trivial runs. MOVE-3 Phase 2: prefer the upstream
+      // `ctx.metadata.taskComplexity` snapshot populated by
+      // `engine/phases/memory-flush-dispatch.ts:42` (the orchestrator that
+      // dispatched THIS phase) so memory-flush and debrief-synthesis
+      // (commit fa831f44) agree on a SINGLE canonical "trivial" verdict
+      // derived from `engine/util.ts:143 classifyComplexity()`. Fall back
+      // to local compute when invoked outside the dispatch chain (direct
+      // callers, test harnesses) — preserves backward compat. Previously
+      // this site used `ctx.iteration <= 1 && !hadToolCalls` directly,
+      // which is a SECOND copy of the same trivial heuristic with a
+      // subtly different signal (`ctx.toolResults.length` vs the
+      // dispatcher's `toolCallLog.length`) — exactly the "5+ scattered
+      // gates" deficit master plan §3 names.
+      const upstreamComplexity = ctx.metadata.taskComplexity;
       const hadToolCalls = ctx.toolResults.length > 0;
-      if (ctx.iteration <= 1 && !hadToolCalls) {
+      const isTrivial =
+        upstreamComplexity !== undefined
+          ? upstreamComplexity === "trivial"
+          : ctx.iteration <= 1 && !hadToolCalls;
+      if (isTrivial) {
         return { ...ctx, agentState: "flushing" as const };
       }
 
