@@ -113,11 +113,21 @@ export const memoryFlush: Phase = {
         Effect.catchAll(() => Effect.succeed(0)),
       );
 
-      // Auto-extract semantic memories — only when there's meaningful content
+      // Auto-extract semantic memories — only when there's meaningful content.
+      //
+      // Lever 7 (2026-05-26) — tightened the gate. Previously fired on
+      // `hadToolCalls || substantialResponse`, which meant any tool-using
+      // task with a short answer (e.g. t1-calculator-add → "391") paid the
+      // ~4 s LLM extraction cost despite having nothing extractable. Profile
+      // evidence: t1 local burned 4.2 s on memory extraction alone for a
+      // 3-char answer. Now requires `substantialResponse` (output > 200 chars)
+      // OR multiple tool calls (≥2 — single tool calls are isolated facts
+      // already captured in the agent's task store, not memory-worthy).
       const lastResponse = String(ctx.metadata["lastResponse"] ?? "");
       const substantialResponse = lastResponse.length > 200;
+      const multiToolUse = ctx.toolResults.length >= 2;
 
-      if (hadToolCalls || substantialResponse) {
+      if (substantialResponse || multiToolUse) {
         yield* Effect.succeed(memoryExtractorOpt).pipe(
           Effect.flatMap((extractorOpt) => {
             if (extractorOpt._tag !== "Some") return Effect.void;
