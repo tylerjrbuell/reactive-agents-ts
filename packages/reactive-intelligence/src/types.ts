@@ -282,6 +282,21 @@ export type ControllerEvalParams = {
   readonly consecutiveToolFailures?: number;
   /** Name of the tool currently on a failure streak, if any. */
   readonly failingToolName?: string;
+  /**
+   * True when `state.output` is a non-empty user-facing string.
+   *
+   * Backstop for FM-A3 (Spurious Tool Engagement → empty-run termination):
+   * RI's `early-stop` MUST NOT terminate a run that has produced no user-facing
+   * output unless we're at the last allowed iteration (`iteration ≥ maxIterations - 1`).
+   * Otherwise the kernel exits `done` with `state.output=null`, which the runtime
+   * wraps as `status="failure", error="Reasoning failed"` — an unhelpful empty failure.
+   *
+   * Caller must compute from kernel state at call time. When omitted, the
+   * suppression defaults to a permissive `true` (preserves prior behavior for
+   * outer-loop synthetic evaluators in plan-execute / ToT that maintain their
+   * own output bookkeeping).
+   */
+  readonly hasUserOutput?: boolean;
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
