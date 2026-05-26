@@ -132,20 +132,39 @@ export function sanitizeOutput(text: string): string {
 
 // ─── Task Complexity Classification ───
 
-export type TaskComplexity = "trivial" | "moderate" | "complex";
+// MOVE-3 Phase 3 (2026-05-26) — type unification. Pre-Phase-3 this file
+// owned a duplicate `TaskComplexity = "trivial" | "moderate" | "complex"`
+// 3-value type definition that lived alongside the canonical 4-value
+// `TaskComplexity = "trivial" | "moderate" | "complex" | "expert"` at
+// `telemetry-enrichment.ts:25`. Both types were exported under the same
+// name in the same package; `ctx.metadata.taskComplexity` was typed
+// against the 4-value version (`types.ts:13`) and assignment compiled
+// only because the 3-value is a structural subset. This duplication was
+// the master-plan §3 root-cause #1 deficit at the type level: same
+// concept defined twice with subtly different vocabularies. Phase 3
+// re-routes to the canonical type; `classifyComplexity` keeps its
+// in-loop semantics (never returns "expert" — that classification
+// requires post-execution telemetry signals the in-loop classifier
+// doesn't see).
+export type { TaskComplexity } from "../telemetry-enrichment.js";
 
 /**
  * Classify a completed task run as trivial / moderate / complex based on
  * iteration count, entropy, tool usage, and termination signal.
  *
- * Hoisted from `execution-engine.ts` (W24-E step 1).
+ * Return type uses the 3-value subset literal; the function signature
+ * declares the canonical 4-value type via the type-only import above so
+ * callers see one TaskComplexity across the package.
+ *
+ * Hoisted from `execution-engine.ts` (W24-E step 1). Type unified
+ * MOVE-3 Phase 3 (2026-05-26).
  */
 export function classifyComplexity(
   iteration: number,
   entropy: { composite: number } | undefined,
   toolCallCount: number,
   terminatedBy: string,
-): TaskComplexity {
+): "trivial" | "moderate" | "complex" {
   if (iteration <= 1 && toolCallCount === 0 && terminatedBy !== "max_iterations") return "trivial";
   if (toolCallCount <= 2 && iteration <= 3 && (entropy ? entropy.composite < 0.4 : true)) return "moderate";
   return "complex";
