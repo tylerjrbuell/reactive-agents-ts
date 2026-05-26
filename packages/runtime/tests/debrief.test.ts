@@ -251,7 +251,16 @@ describe("formatDebriefMarkdown", () => {
 });
 
 describe("DebriefCompleted event emission", () => {
-  it("publishes DebriefCompleted after successful run debrief synthesis", async () => {
+  it("does NOT publish DebriefCompleted on a trivial run (MOVE-3 / GH #143 trivial-skip gate)", async () => {
+    // MOVE-3 Phase 1 — `engine/finalize/debrief-synthesis.ts` honest-gates
+    // debrief synthesis on `ctx.metadata.taskComplexity !== "trivial"`.
+    // A `FINAL ANSWER: done` stub → iter=1, 0 tools, end_turn → trivial
+    // → debrief skipped → no DebriefCompleted event published. Saves the
+    // ~825 tok/task local-tier burn documented in GH #143. The positive
+    // counterpart test (debrief fires on non-trivial run) requires a
+    // tool-call-bearing scenario; tracked as a follow-up once the test
+    // scenario tooling supports inline-stubbed tools without external
+    // package wiring.
     const agent = await ReactiveAgents.create()
       .withName("debrief-event-test")
       .withTestScenario([{ text: "FINAL ANSWER: done" }])
@@ -269,7 +278,7 @@ describe("DebriefCompleted event emission", () => {
     unsubscribe();
     await agent.dispose();
 
-    expect(published.some((event) => event._tag === "DebriefCompleted")).toBe(true);
+    expect(published.some((event) => event._tag === "DebriefCompleted")).toBe(false);
   });
 });
 

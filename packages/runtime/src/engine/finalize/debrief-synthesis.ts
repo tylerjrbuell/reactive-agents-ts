@@ -151,12 +151,24 @@ export const synthesizeAndStoreDebrief = (
     };
 
     // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
-    // Gated on BOTH: rr !== undefined (reasoning path was used) AND config.enableMemory
-    // (user opted in with .withMemory()). Skipped otherwise to avoid injecting extra
-    // LLM calls in direct-LLM path tests and non-memory configurations.
-    // Also requires LLMService to be available in context — use serviceOption to check.
-    // Proportional: skip debrief for trivial and moderate tasks (only run for complex).
-    const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory
+    // Gated on:
+    //   1. rr !== undefined (reasoning path was used)
+    //   2. config.enableMemory (user opted in with .withMemory())
+    //   3. ctx.metadata.taskComplexity !== "trivial" (HONEST GATE — MOVE-3
+    //      Phase 1, GH #143). memory-flush-dispatch sets taskComplexity at
+    //      `runtime/engine/phases/memory-flush-dispatch.ts:42` BEFORE this
+    //      phase runs (`execution-engine.ts:976 → :1070`). Trivial tasks
+    //      (iter≤1 + zero tool calls + no max-iter termination) burn ~825
+    //      tok/call on local tier with 47% hitting max_tokens (#143 evidence);
+    //      synthesizeDebrief fallback at `debrief.ts:222` already constructs
+    //      a deterministic debrief from captured signals — the LLM call adds
+    //      no information. Pre-existing comment on this gate had aspired to
+    //      "skip trivial AND moderate" but the actual code had no complexity
+    //      check at all. This commit makes the code match a conservative
+    //      version of the aspiration (trivial-only) and leaves moderate
+    //      reachable for users who want richer post-mortems on tool runs.
+    const isTrivialTask = ctx.metadata.taskComplexity === "trivial";
+    const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory && !isTrivialTask
       ? Effect.serviceOption(LLMService).pipe(
           Effect.flatMap((llmOpt) => {
             if (llmOpt._tag !== "Some") return Effect.succeed(undefined as AgentDebrief | undefined);
