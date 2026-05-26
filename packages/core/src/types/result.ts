@@ -52,6 +52,17 @@ export const ResultMetadataSchema = Schema.Struct({
    * No deprecation — `tokensUsed` remains canonical per #104 reversal.
    */
   totalTokens: Schema.optional(Schema.Number),
+  /**
+   * Prompt/input tokens consumed across all LLM calls in this execution.
+   * Optional — providers/strategies may not always split (e.g. test-provider,
+   * sub-agent rollups). Sum should equal `tokensUsed` when both present.
+   */
+  inputTokens: Schema.optional(Schema.Number),
+  /**
+   * Completion/output tokens generated across all LLM calls in this execution.
+   * Optional — see `inputTokens` for cases where this may be absent.
+   */
+  outputTokens: Schema.optional(Schema.Number),
   confidence: Schema.optional(Schema.Literal("high", "medium", "low")),
   strategyUsed: Schema.optional(Schema.String),
   stepsCount: Schema.optional(Schema.Number),

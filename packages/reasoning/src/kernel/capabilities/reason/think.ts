@@ -444,27 +444,37 @@ export function handleThinking(
       ? context.toolCallingDriver.buildPromptInstructions(filteredToolSchemas)
       : "";
 
-    // ── Decision Rationale (MANDATORY, always injected) ─────────────────────
-    // Injected regardless of toolSchemaDetail so compressed profiles (local
-    // tier defaults to "names-and-types" → driver instructions suppressed)
-    // still receive the rationale ask. The format is identical for native-fc
-    // and text-parse paths; parseRationaleBlocks reads it from the same place.
-    const rationaleInstructions = [
-      "## Decision Rationale (MANDATORY — every tool call)",
-      "Every tool call you issue MUST be preceded by a rationale block in your text content. Tool calls without a matching rationale block are considered malformed and you will be asked to retry.",
-      "Emit rationale blocks BEFORE the tool call(s), one per call, in order:",
-      '<rationale call="1">{"why":"one sentence, ≤280 chars, explaining why this tool and these arguments","confidence":0.0-1.0}</rationale>',
-      "Rules:",
-      "- `call` is the 1-indexed position of the tool call within this turn (1 for the first, 2 for the second…).",
-      "- `why` is REQUIRED, max 280 chars, must be specific to THIS call (not generic).",
-      "- `confidence` is OPTIONAL (number 0-1).",
-      "- The rationale is for post-hoc review only — NOT passed to the tool, does NOT change behavior.",
-      "- If you emit no tool calls this turn, emit no rationale blocks.",
-    ].join("\n");
+    // ── Decision Rationale (gated on tool availability) ──────────────────────
+    // Only injected when tools are reachable on this turn. ~250 tokens of
+    // formatting rules per call is dead weight on no-tool tasks (knowledge
+    // recall, pure synthesis) — and the model can't emit a rationale block
+    // for a tool call it has no way to make. Format is identical for
+    // native-fc and text-parse paths; parseRationaleBlocks no-ops when no
+    // blocks are present in the response.
+    //
+    // Empirical evidence: 2026-05-25 Mastra-vs-RA bench (local tier k1-france-
+    // capital): RA 485 tok vs Mastra 50 tok for "Paris". Rationale block
+    // accounted for ~250 of the 435-tok gap. Gating restores parity on
+    // tasks where rationale was never going to be emitted anyway.
+    const hasReachableTools = filteredToolSchemas.length > 0;
+    const rationaleInstructions = hasReachableTools
+      ? [
+          "## Decision Rationale (MANDATORY — every tool call)",
+          "Every tool call you issue MUST be preceded by a rationale block in your text content. Tool calls without a matching rationale block are considered malformed and you will be asked to retry.",
+          "Emit rationale blocks BEFORE the tool call(s), one per call, in order:",
+          '<rationale call="1">{"why":"one sentence, ≤280 chars, explaining why this tool and these arguments","confidence":0.0-1.0}</rationale>',
+          "Rules:",
+          "- `call` is the 1-indexed position of the tool call within this turn (1 for the first, 2 for the second…).",
+          "- `why` is REQUIRED, max 280 chars, must be specific to THIS call (not generic).",
+          "- `confidence` is OPTIONAL (number 0-1).",
+          "- The rationale is for post-hoc review only — NOT passed to the tool, does NOT change behavior.",
+          "- If you emit no tool calls this turn, emit no rationale blocks.",
+        ].join("\n")
+      : "";
 
     const parts = [systemPromptText];
     if (driverInstructions) parts.push(driverInstructions);
-    parts.push(rationaleInstructions);
+    if (rationaleInstructions) parts.push(rationaleInstructions);
     const systemPromptWithDriver = parts.join("\n\n");
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
@@ -709,6 +719,8 @@ export function handleThinking(
 
     const rawThought = thoughtResponse.content;
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;
+    const newInputTokens = state.inputTokens + (thoughtResponse.usage.inputTokens ?? 0);
+    const newOutputTokens = state.outputTokens + (thoughtResponse.usage.outputTokens ?? 0);
     const newCost = state.cost + thoughtResponse.usage.estimatedCost;
 
     // HS-128 — Per-iteration token snapshot for the verbosity detector.
@@ -837,6 +849,8 @@ export function handleThinking(
       const stateWithSteps = transitionState(state, {
         steps: newSteps,
         tokens: newTokens,
+        inputTokens: newInputTokens,
+        outputTokens: newOutputTokens,
         cost: newCost,
         priorThought: output,
         iteration: state.iteration + 1,
@@ -951,6 +965,8 @@ export function handleThinking(
           return transitionState(state, {
             steps: newSteps,
             tokens: newTokens,
+            inputTokens: newInputTokens,
+            outputTokens: newOutputTokens,
             cost: newCost,
             status: "acting",
             meta: {
@@ -996,6 +1012,8 @@ export function handleThinking(
         const stateWithSteps = transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
+          inputTokens: newInputTokens,
+          outputTokens: newOutputTokens,
           cost: newCost,
           priorThought: thought.trim(),
           iteration: state.iteration + 1,
@@ -1051,6 +1069,8 @@ export function handleThinking(
           const stateWithThought = transitionState(state, {
             steps: [...newSteps, makeStep("thought", thinkingContent)],
             tokens: newTokens,
+            inputTokens: newInputTokens,
+            outputTokens: newOutputTokens,
             cost: newCost,
             iteration: state.iteration + 1,
             priorThought: thinkingContent,
@@ -1147,6 +1167,8 @@ export function handleThinking(
         return transitionState(state, {
           steps: thinkingSteps,
           tokens: newTokens,
+          inputTokens: newInputTokens,
+          outputTokens: newOutputTokens,
           cost: newCost,
           iteration: state.iteration + 1,
           priorThought: thinkingContent || state.priorThought,
@@ -1189,6 +1211,8 @@ export function handleThinking(
         return transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
+          inputTokens: newInputTokens,
+          outputTokens: newOutputTokens,
           cost: newCost,
           status: "acting",
           meta: {
@@ -1257,6 +1281,8 @@ export function handleThinking(
         const stateWithSteps = transitionState(state, {
           steps: newSteps,
           tokens: newTokens,
+          inputTokens: newInputTokens,
+          outputTokens: newOutputTokens,
           cost: newCost,
           priorThought: thought.trim(),
           iteration: state.iteration + 1,
@@ -1288,6 +1314,8 @@ export function handleThinking(
         return transitionState(state, {
           steps: [...newSteps, gapStep],
           tokens: newTokens,
+          inputTokens: newInputTokens,
+          outputTokens: newOutputTokens,
           cost: newCost,
           iteration: state.iteration + 1,
           priorThought: thought.trim(),
@@ -1303,6 +1331,8 @@ export function handleThinking(
     return transitionState(state, {
       steps: newSteps,
       tokens: newTokens,
+      inputTokens: newInputTokens,
+      outputTokens: newOutputTokens,
       cost: newCost,
       iteration: state.iteration + 1,
     });
