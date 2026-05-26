@@ -38,31 +38,53 @@ type AnthropicMessage = {
 
 const toAnthropicMessages = (
   messages: readonly LLMMessage[],
-): AnthropicMessage[] =>
-  messages
-    .filter((m) => m.role !== "system")
-    .map((m) => {
-      if (m.role === "tool") {
-        // Convert tool result to Anthropic's tool_result content block format
-        return {
-          role: "user" as AnthropicRole,
-          content: [{
-            type: "tool_result" as const,
-            tool_use_id: m.toolCallId,
-            content: m.content,
-          }] as unknown as AnthropicContentBlock[],
-        };
+): AnthropicMessage[] => {
+  const filtered = messages.filter((m) => m.role !== "system");
+
+  // Lever 1 prompt-caching — locate the last tool_result message and mark its
+  // tool_result block with cache_control. On multi-iteration runs the provider
+  // hits the cache on every message up to and including this breakpoint, so
+  // subsequent iterations re-process only the NEW tail (new assistant turn +
+  // user continuation). Combined with the system + tools breakpoints this
+  // uses 3 of Anthropic's 4 cache-breakpoint budget per request.
+  //
+  // The cache_control marker is a no-op on cold caches and when the cached
+  // prefix is below the per-model minimum (Sonnet: 1024 tok; Haiku: 2048 tok),
+  // so adding it unconditionally is safe.
+  let lastToolResultIdx = -1;
+  for (let i = filtered.length - 1; i >= 0; i--) {
+    if (filtered[i]?.role === "tool") {
+      lastToolResultIdx = i;
+      break;
+    }
+  }
+
+  return filtered.map((m, idx) => {
+    if (m.role === "tool") {
+      const block: Record<string, unknown> = {
+        type: "tool_result" as const,
+        tool_use_id: m.toolCallId,
+        content: m.content,
+      };
+      if (idx === lastToolResultIdx) {
+        block.cache_control = { type: "ephemeral" as const };
       }
       return {
-        role: m.role as AnthropicRole,
-        content:
-          typeof m.content === "string"
-            ? m.content
-            : (m.content as readonly ContentBlock[]).map(
-                (b) => b as unknown as AnthropicContentBlock,
-              ),
+        role: "user" as AnthropicRole,
+        content: [block] as unknown as AnthropicContentBlock[],
       };
-    });
+    }
+    return {
+      role: m.role as AnthropicRole,
+      content:
+        typeof m.content === "string"
+          ? m.content
+          : (m.content as readonly ContentBlock[]).map(
+              (b) => b as unknown as AnthropicContentBlock,
+            ),
+    };
+  });
+};
 
 const toAnthropicTool = (tool: {
   name: string;
@@ -96,23 +118,35 @@ const toEffectError = (error: unknown, provider: "anthropic"): LLMErrors => {
 };
 
 // ── System prompt caching ────────────────────────────────────────────────────
-// Anthropic's prompt caching uses cache_control on content blocks.
-// System prompts >= ~1024 tokens benefit from ephemeral caching; the 5-min
-// cache window avoids re-processing the same system prompt across turns.
-
-const MIN_SYSTEM_CACHE_CHARS = 4096; // ~1024 tokens at ~4 chars/token
+// Anthropic prompt caching: marking content with cache_control: { type:
+// "ephemeral" } tells the provider "everything from the request start up to
+// (and including) this block can be cached for 5 minutes". Subsequent calls
+// with the same prefix get a 90% input-token discount on the cached portion.
+//
+// Per-model minimum cacheable block: Sonnet 1024 tok, Haiku 2048 tok. Marking
+// a block below the threshold is a no-op (provider ignores the marker). So
+// marking unconditionally is safe — the provider self-gates.
+//
+// Lever 1 spike (this PR): wrap the system parameter as a content block with
+// cache_control on every call. Pairs with tool-list cache_control (already
+// present, on last tool entry) and message-thread cache_control (added in
+// `toAnthropicMessages` above, on last tool_result). Three breakpoints total,
+// well under Anthropic's 4-breakpoint per-request limit.
 
 type SystemParam =
   | string
   | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
 
 /**
- * Build the Anthropic `system` parameter. For long system prompts, wrap in
- * a content block with `cache_control: { type: "ephemeral" }`.
+ * Build the Anthropic `system` parameter. Wraps in a cache-able content block
+ * unconditionally — the provider auto-skips cache_control on blocks below the
+ * per-model minimum cacheable size (Sonnet: 1024 tok, Haiku: 2048 tok), so
+ * always marking is safe and lets longer scaffolds (real-world RA agents with
+ * multiple built-in tools + full ContextManager output) get cache benefit on
+ * iteration 1+ without any per-call decision logic.
  */
 const buildSystemParam = (systemPrompt: string | undefined): SystemParam | undefined => {
   if (!systemPrompt) return undefined;
-  if (systemPrompt.length < MIN_SYSTEM_CACHE_CHARS) return systemPrompt;
   return [{
     type: "text",
     text: systemPrompt,
@@ -309,6 +343,13 @@ export const AnthropicProviderLive = Layer.effect(
                     },
                     config.pricingRegistry,
                   ),
+                  // Lever 1 prompt-caching observability — mirrors complete() path.
+                  ...(typeof msg.usage.cache_creation_input_tokens === "number"
+                    ? { cacheCreationInputTokens: msg.usage.cache_creation_input_tokens }
+                    : {}),
+                  ...(typeof msg.usage.cache_read_input_tokens === "number"
+                    ? { cacheReadInputTokens: msg.usage.cache_read_input_tokens }
+                    : {}),
                 },
               });
               emit.end();
@@ -602,6 +643,15 @@ const mapAnthropicResponse = (
         },
         registry,
       ),
+      // Lever 1 prompt-caching observability — surface cache hit/creation
+      // counts up the stack so bench reports and runtime metrics can show
+      // "X input tok (Y cached)" instead of just total input.
+      ...(typeof response.usage.cache_creation_input_tokens === "number"
+        ? { cacheCreationInputTokens: response.usage.cache_creation_input_tokens }
+        : {}),
+      ...(typeof response.usage.cache_read_input_tokens === "number"
+        ? { cacheReadInputTokens: response.usage.cache_read_input_tokens }
+        : {}),
     },
     model: response.model ?? model,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
