@@ -146,3 +146,17 @@ export {
   type ResolveModelCalibrationOptions,
   type ResolveModelCalibrationAsyncOptions,
 } from "./calibration-resolver.js";
+
+// ─── Capability Cost Registry (MOVE-2) ───
+export {
+  CapabilityRegistry,
+  CapabilityRegistryLive,
+  CapabilityNotFoundError,
+  bootstrapEntries,
+  type CapabilityEntry,
+  type CapabilityAuditReport,
+  type CostSignature,
+  type LiftEvidence,
+  type WardenOwner,
+  type TierId,
+} from "./capabilities/registry.js";

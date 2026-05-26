@@ -21,6 +21,10 @@ import {
 } from 'effect'
 import { deriveGoalAchieved } from './builder/helpers.js'
 import {
+    CapabilityRegistry,
+    type CapabilityAuditReport,
+} from './capabilities/registry.js'
+import {
     startGateway,
     queryGatewayStatus,
 } from './agent/gateway-runner.js'
@@ -132,6 +136,36 @@ export class ReactiveAgent {
             customTermination?: (state: { output: string }) => boolean
         }
     ) {}
+
+    /**
+     * MOVE-2 M2.1 — read the agent's active capability registry.
+     *
+     * Returns a structured `CapabilityAuditReport` covering every registered
+     * capability: which default-on, cost signature, lift evidence pointer,
+     * owner warden, last ablation date, plus flagged stale + gate-violating
+     * entries. Single user-facing answer to "what's running and why" —
+     * addresses master plan §3 root cause #3 ("Users can't enumerate what's
+     * on by default and why") in one method call. Vision pillar 1 — control
+     * over magic.
+     *
+     * @example
+     * ```typescript
+     * const report = await agent.capabilities.audit();
+     * console.log(`${report.defaultOnCount} capabilities active by default`);
+     * for (const violation of report.violations) {
+     *   console.warn(`  ${violation.name}: defaultOn but no lift evidence`);
+     * }
+     * ```
+     */
+    readonly capabilities = {
+        audit: (): Promise<CapabilityAuditReport> =>
+            this.runtime.runPromise(
+                Effect.gen(function* () {
+                    const reg = yield* CapabilityRegistry
+                    return yield* reg.audit()
+                }),
+            ),
+    }
 
     /** @internal Last debrief from a completed run — used as context in chat() calls. */
     private _lastDebrief?: AgentDebrief

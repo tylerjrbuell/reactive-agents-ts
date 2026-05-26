@@ -1,6 +1,7 @@
 import { Layer, Effect, Context, Schedule, Duration, Ref } from "effect";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
+import { CapabilityRegistryLive } from "./capabilities/registry.js";
 import type { ReactiveAgentsConfig } from "./types.js";
 import { defaultReactiveAgentsConfig } from "./types.js";
 import { CoreServicesLive, EventBusLive, EventBus } from "@reactive-agents/core";
@@ -458,6 +459,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     memoryLayer,
     hookLayer,
     engineLayer,
+    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
   ) as ComposableLayer;
 
   // ── Optional layers ──
@@ -1063,6 +1065,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     memoryLayer,
     hookLayer,
     engineLayer,
+    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
   ) as ComposableLayer;
 
   // ── Optional tools layer ──
