@@ -212,6 +212,14 @@ export const SemanticMemoryServiceLive = Layer.effect(
             [agentId],
           );
 
+          // No records → return empty string so callers can skip injection
+          // entirely. Without this, the header alone (~70 tok) shipped on
+          // every iteration as "Relevant Memory:\n# Agent Memory — <id>\n
+          // > Generated: <ts>\n" — pure boilerplate for fresh agents.
+          // Empirical: removed ~70 tok × iteration count from system prompt
+          // on no-memory runs (2026-05-25 Mastra-vs-RA bench).
+          if (entries.length === 0) return "";
+
           const lines: string[] = [
             `# Agent Memory — ${agentId}`,
             `> Generated: ${new Date().toISOString()}`,
