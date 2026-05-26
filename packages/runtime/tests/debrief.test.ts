@@ -45,7 +45,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(baseInput).pipe(Effect.provide(llmLayer))
     );
 
@@ -78,7 +78,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief({
         ...baseInput,
         terminatedBy: "max_iterations",
@@ -97,7 +97,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(baseInput).pipe(Effect.provide(llmLayer))
     );
 
@@ -121,7 +121,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(baseInput).pipe(Effect.provide(llmLayer))
     );
 
@@ -144,7 +144,7 @@ describe("synthesizeDebrief", () => {
       ],
     };
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(inputWithErrors).pipe(Effect.provide(llmLayer))
     );
 
@@ -173,7 +173,7 @@ describe("synthesizeDebrief", () => {
         "# reactive-agents-ts\n\nEffect-TS agent framework with layered runtime and tools.",
     };
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(input).pipe(Effect.provide(llmLayer)),
     );
 
@@ -197,7 +197,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief({
         ...baseInput,
         finalAnswerCapture: undefined,

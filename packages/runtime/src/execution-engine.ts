@@ -1068,7 +1068,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Debrief Synthesis (best-effort, never blocks the result) ──
                 // Extracted to engine/finalize/debrief-synthesis.ts (W24-B step 1).
-                const { debrief, errorsFromLoop, executionDurationMs } = yield* synthesizeAndStoreDebrief({
+                const { debrief, errorsFromLoop, executionDurationMs, debriefTokensUsed } = yield* synthesizeAndStoreDebrief({
                   ctx,
                   task,
                   config,
@@ -1081,6 +1081,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   toolCallLog,
                   rationaleLog,
                 });
+
+                // GH #143 honesty fix — debrief LLM call's tokens now flow into
+                // the reported total. Without this, bench undercounted RA by ~5x
+                // on local tier (k1 reported 206 tok, actual ~1031 incl. debrief).
+                // Mutating ctx.tokensUsed mirrors the per-iter accumulator pattern
+                // used at inline-think.ts / reasoning-think.ts (those rebuild a new
+                // context object; here we mutate the final ctx before TaskResult
+                // assembly since no downstream phase reads tokensUsed after this).
+                if (debriefTokensUsed > 0) {
+                  (ctx as { tokensUsed: number }).tokensUsed = ctx.tokensUsed + debriefTokensUsed;
+                }
 
                 const result: TaskResult & {
                   format?: string;
