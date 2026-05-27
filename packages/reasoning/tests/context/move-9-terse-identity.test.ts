@@ -124,3 +124,107 @@ describe("MOVE-9 — terse identity prompt for trivial-fact shape", () => {
     expect(out.systemPrompt).not.toContain("Do not include reasoning");
   });
 });
+
+// ── MOVE-10a — single-tool trivial path ──────────────────────────────────────
+
+describe("MOVE-10a — terse-tool identity for trivial+single-tool", () => {
+  it("trivial+single-tool task → TERSE_TOOL_PROMPT applied", () => {
+    const out = ContextManager.build(
+      makeState(),
+      makeInput({
+        // "Use the X tool" cue + digits → trivial+needsTools shape.
+        task: "Use the calc tool to compute 5+5.",
+        availableToolSchemas: [
+          { name: "calc", description: "Calculator", parameters: [] },
+        ],
+      }),
+      makeProfile(),
+      noGuidance,
+    );
+    // Tool-terse prompt mentions tool usage explicitly.
+    expect(out.systemPrompt).toContain("Use the provided tools");
+    expect(out.systemPrompt).toContain("return the result directly");
+  });
+
+  it("trivial+single-tool: tool schemas still rendered (quality preserved)", () => {
+    const out = ContextManager.build(
+      makeState(),
+      makeInput({
+        task: "Use the calc tool to compute 5+5.",
+        availableToolSchemas: [
+          { name: "calc", description: "Calculator", parameters: [] },
+        ],
+      }),
+      makeProfile(),
+      noGuidance,
+    );
+    // Static-context still includes tool schemas (needsTools=true bypasses
+    // strip). Model can SEE tool to call it.
+    expect(out.systemPrompt).toContain("calc");
+  });
+
+  it("trivial+no-tools (k1 style) → fact prompt, NOT tool prompt", () => {
+    const out = ContextManager.build(
+      makeState(),
+      makeInput({ task: "What is the capital of France?" }),
+      makeProfile(),
+      noGuidance,
+    );
+    expect(out.systemPrompt).toContain("Answer the question directly");
+    expect(out.systemPrompt).not.toContain("Use the provided tools");
+  });
+
+  it("trivial+3-tools → TERSE_TOOL NOT applied (multi-tool selection needs reasoning)", () => {
+    const out = ContextManager.build(
+      makeState(),
+      makeInput({
+        task: "Use the calc tool to compute 5+5.",
+        availableToolSchemas: [
+          { name: "calc", description: "Calculator", parameters: [] },
+          { name: "search", description: "Search", parameters: [] },
+          { name: "fetch", description: "Fetch", parameters: [] },
+        ],
+      }),
+      makeProfile(),
+      noGuidance,
+    );
+    // 3 business tools > threshold 2 → terse skipped, reasoning identity kept.
+    expect(out.systemPrompt).not.toContain("return the result directly");
+  });
+
+  it("trivial+1-tool but multi-step cue → terse NOT applied", () => {
+    const out = ContextManager.build(
+      makeState(),
+      makeInput({
+        task: "Use the calc tool to compute 5+5. Then explain the result.",
+        availableToolSchemas: [
+          { name: "calc", description: "Calculator", parameters: [] },
+        ],
+      }),
+      makeProfile(),
+      noGuidance,
+    );
+    // "Then" → needsMultiStep → terse predicate inhibited.
+    expect(out.systemPrompt).not.toContain("return the result directly");
+  });
+
+  it("META-tools don't count toward TERSE_SINGLE_TOOL_THRESHOLD", () => {
+    const out = ContextManager.build(
+      makeState(),
+      makeInput({
+        task: "Use the calc tool to compute 5+5.",
+        // 1 business tool + 3 meta tools = still single-tool-business
+        availableToolSchemas: [
+          { name: "calc", description: "Calculator", parameters: [] },
+          { name: "final-answer", description: "Deliver final", parameters: [] },
+          { name: "recall", description: "Recall stored", parameters: [] },
+          { name: "brief", description: "Brief", parameters: [] },
+        ],
+      }),
+      makeProfile(),
+      noGuidance,
+    );
+    // Meta-tools excluded from count → terse-tool still fires.
+    expect(out.systemPrompt).toContain("return the result directly");
+  });
+});
