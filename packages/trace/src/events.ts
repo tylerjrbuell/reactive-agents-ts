@@ -256,6 +256,10 @@ export interface LLMExchangeEvent extends TraceEventBase {
     readonly stopReason?: string
     readonly tokensIn?: number
     readonly tokensOut?: number
+    /** Anthropic prompt-caching: tokens that wrote new cache entries (Lever 1 evidence). */
+    readonly cacheCreationTokensIn?: number
+    /** Anthropic prompt-caching: tokens served from cache hits (90% input discount). */
+    readonly cacheReadTokensIn?: number
     readonly costUsd?: number
     readonly durationMs?: number
   }
