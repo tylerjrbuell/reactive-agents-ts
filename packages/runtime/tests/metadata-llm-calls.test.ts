@@ -1,14 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { ReactiveAgents } from "../src/index.js";
-
-// MOVE-direct-bypass: trivial fixtures bypass to executeDirect. These
-// tests count LLM calls on reactive kernel path — disable bypass.
-const PRIOR_BYPASS_MLC = process.env.RA_DIRECT_BYPASS;
-beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
-afterAll(() => {
-  if (PRIOR_BYPASS_MLC === undefined) delete process.env.RA_DIRECT_BYPASS;
-  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_MLC;
-});
 
 /**
  * Regression tests for metadata.llmCalls counter.

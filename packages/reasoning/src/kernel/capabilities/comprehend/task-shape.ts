@@ -31,12 +31,11 @@ export interface TaskShapeInput {
 
 /** Form of output the task expects. Drives output-shape predicates. */
 export type ExpectedOutputForm =
-  | "fact"             // single fact, short answer ("Paris", "42")
-  | "list-trivial"     // simple enumeration ("RGB colors", "days of week")
-  | "explanation"      // prose explanation, no enumeration
-  | "synthesis"        // multi-source synthesis (requires citation/grounding)
-  | "code"             // code block as primary deliverable
-  | "structured";      // JSON / CSV / HTML / markdown table (machine-parseable)
+  | "fact"          // single fact, short answer ("Paris", "42")
+  | "explanation"   // prose explanation, no enumeration
+  | "synthesis"     // multi-source synthesis (requires citation/grounding)
+  | "code"          // code block as primary deliverable
+  | "structured";   // JSON / table / list (machine-parseable)
 
 export interface TaskShape {
   /** Complexity verdict (passthrough from TaskComplexityClassification). */
@@ -97,17 +96,7 @@ function inferOutputForm(
   const fmt = classification.intent.format;
   if (fmt === "code") return "code";
   if (fmt === "json" || fmt === "csv" || fmt === "html") return "structured";
-  if (fmt === "markdown") return "structured";
-
-  // MOVE-9b: `list` intent on trivial+no-tools is recall-style enumeration
-  // (e.g. "List the seven days of the week"), eligible for terse identity.
-  // On moderate/complex shape, lists imply analytical enumeration and stay
-  // "structured" so the model keeps reasoning bias.
-  if (fmt === "list") {
-    return classification.complexity.complexity === "trivial" && !needsTools
-      ? "list-trivial"
-      : "structured";
-  }
+  if (fmt === "list" || fmt === "markdown") return "structured";
 
   if (needsCitation) return "synthesis";
 

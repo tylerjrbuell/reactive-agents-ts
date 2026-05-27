@@ -58,8 +58,7 @@ describe("inferTaskShape — bench task pins (APC-0 evidence)", () => {
     expect(r.shape.highConfidence).toBe(true);
   });
 
-  it("k3-rgb-colors → trivial/fact (no list cue; eligible for terse identity)", () => {
-    // No "List" cue here — pure recall question.
+  it("k3-rgb-colors → trivial/fact (eligible for minimal scaffold)", () => {
     const r = classifyTask("What are the three primary colors of light in RGB?");
     expect(r.shape.complexity).toBe("trivial");
     expect(r.shape.needsTools).toBe(false);
@@ -68,40 +67,12 @@ describe("inferTaskShape — bench task pins (APC-0 evidence)", () => {
     expect(r.shape.highConfidence).toBe(true);
   });
 
-  it("k3-rgb-bench-text → trivial/list-trivial (MOVE-9b: 'List them' cue)", () => {
-    // The bench fixture includes "List them" → list-trivial form (not "fact").
-    const r = classifyTask("What are the three primary colors of light (RGB)? List them.");
-    expect(r.shape.complexity).toBe("trivial");
-    expect(r.shape.needsTools).toBe(false);
-    expect(r.shape.expectedOutputForm).toBe("list-trivial");
-    expect(r.shape.highConfidence).toBe(true);
-  });
-
-  it("f2-bench-text → trivial/list-trivial (MOVE-9b widening eligible)", () => {
-    const r = classifyTask(
-      "List the seven days of the week in order, starting with Monday.",
-    );
-    // Bench text length exceeds short-prose threshold → moderate complexity.
-    // list-trivial form requires trivial+no-tools; this stays "structured".
-    // But the intent is clear and the test pins current behavior for
-    // documentation. MOVE-9b only fires when complexity is trivial.
+  it("f2-no-tool-knowledge-recovery → expectedOutputForm hints structured/fact", () => {
+    const r = classifyTask("List five elements from the periodic table.");
+    // "List" cue lifts to structured output; this is fine — the composer
+    // still keeps it lean since needsTools=false and needsMultiStep=false.
     expect(r.shape.needsTools).toBe(false);
     expect(r.shape.needsMultiStep).toBe(false);
-  });
-
-  it("trivial list cue → list-trivial form (eligible for terse identity)", () => {
-    const r = classifyTask("List the RGB colors.");
-    expect(r.shape.complexity).toBe("trivial");
-    expect(r.shape.expectedOutputForm).toBe("list-trivial");
-  });
-
-  it("complex task → terse predicate inhibited (no terse identity)", () => {
-    const r = classifyTask(
-      "Analyze and critique the trade-offs of NoSQL vs SQL databases for high-traffic systems.",
-    );
-    // Complex shape locks in full reasoning identity — composer keeps
-    // scaffold and identity is the default reasoning-agent prompt.
-    expect(r.shape.complexity).toBe("complex");
   });
 
   // ── Tool subset — APC empirical regressors (must keep full scaffold) ──

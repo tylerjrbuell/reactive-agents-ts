@@ -71,111 +71,13 @@ function effectiveTools(
 
 // ── Section: identity ─────────────────────────────────────────────────────────
 
-/**
- * MOVE-9 / MOVE-10a — terse identity prompts.
- *
- * Default identity primes the model to "think step by step", which on
- * local-tier qwen3.5-class models induces 200-400t reasoning preamble
- * even for single-fact or single-tool tasks where no reasoning is needed.
- *
- * MOVE-9 (fact + list-trivial):
- *   Knowledge questions with no tools → "Answer directly, no preamble"
- *
- * MOVE-10a (trivial+single-tool):
- *   Single-tool simple tasks (t1 calculator, t3 kv-fetch) → "Use the
- *   tools, return the result directly". Model still receives full tool
- *   schemas and full tool results (semantic content preserved); only
- *   the reasoning-preamble bias is removed.
- *
- * Custom systemPrompt always wins (caller intent overrides framework
- * defaults). Multi-step / citation / multi-tool shapes get the full
- * reasoning identity since those tasks need the inductive bias.
- */
-const TERSE_FACT_PROMPT =
-  "You are a helpful assistant. Answer the question directly and concisely. Do not include reasoning, explanations, or preamble — just the answer.";
-
-const TERSE_TOOL_PROMPT =
-  "You are a helpful assistant. Use the provided tools to gather data, then return the result directly and concisely. Do not include reasoning, explanations, or preamble — just the answer.";
-
-/** Max business (non-meta) tools that still qualify as "simple single-tool". */
-const TERSE_SINGLE_TOOL_THRESHOLD = 2;
-
-/** Count business tools (exclude meta-tools like recall/brief/final-answer). */
-function countBusinessTools(ctx: PromptSectionContext): number {
-  const schemas = ctx.input.availableToolSchemas ?? [];
-  return schemas.filter((s) => {
-    const n = s.name;
-    return (
-      n !== "final-answer" &&
-      n !== "task-complete" &&
-      n !== "context-status" &&
-      n !== "brief" &&
-      n !== "pulse" &&
-      n !== "find" &&
-      n !== "recall" &&
-      n !== "checkpoint" &&
-      n !== "activate-skill" &&
-      n !== "discover-tools"
-    );
-  }).length;
-}
-
-function shouldUseTerseIdentity(ctx: PromptSectionContext): "fact" | "tool" | null {
-  // Emergency disable: RA_TERSE_IDENTITY=0 forces default reasoning prompt.
-  // Used by tests that mock LLM responses with pattern matching on the
-  // default identity wording, and as a production ops escape hatch.
-  if (process.env.RA_TERSE_IDENTITY === "0") return null;
-  // Caller-supplied prompts always take precedence.
-  const opts = readOptions(ctx);
-  if (opts.systemPromptBody || ctx.input.systemPrompt) return null;
-
-  // Common preconditions
-  if (ctx.shape.complexity !== "trivial") return null;
-  if (!ctx.shape.highConfidence) return null;
-  if (ctx.shape.needsMultiStep) return null;
-  if (ctx.shape.needsCitation) return null;
-  if (ctx.shape.needsStructuredOutput) return null;
-
-  // MOVE-9 / MOVE-9b: knowledge-fact path (no tools)
-  const terseForm =
-    ctx.shape.expectedOutputForm === "fact" ||
-    ctx.shape.expectedOutputForm === "list-trivial";
-  if (terseForm && !ctx.shape.needsTools) {
-    return "fact";
-  }
-
-  // MOVE-10a: single-tool trivial path
-  // Quality safety: only when there's exactly ONE business tool to use.
-  // Two-tool tasks risk model confusion about which to use without
-  // explicit reasoning bias; >2 tools strongly suggest the task needs
-  // selection/multi-step reasoning even if regex-classified trivial.
-  if (
-    ctx.shape.needsTools &&
-    countBusinessTools(ctx) > 0 &&
-    countBusinessTools(ctx) <= TERSE_SINGLE_TOOL_THRESHOLD
-  ) {
-    return "tool";
-  }
-
-  return null;
-}
-
 export const identitySection: PromptSection = {
   id: "identity",
   description:
-    "Agent identity + tier-adaptive system prompt (terse on trivial-fact shape)",
+    "Agent identity + tier-adaptive system prompt + adapter.systemPromptPatch",
   // Identity always required — there is no shape under which we drop it.
   requiredWhen: () => true,
   render: (ctx) => {
-    // MOVE-9 / MOVE-10a: terse path swap by shape.
-    const terseMode = shouldUseTerseIdentity(ctx);
-    if (terseMode) {
-      const tier = ctx.profile.tier ?? "mid";
-      const tersePrompt = terseMode === "fact" ? TERSE_FACT_PROMPT : TERSE_TOOL_PROMPT;
-      const patched =
-        ctx.adapter?.systemPromptPatch?.(tersePrompt, tier) ?? tersePrompt;
-      return patched;
-    }
     const opts = readOptions(ctx);
     const base = buildSystemPrompt(
       ctx.input.task,

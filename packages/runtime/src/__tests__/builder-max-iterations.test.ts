@@ -1,14 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { ReactiveAgents } from "../builder.js";
-
-// MOVE-direct-bypass: trivial fixtures bypass to executeDirect (capped
-// at 1 iter). These tests assert kernel iteration semantics — disable.
-const PRIOR_BYPASS_BMI = process.env.RA_DIRECT_BYPASS;
-beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
-afterAll(() => {
-  if (PRIOR_BYPASS_BMI === undefined) delete process.env.RA_DIRECT_BYPASS;
-  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_BMI;
-});
 
 describe("withReasoning({ maxIterations }) wiring", () => {
   it("caps reactive kernel at 1 iteration when maxIterations: 1", async () => {

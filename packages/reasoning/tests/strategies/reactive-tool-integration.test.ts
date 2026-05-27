@@ -11,25 +11,12 @@ import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
 // Pin pre-lazy-tool-disclosure contract — see f51d7d87.
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
-// MOVE-direct-bypass / MOVE-10a: tool-integration tests use trivial
-// fixtures that would route through executeDirect (bypass) or get the
-// terse-tool identity (MOVE-10a). Both alter the LLM mock's expected
-// pattern-match path. Disable for the file to exercise the full
-// reactive→ToolService path under test.
-const PRIOR_BYPASS_RTI = process.env.RA_DIRECT_BYPASS;
-const PRIOR_TERSE_RTI = process.env.RA_TERSE_IDENTITY;
 beforeAll(() => {
   process.env.RA_LAZY_TOOLS = "0";
-  process.env.RA_DIRECT_BYPASS = "0";
-  process.env.RA_TERSE_IDENTITY = "0";
 });
 afterAll(() => {
   if (PRIOR_LAZY === undefined) delete process.env.RA_LAZY_TOOLS;
   else process.env.RA_LAZY_TOOLS = PRIOR_LAZY;
-  if (PRIOR_BYPASS_RTI === undefined) delete process.env.RA_DIRECT_BYPASS;
-  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_RTI;
-  if (PRIOR_TERSE_RTI === undefined) delete process.env.RA_TERSE_IDENTITY;
-  else process.env.RA_TERSE_IDENTITY = PRIOR_TERSE_RTI;
 });
 import {
   ToolService,

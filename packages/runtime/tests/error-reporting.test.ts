@@ -1,15 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { ReactiveAgents } from "../src/index.js";
 import type { AgentEvent } from "@reactive-agents/core";
-
-// MOVE-direct-bypass: trivial fixtures bypass to executeDirect. These
-// tests assert reactive-loop iteration semantics — disable bypass.
-const PRIOR_BYPASS_ER = process.env.RA_DIRECT_BYPASS;
-beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
-afterAll(() => {
-  if (PRIOR_BYPASS_ER === undefined) delete process.env.RA_DIRECT_BYPASS;
-  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_ER;
-});
 
 /** AgentCompleted with the error field we added (may not be in compiled .d.ts yet). */
 type AgentCompletedWithError = Extract<AgentEvent, { _tag: "AgentCompleted" }> & { error?: string };
