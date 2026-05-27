@@ -246,14 +246,42 @@ function buildIterationSystemPrompt(
   const patched = adapter?.systemPromptPatch?.(base, profile.tier ?? "mid") ?? base;
   sections.push(patched);
 
+  // ── Lever 2: skinny iter 1+ system prompt (conservative variant) ──────────
+  // The system prompt is replaced on every API call (it doesn't accumulate
+  // like the message thread). Some scaffold sections are pure repetition
+  // across iterations and waste tokens.
+  //
+  // Iter 1+ keeps:
+  //   - Identity / adapter systemPromptPatch (model anchor)
+  //   - buildStaticContext (env + tool reference + task + rules)
+  //     ↑ kept because local-tier models (qwen3.5 via Ollama, in particular)
+  //       regress on tool tasks when the tool reference disappears mid-loop;
+  //       empirical: m2-version-then-cite +28% tokens on local when stripped
+  //       (3-run avg, 2026-05-26 bench). The native FC tool schemas in the
+  //       provider request param aren't enough on their own for local models.
+  //   - Progress / prior work / guidance (these CHANGE per iter)
+  //
+  // Drops on iter 1+ (truly stable repetition):
+  //   - priorContext (cross-run memory) — model has it from iter 0
+  //   - adapter toolGuidance (rationale rules, etc.) — stable
+  //   - toolElaboration hints — stable
+  //
+  // Pairs multiplicatively with Lever 1 (Anthropic prompt caching): the
+  // iter 1+ system prompt is still large enough to benefit from cache hits
+  // on the message-thread prefix, while we shave the truly redundant bits.
+  const isInitialIteration = state.iteration === 0;
+
   // Bootstrap / cross-run memory (ExecutionEngine memCtx → ReasoningService.memoryContext
   // → reactive priorContext). Was previously dropped: KernelInput carried the field but
   // ContextManager never rendered it, so episodic + semantic text never reached the LLM.
-  if (input.priorContext?.trim()) {
+  // Lever 2: iter 0 only — by iter 1+ the model has memory context in its message thread.
+  if (isInitialIteration && input.priorContext?.trim()) {
     sections.push(input.priorContext.trim());
   }
 
-  // 2-4. Static context (environment + tools + task + rules)
+  // 2-4. Static context (environment + tools + task + rules). Sent every iter
+  // because local-tier models regress on tool tasks when tool reference is
+  // dropped mid-loop (see Lever 2 comment block above).
   const staticContext = buildStaticContext({
     task: input.task,
     profile,
@@ -262,24 +290,32 @@ function buildIterationSystemPrompt(
     environmentContext: input.environmentContext,
   });
 
-  // 5. Adapter toolGuidance — appended immediately after the static context
-  //    so the reminder sits adjacent to the tool schema block.
-  const toolGuidancePatch = adapter?.toolGuidance?.({
-    toolNames: availableTools.map((t) => t.name),
-    requiredTools: input.requiredTools ?? [],
-    tier: profile.tier ?? "mid",
-    // TODO: wire real ExperienceSummary once ToolCallObservation records are read from store
-    experienceSummary: undefined,
-  });
-  sections.push(
-    toolGuidancePatch ? `${staticContext}\n${toolGuidancePatch}` : staticContext,
-  );
+  if (isInitialIteration) {
+    // 5. Adapter toolGuidance — appended immediately after the static context
+    //    so the reminder sits adjacent to the tool schema block. Lever 2:
+    //    iter 0 only — the rationale rules and provider-specific reminders
+    //    are stable across iterations and the model retains them.
+    const toolGuidancePatch = adapter?.toolGuidance?.({
+      toolNames: availableTools.map((t) => t.name),
+      requiredTools: input.requiredTools ?? [],
+      tier: profile.tier ?? "mid",
+      // TODO: wire real ExperienceSummary once ToolCallObservation records are read from store
+      experienceSummary: undefined,
+    });
+    sections.push(
+      toolGuidancePatch ? `${staticContext}\n${toolGuidancePatch}` : staticContext,
+    );
 
-  // 6. Tool elaboration hints (optional)
-  const toolElaborationSection = options?.toolElaboration
-    ? buildToolElaborationInjection(availableTools, options.toolElaboration)
-    : "";
-  if (toolElaborationSection) sections.push(toolElaborationSection);
+    // 6. Tool elaboration hints (optional). Lever 2: iter 0 only — stable.
+    const toolElaborationSection = options?.toolElaboration
+      ? buildToolElaborationInjection(availableTools, options.toolElaboration)
+      : "";
+    if (toolElaborationSection) sections.push(toolElaborationSection);
+  } else {
+    // iter 1+: push the static context WITHOUT the adapter toolGuidance / tool
+    // elaboration patches that we sent on iter 0.
+    sections.push(staticContext);
+  }
 
   // 7. Progress section — what tools have been called successfully so far
   const progressSection = buildProgressSection(state, input);
