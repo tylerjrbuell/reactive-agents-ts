@@ -71,13 +71,55 @@ function effectiveTools(
 
 // ── Section: identity ─────────────────────────────────────────────────────────
 
+/**
+ * MOVE-9 terse identity for trivial-fact shape.
+ *
+ * Default identity primes the model to "think step by step", which on
+ * local-tier qwen3.5-class models induces 200-400t reasoning preamble
+ * for single-fact knowledge questions (k1 "Paris" → 400+ tok). For
+ * trivial-fact shape with high confidence, swap to a Mastra-equivalent
+ * terse system prompt that explicitly suppresses preamble.
+ *
+ * Mastra emits ~50t for the same questions because its default identity
+ * is "You are a helpful assistant" — no reasoning induction.
+ *
+ * Custom systemPrompt always wins (caller intent overrides framework
+ * defaults). Tool / multi-step / citation / structured shapes get the
+ * full reasoning identity since those tasks need the inductive bias.
+ */
+const TERSE_FACT_PROMPT =
+  "You are a helpful assistant. Answer the question directly and concisely. Do not include reasoning, explanations, or preamble — just the answer.";
+
+function shouldUseTerseIdentity(ctx: PromptSectionContext): boolean {
+  // Caller-supplied prompts always take precedence.
+  const opts = readOptions(ctx);
+  if (opts.systemPromptBody || ctx.input.systemPrompt) return false;
+  return (
+    ctx.shape.complexity === "trivial" &&
+    ctx.shape.highConfidence &&
+    ctx.shape.expectedOutputForm === "fact" &&
+    !ctx.shape.needsTools &&
+    !ctx.shape.needsMultiStep &&
+    !ctx.shape.needsCitation &&
+    !ctx.shape.needsStructuredOutput
+  );
+}
+
 export const identitySection: PromptSection = {
   id: "identity",
   description:
-    "Agent identity + tier-adaptive system prompt + adapter.systemPromptPatch",
+    "Agent identity + tier-adaptive system prompt (terse on trivial-fact shape)",
   // Identity always required — there is no shape under which we drop it.
   requiredWhen: () => true,
   render: (ctx) => {
+    // MOVE-9: terse path for trivial-fact shape (qwen3.5 verbosity cap).
+    if (shouldUseTerseIdentity(ctx)) {
+      const tier = ctx.profile.tier ?? "mid";
+      const patched =
+        ctx.adapter?.systemPromptPatch?.(TERSE_FACT_PROMPT, tier) ??
+        TERSE_FACT_PROMPT;
+      return patched;
+    }
     const opts = readOptions(ctx);
     const base = buildSystemPrompt(
       ctx.input.task,
