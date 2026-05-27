@@ -94,10 +94,15 @@ function shouldUseTerseIdentity(ctx: PromptSectionContext): boolean {
   // Caller-supplied prompts always take precedence.
   const opts = readOptions(ctx);
   if (opts.systemPromptBody || ctx.input.systemPrompt) return false;
+  // MOVE-9b: "list-trivial" output form is recall-style enumeration
+  // ("RGB colors", "days of week"), also benefits from terse identity.
+  const terseForm =
+    ctx.shape.expectedOutputForm === "fact" ||
+    ctx.shape.expectedOutputForm === "list-trivial";
   return (
+    terseForm &&
     ctx.shape.complexity === "trivial" &&
     ctx.shape.highConfidence &&
-    ctx.shape.expectedOutputForm === "fact" &&
     !ctx.shape.needsTools &&
     !ctx.shape.needsMultiStep &&
     !ctx.shape.needsCitation &&

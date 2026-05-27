@@ -93,7 +93,8 @@ const FORMAT_RULES: readonly FormatRule[] = [
     patterns: [
       /(?:bullet|numbered|ordered|unordered)\s+list/i,
       /(?:give|provide|show|return)\s+(?:me\s+)?(?:a\s+)?(?:bullet|numbered)?\s*list/i,
-      /^list\s+(?:the|all|top|every)\b/i,
+      // Sentence-initial or post-period imperative: "List them", "List the…"
+      /(?:^|[.?!]\s+)list\s+\w+/i,
     ],
   },
 ];

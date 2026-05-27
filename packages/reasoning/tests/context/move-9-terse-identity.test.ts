@@ -99,16 +99,28 @@ describe("MOVE-9 — terse identity prompt for trivial-fact shape", () => {
     expect(out.systemPrompt).not.toContain("Do not include reasoning");
   });
 
-  it("list-output trivial task → terse NOT applied (expectedOutputForm !== 'fact')", () => {
+  it("trivial-list task ('List RGB colors') → terse APPLIED (MOVE-9b widening)", () => {
+    // After MOVE-9b: short list cue on trivial+no-tools → list-trivial form
+    // → terse identity fires.
+    const out = ContextManager.build(
+      makeState(),
+      makeInput({ task: "List the RGB colors." }),
+      makeProfile(),
+      noGuidance,
+    );
+    expect(out.systemPrompt).toContain("Answer the question directly");
+  });
+
+  it("moderate-list task → terse NOT applied (preserves reasoning bias)", () => {
     const out = ContextManager.build(
       makeState(),
       makeInput({
-        task: "List the seven days of the week in order.",
+        task: "Analyze and list the trade-offs of NoSQL vs SQL for high-traffic systems.",
       }),
       makeProfile(),
       noGuidance,
     );
-    // List intent classifies as structured form, not "fact" — terse skipped.
+    // Moderate complexity → list stays "structured" → terse skipped.
     expect(out.systemPrompt).not.toContain("Do not include reasoning");
   });
 });
