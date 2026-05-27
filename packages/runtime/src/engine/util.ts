@@ -197,7 +197,7 @@ export type ExecutionReasoningResult = {
   status: string;
   strategy?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string };
+  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string };
 };
 
 export function normalizeReasoningResult(
@@ -226,6 +226,8 @@ export function normalizeReasoningResult(
     metadata: {
       cost: md.cost,
       tokensUsed: md.tokensUsed,
+      inputTokens: typeof md.inputTokens === "number" ? md.inputTokens : undefined,
+      outputTokens: typeof md.outputTokens === "number" ? md.outputTokens : undefined,
       stepsCount: md.stepsCount,
       strategyFallback: typeof md.strategyFallback === "boolean"
         ? md.strategyFallback

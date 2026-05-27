@@ -282,6 +282,8 @@ export const executeReactive = (
             : "partial",
       start,
       totalTokens: pass.tokens,
+      totalInputTokens: pass.inputTokens,
+      totalOutputTokens: pass.outputTokens,
       totalCost: pass.cost,
       extraMetadata: {
         terminatedBy,
