@@ -301,6 +301,10 @@ export interface KernelState {
   // Metrics
   readonly iteration: number;
   readonly tokens: number;
+  /** Cumulative input (prompt) tokens. May be 0 if no LLM call recorded usage yet. */
+  readonly inputTokens: number;
+  /** Cumulative output (completion) tokens. */
+  readonly outputTokens: number;
   readonly cost: number;
 
   // Control
@@ -730,6 +734,8 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     scratchpad: new Map<string, string>(),
     iteration: 0,
     tokens: 0,
+    inputTokens: 0,
+    outputTokens: 0,
     cost: 0,
     status: "thinking",
     output: null,
@@ -809,6 +815,8 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     scratchpad: Object.fromEntries(state.scratchpad),
     iteration: state.iteration,
     tokens: state.tokens,
+    inputTokens: state.inputTokens,
+    outputTokens: state.outputTokens,
     cost: state.cost,
     status: state.status,
     output: state.output,
@@ -837,6 +845,8 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     scratchpad: new Map(Object.entries(raw.scratchpad)),
     iteration: raw.iteration,
     tokens: raw.tokens,
+    inputTokens: raw.inputTokens,
+    outputTokens: raw.outputTokens,
     cost: raw.cost,
     status: raw.status,
     output: raw.output,

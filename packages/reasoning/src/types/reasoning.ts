@@ -19,6 +19,10 @@ export const ReasoningMetadataSchema = Schema.Struct({
   duration: Schema.Number, // ms
   cost: Schema.Number, // USD
   tokensUsed: Schema.Number,
+  /** Cumulative prompt tokens (optional — providers/strategies may not split). */
+  inputTokens: Schema.optional(Schema.Number),
+  /** Cumulative completion tokens (optional — providers/strategies may not split). */
+  outputTokens: Schema.optional(Schema.Number),
   stepsCount: Schema.Number,
   confidence: Schema.Number, // 0-1
   effectiveness: Schema.optional(Schema.Number), // 0-1 (learned)
