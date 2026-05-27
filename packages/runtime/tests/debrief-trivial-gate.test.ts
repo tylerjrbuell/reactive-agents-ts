@@ -26,16 +26,28 @@ import {
 import type { ExecutionContext, ReactiveAgentsConfig } from "../src/types.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
 
-function makeCountingLLM() {
+function makeCountingLLM(opts: { tokens?: { input: number; output: number; total: number; cost: number } } = {}) {
   let calls = 0;
+  const tokens = opts.tokens ?? { input: 50, output: 25, total: 75, cost: 0 };
   const layer = Layer.succeed(LLMService, {
     complete: () => {
       calls += 1;
       return Effect.succeed({
-        content: "FINAL ANSWER: synthesized",
+        content: JSON.stringify({
+          summary: "synth",
+          keyFindings: [],
+          errorsEncountered: [],
+          lessonsLearned: [],
+          caveats: "",
+        }),
         stopReason: "end_turn",
         toolCalls: [],
-        usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75, estimatedCost: 0 },
+        usage: {
+          inputTokens: tokens.input,
+          outputTokens: tokens.output,
+          totalTokens: tokens.total,
+          estimatedCost: tokens.cost,
+        },
         model: "test",
       });
     },
@@ -205,6 +217,57 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
     // returns empty → no "Prior Session" injection. Warden concern
     // resolved by construction; this test is the pin.
     expect(saveCalls.length).toBe(0);
+  });
+
+  // GH #143 honesty fix — verify debrief LLM call's tokens are NOT
+  // dropped on the floor. Pre-fix, `synthesizeDebrief` consumed
+  // `llmResponse.content` but ignored `llmResponse.usage`; bench tools
+  // reading `result.metadata.tokensUsed` under-counted local-tier
+  // trivial-task runs by ~5× per warden ablation evidence. Fix wires
+  // `synthesisTokens` through `DebriefSynthesisResult` → caller
+  // accumulates into ctx.tokensUsed/cost (execution-engine.ts:1083).
+  // This test pins the synthesizeAndStoreDebrief boundary surface.
+  it("synthesizeDebrief — metrics.synthesisTokens populated from llmResponse.usage (GH #143 honesty fix unit)", async () => {
+    // Direct synthesizeDebrief test — bypasses the synthesizeAndStoreDebrief
+    // outer catchAll so any inner failure surfaces directly. Proves the
+    // honesty fix at the debrief.ts schema level: when the LLM call
+    // succeeds with non-zero usage, metrics.synthesisTokens is populated
+    // with the correct token + cost values.
+    const { layer } = makeCountingLLM({
+      tokens: { input: 200, output: 100, total: 300, cost: 0.0015 },
+    });
+    const { synthesizeDebrief } = await import("../src/debrief.js");
+    const debrief = await Effect.runPromise(
+      synthesizeDebrief({
+        taskPrompt: "test",
+        agentId: "a-1",
+        taskId: "t-1",
+        terminatedBy: "end_turn",
+        finalOutputText: "done",
+        toolCallHistory: [],
+        errorsFromLoop: [],
+        metrics: { tokens: 100, duration: 50, iterations: 1, cost: 0 },
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(debrief.metrics.synthesisTokens).toBeDefined();
+    expect(debrief.metrics.synthesisTokens?.input).toBe(200);
+    expect(debrief.metrics.synthesisTokens?.output).toBe(100);
+    expect(debrief.metrics.synthesisTokens?.total).toBe(300);
+    expect(debrief.metrics.synthesisTokens?.cost).toBe(0.0015);
+  });
+
+  it("trivial task → no synthesisTokens (no LLM call made)", async () => {
+    const { layer } = makeCountingLLM();
+    const deps = makeDeps(makeCtx("trivial"), true);
+
+    const result = await Effect.runPromise(
+      synthesizeAndStoreDebrief(deps).pipe(Effect.provide(layer)),
+    );
+
+    // Trivial gate short-circuits → no LLM call → no synthesisTokens.
+    // Caller's accumulation step is a no-op on this path.
+    expect(result.debrief).toBeUndefined();
+    expect(result.synthesisTokens).toBeUndefined();
   });
 
   it("trivial task with memory DISABLED → debrief undefined (existing gate)", async () => {

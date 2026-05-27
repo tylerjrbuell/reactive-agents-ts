@@ -71,6 +71,20 @@ export interface DebriefSynthesisResult {
   readonly debrief: AgentDebrief | undefined;
   readonly errorsFromLoop: readonly string[];
   readonly executionDurationMs: number;
+  /**
+   * GH #143 honesty fix — tokens consumed by the debrief LLM call,
+   * forwarded so the caller can accumulate into ctx.tokensUsed +
+   * ctx.cost. Undefined when debrief was skipped (trivial gate / no
+   * LLMService / memory disabled) or when the fallback path returned
+   * zero usage. Caller MUST add these to the run's reported counters
+   * before result assembly — otherwise bench tools / observability
+   * dashboards under-count by the same factor as pre-fix (~5× on
+   * local-tier trivial).
+   */
+  readonly synthesisTokens?: {
+    readonly total: number;
+    readonly cost: number;
+  };
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -226,6 +240,22 @@ export const synthesizeAndStoreDebrief = (
       );
     }
 
-    return { debrief, errorsFromLoop, executionDurationMs } satisfies DebriefSynthesisResult;
+    // GH #143 honesty fix — extract synthesisTokens from debrief.metrics
+    // (populated by synthesizeDebrief when its own LLM call succeeded)
+    // and surface for caller-side aggregation into ctx.tokensUsed +
+    // ctx.cost. Undefined when debrief skipped or fallback path taken.
+    const synthesisTokens = debrief?.metrics.synthesisTokens
+      ? {
+          total: debrief.metrics.synthesisTokens.total,
+          cost: debrief.metrics.synthesisTokens.cost,
+        }
+      : undefined;
+
+    return {
+      debrief,
+      errorsFromLoop,
+      executionDurationMs,
+      ...(synthesisTokens ? { synthesisTokens } : {}),
+    } satisfies DebriefSynthesisResult;
   });
 };
