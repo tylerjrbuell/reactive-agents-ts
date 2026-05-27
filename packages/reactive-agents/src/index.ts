@@ -58,6 +58,13 @@ export {
   pipe,
   parallel,
   race,
+
+  // Capability Cost Registry (MOVE-2)
+  CapabilityRegistry,
+  CapabilityRegistryLive,
+
+  // Harness Profile presets (MOVE-6)
+  HarnessProfile,
 } from "@reactive-agents/runtime";
 
 export type {
@@ -80,6 +87,18 @@ export type {
   ChannelsConfig,
   // Composition types
   AgentFn,
+
+  // Capability Cost Registry (MOVE-2)
+  CapabilityEntry,
+  CapabilityAuditReport,
+  CostSignature,
+  LiftEvidence,
+  WardenOwner,
+  TierId,
+
+  // Harness Profile presets (MOVE-6)
+  HarnessProfilePatch,
+  HarnessProfileName,
 } from "@reactive-agents/runtime";
 
 // ─── Core Services ───
