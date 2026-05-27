@@ -233,6 +233,8 @@ export function runReactiveObserver(
           priorDecisionsThisRun: priorDecisionsThisRun.length > 0 ? priorDecisionsThisRun : undefined,
           consecutiveToolFailures: consecutiveToolFailures > 0 ? consecutiveToolFailures : undefined,
           failingToolName,
+          // FM-A3 backstop — empty-output invariant for RI early-stop.
+          hasUserOutput: typeof s.output === "string" && s.output.trim().length > 0,
         });
 
         for (const decision of decisions) {
