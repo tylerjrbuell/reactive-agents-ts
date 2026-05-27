@@ -17,7 +17,7 @@
  * (`execution-engine.ts:976 → :1070`).
  */
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import {
   synthesizeAndStoreDebrief,
@@ -166,6 +166,45 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
     // when memory is enabled. No regression for callers who don't populate
     // taskComplexity.
     expect(deps.ctx.metadata.taskComplexity).toBeUndefined();
+  });
+
+  // GH #69 follow-up (warden recommendation) — verify cross-session
+  // prior-debrief-injection path at `reasoning-think.ts:130-147` produces
+  // clean output after a trivial predecessor (no phantom Prior Session
+  // block on the successor's reasoning prompt). The injection logic gates
+  // on `DebriefStoreService.listByAgent(agentId, 1)` returning ≥1 row;
+  // skipped debrief → no `.save()` call → no row persisted → next task's
+  // `listByAgent` returns empty → no injection. This pins the
+  // by-construction guarantee.
+  it("trivial task with DebriefStore present → store.save() NOT called (closes GH #69 warden follow-up)", async () => {
+    const { layer: llmLayer } = makeCountingLLM();
+    const saveCalls: unknown[] = [];
+
+    // Mock DebriefStoreService — only `save` is exercised on the gate
+    // path; other methods are stubbed for type-completeness only.
+    const DebriefStoreTag = Context.GenericTag<{
+      save: (entry: unknown) => Effect.Effect<void, never>;
+      listByAgent: () => Effect.Effect<unknown[], never>;
+    }>("DebriefStoreService");
+    const debriefStoreLayer = Layer.succeed(DebriefStoreTag, {
+      save: (entry) => Effect.sync(() => {
+        saveCalls.push(entry);
+      }),
+      listByAgent: () => Effect.succeed([]),
+    });
+
+    const deps = makeDeps(makeCtx("trivial"), true);
+
+    await Effect.runPromise(
+      synthesizeAndStoreDebrief(deps).pipe(
+        Effect.provide(Layer.mergeAll(llmLayer, debriefStoreLayer)),
+      ),
+    );
+
+    // No row persisted on trivial path → next session's `listByAgent`
+    // returns empty → no "Prior Session" injection. Warden concern
+    // resolved by construction; this test is the pin.
+    expect(saveCalls.length).toBe(0);
   });
 
   it("trivial task with memory DISABLED → debrief undefined (existing gate)", async () => {
