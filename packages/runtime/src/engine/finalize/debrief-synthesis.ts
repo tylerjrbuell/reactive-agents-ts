@@ -17,7 +17,12 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task } from "@reactive-agents/core";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "../../debrief.js";
+import {
+  synthesizeDebrief,
+  buildFallbackDebrief,
+  type DebriefInput,
+  type AgentDebrief,
+} from "../../debrief.js";
 import { DebriefStoreService } from "@reactive-agents/memory";
 import type { AgentDebriefShape } from "@reactive-agents/memory";
 import { extractTaskText } from "../util.js";
@@ -71,6 +76,13 @@ export interface DebriefSynthesisResult {
   readonly debrief: AgentDebrief | undefined;
   readonly errorsFromLoop: readonly string[];
   readonly executionDurationMs: number;
+  /**
+   * Tokens consumed by the debrief LLM call. Zero when the synthetic-fallback
+   * path was taken (trivial task, LLM unavailable, or memory disabled). The
+   * caller is expected to add this to `ctx.tokensUsed` before TaskResult
+   * assembly so bench metrics reflect real LLM consumption (GH #143).
+   */
+  readonly debriefTokensUsed: number;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -150,40 +162,73 @@ export const synthesizeAndStoreDebrief = (
       rationale: rationaleLog,
     };
 
+    // GH #143 trivial-task gate — skip the LLM debrief call when the task is
+    // trivial enough that the fallback synthesizer can reconstruct an equivalent
+    // record from captured signals. On local tier (qwen3.5:latest) the LLM
+    // debrief failed 52% of the time anyway (hit max_tokens, returned empty
+    // content), and bench evidence showed it burned ~825 tok/task uncounted.
+    // The gate covers: short final output (no synthesis nuance to extract),
+    // zero tool calls (nothing to summarize beyond the answer itself), and no
+    // errors (no error-narrative for the LLM to attempt). Any one of those
+    // conditions failing falls through to the LLM path.
+    const isTrivialForDebrief =
+      outputForSuccess.length < 100 &&
+      toolCallLog.length === 0 &&
+      errorsFromLoop.length === 0;
+
     // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
     // Gated on BOTH: rr !== undefined (reasoning path was used) AND config.enableMemory
     // (user opted in with .withMemory()). Skipped otherwise to avoid injecting extra
     // LLM calls in direct-LLM path tests and non-memory configurations.
     // Also requires LLMService to be available in context — use serviceOption to check.
-    // Proportional: skip debrief for trivial and moderate tasks (only run for complex).
-    const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory
-      ? Effect.serviceOption(LLMService).pipe(
-          Effect.flatMap((llmOpt) => {
-            if (llmOpt._tag !== "Some") return Effect.succeed(undefined as AgentDebrief | undefined);
-            // Provide the resolved LLMService back so synthesizeDebrief's R is discharged here.
-            return synthesizeDebrief(debriefInput).pipe(
-              Effect.provideService(LLMService, llmOpt.value),
-              Effect.flatMap((d) => {
-                const debrief = d as AgentDebrief;
-                if (!eb) {
-                  return Effect.succeed(debrief);
+    const debriefAndTokens: { debrief: AgentDebrief | undefined; tokensUsed: number } =
+      yield* (rr !== undefined && config.enableMemory
+        ? isTrivialForDebrief
+          ? Effect.succeed({ debrief: buildFallbackDebrief(debriefInput), tokensUsed: 0 })
+          : Effect.serviceOption(LLMService).pipe(
+              Effect.flatMap((llmOpt) => {
+                if (llmOpt._tag !== "Some") {
+                  // No LLM available — still build a fallback so downstream consumers
+                  // (DebriefStoreService persist, DebriefCompleted event) see a record.
+                  return Effect.succeed({ debrief: buildFallbackDebrief(debriefInput), tokensUsed: 0 });
                 }
-                return eb.publish({
-                  _tag: "DebriefCompleted",
-                  taskId: debriefInput.taskId,
-                  agentId: debriefInput.agentId,
-                  debrief,
-                }).pipe(
-                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-completed-publish", tag: errorTag(err) })),
-                  Effect.as(debrief),
+                return synthesizeDebrief(debriefInput).pipe(
+                  Effect.provideService(LLMService, llmOpt.value),
+                  Effect.map((result) => ({ debrief: result.debrief as AgentDebrief | undefined, tokensUsed: result.tokensUsed })),
+                  Effect.catchAll(() =>
+                    Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }),
+                  ),
                 );
               }),
-              Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
-            );
-          }),
-          Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
-        )
-      : Effect.succeed(undefined as AgentDebrief | undefined));
+              Effect.catchAll(() =>
+                Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }),
+              ),
+            )
+        : Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }));
+
+    const { debrief, tokensUsed: debriefTokensUsed } = debriefAndTokens;
+
+    // Publish DebriefCompleted from a single site so all paths (trivial-fallback,
+    // LLM-success, LLM-failure-fallback) emit consistently. Prior to GH #143 this
+    // fired only on the LLM-success path; subscribers expecting the event missed it
+    // when the trivial gate routed to the fallback synthesizer.
+    if (debrief !== undefined && eb) {
+      yield* eb
+        .publish({
+          _tag: "DebriefCompleted",
+          taskId: debriefInput.taskId,
+          agentId: debriefInput.agentId,
+          debrief,
+        })
+        .pipe(
+          Effect.catchAll((err) =>
+            emitErrorSwallowed({
+              site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-completed-publish",
+              tag: errorTag(err),
+            }),
+          ),
+        );
+    }
 
     // Persist debrief if DebriefStoreService is available
     if (debrief !== undefined) {
@@ -214,6 +259,11 @@ export const synthesizeAndStoreDebrief = (
       );
     }
 
-    return { debrief, errorsFromLoop, executionDurationMs } satisfies DebriefSynthesisResult;
+    return {
+      debrief,
+      errorsFromLoop,
+      executionDurationMs,
+      debriefTokensUsed,
+    } satisfies DebriefSynthesisResult;
   });
 };

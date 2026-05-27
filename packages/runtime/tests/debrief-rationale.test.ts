@@ -70,7 +70,7 @@ describe("synthesizeDebrief with rationale", () => {
       ],
     };
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(inputWithRationale).pipe(Effect.provideService(LLMService, mockLLM))
     );
 

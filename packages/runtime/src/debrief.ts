@@ -124,6 +124,18 @@ export interface AgentDebrief {
   markdown: string;
 }
 
+/**
+ * Wrapper returned by `synthesizeDebrief` so the engine can attribute the
+ * debrief LLM call's token cost into `ctx.tokensUsed` instead of dropping
+ * it on the floor. See GH #143 — bench undercounted RA by ~5x on local
+ * tier because debrief tokens were never aggregated.
+ */
+export interface DebriefResult {
+  readonly debrief: AgentDebrief;
+  /** Tokens consumed by the debrief LLM call. Zero when the synthetic-fallback path was used. */
+  readonly tokensUsed: number;
+}
+
 // ─── Outcome derivation ────────────────────────────────────────────────────
 
 function deriveOutcome(
@@ -156,9 +168,55 @@ Return ONLY a JSON object — no prose, no markdown fences — with exactly thes
 The user message may include a "Final output" section. That text is what the user actually received as the task answer.
 You MUST align your summary with it: if it substantively answers the task (relative to the stated task), say so clearly and do NOT claim that no answer or summary was produced. Multiple tool calls are not evidence of failure by themselves.`;
 
+/**
+ * Build a debrief from captured execution signals WITHOUT calling the LLM.
+ *
+ * Mirrors the same shape `synthesizeDebrief` returns, but uses the data
+ * already in `DebriefInput` instead of asking the LLM to summarize it.
+ * Used in two situations:
+ *
+ *  1. Trivial-task gate (#143): when output is short (<100 chars), no tools
+ *     were called, and no errors fired, the LLM call adds no information the
+ *     fallback couldn't synthesize from the captured data — and on local
+ *     tier (qwen3.5:latest) 52% of those calls hit `max_tokens` and produce
+ *     empty content anyway. Skip the LLM, use this builder, save ~825 tok/task.
+ *
+ *  2. LLM-call failure: the catchAll inside `synthesizeDebrief` already uses
+ *     this shape; centralizing the construction here avoids the divergence
+ *     between the in-place fallback at the old catchAll site and the new
+ *     trivial-task path.
+ */
+export function buildFallbackDebrief(input: DebriefInput): AgentDebrief {
+  const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop);
+  const summary =
+    input.finalAnswerCapture?.summary ??
+    briefOutputFallback(input.finalOutputText) ??
+    "Task completed.";
+  const toolsUsed = input.toolCallHistory.map((t) => ({
+    name: t.name,
+    calls: t.calls,
+    successRate: t.calls > 0 ? (t.calls - t.errors) / t.calls : 1,
+  }));
+  const debrief: Omit<AgentDebrief, "markdown"> = {
+    outcome,
+    summary,
+    keyFindings: [],
+    errorsEncountered: [...input.errorsFromLoop].filter((e, i, arr) => arr.indexOf(e) === i),
+    lessonsLearned: [],
+    confidence:
+      (input.finalAnswerCapture?.confidence as AgentDebrief["confidence"]) ??
+      (input.finalOutputText?.trim().length ? "high" : "medium"),
+    caveats: undefined,
+    toolsUsed,
+    metrics: input.metrics,
+    rationale: input.rationale ?? [],
+  };
+  return { ...debrief, markdown: formatDebriefMarkdown(debrief) };
+}
+
 export function synthesizeDebrief(
   input: DebriefInput,
-): Effect.Effect<AgentDebrief, Error, LLMService> {
+): Effect.Effect<DebriefResult, Error, LLMService> {
   return Effect.gen(function* () {
     const llm = yield* LLMService;
     const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop);
@@ -295,7 +353,11 @@ export function synthesizeDebrief(
       rationale: input.rationale ?? [],
     };
 
-    return { ...debrief, markdown: formatDebriefMarkdown(debrief) };
+    const tokensUsed = llmResponse.usage?.totalTokens ?? 0;
+    return {
+      debrief: { ...debrief, markdown: formatDebriefMarkdown(debrief) },
+      tokensUsed,
+    };
   });
 }
 
