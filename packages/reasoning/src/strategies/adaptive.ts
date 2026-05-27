@@ -28,7 +28,7 @@ import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.j
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
+import { classifyTask } from "../kernel/capabilities/comprehend/task-classification.js";
 import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
 
 /** Record of a past strategy execution outcome for self-improvement. */
@@ -115,10 +115,7 @@ export const executeAdaptive = (
     // backward-compat fallback for direct adaptive callers. The same snapshot
     // is forwarded to the dispatched sub-strategy so it doesn't re-classify.
     const taskClassification =
-      input.taskClassification ?? {
-        complexity: classifyTaskComplexity(input.taskDescription),
-        intent: { format: null, cues: [], expectedContent: [], expectedEntities: [] },
-      };
+      input.taskClassification ?? classifyTask(input.taskDescription);
 
     // ── Heuristic pre-classifier ──
     // Avoid an LLM call for obvious cases. Only consult the LLM for ambiguous tasks.

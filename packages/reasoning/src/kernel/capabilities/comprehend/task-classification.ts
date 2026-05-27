@@ -20,10 +20,17 @@ import {
   type TaskComplexityClassification,
 } from "./task-complexity.js";
 import { extractOutputFormat, type TaskIntent } from "./task-intent.js";
+import { inferTaskShape, type TaskShape } from "./task-shape.js";
 
 export interface TaskClassification {
   readonly complexity: TaskComplexityClassification;
   readonly intent: TaskIntent;
+  /**
+   * Structural-need shape (APC-1). Derived from complexity + intent + task
+   * text cues. Consumed by the Adaptive Prompt Composer to gate prompt
+   * sections per shape.
+   */
+  readonly shape: TaskShape;
 }
 
 /**
@@ -35,8 +42,8 @@ export interface TaskClassification {
  * strategy inputs as `taskClassification`.
  */
 export function classifyTask(task: string): TaskClassification {
-  return {
-    complexity: classifyTaskComplexity(task),
-    intent: extractOutputFormat(task),
-  };
+  const complexity = classifyTaskComplexity(task);
+  const intent = extractOutputFormat(task);
+  const shape = inferTaskShape({ complexity, intent }, task);
+  return { complexity, intent, shape };
 }
