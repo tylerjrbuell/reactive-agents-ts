@@ -1136,6 +1136,10 @@ export type AgentEvent =
         readonly stopReason?: string;
         readonly tokensIn?: number;
         readonly tokensOut?: number;
+        /** Anthropic prompt-caching: tokens that wrote new cache entries (Lever 1). */
+        readonly cacheCreationTokensIn?: number;
+        /** Anthropic prompt-caching: tokens served from cache hits. */
+        readonly cacheReadTokensIn?: number;
         readonly costUsd?: number;
         readonly durationMs?: number;
       };
