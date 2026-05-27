@@ -235,18 +235,48 @@ function buildIterationSystemPrompt(
     return minimal.join("\n\n");
   }
 
-  // ── APC-3: Delegate to PromptComposer in parity mode ─────────────────────
-  // Sections registered in `DEFAULT_SECTIONS` mirror the prior monolithic
-  // build order. `shapeGated: false` (parity) means every section's render
-  // runs regardless of predicate — byte-identical to legacy behavior.
+  // ── APC-4: Shape-gated composition ───────────────────────────────────────
+  // Each section's `requiredWhen(shape)` predicate is consulted.
+  // Per-section behavior (see prompt-sections-default.ts):
+  //   - identity            always rendered
+  //   - prior-context       always (self-conditional on input.priorContext)
+  //   - static-context      STRIPPED on high-confidence-trivial shape
+  //                         (APC-0 evidence: -14 to -25% trivial tokens)
+  //   - tool-elaboration    only when shape.needsTools
+  //   - progress            always (self-conditional on iter/tools)
+  //   - prior-work          always (self-conditional on observation facts)
+  //   - guidance            STRIPPED on high-confidence-trivial shape
   //
-  // APC-4 will flip `shapeGated: true` after per-section predicates are
-  // tightened with empirical evidence (APC-0 data shows this is only safe
-  // on trivial-shape tasks; tool/multi-step shapes must keep full scaffold).
+  // Tool / multi-step / citation shapes keep ALL sections — APC-0 proved
+  // stripping scaffold there blew up output by +42% to +136% and regressed
+  // quality. The conservative-default contract guarantees parity for any
+  // shape that doesn't lock in as high-confidence-trivial.
+  //
   // KernelInput doesn't currently carry taskClassification — classify in
-  // place. Pure regex/keyword pass, cheap. APC-4 may thread the upstream
-  // snapshot once strategy entries are wired to seed it on KernelInput.
-  const shape = classifyTask(input.task).shape;
+  // place. Pure regex/keyword pass, cheap. Future: thread snapshot from
+  // strategy entry to avoid re-classification.
+  const shapeBase = classifyTask(input.task).shape;
+  // Tool-availability override: if the agent has ANY tools available, the
+  // task is implicitly tool-capable regardless of what text cues say.
+  // Stripping scaffold on a tools-present task hides schemas from the
+  // model, causing tool calls to fail blindly. APC-0 evidence is scoped
+  // to tool-LESS trivial tasks (k1/k3/f2 in bench); preserving scaffold
+  // for tools-present tasks captures the lift without that quality risk.
+  const toolsPresent = (input.availableToolSchemas ?? []).length > 0;
+  // Caller-supplied environment context (env vars, custom fields) MUST
+  // reach the LLM — it's an explicit signal that env state is task-
+  // relevant. Force scaffold keep when present, even on trivial tasks.
+  const envPresent =
+    input.environmentContext !== undefined &&
+    Object.keys(input.environmentContext as Record<string, unknown>).length > 0;
+  const needsScaffold = toolsPresent || envPresent;
+  const shape = needsScaffold && !shapeBase.needsTools
+    ? {
+        ...shapeBase,
+        needsTools: true,
+        reason: `${shapeBase.reason}/scaffold-override${toolsPresent ? ":tools" : ""}${envPresent ? ":env" : ""}`,
+      }
+    : shapeBase;
   const result = composePrompt(
     DEFAULT_SECTIONS,
     {
@@ -258,7 +288,7 @@ function buildIterationSystemPrompt(
       adapter,
       options: options as Record<string, unknown> | undefined,
     },
-    { shapeGated: false },
+    { shapeGated: true },
   );
   return result.text;
 }

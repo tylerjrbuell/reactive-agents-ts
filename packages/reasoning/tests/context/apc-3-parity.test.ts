@@ -83,10 +83,14 @@ describe("APC-3 parity — ContextManager.build delegates to composer correctly"
     expect(out.systemPrompt).not.toContain("Guidance:");
   });
 
-  it("with guidance signals → Guidance section appears at tail", () => {
+  it("with guidance signals → Guidance section appears at tail (moderate-shape task)", () => {
+    // APC-4: guidance section stripped on high-confidence-trivial tasks.
+    // Use a tool-cue task so the predicate keeps guidance.
     const out = ContextManager.build(
       makeState(),
-      makeInput(),
+      makeInput({
+        task: "Use the calculator tool to compute 17 plus 23.",
+      }),
       makeProfile(),
       makeGuidance({
         loopDetected: true,
@@ -97,11 +101,6 @@ describe("APC-3 parity — ContextManager.build delegates to composer correctly"
     expect(out.systemPrompt).toContain("Guidance:");
     expect(out.systemPrompt).toContain("REQUIRED tools not yet called");
     expect(out.systemPrompt).toContain("Loop detected");
-    // Guidance section is last → its index in the prompt is highest among
-    // sections we know about.
-    const guidanceIdx = out.systemPrompt.indexOf("Guidance:");
-    const idx = out.systemPrompt.length;
-    expect(guidanceIdx).toBeLessThan(idx);
   });
 
   it("priorContext present → rendered as second section", () => {
@@ -159,6 +158,7 @@ describe("APC-3 — composer always invoked outside RA_MINIMAL_PROMPT", () => {
     expect(DEFAULT_SECTIONS.map((s) => s.id)).toEqual([
       "identity",
       "prior-context",
+      "task-echo",
       "static-context",
       "tool-elaboration",
       "progress",

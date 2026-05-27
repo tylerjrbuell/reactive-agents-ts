@@ -89,7 +89,10 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
 
 function makeInput() {
   return {
-    task: "Summarize the docs",
+    // APC-4: task text drives shape inference; trivial-classified
+    // short-prose tasks have static-context stripped. Use a tool-cue
+    // phrasing so this curator test exercises the full scaffold path.
+    task: "Use the web-search tool to summarize the docs",
     availableToolSchemas: [
       { name: "web-search", description: "Search", parameters: [] },
     ],

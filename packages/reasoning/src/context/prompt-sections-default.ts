@@ -90,6 +90,26 @@ export const identitySection: PromptSection = {
   costTokensApprox: 60,
 };
 
+/**
+ * APC-4 high-confidence-trivial predicate. Returns true when the task is
+ * confirmed trivial (high-confidence verdict, no tool/multistep/citation/
+ * structured needs) — i.e., a single-fact knowledge recall like
+ * `k1-france-capital` or `k3-rgb-colors`.
+ *
+ * Used as the inverse condition for "drop this section": when this returns
+ * TRUE, the section is safe to strip; when FALSE, the section is kept.
+ */
+function isHighConfidenceTrivial(shape: import("../kernel/capabilities/comprehend/task-shape.js").TaskShape): boolean {
+  return (
+    shape.complexity === "trivial" &&
+    shape.highConfidence &&
+    !shape.needsTools &&
+    !shape.needsMultiStep &&
+    !shape.needsCitation &&
+    !shape.needsStructuredOutput
+  );
+}
+
 // ── Section: prior-context (cross-run memory) ─────────────────────────────────
 
 export const priorContextSection: PromptSection = {
@@ -109,7 +129,11 @@ export const staticContextSection: PromptSection = {
   id: "static-context",
   description:
     "Environment + tool schemas + task + rules; adapter.toolGuidance appended inline",
-  requiredWhen: () => true,
+  // APC-4: strip on high-confidence-trivial tasks. Task text still reaches
+  // the LLM as state.messages[0] user role; identity section provides
+  // tier-adaptive system framing. APC-0 evidence: -14 to -25% on trivial
+  // subset, zero quality regression.
+  requiredWhen: (shape) => !isHighConfidenceTrivial(shape),
   render: (ctx) => {
     const availableTools = effectiveTools(ctx);
     const staticContext = buildStaticContext({
@@ -137,7 +161,8 @@ export const staticContextSection: PromptSection = {
 export const toolElaborationSection: PromptSection = {
   id: "tool-elaboration",
   description: "Opt-in tool-call elaboration hints",
-  requiredWhen: () => true,
+  // APC-4: only meaningful when tools are actually needed.
+  requiredWhen: (shape) => shape.needsTools,
   render: (ctx) => {
     const opts = readOptions(ctx);
     if (!opts.toolElaboration) return null;
@@ -207,7 +232,10 @@ function buildPriorWorkText(state: KernelState): string | null {
 export const guidanceSection: PromptSection = {
   id: "guidance",
   description: "Harness signals: required tools, loops, ICS, errors, oracle",
-  requiredWhen: () => true,
+  // APC-4: harness guidance is load-bearing on tool/multi-step paths
+  // (APC-0: stripping caused +42% to +136% output on those tasks). Drop
+  // only on high-confidence-trivial where there is no tool loop to nudge.
+  requiredWhen: (shape) => !isHighConfidenceTrivial(shape),
   render: (ctx) => buildGuidanceText(ctx.guidance),
   costTokensApprox: 80,
 };
@@ -243,10 +271,43 @@ export function buildGuidanceText(guidance: GuidanceContext): string | null {
 
 // ── Ordered list (composition order) ──────────────────────────────────────────
 
-/** Default ordered list, matching context-manager.ts:204-296 byte-for-byte. */
+// ── Section: task-echo (APC-4 trivial-strip safety) ──────────────────────────
+//
+// When APC-4 strips static-context on high-confidence-trivial tasks, the
+// task text is no longer rendered in the system prompt. The execution
+// engine seeds the task into state.messages[0] (user role), so production
+// flows preserve task visibility — but strategy-level callers that bypass
+// the message-seeding path (e.g., direct executeReactive in tests) would
+// lose the task entirely.
+//
+// task-echo fires ONLY when static-context is stripped, emitting a compact
+// "Task: {task}" line. Mirrors the RA_MINIMAL_PROMPT escape hatch's
+// task-preservation behavior. Mastra-equivalent compact framing.
+
+export const taskEchoSection: PromptSection = {
+  id: "task-echo",
+  description: "Compact task framing when static-context is stripped",
+  // INVERSE of static-context's predicate — fires only when static is dropped.
+  requiredWhen: (shape) => isHighConfidenceTrivial(shape),
+  render: (ctx) => {
+    const trimmed = ctx.input.task?.trim();
+    if (!trimmed) return null;
+    return `Task: ${trimmed}`;
+  },
+  costTokensApprox: 30,
+};
+
+/**
+ * Default ordered list. Sections 1-3 mirror the legacy monolith order.
+ * `task-echo` slots immediately after `prior-context` so trivial-stripped
+ * prompts have the task in the same logical position as static-context
+ * would have placed it. Predicates ensure exactly one of
+ * `task-echo` / `static-context` renders per call.
+ */
 export const DEFAULT_SECTIONS: readonly PromptSection[] = [
   identitySection,
   priorContextSection,
+  taskEchoSection,
   staticContextSection,
   toolElaborationSection,
   progressSection,
