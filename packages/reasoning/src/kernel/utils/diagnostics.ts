@@ -320,6 +320,10 @@ export function emitLLMExchange(args: {
     readonly stopReason?: string;
     readonly tokensIn?: number;
     readonly tokensOut?: number;
+    /** Anthropic prompt-caching: tokens that wrote new cache entries (Lever 1). */
+    readonly cacheCreationTokensIn?: number;
+    /** Anthropic prompt-caching: tokens served from cache hits. */
+    readonly cacheReadTokensIn?: number;
     readonly costUsd?: number;
     readonly durationMs?: number;
   };
@@ -356,6 +360,12 @@ export function emitLLMExchange(args: {
           stopReason: args.response.stopReason,
           tokensIn: args.response.tokensIn,
           tokensOut: args.response.tokensOut,
+          ...(typeof args.response.cacheCreationTokensIn === "number"
+            ? { cacheCreationTokensIn: args.response.cacheCreationTokensIn }
+            : {}),
+          ...(typeof args.response.cacheReadTokensIn === "number"
+            ? { cacheReadTokensIn: args.response.cacheReadTokensIn }
+            : {}),
           costUsd: args.response.costUsd,
           durationMs: args.response.durationMs,
         },
