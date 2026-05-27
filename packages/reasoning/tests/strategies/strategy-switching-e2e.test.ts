@@ -21,8 +21,17 @@
  *   kernel that returns the same ACTION every iteration. This is the most
  *   reliable way to force loop detection in an e2e-style test.
  */
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect } from "effect";
+
+// MOVE-direct-bypass: tests exercise reactive-kernel strategy-switching path
+// on trivial fixtures — disable bypass for the file.
+const PRIOR_BYPASS_SSE = process.env.RA_DIRECT_BYPASS;
+beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
+afterAll(() => {
+  if (PRIOR_BYPASS_SSE === undefined) delete process.env.RA_DIRECT_BYPASS;
+  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_SSE;
+});
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";

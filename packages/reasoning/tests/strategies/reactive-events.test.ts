@@ -1,4 +1,13 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+
+// MOVE-direct-bypass: trivial fixtures route through executeDirect under
+// production. Tests exercise reactive-kernel event emission — disable bypass.
+const PRIOR_BYPASS_RE = process.env.RA_DIRECT_BYPASS;
+beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
+afterAll(() => {
+  if (PRIOR_BYPASS_RE === undefined) delete process.env.RA_DIRECT_BYPASS;
+  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_RE;
+});
 import { Effect, Layer } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";

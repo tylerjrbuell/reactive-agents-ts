@@ -1,9 +1,19 @@
 // File: tests/strategies/reactive.test.ts
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+
+// MOVE-direct-bypass: trivial fixtures here ("What is the capital of France?")
+// would route through executeDirect under the production bypass. These tests
+// exercise kernel-loop behavior specifically — disable bypass for the file.
+const PRIOR_BYPASS_REACTIVE = process.env.RA_DIRECT_BYPASS;
+beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
+afterAll(() => {
+  if (PRIOR_BYPASS_REACTIVE === undefined) delete process.env.RA_DIRECT_BYPASS;
+  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_REACTIVE;
+});
 
 describe("ReactiveStrategy", () => {
   it("should execute ReAct loop and return completed result", async () => {

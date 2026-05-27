@@ -20,6 +20,8 @@ import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { TerminatedBy } from "@reactive-agents/core";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
+import { executeDirect } from "./direct.js";
+import { classifyTask } from "../kernel/capabilities/comprehend/task-classification.js";
 
 // ── Re-exports for backwards compatibility ────────────────────────────────────
 
@@ -129,6 +131,82 @@ export const executeReactive = (
     const start = Date.now();
 
     const emitLog = makeStrategyEmitLog("reasoning/src/strategies/reactive.ts:emitLog");
+
+    // ── MOVE-direct-bypass: route trivial+no-tools through executeDirect ──
+    //
+    // High-confidence-trivial tasks with NO tools / NO required tools / NO
+    // citation needs are single-LLM-call problems. Running the full reactive
+    // loop (think → act → verify → arbitrate → debrief) on them burns
+    // 2-3 extra LLM calls per task for zero quality benefit on bench
+    // evidence (k1/k3/f2 currently passing 11/11 with no retries).
+    //
+    // Bypass conditions (ALL must hold):
+    //   - shape.complexity === "trivial"
+    //   - shape.highConfidence === true   (classifier ≥0.7)
+    //   - !needsTools / !needsMultiStep / !needsCitation / !needsStructured
+    //   - no availableToolSchemas AND no requiredTools (overrides shape)
+    //   - no custom verifier (caller-controlled gating overrides bypass)
+    //
+    // Safety:
+    //   - Conservative classifier defaults (low-confidence trivial = false)
+    //   - Tool/required-tool presence inhibits bypass even on trivial text
+    //   - Custom verifier inhibits bypass (caller may have set strict gates)
+    //   - Falls through to reactive path on any uncertainty
+    //
+    // Risk: ambiguous trivial-classified task gets single-shot answer
+    // without verifier retry. APC-0 evidence shows qwen3.5 ≥mid handles
+    // trivial questions reliably; if regression observed, tighten classifier.
+    // Emergency disable: RA_DIRECT_BYPASS=0 forces full reactive path.
+    // Used by tests that need to exercise kernel-specific behavior on
+    // trivial-classified fixtures (event emission, profile threading, etc.)
+    // and as a production escape hatch if bypass causes unforeseen regression.
+    const bypassEnabled = process.env.RA_DIRECT_BYPASS !== "0";
+    const shape = classifyTask(input.taskDescription).shape;
+    const hasTools =
+      (input.availableToolSchemas?.length ?? 0) > 0 ||
+      (input.availableTools?.length ?? 0) > 0;
+    const hasRequiredTools = (input.requiredTools?.length ?? 0) > 0;
+    const canDirectBypass =
+      bypassEnabled &&
+      shape.complexity === "trivial" &&
+      shape.highConfidence &&
+      !shape.needsTools &&
+      !shape.needsMultiStep &&
+      !shape.needsCitation &&
+      !shape.needsStructuredOutput &&
+      !hasTools &&
+      !hasRequiredTools &&
+      input.verifier === undefined;
+
+    if (canDirectBypass) {
+      yield* emitLog({
+        _tag: "phase_started",
+        phase: "reactive:direct-bypass",
+        timestamp: new Date(),
+      });
+      return yield* executeDirect({
+        taskDescription: input.taskDescription,
+        taskType: input.taskType,
+        memoryContext: input.memoryContext,
+        availableTools: [],
+        config: input.config,
+        contextProfile: input.contextProfile,
+        providerName: input.providerName,
+        systemPrompt: input.systemPrompt,
+        taskId: input.taskId,
+        agentId: input.agentId,
+        sessionId: input.sessionId,
+        maxIterations: 1,
+        modelId: input.modelId,
+        temperature:
+          input.temperature ?? input.config.strategies.reactive.temperature,
+        environmentContext: input.environmentContext,
+        calibration: input.calibration,
+        harnessPipeline: input.harnessPipeline,
+        budgetLimits: input.budgetLimits,
+        taskCategory: input.taskCategory,
+      });
+    }
 
     yield* emitLog({ _tag: "phase_started", phase: "reactive:kernel", timestamp: new Date() });
 

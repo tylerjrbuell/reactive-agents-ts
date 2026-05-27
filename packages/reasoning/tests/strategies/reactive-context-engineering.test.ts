@@ -17,12 +17,17 @@ import { ToolService, ToolExecutionError, createToolsLayer } from "@reactive-age
 
 // Pin pre-lazy-tool-disclosure contract — see f51d7d87.
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
+// MOVE-direct-bypass: kernel-loop behavior tests — disable bypass.
+const PRIOR_BYPASS_RCE = process.env.RA_DIRECT_BYPASS;
 beforeAll(() => {
   process.env.RA_LAZY_TOOLS = "0";
+  process.env.RA_DIRECT_BYPASS = "0";
 });
 afterAll(() => {
   if (PRIOR_LAZY === undefined) delete process.env.RA_LAZY_TOOLS;
   else process.env.RA_LAZY_TOOLS = PRIOR_LAZY;
+  if (PRIOR_BYPASS_RCE === undefined) delete process.env.RA_DIRECT_BYPASS;
+  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_RCE;
 });
 
 /** Build a proper Stream stub from a response string */

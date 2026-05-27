@@ -1,5 +1,14 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { ReactiveAgents } from "reactive-agents";
+
+// MOVE-direct-bypass: trivial fixtures bypass to executeDirect, skipping
+// debrief path. These tests verify debrief synthesis — disable bypass.
+const PRIOR_BYPASS_DI = process.env.RA_DIRECT_BYPASS;
+beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
+afterAll(() => {
+  if (PRIOR_BYPASS_DI === undefined) delete process.env.RA_DIRECT_BYPASS;
+  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_DI;
+});
 
 describe("AgentResult enrichment", () => {
   it("result.terminatedBy and result.format are present after run", async () => {

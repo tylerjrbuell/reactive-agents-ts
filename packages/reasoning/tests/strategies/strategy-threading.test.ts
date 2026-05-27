@@ -1,4 +1,13 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+
+// MOVE-direct-bypass: trivial fixtures here would route to executeDirect.
+// Tests assert strategy-threading semantics — disable bypass for the file.
+const PRIOR_BYPASS_ST = process.env.RA_DIRECT_BYPASS;
+beforeAll(() => { process.env.RA_DIRECT_BYPASS = "0"; });
+afterAll(() => {
+  if (PRIOR_BYPASS_ST === undefined) delete process.env.RA_DIRECT_BYPASS;
+  else process.env.RA_DIRECT_BYPASS = PRIOR_BYPASS_ST;
+});
 import { Effect, Layer, Ref, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
