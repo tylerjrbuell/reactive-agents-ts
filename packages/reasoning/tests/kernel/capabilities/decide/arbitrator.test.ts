@@ -186,11 +186,17 @@ describe("arbitrate — agent-final-answer (Verdict-Override pattern)", () => {
     }
   });
 
-  it("VETOES agent's success claim when ≥2 stall-detect with no escalation", () => {
+  // Lever 8 (2026-05-26) — these tests previously used `via: "tool"` which is
+  // now veto-exempt (deliberate tool-mediated exits trust the model). Updated
+  // to `via: undefined` (raw end_turn — the original veto target, silent
+  // mid-loop drops). Veto still applies to `via: "regex"` (FINAL ANSWER:
+  // prefix match) and `via: undefined`.
+  it("VETOES agent's success claim when ≥2 stall-detect with no escalation (end_turn path)", () => {
     const v = arbitrate(
-      { kind: "agent-final-answer", via: "tool", output: "best effort" },
+      { kind: "agent-final-answer", via: undefined, output: "best effort" },
       {
         ...baseCtx,
+        steps: [failedToolStep], // tool-failure evidence needed for veto
         controllerDecisionLog: [
           "stall-detect: low entropy delta",
           "stall-detect: still stuck",
@@ -204,11 +210,12 @@ describe("arbitrate — agent-final-answer (Verdict-Override pattern)", () => {
     }
   });
 
-  it("VETOES on ≥3 tool-inject without escalation", () => {
+  it("VETOES on ≥3 tool-inject without escalation (end_turn path)", () => {
     const v = arbitrate(
-      { kind: "agent-final-answer", via: "tool", output: "" },
+      { kind: "agent-final-answer", via: undefined, output: "" },
       {
         ...baseCtx,
+        steps: [failedToolStep],
         controllerDecisionLog: [
           "tool-inject: more",
           "tool-inject: more",
@@ -222,16 +229,40 @@ describe("arbitrate — agent-final-answer (Verdict-Override pattern)", () => {
     }
   });
 
-  it("VETOES on stall + high entropy combination", () => {
+  it("VETOES on stall + high entropy combination (end_turn path)", () => {
     const v = arbitrate(
-      { kind: "agent-final-answer", via: "tool", output: "" },
+      { kind: "agent-final-answer", via: undefined, output: "" },
       {
         ...baseCtx,
+        steps: [failedToolStep],
         controllerDecisionLog: ["stall-detect: stuck"],
         entropyComposite: 0.7,
       },
     );
     expect(v.action).toBe("exit-failure");
+  });
+
+  // Lever 8 (2026-05-26) — new invariant: deliberate exit via the
+  // final-answer TOOL is the model's strongest possible "I am done"
+  // signal and bypasses the controller-signal veto. Tests f1-style
+  // graceful-failure tasks ("…stop trying and state that you cannot…").
+  it("does NOT veto when agent exits via final-answer TOOL (Lever 8 — deliberate exit)", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "I cannot fetch the live price after multiple tool failures." },
+      {
+        ...baseCtx,
+        steps: [failedToolStep],
+        controllerDecisionLog: [
+          "tool-inject: retry",
+          "tool-inject: retry",
+          "tool-inject: retry",
+        ],
+      },
+    );
+    expect(v.action).toBe("exit-success");
+    if (v.action === "exit-success") {
+      expect(v.terminatedBy).toBe("final_answer_tool");
+    }
   });
 
   it("does NOT veto when switch-strategy already fired (controller escalated)", () => {
@@ -277,9 +308,12 @@ describe("arbitrate — agent-final-answer (Verdict-Override pattern)", () => {
     expect(v.action).toBe("exit-success");
   });
 
-  it("DOES veto when stall-detect AND failed tool observations both present (failure pattern)", () => {
+  // Lever 8 (2026-05-26) — switched to via:undefined; via:"tool" now bypasses
+  // the veto unconditionally. The veto still fires when stall+tool-failure
+  // evidence is present AND exit path is end_turn (silent drop).
+  it("DOES veto when stall-detect AND failed tool observations both present, via end_turn (failure pattern)", () => {
     const v = arbitrate(
-      { kind: "agent-final-answer", via: "tool", output: "best effort" },
+      { kind: "agent-final-answer", via: undefined, output: "best effort" },
       {
         ...baseCtx,
         steps: [failedToolStep], // has tool failure evidence
@@ -474,18 +508,39 @@ describe("arbitrateAndApply", () => {
     expect(out.output).toBe("the answer");
   });
 
-  it("vetoed final-answer flows through to status:failed end-to-end", () => {
+  // Lever 8 (2026-05-26) — via:"tool" path is now veto-exempt; this test
+  // covers the end_turn path which still vetoes when stall + tool-failure
+  // evidence is present.
+  it("vetoed final-answer flows through to status:failed end-to-end (end_turn path)", () => {
     const out = arbitrateAndApply(
       baseState,
-      { kind: "agent-final-answer", via: "tool", output: "fake answer" },
+      { kind: "agent-final-answer", via: undefined, output: "fake answer" },
       {
         ...baseCtx,
+        steps: [failedToolStep],
         controllerDecisionLog: ["stall-detect: x", "stall-detect: x"],
       },
     );
     expect(out.status).toBe("failed");
     expect(out.error).toContain("controller_signal_veto");
     expect(out.meta.terminatedBy).toBe("controller_signal_veto");
+  });
+
+  // Lever 8 (2026-05-26) — verify tool-mediated final-answer survives end-to-end
+  // even when controller signals would otherwise veto.
+  it("final-answer via TOOL bypasses veto end-to-end (Lever 8 invariant)", () => {
+    const out = arbitrateAndApply(
+      baseState,
+      { kind: "agent-final-answer", via: "tool", output: "I cannot fetch the live price." },
+      {
+        ...baseCtx,
+        steps: [failedToolStep],
+        controllerDecisionLog: ["tool-inject: a", "tool-inject: b", "tool-inject: c"],
+      },
+    );
+    expect(out.status).toBe("done");
+    expect(out.output).toBe("I cannot fetch the live price.");
+    expect(out.meta.terminatedBy).toBe("final_answer_tool");
   });
 });
 

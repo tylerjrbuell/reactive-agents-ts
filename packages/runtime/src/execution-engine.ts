@@ -1120,6 +1120,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // for consumers expecting the same name used on
                     // AgentCompleted / ReasoningResult / traceStats.
                     totalTokens: ctx.tokensUsed,
+                    // Prompt/completion split from the reasoning strategy.
+                    // Optional — provider/strategy may not always populate
+                    // (test-provider, sub-agent rollups, retry hooks).
+                    ...(typeof rr?.metadata?.inputTokens === "number" ? { inputTokens: rr.metadata.inputTokens } : {}),
+                    ...(typeof rr?.metadata?.outputTokens === "number" ? { outputTokens: rr.metadata.outputTokens } : {}),
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
                     iterations: ctx.iteration,

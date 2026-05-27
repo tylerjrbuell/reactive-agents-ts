@@ -900,13 +900,31 @@ export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): V
     case "agent-final-answer": {
       // Agent self-claimed success. Apply Verdict-Override: if controller
       // signals contradict, mark as failure.
-      const veto = shouldVetoSuccess(ctx);
-      if (veto.veto) {
-        return {
-          action: "exit-failure",
-          error: veto.reason,
-          terminatedBy: "controller_signal_veto",
-        };
+      //
+      // Lever 8 (2026-05-26) — when the agent exits via the final-answer
+      // TOOL (`intent.via === "tool"`), skip the veto. The final-answer
+      // tool is a deliberate, structured exit channel: invoking it is the
+      // model's strongest possible "I considered the situation and this
+      // is my answer" signal. Vetoing a deliberate tool-mediated exit
+      // breaks graceful-failure tasks like the f1 bench scenario
+      // ("…stop trying and state that you cannot fetch the live price")
+      // where the model correctly acknowledges tool failure via
+      // final-answer and the controller-signal veto then incorrectly
+      // converts the success into max_iterations failure.
+      //
+      // Veto still applies on `via === "regex"` (FINAL ANSWER: prefix
+      // match — weaker signal, may be incidental in a thought) and on
+      // `via === undefined` (raw end_turn — the original veto target,
+      // silent drops mid-loop).
+      if (intent.via !== "tool") {
+        const veto = shouldVetoSuccess(ctx);
+        if (veto.veto) {
+          return {
+            action: "exit-failure",
+            error: veto.reason,
+            terminatedBy: "controller_signal_veto",
+          };
+        }
       }
 
       // Sprint 3.4 Scaffold 3 — synthesis-grounding gate. If the answer
