@@ -7,6 +7,6 @@
   "parallelCallCapability": "reliable",
   "observationHandling": "uses-recall",
   "systemPromptAttention": "strong",
-  "optimalToolResultChars": 2000,
+  "optimalToolResultChars": 4000,
   "toolCallDialect": "none"
 }

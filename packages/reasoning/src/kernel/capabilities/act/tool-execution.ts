@@ -677,6 +677,8 @@ export function executeNativeToolCall(
   config?: {
     compression?: ResultCompressionConfig;
     scratchpad?: Map<string, string>;
+    /** Tier profile — supplies default budget when compression.budget unset. */
+    profile?: ContextProfile;
     /**
      * Optional MemoryService for semantic storage of successful tool results.
      * When present, each successful tool execution forks a daemon fiber to
@@ -716,8 +718,8 @@ export function executeNativeToolCall(
         // Apply result compression for large outputs
         let storedKey: string | undefined;
         if (config?.compression) {
-          const budget = config.compression.budget ?? 800;
-          const previewItems = config.compression.previewItems ?? 5;
+          const budget = config.compression.budget ?? config.profile?.toolResultMaxChars ?? 800;
+          const previewItems = config.compression.previewItems ?? config.profile?.toolResultPreviewItems ?? 5;
           const compressed = compressToolResult(content, toolCall.name, budget, previewItems);
           content = compressed.content;
           if (compressed.stored) {

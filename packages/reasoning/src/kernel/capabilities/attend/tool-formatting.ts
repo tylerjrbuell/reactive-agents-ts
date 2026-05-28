@@ -317,14 +317,25 @@ export function compressToolResult(
         : "unknown";
 
       const renderRecord = (item: Record<string, unknown>, i: number): string => {
+        // Render up to 6 fields. Lifted from 4 — schema header advertises 6+
+        // typical fields but the model only saw the first 4 (e.g. HN posts:
+        // id/title/score/by — missing descendants/url). Filter tasks ("top N
+        // by COMMENTS") fail because the criterion field is invisible.
+        // Numeric fields (scores, counts, ids) are short so the budget impact
+        // is modest; try-fit still falls back to previewItems when total grows.
         const pairs = Object.entries(item)
-          .slice(0, 4)
+          .slice(0, 6)
           .map(([k, v]) => {
             const val =
               v !== null && typeof v === "object"
                 ? Object.values(v as object)
                     .filter((x) => typeof x === "string")
                     .map(String)[0] ?? "{...}"
+                : // URL-like fields get tighter truncation — 30 chars is enough
+                // to identify the domain; full URL adds 50 chars per row with
+                // little selection-criterion value.
+                /^https?:\/\//.test(String(v))
+                ? String(v).slice(0, 30) + (String(v).length > 30 ? "..." : "")
                 : String(v).slice(0, 60);
             return `${k}=${val}`;
           })

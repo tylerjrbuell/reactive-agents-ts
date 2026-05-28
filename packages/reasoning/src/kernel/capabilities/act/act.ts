@@ -648,7 +648,7 @@ export function handleActing(
                   batchCall,
                   input.agentId ?? "reasoning-agent",
                   input.sessionId ?? "reasoning-session",
-                  { compression, scratchpad: sharedScratchpad, memoryService },
+                  { compression, scratchpad: sharedScratchpad, memoryService, profile },
                 );
                 const durationMs = Date.now() - startMs;
                 yield* emitLog({
@@ -832,7 +832,7 @@ export function handleActing(
           tc,
           input.agentId ?? "reasoning-agent",
           input.sessionId ?? "reasoning-session",
-          { compression, scratchpad: sharedScratchpad },
+          { compression, scratchpad: sharedScratchpad, profile },
         );
         const toolDurationMs = Date.now() - toolStartMs;
         yield* emitLog({

@@ -64,7 +64,13 @@ export type ContextProfile = typeof ContextProfileSchema.Type;
 export const CONTEXT_PROFILES: Record<ModelTier, ContextProfile> = {
   local: {
     tier: "local",
-    toolResultMaxChars: 2000,
+    // Bumped 2000 → 4000 (2026-05-28). Filter tasks ("top N by criterion")
+    // need ALL items visible — sort criterion may not be among the first 8.
+    // Local models routinely ship 32K+ context (qwen3:14b, cogito:14b), so
+    // 4000 chars (~1K tokens) for tool obs is well within budget. The 2000
+    // ceiling was tuned for 4K-context models that haven't shipped in a
+    // year. Try-fit pattern still compresses to preview when total exceeds.
+    toolResultMaxChars: 4000,
     toolResultPreviewItems: 8,
     toolSchemaDetail: "names-and-types",
     maxIterations: 8,
