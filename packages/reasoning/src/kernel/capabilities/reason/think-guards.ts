@@ -425,17 +425,23 @@ export function guardEvidenceGrounding(
   if (state.iteration <= 0) return undefined;
   if (state.meta.evidenceGroundingDone) return undefined;
 
-  // Prefer extracted facts (compact, signal-rich) over raw observation bodies.
+  // Evidence corpus must be AUTHORITATIVE — never lossy. Raw observation
+  // bodies are the ground truth; extractedFact summaries are signal-rich
+  // augmentation. Using extracted facts ALONE produced false-positive
+  // rejections when the model's answer cited values present in raw obs
+  // bodies (e.g., a GitHub commit body containing "$77,505") but absent
+  // from the per-step extractedFact one-liner. The valid answer was then
+  // re-prompted, the loop stalled, and the harness shipped raw tool JSON
+  // — the upstream defect behind output poisoning.
   const extractedFacts = newSteps
     .filter((s) => s.type === "observation")
     .map((s) => (s.metadata?.extractedFact as string | undefined) ?? "")
     .filter(Boolean)
     .join("\n");
-
-  const evidenceCorpus =
-    extractedFacts.length >= 20
-      ? extractedFacts
-      : buildEvidenceCorpusFromSteps(newSteps);
+  const rawObservations = buildEvidenceCorpusFromSteps(newSteps);
+  const evidenceCorpus = extractedFacts.length > 0
+    ? `${rawObservations}\n\n${extractedFacts}`
+    : rawObservations;
 
   const check = validateOutputGroundedInEvidence(thought, evidenceCorpus);
   if (check.ok) return undefined;

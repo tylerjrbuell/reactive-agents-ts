@@ -129,28 +129,70 @@ function resolveStoredToolObservation(
 
 // ── Harness deliverable assembly ──────────────────────────────────────────────
 
+/** Minimum thought length to be treated as a model-authored final synthesis. */
+const MIN_MODEL_SYNTHESIS_LENGTH = 100;
+
 /**
- * Assemble a deliverable from accumulated tool results.
+ * A harness-assembled deliverable, source-tagged.
  *
- * When the harness determines the model is spinning but has already gathered
- * useful data, this function extracts all successful non-meta tool observations
- * and joins them as the final output. The harness owns task completion —
- * it doesn't depend on the model calling `final-answer`.
+ *  - `model_synthesis` — a substantive trailing thought authored by the model.
+ *    In React-loop semantics, that thought IS the final answer; raw tool
+ *    observations are the evidence that fed it. Downstream gates should treat
+ *    this as a model-authored output (no forced LLM re-synthesis).
+ *  - `raw_artifacts` — concatenated tool observation bodies. The model never
+ *    produced a synthesizing thought, so the harness ships evidence directly.
+ *    Downstream gates should attempt LLM synthesis to format it for the user.
+ */
+export type Deliverable = {
+  readonly content: string;
+  readonly source: "model_synthesis" | "raw_artifacts";
+};
+
+/**
+ * Assemble the harness-owned deliverable.
  *
- * Filters out guard-blocked observations (which are marked success=true but
- * contain warning markers) by requiring the tool to be in `state.toolsUsed`
- * (only actually-executed tools are added to that set) and excluding known
+ * Priority order (design contract):
+ *   1. Model's most recent substantive synthesizing thought — when the model
+ *      produced a coherent terminal response after tool execution, that text
+ *      is the answer. Raw observations are evidence, not output.
+ *   2. Concatenated successful non-meta tool observations — last-resort when
+ *      no usable model thought exists. Marked `raw_artifacts` so the output
+ *      gate knows to synthesize before user delivery.
+ *   3. Empty-state sentinel — only when neither path has content.
+ *
+ * Filters out guard-blocked observations (success=true but warning markers)
+ * by requiring the tool to be in `state.toolsUsed` and excluding known
  * guard-block text patterns.
  */
-export function assembleDeliverable(state: KernelState): string {
-  const artifacts = collectDeliverableArtifacts(state);
-  if (artifacts.length > 0) return artifacts.join("\n\n");
-
-  // Fallback: use the last substantive thought
+export function assembleDeliverable(state: KernelState): Deliverable {
   const lastThought = [...state.steps]
     .reverse()
-    .find((s) => s.type === "thought" && (s.content ?? "").length > 20);
-  return lastThought?.content ?? "Task complete.";
+    .find(
+      (s) =>
+        s.type === "thought" &&
+        (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
+    );
+  if (lastThought?.content) {
+    return { content: lastThought.content, source: "model_synthesis" };
+  }
+
+  const artifacts = collectDeliverableArtifacts(state);
+  if (artifacts.length > 0) {
+    return { content: artifacts.join("\n\n"), source: "raw_artifacts" };
+  }
+
+  return { content: "Task complete.", source: "raw_artifacts" };
+}
+
+/**
+ * Map a {@link Deliverable} to the `terminatedBy` reason that preserves its
+ * source semantics across the downstream gate. Model-authored synthesis must
+ * NOT trigger forced LLM re-synthesis in §9 — it's already a model output.
+ */
+function deliverableTerminationReason(
+  d: Deliverable,
+): "harness_deliverable" | "harness_synthesis" {
+  return d.source === "model_synthesis" ? "harness_synthesis" : "harness_deliverable";
 }
 
 function collectDeliverableArtifacts(state: KernelState): string[] {
@@ -1055,9 +1097,10 @@ export function runKernel(
           if (requiredToolNudgeCount > maxRequiredToolNudges) {
             if (totalArtifacts > 0) {
               yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
+              const d = assembleDeliverable(state);
               state = terminate(state, {
-                reason: "harness_deliverable",
-                output: assembleDeliverable(state),
+                reason: deliverableTerminationReason(d),
+                output: d.content,
               });
               break;
             }
@@ -1144,7 +1187,9 @@ export function runKernel(
           // artifacts before the harness ships them as-is. If retry budget
           // is exhausted (or verifier passes — should be impossible with
           // the new check), fall through to the original terminate path.
-          const candidateOutput = assembleDeliverable(state);
+          const candidateDeliverable = assembleDeliverable(state);
+          const candidateOutput = candidateDeliverable.content;
+          const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
           const availableUserToolsForFallback =
             (currentInput.availableToolSchemas ?? []).map((t) => t.name);
           const fallbackVerdict = verifier.verify({
@@ -1158,7 +1203,7 @@ export function runKernel(
             toolsUsed: state.toolsUsed,
             availableUserTools: availableUserToolsForFallback,
             terminal: true,
-            terminatedBy: "harness_deliverable",
+            terminatedBy: candidateTerminationReason,
           });
           yield* emitVerifierVerdict({
             taskId: currentOptions.taskId ?? state.taskId,
@@ -1174,9 +1219,9 @@ export function runKernel(
           // to the §9.0 post-loop outer gate which marks the run failed.
           // Proceed with original
           // harness fallback. terminate() preserves the single-owner invariant.
-          yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations`, timestamp: new Date() });
+          yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations (source=${candidateDeliverable.source})`, timestamp: new Date() });
           state = terminate(state, {
-            reason: "harness_deliverable",
+            reason: candidateTerminationReason,
             output: candidateOutput,
           });
           break;
@@ -1463,9 +1508,10 @@ export function runKernel(
               requiredToolNudgeCount++;
               if (requiredToolNudgeCount > maxRequiredToolNudges) {
                 yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`, timestamp: new Date() });
+                const d = assembleDeliverable(state);
                 state = terminate(state, {
-                  reason: "harness_deliverable",
-                  output: assembleDeliverable(state),
+                  reason: deliverableTerminationReason(d),
+                  output: d.content,
                 });
                 break;
               }
@@ -1489,10 +1535,11 @@ export function runKernel(
               continue;
             }
 
-            yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing`, timestamp: new Date() });
+            const loopDeliverable = assembleDeliverable(state);
+            yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing (source=${loopDeliverable.source})`, timestamp: new Date() });
             state = terminate(state, {
-              reason: "harness_deliverable",
-              output: assembleDeliverable(state),
+              reason: deliverableTerminationReason(loopDeliverable),
+              output: loopDeliverable.content,
             });
             break;
           }
@@ -1693,10 +1740,10 @@ export function runKernel(
         const previousTerminatedBy = state.meta.terminatedBy;
         const deliverable = assembleDeliverable(state);
         state = transitionState(state, {
-          output: deliverable,
+          output: deliverable.content,
           meta: {
             ...state.meta,
-            terminatedBy: "harness_deliverable",
+            terminatedBy: deliverableTerminationReason(deliverable),
             previousTerminatedBy,
           },
         });
@@ -1844,6 +1891,12 @@ export function runKernel(
     // Validates format, optionally synthesizes when LLM is available.
     // Harness-assembled output (raw tool artifacts) always attempts synthesis.
     if (state.status === "done" && state.output) {
+      // `harness_synthesis` (introduced when assembleDeliverable picks a
+      // substantive model thought) is treated as a MODEL output here — the
+      // text was authored by the LLM, not concatenated from raw tool JSON.
+      // Routing it as "harness" would force a second LLM re-synthesis that
+      // can degrade clean prose into hallucinated structured output (e.g.,
+      // local small models compressing/reformatting valid answers).
       const terminationSource = (state.meta.terminatedBy === "oracle_forced" ? "oracle"
         : state.meta.terminatedBy === "harness_deliverable" || state.meta.terminatedBy === "low_delta_guard" ? "harness"
         : "model") as "model" | "harness" | "oracle" | "fallback";

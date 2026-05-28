@@ -361,8 +361,8 @@ describe("output quality gate", () => {
       toolsUsed: new Set(["shell-execute"]),
       scratchpad: new Map([[key, fullText]]),
     });
-    expect(assembleDeliverable(st)).toContain("Usage: rax agent create");
-    expect(assembleDeliverable(st)).toContain("--name string");
+    expect(assembleDeliverable(st).content).toContain("Usage: rax agent create");
+    expect(assembleDeliverable(st).content).toContain("--name string");
   });
 
   it("assembleDeliverable resolves compressed previews via metadata.storedKey", () => {
@@ -400,7 +400,7 @@ describe("output quality gate", () => {
       scratchpad: new Map([[key, fullText]]),
     });
 
-    const assembled = assembleDeliverable(st);
+    const assembled = assembleDeliverable(st).content;
     expect(assembled).toContain('"find-xrp-price"');
     expect(assembled).toContain('"succeeded":4');
   });
@@ -433,7 +433,7 @@ describe("output quality gate", () => {
       scratchpad: new Map([[key, fullText]]),
     });
 
-    const assembled = assembleDeliverable(st);
+    const assembled = assembleDeliverable(st).content;
     expect(assembled).toContain("Bitcoin: 70836.96");
     expect(assembled).toContain("XLM: 0.1508");
   });

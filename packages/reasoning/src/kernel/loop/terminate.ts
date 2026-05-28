@@ -32,6 +32,7 @@ import { transitionState } from "../state/kernel-state.js";
  */
 export type TerminateReason =
   | "low_delta_guard" | "switching_exhausted" | "harness_deliverable"
+  | "harness_synthesis"
   | "oracle_forced" | "loop_graceful" | "budget_exceeded" | "max_iterations"
   | "kernel_error" | "controller_signal_veto" | "loop_detected_with_veto"
   | "end_turn" | "final_answer_tool" | "final_answer" | "llm_end_turn"
