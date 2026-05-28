@@ -251,7 +251,16 @@ describe("formatDebriefMarkdown", () => {
 });
 
 describe("DebriefCompleted event emission", () => {
-  it("publishes DebriefCompleted after successful run debrief synthesis", async () => {
+  it("publishes DebriefCompleted on a trivial run with FALLBACK debrief (#144)", async () => {
+    // #144 (debrief honesty / unified emission): DebriefCompleted publishes
+    // from a single site so all paths emit consistently —
+    //   - trivial-fallback (this test)   no LLM call, debriefTokensUsed=0
+    //   - LLM-success                    full LLM debrief, real tokensUsed
+    //   - LLM-failure-fallback           catchAll → fallback, tokensUsed=0
+    // Prior to #144 the publish fired only on the LLM-success path; trivial
+    // runs silently produced a debrief without notifying subscribers.
+    // The trivial gate now means "no LLM call" (cost saving) rather than
+    // "no debrief at all" — fallback debrief still flows through.
     const agent = await ReactiveAgents.create()
       .withName("debrief-event-test")
       .withTestScenario([{ text: "FINAL ANSWER: done" }])

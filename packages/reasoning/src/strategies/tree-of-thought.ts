@@ -97,6 +97,17 @@ interface TreeOfThoughtInput {
    * upstream classification), ToT computes its own — backward-compatible.
    */
   readonly taskClassification?: TaskClassification;
+  /**
+   * GH #127 — Compose harness pipeline threaded through ToT's BFS-iteration
+   * RI dispatchContext so applied decisions emit bridged Compose tags
+   * (`control.strategy-evaluated`, `lifecycle.failure`, `nudge.healing-failure`)
+   * under this outer strategy. Without this thread, users who register
+   * `.withHarness(h => h.tap('control.strategy-evaluated', …))` see
+   * kernel-path emissions (reactive) but ToT remains dark. Mirrors the
+   * kernel-side wire at `kernel/capabilities/reflect/reactive-observer.ts:306`
+   * (HS-112).
+   */
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
 }
 
 interface ThoughtNode {
@@ -537,6 +548,9 @@ export const executeTreeOfThought = (
                 interventionsFiredThisRun: perStrategyRiBudget.interventionsFiredThisRun,
                 tokensSpentOnInterventions: perStrategyRiBudget.tokensSpentOnInterventions,
               },
+              // GH #127 — bridge applied RI decisions into Compose tags on
+              // ToT's BFS exploration loop. No-op when absent.
+              harnessPipeline: input.harnessPipeline,
             };
             const dispatchResult = yield* services.dispatcher.value
               .dispatch(decisions as readonly { readonly decision: string; readonly reason: string }[], {}, dispatchContext)

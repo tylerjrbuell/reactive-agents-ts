@@ -170,6 +170,36 @@ describe("Strategy threading", () => {
     expect(Array.isArray(result.metadata.reflexionCritiques)).toBe(true);
   });
 
+  // ── GH #127 — harnessPipeline threading on outer-loop strategies ─────────
+  // The kernel-path (reactive) wires harnessPipeline into the RI
+  // dispatchContext via `reactive-observer.ts:306` (HS-112). plan-execute
+  // and tree-of-thought build their OWN dispatchContexts in their outer
+  // refinement / BFS loops; without the field threaded, applied RI
+  // decisions inside these strategies cannot bridge to Compose tags. These
+  // smoke tests pin the input acceptance + runtime no-throw. Behavioral
+  // bridge coverage lives in `dispatcher-compose-bridge.test.ts` (HS-112).
+  it("plan-execute accepts harnessPipeline input (GH #127)", async () => {
+    const result = await Effect.runPromise(
+      executePlanExecute({
+        ...baseInput,
+        // Minimal stub — only structural shape matters for input typing.
+        // The dispatcher's bridge consumer is exercised separately.
+        harnessPipeline: { transform: () => Effect.succeed(null) } as never,
+      }).pipe(Effect.provide(makePlanExecuteLLM())),
+    );
+    expect(result.status).toBe("completed");
+  });
+
+  it("tree-of-thought accepts harnessPipeline input (GH #127)", async () => {
+    const result = await Effect.runPromise(
+      executeTreeOfThought({
+        ...baseInput,
+        harnessPipeline: { transform: () => Effect.succeed(null) } as never,
+      }).pipe(Effect.provide(mockLLM)),
+    );
+    expect(result.status).toBe("completed");
+  });
+
   it("plan-execute respects stepKernelMaxIterations config", async () => {
     const config = {
       ...defaultReasoningConfig,

@@ -129,6 +129,21 @@ export {
 } from "./context/context-curator.js";
 export type { Prompt, ContextCurator, CuratorOptions } from "./context/context-curator.js";
 
+// ─── Adaptive Prompt Composer (APC-2) ───
+export {
+  PromptSectionRegistry,
+  composePrompt,
+  auditPromptSections,
+  defaultPromptSectionRegistry,
+} from "./context/prompt-composer.js";
+export type {
+  PromptSection,
+  PromptSectionContext,
+  PromptSectionAuditEntry,
+  ComposeOptions,
+  ComposeResult,
+} from "./context/prompt-composer.js";
+
 // ─── Intelligent Context Synthesis (ICS) ───
 export type {
   TaskPhase,

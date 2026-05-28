@@ -15,17 +15,20 @@
 import type { LLMMessage, ModelCalibration, ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { KernelState, KernelInput } from "../kernel/state/kernel-state.js";
 import type { ContextProfile } from "./context-profile.js";
-import { buildStaticContext } from "./context-engine.js";
 import type { KernelMessage } from "../kernel/state/kernel-state.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import {
-  buildSystemPrompt,
   buildConversationMessages,
 } from "../kernel/capabilities/attend/context-utils.js";
 import {
-  buildToolElaborationInjection,
   type ToolElaborationInjectionConfig,
 } from "../kernel/capabilities/act/tool-gating.js";
+import { classifyTask } from "../kernel/capabilities/comprehend/task-classification.js";
+import { composePrompt } from "./prompt-composer.js";
+import {
+  DEFAULT_SECTIONS,
+  buildGuidanceText,
+} from "./prompt-sections-default.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -201,20 +204,16 @@ function buildIterationSystemPrompt(
   adapter?: ProviderAdapter,
   options?: ContextManagerOptions,
 ): string {
-  const sections: string[] = [];
-
-  // Tool list: explicit override > input.availableToolSchemas
-  const availableTools: readonly ToolSchema[] =
-    options?.availableTools ??
-    ((input.availableToolSchemas ?? []) as readonly ToolSchema[]);
-
   // ── EXPERIMENT: minimal-signal prompt ─────────────────────────────────────
-  // When RA_MINIMAL_PROMPT=1, bypass ALL prompt sections and emit just task +
-  // compact tool list. Used to validate the curator-as-signal-optimizer
-  // hypothesis: bare Ollama with this shape hits 100%; harness over-scaffolds
-  // and induces structurally-weird outputs on local models.
-  // See wiki/Research/Harness-Reports/bare-vs-harness-curation-2026-04-26.md.
+  // RA_MINIMAL_PROMPT=1 — bypasses APC entirely. Empirical APC-0 (2026-05-27)
+  // discriminator established that this global mode regresses quality on
+  // tool/multi-step tasks (+136% tokens, -1 quality). Kept as a manual
+  // escape hatch for diagnostics; APC's shape-gated mode (APC-4) is the
+  // production path that captures the same lever safely.
   if (process.env.RA_MINIMAL_PROMPT === "1") {
+    const availableTools: readonly ToolSchema[] =
+      options?.availableTools ??
+      ((input.availableToolSchemas ?? []) as readonly ToolSchema[]);
     const minimal: string[] = [];
     if (availableTools.length > 0) {
       const compact = availableTools
@@ -236,100 +235,69 @@ function buildIterationSystemPrompt(
     return minimal.join("\n\n");
   }
 
-  // 1. Agent identity. Prefer buildSystemPrompt (honors custom systemPrompt) so
-  //    callers that supply input.systemPrompt keep their identity text.
-  const base = buildSystemPrompt(
-    input.task,
-    options?.systemPromptBody ?? input.systemPrompt,
-    profile.tier,
+  // ── APC-4: Shape-gated composition ───────────────────────────────────────
+  // Each section's `requiredWhen(shape)` predicate is consulted.
+  // Per-section behavior (see prompt-sections-default.ts):
+  //   - identity            always rendered
+  //   - prior-context       always (self-conditional on input.priorContext)
+  //   - static-context      STRIPPED on high-confidence-trivial shape
+  //                         (APC-0 evidence: -14 to -25% trivial tokens)
+  //   - tool-elaboration    only when shape.needsTools
+  //   - progress            always (self-conditional on iter/tools)
+  //   - prior-work          always (self-conditional on observation facts)
+  //   - guidance            STRIPPED on high-confidence-trivial shape
+  //
+  // Tool / multi-step / citation shapes keep ALL sections — APC-0 proved
+  // stripping scaffold there blew up output by +42% to +136% and regressed
+  // quality. The conservative-default contract guarantees parity for any
+  // shape that doesn't lock in as high-confidence-trivial.
+  //
+  // KernelInput doesn't currently carry taskClassification — classify in
+  // place. Pure regex/keyword pass, cheap. Future: thread snapshot from
+  // strategy entry to avoid re-classification.
+  const shapeBase = classifyTask(input.task).shape;
+  // Tool-availability override: if the agent has ANY tools available, the
+  // task is implicitly tool-capable regardless of what text cues say.
+  // Stripping scaffold on a tools-present task hides schemas from the
+  // model, causing tool calls to fail blindly. APC-0 evidence is scoped
+  // to tool-LESS trivial tasks (k1/k3/f2 in bench); preserving scaffold
+  // for tools-present tasks captures the lift without that quality risk.
+  const toolsPresent = (input.availableToolSchemas ?? []).length > 0;
+  // Caller-supplied environment context (env vars, custom fields) MUST
+  // reach the LLM — it's an explicit signal that env state is task-
+  // relevant. Force scaffold keep when present, even on trivial tasks.
+  const envPresent =
+    input.environmentContext !== undefined &&
+    Object.keys(input.environmentContext as Record<string, unknown>).length > 0;
+  const needsScaffold = toolsPresent || envPresent;
+  const shape = needsScaffold && !shapeBase.needsTools
+    ? {
+        ...shapeBase,
+        needsTools: true,
+        reason: `${shapeBase.reason}/scaffold-override${toolsPresent ? ":tools" : ""}${envPresent ? ":env" : ""}`,
+      }
+    : shapeBase;
+  const result = composePrompt(
+    DEFAULT_SECTIONS,
+    {
+      state,
+      input,
+      profile,
+      guidance,
+      shape,
+      adapter,
+      options: options as Record<string, unknown> | undefined,
+    },
+    { shapeGated: true },
   );
-  const patched = adapter?.systemPromptPatch?.(base, profile.tier ?? "mid") ?? base;
-  sections.push(patched);
-
-  // ── Lever 2: skinny iter 1+ system prompt (conservative variant) ──────────
-  // The system prompt is replaced on every API call (it doesn't accumulate
-  // like the message thread). Some scaffold sections are pure repetition
-  // across iterations and waste tokens.
-  //
-  // Iter 1+ keeps:
-  //   - Identity / adapter systemPromptPatch (model anchor)
-  //   - buildStaticContext (env + tool reference + task + rules)
-  //     ↑ kept because local-tier models (qwen3.5 via Ollama, in particular)
-  //       regress on tool tasks when the tool reference disappears mid-loop;
-  //       empirical: m2-version-then-cite +28% tokens on local when stripped
-  //       (3-run avg, 2026-05-26 bench). The native FC tool schemas in the
-  //       provider request param aren't enough on their own for local models.
-  //   - Progress / prior work / guidance (these CHANGE per iter)
-  //
-  // Drops on iter 1+ (truly stable repetition):
-  //   - priorContext (cross-run memory) — model has it from iter 0
-  //   - adapter toolGuidance (rationale rules, etc.) — stable
-  //   - toolElaboration hints — stable
-  //
-  // Pairs multiplicatively with Lever 1 (Anthropic prompt caching): the
-  // iter 1+ system prompt is still large enough to benefit from cache hits
-  // on the message-thread prefix, while we shave the truly redundant bits.
-  const isInitialIteration = state.iteration === 0;
-
-  // Bootstrap / cross-run memory (ExecutionEngine memCtx → ReasoningService.memoryContext
-  // → reactive priorContext). Was previously dropped: KernelInput carried the field but
-  // ContextManager never rendered it, so episodic + semantic text never reached the LLM.
-  // Lever 2: iter 0 only — by iter 1+ the model has memory context in its message thread.
-  if (isInitialIteration && input.priorContext?.trim()) {
-    sections.push(input.priorContext.trim());
-  }
-
-  // 2-4. Static context (environment + tools + task + rules). Sent every iter
-  // because local-tier models regress on tool tasks when tool reference is
-  // dropped mid-loop (see Lever 2 comment block above).
-  const staticContext = buildStaticContext({
-    task: input.task,
-    profile,
-    availableToolSchemas: availableTools,
-    requiredTools: input.requiredTools as string[] | undefined,
-    environmentContext: input.environmentContext,
-  });
-
-  if (isInitialIteration) {
-    // 5. Adapter toolGuidance — appended immediately after the static context
-    //    so the reminder sits adjacent to the tool schema block. Lever 2:
-    //    iter 0 only — the rationale rules and provider-specific reminders
-    //    are stable across iterations and the model retains them.
-    const toolGuidancePatch = adapter?.toolGuidance?.({
-      toolNames: availableTools.map((t) => t.name),
-      requiredTools: input.requiredTools ?? [],
-      tier: profile.tier ?? "mid",
-      // TODO: wire real ExperienceSummary once ToolCallObservation records are read from store
-      experienceSummary: undefined,
-    });
-    sections.push(
-      toolGuidancePatch ? `${staticContext}\n${toolGuidancePatch}` : staticContext,
-    );
-
-    // 6. Tool elaboration hints (optional). Lever 2: iter 0 only — stable.
-    const toolElaborationSection = options?.toolElaboration
-      ? buildToolElaborationInjection(availableTools, options.toolElaboration)
-      : "";
-    if (toolElaborationSection) sections.push(toolElaborationSection);
-  } else {
-    // iter 1+: push the static context WITHOUT the adapter toolGuidance / tool
-    // elaboration patches that we sent on iter 0.
-    sections.push(staticContext);
-  }
-
-  // 7. Progress section — what tools have been called successfully so far
-  const progressSection = buildProgressSection(state, input);
-  if (progressSection) sections.push(progressSection);
-
-  // 8. Prior work — distilled observation facts (not raw tool results)
-  const priorWorkSection = buildPriorWorkSection(state);
-  if (priorWorkSection) sections.push(priorWorkSection);
-
-  // 9. Guidance — harness signals rendered deterministically
-  const guidanceSection = buildGuidanceSection(guidance);
-  if (guidanceSection) sections.push(guidanceSection);
-
-  return sections.join("\n\n");
+  // Resolution: APC composer (HEAD) is the canonical author. Lever 2's
+  // iter-1+ skip logic for priorContext + adapter-toolGuidance + tool
+  // elaboration is ported into the section render functions
+  // (prompt-sections-default.ts). Static-context still rendered every iter
+  // per Lever 2's empirical finding (m2 +28% when dropped mid-loop on
+  // local-tier). APC-4's trivial-shape strip remains the only static-context
+  // omission path.
+  return result.text;
 }
 
 // ── buildCuratedMessages ──────────────────────────────────────────────────────
@@ -381,89 +349,10 @@ function kernelMessageToLLM(msg: KernelMessage): LLMMessage {
 
 // ── Private builders ──────────────────────────────────────────────────────────
 
-function buildProgressSection(state: KernelState, input: KernelInput): string {
-  if (state.toolsUsed.size === 0 && state.iteration === 0) return "";
-
-  const lines: string[] = [];
-
-  // Iteration awareness
-  const maxIter = (state.meta?.maxIterations as number | undefined) ?? 10;
-  lines.push(`Iteration: ${state.iteration + 1}/${maxIter}`);
-
-  // Tools called so far
-  if (state.toolsUsed.size > 0) {
-    const calledList = [...state.toolsUsed].join(", ");
-    lines.push(`Tools called: ${calledList}`);
-  }
-
-  // Required tool satisfaction status
-  const requiredTools = (input.requiredTools ?? []) as string[];
-  if (requiredTools.length > 0) {
-    const pending = requiredTools.filter((t) => !state.toolsUsed.has(t));
-    if (pending.length === 0) {
-      lines.push(`Required tools: all satisfied ✓`);
-    } else {
-      lines.push(`Required tools pending: ${pending.join(", ")}`);
-    }
-  }
-
-  return `Progress:\n${lines.join("\n")}`;
-}
-
-function buildPriorWorkSection(state: KernelState): string {
-  // Surface observation facts extracted from steps (not raw tool results)
-  const facts: string[] = [];
-  for (const step of state.steps) {
-    if (step.type !== "observation") continue;
-    const fact = step.metadata?.extractedFact as string | undefined;
-    if (fact) facts.push(`- ${fact}`);
-  }
-  if (facts.length === 0) return "";
-  return `Prior work:\n${facts.join("\n")}`;
-}
-
+/**
+ * Back-compat alias — buildGuidanceText returns `string | null`; this wraps
+ * the null case to an empty string to preserve the pre-APC signature.
+ */
 export function buildGuidanceSection(guidance: GuidanceContext): string {
-  const signals: string[] = [];
-
-  if (guidance.requiredToolsPending.length > 0) {
-    signals.push(
-      `REQUIRED tools not yet called: ${guidance.requiredToolsPending.join(", ")}. Call these before giving a final answer.`,
-    );
-  }
-
-  if (guidance.loopDetected) {
-    signals.push(
-      guidance.loopDetectedMessage ??
-      "Loop detected: you are repeating the same tool calls. Try a different approach or synthesize what you have.",
-    );
-  }
-
-  if (guidance.icsGuidance) {
-    signals.push(guidance.icsGuidance);
-  }
-
-  if (guidance.oracleGuidance) {
-    signals.push(guidance.oracleGuidance);
-  }
-
-  if (guidance.errorRecovery) {
-    signals.push(guidance.errorRecovery);
-  }
-
-  if (guidance.actReminder) {
-    signals.push(guidance.actReminder);
-  }
-
-  if (guidance.qualityGateHint) {
-    signals.push(guidance.qualityGateHint);
-  }
-
-  if (guidance.evidenceGap) {
-    signals.push(
-      `Your answer contains claims not supported by tool results: ${guidance.evidenceGap}. Revise using only data from the Observations above.`,
-    );
-  }
-
-  if (signals.length === 0) return "";
-  return `Guidance:\n${signals.map((s) => `- ${s}`).join("\n")}`;
+  return buildGuidanceText(guidance) ?? "";
 }

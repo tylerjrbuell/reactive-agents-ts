@@ -51,7 +51,11 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
 
 function makeInput(overrides: Record<string, unknown> = {}) {
   return {
-    task: "Find the current BTC price in USD",
+    // APC-4: task text now drives shape inference. The "use the X tool"
+    // cue ensures shape.needsTools=true so APC-4 keeps full scaffold
+    // (the subject of these tests). Pre-APC the test used a shorter
+    // string; updated to preserve coverage under shape-gated composition.
+    task: "Use the web-search tool to find the current BTC price in USD",
     availableToolSchemas: [
       { name: "web-search", description: "Search the web", parameters: [] },
       { name: "final-answer", description: "Deliver the answer", parameters: [] },

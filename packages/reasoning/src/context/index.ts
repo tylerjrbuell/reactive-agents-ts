@@ -28,3 +28,18 @@ export {
   RECENT_OBSERVATIONS_HEADER,
 } from "./context-curator.js";
 export type { Prompt, ContextCurator, CuratorOptions } from "./context-curator.js";
+
+// ── Adaptive Prompt Composer (APC-2) ─────────────────────────────────────────
+export {
+  PromptSectionRegistry,
+  composePrompt,
+  auditPromptSections,
+  defaultPromptSectionRegistry,
+} from "./prompt-composer.js";
+export type {
+  PromptSection,
+  PromptSectionContext,
+  PromptSectionAuditEntry,
+  ComposeOptions,
+  ComposeResult,
+} from "./prompt-composer.js";

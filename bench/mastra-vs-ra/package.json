@@ -1,0 +1,22 @@
+{
+  "name": "@bench/mastra-vs-ra",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Private head-to-head benchmark: Reactive Agents vs Mastra. Not published; not part of release.",
+  "scripts": {
+    "smoke:ollama": "bun smoke-ollama.ts",
+    "smoke:anthropic": "bun smoke-anthropic.ts",
+    "smoke:openai": "bun smoke-openai.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@mastra/core": "latest",
+    "ai": "^6.0.191",
+    "dotenv": "^16.0.0",
+    "effect": "^3.10.0",
+    "ollama-ai-provider-v2": "^1.0.0",
+    "zod": "^3.23.0"
+  }
+}
