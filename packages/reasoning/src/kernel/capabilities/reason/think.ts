@@ -43,7 +43,7 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   stripPreamble,
-} from "../act/tool-parsing.js";
+} from "../../utils/tool-parsing.js";
 import {
   gateNativeToolCallsForRequiredTools,
 } from "../act/tool-gating.js";

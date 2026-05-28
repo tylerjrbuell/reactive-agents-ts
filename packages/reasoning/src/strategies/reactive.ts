@@ -25,7 +25,7 @@ import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils
 
 export type { CompressResult } from "../kernel/capabilities/attend/tool-formatting.js";
 export { compressToolResult } from "../kernel/capabilities/attend/tool-formatting.js";
-export { evaluateTransform } from "../kernel/capabilities/act/tool-parsing.js";
+export { evaluateTransform } from "../kernel/utils/tool-parsing.js";
 // parseToolRequestWithTransform re-export removed — use parseToolRequest from kernel/tool-utils directly
 export { truncateForDisplay } from "../kernel/capabilities/act/tool-execution.js";
 

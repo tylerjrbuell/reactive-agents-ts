@@ -3,7 +3,7 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   evaluateTransform,
-} from "../../../../src/kernel/capabilities/act/tool-parsing.js";
+} from "../../../../src/kernel/utils/tool-parsing.js";
 import {
   compressToolResult,
   formatToolSchemas,
