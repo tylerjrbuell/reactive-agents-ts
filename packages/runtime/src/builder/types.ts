@@ -611,6 +611,10 @@ export interface AgentResultMetadata {
     readonly cost: number
     /** Total tokens consumed by the LLM for this execution. */
     readonly tokensUsed: number
+    /** Prompt/input tokens (optional — provider may not split; see core ResultMetadataSchema). */
+    readonly inputTokens?: number
+    /** Completion/output tokens (optional — see inputTokens). */
+    readonly outputTokens?: number
     /** Name of the reasoning strategy that was used (e.g., "reactive", "tree-of-thought"). Default: undefined */
     readonly strategyUsed?: string
     /** Number of reasoning iterations/steps taken to complete the task. */

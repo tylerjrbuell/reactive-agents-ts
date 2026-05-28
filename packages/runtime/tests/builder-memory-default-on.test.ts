@@ -42,7 +42,11 @@ describe("GH #122 — memory default-on + clear opt-out", () => {
     // not the legacy debrief-key-presence proxy.
     const metaComplexity = (result.metadata as { complexity?: string }).complexity;
     expect(metaComplexity).toBeDefined();
-    expect(result.debrief).toBeUndefined();
+    // #144 (debrief honesty): trivial gate now returns a FALLBACK debrief
+    // (no LLM call) instead of undefined. The fallback synthesizer
+    // reconstructs an equivalent record from captured signals at zero
+    // token cost. Memory reachability is asserted via complexity field.
+    expect(result.debrief).toBeDefined();
     await agent.dispose();
   });
 
@@ -57,6 +61,8 @@ describe("GH #122 — memory default-on + clear opt-out", () => {
 
     const result = await agent.run("simple task");
     expect(result.success).toBe(true);
+    // .withoutMemory() opt-out → config.enableMemory false → debrief gate
+    // short-circuits to undefined (no fallback, no LLM call).
     expect(result.debrief).toBeUndefined();
     await agent.dispose();
   });
@@ -74,7 +80,8 @@ describe("GH #122 — memory default-on + clear opt-out", () => {
 
     const result = await agent.run("lean task");
     expect(result.success).toBe(true);
-    // Lean mode == no debrief synthesis (memory off)
+    // Lean mode == memory off → debrief gate returns undefined entirely
+    // (skips fallback synthesizer since config.enableMemory is false).
     expect(result.debrief).toBeUndefined();
     await agent.dispose();
   });
@@ -95,7 +102,11 @@ describe("GH #122 — memory default-on + clear opt-out", () => {
     // synthesis. Assert memory-branch reachability via complexity metadata.
     const metaComplexity = (result.metadata as { complexity?: string }).complexity;
     expect(metaComplexity).toBeDefined();
-    expect(result.debrief).toBeUndefined();
+    // #144 (debrief honesty): trivial gate now returns a FALLBACK debrief
+    // (no LLM call) instead of undefined. The fallback synthesizer
+    // reconstructs an equivalent record from captured signals at zero
+    // token cost. Memory reachability is asserted via complexity field.
+    expect(result.debrief).toBeDefined();
     await agent.dispose();
   });
 
@@ -134,7 +145,11 @@ describe("GH #122 — memory default-on + clear opt-out", () => {
     // populated only when memory-flush dispatch ran.
     const metaComplexity = (result.metadata as { complexity?: string }).complexity;
     expect(metaComplexity).toBeDefined();
-    expect(result.debrief).toBeUndefined();
+    // #144 (debrief honesty): trivial gate now returns a FALLBACK debrief
+    // (no LLM call) instead of undefined. The fallback synthesizer
+    // reconstructs an equivalent record from captured signals at zero
+    // token cost. Memory reachability is asserted via complexity field.
+    expect(result.debrief).toBeDefined();
     await agent.dispose();
   });
 });

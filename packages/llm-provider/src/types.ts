@@ -575,6 +575,20 @@ export const TokenUsageSchema = Schema.Struct({
   totalTokens: Schema.Number,
   /** Estimated cost in USD based on provider pricing */
   estimatedCost: Schema.Number,
+  /**
+   * Tokens that wrote NEW entries to the provider's prompt cache on this turn.
+   * Charged at a premium (e.g. Anthropic: 1.25x base input). Subsequent calls
+   * within the cache TTL window read these for the discounted cache_read price.
+   * Optional — providers without prompt caching omit this field.
+   */
+  cacheCreationInputTokens: Schema.optional(Schema.Number),
+  /**
+   * Tokens served from the provider's prompt cache (cache hit). Charged at a
+   * deep discount (e.g. Anthropic: 0.1x base input — 90% off). Indicates the
+   * caching infrastructure (Lever 1, GH #143-followup) is firing on multi-turn
+   * conversations. Optional — providers without prompt caching omit this field.
+   */
+  cacheReadInputTokens: Schema.optional(Schema.Number),
 });
 
 /**

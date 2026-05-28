@@ -207,6 +207,10 @@ export interface ExecutionContextMetadata {
     metadata: {
       cost: number;
       tokensUsed: number;
+      /** Prompt/input tokens (optional — strategy/provider may not split). */
+      inputTokens?: number;
+      /** Completion/output tokens (optional — see inputTokens). */
+      outputTokens?: number;
       stepsCount: number;
       duration?: number;
       strategyFallback?: boolean;

@@ -45,7 +45,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(baseInput).pipe(Effect.provide(llmLayer))
     );
 
@@ -78,7 +78,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief({
         ...baseInput,
         terminatedBy: "max_iterations",
@@ -97,7 +97,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(baseInput).pipe(Effect.provide(llmLayer))
     );
 
@@ -121,7 +121,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(baseInput).pipe(Effect.provide(llmLayer))
     );
 
@@ -144,7 +144,7 @@ describe("synthesizeDebrief", () => {
       ],
     };
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(inputWithErrors).pipe(Effect.provide(llmLayer))
     );
 
@@ -173,7 +173,7 @@ describe("synthesizeDebrief", () => {
         "# reactive-agents-ts\n\nEffect-TS agent framework with layered runtime and tools.",
     };
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief(input).pipe(Effect.provide(llmLayer)),
     );
 
@@ -197,7 +197,7 @@ describe("synthesizeDebrief", () => {
       },
     ]);
 
-    const debrief = await Effect.runPromise(
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief({
         ...baseInput,
         finalAnswerCapture: undefined,
@@ -251,16 +251,16 @@ describe("formatDebriefMarkdown", () => {
 });
 
 describe("DebriefCompleted event emission", () => {
-  it("does NOT publish DebriefCompleted on a trivial run (MOVE-3 / GH #143 trivial-skip gate)", async () => {
-    // MOVE-3 Phase 1 — `engine/finalize/debrief-synthesis.ts` honest-gates
-    // debrief synthesis on `ctx.metadata.taskComplexity !== "trivial"`.
-    // A `FINAL ANSWER: done` stub → iter=1, 0 tools, end_turn → trivial
-    // → debrief skipped → no DebriefCompleted event published. Saves the
-    // ~825 tok/task local-tier burn documented in GH #143. The positive
-    // counterpart test (debrief fires on non-trivial run) requires a
-    // tool-call-bearing scenario; tracked as a follow-up once the test
-    // scenario tooling supports inline-stubbed tools without external
-    // package wiring.
+  it("publishes DebriefCompleted on a trivial run with FALLBACK debrief (#144)", async () => {
+    // #144 (debrief honesty / unified emission): DebriefCompleted publishes
+    // from a single site so all paths emit consistently —
+    //   - trivial-fallback (this test)   no LLM call, debriefTokensUsed=0
+    //   - LLM-success                    full LLM debrief, real tokensUsed
+    //   - LLM-failure-fallback           catchAll → fallback, tokensUsed=0
+    // Prior to #144 the publish fired only on the LLM-success path; trivial
+    // runs silently produced a debrief without notifying subscribers.
+    // The trivial gate now means "no LLM call" (cost saving) rather than
+    // "no debrief at all" — fallback debrief still flows through.
     const agent = await ReactiveAgents.create()
       .withName("debrief-event-test")
       .withTestScenario([{ text: "FINAL ANSWER: done" }])
@@ -278,7 +278,7 @@ describe("DebriefCompleted event emission", () => {
     unsubscribe();
     await agent.dispose();
 
-    expect(published.some((event) => event._tag === "DebriefCompleted")).toBe(false);
+    expect(published.some((event) => event._tag === "DebriefCompleted")).toBe(true);
   });
 });
 

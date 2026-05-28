@@ -237,7 +237,10 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
       tokens: { input: 200, output: 100, total: 300, cost: 0.0015 },
     });
     const { synthesizeDebrief } = await import("../src/debrief.js");
-    const debrief = await Effect.runPromise(
+    // synthesizeDebrief returns { debrief, tokensUsed } — destructure to
+    // access the AgentDebrief itself. The metrics.synthesisTokens object
+    // is populated when llmResponse.usage.totalTokens > 0 (GH #143).
+    const { debrief } = await Effect.runPromise(
       synthesizeDebrief({
         taskPrompt: "test",
         agentId: "a-1",
@@ -256,7 +259,7 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
     expect(debrief.metrics.synthesisTokens?.cost).toBe(0.0015);
   });
 
-  it("trivial task → no synthesisTokens (no LLM call made)", async () => {
+  it("trivial task → no debriefTokensUsed (no LLM call made)", async () => {
     const { layer } = makeCountingLLM();
     const deps = makeDeps(makeCtx("trivial"), true);
 
@@ -264,10 +267,12 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
       synthesizeAndStoreDebrief(deps).pipe(Effect.provide(layer)),
     );
 
-    // Trivial gate short-circuits → no LLM call → no synthesisTokens.
-    // Caller's accumulation step is a no-op on this path.
+    // Trivial gate short-circuits → no LLM call → debriefTokensUsed === 0.
+    // Caller's accumulation step is a no-op on this path. After #144 merge
+    // the wrapper's API surfaces `debriefTokensUsed` (number) instead of
+    // the prior `synthesisTokens` object.
     expect(result.debrief).toBeUndefined();
-    expect(result.synthesisTokens).toBeUndefined();
+    expect(result.debriefTokensUsed).toBe(0);
   });
 
   it("trivial task with memory DISABLED → debrief undefined (existing gate)", async () => {

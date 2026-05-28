@@ -17,7 +17,12 @@ import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task } from "@reactive-agents/core";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { synthesizeDebrief, type DebriefInput, type AgentDebrief } from "../../debrief.js";
+import {
+  synthesizeDebrief,
+  buildFallbackDebrief,
+  type DebriefInput,
+  type AgentDebrief,
+} from "../../debrief.js";
 import { DebriefStoreService } from "@reactive-agents/memory";
 import type { AgentDebriefShape } from "@reactive-agents/memory";
 import { extractTaskText } from "../util.js";
@@ -72,19 +77,12 @@ export interface DebriefSynthesisResult {
   readonly errorsFromLoop: readonly string[];
   readonly executionDurationMs: number;
   /**
-   * GH #143 honesty fix — tokens consumed by the debrief LLM call,
-   * forwarded so the caller can accumulate into ctx.tokensUsed +
-   * ctx.cost. Undefined when debrief was skipped (trivial gate / no
-   * LLMService / memory disabled) or when the fallback path returned
-   * zero usage. Caller MUST add these to the run's reported counters
-   * before result assembly — otherwise bench tools / observability
-   * dashboards under-count by the same factor as pre-fix (~5× on
-   * local-tier trivial).
+   * Tokens consumed by the debrief LLM call. Zero when the synthetic-fallback
+   * path was taken (trivial task, LLM unavailable, or memory disabled). The
+   * caller is expected to add this to `ctx.tokensUsed` before TaskResult
+   * assembly so bench metrics reflect real LLM consumption (GH #143).
    */
-  readonly synthesisTokens?: {
-    readonly total: number;
-    readonly cost: number;
-  };
+  readonly debriefTokensUsed: number;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -164,52 +162,73 @@ export const synthesizeAndStoreDebrief = (
       rationale: rationaleLog,
     };
 
+    // GH #143 trivial-task gate — skip the LLM debrief call when the task is
+    // trivial enough that the fallback synthesizer can reconstruct an equivalent
+    // record from captured signals. On local tier (qwen3.5:latest) the LLM
+    // debrief failed 52% of the time anyway (hit max_tokens, returned empty
+    // content), and bench evidence showed it burned ~825 tok/task uncounted.
+    // The gate covers: short final output (no synthesis nuance to extract),
+    // zero tool calls (nothing to summarize beyond the answer itself), and no
+    // errors (no error-narrative for the LLM to attempt). Any one of those
+    // conditions failing falls through to the LLM path.
+    const isTrivialForDebrief =
+      outputForSuccess.length < 100 &&
+      toolCallLog.length === 0 &&
+      errorsFromLoop.length === 0;
+
     // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
-    // Gated on:
-    //   1. rr !== undefined (reasoning path was used)
-    //   2. config.enableMemory (user opted in with .withMemory())
-    //   3. ctx.metadata.taskComplexity !== "trivial" (HONEST GATE — MOVE-3
-    //      Phase 1, GH #143). memory-flush-dispatch sets taskComplexity at
-    //      `runtime/engine/phases/memory-flush-dispatch.ts:42` BEFORE this
-    //      phase runs (`execution-engine.ts:976 → :1070`). Trivial tasks
-    //      (iter≤1 + zero tool calls + no max-iter termination) burn ~825
-    //      tok/call on local tier with 47% hitting max_tokens (#143 evidence);
-    //      synthesizeDebrief fallback at `debrief.ts:222` already constructs
-    //      a deterministic debrief from captured signals — the LLM call adds
-    //      no information. Pre-existing comment on this gate had aspired to
-    //      "skip trivial AND moderate" but the actual code had no complexity
-    //      check at all. This commit makes the code match a conservative
-    //      version of the aspiration (trivial-only) and leaves moderate
-    //      reachable for users who want richer post-mortems on tool runs.
-    const isTrivialTask = ctx.metadata.taskComplexity === "trivial";
-    const debrief: AgentDebrief | undefined = yield* (rr !== undefined && config.enableMemory && !isTrivialTask
-      ? Effect.serviceOption(LLMService).pipe(
-          Effect.flatMap((llmOpt) => {
-            if (llmOpt._tag !== "Some") return Effect.succeed(undefined as AgentDebrief | undefined);
-            // Provide the resolved LLMService back so synthesizeDebrief's R is discharged here.
-            return synthesizeDebrief(debriefInput).pipe(
-              Effect.provideService(LLMService, llmOpt.value),
-              Effect.flatMap((d) => {
-                const debrief = d as AgentDebrief;
-                if (!eb) {
-                  return Effect.succeed(debrief);
+    // Gated on BOTH: rr !== undefined (reasoning path was used) AND config.enableMemory
+    // (user opted in with .withMemory()). Skipped otherwise to avoid injecting extra
+    // LLM calls in direct-LLM path tests and non-memory configurations.
+    // Also requires LLMService to be available in context — use serviceOption to check.
+    const debriefAndTokens: { debrief: AgentDebrief | undefined; tokensUsed: number } =
+      yield* (rr !== undefined && config.enableMemory
+        ? isTrivialForDebrief
+          ? Effect.succeed({ debrief: buildFallbackDebrief(debriefInput), tokensUsed: 0 })
+          : Effect.serviceOption(LLMService).pipe(
+              Effect.flatMap((llmOpt) => {
+                if (llmOpt._tag !== "Some") {
+                  // No LLM available — still build a fallback so downstream consumers
+                  // (DebriefStoreService persist, DebriefCompleted event) see a record.
+                  return Effect.succeed({ debrief: buildFallbackDebrief(debriefInput), tokensUsed: 0 });
                 }
-                return eb.publish({
-                  _tag: "DebriefCompleted",
-                  taskId: debriefInput.taskId,
-                  agentId: debriefInput.agentId,
-                  debrief,
-                }).pipe(
-                  Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-completed-publish", tag: errorTag(err) })),
-                  Effect.as(debrief),
+                return synthesizeDebrief(debriefInput).pipe(
+                  Effect.provideService(LLMService, llmOpt.value),
+                  Effect.map((result) => ({ debrief: result.debrief as AgentDebrief | undefined, tokensUsed: result.tokensUsed })),
+                  Effect.catchAll(() =>
+                    Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }),
+                  ),
                 );
               }),
-              Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
-            );
-          }),
-          Effect.catchAll(() => Effect.succeed(undefined as AgentDebrief | undefined)),
-        )
-      : Effect.succeed(undefined as AgentDebrief | undefined));
+              Effect.catchAll(() =>
+                Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }),
+              ),
+            )
+        : Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }));
+
+    const { debrief, tokensUsed: debriefTokensUsed } = debriefAndTokens;
+
+    // Publish DebriefCompleted from a single site so all paths (trivial-fallback,
+    // LLM-success, LLM-failure-fallback) emit consistently. Prior to GH #143 this
+    // fired only on the LLM-success path; subscribers expecting the event missed it
+    // when the trivial gate routed to the fallback synthesizer.
+    if (debrief !== undefined && eb) {
+      yield* eb
+        .publish({
+          _tag: "DebriefCompleted",
+          taskId: debriefInput.taskId,
+          agentId: debriefInput.agentId,
+          debrief,
+        })
+        .pipe(
+          Effect.catchAll((err) =>
+            emitErrorSwallowed({
+              site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-completed-publish",
+              tag: errorTag(err),
+            }),
+          ),
+        );
+    }
 
     // Persist debrief if DebriefStoreService is available
     if (debrief !== undefined) {
@@ -240,22 +259,11 @@ export const synthesizeAndStoreDebrief = (
       );
     }
 
-    // GH #143 honesty fix — extract synthesisTokens from debrief.metrics
-    // (populated by synthesizeDebrief when its own LLM call succeeded)
-    // and surface for caller-side aggregation into ctx.tokensUsed +
-    // ctx.cost. Undefined when debrief skipped or fallback path taken.
-    const synthesisTokens = debrief?.metrics.synthesisTokens
-      ? {
-          total: debrief.metrics.synthesisTokens.total,
-          cost: debrief.metrics.synthesisTokens.cost,
-        }
-      : undefined;
-
     return {
       debrief,
       errorsFromLoop,
       executionDurationMs,
-      ...(synthesisTokens ? { synthesisTokens } : {}),
+      debriefTokensUsed,
     } satisfies DebriefSynthesisResult;
   });
 };

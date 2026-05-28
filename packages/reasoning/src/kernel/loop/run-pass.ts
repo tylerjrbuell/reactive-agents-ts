@@ -55,6 +55,10 @@ export interface PassResult {
   readonly output: string | null;
   /** Token total for this pass (normalized from possibly-undefined kernel field). */
   readonly tokens: number;
+  /** Cumulative input/prompt tokens for this pass. */
+  readonly inputTokens: number;
+  /** Cumulative output/completion tokens for this pass. */
+  readonly outputTokens: number;
   /** USD cost for this pass (normalized). */
   readonly cost: number;
   /** Steps produced by this pass, in execution order. */
@@ -109,6 +113,8 @@ export function runPass(
       state,
       output: resolvePassOutput(state),
       tokens: state.tokens ?? 0,
+      inputTokens: state.inputTokens ?? 0,
+      outputTokens: state.outputTokens ?? 0,
       cost: state.cost ?? 0,
       steps,
       messages: state.messages,

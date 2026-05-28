@@ -290,6 +290,13 @@ function buildIterationSystemPrompt(
     },
     { shapeGated: true },
   );
+  // Resolution: APC composer (HEAD) is the canonical author. Lever 2's
+  // iter-1+ skip logic for priorContext + adapter-toolGuidance + tool
+  // elaboration is ported into the section render functions
+  // (prompt-sections-default.ts). Static-context still rendered every iter
+  // per Lever 2's empirical finding (m2 +28% when dropped mid-loop on
+  // local-tier). APC-4's trivial-shape strip remains the only static-context
+  // omission path.
   return result.text;
 }
 

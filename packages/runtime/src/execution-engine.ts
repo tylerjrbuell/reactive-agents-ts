@@ -1068,7 +1068,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // ── Debrief Synthesis (best-effort, never blocks the result) ──
                 // Extracted to engine/finalize/debrief-synthesis.ts (W24-B step 1).
-                const { debrief, errorsFromLoop, executionDurationMs, synthesisTokens } = yield* synthesizeAndStoreDebrief({
+                const { debrief, errorsFromLoop, executionDurationMs, debriefTokensUsed } = yield* synthesizeAndStoreDebrief({
                   ctx,
                   task,
                   config,
@@ -1082,22 +1082,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   rationaleLog,
                 });
 
-                // GH #143 honesty fix — accumulate debrief LLM tokens
-                // into ctx.tokensUsed + ctx.cost BEFORE result assembly.
-                // Pre-fix the debrief LLM call's tokens were dropped on
-                // the floor; bench tools reading result.metadata.tokensUsed
-                // under-counted local-tier trivial-task runs by ~5× per
-                // warden ablation evidence (wiki/Research/Ablations/
-                // 2026-05-26-debrief-trivial-skip-gate.md §"Measurement
-                // instrument note"). Aggregating here keeps every LLM
-                // call the framework made on the user's behalf in a
-                // single canonical counter.
-                if (synthesisTokens) {
-                  ctx = {
-                    ...ctx,
-                    tokensUsed: ctx.tokensUsed + synthesisTokens.total,
-                    cost: ctx.cost + synthesisTokens.cost,
-                  };
+                // GH #143 honesty fix — debrief LLM call's tokens now flow into
+                // the reported total. Without this, bench undercounted RA by ~5x
+                // on local tier (k1 reported 206 tok, actual ~1031 incl. debrief).
+                // Mutating ctx.tokensUsed mirrors the per-iter accumulator pattern
+                // used at inline-think.ts / reasoning-think.ts (those rebuild a new
+                // context object; here we mutate the final ctx before TaskResult
+                // assembly since no downstream phase reads tokensUsed after this).
+                if (debriefTokensUsed > 0) {
+                  (ctx as { tokensUsed: number }).tokensUsed = ctx.tokensUsed + debriefTokensUsed;
                 }
 
                 const result: TaskResult & {
@@ -1127,6 +1120,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // for consumers expecting the same name used on
                     // AgentCompleted / ReasoningResult / traceStats.
                     totalTokens: ctx.tokensUsed,
+                    // Prompt/completion split from the reasoning strategy.
+                    // Optional — provider/strategy may not always populate
+                    // (test-provider, sub-agent rollups, retry hooks).
+                    ...(typeof rr?.metadata?.inputTokens === "number" ? { inputTokens: rr.metadata.inputTokens } : {}),
+                    ...(typeof rr?.metadata?.outputTokens === "number" ? { outputTokens: rr.metadata.outputTokens } : {}),
                     strategyUsed: ctx.selectedStrategy,
                     stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
                     iterations: ctx.iteration,

@@ -91,6 +91,10 @@ type PartialCompletion = {
     readonly inputTokens?: number;
     readonly outputTokens?: number;
     readonly estimatedCost?: number;
+    /** Anthropic prompt-caching: tokens that wrote new cache entries (Lever 1). */
+    readonly cacheCreationInputTokens?: number;
+    /** Anthropic prompt-caching: tokens served from cache hits. */
+    readonly cacheReadInputTokens?: number;
   };
 };
 
@@ -121,6 +125,14 @@ function emitForRequest(
       stopReason: fullResponse?.stopReason,
       tokensIn: fullResponse?.usage?.inputTokens,
       tokensOut: fullResponse?.usage?.outputTokens,
+      // Lever 1 observability — surface Anthropic prompt-cache stats into the
+      // trace so multi-iter cache hit rates are inspectable via `rax:diagnose`.
+      ...(typeof fullResponse?.usage?.cacheCreationInputTokens === "number"
+        ? { cacheCreationTokensIn: fullResponse.usage.cacheCreationInputTokens }
+        : {}),
+      ...(typeof fullResponse?.usage?.cacheReadInputTokens === "number"
+        ? { cacheReadTokensIn: fullResponse.usage.cacheReadInputTokens }
+        : {}),
       costUsd: fullResponse?.usage?.estimatedCost,
       durationMs,
     },

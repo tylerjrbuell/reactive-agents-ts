@@ -49,6 +49,10 @@ export function buildStrategyResult(params: {
   /** Date.now() captured at strategy start */
   start: number;
   totalTokens: number;
+  /** Cumulative prompt tokens (optional — defaults to 0 when not split). */
+  totalInputTokens?: number;
+  /** Cumulative completion tokens (optional — defaults to 0 when not split). */
+  totalOutputTokens?: number;
   totalCost: number;
   /** Strategy-specific metadata fields merged into result.metadata */
   extraMetadata?: Record<string, unknown>;
@@ -84,6 +88,8 @@ export function buildStrategyResult(params: {
       duration: Date.now() - params.start,
       cost: params.totalCost,
       tokensUsed: params.totalTokens,
+      inputTokens: params.totalInputTokens ?? 0,
+      outputTokens: params.totalOutputTokens ?? 0,
       stepsCount: params.steps.length,
       confidence,
       ...params.extraMetadata,

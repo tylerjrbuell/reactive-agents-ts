@@ -114,9 +114,15 @@ function isHighConfidenceTrivial(shape: import("../kernel/capabilities/comprehen
 
 export const priorContextSection: PromptSection = {
   id: "prior-context",
-  description: "Cross-run memory (episodic + semantic) from ExecutionEngine",
+  description:
+    "Cross-run memory (episodic + semantic) from ExecutionEngine — iter 0 only (Lever 2)",
   requiredWhen: () => true,
   render: (ctx) => {
+    // Lever 2 (#146): iter 0 only — by iter 1+ the model has memory context
+    // in its message thread; resending the system-prompt prior-context block
+    // is pure repetition. Empirically dropped without quality cost (c1 -45%,
+    // f1 -25% on local-tier).
+    if (ctx.state.iteration > 0) return null;
     const prior = ctx.input.priorContext?.trim();
     return prior && prior.length > 0 ? prior : null;
   },
@@ -143,6 +149,11 @@ export const staticContextSection: PromptSection = {
       requiredTools: ctx.input.requiredTools as string[] | undefined,
       environmentContext: ctx.input.environmentContext,
     });
+    // Lever 2 (#146): adapter toolGuidance (rationale rules, provider-specific
+    // reminders) is stable across iterations — emit on iter 0 only. Static
+    // context itself is kept every iter because local-tier models regress on
+    // tool tasks when tool reference disappears mid-loop (empirical m2 +28%).
+    if (ctx.state.iteration > 0) return staticContext;
     const toolGuidancePatch = ctx.adapter?.toolGuidance?.({
       toolNames: availableTools.map((t) => t.name),
       requiredTools: ctx.input.requiredTools ?? [],
@@ -160,10 +171,14 @@ export const staticContextSection: PromptSection = {
 
 export const toolElaborationSection: PromptSection = {
   id: "tool-elaboration",
-  description: "Opt-in tool-call elaboration hints",
+  description:
+    "Opt-in tool-call elaboration hints — iter 0 only (Lever 2)",
   // APC-4: only meaningful when tools are actually needed.
   requiredWhen: (shape) => shape.needsTools,
   render: (ctx) => {
+    // Lever 2 (#146): elaboration hints are stable across iterations — emit
+    // only on iter 0. Model retains the elaboration context once delivered.
+    if (ctx.state.iteration > 0) return null;
     const opts = readOptions(ctx);
     if (!opts.toolElaboration) return null;
     const availableTools = effectiveTools(ctx);

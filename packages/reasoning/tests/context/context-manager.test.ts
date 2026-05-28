@@ -179,6 +179,101 @@ describe("ContextManager.build — systemPrompt", () => {
   }, 15000);
 });
 
+// ── Lever 2: skinny iter 1+ system prompt (conservative variant) ─────────────
+// Drops priorContext (cross-run memory injection) + adapter toolGuidance
+// (rationale rules, provider-specific reminders) + toolElaboration on iter 1+.
+// KEEPS env / tool reference / task / rules because empirical evidence
+// (m2-version-then-cite local-tier sweep 2026-05-26) showed dropping the
+// tool reference regresses tool-using tasks +28% tokens on qwen3.5 via Ollama
+// — native FC schemas in the request param aren't enough on their own.
+
+describe("ContextManager.build — Lever 2 (skinny iter 1+ system prompt)", () => {
+  it("iter 0 includes adapter toolGuidance reminders when applicable", () => {
+    // Iter 0 fires the full scaffold including adapter rationale rules.
+    const { systemPrompt } = ContextManager.build(
+      makeState({ iteration: 0 }),
+      makeInput(),
+      CONTEXT_PROFILES.local,
+      noGuidance,
+    );
+    expect(systemPrompt).toContain("Environment:");
+    expect(systemPrompt).toContain("Task:");
+    expect(systemPrompt).toContain("web-search");
+  }, 15000);
+
+  it("iter > 0 keeps tool reference (required for local tool-tasks)", () => {
+    // KEY safety check: m2-shape tasks regress when tool ref disappears
+    // mid-loop. Provider native FC alone isn't enough for local models.
+    const { systemPrompt } = ContextManager.build(
+      makeState({ iteration: 1 }),
+      makeInput(),
+      CONTEXT_PROFILES.local,
+      noGuidance,
+    );
+    expect(systemPrompt).toContain("web-search");
+  }, 15000);
+
+  it("iter > 0 keeps env / Task / rules block (static context still emitted)", () => {
+    const { systemPrompt } = ContextManager.build(
+      makeState({ iteration: 1 }),
+      makeInput(),
+      CONTEXT_PROFILES.local,
+      noGuidance,
+    );
+    expect(systemPrompt).toContain("Environment:");
+    expect(systemPrompt).toContain("Task:");
+  }, 15000);
+
+  it("iter > 0 drops priorContext (cross-run memory) — model has it from iter 0", () => {
+    const inputWithPriorContext = makeInput({
+      priorContext: "Relevant Memory:\n- prior fact one\n- prior fact two",
+    });
+    const iter0 = ContextManager.build(
+      makeState({ iteration: 0 }),
+      inputWithPriorContext,
+      CONTEXT_PROFILES.local,
+      noGuidance,
+    );
+    const iter1 = ContextManager.build(
+      makeState({ iteration: 1 }),
+      inputWithPriorContext,
+      CONTEXT_PROFILES.local,
+      noGuidance,
+    );
+    expect(iter0.systemPrompt).toContain("Relevant Memory:");
+    expect(iter1.systemPrompt).not.toContain("Relevant Memory:");
+  }, 15000);
+
+  it("iter > 0 keeps progress section when tools have been called", () => {
+    const stateWithProgress = makeState({
+      iteration: 2,
+      toolsUsed: new Set(["web-search"]),
+    });
+    const { systemPrompt } = ContextManager.build(
+      stateWithProgress,
+      makeInput(),
+      CONTEXT_PROFILES.local,
+      noGuidance,
+    );
+    expect(systemPrompt).toContain("Progress");
+  }, 15000);
+
+  it("iter > 0 keeps guidance section when harness signals fire", () => {
+    const guidance: GuidanceContext = {
+      requiredToolsPending: ["web-search"],
+      loopDetected: false,
+    };
+    const { systemPrompt } = ContextManager.build(
+      makeState({ iteration: 1 }),
+      makeInput(),
+      CONTEXT_PROFILES.local,
+      guidance,
+    );
+    expect(systemPrompt).toContain("Guidance:");
+  }, 15000);
+
+});
+
 // ── ContextManager.build — curated messages ───────────────────────────────────
 
 describe("ContextManager.build — messages", () => {
