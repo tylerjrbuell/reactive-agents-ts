@@ -260,7 +260,8 @@ export function compressToolResult(
             .slice(0, 140);
           const author = String(authorObj.name ?? "").trim();
           const date = String(authorObj.date ?? "").trim();
-          return `  [${i}] message=${message} | author=${author} | date=${date}`;
+          const shaShort = String(item.sha ?? "").slice(0, 7);
+          return `  [${i}] sha=${shaShort} | message=${message} | author=${author} | date=${date}`;
         };
 
         // Try-fit: if every commit fits at title-detail level within budget,
@@ -275,7 +276,7 @@ export function compressToolResult(
         if (showAll) {
           const content =
             `[STORED: ${key} | ${toolName}]\n` +
-            `Type: Array(${parsed.length}) | Schema: commit.message, commit.author.name, commit.author.date\n` +
+            `Type: Array(${parsed.length}) | Schema: commit.message, commit.author.name, commit.author.date, sha (7-char short)\n` +
             `All ${parsed.length} commits:\n` +
             allItems +
             `\n  ✓ Preview includes all commits with exact message/author/date values.`;
@@ -293,7 +294,7 @@ export function compressToolResult(
           `\n  — full data is stored. Use recall("${key}", arrayStart: ${shownCount}, arrayCount: ${remaining}) for remaining commits.`;
         const content =
           `[STORED: ${key} | ${toolName}]\n` +
-          `Type: Array(${parsed.length}) | Schema: commit.message, commit.author.name, commit.author.date\n` +
+          `Type: Array(${parsed.length}) | Schema: commit.message, commit.author.name, commit.author.date, sha (7-char short)\n` +
           `Preview (first ${shownCount} of ${parsed.length}):\n` +
           items +
           moreStr +

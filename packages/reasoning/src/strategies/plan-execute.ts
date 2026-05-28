@@ -45,6 +45,7 @@ import {
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
+import { compressToolResult } from "../kernel/capabilities/attend/tool-formatting.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   extractThinkingSafeContent,
@@ -1180,10 +1181,25 @@ function executeStep(
       // Sanitize tool_call output: strip internal metadata (args, recipient, raw JSON)
       // so it doesn't leak into downstream steps or final synthesis.
       // Data-fetching tools keep full output; action tools get a clean confirmation.
-      const output = sanitizeToolOutput(step.toolName!, rawOutput, resolvedArgs);
+      const sanitized = sanitizeToolOutput(step.toolName!, rawOutput, resolvedArgs);
+
+      // Structured-result compression — symmetric to kernel/act path. Without
+      // this, plan-execute shipped raw 50KB+ MCP arrays (github/list_commits)
+      // into the next step's prompt AND the reflection prompt, blowing local-tier
+      // context and triggering fabrication-from-training (MCP probe M2/M3:
+      // composite 15-20%). The kernel's `compressToolResult` already produces
+      // a fit-aware preview with scratchpad pointer — reuse it here.
+      const compressionBudget = input.resultCompression?.budget ?? 2000;
+      const compressionPreviewItems = input.resultCompression?.previewItems ?? 8;
+      const compressed = compressToolResult(
+        sanitized,
+        step.toolName!,
+        compressionBudget,
+        compressionPreviewItems,
+      );
 
       return {
-        output,
+        output: compressed.content,
         tokens: 0,
         cost: 0,
         success: toolResult.success !== false,

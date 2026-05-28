@@ -30,6 +30,7 @@ import {
   validateContentCompleteness,
   buildSynthesisPrompt,
 } from "./output-synthesis.js";
+import { validateGeneralizedGrounding } from "../capabilities/verify/evidence-grounding.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
@@ -59,6 +60,18 @@ export function decideSynthesisInput(
   taskDescription: string,
   toolData: string | undefined,
 ): { needsSynthesis: boolean; rawForSynthesis: string } {
+  // Compression-marker echo is a structural failure regardless of format —
+  // the model shipped framework internal scaffolding ([STORED: _tool_result_N],
+  // "Type: Object(...)", "compressed preview", etc.) as the final answer
+  // instead of synthesizing real content. This was the MCP probe M4 failure
+  // mode on plan-execute: model echoed the github/search_repositories preview
+  // verbatim. Force synthesis-from-tool-data when detected.
+  const markerCheck = validateGeneralizedGrounding(output, "");
+  if (markerCheck.compressionEchoDetected) {
+    const rawForSynthesis = toolData && toolData.length > 0 ? toolData : output;
+    return { needsSynthesis: true, rawForSynthesis };
+  }
+
   const intent = extractOutputFormat(taskDescription);
   if (!intent.format) {
     return { needsSynthesis: false, rawForSynthesis: output };
@@ -121,9 +134,12 @@ export function enforceQualityGate(input: {
     return Effect.succeed({ output: input.output, tokens: 0, cost: 0 });
   }
   const intent = extractOutputFormat(input.taskDescription);
+  // Default to "prose" when no explicit format detected — covers compression-echo
+  // synthesis for free-form tasks (MCP probe M4: "summarize in one sentence").
+  const synthesisFormat = intent.format ?? "prose";
   const synthesisPrompt = buildSynthesisPrompt(
     decision.rawForSynthesis,
-    intent.format!,
+    synthesisFormat,
     input.taskDescription,
   );
 
@@ -145,7 +161,7 @@ export function enforceQualityGate(input: {
             cost: response.usage.estimatedCost,
           };
         }
-        const revalidation = validateOutputFormat(candidate, intent.format!);
+        const revalidation = validateOutputFormat(candidate, synthesisFormat);
         return {
           output: revalidation.valid ? candidate : input.output,
           tokens: response.usage.totalTokens,
