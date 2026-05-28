@@ -62,8 +62,12 @@ if (targets.length === 0) fail("no public packages discovered");
 const names = new Set(targets.map((t) => t.name));
 
 // npm auth must be valid before we touch anything.
-const who = await $`npm whoami`.quiet().nothrow();
-if (who.exitCode !== 0) fail("not logged in to npm (`npm whoami` failed). Run `npm login` first.");
+// Skip when --dry-run / --no-publish: those modes don't push to the registry,
+// so `release:dry` functions as a drift gate without requiring `npm login`.
+if (!dryRun && !noPublish) {
+  const who = await $`npm whoami`.quiet().nothrow();
+  if (who.exitCode !== 0) fail("not logged in to npm (`npm whoami` failed). Run `npm login` first.");
+}
 
 // ── Topological sort over internal dependency edges ──────────────────────────
 

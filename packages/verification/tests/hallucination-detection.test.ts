@@ -136,6 +136,8 @@ describe("checkHallucinationLLM", () => {
             ],
           }),
         }),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     const result = await Effect.runPromise(
@@ -156,6 +158,8 @@ describe("checkHallucinationLLM", () => {
   test("falls back to heuristic on invalid JSON from LLM", async () => {
     const mockLLM = {
       complete: (_req: any) => Effect.succeed({ content: "not valid json at all" }),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     const result = await Effect.runPromise(
@@ -170,6 +174,8 @@ describe("checkHallucinationLLM", () => {
   test("falls back to heuristic on LLM error", async () => {
     const mockLLM = {
       complete: (_req: any) => Effect.fail(new Error("LLM unavailable")),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     const result = await Effect.runPromise(
@@ -186,6 +192,8 @@ describe("checkHallucinationLLM", () => {
         Effect.succeed({
           content: JSON.stringify({ claims: [] }),
         }),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     const result = await Effect.runPromise(

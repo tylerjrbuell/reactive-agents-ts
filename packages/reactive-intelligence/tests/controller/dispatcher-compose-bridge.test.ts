@@ -34,7 +34,6 @@ const makeContext = (
   iteration: 5,
   entropyScore: {
     composite: 0.7,
-    token: 0.7,
     structural: 0.6,
     semantic: 0.5,
     behavioral: 0.4,
@@ -79,7 +78,7 @@ const taps = (h: RegistrationHarness, sink: TapEntry[]) => {
     "lifecycle.failure",
     "nudge.healing-failure",
   ] as const) {
-    h.tap(tag, (payload) => { sink.push({ tag, payload }); });
+    h.tap(tag, (payload: unknown) => { sink.push({ tag, payload }); });
   }
 };
 
@@ -170,10 +169,10 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const captured: TapEntry[] = [];
     taps(h, captured);
     // Also tap the 4 always-live tags so we'd catch any spurious emission.
-    h.tap("prompt.system", (payload) => captured.push({ tag: "prompt.system", payload }));
-    h.tap("observation.tool-result", (payload) => captured.push({ tag: "observation.tool-result", payload }));
-    h.tap("nudge.loop-detected", (payload) => captured.push({ tag: "nudge.loop-detected", payload }));
-    h.tap("message.tool-result", (payload) => captured.push({ tag: "message.tool-result", payload }));
+    h.tap("prompt.system", (payload: unknown) => { captured.push({ tag: "prompt.system", payload }); });
+    h.tap("observation.tool-result", (payload: unknown) => { captured.push({ tag: "observation.tool-result", payload }); });
+    h.tap("nudge.loop-detected", (payload: unknown) => { captured.push({ tag: "nudge.loop-detected", payload }); });
+    h.tap("message.tool-result", (payload: unknown) => { captured.push({ tag: "message.tool-result", payload }); });
     const pipeline = new HarnessPipeline(h._collected);
 
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
@@ -218,7 +217,7 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
       "lifecycle.failure",
       "nudge.healing-failure",
     ] as const) {
-      h.tap(tag, (_payload, ctx) => { seenCtx.push({ tag, phase: (ctx as { phase: string }).phase }); });
+      h.tap(tag, (_payload: unknown, ctx: unknown) => { seenCtx.push({ tag, phase: (ctx as { phase: string }).phase }); });
     }
     const pipeline = new HarnessPipeline(h._collected);
 
