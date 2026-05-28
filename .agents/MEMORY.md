@@ -43,6 +43,72 @@ All P0 bugs closed (merged to `main`). Probe-verified cross-tier (cogito:14b + q
 - ✅ **#108 R10** — Ablation probe `.withReactiveIntelligence(riEnabled)` explicit toggle (commit 1d528861). RI-off cells: `interventionsDispatched=0` across all 4 scenarios. Counter is correctly RI-scoped.
 - ✅ **#109 R11** — Triple-surface skill persistence failure: console.warn + Effect.logWarning + ErrorSwallowed tagged `"SkillPersistenceFailed"` (commit af6a9e35). Canonical grep predicate: `e._tag === "ErrorSwallowed" && e.tag === "SkillPersistenceFailed"`.
 
+### Health Sweep — 2026-05-27 (60 findings, 8 new GH issues)
+
+**Method:** 4 parallel scan agents (codebase-health-sweep skill v3), `verified-by:` per audit-of-audit. Build GREEN (38/38 turbo). Full report `wiki/Research/Audit-Reports-2026-05-27/health-sweep.md`.
+
+**Filed:** #151 (HS-A-01 P1 Gateway `this as any`), #152 (HS-B-01/02/03 P1 honesty-pass bundle), #153 (HS-A-03 P2 dead trace exports), #154 (HS-A-18 P1 HITL example calls nonexistent `onApprovalRequest`), #155 (HS-D-01/02/17/19 P1 surface test gaps observe+vue+health+umbrella), #156 (HS-C-11/12 P2 provider `completeStructured` dup + JSON deep-clone), #157 (HS-B-04 P2 memory-service 4× swallows missing `emitErrorSwallowed`), #158 (HS-A-19 P2 playground reads private `_lastDebrief`).
+
+**Comments on existing:** #77 (5 of 7 HS-20 monoliths grew + 5 NEW monoliths post-W26 including runner.ts 1739→1934, reactive-agent.ts 1415, runtime.ts 1261, builder.ts 2027, execution-engine.ts 1414), #78 (4/5 HS-21 deprecated still active + 1 new HS-C-20), #87 (test `as unknown as` grew 55→85 = +55%, reasoning(12)+runtime(10)+RI(4) hotspots).
+
+**Two active debt vectors:**
+1. **File-size regression** — arbitrator.ts +161 LOC most aggressive grower; runner regrew post-decomp.
+2. **Mock drift mirrors source drift** — Fixing source-side seam types (#91 + #151) auto-reduces test cast surface.
+
+**Stale doc detected:** `CLAUDE.md` cites runner.ts at 1,739 LOC; actual 1934. Update during next docs sweep.
+
+**No P0 found in iter 1.** Strong honesty discipline (0 `@ts-ignore` in prod, 0 `.skip`/`.todo` in tests, 0 dist/ committed).
+
+### Iter 2 (2026-05-28) — apps/* + wiki/docs staleness — **1 P0 surfaced**
+
+**+27 findings** (E:12 apps, F:15 docs) → 6 GH issues #159-#164.
+
+**🚨 P0 #159 release-state drift:** root `VERSION=0.11.1`, npm has 0.11.1 published, BUT 34/35 `packages/*/package.json` at `0.10.6` + NO `v0.10.x`/`v0.11.x` git tags exist (local OR remote, both max at `v0.9.0`). Tag-driven release flow violated. Next `bun run release:dry 0.12.0` will fail the drift gate per `feedback_npm_version_drift`.
+
+**P1 #160 confidenceFloor doc lie:** killswitch unshipped 2026-05-19 per `project_killswitch_honesty_2026_05_19` but still in AGENTS.md L66/L99 + Hot.md L25. Re-add risk.
+
+**P1 #162 AgentResult.debrief missing public type:** supersedes #158, single 5-LOC fix closes 4 cast sites across CLI + cortex/server.
+
+**P1 #163 AgentEvent union not narrowing on `_tag`:** 13+ casts in cortex/ui (chat-store + RunChatTab).
+
+**P1 #164 create-reactive-agent template:** ships `(process.env.LLM_PROVIDER as any)` to every scaffolded user project.
+
+**Combined iter 1+2:** 87 findings, 14 GH issues, 3 comments. Build still GREEN.
+
+### Iter 3 (2026-05-28) — CI/release root cause + live test scan
+
+**+19 findings** (H:13 CI, I:6 tests) → 2 GH issues #165 #166 + correction comment on #159.
+
+**🔧 #159 root cause found (CORRECTION):** Tags DO exist (my iter 2 `git tag | tail -10` only showed 10, missed v0.10.x range). Real bug: `publish.yml:135-149` "Sync VERSION to main" commits ONLY the `VERSION` file. `release.ts:197-208` stamps `packages/*/package.json` in ephemeral CI runner; mutations die with runner. Same mechanism stales CHANGELOG.
+
+**Fix:** Move stamping OUT of CI into local `release.ts` — stamp+commit+push BEFORE tag/publish. CI just builds + publishes already-stamped commit. Drift becomes structurally impossible.
+
+**Live test verdict:** 3219/3219 GREEN across 6 most-changed packages. +761 since Hot.md May-23 baseline of 2458. Zero regressions.
+
+**Filed:** #165 (orphan v0.10.7 draft GH release), #166 (MetricsCollectorTag missing in test Layers — WARN noise + potential prod under-counting).
+
+**Combined iter 1+2+3:** 106 findings, 16 GH issues #151-#166, 4 comments on existing. Build GREEN. Tests GREEN.
+
+### Iter 4 (2026-05-28) — Effect-TS abstraction + arch drift (5 GH issues)
+
+**+20 findings** (J:12, K:8) → 5 GH issues #167-#171.
+
+**🏗️ #167 RuntimeAssembly bundle:** `runtime.ts:479-868` mutates `runtime` variable 38× via `Layer.merge(...) as ComposableLayer` (64 casts in 3 files); 17 inline `Context.GenericTag<{...}>` inside Effect.gen; 2 shadow `MemoryService` Tags alongside canonical class-Tag. Fix: RuntimeAssembly collector + terminal `Layer.mergeAll`; ~230 LOC saved + eliminates `ComposableLayer` alias + dual-tag identity hazard.
+
+**🛡️ #168 tagged-error algebra:** 105 `Effect<X, unknown>` sites in production = silent swallow at type level. Per-service `Data.TaggedError` union; converts swallows into compile-time obligations. Type-level analog of `project_killswitch_honesty_2026_05_19` anti-pattern.
+
+**🕸️ #169 capability mesh:** kernel/capabilities/** has 21 sibling cross-edges + 7 cycles (act↔decide, act↔reason, reason↔verify, attend↔verify, decide↔comprehend). Violates documented "capability is a leaf" principle. Extract to `_shared/` + ESLint `no-restricted-imports`.
+
+**💀 #170 dead surfaces:** `@reactive-agents/observe` package has zero internal `src/` callers (only docs reference); 5 M12 `LocalProviderAdapter` hooks (continuationHint/errorRecovery/synthesisPrompt/qualityCheck/systemPromptPatch) ship 270 LOC with zero callers. Memory's claim "M12 dead hook removal 2026-05-24" was incomplete (only 1 of 6 removed).
+
+**📝 #171 manifest/doc drift:** AGENTS.md package tree omits 7/35 packages (incl. reactive-intelligence w/ 39 inbound consumers); North Star §4.3 says LearningPipeline "currently missing" but file exists with passing test; 2 unused workspace deps (reasoning→prompts, interaction→reasoning).
+
+**Effect-TS verdict: mid-maturity** (0 SubscriptionRef despite 409 Ref ops, 1 acquireRelease, 105 unknown errors, 28 runPromise calls, 15 in runtime alone). Runtime uses Effect as service locator, not type-driven composition.
+
+**Architecture verdict: mild-to-serious drift.** Capability mesh systemic; doc-vs-source inversions; central reference docs write-once-then-drift.
+
+**Combined iter 1+2+3+4:** 126 findings, 21 GH issues #151-#171, 4 comments. Build + tests GREEN.
+
 ### Architectural reframes (evidence-grounded)
 
 - ❌ "Strategies bypass kernel" → ✅ 5 of 7 use `runKernel`; outer loops legitimately reimplement BFS/critique/plan-revision (capability mapping <30% mappable)

@@ -16,9 +16,6 @@ const agent = await ReactiveAgents.create()
         enableStrategySwitching: false,
     })
     .withTools()
-    .withTools({
-        allowedTools: ['file-write', 'github/list_commits'],
-    })
     .withMCP({
         name: 'github',
         transport: 'stdio',
@@ -40,7 +37,8 @@ const agent = await ReactiveAgents.create()
     .build()
 
 const result = await agent.run(
-    'Fetch the last 15 commits to tylerjrbuell/reactive-agents-ts then summarize the recent changes to the repo as a blog post title and summary'
+    'Fetch the last 5 commits to tylerjrbuell/reactive-agents-ts and list them.'
 )
 console.log(result.output)
+console.log(result.debrief?.rationale)
 await agent.dispose()

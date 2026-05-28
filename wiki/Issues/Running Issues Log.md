@@ -445,3 +445,33 @@ At that point, we expect to see:
 - **HS-31:** claimed "74 casts" — actually 55 (grep counted match lines, not occurrences)
 
 **Process fix:** every future health-sweep finding requires a `verified-by:` line citing concrete file:line evidence before filing. `.claude/skills/codebase-health-sweep/SKILL.md` updated to enforce this.
+
+---
+
+## Health Sweep — 2026-05-27 (pointer)
+
+**60 NEW findings** filed to `wiki/Research/Audit-Reports-2026-05-27/health-sweep.md`. Method: 4 parallel scan agents (codebase-health-sweep skill v3), all `verified-by:` per audit-of-audit protocol. Build was GREEN at baseline.
+
+**Counts:**
+- A — Type Safety / Dead Exports: 20 (1 P0, 8 P1, 11 P2)
+- B — Runtime Bug Patterns: 10 (0 P0, 3 P1, 7 P2)
+- C — Dead Weight / Inefficiency: 20 (0 P1, 16 P2, 4 P3)
+- D — Tests / Coverage: 20 (7 P1, 13 P2)
+
+**Top P0 / P1 (12):** see *Execution Priority* table in audit report. Top item: **HS-A-01** — `ReactiveAgent` Gateway helpers cast `this as any` (public API contract lie, single-class fix).
+
+**5 recommended /execute-backlog bundles** drafted in the audit report (honesty-pass, public-API-honesty, provider-helper-extraction, surface-coverage-gap, deferred-arch-debt-epic).
+
+**Cross-checked**: none of the 60 are open in GH #29-#149 or in this log above.
+
+### Iter 2 update — 2026-05-28 (apps/* + docs)
+
+**+27 NEW findings** (E:12 apps, F:15 docs). Filed as #159-#164 (6 GH issues).
+
+**🚨 P0 release-state drift (#159):** Root VERSION=0.11.1 + npm has 0.11.1 published, BUT 34/35 workspace package.json files at 0.10.6 AND no v0.10.x/v0.11.x git tags exist locally OR on remote. Tag-driven release flow violated; next `release:dry` will fail drift gate.
+
+**P1 supersedes #158:** #162 (`AgentResult.debrief` missing from public type) is the root-cause fix that closes #158 and erases 4+ casts across CLI + cortex/server in one PR.
+
+**Cross-app pattern:** 2 missing public types account for 17 casts in apps — `AgentResult.debrief` (#162) and `AgentEvent` discriminated union (#163).
+
+**Doc systemically lags code:** 04-PROJECT-STATE.md (the AGENTS.md-mandated "READ FIRST" doc) is 30+ days stale, says "v0.10.0 deferred". confidenceFloor killswitch unshipped 2026-05-19 but still in AGENTS.md killswitch list (#160 — re-add anti-pattern risk).
