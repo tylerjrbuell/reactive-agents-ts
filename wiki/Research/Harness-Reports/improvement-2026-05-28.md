@@ -133,3 +133,52 @@ weakness. qwen3:14b 3pp better overall but inherits the synthesis gap.
   title-citation in paragraph summary) may not match the task's actual
   ask ("categorize by topic"). Reconsider per-task scoring before
   treating T5=0% as a fabrication signal.
+
+---
+
+## Session 2 (2026-05-28 continued)
+
+### Fixes shipped
+
+| Commit | Change | Impact |
+|--------|--------|--------|
+| `a9ba4f8e` | MCP comprehension trio: plan-execute compression, GitHub SHA in preview, compression-echo synthesis | MCP probe: 67% → 84-86% |
+| `ab531990` | Render 6 fields, tighter URL trim, calibration `optimalToolResultChars` 2000→4000 (cogito/qwen3:14b) | Filter task visibility: 8 of 25 → All 25 |
+
+### MCP comprehension probe added
+
+`mcp-comprehension-probe.ts` exercises 5 realistic MCP scenarios via the public
+github MCP server (Docker). Tasks: single-record field, array listing, selective
+filter, multi-tool workflow, error recovery.
+
+### Comprehensive results
+
+| Probe | cogito:14b | qwen3:14b |
+|-------|------------|-----------|
+| MCP probe avg | 84-86% (was 67%) | 79% |
+| Quality-gate avg | 86% | 89% |
+
+### Bottlenecks identified — root-cause classification
+
+| Class | Symptom | Root |
+|-------|---------|------|
+| **Compression visibility** ✅ FIXED | Filter tasks see only first 8 of N items | renderRecord shows 4 fields; budget 2000 too tight for modern context windows |
+| **Code-path asymmetry** ✅ FIXED | Plan-execute fabricates from training data on listing tasks | plan-execute bypassed kernel's compressToolResult |
+| **Synthesis gate blindness** ✅ FIXED | Compression preview echoed as final answer (FM-A2) | decideSynthesisInput skipped compression-marker check on no-format tasks |
+| **MCP field stripping** ✅ FIXED | Model fabricates SHAs on filter tasks | GitHub commit preview omitted SHA field entirely |
+| **Model attention** ⚠️ OUT-OF-SCOPE | cogito:14b ignores `descendants` field even when visible | Local 14b model behavior — not framework |
+| **Long-form synthesis citation** ⚠️ OUT-OF-SCOPE | T5 0% title-citation rate in paragraph summary | Quality-gate metric vs paraphrase mismatch (advisor flagged) |
+| **Classifier wrong tool** 📋 NEXT | "Stars on repo X" classified as web-search not github | LLM classifier lacks task-shape heuristic for owner/repo paths |
+| **`synthesis-grounded` no-op** 📋 NEXT | Fabrication passes verifier | Claim-grounding disabled by default (Stage 5 rollback) |
+
+### Open hypotheses for next session
+
+- **Classifier post-process rule**: when task contains `owner/repo` path AND github
+  tools available, demote web-search from required → relevant. Pure heuristic,
+  no LLM round-trip.
+- **Task-shape gated `synthesis-grounded`**: enable only when
+  `taskIntent.expectedEntities.length > 0`. Lower false-positive surface than the
+  general claim-grounding case Stage 5 rolled back.
+- **Per-tier render-detail calibration**: bump cogito:8b, qwen2.5:14b, llama3:14b
+  to 4000 once individually validated.
+
