@@ -249,34 +249,52 @@ export function compressToolResult(
       };
 
       if (looksLikeGitHubCommitArray(parsed)) {
+        const renderCommit = (item: Record<string, unknown>, i: number): string => {
+          const commit = item.commit as Record<string, unknown>;
+          const authorObj = commit.author as Record<string, unknown>;
+          const rawMessage = String(commit.message ?? "");
+          const message = rawMessage
+            .split("\n")[0]
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 140);
+          const author = String(authorObj.name ?? "").trim();
+          const date = String(authorObj.date ?? "").trim();
+          return `  [${i}] message=${message} | author=${author} | date=${date}`;
+        };
+
+        // Try-fit: if every commit fits at title-detail level within budget,
+        // show all of them. Listing tasks ("last N commits") fabricate the
+        // hidden tail when only `previewItems` are visible — the model has
+        // a real recall path but rarely uses it. Showing the full list when
+        // it fits is the structural fix.
+        const allItems = parsed.map((it, i) => renderCommit(it, i)).join("\n");
+        const headerOverhead = 220; // STORED + Type + Preview + coverage hint
+        const showAll = allItems.length + headerOverhead <= budget;
+
+        if (showAll) {
+          const content =
+            `[STORED: ${key} | ${toolName}]\n` +
+            `Type: Array(${parsed.length}) | Schema: commit.message, commit.author.name, commit.author.date\n` +
+            `All ${parsed.length} commits:\n` +
+            allItems +
+            `\n  ✓ Preview includes all commits with exact message/author/date values.`;
+          return { content, stored: { key, value: result } };
+        }
+
         const items = parsed
           .slice(0, previewItems)
-          .map((item, i) => {
-            const commit = item.commit as Record<string, unknown>;
-            const authorObj = commit.author as Record<string, unknown>;
-            const rawMessage = String(commit.message ?? "");
-            const message = rawMessage
-              .split("\n")[0]
-              .replace(/\s+/g, " ")
-              .trim()
-              .slice(0, 140);
-            const author = String(authorObj.name ?? "").trim();
-            const date = String(authorObj.date ?? "").trim();
-            return `  [${i}] message=${message} | author=${author} | date=${date}`;
-          })
+          .map((it, i) => renderCommit(it as Record<string, unknown>, i))
           .join("\n");
-
         const shownCount = Math.min(previewItems, parsed.length);
         const remaining = parsed.length - shownCount;
-        const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
+        const moreStr = `\n  ...${remaining} more`;
         const coverageHint =
-          remaining === 0
-            ? `\n  ✓ Preview includes all commits with exact message/author/date values.`
-            : `\n  — full data is stored. Use recall("${key}", arrayStart: ${shownCount}, arrayCount: ${previewItems}) for remaining commits.`;
+          `\n  — full data is stored. Use recall("${key}", arrayStart: ${shownCount}, arrayCount: ${remaining}) for remaining commits.`;
         const content =
           `[STORED: ${key} | ${toolName}]\n` +
           `Type: Array(${parsed.length}) | Schema: commit.message, commit.author.name, commit.author.date\n` +
-          `Preview (first ${shownCount}):\n` +
+          `Preview (first ${shownCount} of ${parsed.length}):\n` +
           items +
           moreStr +
           coverageHint;
@@ -297,37 +315,57 @@ export function compressToolResult(
             .join(", ")
         : "unknown";
 
+      const renderRecord = (item: Record<string, unknown>, i: number): string => {
+        const pairs = Object.entries(item)
+          .slice(0, 4)
+          .map(([k, v]) => {
+            const val =
+              v !== null && typeof v === "object"
+                ? Object.values(v as object)
+                    .filter((x) => typeof x === "string")
+                    .map(String)[0] ?? "{...}"
+                : String(v).slice(0, 60);
+            return `${k}=${val}`;
+          })
+          .join("  ");
+        return `  [${i}] ${pairs}`;
+      };
+
+      // Try-fit: full coverage at row-summary detail wins over a partial
+      // preview when it fits the budget. Listing tasks ("top N", "all X")
+      // fabricate hidden rows when only `previewItems` are visible — the
+      // model has a recall path but rarely uses it. Showing the full list
+      // when it fits eliminates the fabrication surface entirely.
+      const allItems = (parsed as Array<Record<string, unknown>>)
+        .map((it, i) => renderRecord(it, i))
+        .join("\n");
+      const headerOverhead = 220;
+      const showAll = allItems.length + headerOverhead <= budget;
+
+      if (showAll) {
+        const content =
+          `[STORED: ${key} | ${toolName}]\n` +
+          `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
+          `All ${parsed.length} items:\n` +
+          allItems +
+          `\n  ✓ Preview covers all items — you can use this data directly.`;
+        return { content, stored: { key, value: result } };
+      }
+
       const items = (parsed as Array<Record<string, unknown>>)
         .slice(0, previewItems)
-        .map((item, i) => {
-          const pairs = Object.entries(item)
-            .slice(0, 4)
-            .map(([k, v]) => {
-              const val =
-                v !== null && typeof v === "object"
-                  ? Object.values(v as object)
-                      .filter((x) => typeof x === "string")
-                      .map(String)[0] ?? "{...}"
-                  : String(v).slice(0, 60);
-              return `${k}=${val}`;
-            })
-            .join("  ");
-          return `  [${i}] ${pairs}`;
-        })
+        .map((it, i) => renderRecord(it, i))
         .join("\n");
-
       const shownCount = Math.min(previewItems, parsed.length);
       const remaining = parsed.length - shownCount;
-      const moreStr = remaining > 0 ? `\n  ...${remaining} more` : "";
-      // When the preview covers most/all items, tell the agent it can proceed
-      // without a recall — avoids wasting an iteration.
+      const moreStr = `\n  ...${remaining} more`;
       const coverageHint = remaining <= 2
-        ? `\n  ✓ Preview covers ${remaining === 0 ? "all" : "nearly all"} items — you can use this data directly.`
-        : `\n  — full data is stored. Use segmented recall if needed: recall("${key}", arrayStart: ${shownCount}, arrayCount: ${previewItems}) or recall("${key}", start: 0, maxChars: 1200).`;
+        ? `\n  ✓ Preview covers nearly all items — you can use this data directly.`
+        : `\n  — full data is stored. Use segmented recall if needed: recall("${key}", arrayStart: ${shownCount}, arrayCount: ${remaining}) or recall("${key}", start: 0, maxChars: 1200).`;
       const content =
         `[STORED: ${key} | ${toolName}]\n` +
         `Type: Array(${parsed.length}) | Schema: ${schema}\n` +
-        `Preview (first ${shownCount}):\n` +
+        `Preview (first ${shownCount} of ${parsed.length}):\n` +
         items +
         moreStr +
         coverageHint;

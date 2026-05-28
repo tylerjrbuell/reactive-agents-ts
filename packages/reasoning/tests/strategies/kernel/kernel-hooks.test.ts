@@ -115,6 +115,42 @@ describe("buildKernelHooks", () => {
       expect(event.kernelPass).toBe("test:main");
     });
 
+    it("onAction also publishes ToolCallStarted (with rationale) when callId given", async () => {
+      const { events, eb } = makeMockEventBus();
+      const hooks = buildKernelHooks(eb);
+      const state = baseState();
+      const rationale = { why: "need fresh price data", confidence: 0.85 } as const;
+
+      await Effect.runPromise(
+        hooks.onAction(state, "web-search", '{"query":"effect-ts"}', {
+          callId: "tc-42",
+          rationale,
+        }),
+      );
+
+      // Both events fire: ReasoningStepCompleted (existing) + ToolCallStarted (new).
+      // Without ToolCallStarted, kernel-driven strategies (reactive/adaptive)
+      // silently drop tool-selection rationale from debrief.rationale[].
+      expect(events).toHaveLength(2);
+      const tcs = events.find((e) => (e as { _tag: string })._tag === "ToolCallStarted") as Record<string, unknown> | undefined;
+      expect(tcs).toBeDefined();
+      expect(tcs!.taskId).toBe("task-1");
+      expect(tcs!.toolName).toBe("web-search");
+      expect(tcs!.callId).toBe("tc-42");
+      expect(tcs!.rationale).toEqual(rationale);
+    });
+
+    it("onAction without callId does NOT emit ToolCallStarted (back-compat)", async () => {
+      const { events, eb } = makeMockEventBus();
+      const hooks = buildKernelHooks(eb);
+      const state = baseState();
+
+      await Effect.runPromise(hooks.onAction(state, "web-search", '{"query":"x"}'));
+
+      expect(events).toHaveLength(1);
+      expect((events[0] as { _tag: string })._tag).toBe("ReasoningStepCompleted");
+    });
+
     it("onObservation publishes ReasoningStepCompleted AND ToolCallCompleted", async () => {
       const { events, eb } = makeMockEventBus();
       const hooks = buildKernelHooks(eb);

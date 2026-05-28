@@ -61,16 +61,46 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
         } : {}),
       }),
 
-    onAction: (state: KernelState, tool: string, input: string): Effect.Effect<void, never> =>
-      publishReasoningStep(eventBus, {
-        _tag: "ReasoningStepCompleted",
-        taskId: state.taskId,
-        strategy: state.strategy,
-        step: state.steps.length + 1,
-        totalSteps: 0,
-        action: JSON.stringify({ tool, input }),
-        kernelPass: getKernelPass(state),
-      }),
+    onAction: (
+      state: KernelState,
+      tool: string,
+      input: string,
+      opts?: {
+        readonly callId?: string;
+        readonly rationale?: import("@reactive-agents/core").Rationale;
+      },
+    ): Effect.Effect<void, never> => {
+      const effects: Effect.Effect<void, never>[] = [
+        publishReasoningStep(eventBus, {
+          _tag: "ReasoningStepCompleted",
+          taskId: state.taskId,
+          strategy: state.strategy,
+          step: state.steps.length + 1,
+          totalSteps: 0,
+          action: JSON.stringify({ tool, input }),
+          kernelPass: getKernelPass(state),
+        }),
+      ];
+      // Symmetric to `ToolCallCompleted` emitted at onObservation. Without
+      // this `ToolCallStarted` emission the kernel-driven strategies
+      // (reactive / adaptive) silently drop tool-selection rationale —
+      // execution-engine's debrief subscriber only sees the event from
+      // plan-execute + runtime inline-act, so `debrief.rationale[]` lacks
+      // all tool entries on reactive runs.
+      if (opts?.callId) {
+        effects.push(
+          publishReasoningStep(eventBus, {
+            _tag: "ToolCallStarted",
+            taskId: state.taskId,
+            toolName: tool,
+            callId: opts.callId,
+            iteration: state.iteration,
+            ...(opts.rationale ? { rationale: opts.rationale } : {}),
+          }),
+        );
+      }
+      return Effect.all(effects).pipe(Effect.asVoid);
+    },
 
     onObservation: (state: KernelState, result: string, success: boolean): Effect.Effect<void, never> => {
       const lastStep = state.steps[state.steps.length - 1];

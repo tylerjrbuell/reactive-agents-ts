@@ -406,7 +406,7 @@ export function handleActing(
             toolCallId: tc.id,
             observationResult: makeObservationResult(tc.name, false, blockedMsg),
           });
-          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
             blockedMsg,
@@ -431,7 +431,7 @@ export function handleActing(
             toolCallId: tc.id,
             observationResult: makeObservationResult(tc.name, success, content),
           });
-          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
             content,
@@ -492,7 +492,7 @@ export function handleActing(
               observationResult: makeObservationResult("final-answer", true, finalObsContent),
             });
 
-            yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+            yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
             yield* hooks.onObservation(
               transitionState(state, { steps: [...allSteps, actionStep] }),
               finalObsContent,
@@ -543,7 +543,7 @@ export function handleActing(
             observationResult: makeObservationResult("final-answer", false, rejectObs),
           });
 
-          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
             rejectObs,
@@ -579,7 +579,7 @@ export function handleActing(
                 toolCallId: batchCall.id,
                 observationResult: makeObservationResult(batchCall.name, !guardFailed, guardOutcome.observation),
               });
-              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
+              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
               yield* hooks.onObservation(
                 transitionState(state, { steps: [...allSteps, blockedActionStep] }),
                 guardOutcome.observation,
@@ -607,7 +607,7 @@ export function handleActing(
               allSteps = [...allSteps, actionStep];
               newToolsUsed.add(batchCall.name);
 
-              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
+              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
               const errContent = `[Tool "${batchCall.name}" requested but ToolService is not available]`;
               const errObsStep = makeStep("observation", errContent, {
                 toolCallId: batchCall.id,
@@ -635,7 +635,7 @@ export function handleActing(
             allSteps = [...allSteps, actionStep];
             actionIndexByCallId.set(batchCall.id, allSteps.length - 1);
             newToolsUsed.add(batchCall.name);
-            yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments));
+            yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
           }
 
           const executionResults = yield* Effect.all(
@@ -782,7 +782,7 @@ export function handleActing(
             toolCallId: tc.id,
             observationResult: makeObservationResult(tc.name, !guardFailed, guardOutcome.observation),
           });
-          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
             guardOutcome.observation,
@@ -808,7 +808,7 @@ export function handleActing(
         allSteps = [...allSteps, actionStep];
         newToolsUsed.add(tc.name);
 
-        yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments));
+        yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
 
         if (toolService._tag === "None") {
           const errContent = `[Tool "${tc.name}" requested but ToolService is not available]`;
