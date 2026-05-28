@@ -1,209 +1,274 @@
 ---
-title: WS-1 — Release-Flow Integrity
+title: WS-1 — Release-Flow Residual Fixes (REVISED post-warden-audit)
 date: 2026-05-28
-status: pending
-master-plan: 2026-05-28-canonical-refactor.md
+revised: 2026-05-28 (evening)
+status: pending execution
+master-plan: 2026-05-28-canonical-refactor.md (§4 RC-5 REVISED)
 architecture-model: 2026-05-28-canonical-architecture-model.md
-root-cause-closed: RC-5 (release stamping in ephemeral CI runner)
-gh-issues-closed: [#159 (P0), #165]
-authoritative-anchor: master-plan §3.4 RC-5 + §3.6 first-hand verification
-owner-warden: release-warden
-session-budget: 1 day (~4-6 hours active work + 1 release dry run)
-risk: LOW (isolated, no kernel/runtime semantics touched, full rollback path)
+audit-evidence: wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md (release-warden Phase 0)
+root-cause-closed: RC-5 (residual fixes only — premise of original framing invalidated)
+gh-issues-closed: [#159 (close as invalid), #165 (orphan v0.10.7 draft)]
+gh-issues-touched: [F2 typecheck-fix, F3 judge-server-lockstep, F4 release.ts ordering — file as separate issues with `audit-2026-05-28-release-warden` label OR fold into this WS PR]
+authoritative-anchor: warden audit findings F2/F3/F4 + first-hand reproduction
+owner: claude main thread + user authorization
+session-budget: ~30 min execution + verification
+risk: LOW (4 small, isolated, well-bounded fixes)
 ---
 
-# WS-1 — Release-Flow Integrity
+# WS-1 — Release-Flow Residual Fixes (REVISED)
+
+## Revision Note
+
+**Original WS-1 thin spec scope was wrong.** Release-warden Phase 0 audit 2026-05-28 invalidated three premises:
+
+1. ❌ "Workspace pkg.jsons at 0.10.6 = drift defect" — ✅ Actually intentional steady-state per `release.ts:205-208` comment ("so `cat VERSION` always matches npm @latest")
+2. ❌ "Git tags max at v0.9.0; no v0.10.x/v0.11.x" — ✅ All v0.10.0-v0.11.1 tags exist on origin already, deref'ing to npm gitHead SHAs
+3. ❌ "Release flow structurally broken; needs rebuild" — ✅ Works in steady state; 4 small residual issues identified
+
+This revision aligns scope with reality. See master plan §3.4 RC-5 REVISED + §11 amendment 4.
+
+---
 
 ## Goal (one sentence)
 
-Move version stamping from CI ephemeral runner to local pre-tag step so workspace `packages/*/package.json` versions, root `VERSION`, npm published artifact, and git tags are structurally guaranteed to match.
+Fix the 4 residual release-flow issues identified by warden audit (typecheck RED at HEAD, judge-server inconsistency, release.ts auth-before-drift ordering, orphan GH draft) AND close #159 as invalid framing.
 
 ## Anchor
 
-Master plan §4 RC-5: "Release stamping happens in CI ephemeral runner, not in local pre-tag step. Mutations die with the runner." This violates the trust differentiator at the release surface: a `bun run release:dry 0.12.0` would today fail the drift gate AGAINST main even though npm shows 0.11.1 published.
+- **Master plan §4 RC-5 REVISED:** four small issues, not a structural rebuild
+- **Warden audit** `wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md` (F1-F5 findings, gate results)
+- **Architecture model §17 mapping:** release-flow is L4 surface concern; hygiene workstream
 
 ## Current State (first-hand verified 2026-05-28)
 
 ```
-root VERSION:                          0.11.1
-npm @reactive-agents/core version:     0.11.1
-packages/core/package.json:            0.10.6
-packages/llm-provider/package.json:    0.10.6
-packages/memory/package.json:          0.10.6
-packages/reasoning/package.json:       0.10.6
-packages/tools/package.json:           0.10.6
-packages/runtime/package.json:         0.10.6
-packages/reactive-agents/package.json: 0.10.6
-packages/compose/package.json:         0.10.6
-... (35 packages total — ALL at 0.10.6 except judge-server at 0.9.5)
-git tags max:                          v0.9.0 (no v0.10.x, no v0.11.x)
+✅ Origin tags v0.10.6 + v0.11.1 — present, deref to npm gitHead
+✅ Workspace pkg.json lag = intentional design (release.ts:205-208 documents)
+✅ Build green (turbo 38/38)
+✅ Tests green (5750 pass / 23 skip / 0 fail)
+❌ Typecheck RED — @reactive-agents/verification 8 TS2345 errors
+❌ judge-server unpublished (npm view 404) + not lockstep (0.9.5 vs 0.10.6 floor)
+❌ release.ts:42-66 npm whoami bails before drift inspection
+❌ Orphan v0.10.7 GH draft release
 ```
 
-The CI script at `release.ts:197-208` stamps inside the runner; the mutated files are not committed back to main. The drift compounds at every release.
+## Scope IN — 5 small fixes
 
-## Scope IN
+### Fix 1 — F2 typecheck stubs (the blocker)
 
-### Phase 1 — Restructure `release.ts` for local-stamp pattern
+**Files touched:** `packages/verification/tests/hallucination-detection.test.ts` + `packages/verification/tests/layers.test.ts`
 
-**Files touched:** `scripts/release.ts`
+**Lines:** 145, 162, 176, 192 (hallucination) + 76, 97, 118, 139 (layers) — 8 mock objects total
 
-**Change:** Move the stamping logic OUT of the ephemeral path. Local invocation:
-
-```bash
-bun run release 0.12.0
+**Change:** Each mock currently shapes:
+```typescript
+{ complete: (_req: any) => Effect.succeed({ content: "..." }) }
+```
+Add the missing `embed` method to match `VerificationLLM` interface:
+```typescript
+{
+  complete: (_req: any) => Effect.succeed({ content: "..." }),
+  embed: (_texts: readonly string[], _model?: string) => Effect.succeed([]),
+}
 ```
 
-MUST:
-1. Read `0.12.0` from CLI arg
-2. Stamp every `packages/*/package.json` `version` field to `0.12.0` (excluding `judge-server` if it stays on its own track — verify per policy)
-3. Update root `VERSION` to `0.12.0`
-4. Update workspace `package.json` references that pin versions
-5. `bun install` to sync lockfile
-6. `bun run build && bun run typecheck && bun test` to gate
-7. `bun run release:dry 0.12.0` to confirm no drift remains
-8. `git add` modified package.jsons + root VERSION + bun.lock
-9. `git commit -m "chore(release): stamp 0.12.0"`
-10. `git push origin main`
-11. `git tag v0.12.0`
-12. `git push origin v0.12.0`
+Pre-verify shape: `grep "interface VerificationLLM" packages/verification/src/` → confirm `embed`'s exact signature. Use matching signature in stubs. Use `Effect.succeed([])` or `Effect.die(new Error("not implemented"))` per test intent.
 
-After this, CI's `publish.yml` triggers on the tag and runs build + publish only — no mutations.
+**Verification:** `cd packages/verification && bun run typecheck` exits 0.
 
-### Phase 2 — Simplify `publish.yml`
+### Fix 2 — F3 judge-server private + lockstep
 
-**Files touched:** `.github/workflows/publish.yml`
-
-**Change:** Remove the "Sync VERSION to main" step (publish.yml:135-149) that commits only `VERSION` but not package.jsons. Replace with assertion: confirm tag commit's `packages/*/package.json` `version` field matches the tag (belt-and-suspenders).
-
-### Phase 3 — Belt-and-suspenders gate in `test-clean-install.ts`
-
-**Files touched:** `scripts/test-clean-install.ts` (per HS-H-04 audit recommendation)
-
-**Change:** After clean install, assert published version matches the tag's expected version. Fails the workflow if any drift slips through.
-
-### Phase 4 — Backfill workspace pkg.jsons + delete orphan draft
-
-**Files touched:** All 35 `packages/*/package.json` files. GitHub release page (manual).
+**Files touched:** `packages/judge-server/package.json`
 
 **Change:**
-1. Stamp every workspace `packages/*/package.json` to `0.11.1` (current published) via the new `release.ts` flow
-2. Commit + push the stamps (NO tag — this is backfill catching up reality to npm)
-3. CHANGELOG backfill entries for v0.10.6 → v0.11.1 in their respective package CHANGELOG.md files (per `feedback_npm_version_drift`)
-4. Delete orphan `v0.10.7` draft GH release (#165) via `gh release delete v0.10.7 --yes`
+1. Add `"private": true` field
+2. Bump `"version": "0.9.5"` → `"version": "0.10.6"` (lockstep with workspace floor)
+
+**Verification:**
+- `grep -E '"(private|version)"' packages/judge-server/package.json` shows both fields correctly set
+- Workspace consumers of judge-server (if any) continue to resolve (verify via `grep -r "@reactive-agents/judge-server" packages apps` and confirm workspace:* refs resolve)
+- `bun install` runs clean (lockfile regenerates if needed)
+
+### Fix 3 — F4 release.ts ordering (drift check before auth)
+
+**Files touched:** `scripts/release.ts` (~lines 42-66)
+
+**Change:** Move the workspace-version-drift inspection BEFORE the `npm whoami` auth gate so `bun run release:dry <ver>` functions as a drift gate without requiring login.
+
+**Read first:** Confirm current sequence at `scripts/release.ts:42-66`. Likely shape: `auth check → drift check → other gates`. Target: `drift check → auth check (only for non-dry runs) → other gates`. Dry-run path skips auth entirely.
+
+**Verification:**
+- `bun run release:dry 0.12.0` exits with a drift-specific message (or "clean — no drift detected") WITHOUT requiring npm login
+- `bun run release 0.12.0` (real, NOT dry) still requires `npm whoami` (auth still gated for actual publishing)
+
+### Fix 4 — #165 orphan v0.10.7 draft cleanup
+
+**Command:** `gh release delete v0.10.7 --yes`
+
+**Verification:** `gh release list | grep v0.10.7` returns empty.
+
+### Fix 5 — #159 close as invalid
+
+**Command:** `gh issue close 159 --comment "Closing as invalid framing. Release-warden Phase 0 audit 2026-05-28 (wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md) verified: workspace packages/*/package.json lag at 0.10.6 vs root VERSION 0.11.1 is the intentional steady-state per release.ts:205-208 comment (\"so cat VERSION always matches npm @latest (repo package.json stays unbumped by the tag-driven flow)\"). Git tags v0.10.0-v0.11.1 exist on origin and deref to the correct npm gitHead SHAs. Release flow works as designed. Residual issues (F2 typecheck, F3 judge-server, F4 release.ts ordering, #165 orphan draft) addressed in WS-1 follow-up bundle."`
 
 ## Scope OUT (non-goals — flagged for refusal)
 
-- Touching ANY package's source code (no behavior change)
-- Changing the semantic of `release:dry` itself (only how it's invoked)
-- Touching changesets (already removed May 2026)
-- Touching CI for non-release workflows (PR CI stays as-is)
-- Tagging a new version (this WS prepares the rails; an actual v0.12.0 release is downstream)
+- Touching ANY production source code (only test stubs + judge-server config + release script)
+- Stamping workspace pkg.jsons to 0.11.1 (premise was wrong — pkg.json lag is intentional)
+- Creating v0.10.x or v0.11.x tags (already exist)
+- Touching `.github/workflows/publish.yml` (not broken — actually-working flow per audit)
+- Touching `scripts/test-clean-install.ts` (premise was wrong — no belt-and-suspenders needed for non-existent drift)
+- npm publishing judge-server (user adjudicated: keep internal/private)
+- Major release.ts refactor (just move 2 lines — drift check before auth)
 
 ## Pre-Conditions
 
-- `main` branch is current with `origin/main`
-- Build green (`bunx turbo run build` 38/38)
-- Tests green (`bun test` workspace pass)
-- No uncommitted changes in tree
-- `npm view @reactive-agents/core version` returns 0.11.1 (current truth)
-- `node`, `bun`, `gh` CLI all available locally
+- `main` current with `origin/main` (verified: 8 commits ahead at session entry; pushed via WS-1 prep)
+- Build green (verified: 38/38)
+- Tests green (verified: 5750 pass / 23 skip)
+- Typecheck currently RED (this WS fixes that)
+- `gh` CLI authenticated (`gh auth status` returns success)
 
 ## Tests (RED → GREEN)
 
-### RED first
+### RED state (current baseline at HEAD)
 
-1. Manual repro: `bun run release:dry 0.12.0` against current main MUST fail with drift error
-2. Snapshot the failure message — this is the RED state
+| Gate | Current |
+|---|---|
+| `cd packages/verification && bun run typecheck` | ❌ 8 TS2345 errors |
+| `npm view @reactive-agents/judge-server version` | ❌ 404 (unpublished) |
+| `grep '"private"' packages/judge-server/package.json` | ❌ no match |
+| `bun run release:dry 0.12.0` (without npm login) | ❌ bails at `npm whoami` before drift logic |
+| `gh release list \| grep v0.10.7` | ❌ orphan present |
+| `gh issue view 159 --json state -q .state` | ❌ `OPEN` |
 
-### GREEN gates per phase
+### GREEN state (post-WS-1)
 
-| Phase | Verification command | Expected pass |
-|---|---|---|
-| 1 | `bun run release 0.11.1 --dry` (no-op) | exits clean; no diff to commit |
-| 1 | `bun run release 0.12.0-test --dry` (preview) | shows planned mutations; no actual writes |
-| 2 | `cat .github/workflows/publish.yml \| grep -c "Sync VERSION to main"` | 0 |
-| 2 | `cat .github/workflows/publish.yml \| grep -c "assert.*version.*tag"` | ≥1 |
-| 3 | `bun run scripts/test-clean-install.ts --target 0.11.1` | exits 0 |
-| 4 | `grep '"version": "0.11.1"' packages/*/package.json \| wc -l` | 35 (matches package count, allowing for judge-server policy) |
-| 4 | `git tag --list v0.11.*` | (no tag — backfill is not a re-release) |
-| 4 | `gh release list \| grep v0.10.7` | (empty) |
+| Gate | Expected |
+|---|---|
+| `cd packages/verification && bun run typecheck` | ✅ exits 0 |
+| `bunx turbo run typecheck` workspace-wide | ✅ exits 0 |
+| `grep '"private": true' packages/judge-server/package.json` | ✅ 1 match |
+| `grep '"version": "0.10.6"' packages/judge-server/package.json` | ✅ 1 match |
+| `bun run release:dry 0.12.0` (without npm login) | ✅ exits with drift-specific output (clean or specific drift); does NOT bail on auth |
+| `bun run release 0.12.0` (non-dry, no login) | ✅ bails on auth (expected — actual publish requires login) |
+| `gh release list \| grep v0.10.7` | ✅ empty |
+| `gh issue view 159 --json state -q .state` | ✅ `CLOSED` |
 
 ### Existing tests that MUST still pass
 
-- All workspace `bun test` (3219+ tests at baseline)
-- `bunx turbo run build` 38/38
-- `bun run typecheck` clean
+- All 5750+ workspace tests pass (`bun test`)
+- Build 38/38 (`bunx turbo run build`)
+- No regression in any package's test suite
 
-## Verification Protocol (commands + counts captured in PR body)
+## Verification Protocol
 
 ```bash
-# Before
-echo "Root VERSION: $(cat VERSION)"
-echo "npm published: $(npm view @reactive-agents/core version)"
-echo "pkg.json versions (unique):"
-grep '"version"' packages/*/package.json | awk -F'"' '{print $4}' | sort -u
-echo "Recent tags:"
-git tag | grep -E '^v0\.(1[01]|9)\.' | tail -5
+# Before (capture RED state)
+echo "=== Pre-WS-1 baseline ==="
+cd packages/verification && bun run typecheck 2>&1 | grep -c "error TS"     # expect: ≥8
+cd ../..
+npm view @reactive-agents/judge-server version 2>&1 | grep -c "404"          # expect: ≥1
+grep -c '"private"' packages/judge-server/package.json                       # expect: 0
+git status -s                                                                # expect: empty (clean)
 
-# Apply phases 1-3 changes (release.ts + publish.yml + test-clean-install.ts)
-git checkout -b refactor/ws-1-release-flow-integrity
-# ... edit release.ts, publish.yml, test-clean-install.ts ...
+# Apply Fix 1 (verification test stubs) + Fix 2 (judge-server config)
+# Apply Fix 3 (release.ts ordering)
+# (commit + push branch)
 
-# Run dry preview
-bun run release 0.12.0-preview --dry  # MUST exit clean
+# After (capture GREEN state)
+echo "=== Post-WS-1 ==="
+cd packages/verification && bun run typecheck 2>&1 | grep -c "error TS"     # expect: 0
+cd ../..
+bunx turbo run typecheck 2>&1 | tail -3                                      # expect: success
+grep '"private": true' packages/judge-server/package.json                    # expect: 1 match
+grep '"version": "0.10.6"' packages/judge-server/package.json                # expect: 1 match
+bun run release:dry 0.12.0 2>&1 | head -10                                   # expect: drift output (no whoami bail)
 
-# Apply phase 4 backfill (NOT in this PR — separate commit)
-bun run release 0.11.1  # this will stamp + commit + push (only the stamp commit, no tag)
-
-# After
-echo "pkg.json versions post-backfill:"
-grep '"version"' packages/*/package.json | awk -F'"' '{print $4}' | sort -u  # MUST show only 0.11.1 (and judge-server's policy)
-
-# Delete orphan draft
+# Apply Fix 4 (#165 cleanup) + Fix 5 (#159 close)
 gh release delete v0.10.7 --yes
+gh issue close 159 --comment "..." (see Fix 5)
+gh release list | grep -c v0.10.7                                            # expect: 0
+gh issue view 159 --json state -q .state                                     # expect: CLOSED
+
+# Full gate
+bun test 2>&1 | tail -3                                                      # expect: ≥5750 pass / 0 fail
+bunx turbo run build 2>&1 | tail -3                                          # expect: 38/38
 ```
 
 ## Done Criteria (falsifiable)
 
-- [ ] `grep '"version": "0.11.1"' packages/*/package.json | wc -l` == 35 (or 34 if judge-server has policy split)
-- [ ] `git tag --list v0.9.* v0.10.* v0.11.*` shows v0.9.0 + v0.10.6 + v0.11.1 (matching npm published artifacts; tags catch up to reality)
-- [ ] `bun run release:dry 0.12.0` exits clean (zero drift gate violations)
-- [ ] `.github/workflows/publish.yml` has zero "Sync VERSION to main" mutations
-- [ ] `gh release list` shows no orphan v0.10.7 draft
-- [ ] All 3219+ tests pass
-- [ ] Build 38/38 green
-- [ ] PR body cites every grep + count above
+### Fix 1 — F2 typecheck
+
+- [ ] `cd packages/verification && bun run typecheck` exits 0
+- [ ] `bunx turbo run typecheck` workspace-wide exits 0
+- [ ] No new test logic changed — only `embed` stub added to existing mocks
+
+### Fix 2 — F3 judge-server
+
+- [ ] `packages/judge-server/package.json` has `"private": true`
+- [ ] `packages/judge-server/package.json` has `"version": "0.10.6"`
+- [ ] No npm publish triggered (since `private: true`)
+- [ ] `bun install` runs clean
+
+### Fix 3 — F4 release.ts ordering
+
+- [ ] `bun run release:dry 0.12.0` runs the drift check without requiring `npm whoami`
+- [ ] `bun run release 0.12.0` (non-dry) still requires auth (no regression to actual publish gate)
+
+### Fix 4 — #165 cleanup
+
+- [ ] `gh release list` shows no v0.10.7 entry
+- [ ] No tag v0.10.7 ever materialized (it was draft-only)
+
+### Fix 5 — #159 close
+
+- [ ] Issue closed with the comment text above
+- [ ] Comment cites warden audit report path
+
+### Cross-cutting
+
+- [ ] All 5750+ tests pass
+- [ ] Build 38/38
+- [ ] Typecheck clean workspace-wide
+- [ ] PR body cites before/after for each fix's verification gate
+- [ ] No new `as any` or `as unknown as` introduced
 
 ## Rollback Plan
 
-Single revert commit reverts release.ts + publish.yml + test-clean-install.ts changes. Workspace pkg.json backfill stays committed (it represents truth catching up to reality). Tag backfill stays. Net: rollback restores the old (broken) CI pattern but keeps reality-truth alignment on main.
+Each fix is independent and rollback-isolated:
 
-If catastrophic (e.g. release.ts has a destructive bug): revert + immediately re-stamp pkg.jsons + push. Tagging is gated on local CLI.
+- **Fix 1 rollback:** revert test file changes; typecheck returns to RED
+- **Fix 2 rollback:** unset `private` + restore `0.9.5` version; judge-server returns to prior inconsistent state
+- **Fix 3 rollback:** revert release.ts changes; `release:dry` returns to bailing on auth
+- **Fix 4 rollback:** `gh release create v0.10.7 --draft` (recreate orphan — unlikely needed)
+- **Fix 5 rollback:** `gh issue reopen 159`
+
+Per-fix commits make granular rollback trivial. PR is one logical bundle but commits are atomic per fix.
 
 ## Evidence Artifact
 
-`wiki/Research/Refactor-Reports/2026-05-28-ws-1-release-flow.md` containing:
+`wiki/Research/Refactor-Reports/2026-05-28-ws-1-residual-fixes.md` containing:
 
-- Before/after `grep + wc -l` snapshots
-- The first successful `bun run release:dry 0.12.0` exit-clean output
-- The first successful clean release dry-run end-to-end output
-- Confirmation of #159 + #165 close
+- Before/after gate output for each fix
+- Confirmation that warden audit findings F2, F3, F4, #165, #159 are addressed
+- Reference to the warden audit baseline at `wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md`
 
-## Why This Workstream Is First
+## Execution Path
 
-- Self-contained (no kernel/runtime semantics touched)
-- P0 blocker for any future release
-- Cheapest unblocker (≤1 day)
-- Failure mode is bounded (single revert returns status quo)
-- Subsequent WSes ship behavior changes — they need a working release flow to validate end-to-end
+Original WS-1 brief was rejected by release-warden (correctly — outside its authority). This revision routes through claude main thread + user authorization:
 
-## Owner + Handoff
-
-`release-warden` dispatch via Agent tool, with MissionBrief input. Warden produces UpwardReport on completion. Main thread reviews UpwardReport, runs the validation gates in `Verification Protocol`, merges PR.
+1. Claude applies Fix 1 (test stubs — `Edit` tool) and Fix 2 (judge-server config — `Edit`) on branch `refactor/ws-1-residual-fixes`
+2. Claude applies Fix 3 (release.ts ordering — `Edit`) carefully — read full release.ts:1-100 first to confirm exact ordering target
+3. Claude commits with conventional message
+4. Claude runs verification gates locally; captures evidence
+5. User authorizes Fix 4 (`gh release delete v0.10.7 --yes`) + Fix 5 (`gh issue close 159 --comment ...`)
+6. Claude pushes branch; opens PR with verified-by table; closes #159 + #165 references in PR body
 
 ## Cross-Reference
 
-- Master plan: `wiki/Planning/Implementation-Plans/2026-05-28-canonical-refactor.md` §4 RC-5, §6.2 WS-1 summary
-- Architecture model: §1 (layered dependency rule applies — release is L4 surface concern), §17 mapping
-- Related closed issues: #159 P0, #165
-- Memory cross-ref: `feedback_npm_version_drift`, `project_release_flow`
+- Master plan: `wiki/Planning/Implementation-Plans/2026-05-28-canonical-refactor.md` §3.4 RC-5 REVISED, §4 RC-5 table row, §6.2 WS-1 summary REVISED, §10 #159 mapping
+- Architecture model: §17 mapping (L4 surface concern)
+- Warden audit: `wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md` (findings F1-F5)
+- Related closed: #159 (invalid), #165 (orphan), F2 typecheck-fix, F3 judge-server-lockstep, F4 release.ts-ordering
+- Memory: `feedback_npm_version_drift` (refined — workspace lag IS the design)

@@ -344,17 +344,27 @@ The honesty debt is **real but smaller than reported**. The audit's count-inflat
 
 **Cited:** #168, #161, #171, HS-B-01..09, first-hand counts 2026-05-28.
 
-#### **RC-5 — Release-flow drift (P0, first-hand confirmed)**
+#### **RC-5 — REVISED (audit-driven correction, 2026-05-28 evening)**
 
-- ✅ `release.ts:197–208` stamps `packages/*/package.json` in ephemeral CI runner; mutations die with runner.
-- ✅ Root `VERSION=0.11.1` (verified `cat VERSION`)
-- ✅ npm published `@reactive-agents/core` at 0.11.1 (verified `npm view`)
-- ✅ All 35 `packages/*/package.json` workspace versions at **0.10.6** (verified `grep "version" packages/*/package.json`)
-- ✅ Local + remote git tags max at `v0.9.0` (verified `git tag | tail`); no v0.10.x or v0.11.x tags
-- ✅ Drift is structural, not accidental
-- Orphan v0.10.7 GH draft release residue (#165)
+**Original framing INVALID.** The release-warden Phase 0 audit (`wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md`) corrected three premises this plan and the prior health-sweep had wrong:
 
-**Cited:** #159 P0 + #165, HS-F-04, HS-H audit, first-hand 2026-05-28.
+| Original claim | Reality |
+|---|---|
+| Workspace `packages/*/package.json` at 0.10.6 = drift defect | **Intentional steady-state per `release.ts:205-208` comment** — "so `cat VERSION` always matches npm @latest (repo package.json stays unbumped by the tag-driven flow)" |
+| Git tags max at v0.9.0; no v0.10.x or v0.11.x | **v0.10.0–v0.10.6 + v0.11.0–v0.11.1 tags exist locally AND on origin**, deref'ing to the exact npm `gitHead` SHAs (cross-package verified) |
+| Release flow structurally broken | **Release flow works in steady state.** Four secondary defects exist but no structural rebuild needed |
+
+**Actual issues (P1, not P0):**
+
+- **F2 (NEW):** Typecheck RED at HEAD. `@reactive-agents/verification` test files reference stale `VerificationLLM` shape missing `embed`. 8 TS2345 errors across `tests/hallucination-detection.test.ts:145,162,176,192` + `tests/layers.test.ts:76,97,118,139`. Same pattern: mock objects declare `complete` but not `embed`. Blocks any future v0.12.0 tag-cut under release-warden gate.
+- **F3 (NEW):** `@reactive-agents/judge-server` at workspace version 0.9.5; never published to npm (404); not lockstep with other packages. User adjudication 2026-05-28: mark `private: true` + stamp to 0.10.6.
+- **F4 (NEW):** `release.ts` bails at `npm whoami` (line 65-66) BEFORE drift inspection logic runs. Cannot function as drift gate without `npm login`. Either run after login OR refactor script (drift check before auth).
+- **#165:** Orphan v0.10.7 GH draft release residue. Trivial delete.
+- **#159:** Invalid as framed — workspace lag is intentional steady-state. Close with comment.
+
+**Cited:** Release-warden audit 2026-05-28 (`wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md`); first-hand reproduction of F2 (`bun run typecheck` in `packages/verification`) + F3 (`npm view @reactive-agents/judge-server` → 404) + F1 (`git ls-remote --tags origin v0.10.6 v0.11.1` → both present).
+
+**Implication:** RC-5 was overstated in priority (P0 → P1 in reality) and overscoped in mechanism (structural rebuild → 4 small fixes). The CI ephemeral-runner stamping pattern at `release.ts:197-208` IS the design — the tag-driven flow leaves workspace pkg.jsons unbumped on purpose so `VERSION` is the source-of-truth single field. This was specified in the comment block all along; prior audits read the symptom without reading the rationale.
 
 ### 3.6 First-Hand Deep-Audit Findings (2026-05-28 amendment 2)
 
@@ -479,7 +489,7 @@ The five clusters above each have a **single structural mechanism** that generat
 | **RC-2** | **`act/` capability dir conflates the Act capability (`act.ts` + `guard.ts`, ~1495 LOC) with tool substrate (`tool-execution.ts` + `tool-parsing.ts` + `tool-gating.ts` + `tool-capabilities.ts`, ~1558 LOC, 9 cross-capability inbound).** Other capabilities import tool primitives by reaching into `act/`'s directory — that's what creates the mesh edges. The `leaf principle` is unenforced because there's no separation between "capability" and "primitives capabilities consume." | Extracting tool-* → `kernel/substrate/tools/` (or back into `@reactive-agents/tools`): `act/` 3053→~1495 LOC; 9 of 38 cross-edges disappear; act↔reason and reason↔verify cycles likely collapse; act↔decide may remain as one legitimate cross-capability dependency worth its own structural analysis. |
 | **RC-3** | **There is no enforced ship-time invariant that every declared surface element has a live emit + consumer in the same commit.** | Compose tags get callers (verified). `observe` (zero callers verified) either gets a caller or is deleted. M12 hooks get wired or removed. `confidenceFloor` ships or unships. |
 | **RC-4** | **The Effect-TS error channel is used as `unknown` instead of a tagged-error algebra; swallow happens at type level, not at code level.** Lying comments and `console.warn` bypasses are the same disease in different syntax. | 34 silent-swallow sites (corrected count) become explicit `Effect<X, KnownError>` declarations. 27 `console.warn` bypass sites route through ObservabilityService. Doc-drift gets a CI gate. |
-| **RC-5** | **Release stamping happens in CI ephemeral runner, not in local pre-tag step.** Mutations die with the runner. | Local `release.ts` stamps + commits + pushes BEFORE tag. CI publish becomes build+publish-only. Drift becomes structurally impossible. |
+| **RC-5 (REVISED)** | **Premise was wrong; release flow works in steady state.** Workspace pkg.json lag at 0.10.6 is intentional design per `release.ts:205-208` comment (so `VERSION` is sole source of truth matching npm @latest). Tags v0.10.x and v0.11.x exist on origin already. Actual residual issues: typecheck RED at HEAD (F2 — verification test files missing `embed` stub), judge-server inconsistency (F3 — mark `private: true` + stamp to 0.10.6), `release.ts` ordering (F4 — `npm whoami` gate trips before drift logic), #165 orphan v0.10.7 draft. | F2/F3/F4 + #165 fixes ship as small bundle; #159 closes as invalid; release flow continues to work as designed. |
 
 ---
 
@@ -577,9 +587,19 @@ session-budget: <N hours / N days>
 
 ### 6.2 Workstream summaries (one paragraph each)
 
-#### WS-1 — Release-Flow Integrity (RC-5)
+#### WS-1 — Release-Flow Residual Fixes (RC-5 REVISED — small bundle)
 
-Move version stamping out of CI runner. `release.ts` runs locally: stamps `packages/*/package.json` + CHANGELOG, commits, pushes, THEN tags. `publish.yml` becomes build+publish-only; no mutations. Add `test-clean-install.ts` target-version assertion (HS-H-04) as belt-and-suspenders. Backfill workspace pkg.jsons to 0.11.1. Delete orphan v0.10.7 draft (#165). Owner: release-warden (per MissionBrief).
+**Scope revised after warden audit 2026-05-28** (original premise invalidated; see §3.4 RC-5 REVISED). New scope:
+
+1. **F2 typecheck fix** — add `embed: () => Effect.succeed([])` (or matching stub) to 8 mock `VerificationLLM` objects in `packages/verification/tests/{hallucination-detection,layers}.test.ts`
+2. **F3 judge-server lockstep** — set `"private": true` in `packages/judge-server/package.json` + bump version 0.9.5 → 0.10.6
+3. **F4 release.ts ordering** — move drift inspection BEFORE `npm whoami` gate in `scripts/release.ts:42-66` so `release:dry` functions without auth
+4. **#165 cleanup** — `gh release delete v0.10.7 --yes`
+5. **#159 close** — comment + close as invalid framing
+
+NOT in WS-1 scope (premise invalidated): pkg.json stamping (intentional steady-state); tag backfill (already exists); publish.yml rebuild (not broken).
+
+Owner: claude main thread + user authorization (release-warden's manifest is GATE/AUDIT only — refused execution dispatch with cause). Risk: LOW. Budget: ~30 min execution.
 
 #### WS-2 — Runtime Layer Composition + Agent-Facade Type Truth (RC-1)
 
@@ -777,7 +797,7 @@ Out of scope. Each has its own existing or proposed home; not blurring into this
 | #122 (cross-session default-on) | **WS-4** (verify default+evidence pair) |
 | #123–#125 (Phase 3 compounding) | Folded into **WS-7** |
 | #151–#158 (audit iter 1) | Folded into **WS-4** + **WS-5** by category |
-| #159 (P0 release flow) | **WS-1** |
+| #159 (P0 release flow) | **CLOSE AS INVALID** (warden audit 2026-05-28: workspace lag is intentional steady-state per release.ts:205-208 comment; tags exist on origin) |
 | #160 (confidenceFloor docs lie) | **WS-4** |
 | #161 (doc-drift bundle) | **WS-5** |
 | #162 (AgentResult.debrief gap) | **WS-2** |
@@ -801,6 +821,7 @@ Out of scope. Each has its own existing or proposed home; not blurring into this
 | 2026-05-28 (amend 1) | First-hand audit pass corrected numerical baselines + reframed RC-1 + reframed RC-2 around `act/` monolith finding. | Prior-audit numbers were 2–4× inflated; runtime.ts `ComposableLayer` is a documented engineering choice (Effect union explosion), not service-locator anti-pattern; `act/` conflates capability + tool substrate which is the actual mesh generator. |
 | 2026-05-28 (amend 2) | Deep-audit of runtime.ts + act/* + reactive-agent.ts + runner.ts + arbitrator.ts + builder.ts. Added §3.6 (six structural facts F1-F6). Refined WS-2 + WS-3 with phased + differential-mobility decisions. | User-directed deep read of the seams to "fully understand the problem space before designing the ideal architecture." Found: (F1) `createLightRuntime` already uses target pattern; (F2) `act/tool-*` files have differential mobility — not all are substrate; (F3) capabilities DO emit; runner.ts emit calls need per-call audit; (F4) arbitrator.ts canonical owner intact; (F5) builder.ts 59 withers; (F6) reactive-agent.ts `this as any` casts have a 1-line fix. |
 | 2026-05-28 (amend 3) | Read CapabilityRegistry + HarnessProfile + RI package surface + StrategyRegistry + state-mutation counts. Added §3.6 F7-F11 + extended §8.1 done-criteria. | Both audit tracks per user. Found: (F7) CapabilityRegistry clean; HarnessProfile patch has growth risk; (F8) RI is 50+ exports framework piece; (F9) StrategyFn input has 30+ fields — Pillar 3 violation; (F10) 27 raw `state.status=` mutations vs ≤10 target = 2.7× Pillar 4 violation. |
+| 2026-05-28 (amend 4) | RC-5 reversal. Release-warden Phase 0 audit invalidated original framing; workspace pkg.json lag is intentional steady-state. WS-1 scope reduced from "structural release flow rebuild" to small bundle: F2 (typecheck embed stubs) + F3 (judge-server private+lockstep) + F4 (release.ts ordering) + #165 delete + #159 close-invalid. | First-hand reproduction of warden findings (`git ls-remote --tags origin v0.10.6 v0.11.1` returns both, `npm view @reactive-agents/judge-server` returns 404, `cd packages/verification && bun run typecheck` shows 8 TS2345 errors). Prior audit (HS-F-04 + HS-H + #159) read symptoms without reading `release.ts:205-208` rationale comment. |
 
 ---
 
