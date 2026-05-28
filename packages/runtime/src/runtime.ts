@@ -452,81 +452,82 @@ export const createRuntime = (options: RuntimeOptions) => {
     Layer.provide(metricsCollectorLayer), // Now has EventBusLive already provided
   );
 
-  let runtime: ComposableLayer = Layer.mergeAll(
-    coreLayer,
-    eventBusLayer,
-    observableLlmLayer,
-    memoryLayer,
-    hookLayer,
-    engineLayer,
-    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
-  ) as ComposableLayer;
+  // ── Canonical composition (WS-2 RC-1) ──
+  // Build every optional layer into a local variable defaulting to `Layer.empty`
+  // when the feature is disabled. Final composition is a single declarative
+  // `Layer.mergeAll(...)` call mirroring the shape used by `createLightRuntime`
+  // (see this file ~1180). The single terminal erasure cast is the only
+  // boundary widening — no mid-chain mutations, no per-layer casts.
 
-  // ── Optional layers ──
+  // ── Guardrails ──
+  const guardrailsOptLayer = options.enableGuardrails
+    ? (() => {
+        const gc = options.guardrailsOptions;
+        const guardrailConfig = gc
+          ? {
+              enableInjectionDetection: gc.injection ?? true,
+              enablePiiDetection: gc.pii ?? true,
+              enableToxicityDetection: gc.toxicity ?? true,
+              ...(gc.customBlocklist
+                ? { customBlocklist: [...gc.customBlocklist] }
+                : {}),
+            }
+          : undefined;
+        return createGuardrailsLayer(guardrailConfig);
+      })()
+    : Layer.empty;
 
-  if (options.enableGuardrails) {
-    const gc = options.guardrailsOptions;
-    const guardrailConfig = gc
-      ? {
-          enableInjectionDetection: gc.injection ?? true,
-          enablePiiDetection: gc.pii ?? true,
-          enableToxicityDetection: gc.toxicity ?? true,
-          ...(gc.customBlocklist
-            ? { customBlocklist: [...gc.customBlocklist] }
-            : {}),
-        }
-      : undefined;
-    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as ComposableLayer;
-  }
+  // ── KillSwitch ──
+  // Provide eventBusLayer so KillSwitchService captures the same EventBus instance
+  // during its layer build (for AgentPaused/AgentResumed event emission).
+  const killSwitchOptLayer = options.enableKillSwitch
+    ? (() => {
+        const { KillSwitchServiceLive } =
+          require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
+        return KillSwitchServiceLive().pipe(Layer.provide(eventBusLayer));
+      })()
+    : Layer.empty;
 
-  if (options.enableKillSwitch) {
-    const { KillSwitchServiceLive } =
-      require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
-    // Provide eventBusLayer so KillSwitchService captures the same EventBus instance
-    // during its layer build (for AgentPaused/AgentResumed event emission).
-    runtime = Layer.merge(
-      runtime,
-      KillSwitchServiceLive().pipe(Layer.provide(eventBusLayer)),
-    ) as ComposableLayer;
-  }
+  // ── Behavioral contracts ──
+  const behavioralContractsOptLayer =
+    options.enableBehavioralContracts && options.behavioralContract
+      ? (() => {
+          const { BehavioralContractServiceLive } =
+            require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
+          return BehavioralContractServiceLive(options.behavioralContract);
+        })()
+      : Layer.empty;
 
-  if (options.enableBehavioralContracts && options.behavioralContract) {
-    const { BehavioralContractServiceLive } =
-      require("@reactive-agents/guardrails") as typeof import("@reactive-agents/guardrails");
-    runtime = Layer.merge(
-      runtime,
-      BehavioralContractServiceLive(options.behavioralContract),
-    ) as ComposableLayer;
-  }
+  // ── Verification ──
+  const verificationOptLayer = options.enableVerification
+    ? (() => {
+        const vc = options.verificationOptions;
+        const verificationConfig = {
+          enableSemanticEntropy: vc?.semanticEntropy ?? true,
+          enableFactDecomposition: vc?.factDecomposition ?? true,
+          enableMultiSource: vc?.multiSource ?? false,
+          enableSelfConsistency: vc?.selfConsistency ?? true,
+          enableNli: vc?.nli ?? true,
+          enableHallucinationDetection: vc?.hallucinationDetection,
+          hallucinationThreshold: vc?.hallucinationThreshold,
+          passThreshold: vc?.passThreshold ?? 0.7,
+          riskThreshold: vc?.riskThreshold ?? 0.5,
+          useLLMTier: vc?.useLLMTier !== false,
+        };
+        return verificationConfig.useLLMTier === true
+          ? createVerificationLayerWithRuntimeLlm(verificationConfig).pipe(
+              // Same pattern as memoryLayer: satisfy LLM here so merge order does not
+              // leave VerificationService construction without LLMService.
+              Layer.provide(observableLlmLayer as Layer.Layer<LLMService>),
+            )
+          : createVerificationLayer({ ...verificationConfig, useLLMTier: false });
+      })()
+    : Layer.empty;
 
-  if (options.enableVerification) {
-    const vc = options.verificationOptions;
-    const verificationConfig = {
-      enableSemanticEntropy: vc?.semanticEntropy ?? true,
-      enableFactDecomposition: vc?.factDecomposition ?? true,
-      enableMultiSource: vc?.multiSource ?? false,
-      enableSelfConsistency: vc?.selfConsistency ?? true,
-      enableNli: vc?.nli ?? true,
-      enableHallucinationDetection: vc?.hallucinationDetection,
-      hallucinationThreshold: vc?.hallucinationThreshold,
-      passThreshold: vc?.passThreshold ?? 0.7,
-      riskThreshold: vc?.riskThreshold ?? 0.5,
-      useLLMTier: vc?.useLLMTier !== false,
-    };
-    const verificationLayer =
-      verificationConfig.useLLMTier === true
-        ? createVerificationLayerWithRuntimeLlm(verificationConfig).pipe(
-            // Same pattern as memoryLayer: satisfy LLM here so merge order does not
-            // leave VerificationService construction without LLMService.
-            Layer.provide(observableLlmLayer as Layer.Layer<LLMService>),
-          )
-        : createVerificationLayer({ ...verificationConfig, useLLMTier: false });
-    runtime = Layer.merge(runtime, verificationLayer) as ComposableLayer;
-  }
-
-  if (options.enableCostTracking) {
-    runtime = Layer.merge(runtime, createCostLayer(options.costTrackingOptions)) as ComposableLayer;
-  }
+  // ── Cost tracking ──
+  const costTrackingOptLayer = options.enableCostTracking
+    ? createCostLayer(options.costTrackingOptions)
+    : Layer.empty;
 
   // Build tools layer first — reasoning may depend on it
   // MCP servers implicitly enable tools
@@ -602,36 +603,31 @@ export const createRuntime = (options: RuntimeOptions) => {
       toolsLayer = baseToolsLayer as unknown as ComposableLayer;
     }
 
-    const toolResultCacheLayer = ToolResultCacheLive();
-    runtime = Layer.merge(runtime, toolsLayer) as ComposableLayer;
-    runtime = Layer.merge(runtime, toolResultCacheLayer as unknown as ComposableLayer) as ComposableLayer;
   }
+
+  // toolsLayer is included in the terminal Layer.mergeAll below when defined.
+  const toolResultCacheOptLayer = shouldEnableTools
+    ? ToolResultCacheLive()
+    : Layer.empty;
 
   // ── Experience learning layer (requires MemoryDatabase from memoryLayer) ──
-  if (options.enableExperienceLearning) {
-    runtime = Layer.merge(
-      runtime,
-      ExperienceStoreLive.pipe(Layer.provide(memoryLayer)),
-    ) as ComposableLayer;
-  }
+  const experienceLearningOptLayer = options.enableExperienceLearning
+    ? ExperienceStoreLive.pipe(Layer.provide(memoryLayer))
+    : Layer.empty;
 
   // ── Memory consolidation layer (requires MemoryDatabase from memoryLayer) ──
-  if (options.enableMemoryConsolidation) {
-    runtime = Layer.merge(
-      runtime,
-      MemoryConsolidatorServiceLive(options.consolidationConfig).pipe(Layer.provide(memoryLayer)),
-    ) as ComposableLayer;
-  }
+  const memoryConsolidationOptLayer = options.enableMemoryConsolidation
+    ? MemoryConsolidatorServiceLive(options.consolidationConfig).pipe(
+        Layer.provide(memoryLayer),
+      )
+    : Layer.empty;
 
   // ── Session persistence layer (requires MemoryDatabase from memoryLayer) ──
   // Only wired when sessionPersist is true. Without memory, SessionStoreService will not be
   // in the runtime and agent.session({ persist: true }) will silently no-op via Effect.serviceOption.
-  if (options.sessionPersist) {
-    runtime = Layer.merge(
-      runtime,
-      SessionStoreLive.pipe(Layer.provide(memoryLayer)),
-    ) as ComposableLayer;
-  }
+  const sessionStoreOptLayer = options.sessionPersist
+    ? SessionStoreLive.pipe(Layer.provide(memoryLayer))
+    : Layer.empty;
 
   // ── Skill persistence layer (requires MemoryDatabase from memoryLayer) ──
   // Policy: wire-when-memory-enabled. Default-on when memory is enabled — graduates
@@ -640,196 +636,199 @@ export const createRuntime = (options: RuntimeOptions) => {
   // `reactive-intelligence/src/learning/learning-engine.ts:170`. Without memory,
   // SkillStoreService is absent and `agent.skills()` returns [] via the existing
   // `Effect.serviceOption` fallback at `reactive-agent.ts:370`.
-  if (options.enableMemory && options.skillPersistence !== false) {
-    runtime = Layer.merge(
-      runtime,
-      SkillStoreServiceLive.pipe(Layer.provide(memoryLayer)),
-    ) as ComposableLayer;
-  }
+  const skillStoreOptLayer =
+    options.enableMemory && options.skillPersistence !== false
+      ? SkillStoreServiceLive.pipe(Layer.provide(memoryLayer))
+      : Layer.empty;
 
   // Create PromptLayer once — shared by reasoning deps and the main runtime
   const promptLayer = options.enablePrompts ? createPromptLayer() : null;
 
-  if (options.enableReasoning) {
-    // Build reasoning config from defaults + user overrides
-    const reasoningConfig: ReasoningConfig = options.reasoningOptions
-      ? {
-          ...defaultReasoningConfig,
-          ...(options.reasoningOptions.defaultStrategy
-            ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
+  // ── Reasoning ──
+  const reasoningOptLayer = options.enableReasoning
+    ? (() => {
+        // Build reasoning config from defaults + user overrides
+        const reasoningConfig: ReasoningConfig = options.reasoningOptions
+          ? {
+              ...defaultReasoningConfig,
+              ...(options.reasoningOptions.defaultStrategy
+                ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
+                : {}),
+              adaptive: {
+                ...defaultReasoningConfig.adaptive,
+                ...(options.reasoningOptions.adaptive ?? {}),
+              },
+              strategies: {
+                reactive: {
+                  ...defaultReasoningConfig.strategies.reactive,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+                  ...(options.maxIterations !== undefined
+                    ? { maxIterations: options.maxIterations }
+                    : {}),
+                  ...(options.reasoningOptions.parallelToolCalls === false
+                    ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
+                    : {}),
+                },
+                planExecute: {
+                  ...defaultReasoningConfig.strategies.planExecute,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
+                },
+                treeOfThought: {
+                  ...defaultReasoningConfig.strategies.treeOfThought,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
+                },
+                reflexion: {
+                  ...defaultReasoningConfig.strategies.reflexion,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
+                },
+              },
+            }
+          : defaultReasoningConfig;
+
+        // ReasoningService requires LLMService, optionally ToolService + PromptService.
+        // Build deps via small Layer.merge calls (NOT mid-chain runtime mutations —
+        // they only assemble the dep stack for a single optional layer).
+        const reasoningDepsBase = toolsLayer
+          ? Layer.merge(observableLlmLayer, toolsLayer)
+          : observableLlmLayer;
+        const reasoningDeps = promptLayer
+          ? Layer.merge(reasoningDepsBase, promptLayer)
+          : reasoningDepsBase;
+        return createReasoningLayer(reasoningConfig).pipe(
+          Layer.provide(reasoningDeps),
+        );
+      })()
+    : Layer.empty;
+
+  // ── Identity ──
+  const identityOptLayer = options.enableIdentity
+    ? createIdentityLayer()
+    : Layer.empty;
+
+  // ── Observability ──
+  const observabilityOptLayer = options.enableObservability
+    ? (() => {
+        const obsExporterConfig = {
+          verbosity: options.observabilityOptions?.verbosity,
+          live: options.observabilityOptions?.live,
+          file: options.observabilityOptions?.file
+            ? { filePath: options.observabilityOptions.file }
+            : undefined,
+          ...(options.observabilityOptions?.redactors !== undefined
+            ? { redactors: options.observabilityOptions.redactors }
             : {}),
-          adaptive: {
-            ...defaultReasoningConfig.adaptive,
-            ...(options.reasoningOptions.adaptive ?? {}),
-          },
-          strategies: {
-            reactive: {
-              ...defaultReasoningConfig.strategies.reactive,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
-              ...(options.maxIterations !== undefined
-                ? { maxIterations: options.maxIterations }
-                : {}),
-              ...(options.reasoningOptions.parallelToolCalls === false
-                ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
-                : {}),
-            },
-            planExecute: {
-              ...defaultReasoningConfig.strategies.planExecute,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
-            },
-            treeOfThought: {
-              ...defaultReasoningConfig.strategies.treeOfThought,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
-            },
-            reflexion: {
-              ...defaultReasoningConfig.strategies.reflexion,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
-            },
-          },
-        }
-      : defaultReasoningConfig;
+        };
+        // Provide the shared metricsCollectorLayer so ObservabilityService uses the same instance
+        // as ExecutionEngine, ensuring metrics flow through properly
+        return createObservabilityLayer(obsExporterConfig, metricsCollectorLayer);
+      })()
+    : Layer.empty;
 
-    // ReasoningService requires LLMService, optionally ToolService + PromptService
-    let reasoningDeps: ComposableLayer = observableLlmLayer as ComposableLayer;
-    if (toolsLayer) {
-      reasoningDeps = Layer.merge(observableLlmLayer, toolsLayer) as ComposableLayer;
-    }
-    if (promptLayer) {
-      reasoningDeps = Layer.merge(reasoningDeps, promptLayer) as ComposableLayer;
-    }
-    const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
-      Layer.provide(reasoningDeps),
-    );
-    runtime = Layer.merge(runtime, reasoningLayer) as ComposableLayer;
-  }
-
-  if (options.enableIdentity) {
-    runtime = Layer.merge(runtime, createIdentityLayer()) as ComposableLayer;
-  }
-
-  if (options.enableObservability) {
-    const obsExporterConfig = {
-      verbosity: options.observabilityOptions?.verbosity,
-      live: options.observabilityOptions?.live,
-      file: options.observabilityOptions?.file
-        ? { filePath: options.observabilityOptions.file }
-        : undefined,
-      ...(options.observabilityOptions?.redactors !== undefined
-        ? { redactors: options.observabilityOptions.redactors }
-        : {}),
-    };
-    // Provide the shared metricsCollectorLayer so ObservabilityService uses the same instance
-    // as ExecutionEngine, ensuring metrics flow through properly
-    const obsLayer = createObservabilityLayer(
-      obsExporterConfig,
-      metricsCollectorLayer,
-    );
-    runtime = Layer.merge(runtime, obsLayer) as ComposableLayer;
-  }
-
-  if (options.telemetryConfig) {
-    const telemetryLayer = TelemetryCollectorLive(options.telemetryConfig).pipe(
-      Layer.provide(eventBusLayer),
-    );
-    runtime = Layer.merge(runtime, telemetryLayer) as ComposableLayer;
-  }
+  // ── Telemetry ──
+  const telemetryOptLayer = options.telemetryConfig
+    ? TelemetryCollectorLive(options.telemetryConfig).pipe(
+        Layer.provide(eventBusLayer),
+      )
+    : Layer.empty;
 
   // ── Structured logging tap — subscribes to EventBus and writes to configured output ──
-  if (options.loggingConfig) {
-    const { makeLoggerService } =
-      require("@reactive-agents/observability") as typeof import("@reactive-agents/observability");
-    const loggerCfg = options.loggingConfig;
-    const loggerTapLayer = Layer.effectDiscard(
-      Effect.gen(function* () {
-        const logger = makeLoggerService(loggerCfg);
-        const eb = yield* EventBus;
+  const loggerTapOptLayer = options.loggingConfig
+    ? (() => {
+        const { makeLoggerService } =
+          require("@reactive-agents/observability") as typeof import("@reactive-agents/observability");
+        const loggerCfg = options.loggingConfig;
+        return Layer.effectDiscard(
+          Effect.gen(function* () {
+            const logger = makeLoggerService(loggerCfg);
+            const eb = yield* EventBus;
 
-        type E<T extends AgentEvent["_tag"]> = Extract<AgentEvent, { _tag: T }>;
+            type E<T extends AgentEvent["_tag"]> = Extract<AgentEvent, { _tag: T }>;
 
-        yield* eb.on("AgentStarted", (event: E<"AgentStarted">) =>
-          Effect.sync(() =>
-            logger.info("[agent:started]", { agentId: event.agentId, taskId: event.taskId }),
-          ),
-        );
+            yield* eb.on("AgentStarted", (event: E<"AgentStarted">) =>
+              Effect.sync(() =>
+                logger.info("[agent:started]", { agentId: event.agentId, taskId: event.taskId }),
+              ),
+            );
 
-        yield* eb.on("AgentCompleted", (event: E<"AgentCompleted">) =>
-          Effect.sync(() =>
-            event.success
-              ? logger.info("[agent:completed]", {
-                  agentId: event.agentId,
-                  taskId: event.taskId,
-                  durationMs: event.durationMs,
-                  totalTokens: event.totalTokens,
-                  totalIterations: event.totalIterations,
-                })
-              : logger.warn("[agent:failed]", {
-                  agentId: event.agentId,
+            yield* eb.on("AgentCompleted", (event: E<"AgentCompleted">) =>
+              Effect.sync(() =>
+                event.success
+                  ? logger.info("[agent:completed]", {
+                      agentId: event.agentId,
+                      taskId: event.taskId,
+                      durationMs: event.durationMs,
+                      totalTokens: event.totalTokens,
+                      totalIterations: event.totalIterations,
+                    })
+                  : logger.warn("[agent:failed]", {
+                      agentId: event.agentId,
+                      taskId: event.taskId,
+                      durationMs: event.durationMs,
+                    }),
+              ),
+            );
+
+            yield* eb.on("ExecutionPhaseCompleted", (event: E<"ExecutionPhaseCompleted">) =>
+              Effect.sync(() =>
+                logger.debug(`[phase:${event.phase}]`, {
                   taskId: event.taskId,
                   durationMs: event.durationMs,
                 }),
-          ),
-        );
+              ),
+            );
 
-        yield* eb.on("ExecutionPhaseCompleted", (event: E<"ExecutionPhaseCompleted">) =>
-          Effect.sync(() =>
-            logger.debug(`[phase:${event.phase}]`, {
-              taskId: event.taskId,
-              durationMs: event.durationMs,
-            }),
-          ),
-        );
+            yield* eb.on("ToolCallCompleted", (event: E<"ToolCallCompleted">) =>
+              Effect.sync(() => {
+                if (event.success) {
+                  logger.info(`[tool:${event.toolName}]`, {
+                    taskId: event.taskId,
+                    durationMs: event.durationMs,
+                  });
+                } else {
+                  logger.warn(`[tool:${event.toolName}:error]`, {
+                    taskId: event.taskId,
+                    durationMs: event.durationMs,
+                  });
+                }
+              }),
+            );
 
-        yield* eb.on("ToolCallCompleted", (event: E<"ToolCallCompleted">) =>
-          Effect.sync(() => {
-            if (event.success) {
-              logger.info(`[tool:${event.toolName}]`, {
-                taskId: event.taskId,
-                durationMs: event.durationMs,
-              });
-            } else {
-              logger.warn(`[tool:${event.toolName}:error]`, {
-                taskId: event.taskId,
-                durationMs: event.durationMs,
-              });
-            }
+            yield* eb.on("LLMRequestCompleted", (event: E<"LLMRequestCompleted">) =>
+              Effect.sync(() =>
+                logger.debug("[llm:completed]", {
+                  taskId: event.taskId,
+                  model: event.model,
+                  tokensUsed: event.tokensUsed,
+                  durationMs: event.durationMs,
+                }),
+              ),
+            );
+
+            yield* eb.on("GuardrailViolationDetected", (event: E<"GuardrailViolationDetected">) =>
+              Effect.sync(() =>
+                logger.warn("[guardrail:violation]", {
+                  taskId: event.taskId,
+                  blocked: event.blocked,
+                  violations: event.violations,
+                }),
+              ),
+            );
           }),
-        );
-
-        yield* eb.on("LLMRequestCompleted", (event: E<"LLMRequestCompleted">) =>
-          Effect.sync(() =>
-            logger.debug("[llm:completed]", {
-              taskId: event.taskId,
-              model: event.model,
-              tokensUsed: event.tokensUsed,
-              durationMs: event.durationMs,
-            }),
-          ),
-        );
-
-        yield* eb.on("GuardrailViolationDetected", (event: E<"GuardrailViolationDetected">) =>
-          Effect.sync(() =>
-            logger.warn("[guardrail:violation]", {
-              taskId: event.taskId,
-              blocked: event.blocked,
-              violations: event.violations,
-            }),
-          ),
-        );
-      }),
-    ).pipe(Layer.provide(eventBusLayer));
-    runtime = Layer.merge(runtime, loggerTapLayer) as ComposableLayer;
-  }
+        ).pipe(Layer.provide(eventBusLayer));
+      })()
+    : Layer.empty;
 
   // ── Health check service ──
-  if (options.enableHealthCheck) {
-    const { Health, makeHealthService } =
-      require("@reactive-agents/health") as typeof import("@reactive-agents/health");
-    const healthLayer = Layer.effect(
-      Health,
-      makeHealthService({ port: 0, agentName: options.agentId }),
-    );
-    runtime = Layer.merge(runtime, healthLayer) as ComposableLayer;
-  }
+  const healthOptLayer = options.enableHealthCheck
+    ? (() => {
+        const { Health, makeHealthService } =
+          require("@reactive-agents/health") as typeof import("@reactive-agents/health");
+        return Layer.effect(
+          Health,
+          makeHealthService({ port: 0, agentName: options.agentId }),
+        );
+      })()
+    : Layer.empty;
 
   // ── Reactive Intelligence (entropy sensing) + optional skill resolver ──
   const skillResolverPaths =
@@ -847,97 +846,123 @@ export const createRuntime = (options: RuntimeOptions) => {
         }
       : undefined;
 
-  if (options.enableReactiveIntelligence) {
-    runtime = Layer.merge(
-      runtime,
-      createReactiveIntelligenceLayer(
+  const reactiveIntelOptLayer = options.enableReactiveIntelligence
+    ? createReactiveIntelligenceLayer(
         options.reactiveIntelligenceOptions as any,
         undefined,
         skillLayerForRi,
-      ),
-    ) as ComposableLayer;
-  } else if (skillLayerForRi?.resolver) {
-    runtime = Layer.merge(runtime, makeSkillResolverService(skillLayerForRi.resolver)) as ComposableLayer;
-  }
+      )
+    : skillLayerForRi?.resolver
+      ? makeSkillResolverService(skillLayerForRi.resolver)
+      : Layer.empty;
 
-  if (options.enableInteraction) {
-    // InteractionManager requires EventBus
-    const interactionLayer = createInteractionLayer().pipe(
-      Layer.provide(eventBusLayer),
-    );
-    runtime = Layer.merge(runtime, interactionLayer) as ComposableLayer;
-  }
+  // ── Interaction ──
+  const interactionOptLayer = options.enableInteraction
+    ? createInteractionLayer().pipe(Layer.provide(eventBusLayer))
+    : Layer.empty;
 
-  if (promptLayer) {
-    runtime = Layer.merge(runtime, promptLayer) as ComposableLayer;
-  }
+  // ── Prompts (already constructed above; included only if enabled) ──
+  const promptOptLayer = promptLayer ?? Layer.empty;
 
-  if (options.enableOrchestration) {
-    runtime = Layer.merge(runtime, createOrchestrationLayer()) as ComposableLayer;
-  }
+  // ── Orchestration ──
+  const orchestrationOptLayer = options.enableOrchestration
+    ? createOrchestrationLayer()
+    : Layer.empty;
 
-  // A2A support - use extraLayers pattern for optional A2A
-  if (options.enableA2A) {
-    runtime = Layer.merge(
-      runtime,
-      A2aExtraLayer(options.agentId, options.a2aPort ?? 3000),
-    ) as ComposableLayer;
-  }
+  // ── A2A ──
+  const a2aOptLayer = options.enableA2A
+    ? A2aExtraLayer(options.agentId, options.a2aPort ?? 3000)
+    : Layer.empty;
 
-  // Gateway — compose GatewayService + SchedulerService when enabled.
+  // ── Gateway — compose GatewayService + SchedulerService when enabled. ──
   // The persistent event loop itself starts via agent.start(); layer composition just makes
   // the services resolvable from the ManagedRuntime.
   // EventBus is passed to gateway services for observability when available.
-  if (options.enableGateway) {
-    const gatewayLayer = Layer.unwrapEffect(
-      Effect.gen(function* () {
-        const gw = yield* Effect.promise(
-          () => import("@reactive-agents/gateway"),
-        );
+  const gatewayOptLayer = options.enableGateway
+    ? (() => {
+        const gatewayLayer = Layer.unwrapEffect(
+          Effect.gen(function* () {
+            const gw = yield* Effect.promise(
+              () => import("@reactive-agents/gateway"),
+            );
 
-        // Resolve EventBus from context for observability (optional).
-        // Use Effect.catchAll — yield* with a missing service produces a fiber failure,
-        // not a JS exception, so try/catch won't catch it.
-        const core = yield* Effect.promise(
-          () => import("@reactive-agents/core"),
-        );
-        type BusLike = { publish: (e: any) => Effect.Effect<void, never> };
-        const bus: BusLike | undefined = yield* Effect.gen(function* () {
-          const eb = yield* core.EventBus as any;
-          return { publish: (e: any) => (eb as any).publish(e) } as BusLike;
-        }).pipe(
-          Effect.catchAll(() =>
-            Effect.succeed(undefined as BusLike | undefined),
-          ),
-        );
+            // Resolve EventBus from context for observability (optional).
+            // Use Effect.catchAll — yield* with a missing service produces a fiber failure,
+            // not a JS exception, so try/catch won't catch it.
+            const core = yield* Effect.promise(
+              () => import("@reactive-agents/core"),
+            );
+            type BusLike = { publish: (e: any) => Effect.Effect<void, never> };
+            const bus: BusLike | undefined = yield* Effect.gen(function* () {
+              const eb = yield* core.EventBus as any;
+              return { publish: (e: any) => (eb as any).publish(e) } as BusLike;
+            }).pipe(
+              Effect.catchAll(() =>
+                Effect.succeed(undefined as BusLike | undefined),
+              ),
+            );
 
-        const gwLayer = gw.GatewayServiceLive(
-          (options.gatewayOptions ?? {}) as any,
-          bus,
+            const gwLayer = gw.GatewayServiceLive(
+              (options.gatewayOptions ?? {}) as any,
+              bus,
+            );
+            const schedLayer = gw.SchedulerServiceLive(
+              {
+                agentId: options.agentId,
+                timezone: options.gatewayOptions?.timezone as any,
+                heartbeat: options.gatewayOptions?.heartbeat as any,
+                crons: options.gatewayOptions?.crons as any,
+              },
+              bus,
+            );
+            return Layer.merge(gwLayer, schedLayer);
+          }),
         );
-        const schedLayer = gw.SchedulerServiceLive(
-          {
-            agentId: options.agentId,
-            timezone: options.gatewayOptions?.timezone as any,
-            heartbeat: options.gatewayOptions?.heartbeat as any,
-            crons: options.gatewayOptions?.crons as any,
-          },
-          bus,
-        );
-        return Layer.merge(gwLayer, schedLayer);
-      }),
-    );
-    runtime = Layer.merge(
-      runtime,
-      gatewayLayer.pipe(Layer.provide(eventBusLayer)),
-    ) as ComposableLayer;
-  }
+        return gatewayLayer.pipe(Layer.provide(eventBusLayer));
+      })()
+    : Layer.empty;
 
-  if (options.extraLayers) {
-    runtime = Layer.merge(runtime, options.extraLayers) as ComposableLayer;
-  }
+  // ── Extra (user-supplied) layers ──
+  const extraOptLayer = options.extraLayers ?? Layer.empty;
 
-  return runtime;
+  // ── Terminal canonical composition (WS-2 RC-1) ──
+  // Single declarative Layer.mergeAll over mandatory + optional layers; single
+  // erasure cast at the boundary (mirrors createLightRuntime:1061).
+  return Layer.mergeAll(
+    // Mandatory
+    coreLayer,
+    eventBusLayer,
+    observableLlmLayer,
+    memoryLayer,
+    hookLayer,
+    engineLayer,
+    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
+    // Optional (default Layer.empty when feature disabled)
+    guardrailsOptLayer,
+    killSwitchOptLayer,
+    behavioralContractsOptLayer,
+    verificationOptLayer,
+    costTrackingOptLayer,
+    toolsLayer ?? Layer.empty,
+    toolResultCacheOptLayer,
+    experienceLearningOptLayer,
+    memoryConsolidationOptLayer,
+    sessionStoreOptLayer,
+    skillStoreOptLayer,
+    reasoningOptLayer,
+    identityOptLayer,
+    observabilityOptLayer,
+    telemetryOptLayer,
+    loggerTapOptLayer,
+    healthOptLayer,
+    reactiveIntelOptLayer,
+    interactionOptLayer,
+    promptOptLayer,
+    orchestrationOptLayer,
+    a2aOptLayer,
+    gatewayOptLayer,
+    extraOptLayer,
+  ) as ComposableLayer;
 };
 
 
@@ -1058,16 +1083,6 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     Layer.provide(metricsCollectorLayer),
   );
 
-  let runtime: ComposableLayer = Layer.mergeAll(
-    coreLayer,
-    eventBusLayer,
-    llmLayer,
-    memoryLayer,
-    hookLayer,
-    engineLayer,
-    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
-  ) as ComposableLayer;
-
   // ── Optional tools layer ──
   let toolsLayer: ComposableLayer | null = null;
   if (options.enableTools) {
@@ -1124,94 +1139,111 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     } else {
       toolsLayer = baseToolsLayer as unknown as ComposableLayer;
     }
-    const toolResultCacheLayer = ToolResultCacheLive();
-    runtime = Layer.merge(runtime, toolsLayer) as ComposableLayer;
-    runtime = Layer.merge(runtime, toolResultCacheLayer as unknown as ComposableLayer) as ComposableLayer;
   }
+  const lightToolResultCacheOptLayer = options.enableTools
+    ? ToolResultCacheLive()
+    : Layer.empty;
 
   // ── Optional reasoning layer ──
-  if (options.enableReasoning) {
-    const reasoningConfig: ReasoningConfig = options.reasoningOptions
-      ? {
-          ...defaultReasoningConfig,
-          ...(options.reasoningOptions.defaultStrategy
-            ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
-            : {}),
-          adaptive: {
-            ...defaultReasoningConfig.adaptive,
-            ...(options.reasoningOptions.adaptive ?? {}),
-          },
-          strategies: {
-            reactive: {
-              ...defaultReasoningConfig.strategies.reactive,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
-              ...(options.maxIterations !== undefined
-                ? { maxIterations: options.maxIterations }
+  const lightReasoningOptLayer = options.enableReasoning
+    ? (() => {
+        const reasoningConfig: ReasoningConfig = options.reasoningOptions
+          ? {
+              ...defaultReasoningConfig,
+              ...(options.reasoningOptions.defaultStrategy
+                ? { defaultStrategy: options.reasoningOptions.defaultStrategy }
                 : {}),
-              ...(options.reasoningOptions.parallelToolCalls === false
-                ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
-                : {}),
-            },
-            planExecute: {
-              ...defaultReasoningConfig.strategies.planExecute,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
-            },
-            treeOfThought: {
-              ...defaultReasoningConfig.strategies.treeOfThought,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
-            },
-            reflexion: {
-              ...defaultReasoningConfig.strategies.reflexion,
-              ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
-            },
-          },
-        }
-      : defaultReasoningConfig;
+              adaptive: {
+                ...defaultReasoningConfig.adaptive,
+                ...(options.reasoningOptions.adaptive ?? {}),
+              },
+              strategies: {
+                reactive: {
+                  ...defaultReasoningConfig.strategies.reactive,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reactive),
+                  ...(options.maxIterations !== undefined
+                    ? { maxIterations: options.maxIterations }
+                    : {}),
+                  ...(options.reasoningOptions.parallelToolCalls === false
+                    ? { nextMovesPlanning: { ...defaultReasoningConfig.strategies.reactive.nextMovesPlanning, enabled: false } }
+                    : {}),
+                },
+                planExecute: {
+                  ...defaultReasoningConfig.strategies.planExecute,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.planExecute),
+                },
+                treeOfThought: {
+                  ...defaultReasoningConfig.strategies.treeOfThought,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.treeOfThought),
+                },
+                reflexion: {
+                  ...defaultReasoningConfig.strategies.reflexion,
+                  ...withoutStrategyIcsOverrides(options.reasoningOptions.strategies?.reflexion),
+                },
+              },
+            }
+          : defaultReasoningConfig;
 
-    let reasoningDeps: ComposableLayer = llmLayer as ComposableLayer;
-    if (toolsLayer) {
-      reasoningDeps = Layer.merge(llmLayer, toolsLayer) as ComposableLayer;
-    }
-    const reasoningLayer = createReasoningLayer(reasoningConfig).pipe(
-      Layer.provide(reasoningDeps),
-    );
-    runtime = Layer.merge(runtime, reasoningLayer) as ComposableLayer;
-  }
+        // Tiny dep stack assembly — not a runtime mid-chain mutation.
+        const reasoningDeps = toolsLayer
+          ? Layer.merge(llmLayer, toolsLayer)
+          : llmLayer;
+        return createReasoningLayer(reasoningConfig).pipe(
+          Layer.provide(reasoningDeps),
+        );
+      })()
+    : Layer.empty;
 
   // ── Optional heavy layers (parent-toggleable) ──
+  const lightGuardrailsOptLayer = options.enableGuardrails
+    ? (() => {
+        const gc = options.guardrailsOptions;
+        const guardrailConfig = gc
+          ? {
+              enableInjectionDetection: gc.injection ?? true,
+              enablePiiDetection: gc.pii ?? true,
+              enableToxicityDetection: gc.toxicity ?? true,
+            }
+          : undefined;
+        return createGuardrailsLayer(guardrailConfig);
+      })()
+    : Layer.empty;
 
-  if (options.enableGuardrails) {
-    const gc = options.guardrailsOptions;
-    const guardrailConfig = gc
-      ? {
-          enableInjectionDetection: gc.injection ?? true,
-          enablePiiDetection: gc.pii ?? true,
-          enableToxicityDetection: gc.toxicity ?? true,
-        }
-      : undefined;
-    runtime = Layer.merge(runtime, createGuardrailsLayer(guardrailConfig)) as ComposableLayer;
-  }
+  const lightCostTrackingOptLayer = options.enableCostTracking
+    ? createCostLayer()
+    : Layer.empty;
 
-  if (options.enableCostTracking) {
-    runtime = Layer.merge(runtime, createCostLayer()) as ComposableLayer;
-  }
+  const lightObservabilityOptLayer = options.enableObservability
+    ? (() => {
+        const obsExporterConfig = {
+          verbosity: options.observabilityOptions?.verbosity,
+          live: options.observabilityOptions?.live,
+          ...(options.observabilityOptions?.redactors !== undefined
+            ? { redactors: options.observabilityOptions.redactors }
+            : {}),
+        };
+        return createObservabilityLayer(obsExporterConfig, metricsCollectorLayer);
+      })()
+    : Layer.empty;
 
-  if (options.enableObservability) {
-    const obsExporterConfig = {
-      verbosity: options.observabilityOptions?.verbosity,
-      live: options.observabilityOptions?.live,
-      ...(options.observabilityOptions?.redactors !== undefined
-        ? { redactors: options.observabilityOptions.redactors }
-        : {}),
-    };
-    const obsLayer = createObservabilityLayer(
-      obsExporterConfig,
-      metricsCollectorLayer,
-    );
-    runtime = Layer.merge(runtime, obsLayer) as ComposableLayer;
-  }
-
-  return runtime;
+  // ── Terminal canonical composition (WS-2 RC-1) ──
+  return Layer.mergeAll(
+    // Mandatory
+    coreLayer,
+    eventBusLayer,
+    llmLayer,
+    memoryLayer,
+    hookLayer,
+    engineLayer,
+    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
+    // Optional (default Layer.empty when feature disabled)
+    toolsLayer ?? Layer.empty,
+    lightToolResultCacheOptLayer,
+    lightReasoningOptLayer,
+    lightGuardrailsOptLayer,
+    lightCostTrackingOptLayer,
+    lightObservabilityOptLayer,
+  ) as ComposableLayer;
 };
 
 /**
@@ -1234,8 +1266,12 @@ const A2aExtraLayer = (
 ): ComposableLayer => {
   // Use dynamic import() so Bun's mock.module() can intercept it in tests.
   // Layer.unwrapEffect lets us return a Layer from inside an async Effect.
+  // Single erasure cast at the wrap boundary — the inner promise returns
+  // dynamically-typed Layers (a2a package may be absent), so the union is
+  // collapsed to ComposableLayer once at the helper return.
   return Layer.unwrapEffect(
-    Effect.promise(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Effect.promise<any>(async () => {
       try {
         const mod = (await import("@reactive-agents/a2a")) as any;
         const { createA2AServerLayer } = mod;
@@ -1251,10 +1287,10 @@ const A2aExtraLayer = (
             stateTransitionHistory: false,
           },
         };
-        return createA2AServerLayer(agentCard, port) as ComposableLayer;
+        return createA2AServerLayer(agentCard, port);
       } catch {
         // A2A package not installed — return empty layer
-        return Layer.empty as unknown as ComposableLayer;
+        return Layer.empty;
       }
     }),
   );
