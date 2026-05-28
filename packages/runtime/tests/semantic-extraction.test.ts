@@ -155,7 +155,11 @@ function makeMockMemoryService() {
 // ─── TESTS ─────────────────────────────────────────────────────────────────
 
 describe("Semantic memory extraction during memory-flush", () => {
-  it("extracts semantic memories when tool calls were made", async () => {
+  it("extracts semantic memories when multiple tool calls were made (Lever 7 gate)", async () => {
+    // Lever 7 (2026-05-26) — single-tool + short-answer tasks now SKIP
+    // extraction (no memory-worthy content to summarize). Multi-tool tasks
+    // STILL trigger extraction because the cross-tool synthesis IS the
+    // memory-worthy artifact.
     const extractedEntries = [
       { id: "mem-1", agentId: "test-agent", content: "The web search returned useful info about addition.", summary: "addition info", importance: 0.6, verified: false, tags: ["math"] },
     ];
@@ -163,10 +167,14 @@ describe("Semantic memory extraction during memory-flush", () => {
     const memService = makeMockMemoryService();
     const { engineLayer } = makeEngine();
 
-    // LLM makes a tool call on first request, then returns final answer
+    // LLM makes TWO tool calls on first request, then returns final answer.
+    // Multi-tool use triggers the extraction path under Lever 7.
     const llmLayer = makeMockLLM({
       content: "FINAL ANSWER: The answer is 4.",
-      toolCalls: [{ id: "tc-1", name: "web_search", input: { query: "2+2" } }],
+      toolCalls: [
+        { id: "tc-1", name: "web_search", input: { query: "2+2" } },
+        { id: "tc-2", name: "web_search", input: { query: "2 plus 2" } },
+      ],
     });
 
     const testLayer = Layer.mergeAll(
@@ -333,9 +341,14 @@ describe("Semantic memory extraction during memory-flush", () => {
     const extractor = makeMockExtractor(extractedEntries);
     const { engineLayer } = makeEngine();
 
+    // Multi-tool use triggers the extraction path under Lever 7 (single tool
+    // + short answer would skip the LLM call entirely).
     const llmLayer = makeMockLLM({
       content: "FINAL ANSWER: The answer is 4.",
-      toolCalls: [{ id: "tc-1", name: "web_search", input: { query: "2+2" } }],
+      toolCalls: [
+        { id: "tc-1", name: "web_search", input: { query: "2+2" } },
+        { id: "tc-2", name: "web_search", input: { query: "addition" } },
+      ],
     });
 
     const testLayer = Layer.mergeAll(

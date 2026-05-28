@@ -162,18 +162,29 @@ export const synthesizeAndStoreDebrief = (
       rationale: rationaleLog,
     };
 
-    // GH #143 trivial-task gate — skip the LLM debrief call when the task is
-    // trivial enough that the fallback synthesizer can reconstruct an equivalent
-    // record from captured signals. On local tier (qwen3.5:latest) the LLM
-    // debrief failed 52% of the time anyway (hit max_tokens, returned empty
-    // content), and bench evidence showed it burned ~825 tok/task uncounted.
-    // The gate covers: short final output (no synthesis nuance to extract),
-    // zero tool calls (nothing to summarize beyond the answer itself), and no
-    // errors (no error-narrative for the LLM to attempt). Any one of those
-    // conditions failing falls through to the LLM path.
+    // GH #143 / Lever 7 trivial-task gate — skip the LLM debrief call when
+    // the captured signals are simple enough that the fallback synthesizer
+    // can reconstruct an equivalent record. On local tier (qwen3.5:latest)
+    // the LLM debrief failed 52% of the time anyway (hit max_tokens, returned
+    // empty content), and bench evidence showed it burned ~825 tok and ~6 s
+    // per task uncounted.
+    //
+    // Lever 7 (2026-05-26) — relaxed the gate to also fire on tool-using
+    // tasks with short outputs. The original gate required zero tool calls,
+    // which left tasks like t1-calculator-add ("Use bench_calculator → 391")
+    // paying the full debrief LLM cost even though the output is 3 chars and
+    // the fallback could trivially summarize it. Profile evidence: t1 local
+    // burned 6.3 s on the debrief LLM call alone (37% of total runtime).
+    //
+    // Conditions:
+    //  - outputForSuccess.length < 100  — short answer, fallback handles it
+    //  - errorsFromLoop.length === 0    — no error narrative for the LLM
+    //
+    // Tool-call presence is no longer a gating signal — the fallback already
+    // records `toolsUsed` from `toolCallHistory`, which the LLM debrief
+    // adds no information on top of for trivial answers.
     const isTrivialForDebrief =
       outputForSuccess.length < 100 &&
-      toolCallLog.length === 0 &&
       errorsFromLoop.length === 0;
 
     // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
