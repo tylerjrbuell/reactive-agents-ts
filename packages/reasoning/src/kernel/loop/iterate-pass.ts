@@ -72,6 +72,7 @@ import {
 } from "../../kernel/state/kernel-state.js";
 import { evaluateStrategySwitch } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
+import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
@@ -614,146 +615,31 @@ export function runIterationPass(
       const riActive = services.reactiveController._tag === "Some";
       const stallThreshold = riActive ? 4 : 2;
 
-      if (
+      const stallTriggered =
         consecutiveStalled >= stallThreshold &&
         state.iteration >= 2 &&
-        state.status === "thinking"
-      ) {
-        const missingRequiredByCount = laneDecision.missingRequiredTools;
-        if (missingRequiredByCount.length > 0) {
-          requiredToolNudgeCount++;
-          if (requiredToolNudgeCount > maxRequiredToolNudges) {
-            if (totalArtifacts > 0) {
-              yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
-              const d = assembleDeliverable(state);
-              state = terminate(state, {
-                reason: deliverableTerminationReason(d),
-                output: d.content,
-              });
-              sync(); return "break";
-            }
-            state = transitionState(state, {
-              status: "failed",
-              error: `Required tool quota not met after ${maxRequiredToolNudges} nudge attempts: ${missingRequiredByCount.join(", ")}`,
-            });
-            sync(); return "break";
-          }
-          const guidance =
-            `Required tool quota not met: ${missingRequiredByCount.join(", ")}. ` +
-            `Continue calling the missing required tool(s) before attempting completion.`;
-          yield* emitHarnessSignalInjected({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            signalKind: "nudge",
-            origin: "runner.ts:875",
-            content: guidance,
-            metadata: { missingTools: missingRequiredByCount, nudgeCount: requiredToolNudgeCount },
-          });
-          state = transitionState(state, {
-            status: "thinking",
-            steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-            pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
-          });
-          sync(); return "continue";
-        }
-
-        const recovery = getToolFailureRecovery(state, currentInput);
-        const shouldNudgeRecovery =
-          recovery.failedUnresolved.length > 0 &&
-          failureRecoveryRedirects < maxFailureRecoveryRedirects;
-
-        if (shouldNudgeRecovery) {
-          failureRecoveryRedirects++;
-          const guidance = buildRecoverySteeringGuidance(
-            recovery,
-            failureRecoveryRedirects,
-            maxFailureRecoveryRedirects,
-            "stall",
-          );
-
-          yield* emitHarnessSignalInjected({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            signalKind: "redirect",
-            origin: "runner.ts:897",
-            content: guidance,
-            metadata: {
-              failedTools: recovery.failedUnresolved,
-              alternatives: recovery.alternativeCandidates,
-              redirectCount: failureRecoveryRedirects,
-            },
-          });
-          state = transitionState(state, {
-            status: "thinking",
-            steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-            pendingGuidance: { errorRecovery: guidance },
-            meta: {
-              ...state.meta,
-              recoveryPending: true,
-              recoveryFailedTools: recovery.failedUnresolved,
-              recoveryAlternativeCandidates: recovery.alternativeCandidates,
-            },
-          });
-          sync(); return "continue";
-        }
-
-        if (totalArtifacts > 0) {
-          // Verifier-driven retry on harness fallback (Pivot A, 2026-05-06).
-          //
-          // Pre-fix: the harness assembled raw `_tool_result_*` artifacts and
-          // shipped them as the final answer. The verifier never saw the
-          // output (loop broke before §9.0 ran), so quality-degraded JSON
-          // dumps silently passed to the user. Empirical evidence: cogito:14b
-          // T5 trace 01KQZFHFQA97RHHCNXQ792VWNQ — verified=true on a raw
-          // JSON dump rated 7% faithfulness by the quality scorer.
-          //
-          // Post-fix: run the verifier on the candidate harness output with
-          // terminatedBy="harness_deliverable" so the new
-          // `output-is-model-authored` check rejects it. If retry budget
-          // allows, inject the verdict-driven signal and continue thinking
-          // — the model gets one more chance to synthesize from the
-          // artifacts before the harness ships them as-is. If retry budget
-          // is exhausted (or verifier passes — should be impossible with
-          // the new check), fall through to the original terminate path.
-          const candidateDeliverable = assembleDeliverable(state);
-          const candidateOutput = candidateDeliverable.content;
-          const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
-          const availableUserToolsForFallback =
-            (currentInput.availableToolSchemas ?? []).map((t) => t.name);
-          // M3 REWORK (2026-05-12): the retry path was removed, so the
-          // verdict isn't consumed here — we just need the emit so the
-          // outer post-loop §9.0 gate can read the trace. WS-3 Phase 5a
-          // routes the emit through the verify capability boundary.
-          yield* verifyAndEmit({
-            verifier,
-            context: {
-              action: "final-answer",
-              content: candidateOutput,
-              actionSuccess: true,
-              task: currentInput.task,
-              priorSteps: state.steps,
-              requiredTools: currentInput.requiredTools,
-              relevantTools: currentInput.relevantTools,
-              toolsUsed: state.toolsUsed,
-              availableUserTools: availableUserToolsForFallback,
-              terminal: true,
-              terminatedBy: candidateTerminationReason,
-            },
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-          });
-          // M3 REWORK (2026-05-12): retry loop removed per ablation verdict.
-          // Verifier gate still fires (emitted above); rejection falls through
-          // to the §9.0 post-loop outer gate which marks the run failed.
-          // Proceed with original
-          // harness fallback. terminate() preserves the single-owner invariant.
-          yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations (source=${candidateDeliverable.source})`, timestamp: new Date() });
-          state = terminate(state, {
-            reason: candidateTerminationReason,
-            output: candidateOutput,
-          });
-          sync(); return "break";
-        }
+        state.status === "thinking";
+      {
+        const stallResult = yield* runStallDeliverableStep({
+          state,
+          currentInput,
+          currentOptions,
+          missingRequiredByCount: laneDecision.missingRequiredTools,
+          stallTriggered,
+          totalArtifacts,
+          consecutiveStalled,
+          requiredToolNudgeCount,
+          failureRecoveryRedirects,
+          maxRequiredToolNudges,
+          maxFailureRecoveryRedirects,
+          verifier,
+          emitLog,
+        });
+        state = stallResult.state;
+        requiredToolNudgeCount = stallResult.requiredToolNudgeCount;
+        failureRecoveryRedirects = stallResult.failureRecoveryRedirects;
+        if (stallResult.outcome === "break") { sync(); return "break"; }
+        if (stallResult.outcome === "next") { sync(); return "continue"; }
       }
 
       // ── Intelligent Context Synthesis (before thinking step) ──
