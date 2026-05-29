@@ -34,10 +34,24 @@ const makeContext = (
   iteration: 5,
   entropyScore: {
     composite: 0.7,
-    structural: 0.6,
-    semantic: 0.5,
-    behavioral: 0.4,
-    contextPressure: 0.3,
+    sources: {
+      token: null,
+      structural: 0.6,
+      semantic: 0.5,
+      behavioral: 0.4,
+      contextPressure: 0.3,
+    },
+    trajectory: {
+      history: [],
+      shape: "flat",
+      derivative: 0,
+      momentum: 0,
+    },
+    confidence: "medium",
+    modelTier: "local",
+    iteration: 5,
+    iterationWeight: 1,
+    timestamp: 0,
   },
   recentDecisions: [],
   budget: {
