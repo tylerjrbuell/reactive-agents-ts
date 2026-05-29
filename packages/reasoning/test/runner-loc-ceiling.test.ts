@@ -1,6 +1,6 @@
 // Run: bun test packages/reasoning/test/runner-loc-ceiling.test.ts --timeout 10000
 //
-// WS-6 Phase 2 — runner.ts LOC ceiling (anti-regression).
+// WS-6 Phase 2/4 — runner.ts LOC ceiling (anti-regression).
 //
 // PREMISE
 // -------
@@ -46,12 +46,16 @@
 // is the honest measured landing plus thin headroom — same precedent shape as
 // Phase 1 (target 2,050 → empirical 2,108 → ratified 2,115).
 //
-// Stretch target: ≤1,500 LOC abandoned — not attainable without violating
-// the no-comment-deletion constraint. Future reductions would need to come
-// from `runKernel()` body itself (e.g. lifting iteration-block code into a
-// dedicated `iterate-pass.ts`), not from further helper extraction.
+// WS-6 Phase 4 (2026-05-29) — tighten ceiling 1625 → 1500 after lifting the
+// per-iteration block out of `runKernel()` to a dedicated module
+// `kernel/loop/iterate-pass.ts`. The Phase 2 closure-note ("≤1,500 LOC abandoned")
+// turned out wrong once the structural lift was attempted: ~900 LOC of the
+// `runKernel()` body was a single while-loop iteration body whose closure deps
+// resolve cleanly to a mutable IterationCarrier + immutable IterationConfig.
+// runner.ts post-lift hosts only orchestration (services + profile +
+// pre/post-loop) and re-exports.
 //
-// Headroom is intentionally thin (~10 LOC) so post-Phase-2 drift triggers
+// Headroom is intentionally thin (~10 LOC) so post-Phase-4 drift triggers
 // this ceiling before it accumulates. If a legitimate addition to
 // `runKernel()` orchestration body is required, raise CEILING in this file
 // AND rationale-comment the new addition.
@@ -66,9 +70,9 @@ const RUNNER_PATH = resolve(
   "packages/reasoning/src/kernel/loop/runner.ts",
 );
 
-const CEILING = 1625;
+const CEILING = 1500;
 
-describe("WS-6 Phase 2 — runner.ts LOC ceiling", () => {
+describe("WS-6 Phase 4 — runner.ts LOC ceiling", () => {
   it(`runner.ts stays ≤ ${CEILING} LOC after helper bucket extraction`, () => {
     const src = readFileSync(RUNNER_PATH, "utf-8");
     // Count lines the same way `wc -l` does — trailing newline notwithstanding,
@@ -81,8 +85,9 @@ describe("WS-6 Phase 2 — runner.ts LOC ceiling", () => {
       throw new Error(
         `runner.ts is ${lines} LOC (ceiling: ${CEILING}).\n` +
           `Either:\n` +
-          `  1. Bucket-extract additional helpers to ` +
-          `kernel/loop/runner-helpers/<bucket>.ts following the WS-6 Phase 2 pattern, OR\n` +
+          `  1. Lift orchestration body to ` +
+          `kernel/loop/iterate-pass.ts (Phase 4) or bucket-extract helpers to ` +
+          `kernel/loop/runner-helpers/<bucket>.ts (Phase 2 pattern), OR\n` +
           `  2. If the addition is a legitimate new orchestration concern in ` +
           `runKernel(), raise CEILING in this test and add a rationale comment ` +
           `referencing the WS-6 follow-up plan.`,
