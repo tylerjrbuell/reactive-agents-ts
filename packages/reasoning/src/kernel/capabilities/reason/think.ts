@@ -46,7 +46,7 @@ import {
 } from "../act/tool-parsing.js";
 import {
   gateNativeToolCallsForRequiredTools,
-} from "../act/tool-gating.js";
+} from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,

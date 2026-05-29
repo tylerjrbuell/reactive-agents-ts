@@ -49,7 +49,7 @@ import {
 } from "../../../kernel/state/kernel-state.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phase-hooks.js";
 import { emitToCompose } from "@reactive-agents/core";
-import { planNextMoveBatches } from "../act/tool-gating.js";
+import { planNextMoveBatches } from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,

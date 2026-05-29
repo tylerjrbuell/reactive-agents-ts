@@ -26,7 +26,7 @@ import {
   buildEvidenceCorpusFromSteps,
   validateOutputGroundedInEvidence,
 } from "../verify/evidence-grounding.js";
-import { gateNativeToolCallsForRequiredTools } from "../act/tool-gating.js";
+import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,

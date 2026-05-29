@@ -22,7 +22,7 @@ import {
 } from "../kernel/capabilities/attend/context-utils.js";
 import {
   type ToolElaborationInjectionConfig,
-} from "../kernel/capabilities/act/tool-gating.js";
+} from "../kernel/capabilities/decide/tool-gating.js";
 import { classifyTask } from "../kernel/capabilities/comprehend/task-classification.js";
 import { composePrompt } from "./prompt-composer.js";
 import {
