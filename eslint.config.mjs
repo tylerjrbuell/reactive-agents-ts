@@ -51,6 +51,37 @@ const NO_DIRECT_STATE_MUTATION = {
     "See GH #114 (transitionState discipline).",
 };
 
+// WS-3 Phase 4b — Capability boundary rule (leaf principle, architecture model §2.3).
+//
+// Files under `kernel/capabilities/<cap>/` MAY NOT import from sibling
+// capability directories. Cross-capability dependencies must route through:
+//   - `kernel/utils/` (substrate primitives — pure helpers)
+//   - `kernel/state/` (shared state types)
+//   - `core/services/` Tag-based service contracts
+//
+// Restored cycles after WS-3 Phase 1+2+3+4a: ZERO (verified 2026-05-28).
+// This rule structurally prevents re-introduction.
+//
+// Severity warn → error flip after retrofitting any pre-existing flagged
+// sites (currently expected: zero, but pre-existing edges may surface).
+// Match `from "../<cap>/...js"` — esquery doesn't support regex alternation
+// groups, so the selector is the broader `^\.\./[a-z]+\/` pattern. This
+// catches all cross-directory ../X/ imports from within a capability dir.
+// Inside kernel/capabilities/<cap>/ files, the only "../<X>/" path that's
+// legitimate is `../<same-cap>/` (rare same-dir-via-parent pattern); all
+// other matches are cross-capability internal imports.
+const NO_CROSS_CAPABILITY_INTERNAL_IMPORT = {
+  selector:
+    "ImportDeclaration[source.value=/^\\.\\.\\/[a-z]+\\//]",
+  message:
+    "Cross-capability internal import. The leaf principle (architecture-model §2.3) " +
+    "says capabilities consume substrate, NOT each other. Route through " +
+    "kernel/utils/ (pure helpers), kernel/state/ (shared types), or a " +
+    "Tag-based service contract in core/services/. " +
+    "Allowed baseline (~23 pre-existing edges, all one-way; zero cycles as of WS-3 Phase 4a) " +
+    "tolerated via warn-level; new violations should be reviewed.",
+};
+
 export default [
   {
     ignores: [
@@ -98,6 +129,15 @@ export default [
     ],
     rules: {
       "no-restricted-syntax": "off",
+    },
+  },
+  // WS-3 Phase 4b — Capability boundary rule. Applies ONLY under
+  // packages/reasoning/src/kernel/capabilities/*/. Each capability dir is a
+  // leaf — no sibling capability internal imports.
+  {
+    files: ["packages/reasoning/src/kernel/capabilities/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": ["warn", NO_DIRECT_STATE_MUTATION, NO_CROSS_CAPABILITY_INTERNAL_IMPORT],
     },
   },
 ];
