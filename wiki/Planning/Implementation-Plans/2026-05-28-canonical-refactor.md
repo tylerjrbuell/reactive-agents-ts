@@ -554,6 +554,34 @@ After WS-5 ships, re-run the audit (codebase-health-sweep skill v3) and confirm:
 
 ---
 
+#### 5.5a — Re-baselined thresholds (2026-05-29; Branch A decision)
+
+After WS-5b + WS-5c shipped the residual sweep, the original §5.5 thresholds proved unreachable without out-of-scope structural work in 6 different domains. Per re-audit gate report (`wiki/Research/Refactor-Reports/2026-05-29-re-audit-gate.md`) and user adjudication, the gate is re-baselined against **AST-counted floors + ceiling tests**:
+
+| Metric | Original target | Re-baselined target | Locked by |
+|---|---|---|---|
+| `as any` | ≤245 | ≤106 (current actual) | none yet — candidate for follow-up ceiling test |
+| `as unknown as` | ≤40 | ≤67 | `packages/runtime/test/as-unknown-as-ceiling.test.ts` (WS-5b) |
+| `as ComposableLayer` | = 0 | ≤3 (2 terminal mergeAll + 1 residual) | `packages/runtime/test/composable-layer-ceiling.test.ts` (WS-5c) |
+| `Effect<X, unknown>` | ≤52 | ≤20 (AST-counted) | `packages/runtime/test/no-silent-swallow-floor.test.ts` (WS-5 Phase 2) |
+| `console.warn` (active) | n/a | ≤9 | `packages/observability/.../console-ceiling.test.ts` (WS-5 Phase 3) |
+| `console.error` (active) | n/a | ≤0 | (same) |
+| Dead-surface (TagMap/ControllerDecision/Registry) | 0 | 0 | `packages/compose/test/anti-scaffold-tagmap.test.ts` (WS-4 Phase 6) + `decision-coverage.test.ts` (WS-4 Phase 2) + `harness-profile.test.ts` registry-drift guard |
+| Lying-comment | 0 | 0 | manual audit (B-series clean) |
+| AGENTS.md package-tree drift | 0 | 0 | `packages/core/tests/doc-drift.test.ts` (WS-5 Phase 4) |
+
+**Rationale:** The original §5.5 thresholds were grep-derived and overcounted by 5× for `Effect<X,unknown>` and `console.*` (docstring + comment contamination). For `as unknown as` and `as ComposableLayer`, the residual is structurally legitimate type-widening at module/shim/dynamic-import boundaries — not silent swallow. The **4 active ceiling tests** (Phase 2/3 + WS-5b/5c) provide durable anti-regression mechanism replacing the one-time threshold gate.
+
+**WS-6 status: UNBLOCKED 2026-05-29.** Follow-up structural work tracked separately:
+- AgentEvent union expansion (channels owner)
+- LLMConfig schema extension (llm-provider owner)
+- ReasoningExecuteRequest typing (kernel owner)
+- Anthropic SDK typings shim
+- Effect.Cause refactor for errors.ts:355
+- createLightRuntime ↔ createRuntime convergence (path to `as ComposableLayer` = 1)
+
+---
+
 ## 6. Per-Workstream Anatomy
 
 Each workstream gets a **thin spec doc** under `wiki/Planning/Implementation-Plans/2026-05-28-ws-N-<name>.md` with a uniform shape. The master plan does not duplicate per-WS detail.
