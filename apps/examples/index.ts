@@ -434,6 +434,14 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: true,
         path: './src/messaging/signal-telegram-hub.ts',
     },
+    // observe — offline (OTel exporter exercised, in-memory span witness)
+    {
+        num: 'O29',
+        label: 'otel-export',
+        category: 'observe',
+        requiresKey: false,
+        path: './src/observe/otel-export.ts',
+    },
 ]
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────

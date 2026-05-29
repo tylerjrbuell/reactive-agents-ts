@@ -923,7 +923,17 @@ export const createRuntime = (options: RuntimeOptions) => {
     : Layer.empty;
 
   // ── Extra (user-supplied) layers ──
-  const extraOptLayer = options.extraLayers ?? Layer.empty;
+  // WS-4 Phase 3: user-supplied layers (e.g. `OpenInferenceTracerLayer` from
+  // `@reactive-agents/observe`) typically subscribe to the framework
+  // `EventBus`. `Layer.mergeAll` does NOT auto-wire cross-dependencies, so
+  // an extra layer requiring `EventBus` would surface as
+  // "Service not found: EventBus" at build time. Provide the framework's
+  // EventBus to the extra layer so user code can compose against it the
+  // same way internal optional layers do (cf. `gatewayLayer.pipe(...)` above).
+  const extraOptLayer =
+    options.extraLayers !== undefined
+      ? options.extraLayers.pipe(Layer.provide(eventBusLayer))
+      : Layer.empty;
 
   // ── Terminal canonical composition (WS-2 RC-1) ──
   // Single declarative Layer.mergeAll over mandatory + optional layers; single
