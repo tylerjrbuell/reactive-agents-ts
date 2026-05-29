@@ -73,6 +73,7 @@ import {
 import { evaluateStrategySwitch } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
+import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
@@ -86,7 +87,7 @@ import {
   decideExecutionLane,
   shouldInjectOracleNudge,
 } from "../../kernel/utils/lane-controller.js";
-import { verifyAndEmit, type Verifier } from "../../kernel/capabilities/verify/verifier.js";
+import { type Verifier } from "../../kernel/capabilities/verify/verifier.js";
 import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
 import {
   RecallService,
@@ -95,7 +96,6 @@ import {
 } from "../../kernel/capabilities/recall/recall-service.js";
 import {
   emitKernelStateSnapshot,
-  emitHarnessSignalInjected,
 } from "../../kernel/utils/diagnostics.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import { RunControllerRef } from "@reactive-agents/core";
@@ -111,15 +111,9 @@ import {
   getLastErrors,
 } from "./runner-helpers/state-queries.js";
 import {
-  assembleDeliverable,
-  deliverableTerminationReason,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
 } from "./runner-helpers/deliverable.js";
-import {
-  buildRecoverySteeringGuidance,
-  getToolFailureRecovery,
-} from "./runner-helpers/recovery-steering.js";
 
 /**
  * Outer-loop control signal returned by `runIterationPass`.
@@ -806,118 +800,25 @@ export function runIterationPass(
             }
           }
 
-          // Before failing: if the model has gathered artifacts, succeed with them.
-          // Loops with data → deliver. Loops without data → fail.
-          const recovery = getToolFailureRecovery(state, currentInput);
-          const shouldNudgeRecovery =
-            recovery.failedUnresolved.length > 0 &&
-            failureRecoveryRedirects < maxFailureRecoveryRedirects;
-
-          if (shouldNudgeRecovery) {
-            failureRecoveryRedirects++;
-            const guidance = buildRecoverySteeringGuidance(
-              recovery,
-              failureRecoveryRedirects,
-              maxFailureRecoveryRedirects,
-              "loop",
-            );
-            yield* emitHarnessSignalInjected({
-              taskId: currentOptions.taskId ?? state.taskId,
-              iteration: state.iteration,
-              signalKind: "redirect",
-              origin: "runner.ts:1173",
-              content: guidance,
-              metadata: {
-                failedTools: recovery.failedUnresolved,
-                redirectCount: failureRecoveryRedirects,
-                trigger: "loop",
-              },
-            });
-            state = transitionState(state, {
-              status: "thinking",
-              steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-              pendingGuidance: { errorRecovery: guidance },
-              error: null,
-            });
-            sync(); return "continue";
-          }
-
-          const loopArtifactCount = countDeliverableCandidates(state);
-          if (loopArtifactCount > 0) {
-            const missingRequiredByCount = missingRequiredToolsForInput(state.steps, currentInput);
-            if (missingRequiredByCount.length > 0) {
-              requiredToolNudgeCount++;
-              if (requiredToolNudgeCount > maxRequiredToolNudges) {
-                yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`, timestamp: new Date() });
-                const d = assembleDeliverable(state);
-                state = terminate(state, {
-                  reason: deliverableTerminationReason(d),
-                  output: d.content,
-                });
-                sync(); return "break";
-              }
-              const guidance =
-                `Loop detected but required tool quota is still missing: ${missingRequiredByCount.join(", ")}. ` +
-                `Call the missing required tool(s) now instead of finalizing.`;
-              yield* emitHarnessSignalInjected({
-                taskId: currentOptions.taskId ?? state.taskId,
-                iteration: state.iteration,
-                signalKind: "nudge",
-                origin: "runner.ts:1199",
-                content: guidance,
-                metadata: { missingTools: missingRequiredByCount, trigger: "loop-with-missing-tools" },
-              });
-              state = transitionState(state, {
-                status: "thinking",
-                steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-                pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
-                error: null,
-              });
-              sync(); return "continue";
-            }
-
-            const loopDeliverable = assembleDeliverable(state);
-            yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing (source=${loopDeliverable.source})`, timestamp: new Date() });
-            state = terminate(state, {
-              reason: deliverableTerminationReason(loopDeliverable),
-              output: loopDeliverable.content,
-            });
-            sync(); return "break";
-          }
-
-          // Distinguish: if no tool calls were attempted, it's a pure thought loop.
-          // Degrade gracefully — deliver the last thought rather than a cryptic error.
-          // If tool calls were attempted but produced no deliverable results, it IS
-          // a genuine failure (the agent tried tools and got stuck).
-          //
-          // Output-boundary discipline (per types/step.ts isUserVisibleStep):
-          // when the lastThought has no real content, do NOT substitute the
-          // loop-detector diagnostic as the user-visible answer — that's a
-          // harness internal. Instead, fail with the diagnostic in `error`
-          // so the transitionState invariant nulls the output and the user
-          // sees a structured failure rather than developer-targeted advice.
-          const hasToolAttempts = state.steps.some((s) => s.type === "action");
-          if (hasToolAttempts) {
-            state = transitionState(state, {
-              status: "failed",
-              error: loopMsg,
-            });
-          } else {
-            const lastThought = [...state.steps].reverse().find((s) => s.type === "thought");
-            const lastThoughtContent = lastThought?.content;
-            if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
-              state = terminate(state, {
-                reason: "loop_graceful",
-                output: lastThoughtContent,
-              });
-            } else {
-              state = transitionState(state, {
-                status: "failed",
-                error: loopMsg,
-              });
-            }
-          }
-          sync(); return "break";
+          // No switch taken (disabled / exhausted / evaluator declined) — resolve
+          // the confirmed loop via the recovery / deliver / fail tree. Always
+          // ends in break or continue; never proceeds to the rest of the body.
+          const loopResult = yield* resolveDetectedLoop({
+            state,
+            currentInput,
+            currentOptions,
+            loopMsg,
+            failureRecoveryRedirects,
+            requiredToolNudgeCount,
+            maxFailureRecoveryRedirects,
+            maxRequiredToolNudges,
+            emitLog,
+          });
+          state = loopResult.state;
+          failureRecoveryRedirects = loopResult.failureRecoveryRedirects;
+          requiredToolNudgeCount = loopResult.requiredToolNudgeCount;
+          sync();
+          return loopResult.outcome === "break" ? "break" : "continue";
         }
       } // end if (state.status !== "done" && state.status !== "failed")
 
