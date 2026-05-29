@@ -38,6 +38,14 @@ import {
     applyWithModel,
     applyWithBudget,
 } from './builder/withers/model-budget.js'
+import {
+    applyWithTools,
+    applyWithTerminalTools,
+    applyWithDocuments,
+    applyWithRequiredTools,
+    applyWithMCP,
+    applyWithMetaTools,
+} from './builder/withers/tools.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -1064,20 +1072,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withTools(options?: ToolsOptions): this {
-        this._enableTools = true
-        if (options) {
-            const previous = this._toolsOptions
-            this._toolsOptions = {
-                ...previous,
-                ...options,
-                tools: options.tools
-                    ? [...(previous?.tools ?? []), ...options.tools]
-                    : previous?.tools,
-            }
-        }
-        if (options?.resultCompression) {
-            this._resultCompression = options.resultCompression
-        }
+        applyWithTools(this, options)
         return this
     }
 
@@ -1098,11 +1093,7 @@ export class ReactiveAgentBuilder {
      *   Method remains for backward compatibility.
      */
     withTerminalTools(options?: ShellExecuteConfig): this {
-        this._enableTools = true
-        this._toolsOptions = {
-            ...this._toolsOptions,
-            terminal: options ?? true,
-        }
+        applyWithTerminalTools(this, options)
         return this
     }
 
@@ -1121,8 +1112,7 @@ export class ReactiveAgentBuilder {
      *   backward compatibility.
      */
     withDocuments(docs: DocumentSpec[]): this {
-        this._documents = [...this._documents, ...docs]
-        this._enableTools = true // rag-search needs tools enabled
+        applyWithDocuments(this, docs)
         return this
     }
 
@@ -1146,7 +1136,7 @@ export class ReactiveAgentBuilder {
         /** Max redirect attempts before failing (default: 2) */
         maxRetries?: number
     }): this {
-        this._requiredToolsConfig = config
+        applyWithRequiredTools(this, config)
         return this
     }
 
@@ -1463,9 +1453,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withMCP(config: MCPServerConfig | MCPServerConfig[]): this {
-        const configs = Array.isArray(config) ? config : [config]
-        this._mcpServers.push(...configs)
-        this._enableTools = true
+        applyWithMCP(this, config)
         return this
     }
 
@@ -1770,17 +1758,7 @@ export class ReactiveAgentBuilder {
      *   a `ToolsOptions` field. Method remains for backward compatibility.
      */
     withMetaTools(config?: import('./types.js').MetaToolsConfig | false): this {
-        if (config === false) {
-            this._metaTools = false
-        } else {
-            this._metaTools = config ?? {
-                brief: true,
-                find: true,
-                pulse: true,
-                recall: true,
-                harnessSkill: true,
-            }
-        }
+        applyWithMetaTools(this, config)
         return this
     }
 
