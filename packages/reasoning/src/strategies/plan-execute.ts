@@ -58,6 +58,15 @@ import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
 
+// ── WS-6 Phase 3 — output utilities bucket (B) ──────────────────────────────
+// Goal text extraction, FINAL ANSWER stripping, action-tool sanitization.
+// See ./plan-execute/output-utils.ts for the moved implementations.
+import {
+  extractGoalText,
+  stripFinalAnswerPrefix,
+  sanitizeToolOutput,
+} from "./plan-execute/output-utils.js";
+
 interface PlanExecuteInput {
   readonly taskDescription: string;
   readonly taskType: string;
@@ -1454,125 +1463,8 @@ function augmentPlan(
 }
 
 // ─── Utility Helpers ───
-
-/**
- * Extract plain goal text from taskDescription which may be JSON-wrapped.
- * The execution engine passes `JSON.stringify(task.input)` which produces
- * `{"question":"actual goal text"}` — unwrap that to get the clean string.
- */
-function extractGoalText(taskDescription: string): string {
-  try {
-    const parsed = JSON.parse(taskDescription);
-    if (typeof parsed === "object" && parsed !== null && typeof parsed.question === "string") {
-      return parsed.question;
-    }
-  } catch {
-    // Not JSON — use as-is
-  }
-  return taskDescription;
-}
-
-/**
- * Strip "FINAL ANSWER:" prefix from LLM output so it doesn't leak into
- * tool arguments or user-visible messages.
- */
-function stripFinalAnswerPrefix(text: string): string {
-  return text.replace(/^FINAL ANSWER:\s*/i, "").trim();
-}
-
-/**
- * Action-oriented tool name patterns — tools that perform side effects
- * (send, write, post, create, delete, etc.) rather than fetching data.
- * Their raw output (JSON with args like recipient/message) should NOT
- * appear in downstream steps or the final synthesis.
- */
-const ACTION_TOOL_PATTERNS = /\b(send|write|post|create|delete|remove|update|set|put|push|publish|notify|deploy|upload)\b/i;
-
-/**
- * Sanitize tool output to prevent internal metadata from leaking into
- * downstream steps or final user-facing synthesis.
- *
- * - Data-fetching tools (list, get, search, read) → keep full output
- * - Action tools (send, write, post, create) → clean confirmation only
- */
-function sanitizeToolOutput(
-  toolName: string,
-  rawOutput: string,
-  args: Record<string, unknown>,
-): string {
-  // shell-execute wraps command output in metadata; prefer the full untruncated
-  // command payload so downstream synthesis can parse complete results.
-  if (toolName.includes("shell-execute")) {
-    const extractText = (value: unknown): string | null => {
-      if (typeof value === "string" && value.trim().length > 0) return value;
-      return null;
-    };
-
-    const parseUnknown = (value: unknown): unknown => {
-      if (typeof value !== "string") return value;
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
-      }
-    };
-
-    // Some integrations return shell payloads as nested objects or as
-    // stringified JSON at one or more levels. Normalize to inspect safely.
-    const parsed = parseUnknown(rawOutput);
-    const normalized =
-      parsed && typeof parsed === "object" && "result" in parsed
-        ? parseUnknown((parsed as { result?: unknown }).result)
-        : parsed;
-
-    if (normalized && typeof normalized === "object") {
-      const payload = normalized as {
-        fullOutput?: unknown;
-        output?: unknown;
-        fullStderr?: unknown;
-        stderr?: unknown;
-      };
-
-      const output =
-        extractText(payload.fullOutput) ??
-        extractText(payload.output) ??
-        "";
-      const stderr =
-        extractText(payload.fullStderr) ??
-        extractText(payload.stderr) ??
-        "";
-
-      if (output.trim().length > 0) return output;
-      if (stderr.trim().length > 0) return stderr;
-    }
-  }
-
-  // If tool name indicates a data-fetching operation, keep full output
-  if (!ACTION_TOOL_PATTERNS.test(toolName)) {
-    return rawOutput;
-  }
-
-  // For action tools, check if the raw output is just echoing back the args
-  // (common MCP pattern: return the request payload as confirmation)
-  const isJsonEcho = (() => {
-    try {
-      const parsed = JSON.parse(rawOutput);
-      if (typeof parsed !== "object" || parsed === null) return false;
-      // If most keys in the output match the input args, it's an echo
-      const outputKeys = Object.keys(parsed);
-      const argKeys = Object.keys(args);
-      const overlap = outputKeys.filter((k) => argKeys.includes(k));
-      return overlap.length >= argKeys.length * 0.5;
-    } catch {
-      return false;
-    }
-  })();
-
-  if (isJsonEcho) {
-    // Replace with clean confirmation — just the tool name and success
-    const friendlyName = toolName.split("/").pop() ?? toolName;
-    return `✓ ${friendlyName} completed successfully`;
-  }
-
-  return rawOutput;
-}
+//
+// Output utilities (extractGoalText, stripFinalAnswerPrefix, sanitizeToolOutput,
+// ACTION_TOOL_PATTERNS) were extracted to ./plan-execute/output-utils.ts in
+// WS-6 Phase 3 bucket B so step-executor and plan-mutation helpers can import
+// without circular dependency. Import added at top of file.
