@@ -1769,7 +1769,14 @@ export function runKernel(
     // already ensures state.error doesn't leak as state.output; user sees
     // null output + structured error.
     if (process.env.DEBUG_VERIFIER === "1") {
-      console.error(`[VERIFIER-PRE] status=${state.status} hasOutput=${!!state.output} terminatedBy=${state.meta.terminatedBy} outLen=${(state.output ?? "").length} stepsCount=${state.steps.length}`);
+      // WS-5 Phase 3: migrated from console.error to Effect.logDebug. The
+      // [VERIFIER-PRE] trace is a debug-only diagnostic for the verifier-pre
+      // snapshot path; routing through Effect.logDebug threads it into the
+      // structured observability sink instead of stdout. Env-gate preserved
+      // (opt-in semantics — high-frequency message).
+      yield* Effect.logDebug(
+        `[VERIFIER-PRE] status=${state.status} hasOutput=${!!state.output} terminatedBy=${state.meta.terminatedBy} outLen=${(state.output ?? "").length} stepsCount=${state.steps.length}`,
+      );
     }
 
     // ── Terminal snapshot (pre-verifier) ─────────────────────────────────────
