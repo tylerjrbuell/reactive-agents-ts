@@ -1357,10 +1357,13 @@ export class ReactiveAgentBuilder {
      * Required for `.pause()`, `.resume()`, `.stop()`, and `.terminate()` methods on ReactiveAgent.
      *
      * @returns `this` for chaining
-     * @deprecated alias for the frozen killswitch set (master plan §11.4 —
+     * @deprecated alias for the 5 shipped killswitches (master plan §11.4 —
      *   `budgetLimit`, `maxIterations`, `timeoutAfter`, `watchdog`,
-     *   `requireApprovalFor`, `confidenceFloor`). Compose via
-     *   `.compose(killSwitch(...))`. Method remains for backward compatibility.
+     *   `requireApprovalFor`). Compose via `.compose(killSwitch(...))`.
+     *   Method remains for backward compatibility.
+     *   Note: `confidenceFloor` was unshipped 2026-05-19 (Tier 0 honesty sweep,
+     *   GH #160) — verify-phase killswitches cannot fire at runtime per the
+     *   compose pipeline contract; see `packages/compose/test/killswitches.test.ts`.
      */
     withKillSwitch(): this {
         this._enableKillSwitch = true
