@@ -28,10 +28,8 @@ import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
-  buildPatchPrompt,
   buildStepExecutionPrompt,
   buildReflectionPrompt,
-  buildAugmentPrompt,
 } from "./plan-prompts.js";
 import type { ToolSummary, StepResult } from "./plan-prompts.js";
 import { executeReActKernel } from "../kernel/loop/react-kernel.js";
@@ -66,6 +64,15 @@ import {
   stripFinalAnswerPrefix,
   sanitizeToolOutput,
 } from "./plan-execute/output-utils.js";
+
+// ── WS-6 Phase 3 — plan mutation bucket (A) ─────────────────────────────────
+// patchPlan + augmentPlan helpers (both swallow LLM extraction failures into
+// Effect.succeed(null) so the refinement loop can fall through). See
+// ./plan-execute/plan-mutation.ts for the moved implementations.
+import {
+  patchPlan,
+  augmentPlan,
+} from "./plan-execute/plan-mutation.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -1343,124 +1350,13 @@ function executeStep(
   );
 }
 
-/**
- * Attempt to patch remaining plan steps after a failure.
- * Uses extractStructuredOutput with buildPatchPrompt.
- */
-function patchPlan(
-  plan: Plan,
-  failedStepIndex: number,
-  input: PlanExecuteInput,
-  _llm: unknown,
-  _currentTokens: number,
-): Effect.Effect<
-  { steps: PlanStep[]; tokens: number } | null,
-  Error,
-  LLMService
-> {
-  const patchPrompt = buildPatchPrompt(extractGoalText(input.taskDescription), plan.steps);
-
-  return extractStructuredOutput({
-    schema: LLMPlanOutputSchema,
-    prompt: patchPrompt,
-    systemPrompt:
-      "You are a planning agent. Rewrite the failed and pending steps to recover.",
-    maxRetries: 1,
-    temperature: 0.3,
-    maxTokens: 4096,
-  }).pipe(
-    Effect.map((result) => {
-      const patchedPlan = hydratePlan(result.data, {
-        taskId: plan.taskId,
-        agentId: plan.agentId,
-        goal: plan.goal,
-        planMode: plan.mode,
-      });
-      // Re-number patch steps starting after the failed step
-      const patchedSteps = patchedPlan.steps.map((s, idx) => ({
-        ...s,
-        id: `s${failedStepIndex + 2 + idx}`,
-        seq: failedStepIndex + 2 + idx,
-      }));
-      const tokenEst =
-        Math.ceil(result.raw.length / 4) +
-        Math.ceil(patchPrompt.length / 4);
-      return { steps: patchedSteps, tokens: tokenEst };
-    }),
-    Effect.catchAll(() => Effect.succeed(null)),
-  );
-}
-
-/**
- * Generate supplementary plan steps when all existing steps completed but the
- * reflector determined the goal is unmet. Unlike patchPlan (which rewrites
- * failed steps), this appends NEW steps to fill gaps.
- */
-function augmentPlan(
-  plan: Plan,
-  goal: string,
-  reflectionFeedback: string,
-  input: PlanExecuteInput,
-  _llm: unknown,
-  _currentTokens: number,
-): Effect.Effect<
-  { steps: PlanStep[]; tokens: number } | null,
-  Error,
-  LLMService
-> {
-  const toolSummaries: ToolSummary[] = (
-    input.availableToolSchemas ?? []
-  ).map((t) => ({
-    name: t.name,
-    signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
-  }));
-
-  const completedSteps = plan.steps
-    .filter((s) => s.status === "completed")
-    .map((s) => ({
-      stepId: s.id,
-      title: s.title,
-      result: s.result,
-    }));
-
-  const augmentPrompt = buildAugmentPrompt({
-    goal,
-    completedSteps,
-    reflectionFeedback,
-    tools: toolSummaries,
-  });
-
-  const nextSeq = plan.steps.length + 1;
-
-  return extractStructuredOutput({
-    schema: LLMPlanOutputSchema,
-    prompt: augmentPrompt,
-    systemPrompt:
-      "You are a planning agent. Generate supplementary steps to fill gaps in an incomplete plan.",
-    maxRetries: 1,
-    temperature: 0.3,
-    maxTokens: 4096,
-  }).pipe(
-    Effect.map((result) => {
-      const augmentedPlan = hydratePlan(result.data, {
-        taskId: plan.taskId,
-        agentId: plan.agentId,
-        goal: plan.goal,
-        planMode: plan.mode,
-      });
-      const augmentedSteps = augmentedPlan.steps.map((s, idx) => ({
-        ...s,
-        id: `s${nextSeq + idx}`,
-        seq: nextSeq + idx,
-      }));
-      const tokenEst =
-        Math.ceil(result.raw.length / 4) +
-        Math.ceil(augmentPrompt.length / 4);
-      return { steps: augmentedSteps, tokens: tokenEst };
-    }),
-    Effect.catchAll(() => Effect.succeed(null)),
-  );
-}
+// ─── Plan Mutation Helpers ───
+//
+// `patchPlan` (rewrite failed + pending steps) and `augmentPlan` (append
+// supplementary steps to fill goal gaps) were extracted to
+// ./plan-execute/plan-mutation.ts in WS-6 Phase 3 bucket A. Both helpers
+// take a narrowed input shape (PatchInput/AugmentInput) so they don't
+// re-import the full `PlanExecuteInput` type from this module.
 
 // ─── Utility Helpers ───
 //
