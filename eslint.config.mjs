@@ -114,9 +114,11 @@ export default [
       reportUnusedDisableDirectives: false,
     },
     rules: {
-      // Phase 1 severity: "warn". Phase 2 flips to "error" once any
-      // surviving violations from the audit have been retrofitted.
-      "no-restricted-syntax": ["warn", NO_DIRECT_STATE_MUTATION],
+      // WS-3 Phase 4c (2026-05-29): severity flipped warn → error after
+      // Sprint 3.3 + prior transitionState retrofit confirmed zero raw
+      // state.{status,terminatedBy,error} = sites outside canonical owners.
+      // Gate: packages/reasoning/tests/kernel-state-mutation-discipline.test.ts.
+      "no-restricted-syntax": ["error", NO_DIRECT_STATE_MUTATION],
     },
   },
   // Canonical mutation sites — turn the rule OFF here. These two files are
@@ -134,10 +136,39 @@ export default [
   // WS-3 Phase 4b — Capability boundary rule. Applies ONLY under
   // packages/reasoning/src/kernel/capabilities/*/. Each capability dir is a
   // leaf — no sibling capability internal imports.
+  //
+  // Severity is "warn": the rule has its own retrofit baseline (~23 pre-existing
+  // one-way edges, zero cycles as of WS-3 Phase 4a) which is tolerated until a
+  // dedicated boundary-relocation phase retires the residual edges. New
+  // cross-cap imports surface as warnings during review.
+  //
+  // NOTE: this block carries ONLY the cross-cap selector. State-mutation
+  // enforcement at error severity is provided by the trailing block below.
+  // (`no-restricted-syntax` is a single-severity rule and flat-config rule
+  // settings are REPLACED — not merged — by later matching blocks; mixing
+  // selectors at different severities therefore requires the split.)
   {
     files: ["packages/reasoning/src/kernel/capabilities/**/*.ts"],
     rules: {
-      "no-restricted-syntax": ["warn", NO_DIRECT_STATE_MUTATION, NO_CROSS_CAPABILITY_INTERNAL_IMPORT],
+      "no-restricted-syntax": ["warn", NO_CROSS_CAPABILITY_INTERNAL_IMPORT],
+    },
+  },
+  // WS-3 Phase 4c (2026-05-29) — Severity lock-in for NO_DIRECT_STATE_MUTATION
+  // across the whole kernel/ tree, including capabilities/, where the
+  // preceding Phase 4b block would otherwise have dropped the state-mutation
+  // selector entirely.
+  //
+  // Excludes the two canonical mutation owners (kernel-state.ts +
+  // terminate.ts) — their existing "off" override above remains the
+  // structural source of truth for those files.
+  {
+    files: ["packages/reasoning/src/kernel/**/*.ts"],
+    ignores: [
+      "packages/reasoning/src/kernel/state/kernel-state.ts",
+      "packages/reasoning/src/kernel/loop/terminate.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": ["error", NO_DIRECT_STATE_MUTATION],
     },
   },
 ];
