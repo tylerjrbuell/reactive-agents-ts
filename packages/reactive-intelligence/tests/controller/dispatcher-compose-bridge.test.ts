@@ -132,7 +132,11 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     expect(payload.recommendedAction).toBe("switch");
   });
 
-  it("emits lifecycle.failure for stall-detect / harness-harm / human-escalate", async () => {
+  it("emits lifecycle.failure for stall-detect / harness-harm", async () => {
+    // WS-4 Phase 2 (2026-05-28) — `human-escalate` removed from the bridge
+    // alongside the ControllerDecision union prune. Remaining bridgeable
+    // lifecycle-failure decisions are stall-detect (llm-refusal) and
+    // harness-harm (tool-error).
     const h = new RegistrationHarness();
     const captured: TapEntry[] = [];
     taps(h, captured);
@@ -141,20 +145,18 @@ describe("dispatcher → Compose bridge (HS-112)", () => {
     const dispatcher = makeDispatcher({ ...defaultInterventionConfig, suppression: baseSuppression });
     registerHandler(dispatcher, asInterventionHandler(fixedHandler("stall-detect", successOutcome())));
     registerHandler(dispatcher, asInterventionHandler(fixedHandler("harness-harm", successOutcome())));
-    registerHandler(dispatcher, asInterventionHandler(fixedHandler("human-escalate", successOutcome())));
 
     const decisions: ControllerDecision[] = [
       { decision: "stall-detect", reason: "no progress", stalledIterations: 4 },
       { decision: "harness-harm", reason: "infinite loop signature", harmLevel: "confirmed" },
-      { decision: "human-escalate", reason: "blocked", decisionsExhausted: ["switch-strategy"] },
     ];
 
     await Effect.runPromise(dispatcher.dispatch(decisions, makeState(), makeContext(pipeline)));
 
     const failures = captured.filter((c) => c.tag === "lifecycle.failure");
-    expect(failures).toHaveLength(3);
+    expect(failures).toHaveLength(2);
     const reasons = failures.map((f) => (f.payload as LifecycleFailurePayload).reason).sort();
-    expect(reasons).toEqual(["llm-refusal", "tool-error", "verifier-rejection"]);
+    expect(reasons).toEqual(["llm-refusal", "tool-error"]);
   });
 
   it("emits nudge.healing-failure for tool-failure-redirect", async () => {
