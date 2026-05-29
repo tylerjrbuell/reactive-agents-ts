@@ -17,7 +17,6 @@
 import { Effect, Ref } from "effect";
 import {
   scratchpadStoreRef,
-  type FinalAnswerCapture,
   buildBriefResponse,
   mergeBriefAvailableSkills,
   type BriefInput,
@@ -41,10 +40,6 @@ export type MetaToolHandler = (
   allSteps: readonly ReasoningStep[],
   newToolsUsed: Set<string>,
 ) => Effect.Effect<MetaToolResult, never>;
-
-// `FinalAnswerCapture` re-exported through the original import surface so
-// act.ts keeps a single import site; the final-answer path lives in act.ts.
-export type { FinalAnswerCapture };
 
 /**
  * brief — situational awareness snapshot (inline, no ToolService round-trip).

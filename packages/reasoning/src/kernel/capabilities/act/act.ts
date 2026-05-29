@@ -47,7 +47,6 @@ import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phas
 import { emitToCompose } from "@reactive-agents/core";
 import { planNextMoveBatches } from "../decide/tool-gating.js";
 import {
-  getMissingRequiredToolsByCount,
   getEffectiveMissingRequiredTools,
 } from "../verify/requirement-state.js";
 import { assembleConversation } from "./conversation-assembly.js";
