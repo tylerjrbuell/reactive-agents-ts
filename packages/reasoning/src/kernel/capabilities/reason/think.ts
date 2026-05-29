@@ -73,9 +73,8 @@ import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { detectAssumptions } from "./assumption-detector.js";
 import { explainProviderError } from "./provider-error-explain.js";
-import { emitAssumptionRecorded } from "../../utils/diagnostics.js";
+import { surfaceAssumptions } from "./assumption-surfacing.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -714,27 +713,12 @@ export function handleThinking(
 
     // ── v0.11.x: surface model-stated assumptions as AssumptionRecordedEvents.
     // Best-effort; failure is swallowed inside the emitter so think never breaks.
-    {
-      const assumptions = detectAssumptions(thought);
-      if (assumptions.length > 0 && thinking) {
-        // Also scan the hidden thinking trace, capped to the global limit (3).
-        const fromThinking = detectAssumptions(thinking);
-        for (const a of fromThinking) {
-          if (assumptions.length >= 3) break;
-          if (!assumptions.some((x) => x.assumption === a.assumption)) {
-            assumptions.push(a);
-          }
-        }
-      }
-      for (const a of assumptions) {
-        yield* emitAssumptionRecorded({
-          taskId: state.taskId,
-          iteration: state.iteration,
-          assumption: a.assumption,
-          rationale: a.rationale,
-        });
-      }
-    }
+    yield* surfaceAssumptions({
+      thought,
+      thinking,
+      taskId: state.taskId,
+      iteration: state.iteration,
+    });
 
     // Publish thought event with full prompt trace for logModelIO.
     // messages[] carries the complete FC conversation thread with role labels.
