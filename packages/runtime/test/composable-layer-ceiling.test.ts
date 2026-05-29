@@ -13,13 +13,15 @@
 // Master plan §8.1 (`wiki/Planning/Implementation-Plans/2026-05-28-canonical-refactor.md`)
 // fixes the target at "1 in runtime.ts (terminal cast at Layer.mergeAll); = 0
 // elsewhere". WS-2 Phase 3 collapsed the merge chain to a single Layer.mergeAll
-// and reduced the cast count from ~33 → 6. WS-5c finishes the helper-internal
+// and reduced the cast count from ~33 → 6. WS-5c finished the helper-internal
 // sweep, taking the count from 6 → 2 (one terminal cast per runtime factory).
 //
-// The path from 2 → 1 requires re-architecting createLightRuntime to compose
-// through createRuntime with an options patch — that's a deeper refactor
-// (createLightRuntime intentionally skips the heavy layers) and is tracked
-// as a documented follow-up to this phase.
+// WS-5d reaches the §8.1 "= 1" target WITHOUT converging the two factories.
+// Instead of re-architecting createLightRuntime through createRuntime (which
+// would change hot-path behavior — isolated MetricsCollector, Tier-1 memory),
+// both factories now route their terminal Layer.mergeAll(...) result through a
+// single `finalizeComposition()` widening helper. The lone `as ComposableLayer`
+// lives exactly once, inside that helper; both call sites carry ZERO casts.
 //
 // CEILING RATIONALE
 // -----------------
@@ -35,20 +37,19 @@ import { resolve, join } from "node:path";
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const RUNTIME_FILE = join(REPO_ROOT, "packages/runtime/src/runtime.ts");
 
-// Verified ceiling at WS-5c GREEN (2026-05-29):
-//   • runtime.ts:975  — terminal `) as ComposableLayer;` after `createRuntime`'s
-//                       Layer.mergeAll. §8.1-legitimate.
-//   • runtime.ts:1256 — terminal `) as ComposableLayer;` after `createLightRuntime`'s
-//                       Layer.mergeAll. §8.1-legitimate (2-vs-1 deferred —
-//                       see WS-5c follow-up below).
+// Verified ceiling at WS-5d GREEN (2026-05-29):
+//   • runtime.ts (~line 80) — the SINGLE `as ComposableLayer` lives inside the
+//     `finalizeComposition()` widening helper. Both `createRuntime` and
+//     `createLightRuntime` route their terminal `Layer.mergeAll(...)` result
+//     through that helper, so each call site carries ZERO casts. §8.1 "= 1" met.
 //
-// FOLLOW-UP TO REACH §8.1 "= 1" TARGET
-// ------------------------------------
-// To take the ceiling from 2 → 1, `createLightRuntime` must compose through
-// `createRuntime` with a "skip heavy layers" options patch. createLightRuntime
-// today is ~250 LOC of parallel composition logic that intentionally omits
-// MetricsCollector subscription, LifecycleHookRegistry, memory, and ~12
-// optional layers. The convergence is feasible but out of scope for WS-5c.
+// WHY THE HELPER (and not factory convergence)
+// --------------------------------------------
+// Reaching "= 1" by composing createLightRuntime through createRuntime would
+// change hot-path behavior — createLightRuntime intentionally gives the engine
+// an isolated MetricsCollector and uses Tier-1 working memory only. The helper
+// is a pure generic identity-wrap: it consolidates the type widening without
+// touching any layer set, config default, or MetricsCollector wiring.
 //
 // COUNTER DISCIPLINE
 // ------------------
@@ -57,7 +58,7 @@ const RUNTIME_FILE = join(REPO_ROOT, "packages/runtime/src/runtime.ts");
 // the ComposableLayer type alias is declared once at runtime.ts:76. No
 // docstring/comment hits because the type only appears in real type
 // positions (the call sites and the type alias declaration itself).
-const CEILING = 2;
+const CEILING = 1;
 
 interface Hit {
   line: number;
@@ -94,7 +95,7 @@ function countComposableCasts(file: string): Hit[] {
   return hits;
 }
 
-describe("WS-5c — ComposableLayer cast-site ceiling", () => {
+describe("WS-5d — ComposableLayer cast-site ceiling", () => {
   it(`ComposableLayer casts in runtime.ts stay ≤ ${CEILING}`, () => {
     const hits = countComposableCasts(RUNTIME_FILE);
     if (hits.length > CEILING) {
