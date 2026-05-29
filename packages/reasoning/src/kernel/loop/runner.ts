@@ -48,7 +48,7 @@ import {
 // through the Arbitrator so the veto applies (catches "framework giving
 // up due to maxIterations approach with tool failures" as exit-failure).
 import {
-  arbitrateAndApply,
+  arbitrateAndApplyWithBudgetEmit,
   arbitrationContextFromState,
 } from "../../kernel/capabilities/decide/arbitrator.js";
 import { buildOracleNudge } from "../../kernel/capabilities/decide/oracle-nudge.js";
@@ -73,7 +73,6 @@ import {
 import {
   emitKernelStateSnapshot,
   emitHarnessSignalInjected,
-  emitBudgetSignalCollected,
 } from "../../kernel/utils/diagnostics.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import {
@@ -921,32 +920,18 @@ export function runKernel(
           task: input.task,
           requiredTools: input.requiredTools,
         });
-        // Issue #128 — surface BudgetSignal whenever the Arbitrator runs.
-        if (arbCtx.budget) {
-          yield* emitBudgetSignalCollected({
-            taskId: effectiveInput.taskId ?? "",
-            iteration: state.iteration,
-            tokensUsed: arbCtx.budget.tokensUsed,
-            costUsd: arbCtx.budget.costUsd,
-            ...(arbCtx.budget.tokenLimit !== undefined
-              ? { tokenLimit: arbCtx.budget.tokenLimit }
-              : {}),
-            ...(arbCtx.budget.costLimit !== undefined
-              ? { costLimit: arbCtx.budget.costLimit }
-              : {}),
-            status: arbCtx.budget.status,
-            ...(arbCtx.budget.reason !== undefined ? { reason: arbCtx.budget.reason } : {}),
-          });
-        }
-        state = arbitrateAndApply(
+        // WS-3 Phase 5b — emit BudgetSignal + arbitrate in a single call
+        // colocated at the Decide capability boundary (invariant 10).
+        state = yield* arbitrateAndApplyWithBudgetEmit({
           state,
-          {
+          intent: {
             kind: "controller-early-stop",
             output: state.output ?? "",
             reason: "dispatcher_early_stop",
           },
-          arbCtx,
-        );
+          ctx: arbCtx,
+          taskId: effectiveInput.taskId ?? "",
+        });
         break;
       }
 

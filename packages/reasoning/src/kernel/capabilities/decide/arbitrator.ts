@@ -7,10 +7,12 @@
  * short-circuit semantics for high-confidence signals.
  */
 
+import { Effect } from "effect";
 import type { ReasoningStep } from "../../../types/index.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { FINAL_ANSWER_RE, extractFinalAnswer } from "../../utils/tool-parsing.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
+import { emitBudgetSignalCollected } from "../../utils/diagnostics.js";
 
 // ── Local structural types ──────────────────────────────────────────────
 // These mirror shapes from @reactive-agents/reactive-intelligence without
@@ -1096,6 +1098,59 @@ export function arbitrateAndApply(
 ): _KernelState {
   const verdict = arbitrate(intent, ctx);
   return applyTermination(state, verdict, extraMeta);
+}
+
+// ─── Capability-boundary emit wrapper (WS-3 Phase 5b) ───────────────────────
+//
+// `arbitrateAndApplyWithBudgetEmit` is the canonical entry point for callers
+// (the kernel loop) that need both the BudgetSignalCollected trace event AND
+// the arbitrate-and-apply state transition. It enforces invariant 10 of the
+// canonical-refactor model: capability emit events fire from capability code,
+// never from strategy / loop code.
+//
+// Pre-WS-3 Phase 5b, runner.ts called `yield* emitBudgetSignalCollected({...})`
+// inline before `arbitrateAndApply(...)` at the dispatcher-early-stop site.
+// That coupled the loop to the BudgetSignal trace shape. This helper colocates
+// the emit with the arbitration call so future budget-signal evolution
+// (new threshold bands, derived fields, etc.) updates the emit without
+// touching runner.ts.
+//
+// Architecture mapping: §5.3 — Arbitrator integrates 6 signals;
+// BudgetSignal is one of them; emit fires from Decide.
+//
+// Same semantics as calling `arbitrateAndApply(state, intent, ctx, extraMeta)`
+// directly — the returned KernelState is unchanged. The emit fires only when
+// `ctx.budget` is present (limits were declared) and is fire-and-forget at
+// the EventBus boundary (Effect-swallows publish failures via the underlying
+// helper's `emitErrorSwallowed` policy).
+export function arbitrateAndApplyWithBudgetEmit(args: {
+  readonly state: _KernelState;
+  readonly intent: TerminationIntent;
+  readonly ctx: ArbitrationContext;
+  readonly taskId: string;
+  readonly extraMeta?: Record<string, unknown>;
+}): Effect.Effect<_KernelState, never> {
+  const { state, intent, ctx, taskId, extraMeta } = args;
+  return Effect.gen(function* () {
+    // Issue #128 — surface BudgetSignal whenever the Arbitrator runs.
+    if (ctx.budget) {
+      yield* emitBudgetSignalCollected({
+        taskId,
+        iteration: ctx.iteration,
+        tokensUsed: ctx.budget.tokensUsed,
+        costUsd: ctx.budget.costUsd,
+        ...(ctx.budget.tokenLimit !== undefined
+          ? { tokenLimit: ctx.budget.tokenLimit }
+          : {}),
+        ...(ctx.budget.costLimit !== undefined
+          ? { costLimit: ctx.budget.costLimit }
+          : {}),
+        status: ctx.budget.status,
+        ...(ctx.budget.reason !== undefined ? { reason: ctx.budget.reason } : {}),
+      });
+    }
+    return arbitrateAndApply(state, intent, ctx, extraMeta);
+  });
 }
 
 /**
