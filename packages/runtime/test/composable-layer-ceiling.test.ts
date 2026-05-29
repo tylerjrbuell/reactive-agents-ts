@@ -69,19 +69,25 @@ function countComposableCasts(file: string): Hit[] {
   const lines = src.split("\n");
   const hits: Hit[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i] ?? "";
+    const raw = lines[i] ?? "";
+    const trimmed = raw.trim();
     // Two spellings:
     //   1. `as ComposableLayer` (used at terminal Layer.mergeAll sites)
     //   2. `as unknown as ComposableLayer` (helper-internal casts WS-5c removes)
     // Exclude the type-alias declaration line itself.
-    if (line.includes("type ComposableLayer =")) continue;
+    if (raw.includes("type ComposableLayer =")) continue;
+    // Exclude JSDoc / line-comment mentions — the cast spelling appears in
+    // the buildToolsLayer docstring at runtime.ts:~106 explaining the WS-5c
+    // invariant. Real cast sites live in code positions; comment mentions
+    // don't trigger TS semantics and shouldn't count.
+    if (trimmed.startsWith("*") || trimmed.startsWith("//")) continue;
     if (
-      line.includes("as ComposableLayer") ||
-      line.includes("as unknown as ComposableLayer")
+      raw.includes("as ComposableLayer") ||
+      raw.includes("as unknown as ComposableLayer")
     ) {
       hits.push({
         line: i + 1,
-        snippet: line.trim().length > 140 ? line.trim().slice(0, 140) + "…" : line.trim(),
+        snippet: trimmed.length > 140 ? trimmed.slice(0, 140) + "…" : trimmed,
       });
     }
   }
@@ -110,15 +116,20 @@ describe("WS-5c — ComposableLayer cast-site ceiling", () => {
     expect(hits.length).toBeLessThanOrEqual(CEILING);
   }, 30000);
 
-  it("ComposableLayer cast spelling 'as ComposableLayer' only appears at terminal merge sites", () => {
+  it("ComposableLayer cast spelling 'as unknown as ComposableLayer' is gone from code positions", () => {
     // Anti-regression sanity check: the only acceptable spelling at the
     // ceiling is the clean `) as ComposableLayer;` at a Layer.mergeAll terminus.
     // Helper-internal `as unknown as ComposableLayer` casts (the 4 sites
-    // WS-5c removed) must NOT come back.
+    // WS-5c removed) must NOT come back in code positions. Comment / docstring
+    // mentions are exempt (no TS semantics).
     const src = readFileSync(RUNTIME_FILE, "utf-8");
-    // The type-alias declaration is exempt (it's a type position, not a cast).
-    const lines = src.split("\n").filter((l) => !l.includes("type ComposableLayer ="));
-    const filteredSrc = lines.join("\n");
+    const codeLines = src.split("\n").filter((l) => {
+      const t = l.trim();
+      if (l.includes("type ComposableLayer =")) return false;
+      if (t.startsWith("*") || t.startsWith("//")) return false;
+      return true;
+    });
+    const filteredSrc = codeLines.join("\n");
     const helperInternalCount = (
       filteredSrc.match(/as unknown as ComposableLayer/g) ?? []
     ).length;

@@ -96,6 +96,105 @@ const leanModeVerifier: Verifier = {
 };
 
 /**
+ * Build the optional ToolService layer for a runtime factory.
+ *
+ * Encapsulates the gate (`enableTools || mcpServers.length > 0`) and the
+ * optional `allowedTools` filtering wrap that both `createRuntime` and
+ * `createLightRuntime` previously open-coded as ~70-LOC duplicate blocks.
+ *
+ * Returns a typed `Layer.Layer<ToolService>` (or `null` when tools are
+ * disabled) — no `as ComposableLayer` cast inside. The single terminal
+ * cast happens at the consuming `Layer.mergeAll(...)` site, which is the
+ * WS-5c / §8.1 invariant pinned by
+ * `packages/runtime/test/composable-layer-ceiling.test.ts`.
+ *
+ * Note: `createLightRuntime` does not honor `mcpServers` (its tools gate
+ * is `options.enableTools` only). To preserve that behavior, the caller
+ * passes `mcpServers: undefined` (or simply omits it via Pick) when
+ * invoking from the light runtime path.
+ */
+function buildToolsLayer(
+  options: {
+    readonly enableTools?: boolean;
+    // We only inspect `.length`; the element shape is irrelevant here. Using
+    // `unknown` avoids importing MCPServerConfig solely for arity checking
+    // and keeps the helper compatible with LightRuntimeOptions (no mcpServers).
+    readonly mcpServers?: readonly unknown[] | undefined;
+    readonly allowedTools?: readonly string[];
+  },
+  eventBusLayer: Layer.Layer<EventBus>,
+): Layer.Layer<ToolService> | null {
+  const shouldEnableTools =
+    options.enableTools ||
+    (options.mcpServers && options.mcpServers.length > 0);
+  if (!shouldEnableTools) return null;
+
+  // ToolService requires EventBus; over-provide the runtime's shared
+  // EventBus instance so the tool layer joins the runtime's singleton bus.
+  const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
+
+  if (!options.allowedTools || options.allowedTools.length === 0) {
+    return baseToolsLayer;
+  }
+
+  // Normalize entries: trim whitespace so typos like `" recall"` don't silently
+  // reject the legitimate `recall` tool. Keeping the comparison lenient here is
+  // safer than making users debug invisible whitespace; `checkAllowedToolsMismatch`
+  // at bootstrap surfaces the normalized→registered match for visibility.
+  const allowed = new Set(
+    options.allowedTools
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0),
+  );
+
+  return Layer.effect(
+    ToolService,
+    Effect.gen(function* () {
+      // Get the underlying ToolService from the base layer
+      const base = yield* ToolService.pipe(Effect.provide(baseToolsLayer));
+
+      return {
+        execute: (input: import("@reactive-agents/tools").ToolInput) => {
+          if (!allowed.has(input.toolName)) {
+            return Effect.fail(
+              new ToolNotFoundError({
+                message: `Tool "${input.toolName}" is not in the allowed tools list`,
+                toolName: input.toolName,
+              }),
+            );
+          }
+          return base.execute(input);
+        },
+        register: base.register,
+        connectMCPServer: base.connectMCPServer,
+        disconnectMCPServer: base.disconnectMCPServer,
+        listTools: (filter?: { category?: string; source?: string; riskLevel?: string }) =>
+          base.listTools(filter).pipe(
+            Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+          ),
+        getTool: (name: string) => {
+          if (!allowed.has(name)) {
+            return Effect.fail(
+              new ToolNotFoundError({
+                message: `Tool "${name}" is not in the allowed tools list`,
+                toolName: name,
+              }),
+            );
+          }
+          return base.getTool(name);
+        },
+        toFunctionCallingFormat: () =>
+          base.toFunctionCallingFormat().pipe(
+            Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+          ),
+        listMCPServers: base.listMCPServers,
+        unregisterTool: base.unregisterTool,
+      };
+    }),
+  ).pipe(Layer.provide(baseToolsLayer));
+}
+
+/**
  * Create the full Reactive Agents runtime layer.
  *
  * Composes the base layers (Core, LLM Provider, Memory, ExecutionEngine, EventBus, MetricsCollector)
@@ -529,81 +628,13 @@ export const createRuntime = (options: RuntimeOptions) => {
     ? createCostLayer(options.costTrackingOptions)
     : Layer.empty;
 
-  // Build tools layer first — reasoning may depend on it
-  // MCP servers implicitly enable tools
-  let toolsLayer: ComposableLayer | null = null;
-  const shouldEnableTools =
-    options.enableTools ||
-    (options.mcpServers && options.mcpServers.length > 0);
-  if (shouldEnableTools) {
-    // ToolService requires EventBus; ToolResultCache enables opt-in tool result caching
-    const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
-
-    // If allowedTools is specified, wrap the ToolService with a filtering layer
-    // that restricts listTools, getTool, and toFunctionCallingFormat to only
-    // the whitelisted tool names. execute() also rejects non-allowed tools.
-    if (options.allowedTools && options.allowedTools.length > 0) {
-      // Normalize entries: trim whitespace so typos like `" recall"` don't silently
-      // reject the legitimate `recall` tool. Keeping the comparison lenient here is
-      // safer than making users debug invisible whitespace; `checkAllowedToolsMismatch`
-      // at bootstrap surfaces the normalized→registered match for visibility.
-      const allowed = new Set(
-        options.allowedTools
-          .map((name) => name.trim())
-          .filter((name) => name.length > 0),
-      );
-      toolsLayer = Layer.effect(
-        ToolService,
-        Effect.gen(function* () {
-          // Get the underlying ToolService from the base layer
-          const base = yield* ToolService.pipe(Effect.provide(baseToolsLayer));
-
-          return {
-            execute: (input: import("@reactive-agents/tools").ToolInput) => {
-              if (!allowed.has(input.toolName)) {
-                return Effect.fail(
-                  new ToolNotFoundError({
-                    message: `Tool "${input.toolName}" is not in the allowed tools list`,
-                    toolName: input.toolName,
-                  }),
-                );
-              }
-              return base.execute(input);
-            },
-            register: base.register,
-            connectMCPServer: base.connectMCPServer,
-            disconnectMCPServer: base.disconnectMCPServer,
-            listTools: (filter?: { category?: string; source?: string; riskLevel?: string }) =>
-              base.listTools(filter).pipe(
-                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
-              ),
-            getTool: (name: string) => {
-              if (!allowed.has(name)) {
-                return Effect.fail(
-                  new ToolNotFoundError({
-                    message: `Tool "${name}" is not in the allowed tools list`,
-                    toolName: name,
-                  }),
-                );
-              }
-              return base.getTool(name);
-            },
-            toFunctionCallingFormat: () =>
-              base.toFunctionCallingFormat().pipe(
-                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
-              ),
-            listMCPServers: base.listMCPServers,
-            unregisterTool: base.unregisterTool,
-          };
-        }),
-      ).pipe(Layer.provide(baseToolsLayer)) as unknown as ComposableLayer;
-    } else {
-      // Effect-TS Layer<ROut> is invariant; cross-invariance widening is the
-      // documented escape hatch at composition boundaries.
-      toolsLayer = baseToolsLayer as unknown as ComposableLayer;
-    }
-
-  }
+  // Build tools layer first — reasoning may depend on it.
+  // MCP servers implicitly enable tools (gate handled inside the helper).
+  // Helper returns `Layer.Layer<ToolService> | null` — no cast here; the
+  // ComposableLayer widening happens at the terminal Layer.mergeAll below
+  // (WS-5c / §8.1 ceiling pinned by composable-layer-ceiling.test.ts).
+  const toolsLayer = buildToolsLayer(options, eventBusLayer);
+  const shouldEnableTools = toolsLayer !== null;
 
   // toolsLayer is included in the terminal Layer.mergeAll below when defined.
   const toolResultCacheOptLayer = shouldEnableTools
@@ -1094,62 +1125,15 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
   );
 
   // ── Optional tools layer ──
-  let toolsLayer: ComposableLayer | null = null;
-  if (options.enableTools) {
-    const baseToolsLayer = createToolsLayer().pipe(Layer.provide(eventBusLayer));
-    if (options.allowedTools && options.allowedTools.length > 0) {
-      const allowed = new Set(
-        options.allowedTools
-          .map((name) => name.trim())
-          .filter((name) => name.length > 0),
-      );
-      toolsLayer = Layer.effect(
-        ToolService,
-        Effect.gen(function* () {
-          const base = yield* ToolService.pipe(Effect.provide(baseToolsLayer));
-          return {
-            execute: (input: import("@reactive-agents/tools").ToolInput) => {
-              if (!allowed.has(input.toolName)) {
-                return Effect.fail(
-                  new ToolNotFoundError({
-                    message: `Tool "${input.toolName}" is not in the allowed tools list`,
-                    toolName: input.toolName,
-                  }),
-                );
-              }
-              return base.execute(input);
-            },
-            register: base.register,
-            connectMCPServer: base.connectMCPServer,
-            disconnectMCPServer: base.disconnectMCPServer,
-            listTools: (filter?: { category?: string; source?: string; riskLevel?: string }) =>
-              base.listTools(filter).pipe(
-                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
-              ),
-            getTool: (name: string) => {
-              if (!allowed.has(name)) {
-                return Effect.fail(
-                  new ToolNotFoundError({
-                    message: `Tool "${name}" is not in the allowed tools list`,
-                    toolName: name,
-                  }),
-                );
-              }
-              return base.getTool(name);
-            },
-            toFunctionCallingFormat: () =>
-              base.toFunctionCallingFormat().pipe(
-                Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
-              ),
-            listMCPServers: base.listMCPServers,
-            unregisterTool: base.unregisterTool,
-          };
-        }),
-      ).pipe(Layer.provide(baseToolsLayer)) as unknown as ComposableLayer;
-    } else {
-      toolsLayer = baseToolsLayer as unknown as ComposableLayer;
-    }
-  }
+  // Light runtime ignores `mcpServers` by passing only the fields it honors
+  // (enableTools, allowedTools). Helper returns typed Layer.Layer<ToolService>
+  // | null — no cast here; ComposableLayer widening happens at the terminal
+  // Layer.mergeAll below (WS-5c / §8.1 ceiling pinned by
+  // composable-layer-ceiling.test.ts).
+  const toolsLayer = buildToolsLayer(
+    { enableTools: options.enableTools, allowedTools: options.allowedTools },
+    eventBusLayer,
+  );
   const lightToolResultCacheOptLayer = options.enableTools
     ? ToolResultCacheLive()
     : Layer.empty;
