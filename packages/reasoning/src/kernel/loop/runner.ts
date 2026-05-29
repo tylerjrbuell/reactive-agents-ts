@@ -85,41 +85,38 @@ import {
 
 import { META_TOOLS as RUNNER_META_TOOLS } from "../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, RunControllerRef } from "@reactive-agents/core";
+
+// ── WS-6 Phase 2 — helper bucket imports ──────────────────────────────────────
+// Tier-aware guard thresholds, deliverable assembly, recovery steering, and
+// state-query helpers all moved to ./runner-helpers/<bucket>.ts. Re-exports
+// below keep `kernel/loop/runner.js` as the stable import surface for callers
+// (output-quality-gate.test.ts, tier-guard-config.test.ts, strategies/*).
 import {
   TIER_GUARD_THRESHOLDS,
   resolveMaxSameTool,
   shouldExitOnLowDelta,
   shouldForceOracleExit,
 } from "./runner-helpers/tier-guards.js";
-
-// State-query helpers (missingRequiredToolsForInput, resolveStoredToolObservation,
-// getLastPulseReadyToAnswer, getLastErrors) extracted to ./runner-helpers/state-queries.ts
-// in WS-6 Phase 2. `resolveStoredToolObservation` is consumed transitively via
-// deliverable.ts; runner.ts only needs the direct consumers below.
 import {
   missingRequiredToolsForInput,
   getLastPulseReadyToAnswer,
   getLastErrors,
 } from "./runner-helpers/state-queries.js";
-
-// ── Harness deliverable assembly ──────────────────────────────────────────────
-// Extracted to ./runner-helpers/deliverable.ts in WS-6 Phase 2. The public
-// `Deliverable` type and `assembleDeliverable()` are re-exported below so
-// callers (e.g. `output-quality-gate.test.ts`) continue importing from
-// `kernel/loop/runner.js`.
-export { assembleDeliverable } from "./runner-helpers/deliverable.js";
-export type { Deliverable } from "./runner-helpers/deliverable.js";
-
 import {
   assembleDeliverable,
   deliverableTerminationReason,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
 } from "./runner-helpers/deliverable.js";
+import {
+  buildRecoverySteeringGuidance,
+  getToolFailureRecovery,
+} from "./runner-helpers/recovery-steering.js";
 
-// ── Tier-aware guard thresholds ───────────────────────────────────────────────
-// Extracted to ./runner-helpers/tier-guards.ts in WS-6 Phase 2; re-exported
-// here so callers continue importing from `kernel/loop/runner.js`.
+// Re-export the public helper surface so external imports of
+// `kernel/loop/runner.js` remain unchanged.
+export { assembleDeliverable } from "./runner-helpers/deliverable.js";
+export type { Deliverable } from "./runner-helpers/deliverable.js";
 export {
   TIER_GUARD_THRESHOLDS,
   shouldExitOnLowDelta,
@@ -127,20 +124,6 @@ export {
   resolveMaxSameTool,
 } from "./runner-helpers/tier-guards.js";
 export type { TierGuardConfig } from "./runner-helpers/tier-guards.js";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-// getLastPulseReadyToAnswer / getLastErrors extracted to ./runner-helpers/state-queries.ts
-
-// Recovery / steering helpers (buildRecoverySteeringGuidance, getToolFailureRecovery,
-// ToolFailureRecovery, RecoverySteeringKind) extracted to
-// ./runner-helpers/recovery-steering.ts in WS-6 Phase 2.
-import {
-  buildRecoverySteeringGuidance,
-  getToolFailureRecovery,
-} from "./runner-helpers/recovery-steering.js";
-
-// ── Phase hooks helper ─────────────────────────────────────────────────────────
-// `runPhaseHooks` moved to ./phase-hooks.js (shared with act.ts).
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
