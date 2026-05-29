@@ -1,45 +1,36 @@
 /**
- * WS-2 Phase 3 — builder wither discipline gate (anti-mission #3).
+ * Builder wither discipline gate — CORRECTION 1+2 (2026-05-29).
  *
- * Master plan §8.1 + architecture-model §11.2 cap the **effective**
- * builder surface at ≤24 methods ("24 named override methods IS the
- * failure mode"). Phase 3 keeps every wither callable for backward
- * compatibility — the architecturally honest measure is the
- * non-deprecated surface: signatures NOT annotated `@deprecated` in
- * their JSDoc.
+ * **Value-subtraction reverted 2026-05-29; anti-mission #3 amended —
+ * count is not the failure mode, redundancy/no-canonical-path is.**
  *
- * Phase 3 marks each redundant wither — whose concern is already
- * served by a `HarnessProfile.{lean,balanced,intelligent}()` preset,
- * a `.compose(...)` chokepoint, the killswitch set (master plan
- * §11.4), or `CapabilityRegistry`-driven defaults — with a JSDoc
- * `@deprecated alias for HarnessProfile.X() / .compose(...)` marker.
- * The runtime API surface gets smaller as the capability registry
- * grows; new defaults flow through presets + registry, not new
- * builder methods.
+ * History: WS-2 Phase 3 marked 48 builder methods `@deprecated alias
+ * for HarnessProfile.X / .compose(...)` to drop the "effective" wither
+ * count below an arbitrary ≤24 ceiling. That was metric-gaming: the
+ * methods still existed and functioned; the tag only relabelled them.
+ * `@deprecated` causes IDE strikethrough + doc-generator deprecation
+ * warnings + lint noise in USER code — it tells consumers to abandon
+ * the documented happy path (`.withReasoning()`, `.withCortex()`,
+ * `.withMemory()`, `.withTools()`, `.withVerification()`, …). That is
+ * value subtraction, which the project owner rejected.
  *
- * Source-of-truth (counted from `packages/runtime/src/builder.ts`):
- *   - **Effective surface** (non-deprecated wither signatures) ≤ 24
- *     (architecture-model §11.2 ceiling)
- *   - `@deprecated` JSDoc tags ≥ 20 (alias annotations across the
- *     redundant set; spec §verification-protocol Phase 3)
+ * Corrected intent: the composable API (`compose`, `withProfile`,
+ * `HarnessProfile.*`) offers ADDITIONAL ways to use Reactive Agents —
+ * it does not take away value we already have. The fluent wither
+ * methods ARE a first-class supported path.
  *
- * RED phase: baseline shows 0 `@deprecated` annotations + ~59 raw
- *   wither signatures, all "effective" — test FAILS on both counts.
- * GREEN phase: ≥20 redundant withers annotated; the effective surface
- *   drops to ≤24 — test PASSES. Behaviour unchanged (backward compat:
- *   every wither remains callable; deprecation is JSDoc + IDE signal
- *   only).
+ * What this gate now asserts (the things that actually matter):
+ *   - The documented capability methods EXIST and are NOT
+ *     `@deprecated` — locking in that the happy path stays first-class
+ *     (the inverse of the old ceiling gate).
+ *   - The additive composable surface (`compose`, `withProfile`)
+ *     EXISTS alongside the withers.
  *
- * Spec deviation note: the implementation-plan §verification-protocol
- * specifies `grep -cE "^\\s*public\\s+with[A-Z]"` ≤ 30. That grep
- * returns 0 against `builder.ts` (no `public` keyword on class methods
- * — TypeScript default visibility), so the literal threshold is
- * trivially satisfied at baseline. This test substitutes the
- * §11.2-intent count (effective non-deprecated surface ≤ 24), which
- * is the metric the anti-mission cares about.
- *
- * Spec: wiki/Planning/Implementation-Plans/2026-05-28-ws-2-runtime-canonical-seam.md §Phase 3
- * Architecture: wiki/Architecture/Design-Specs/2026-05-28-canonical-architecture-model.md §11.1, §11.2
+ * What this gate no longer asserts:
+ *   - No raw `@deprecated`-count floor (≥20) — removed.
+ *   - No "effective surface ≤ 24" ceiling — removed. A large, clear,
+ *     non-redundant wither surface is not a failure; silent
+ *     redundancy / a missing canonical path would be.
  */
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -112,61 +103,62 @@ function classifyWithers(): readonly WitherClassification[] {
   return result;
 }
 
-function countDeprecatedTags(src: string): number {
-  return (src.match(/@deprecated/g) ?? []).length;
-}
-
-describe("builder.ts wither discipline (WS-2 Phase 3)", () => {
-  it("effective surface (non-deprecated withers) ≤ 24 per architecture-model §11.2", () => {
-    const all = classifyWithers();
-    const effective = all.filter((w) => !w.deprecated);
-    if (effective.length > 24) {
-      // Diagnostic: surface the offending non-deprecated wither lines
-      // so future maintainers can see which methods count against the
-      // ceiling.
-      const surface = effective
-        .map((w) => `  line ${w.lineIdx + 1}: ${w.source}`)
-        .join("\n");
-      throw new Error(
-        `Effective wither surface = ${effective.length} (ceiling ≤ 24).\n` +
-          `Non-deprecated wither signatures:\n${surface}`,
-      );
-    }
-    expect(effective.length).toBeLessThanOrEqual(24);
-  });
-
-  it("annotates ≥20 redundant withers with @deprecated (HarnessProfile / compose aliases)", () => {
-    const count = countDeprecatedTags(SOURCE);
-    expect(count).toBeGreaterThanOrEqual(20);
-  });
-
-  it("preserves backward compatibility — withProfile remains the canonical entry point (not deprecated)", () => {
+describe("builder.ts wither discipline (CORRECTION 1+2 — happy path stays first-class)", () => {
+  it("the additive composable surface (compose, withProfile) exists alongside the withers", () => {
     const withers = classifyWithers();
+    const compose = withers.find((w) => /^\s*compose\(/.test(w.source));
     const withProfile = withers.find((w) => /^\s*withProfile\(/.test(w.source));
-    expect(withProfile).toBeDefined();
-    expect(withProfile?.deprecated).toBe(false);
+    // `compose` is declared without the `with` prefix; scan the source directly.
+    const hasCompose =
+      compose !== undefined || /^\s*compose\(/m.test(SOURCE);
+    expect(hasCompose, "compose() must exist as the additive composable entry").toBe(
+      true,
+    );
+    expect(withProfile, "withProfile() must exist as the additive preset entry").toBeDefined();
+    expect(withProfile?.deprecated, "withProfile() must NOT be @deprecated").toBe(
+      false,
+    );
   });
 
-  it("preserves backward compatibility — irreducible essentials remain non-deprecated", () => {
-    const essentials = [
+  it("documented capability methods exist and are NOT @deprecated (happy path stays first-class)", () => {
+    // The documented happy path the README + docs teach. Each method
+    // delivers a working, documented capability — un-deprecating these
+    // is the whole point of CORRECTION 1+2. If a future change marks
+    // one `@deprecated`, this gate fails: that would tell users to
+    // abandon what the docs teach (value subtraction).
+    const documentedHappyPath = [
+      // Identity / model essentials
       "withName",
       "withModel",
       "withProvider",
+      // Core capabilities
+      "withReasoning",
       "withMemory",
       "withTools",
+      "withVerification",
+      "withGuardrails",
+      "withReactiveIntelligence",
+      "withCortex",
+      "withObservability",
+      "withSkills",
+      "withLearning",
+      "withSkillPersistence",
+      // Execution controls
       "withMaxIterations",
       "withBudget",
       "withTimeout",
     ];
     const withers = classifyWithers();
-    for (const name of essentials) {
+    for (const name of documentedHappyPath) {
       const match = withers.find((w) =>
         new RegExp(`^\\s*${name}\\(`).test(w.source),
       );
       expect(match, `${name}() must be present`).toBeDefined();
       expect(
         match?.deprecated,
-        `${name}() must NOT be @deprecated (irreducible essential)`,
+        `${name}() must NOT be @deprecated — it is a documented, working ` +
+          `capability on the happy path. The composable API is additive, ` +
+          `not a replacement (CORRECTION 1+2, 2026-05-29).`,
       ).toBe(false);
     }
   });
