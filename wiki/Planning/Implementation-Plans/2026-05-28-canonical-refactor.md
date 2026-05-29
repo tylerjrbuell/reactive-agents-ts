@@ -434,6 +434,8 @@ Anti-mission #3: "24 named override methods IS the failure mode." Current: 59. H
 
 **Implication for plan:** WS-4 (anti-scaffold purge) should generalize `HarnessProfilePatch` to derive from registry (e.g., `Partial<Record<RegisteredCapabilityName, boolean>>`) so adding a registry entry doesn't require touching profile.ts.
 
+**Update 2026-05-29 (WS-4 Phase 5b):** **DEFERRED.** Audit confirms the existing test gate `packages/runtime/tests/harness-profile.test.ts:174-198` ("HarnessProfile registry-drift guard (MOVE-6)") already pins `lean()` patch field count at 5 — any new registry default-on entry without a matching patch field surfaces immediately as a test failure. This is sufficient mitigation: the *risk* of silent drift is closed by the drift detector. The structural refactor (Partial<Record<RegisteredCapabilityName, …>>) would add type-level complexity for zero runtime improvement until the registry actually grows. Re-open when the registry adds its 5th default-on entry (MOVE-2 adaptive-routing being the most likely trigger).
+
 #### F8 — `@reactive-agents/reactive-intelligence` is a substantial framework piece (50+ exports)
 
 `packages/reactive-intelligence/src/index.ts` re-exports across 8 sub-domains: calibration (entropy sensor priors, conformal threshold), controller (dispatcher FSM, intervention handlers, patch applier), learning (bandit, task classifier, skill synthesis, learning engine), sensor (token/structural/semantic/behavioral/context entropies + composite + trajectory), skills (resolver, distiller, registry, injection, compression), telemetry (install ID, signing, telemetry client), runtime (createReactiveIntelligenceLayer), events. **50+ public symbols.**
