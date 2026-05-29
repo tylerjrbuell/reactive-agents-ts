@@ -564,7 +564,7 @@ After WS-5b + WS-5c shipped the residual sweep, the original §5.5 thresholds pr
 |---|---|---|---|
 | `as any` | ≤245 | ≤106 (current actual) | none yet — candidate for follow-up ceiling test |
 | `as unknown as` | ≤40 | ≤67 | `packages/runtime/test/as-unknown-as-ceiling.test.ts` (WS-5b) |
-| `as ComposableLayer` | = 0 | ≤3 (2 terminal mergeAll + 1 residual) | `packages/runtime/test/composable-layer-ceiling.test.ts` (WS-5c) |
+| `as ComposableLayer` | = 0 | **= 1** (single `finalizeComposition` widening boundary — WS-5d closed the ≤3 re-baseline back to the original =1 intent) | `packages/runtime/test/composable-layer-ceiling.test.ts` (ceiling ≤1, WS-5c→WS-5d) |
 | `Effect<X, unknown>` | ≤52 | ≤20 (AST-counted) | `packages/runtime/test/no-silent-swallow-floor.test.ts` (WS-5 Phase 2) |
 | `console.warn` (active) | n/a | ≤9 | `packages/observability/.../console-ceiling.test.ts` (WS-5 Phase 3) |
 | `console.error` (active) | n/a | ≤0 | (same) |
