@@ -46,7 +46,7 @@
 // is the honest measured landing plus thin headroom — same precedent shape as
 // Phase 1 (target 2,050 → empirical 2,108 → ratified 2,115).
 //
-// WS-6 Phase 4 (2026-05-29) — tighten ceiling 1625 → 1500 after lifting the
+// WS-6 Phase 4 (2026-05-29) — tighten ceiling 1625 → 735 after lifting the
 // per-iteration block out of `runKernel()` to a dedicated module
 // `kernel/loop/iterate-pass.ts`. The Phase 2 closure-note ("≤1,500 LOC abandoned")
 // turned out wrong once the structural lift was attempted: ~900 LOC of the
@@ -55,10 +55,22 @@
 // runner.ts post-lift hosts only orchestration (services + profile +
 // pre/post-loop) and re-exports.
 //
+// CEILING DERIVATION (Phase 4)
+// ----------------------------
+// Initial target: 1,500 LOC (115 LOC drop from 1,615). The structural lift
+// turned out far more productive than the target anticipated — the iteration
+// body wasn't 115 LOC of leaf-extractable code, it was a 900-LOC single block
+// whose closure deps round-trip cleanly to a carrier. Empirical post-lift
+// landing: 725 LOC after also dropping ~40 LOC of now-unused imports that
+// only served the lifted block. Ratified at 735 (+10 LOC headroom) per the
+// Phase 1/2 lessons-learned precedent.
+//
 // Headroom is intentionally thin (~10 LOC) so post-Phase-4 drift triggers
 // this ceiling before it accumulates. If a legitimate addition to
 // `runKernel()` orchestration body is required, raise CEILING in this file
-// AND rationale-comment the new addition.
+// AND rationale-comment the new addition. Further reductions, if needed,
+// should target the per-iteration body in `iterate-pass.ts` (its own ceiling
+// can be added then).
 
 import { describe, it, expect } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -70,7 +82,7 @@ const RUNNER_PATH = resolve(
   "packages/reasoning/src/kernel/loop/runner.ts",
 );
 
-const CEILING = 1500;
+const CEILING = 735;
 
 describe("WS-6 Phase 4 — runner.ts LOC ceiling", () => {
   it(`runner.ts stays ≤ ${CEILING} LOC after helper bucket extraction`, () => {
