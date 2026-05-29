@@ -16,17 +16,40 @@ verified-by: |
 
 # WS-3 Phase 0 — Kernel Capability Import-Graph Evidence
 
-## TL;DR
+## TL;DR (UPDATED post-Phase-1)
 
-**27 cross-capability edges** across **21 file-import pairs** in current code (corrected from prior audit's overcount of 38).
+**Pre-Phase-1 baseline:** 27 cross-capability edges across 21 file-import pairs; 3 confirmed cycles.
 
-**3 confirmed cycles** (capability A imports from B + B imports from A):
+**Post-Phase-1 state (PR #175, commit `412bb922`):** 2 cycles remain; act/ LOC 3053 → 2798.
 
-1. **act ↔ decide** (`act/act.ts ↔ decide/arbitrator.ts`)
-2. **act ↔ reason** (`act/tool-execution.ts ↔ reason/{think,think-guards}.ts`)
-3. **reason ↔ verify** (`reason/{think,think-guards}.ts ↔ verify/critique.ts`)
+Cycles:
 
-**`act/` capability dir is 3053 LOC across 6 files.** Of that, 4 files (`tool-execution.ts` 893 LOC, `tool-parsing.ts` 255 LOC, `tool-gating.ts` 270 LOC, `tool-capabilities.ts` 140 LOC = 1558 LOC) are tool substrate, not Act capability proper.
+| # | Cycle | Status |
+|---|---|---|
+| 1 | `act ↔ decide` | ❌ **CLOSED Phase 1** — decide/arbitrator.ts no longer imports from act/ (consumes kernel/utils/tool-parsing.ts) |
+| 2 | `act ↔ reason` (`act/tool-execution.ts ↔ reason/{think,think-guards}.ts`) | ✅ remains (Phase 2+3 target) |
+| 3 | `reason ↔ verify` (`reason/{think,think-guards}.ts ↔ verify/critique.ts`) | ✅ remains (Phase 4 target) |
+
+**`act/` capability dir post-Phase-1: 2798 LOC across 5 files.** Of that, 3 files (`tool-execution.ts` 893 LOC, `tool-gating.ts` 270 LOC, `tool-capabilities.ts` 140 LOC = 1303 LOC) are tool substrate, not Act capability proper.
+
+## Methodology Correction (amendment 1, 2026-05-28 evening)
+
+**Original methodology was incomplete.** It walked only `packages/reasoning/src/kernel/capabilities/*/` for cross-capability imports. Phase 1 dispatch surfaced 2 import sites the original methodology missed:
+
+1. **`packages/reasoning/src/strategies/reactive.ts:28`** — backward-compat re-export of `evaluateTransform` from `tool-parsing.ts`
+2. **`packages/reasoning/tests/strategies/kernel/utils/tool-utils.test.ts:6`** — test import of `evaluateTransform`
+
+**Corrected methodology (apply to future phases):**
+
+```bash
+# For each file under kernel/capabilities/ being moved or refactored:
+rtk grep -rlE "<filename>|<filename without .ts>" packages/ apps/ 2>/dev/null \
+  | grep -v dist | grep -v node_modules
+```
+
+Walk `packages/` (not just `packages/reasoning/src/kernel/capabilities/`) + walk `apps/` + walk test directories. Backward-compat re-exports under `strategies/` and consumer-package re-exports may live outside the kernel tree but still hold references.
+
+For Phase 2-5 dispatches: the per-file inbound counts in §3 below ONLY cover `kernel/capabilities/*`. Add a workspace-wide grep step before dispatching each phase to catch the same class of miss.
 
 ---
 
@@ -150,7 +173,7 @@ This cycle is the only one NOT obviously closed by the `act/`-monolith disentang
 | `act/act.ts` | 1208 | 0 | Act capability orchestration | **stays in `act/`** |
 | `act/guard.ts` | 287 | 0 | Pre-act guard | **stays in `act/`** |
 | `act/tool-execution.ts` | 893 | 3 (reason/think-guards `makeObservationResult`, reason/think-guards `extractObservationFacts`, reason/think) | Kernel-state-coupled tool dispatch | **stays in `act/` as canonical Act owner; expose `ToolExecutionService` Tag** |
-| `act/tool-parsing.ts` | 255 | 2 (decide/arbitrator `FINAL_ANSWER_RE` + `extractFinalAnswer`, reason/think `evaluateTransform`) | Pure regex helpers | **move to `kernel/utils/tool-parsing.ts`** |
+| ~~`act/tool-parsing.ts`~~ → `kernel/utils/tool-parsing.ts` | 255 | ~~2~~ → 5 (2 kernel/capabilities/ + 1 same-dir act/tool-execution + 1 strategies/reactive.ts re-export + 1 test) | Pure regex helpers | ✅ **MOVED Phase 1** (PR #175) |
 | `act/tool-gating.ts` | 270 | 4 (reason/think-guards `gateNativeToolCallsForRequiredTools`, reason/think `planNextMoveBatches`, reason/think `isParallelBatchSafeTool`, act/act `planNextMoveBatches` — but act/act is same-dir, doesn't count cross-cap) | Tool selection logic | **ADR — likely `decide/tool-gating.ts`** |
 | `act/tool-capabilities.ts` | 140 | 0 | Tool capability declarations | stays in `act/` |
 
@@ -175,9 +198,9 @@ If `act/tool-execution.ts` further decomposes into its own substrate dir (`act/t
 
 ## §5 — Phase Plan Mapping (per WS-3 thin spec)
 
-| WS-3 Phase | Action | Expected edge change |
-|---|---|---|
-| Phase 1 | Move `act/tool-parsing.ts` → `kernel/utils/tool-parsing.ts` | act → decide remains (1 file); decide → act drops (was 1 file via parsing import). **Cycle 1 closes.** |
+| WS-3 Phase | Action | Expected edge change | Status |
+|---|---|---|---|
+| Phase 1 | Move `act/tool-parsing.ts` → `kernel/utils/tool-parsing.ts` | act → decide remains (1 file); decide → act drops (was 1 file via parsing import). **Cycle 1 closes.** | ✅ **SHIPPED 2026-05-28** (PR #175 / commit `412bb922`); verified cycle 1 closed via formal walk |
 | Phase 2 | ADR + move `act/tool-gating.ts` (likely to decide/) | act → decide may gain 1 (if gating moves to decide) — but no new cycle. reason → act drops 1 (gating import). |
 | Phase 3 | Expose `ToolExecutionService` Tag from act; reason consumes via Tag | reason → act drops 2 (think-guards). **Cycle 2 closes.** |
 | Phase 4 | Audit reason ↔ verify cycle; read `verify/critique.ts` for the verify → reason import | Resolution TBD — may be legitimate cross-cap dep requiring Tag, or structural mismatch requiring refactor |
