@@ -57,11 +57,26 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/gateway       — Persistent harness: heartbeats, crons, webhooks, policy engine
 │   └── depends on: core, llm-provider, tools
 │
+├── @reactive-agents/channels      — External channel layer: webhooks, bot transports, triggers, session bridging
+│   └── depends on: core, gateway
+│
 ├── @reactive-agents/testing       — Mock LLMService, mock ToolService, mock EventBus, assertion helpers
 │   └── depends on: core, llm-provider (dev only)
 │
 ├── @reactive-agents/runtime-shim  — Bun/Node.js unified primitives (Database, spawn, serve, glob, hash)
 │   (no reactive-agents deps — consumed by memory, tools, health, judge-server)
+│
+├── @reactive-agents/trace         — Structured execution traces: TraceEvent schema, recorders, span helpers
+│   └── depends on: core
+│
+├── @reactive-agents/health        — Health-check primitives + readiness probes for production deploys
+│   └── depends on: runtime-shim
+│
+├── @reactive-agents/reactive-intelligence — Entropy sensing, adaptive control, learning pipeline
+│   └── depends on: core, llm-provider, runtime-shim, trace
+│
+├── @reactive-agents/judge-server  — LLM-as-judge HTTP server backing @reactive-agents/eval
+│   └── depends on: core, eval, llm-provider, runtime-shim
 │
 ├── @reactive-agents/compose       — Harness composition + 6 killswitches (maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor, confidenceFloor)
 │   └── depends on: core, runtime
@@ -69,14 +84,34 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/replay        — Deterministic trace replay: loadRecordedRun, makeReplayController, makeReplayToolLayer, diffTraces
 │   └── depends on: core, trace, runtime
 │
+├── @reactive-agents/diagnose      — Trace diagnostics + replay-driven root-cause analysis (rax-diagnose CLI)
+│   └── depends on: replay, trace
+│
+├── @reactive-agents/scenarios     — Canonical scenario fixtures for the testing harness (gate scenarios, schema-drift, etc.)
+│   └── depends on: testing, trace
+│
+├── @reactive-agents/benchmarks    — Benchmark task suites + tier-aware runners for cross-model evaluation
+│   └── depends on: core, cost, judge-server, llm-provider, reasoning, runtime, runtime-shim
+│
 ├── @reactive-agents/observe       — OpenTelemetry/OpenInference span exporter: OpenInferenceTracerLayer, setupOpenInferenceExporter
 │   └── depends on: core
+│
+├── @reactive-agents/react         — React hooks for Reactive Agents: useAgentStream, useAgent
+│   (no reactive-agents deps — peer-depends on `react`; consumes umbrella API)
+│
+├── @reactive-agents/svelte        — Svelte stores for Reactive Agents: agentStream, agentRun
+│   (no reactive-agents deps — peer-depends on `svelte`; consumes umbrella API)
+│
+├── @reactive-agents/vue           — Vue composables for Reactive Agents: useAgentStream, useAgent
+│   (no reactive-agents deps — peer-depends on `vue`; consumes umbrella API)
 │
 └── Facade & Runtime
     ├── @reactive-agents/runtime   — ExecutionEngine, ReactiveAgentBuilder, createRuntime()
     │   └── depends on: all packages above (optional via Effect Layers)
-    └── reactive-agents            — Public API facade, re-exports builder + types
-        └── depends on: runtime
+    ├── reactive-agents            — Public API facade, re-exports builder + types
+    │   └── depends on: runtime
+    └── create-reactive-agent      — `npm create reactive-agent` scaffold CLI for new projects
+        (no reactive-agents deps — bundles templates + post-install)
 ```
 
 ### Per-Layer Quick Reference
