@@ -11,35 +11,16 @@
  * with `(this as any)._field`.
  */
 import type { ReactiveAgentBuilder } from "../builder.js";
-import type { LifecycleHook, ReasoningOptions } from "../types.js";
+import type { LifecycleHook } from "../types.js";
 import type { MemoryOptions } from "./types.js";
 import { invokeUserHookSafely } from "./api-surface.js";
-import type { RiHooks } from "./ri-wiring.js";
+import { asBuilderState } from "./withers/_state.js";
 
-/** Typed view of the builder's private fields that the wither bodies mutate. */
-interface BuilderState {
-  _enableReactiveIntelligence: boolean;
-  _reactiveIntelligenceOptions?: Partial<
-    import("@reactive-agents/reactive-intelligence").ReactiveIntelligenceConfig
-  >;
-  _riHooks?: RiHooks;
-  _riConstraints?: {
-    allowedStrategySwitch?: string[];
-    maxTemperatureAdjustment?: number;
-    neverEarlyStop?: boolean;
-    neverHumanEscalate?: boolean;
-    protectedSkills?: string[];
-    lockedSkills?: string[];
-  };
-  _riAutonomy?: "full" | "suggest" | "observe";
-  _enableMemory: boolean;
-  _memoryTier: "1" | "2";
-  _memoryOptions?: MemoryOptions;
-  _hooks: LifecycleHook[];
-}
-
-const asState = (builder: ReactiveAgentBuilder): BuilderState =>
-  builder as unknown as BuilderState;
+// `asState` is a re-name shim onto the shared `asBuilderState` helper
+// (`builder/withers/_state.ts`). WS-6 Phase 1 collapses this file's local
+// cast into the shared module so adding new wither-bucket files is cast-budget
+// neutral against the §5.5 `as unknown as` ceiling.
+const asState = asBuilderState;
 
 /**
  * Apply `.withReactiveIntelligence(arg)` configuration. Handles both the

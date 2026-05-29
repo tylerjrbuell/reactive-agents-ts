@@ -1,28 +1,16 @@
 /**
  * Shared test helpers for the runtime package's `__tests__/` suites.
  *
- * Concentrates type-widening casts so individual test files don't litter the
- * codebase with inline `(builder as unknown as BuilderRuntimeStateView)` calls.
+ * Re-exports the production `asBuilderState` helper from
+ * `builder/withers/_state.ts` (WS-6 Phase 1) so tests and production wither
+ * helpers share a single concentrated `as unknown as` cast site. The
+ * production helper widens to a SUPERSET `BuilderState` view that covers
+ * every private field touched by wither bodies — broader than the prior
+ * `BuilderRuntimeStateView` (which models the runtime-construction read
+ * path). Tests asserting on `_xyz` fields get the same guarantees: a passing
+ * assertion lands on a field the production code path mutates / reads.
  *
  * See `packages/runtime/test/as-unknown-as-ceiling.test.ts` for the
- * anti-regression ceiling that this helper file feeds into.
+ * anti-regression ceiling this concentration feeds into.
  */
-import type { ReactiveAgentBuilder } from "../builder.js";
-import type { BuilderRuntimeStateView } from "../builder/build-effect/runtime-construction.js";
-
-/**
- * Cast a `ReactiveAgentBuilder` to its private-field view for assertions.
- *
- * The builder's `_xyz` fields are marked private in the public type, but the
- * production runtime construction path reads them through
- * `BuilderRuntimeStateView`. Tests assert against the same view so that a
- * passing assertion guarantees the field lands in the production read path.
- *
- * This is the single concentrated `as unknown as` cast for builder-state
- * test access — duplicating it inline in test bodies adds count to the §5.5
- * ceiling without adding signal.
- */
-export const asBuilderState = (
-  builder: ReactiveAgentBuilder,
-): BuilderRuntimeStateView =>
-  builder as unknown as BuilderRuntimeStateView;
+export { asBuilderState } from "../builder/withers/_state.js";

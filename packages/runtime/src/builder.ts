@@ -28,6 +28,12 @@ import {
     applyMemoryOptions,
     applyHookRegistration,
 } from './builder/wither-applies.js'
+import {
+    applyWithoutMemory,
+    applyWithLearning,
+    applyWithLeanHarness,
+    applyWithMemoryConsolidation,
+} from './builder/withers/memory.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -690,12 +696,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withoutMemory(): this {
-        this._enableMemory = false
-        this._memoryExplicitlyDisabled = true
-        this._skillPersistence = false
-        this._sessionPersist = false
-        this._enableExperienceLearning = false
-        this._enableMemoryConsolidation = false
+        applyWithoutMemory(this)
         return this
     }
 
@@ -724,13 +725,7 @@ export class ReactiveAgentBuilder {
      *   Method remains for backward compatibility.
      */
     withLearning(opts?: { tier?: 'standard' | 'enhanced'; dbPath?: string }): this {
-        this._enableMemory = true
-        this._memoryExplicitlyDisabled = false
-        this._memoryTier = opts?.tier === 'enhanced' ? '2' : '1'
-        if (opts?.dbPath) {
-            this._memoryOptions = { ...this._memoryOptions, dbPath: opts.dbPath }
-        }
-        this._skillPersistence = true
+        applyWithLearning(this, opts)
         return this
     }
 
@@ -1008,15 +1003,7 @@ export class ReactiveAgentBuilder {
      *   compatibility — wires the same `_leanHarness` substrate flag.
      */
     withLeanHarness(): this {
-        this._leanHarness = true
-        // Memory v2 spec §lean-mode-interaction: lean mode forces memory
-        // off. Latency- + cost-sensitive workloads do not pay for the
-        // memory stack. User can re-enable explicitly via `.withMemory()`
-        // / `.withLearning()` AFTER `.withLeanHarness()` if they want a
-        // non-standard hybrid.
-        this._enableMemory = false
-        this._memoryExplicitlyDisabled = true
-        this._skillPersistence = false
+        applyWithLeanHarness(this)
         return this
     }
 
@@ -1439,8 +1426,7 @@ export class ReactiveAgentBuilder {
         decayFactor?: number
         pruneThreshold?: number
     }): this {
-        this._enableMemoryConsolidation = true
-        if (config) this._consolidationConfig = config
+        applyWithMemoryConsolidation(this, config)
         return this
     }
 
