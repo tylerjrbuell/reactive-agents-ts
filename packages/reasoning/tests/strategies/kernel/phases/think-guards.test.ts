@@ -17,7 +17,7 @@ import type { ContextProfile } from "../../../../src/context/context-profile.js"
 import type { ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.js";
-import { makeObservationResult } from "../../../../src/kernel/capabilities/act/tool-execution.js";
+import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 

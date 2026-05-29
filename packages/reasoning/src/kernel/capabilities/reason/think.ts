@@ -61,7 +61,7 @@ import {
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
 import { extractThinking, rescueFromThinking } from "../reason/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
-import { makeObservationResult } from "../act/tool-execution.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 import {
   transitionState,
   asKernelStateLike,

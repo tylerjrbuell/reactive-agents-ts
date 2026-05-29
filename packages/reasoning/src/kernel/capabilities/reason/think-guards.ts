@@ -32,7 +32,7 @@ import {
   getMissingRequiredToolsFromSteps,
 } from "../verify/requirement-state.js";
 import { makeStep } from "../sense/step-utils.js";
-import { makeObservationResult } from "../act/tool-execution.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import {
   transitionState,

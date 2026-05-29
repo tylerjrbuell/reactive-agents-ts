@@ -6,9 +6,11 @@
  * (~130 lines each). This module provides a single canonical implementation.
  *
  * Exports:
- *   - makeObservationResult(toolName, success, displayText) → ObservationResult
  *   - truncateForDisplay(result, maxChars) → string
  *   - executeToolCall(toolServiceOpt, toolRequest, config) → Effect<ToolExecutionResult>
+ *
+ * Note: `makeObservationResult` was moved to `kernel/utils/observation-helpers.ts`
+ * in WS-3 Phase 3 (cycle 2 closure). Pure helpers don't belong to a capability.
  *
  * Internal helpers (not exported):
  *   - normalizeTripleQuotes(input) — Python-style """...""" → JSON string
@@ -20,12 +22,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ObservationResult } from "../../../types/observation.js";
-import {
-  categorizeToolName,
-  deriveResultKind,
-  KNOWN_TRUSTED_TOOL_NAMES,
-  GRANDFATHER_TRUST_JUSTIFICATION,
-} from "../../../types/observation.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -149,37 +146,10 @@ function storeToolObservationSemantic(
 }
 
 // ── Exported utilities ───────────────────────────────────────────────────────
-
-/**
- * Build an ObservationResult from tool name + success flag + display text.
- */
-export function makeObservationResult(
-  toolName: string,
-  success: boolean,
-  displayText: string,
-  options?: { readonly delegatedToolsUsed?: readonly string[] },
-): ObservationResult {
-  const category = categorizeToolName(toolName);
-  const resultKind = deriveResultKind(category, success);
-  const preserveOnCompaction = !success || category === "error";
-  // Phase 1 S2.3 — derive trustLevel from KNOWN_TRUSTED_TOOL_NAMES set in
-  // observation.ts. ContextCurator (S2.5) consumes this to decide whether
-  // to render the observation inline or in a <tool_output> block.
-  const isTrusted = KNOWN_TRUSTED_TOOL_NAMES.has(toolName);
-  return {
-    success,
-    toolName,
-    displayText,
-    category,
-    resultKind,
-    preserveOnCompaction,
-    ...(options?.delegatedToolsUsed && options.delegatedToolsUsed.length > 0
-      ? { delegatedToolsUsed: [...new Set(options.delegatedToolsUsed)] }
-      : {}),
-    trustLevel: isTrusted ? "trusted" : "untrusted",
-    ...(isTrusted ? { trustJustification: GRANDFATHER_TRUST_JUSTIFICATION } : {}),
-  };
-}
+//
+// `makeObservationResult` lives in kernel/utils/observation-helpers.ts as of
+// WS-3 Phase 3 (cycle 2 closure). It is re-imported above for the internal
+// call sites in `executeToolCall` / `executeNativeToolCall` below.
 
 function extractDelegatedToolsUsed(result: unknown): readonly string[] | undefined {
   if (typeof result !== "object" || result === null || Array.isArray(result)) return undefined;
