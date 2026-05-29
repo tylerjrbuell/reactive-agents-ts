@@ -25,7 +25,8 @@ import {
   runHealingPipeline,
 } from "@reactive-agents/tools";
 import { makeStep } from "../sense/step-utils.js";
-import { executeNativeToolCall, makeObservationResult, extractObservationFacts } from "../act/tool-execution.js";
+import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 // Sprint 3.2 — Verifier promotion: every effector output flows through
 // defaultVerifier.verify() so the structured VerificationResult is
 // attached to the observation step's metadata. Future sprints (Arbitrator

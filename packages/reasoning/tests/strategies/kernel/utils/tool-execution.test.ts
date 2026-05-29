@@ -1,12 +1,12 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Ref } from "effect";
 import {
-  makeObservationResult,
   truncateForDisplay,
   executeToolCall,
   executeNativeToolCall,
   type ToolExecutionResult,
 } from "../../../../src/kernel/capabilities/act/tool-execution.js";
+import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 import type { MaybeService, ToolServiceInstance } from "../../../../src/kernel/state/kernel-state.js";
 import { scratchpadStoreRef, makeRecallHandler } from "@reactive-agents/tools";
 
