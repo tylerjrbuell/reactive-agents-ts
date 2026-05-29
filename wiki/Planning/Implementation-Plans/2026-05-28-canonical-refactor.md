@@ -736,6 +736,7 @@ The refactor's foundation is declared canonical when ALL of the following hold s
 - [ ] Every entry in TagMap / ControllerDecision union / CapabilityRegistry has paired emit + consumer (CI lint)
 - [ ] All 35 packages appear in AGENTS.md package tree (CI diff)
 - [ ] No production file >1500 LOC (relaxed from N* §8.1 ≤500; WS-6 target)
+- [ ] `runner.ts` emit-related line count ≤ **30** (architecture model §12.2a amendment; runner-orchestrated emits legitimate; WS-3 Phase 5a+5b shipped capability-event migrations for verifier-verdict + BudgetSignal)
 
 ### 8.2 Behavioral (test-checkable)
 

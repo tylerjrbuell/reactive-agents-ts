@@ -804,6 +804,20 @@ These compose:
 - `observability` aggregates metrics + structured logs
 - `observe` bridges to external OTel sinks
 
+### 12.2a Runner.ts legitimate emit surface (amendment 1)
+
+The Loop Controller (`runner.ts`) is allowed to emit ALL of the following:
+
+1. **Per-iter snapshots** — `emitKernelStateSnapshot` at iter-start and at terminal transitions (~3 sites)
+2. **Phase boundaries** — `emitLog({ _tag: "phase_started", phase: "..." })` at canonical phase transitions (~1 site)
+3. **Orchestration-decision injections** — `emitHarnessSignalInjected` when the runner COMBINES multi-capability signals (required-tools + loop-detection + recovery-state) into a guidance message it injects into the LLM thread. These are NOT capability-owned because the *decision-to-inject* is the loop's, not any single capability's. (~4 sites)
+4. **Observability warnings** — `emitLog({ _tag: "warning", message: "..." })` documenting orchestration decisions (harness-deliverable, output-gate, oracle-gate, auto-checkpoint, synthesis fallback). These are the LOG SURFACE, not capability events. (~15 sites)
+5. **Auto-checkpoint diagnostics** — emit when the runner saves observation state pre-pressure-gate (~1 site)
+
+Capability-event emits (`verifier-verdict`, `arbitrator-verdict`, `tool-call-*`, `memory-recall`, `learn-write`, etc.) MUST fire from the capability boundary, NOT from runner. WS-3 Phase 5a (verifier-verdict) + Phase 5b (BudgetSignalCollected) shipped this migration.
+
+**Canonical target for runner.ts emit-line count: ≤30** (revised from prior ≤15 aspiration). The lower target was unachievable without splitting orchestration-decision logic across capabilities — which would have FOUGHT the canonical loop's role as state mutator and signal integrator (architecture model §4.5 + Mission Pillar 4).
+
 ### 12.2 What every iter MUST emit (Pillar 2 enforcement)
 
 Per `07-OPTIMAL-EXECUTION-ALGORITHM` §3:
