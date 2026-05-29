@@ -158,69 +158,51 @@ console.log(result.metadata) // { duration, cost, tokensUsed, stepsCount }
 
 ### Add Capabilities
 
-Every capability is opt-in. Chain what you need:
+The canonical composition path is a `HarnessProfile` preset — `lean()`,
+`balanced()`, or `intelligent()`. Presets compose the registry's
+default-on capability set in one line:
+
+```typescript
+import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+    .withName('research-agent')
+    .withProvider('anthropic')
+    .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
+    .withTools()                              // built-in tools + MCP
+    .withMaxIterations(15)
+    .withBudget({ tokenLimit: 100_000 })      // canonical budget killswitch
+    .build()
+```
+
+Pick the preset that matches the workload:
+
+- **`HarnessProfile.lean()`** — model + nothing else. Latency- and
+  cost-sensitive paths; benchmark ablations.
+- **`HarnessProfile.balanced()`** — today's production defaults
+  (memory + reactive intelligence + verifier + strategy switching).
+- **`HarnessProfile.intelligent()`** — balanced + skill persistence
+  for cross-session compounding learning.
+
+Override specific capabilities after the preset — order matters; later
+calls win. Most individual `.withX()` methods still ship for backward
+compatibility, but are `@deprecated` aliases for either a preset or a
+`.compose(...)` chokepoint. Check the JSDoc on each method to see
+which preset / compose primitive it routes to.
 
 ```typescript
 const agent = await ReactiveAgents.create()
     .withName('research-agent')
     .withProvider('anthropic')
-    .withReasoning() // ReAct reasoning loop
-    .withTools() // Built-in tools + MCP support
-    .withMemory() // Persistent memory: tier "standard" (FTS5 search). Use { tier: "enhanced" } for vector embeddings.
-    .withGuardrails() // Block injection, PII, toxicity
-    .withKillSwitch() // Per-agent + global emergency halt
-    .withBehavioralContracts({
-        // Enforce tool whitelist + iteration cap
-        deniedTools: ['file-write'],
-        maxIterations: 10,
-    })
-    .withVerification() // Fact-check outputs
-    .withCostTracking() // Budget enforcement + model routing
-    .withObservability({ verbosity: 'verbose', live: true }) // Live log streaming + tracing
-    .withContextProfile({ tier: 'local' }) // Adaptive context for model tier
-    .withIdentity() // RBAC + agent certificates (Ed25519)
-    .withInteraction() // 5 autonomy modes
-    .withOrchestration() // Multi-agent workflows
-    .withSelfImprovement() // Cross-task strategy outcome learning
-    .withRequiredTools({
-        // Ensure critical tools are called
-        tools: ['web-search'],
-        maxRetries: 2,
-    })
-    .withStrictValidation() // Throw at build time if required config is missing
-    .withTimeout(60_000) // Execution timeout (ms)
-    .withRetryPolicy({ maxRetries: 3, backoffMs: 1_000 }) // Retry on transient LLM failures
-    .withCacheTimeout(3_600_000) // Semantic cache TTL (ms)
-    .withErrorHandler((err, ctx) => {
-        // Global error callback
-        console.error('Agent error:', err.message)
-    })
-    .withFallbacks({
-        // Provider/model fallback chain
-        providers: ['anthropic', 'openai'],
-        errorThreshold: 3,
-    })
-    .withLogging({ level: 'info', format: 'json', filePath: './agent.log' }) // Structured logging
-    .withHealthCheck() // Enable agent.health() probe
-    .withMinIterations(3) // Require at least 3 iterations before exit
-    .withVerificationStep({ mode: 'reflect' }) // LLM self-review pass after initial answer
-    .withOutputValidator((output) => ({
-        // Structural validation with retry
-        valid: output.includes('COMPLETE'),
-        feedback: 'Response must include COMPLETE marker',
-    }))
-    .withTaskContext({ project: 'acme', env: 'prod' }) // Background data → reasoning context
-    .withSkills({
-        // Living Skills System
-        paths: ['./my-skills/'],
-        evolution: { mode: 'suggest' },
-    })
-    .withGateway({
-        // Persistent autonomous harness
+    .withProfile(HarnessProfile.intelligent())  // cross-session skills
+    .withMemory({ tier: 'enhanced' })           // upgrade memory to vector embeddings
+    .withTools()
+    .withGateway({                              // persistent autonomous harness
         heartbeat: { intervalMs: 1_800_000, policy: 'adaptive' },
         crons: [{ schedule: '0 9 * * MON', instruction: 'Weekly review' }],
         policies: { dailyTokenBudget: 50_000 },
     })
+    .compose((h) => h.before('act', logFn))     // canonical chokepoint composition
     .build()
 ```
 

@@ -355,6 +355,10 @@ export class ReactiveAgentBuilder {
      * - `ModelCalibration` object: provide calibration data directly (e.g. after running
      *   the calibration probe suite).
      *
+     * @deprecated alias for registry-driven calibration. Calibration mode is
+     *   resolved automatically from the model id; explicit override is reserved
+     *   for the calibration probe harness. Prefer `HarnessProfile.balanced()`
+     *   defaults. Backward compatibility retained — this method still functions.
      */
     withCalibration(mode: CalibrationMode): this {
         this._calibration = mode
@@ -372,6 +376,10 @@ export class ReactiveAgentBuilder {
      * and attached to the agent's kernel input. Wave B wires the pipeline into
      * kernel chokepoints; Wave A makes the infrastructure available.
      *
+     * @deprecated alias for `.compose(fn)` — the canonical compose entry
+     *   point per architecture-model §11.3. The two methods are identical
+     *   (`compose` is defined as `this.withHarness(fn)`). Method remains for
+     *   backward compatibility.
      */
     withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this {
         this._harnessRegistrations = [...this._harnessRegistrations, fn]
@@ -461,6 +469,9 @@ export class ReactiveAgentBuilder {
      *
      * @param context - Key-value pairs (e.g., `{ "User Location": "San Francisco, CA" }`)
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(h => h.on('prompt.system', ...))`. Prefer
+     *   the canonical compose chokepoint for prompt augmentation; this method
+     *   remains for backward compatibility.
      */
     withEnvironment(context: Record<string, string>): this {
         this._environmentContext = { ...this._environmentContext, ...context }
@@ -647,6 +658,10 @@ export class ReactiveAgentBuilder {
      * @param enabled - When `true` (default), wire `SkillStoreServiceLive`;
      *                  when `false`, explicitly disable even if memory is on.
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.intelligent()` (compounding
+     *   cross-session learning, `enableSkillPersistence: true`). For explicit
+     *   opt-out, use `HarnessProfile.lean()`. Method remains for backward
+     *   compatibility.
      */
     withSkillPersistence(enabled: boolean = true): this {
         this._skillPersistence = enabled
@@ -703,6 +718,10 @@ export class ReactiveAgentBuilder {
      *
      * @param opts - Memory tier + path overrides
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.intelligent()` (memory + skill
+     *   persistence + reactive intelligence). For memory path overrides,
+     *   compose: `.withProfile(HarnessProfile.intelligent()).withMemory({ dbPath })`.
+     *   Method remains for backward compatibility.
      */
     withLearning(opts?: { tier?: 'standard' | 'enhanced'; dbPath?: string }): this {
         this._enableMemory = true
@@ -773,6 +792,10 @@ export class ReactiveAgentBuilder {
      *
      * @param hook - Lifecycle hook configuration
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(h => h.before(phase, fn) / h.after(phase, fn))`.
+     *   Lifecycle phase chokepoints are first-class on the canonical
+     *   `Harness` compose API (master plan §11.3). Method remains for
+     *   backward compatibility.
      */
     withHook(hook: LifecycleHook): this {
         return this.withHarness(applyHookRegistration(this, hook))
@@ -801,6 +824,10 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Optional verification configuration
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.balanced()` (verifier default-on).
+     *   To opt out, use `HarnessProfile.lean()`. For configuration overrides,
+     *   compose: `.withProfile(HarnessProfile.balanced()).compose(...)`. Method
+     *   remains for backward compatibility.
      */
     withVerification(options?: VerificationOptions): this {
         this._enableVerification = true
@@ -815,6 +842,10 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Optional budget limit configuration (USD)
      * @returns `this` for chaining
+     * @deprecated alias for `.withObservability({ costs: ... })` + `.withBudget(...)`.
+     *   Cost tracking rides the observability stack; spend caps belong to
+     *   the budget killswitch (master plan §11.4). Method remains for
+     *   backward compatibility.
      */
     withCostTracking(options?: CostTrackingOptions): this {
         this._enableCostTracking = true
@@ -828,6 +859,10 @@ export class ReactiveAgentBuilder {
      *
      * @param registry - Record mapping model IDs to input/output token cost per 1 million tokens
      * @returns `this` for chaining
+     * @deprecated alias for registry-driven pricing. The
+     *   `CapabilityRegistry` resolves model pricing from the provider's
+     *   published rates; explicit override is for custom / proxied models
+     *   only. Method remains for backward compatibility.
      */
     withModelPricing(
         registry: Record<
@@ -845,6 +880,9 @@ export class ReactiveAgentBuilder {
      *
      * @param provider - PricingProvider implementation (e.g., `openRouterPricingProvider`)
      * @returns `this` for chaining
+     * @deprecated alias for registry-driven pricing. Dynamic pricing providers
+     *   register with the `CapabilityRegistry` directly; explicit builder wiring
+     *   is reserved for ad-hoc overrides. Method remains for backward compatibility.
      */
     withDynamicPricing(
         provider: import('@reactive-agents/llm-provider').PricingProvider
@@ -862,6 +900,10 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Optional circuit breaker thresholds
      * @returns `this` for chaining
+     * @deprecated alias for registry-driven default-on circuit breaker.
+     *   `HarnessProfile.balanced()` ships the breaker enabled with sensible
+     *   thresholds; pass overrides via `.compose(...)` or environment config.
+     *   Method remains for backward compatibility.
      */
     withCircuitBreaker(
         config?: Partial<
@@ -880,6 +922,9 @@ export class ReactiveAgentBuilder {
      *
      * @returns `this` for chaining
      * @example .withoutCircuitBreaker()
+     * @deprecated alias for `HarnessProfile.lean()` (disables registry
+     *   default-on capabilities including the breaker for chaos / latency
+     *   tests). Method remains for backward compatibility.
      */
     withoutCircuitBreaker(): this {
         this._circuitBreakerConfig = false
@@ -896,6 +941,10 @@ export class ReactiveAgentBuilder {
      * @param config - Optional rate limiter thresholds (defaults: 60 RPM, 100k TPM, 10 concurrent)
      * @returns `this` for chaining
      * @example .withRateLimiting({ requestsPerMinute: 30, tokensPerMinute: 50_000 })
+     * @deprecated alias for registry-driven rate limiting. Limits should be
+     *   resolved from provider metadata + `CapabilityRegistry` defaults;
+     *   explicit override is reserved for pinned per-deployment policy.
+     *   Method remains for backward compatibility.
      */
     withRateLimiting(
         config?: import('@reactive-agents/llm-provider').RateLimiterConfig
@@ -910,6 +959,10 @@ export class ReactiveAgentBuilder {
      * Audit logs record all phase transitions, tool invocations, and decision points.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `.withObservability({ audit: true })` /
+     *   `@reactive-agents/observe` exporters. Audit is a verbosity tier on
+     *   the observability stack, not a separate capability. Method remains
+     *   for backward compatibility.
      */
     withAudit(): this {
         this._enableAudit = true
@@ -924,6 +977,11 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Reasoning configuration overrides
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.balanced()` (reasoning + strategy
+     *   switching default-on). For strategy overrides, compose:
+     *   `.withProfile(HarnessProfile.balanced()).compose(...)`. To opt out
+     *   entirely, use `HarnessProfile.lean()`. Method remains for backward
+     *   compatibility.
      */
     withReasoning(options?: ReasoningOptions): this {
         this._enableReasoning = true
@@ -943,6 +1001,11 @@ export class ReactiveAgentBuilder {
      * the task does not require grounding or synthesis validation.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.lean()` (MOVE-6 closes the
+     *   historical `.withLeanHarness()` leak that did NOT disable reactive
+     *   intelligence). Use `.withProfile(HarnessProfile.lean())` for the
+     *   correct truly-lean composition. Method remains for backward
+     *   compatibility — wires the same `_leanHarness` substrate flag.
      */
     withLeanHarness(): this {
         this._leanHarness = true
@@ -1058,6 +1121,9 @@ export class ReactiveAgentBuilder {
      * Equivalent to calling `.withTools({ terminal: options ?? true })`.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `.withTools({ terminal: options ?? true })`.
+     *   Terminal access is a `ToolsOptions` field, not a separate capability.
+     *   Method remains for backward compatibility.
      */
     withTerminalTools(options?: ShellExecuteConfig): this {
         this._enableTools = true
@@ -1077,7 +1143,10 @@ export class ReactiveAgentBuilder {
      *
      * @param docs - Array of document specifications to ingest
      * @returns `this` for chaining
-     *
+     * @deprecated alias for `.withTools({ rag: { documents: docs } })`. RAG
+     *   ingestion is a tool-layer concern; the dedicated builder method
+     *   predates `.withTools()` `rag` configuration. Method remains for
+     *   backward compatibility.
      */
     withDocuments(docs: DocumentSpec[]): this {
         this._documents = [...this._documents, ...docs]
@@ -1115,6 +1184,9 @@ export class ReactiveAgentBuilder {
      * Allows the agent to sign messages and verify the identity of other agents in a network.
      *
      * @returns `this` for chaining
+     * @deprecated alias for the registry-driven identity capability — pair
+     *   with `.withA2A()` / `.withGateway()` for cross-agent verification.
+     *   Method remains for backward compatibility.
      */
     withIdentity(): this {
         this._enableIdentity = true
@@ -1155,6 +1227,10 @@ export class ReactiveAgentBuilder {
      * 1) explicit `url` argument
      * 2) `CORTEX_URL` environment variable
      * 3) `http://localhost:4321`
+     *
+     * @deprecated alias for `.withObservability({ cortex: { url } })`. Cortex
+     *   is one of the observability exporters; the URL belongs in observability
+     *   config. Method remains for backward compatibility.
      */
     withCortex(url?: string): this {
         this._cortexUrl =
@@ -1167,6 +1243,9 @@ export class ReactiveAgentBuilder {
      *
      * @param options.density - `"tokens"` (default) for TextDelta only, `"full"` for all events
      * @returns `this` for chaining
+     * @deprecated alias — pass `density` directly to `agent.runStream({ density })`.
+     *   The per-call argument is the canonical knob. Method remains for backward
+     *   compatibility for users who want a build-time default.
      */
     withStreaming(options?: { density?: StreamDensity }): this {
         this._streamDensity = options?.density ?? 'tokens'
@@ -1182,7 +1261,9 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Telemetry mode and privacy settings
      * @returns `this` for chaining
-     *
+     * @deprecated alias for `.withObservability({ telemetry: ... })`. Telemetry
+     *   is a verbosity tier on the observability stack. Method remains for
+     *   backward compatibility.
      */
     withTelemetry(config?: TelemetryConfig): this {
         this._telemetryConfig = config ?? { mode: 'isolated' }
@@ -1203,6 +1284,9 @@ export class ReactiveAgentBuilder {
      * @param config.maxFileSizeBytes - Max file size before rotation (default: 10MB)
      * @param config.maxFiles - Max rotated files to keep (default: 5)
      * @returns `this` for chaining
+     * @deprecated alias for `.withObservability({ logging: ... })`. Structured
+     *   logging is a verbosity tier on the observability stack. Method remains
+     *   for backward compatibility.
      */
     withLogging(config: {
         level?: 'debug' | 'info' | 'warn' | 'error'
@@ -1222,6 +1306,9 @@ export class ReactiveAgentBuilder {
      * Allows the agent to pause and request human approval for critical operations.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(requireApprovalFor(...))` killswitch
+     *   (master plan §11.4). Approval gates compose through the frozen
+     *   killswitch set. Method remains for backward compatibility.
      */
     withInteraction(): this {
         this._enableInteraction = true
@@ -1236,6 +1323,10 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Custom prompt template definitions
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(h => h.on('prompt.system', ...))` /
+     *   `@reactive-agents/prompts` template registry. Prompt templates flow
+     *   through the canonical compose chokepoint. Method remains for
+     *   backward compatibility.
      */
     withPrompts(options?: PromptsOptions): this {
         this._enablePrompts = true
@@ -1249,6 +1340,10 @@ export class ReactiveAgentBuilder {
      * Allows defining and executing complex workflows with approval gates and task dependencies.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `.withAgentTool()` / `.withDynamicSubAgents()` /
+     *   `.compose(...)` workflow composition. Orchestration is a downstream
+     *   product of the sub-agent + compose primitives. Method remains for
+     *   backward compatibility.
      */
     withOrchestration(): this {
         this._enableOrchestration = true
@@ -1262,6 +1357,10 @@ export class ReactiveAgentBuilder {
      * Required for `.pause()`, `.resume()`, `.stop()`, and `.terminate()` methods on ReactiveAgent.
      *
      * @returns `this` for chaining
+     * @deprecated alias for the frozen killswitch set (master plan §11.4 —
+     *   `budgetLimit`, `maxIterations`, `timeoutAfter`, `watchdog`,
+     *   `requireApprovalFor`, `confidenceFloor`). Compose via
+     *   `.compose(killSwitch(...))`. Method remains for backward compatibility.
      */
     withKillSwitch(): this {
         this._enableKillSwitch = true
@@ -1276,6 +1375,9 @@ export class ReactiveAgentBuilder {
      *
      * @param contract - Behavioral contract specification
      * @returns `this` for chaining
+     * @deprecated alias for `.withGuardrails(...)` + `.compose(h => h.before('act', ...))`.
+     *   Behavioural contracts compose from guardrails plus the canonical
+     *   pre-act chokepoint. Method remains for backward compatibility.
      */
     withBehavioralContracts(
         contract: import('@reactive-agents/guardrails').BehavioralContract
@@ -1293,6 +1395,9 @@ export class ReactiveAgentBuilder {
      * strategies with higher success rates.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.intelligent()` (compounding
+     *   cross-session learning surface). Method remains for backward
+     *   compatibility.
      */
     withSelfImprovement(): this {
         this._enableSelfImprovement = true
@@ -1306,6 +1411,8 @@ export class ReactiveAgentBuilder {
      * prior runs. Tips are injected into the execution context as `experienceTips`.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.intelligent()` (cross-agent
+     *   learning surface). Method remains for backward compatibility.
      */
     withExperienceLearning(): this {
         this._enableExperienceLearning = true
@@ -1320,6 +1427,9 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Optional consolidation thresholds
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.intelligent()` (memory
+     *   consolidation activates with compounding-intelligence presets).
+     *   Method remains for backward compatibility.
      */
     withMemoryConsolidation(config?: {
         threshold?: number
@@ -1339,6 +1449,9 @@ export class ReactiveAgentBuilder {
      * whether or not `withEvents()` was called.
      *
      * @returns `this` for chaining
+     * @deprecated no-op semantic marker. EventBus is always active; subscribe
+     *   with `agent.subscribe(...)` directly. Method remains for backward
+     *   compatibility.
      */
     withEvents(): this {
         this._enableEvents = true
@@ -1353,6 +1466,10 @@ export class ReactiveAgentBuilder {
      *
      * @param profile - Partial context profile with overrides
      * @returns `this` for chaining
+     * @deprecated alias for registry-driven model→profile auto-resolution
+     *   (see `resolveProfile()` in `@reactive-agents/reasoning`). Explicit
+     *   overrides are rarely needed; the model id determines the tier.
+     *   Method remains for backward compatibility.
      */
     withContextProfile(profile: Partial<ContextProfile>): this {
         this._contextProfile = profile
@@ -1410,6 +1527,10 @@ export class ReactiveAgentBuilder {
     /**
      * Enable strict build-time validation. Missing API keys and model/provider
      * mismatches become hard errors instead of warnings.
+     *
+     * @deprecated alias for `REACTIVE_AGENTS_STRICT_VALIDATION=1` env config /
+     *   `HarnessProfile.balanced()` build defaults. Method remains for backward
+     *   compatibility.
      */
     withStrictValidation(): this {
         this._strictValidation = true
@@ -1433,6 +1554,9 @@ export class ReactiveAgentBuilder {
      * @param policy.maxRetries - Maximum number of retries (default: 0 = no retries)
      * @param policy.backoffMs - Base backoff duration in milliseconds (doubled each retry)
      * @example .withRetryPolicy({ maxRetries: 3, backoffMs: 1000 })
+     * @deprecated alias for registry-driven retry. Default policy resolves
+     *   from `CapabilityRegistry`; explicit override is reserved for pinned
+     *   deployments. Method remains for backward compatibility.
      */
     withRetryPolicy(policy: { maxRetries: number; backoffMs: number }): this {
         this._retryPolicy = policy
@@ -1480,6 +1604,9 @@ export class ReactiveAgentBuilder {
      * with individual check results. Useful for Kubernetes liveness/readiness probes.
      *
      * @returns `this` for chaining
+     * @deprecated alias for `.withObservability({ health: true })`. Health
+     *   checks ride the observability stack. Method remains for backward
+     *   compatibility.
      */
     withHealthCheck(): this {
         this._enableHealthCheck = true
@@ -1492,6 +1619,8 @@ export class ReactiveAgentBuilder {
      * is reached. Only iterations that include at least one tool call count.
      * @param n - Minimum number of iterations required
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(...)` minimum-iteration killswitch
+     *   variant. Method remains for backward compatibility.
      */
     withMinIterations(n: number): this {
         this._minIterations = n
@@ -1504,6 +1633,8 @@ export class ReactiveAgentBuilder {
      * data — facts about the current task, project, or environment.
      * @param context - Key-value pairs injected as a "Task Context" section
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(h => h.on('prompt.system', ...))` with
+     *   task-context formatting. Method remains for backward compatibility.
      */
     withTaskContext(context: Record<string, string>): this {
         this._taskContext = context
@@ -1521,6 +1652,9 @@ export class ReactiveAgentBuilder {
      * @param every - Checkpoint interval in iterations
      * @param options.autoResume - Automatically resume from last checkpoint (default: false)
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(h => h.after('iteration', ...))` +
+     *   `@reactive-agents/replay` checkpoint store. Method remains for
+     *   backward compatibility while PlanStore wiring lands (V1.1).
      */
     withProgressCheckpoint(
         every: number,
@@ -1537,6 +1671,9 @@ export class ReactiveAgentBuilder {
      * @param config.mode - "reflect" (default) or "loop"
      * @param config.prompt - Custom verification prompt (optional)
      * @returns `this` for chaining
+     * @deprecated alias for `HarnessProfile.balanced()` verifier (default-on)
+     *   + `.compose(...)` for custom prompts. Method remains for backward
+     *   compatibility.
      */
     withVerificationStep(
         config: { mode?: 'reflect' | 'loop'; prompt?: string } = {}
@@ -1554,6 +1691,9 @@ export class ReactiveAgentBuilder {
      * @param validator - Returns { valid, feedback? }; feedback is shown to the agent on retry
      * @param options.maxRetries - Max retry attempts on validation failure (default: 2)
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(h => h.before('finalize', validatorFn))`
+     *   on the output assembly chokepoint. Method remains for backward
+     *   compatibility.
      */
     withOutputValidator(
         validator: (output: string) => { valid: boolean; feedback?: string },
@@ -1570,6 +1710,9 @@ export class ReactiveAgentBuilder {
      * with the prior output as context, up to 3 additional times.
      * @param fn - Predicate receiving { output: string }; return true to accept the result
      * @returns `this` for chaining
+     * @deprecated alias for `.compose(h => h.on('arbitrator.decide', fn))`.
+     *   Termination predicates compose through the arbitrator chokepoint.
+     *   Method remains for backward compatibility.
      */
     withCustomTermination(fn: (state: { output: string }) => boolean): this {
         this._customTermination = fn
@@ -1587,6 +1730,10 @@ export class ReactiveAgentBuilder {
      *
      * @example .withReactiveIntelligence(false) // disable RI
      * @example .withReactiveIntelligence({ controller: { earlyStop: true } })
+     * @deprecated alias for `HarnessProfile.balanced()` (RI default-on) /
+     *   `HarnessProfile.lean()` (RI off). Config overrides flow through
+     *   `.compose(...)` or the `@reactive-agents/reactive-intelligence`
+     *   layer. Method remains for backward compatibility.
      */
     withReactiveIntelligence(enabled: boolean): this
     withReactiveIntelligence(
@@ -1623,6 +1770,9 @@ export class ReactiveAgentBuilder {
      * and evolved over time based on agent performance.
      *
      * @param config - Optional skills configuration
+     * @deprecated alias for `HarnessProfile.intelligent()` (skills graduate
+     *   with the compounding-intelligence preset). Method remains for
+     *   backward compatibility for explicit path / evolution overrides.
      */
     withSkills(config?: {
         paths?: string[]
@@ -1642,6 +1792,8 @@ export class ReactiveAgentBuilder {
      * Enable the Conductor's Suite meta-tools: brief, find, pulse, recall.
      * Also injects the harness skill into the agent's operating context.
      *
+     * @deprecated alias for `.withTools({ metaTools: ... })`. Meta-tools are
+     *   a `ToolsOptions` field. Method remains for backward compatibility.
      */
     withMetaTools(config?: import('./types.js').MetaToolsConfig | false): this {
         if (config === false) {
@@ -1663,6 +1815,9 @@ export class ReactiveAgentBuilder {
      * this duration will be evicted.
      * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
      * @example .withCacheTimeout(600_000) // 10 minutes
+     * @deprecated alias for registry-driven cache TTL. Cache lifetime resolves
+     *   from `CapabilityRegistry`; explicit override is reserved for
+     *   per-deployment tuning. Method remains for backward compatibility.
      */
     withCacheTimeout(ms: number): this {
         this._cacheTimeoutMs = ms
@@ -1678,6 +1833,10 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Fallback chain configuration with provider, model, and error threshold
      * @returns `this` for chaining
+     * @deprecated alias for registry-driven provider fallback chain. Fallback
+     *   order resolves from `CapabilityRegistry` provider tiers; explicit
+     *   override is reserved for pinned multi-provider deployments. Method
+     *   remains for backward compatibility.
      */
     withFallbacks(config: {
         providers?: string[]
@@ -1711,6 +1870,10 @@ export class ReactiveAgentBuilder {
      * (entropy scores, reactive decisions, strategy switches).
      *
      * @param opts.dir - Directory to write JSONL files (default: `.reactive-agents/traces`)
+     *
+     * @deprecated alias for `.withObservability({ tracing: { dir } })` or
+     *   `REACTIVE_AGENTS_TRACE` env config (process-wide). Tracing rides
+     *   the observability stack. Method remains for backward compatibility.
      */
     withTracing(opts: { dir?: string } = {}): this {
         this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` }
