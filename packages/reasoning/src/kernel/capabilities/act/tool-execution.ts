@@ -29,7 +29,7 @@ import {
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
-import { evaluateTransform } from "./tool-parsing.js";
+import { evaluateTransform } from "../../utils/tool-parsing.js";
 import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
 import {
   extractThinkingSafeContent,

@@ -9,7 +9,7 @@
 
 import type { ReasoningStep } from "../../../types/index.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
-import { FINAL_ANSWER_RE, extractFinalAnswer } from "../act/tool-parsing.js";
+import { FINAL_ANSWER_RE, extractFinalAnswer } from "../../utils/tool-parsing.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
 
 // ── Local structural types ──────────────────────────────────────────────
