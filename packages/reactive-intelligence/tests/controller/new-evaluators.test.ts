@@ -1,12 +1,13 @@
 import { describe, it, expect } from "bun:test";
 import { evaluateTempAdjust } from "../../src/controller/evaluators/temp-adjust.js";
 import { evaluateSkillActivate } from "../../src/controller/evaluators/skill-activate.js";
-import { evaluatePromptSwitch } from "../../src/controller/evaluators/prompt-switch.js";
 import { evaluateToolInject } from "../../src/controller/evaluators/tool-inject.js";
-import { evaluateMemoryBoost } from "../../src/controller/evaluators/memory-boost.js";
-import { evaluateSkillReinject } from "../../src/controller/evaluators/skill-reinject.js";
-import { evaluateHumanEscalate } from "../../src/controller/evaluators/human-escalate.js";
 import type { ControllerEvalParams } from "../../src/types.js";
+
+// WS-4 Phase 2 (2026-05-28) — describe blocks for `evaluatePromptSwitch`,
+// `evaluateMemoryBoost`, `evaluateSkillReinject`, `evaluateHumanEscalate`
+// removed alongside the prune of those 4 ⚠ UNWIRED variants from the
+// ControllerDecision union (master plan §3.6 RC-3, anti-mission #6).
 
 const baseParams: ControllerEvalParams = {
   entropyHistory: [
@@ -75,23 +76,6 @@ describe("evaluateSkillActivate", () => {
   });
 });
 
-describe("evaluatePromptSwitch", () => {
-  it("fires after 4+ flat iterations", () => {
-    const params = {
-      ...baseParams,
-      activePromptVariantId: "variant-A",
-      entropyHistory: Array(5).fill({ composite: 0.6, trajectory: { shape: "flat" as const, derivative: 0, momentum: 0 } }),
-    };
-    const result = evaluatePromptSwitch(params);
-    expect(result).not.toBeNull();
-    expect(result!.decision).toBe("prompt-switch");
-  });
-
-  it("returns null without activePromptVariantId", () => {
-    expect(evaluatePromptSwitch(baseParams)).toBeNull();
-  });
-});
-
 describe("evaluateToolInject", () => {
   it("fires with high entropy and available tools", () => {
     const result = evaluateToolInject({
@@ -105,67 +89,5 @@ describe("evaluateToolInject", () => {
 
   it("returns null without available tools", () => {
     expect(evaluateToolInject(baseParams)).toBeNull();
-  });
-});
-
-describe("evaluateMemoryBoost", () => {
-  it("fires when retrieval mode is recent and entropy high", () => {
-    const result = evaluateMemoryBoost({
-      ...baseParams,
-      activeRetrievalMode: "recent",
-    });
-    expect(result).not.toBeNull();
-    expect(result!.decision).toBe("memory-boost");
-    expect(result!.to).toBe("semantic");
-  });
-
-  it("returns null when already semantic", () => {
-    expect(evaluateMemoryBoost({ ...baseParams, activeRetrievalMode: "semantic" })).toBeNull();
-  });
-});
-
-describe("evaluateSkillReinject", () => {
-  it("fires when skill content is missing from context", () => {
-    const result = evaluateSkillReinject({
-      ...baseParams,
-      contextHasSkillContent: false,
-      activeSkillNames: ["data-analysis"],
-    });
-    expect(result).not.toBeNull();
-    expect(result!.decision).toBe("skill-reinject");
-    expect(result!.skillName).toBe("data-analysis");
-  });
-
-  it("returns null when skill content is present", () => {
-    expect(evaluateSkillReinject({ ...baseParams, contextHasSkillContent: true, activeSkillNames: ["x"] })).toBeNull();
-  });
-
-  it("returns null when no active skills", () => {
-    expect(evaluateSkillReinject({ ...baseParams, contextHasSkillContent: false })).toBeNull();
-  });
-});
-
-describe("evaluateHumanEscalate", () => {
-  it("fires when 3+ decision types tried and entropy still high", () => {
-    const result = evaluateHumanEscalate({
-      ...baseParams,
-      priorDecisionsThisRun: ["early-stop", "switch-strategy", "compress", "temp-adjust"],
-    });
-    expect(result).not.toBeNull();
-    expect(result!.decision).toBe("human-escalate");
-    expect(result!.decisionsExhausted.length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("returns null with few prior decisions", () => {
-    expect(evaluateHumanEscalate({ ...baseParams, priorDecisionsThisRun: ["early-stop"] })).toBeNull();
-  });
-
-  it("returns null when entropy is manageable", () => {
-    const lowEntropy = {
-      ...baseParams,
-      entropyHistory: Array(5).fill({ composite: 0.3, trajectory: { shape: "converging" as const, derivative: -0.1, momentum: -0.1 } }),
-      priorDecisionsThisRun: ["a", "b", "c", "d"],
-    };
-    expect(evaluateHumanEscalate(lowEntropy)).toBeNull();
   });
 });

@@ -8,7 +8,7 @@ const agent = await ReactiveAgents.create()
         tone: 'friendly, concise',
     })
     .withProvider('ollama')
-    .withModel('gemma4:e4b')
+    .withModel('qwen3.5:latest')
     .withCortex()
     .withMemory()
     .withReasoning({
@@ -33,12 +33,11 @@ const agent = await ReactiveAgents.create()
                 process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
         },
     })
-    .withObservability({ verbosity: 'verbose', live: true, logModelIO: false })
+    .withObservability({ verbosity: 'debug', live: true, logModelIO: true })
     .build()
 
 const result = await agent.run(
-    'Fetch the last 5 commits to tylerjrbuell/reactive-agents-ts and list them.'
+    'Fetch the last 10 commits to tylerjrbuell/reactive-agents-ts and create a markdown file (./commits.md) with commit categories (feat/fix/refactor/docs), a 1-sentence summary per category, and any breaking changes. Self-critique and improve the format.'
 )
 console.log(result.output)
-console.log(result.debrief?.rationale)
 await agent.dispose()

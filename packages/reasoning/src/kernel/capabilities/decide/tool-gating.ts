@@ -1,4 +1,17 @@
 /**
+ * Tool gating — Decide capability concern (pre-Act selection).
+ *
+ * Tool gating answers "which subset of permitted tools is the agent
+ * allowed to fire on this iter?" That is a Decide concern (pre-Act
+ * filtering), per Mission Pillar 5: the Arbitrator integrates signals
+ * into one Verdict; tool gating narrows the candidate set the Verdict
+ * applies to.
+ *
+ * Moved from kernel/capabilities/act/tool-gating.ts in WS-3 Phase 2
+ * (ADR: wiki/Decisions/2026-05-28-tool-gating-disposition.md option (a)).
+ */
+
+/**
  * kernel/utils/tool-gating.ts — Parallel-batch safety, required-tool gating,
  * per-tool quota enforcement, tool-elaboration injection, and next-move
  * batching plans.

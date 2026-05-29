@@ -9,6 +9,31 @@ The `ReactiveAgentBuilder` is the primary entry point for creating agents. It pr
 For copy-paste **recipe chains** (minimal LLM, ReAct + tools, memory, streaming, serialization), see [Common builder stacks](/cookbook/builder-stacks/). For defaults and env vars in one table, see [Configuration](/reference/configuration/).
 :::
 
+:::note[Composition order: prefer `HarnessProfile` presets]
+Per architecture model §11.1, the canonical composition order is:
+
+1. **`HarnessProfile.lean()/balanced()/intelligent()`** — primary. One
+   line that composes the registry's default-on capability set.
+2. **`.compose(harness => ...)`** — advanced. For users overriding
+   specific tags / phases / hooks.
+3. **`.withX()` methods** — backward compatible. Many are now
+   `@deprecated` aliases for either a preset or a `.compose(...)`
+   chokepoint; check the JSDoc on each method to see which preset /
+   compose primitive it routes to. Deprecated methods remain fully
+   functional — no breaking changes.
+
+```typescript
+import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+  .withName('research-agent')
+  .withProvider('anthropic')
+  .withProfile(HarnessProfile.balanced())  // ← canonical entry
+  .withTools()
+  .build()
+```
+:::
+
 ## Jump to section
 
 | Category | Methods |

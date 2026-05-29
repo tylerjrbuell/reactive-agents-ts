@@ -118,19 +118,49 @@ bun run src/agent.ts
 
 ## 5. Add Capabilities
 
-Enable memory, reasoning, and safety:
+The canonical composition path is a `HarnessProfile` preset — `lean()`,
+`balanced()`, or `intelligent()`. Presets compose the registry's
+default-on capability set so you don't pile up redundant `.withX()`
+calls.
 
-```typescript title="src/agent.ts" {5-8}
+```typescript title="src/agent.ts" {2,7}
+import { ReactiveAgents, HarnessProfile } from "reactive-agents";
+
 const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-20250514")
-  .withMemory()         // Default tier "standard" (FTS5 keyword search)
-  .withReasoning()      // ReAct loop: Think → Act → Observe
-  .withGuardrails()     // Pre-LLM injection / PII / toxicity blocking
-  .withCostTracking()   // Complexity routing + budget enforcement
+  .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
   .build();
 ```
+
+Pick the preset that matches the workload:
+
+- **`HarnessProfile.lean()`** — model + nothing else. Latency- and
+  cost-sensitive paths; benchmark ablations.
+- **`HarnessProfile.balanced()`** — today's production defaults
+  (memory + reactive intelligence + verifier + strategy switching).
+- **`HarnessProfile.intelligent()`** — balanced + skill persistence
+  for cross-session compounding learning.
+
+Override one capability after the preset — order matters; later calls
+win:
+
+```typescript {6-7}
+const agent = await ReactiveAgents.create()
+  .withName("research-agent")
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-20250514")
+  .withProfile(HarnessProfile.balanced())
+  .withMemory({ tier: "enhanced" })          // upgrade memory to vector embeddings
+  .compose((h) => h.before("act", logFn))    // canonical chokepoint composition
+  .build();
+```
+
+Individual `.withX()` methods still work for backward compatibility,
+but most are now `@deprecated` aliases for either a `HarnessProfile`
+preset or a `.compose(...)` chokepoint. Check the JSDoc on a method
+to see which preset / compose primitive it routes to.
 
 ## What's Next?
 

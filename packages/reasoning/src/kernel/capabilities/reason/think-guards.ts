@@ -26,13 +26,13 @@ import {
   buildEvidenceCorpusFromSteps,
   validateOutputGroundedInEvidence,
 } from "../verify/evidence-grounding.js";
-import { gateNativeToolCallsForRequiredTools } from "../act/tool-gating.js";
+import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
 } from "../verify/requirement-state.js";
 import { makeStep } from "../sense/step-utils.js";
-import { makeObservationResult } from "../act/tool-execution.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import {
   transitionState,

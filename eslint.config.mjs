@@ -51,6 +51,37 @@ const NO_DIRECT_STATE_MUTATION = {
     "See GH #114 (transitionState discipline).",
 };
 
+// WS-3 Phase 4b — Capability boundary rule (leaf principle, architecture model §2.3).
+//
+// Files under `kernel/capabilities/<cap>/` MAY NOT import from sibling
+// capability directories. Cross-capability dependencies must route through:
+//   - `kernel/utils/` (substrate primitives — pure helpers)
+//   - `kernel/state/` (shared state types)
+//   - `core/services/` Tag-based service contracts
+//
+// Restored cycles after WS-3 Phase 1+2+3+4a: ZERO (verified 2026-05-28).
+// This rule structurally prevents re-introduction.
+//
+// Severity warn → error flip after retrofitting any pre-existing flagged
+// sites (currently expected: zero, but pre-existing edges may surface).
+// Match `from "../<cap>/...js"` — esquery doesn't support regex alternation
+// groups, so the selector is the broader `^\.\./[a-z]+\/` pattern. This
+// catches all cross-directory ../X/ imports from within a capability dir.
+// Inside kernel/capabilities/<cap>/ files, the only "../<X>/" path that's
+// legitimate is `../<same-cap>/` (rare same-dir-via-parent pattern); all
+// other matches are cross-capability internal imports.
+const NO_CROSS_CAPABILITY_INTERNAL_IMPORT = {
+  selector:
+    "ImportDeclaration[source.value=/^\\.\\.\\/[a-z]+\\//]",
+  message:
+    "Cross-capability internal import. The leaf principle (architecture-model §2.3) " +
+    "says capabilities consume substrate, NOT each other. Route through " +
+    "kernel/utils/ (pure helpers), kernel/state/ (shared types), or a " +
+    "Tag-based service contract in core/services/. " +
+    "Allowed baseline (~23 pre-existing edges, all one-way; zero cycles as of WS-3 Phase 4a) " +
+    "tolerated via warn-level; new violations should be reviewed.",
+};
+
 export default [
   {
     ignores: [
@@ -83,9 +114,11 @@ export default [
       reportUnusedDisableDirectives: false,
     },
     rules: {
-      // Phase 1 severity: "warn". Phase 2 flips to "error" once any
-      // surviving violations from the audit have been retrofitted.
-      "no-restricted-syntax": ["warn", NO_DIRECT_STATE_MUTATION],
+      // WS-3 Phase 4c (2026-05-29): severity flipped warn → error after
+      // Sprint 3.3 + prior transitionState retrofit confirmed zero raw
+      // state.{status,terminatedBy,error} = sites outside canonical owners.
+      // Gate: packages/reasoning/tests/kernel-state-mutation-discipline.test.ts.
+      "no-restricted-syntax": ["error", NO_DIRECT_STATE_MUTATION],
     },
   },
   // Canonical mutation sites — turn the rule OFF here. These two files are
@@ -98,6 +131,44 @@ export default [
     ],
     rules: {
       "no-restricted-syntax": "off",
+    },
+  },
+  // WS-3 Phase 4b — Capability boundary rule. Applies ONLY under
+  // packages/reasoning/src/kernel/capabilities/*/. Each capability dir is a
+  // leaf — no sibling capability internal imports.
+  //
+  // Severity is "warn": the rule has its own retrofit baseline (~23 pre-existing
+  // one-way edges, zero cycles as of WS-3 Phase 4a) which is tolerated until a
+  // dedicated boundary-relocation phase retires the residual edges. New
+  // cross-cap imports surface as warnings during review.
+  //
+  // NOTE: this block carries ONLY the cross-cap selector. State-mutation
+  // enforcement at error severity is provided by the trailing block below.
+  // (`no-restricted-syntax` is a single-severity rule and flat-config rule
+  // settings are REPLACED — not merged — by later matching blocks; mixing
+  // selectors at different severities therefore requires the split.)
+  {
+    files: ["packages/reasoning/src/kernel/capabilities/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": ["warn", NO_CROSS_CAPABILITY_INTERNAL_IMPORT],
+    },
+  },
+  // WS-3 Phase 4c (2026-05-29) — Severity lock-in for NO_DIRECT_STATE_MUTATION
+  // across the whole kernel/ tree, including capabilities/, where the
+  // preceding Phase 4b block would otherwise have dropped the state-mutation
+  // selector entirely.
+  //
+  // Excludes the two canonical mutation owners (kernel-state.ts +
+  // terminate.ts) — their existing "off" override above remains the
+  // structural source of truth for those files.
+  {
+    files: ["packages/reasoning/src/kernel/**/*.ts"],
+    ignores: [
+      "packages/reasoning/src/kernel/state/kernel-state.ts",
+      "packages/reasoning/src/kernel/loop/terminate.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": ["error", NO_DIRECT_STATE_MUTATION],
     },
   },
 ];

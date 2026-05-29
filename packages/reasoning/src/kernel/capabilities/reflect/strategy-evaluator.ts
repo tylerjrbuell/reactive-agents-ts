@@ -16,7 +16,7 @@ import { getPermanentlyFailedRequiredTools } from "../verify/requirement-state.j
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../reason/stream-parser.js";
+} from "../../utils/stream-parser.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

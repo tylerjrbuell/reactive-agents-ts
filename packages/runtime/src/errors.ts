@@ -240,6 +240,27 @@ const KNOWN_TAGS = new Set([
   "BudgetExceededError",
 ]);
 
+/**
+ * Attach the original tagged-error value to an `Error` instance so callers
+ * (e.g. `unwrapErrorWithSuggestion`) can recover the original for context
+ * lookup after the message has been cleaned.
+ *
+ * Concentrates the narrow widening cast in one place — see
+ * `packages/runtime/test/as-unknown-as-ceiling.test.ts` for the §5.5 anti-
+ * regression ceiling that feeds off this consolidation.
+ */
+function setOriginalTaggedError(err: Error, original: unknown): void {
+  (err as unknown as Record<string, unknown>)._originalTaggedError = original;
+}
+
+/**
+ * Read the original tagged-error value previously attached via
+ * `setOriginalTaggedError`. Returns `undefined` if no original is attached.
+ */
+function getOriginalTaggedError(base: Error): unknown {
+  return (base as unknown as Record<string, unknown>)._originalTaggedError;
+}
+
 function isKnownTaggedError(error: unknown): boolean {
   return (
     error != null &&
@@ -273,7 +294,7 @@ function extractRootTaggedError(error: unknown): unknown {
  */
 export function unwrapErrorWithSuggestion(error: unknown): Error {
   const base = unwrapError(error);
-  const original = (base as unknown as Record<string, unknown>)._originalTaggedError ?? error;
+  const original = getOriginalTaggedError(base) ?? error;
   const ctx = errorContext(original);
   if (ctx.suggestion && !base.message.includes("Consider:") && !base.message.includes("Options:")) {
     base.message = `${base.message}\n  → ${ctx.suggestion}`;
@@ -296,7 +317,7 @@ export function unwrapError(error: unknown): Error {
   if (isKnownTaggedError(error)) {
     const msg = (error as { message: string }).message;
     const err = new Error(cleanMessage(msg));
-    (err as unknown as Record<string, unknown>)._originalTaggedError = error;
+    setOriginalTaggedError(err, error);
     return err;
   }
 
@@ -310,7 +331,7 @@ export function unwrapError(error: unknown): Error {
   if (root && isKnownTaggedError(root)) {
     const msg = (root as { message: string }).message;
     const err = new Error(cleanMessage(msg));
-    (err as unknown as Record<string, unknown>)._originalTaggedError = root;
+    setOriginalTaggedError(err, root);
     return err;
   }
 

@@ -57,6 +57,7 @@
     "@reactive-agents/runtime": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/memory": "workspace:*",
+    "@reactive-agents/observe": "workspace:*",
     "@reactive-agents/reasoning": "workspace:*",
     "@reactive-agents/tools": "workspace:*",
     "@reactive-agents/guardrails": "workspace:*",
@@ -93,6 +94,11 @@
       "types": "./dist/memory.d.ts",
       "import": "./dist/memory.js",
       "default": "./dist/memory.js"
+    },
+    "./observe": {
+      "types": "./dist/observe.d.ts",
+      "import": "./dist/observe.js",
+      "default": "./dist/observe.js"
     },
     "./reasoning": {
       "types": "./dist/reasoning.d.ts",

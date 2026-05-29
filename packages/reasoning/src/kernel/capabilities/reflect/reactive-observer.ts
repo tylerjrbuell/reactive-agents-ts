@@ -194,7 +194,8 @@ export function runReactiveObserver(
           for (const t of toolList) availableToolNames.push(t.name);
         }
 
-        // Extract decision types already fired this run for human-escalate evaluator
+        // Extract decision types already fired this run for evaluators that
+        // condition on exhaustion of prior decisions.
         const priorDecisionsThisRun = s.controllerDecisionLog.map((entry) => {
           const colonIdx = entry.indexOf(":");
           return colonIdx > 0 ? entry.slice(0, colonIdx).trim() : entry;

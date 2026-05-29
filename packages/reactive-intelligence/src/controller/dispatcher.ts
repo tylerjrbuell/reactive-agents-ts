@@ -20,13 +20,16 @@ import {
 //
 // Sparse mapping: only RI decisions that have a natural Compose tag are
 // bridged. Decisions without a natural tag (compress, skill-activate,
-// temp-adjust, tool-inject, memory-boost, prompt-switch, skill-reinject)
-// stay internal — inventing new tags to force coverage would expand the
-// Compose surface for cosmetic reasons.
+// temp-adjust, tool-inject) stay internal — inventing new tags to force
+// coverage would expand the Compose surface for cosmetic reasons.
 //
 // The bridge fires only after the handler reports `outcome.applied === true`.
 // Skipped, suppressed, and erroring decisions do not emit; observers see
 // confirmed kernel-affecting events, not the full deliberation stream.
+//
+// WS-4 Phase 2 (2026-05-28) — `human-escalate` removed from the bridge
+// alongside the union prune. When a HITL bridge ships, register handler
+// + variant + bridge case together.
 
 type BridgeableDecision = Extract<
   ControllerDecision,
@@ -34,7 +37,6 @@ type BridgeableDecision = Extract<
       | "switch-strategy"
       | "harness-harm"
       | "stall-detect"
-      | "human-escalate"
       | "tool-failure-redirect"
   }
 >
@@ -43,7 +45,6 @@ const isBridgeable = (d: ControllerDecision): d is BridgeableDecision =>
   d.decision === "switch-strategy" ||
   d.decision === "harness-harm" ||
   d.decision === "stall-detect" ||
-  d.decision === "human-escalate" ||
   d.decision === "tool-failure-redirect"
 
 const lifecycleFailureFromDecision = (
@@ -143,20 +144,6 @@ const bridgeAppliedDecision = (
           state,
           "llm-refusal",
           `stall detected after ${decision.stalledIterations} iterations: ${decision.reason}`,
-        ),
-        baseCtxFromState(ctx, state, phase),
-      )
-    }
-    case "human-escalate": {
-      return emitToCompose(
-        pipeline,
-        "lifecycle.failure" satisfies Tag,
-        lifecycleFailureFromDecision(
-          decision,
-          ctx,
-          state,
-          "verifier-rejection",
-          `human escalation requested: ${decision.reason}`,
         ),
         baseCtxFromState(ctx, state, phase),
       )

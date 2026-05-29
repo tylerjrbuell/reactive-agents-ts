@@ -69,6 +69,8 @@ type ReactiveControllerInstance = {
     readonly priorDecisionsThisRun?: readonly string[];
     readonly consecutiveToolFailures?: number;
     readonly failingToolName?: string;
+    /** FM-A3 backstop — see reactive-intelligence/src/types.ts ControllerEvalParams.hasUserOutput. */
+    readonly hasUserOutput?: boolean;
   }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
 };
 

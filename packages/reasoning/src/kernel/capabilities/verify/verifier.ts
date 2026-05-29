@@ -27,6 +27,7 @@
 //   - Not a memory writer (Learn owns that)
 //   - Just: did the action achieve its purpose? Pass/fail with reasons.
 
+import { Effect } from "effect";
 import type { ReasoningStep } from "../../../types/index.js";
 import type { ObservationResult } from "../../../types/observation.js";
 import { isSatisfied } from "./quality-utils.js";
@@ -35,6 +36,7 @@ import {
   validateOutputGroundedInEvidence,
   validateGeneralizedGrounding,
 } from "./evidence-grounding.js";
+import { emitVerifierVerdict } from "../../utils/diagnostics.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -631,4 +633,46 @@ export function contextFromObservation(args: {
     toolsUsed: args.toolsUsed,
     terminal: args.terminal ?? false,
   };
+}
+
+// ─── Capability-boundary emit wrapper (WS-3 Phase 5a) ───────────────────────
+//
+// `verifyAndEmit` is the canonical entry point for callers (the kernel loop,
+// outer-loop strategies) that need both the structured `VerificationResult`
+// AND the trace-event side effect. It enforces invariant 10 of the
+// canonical-refactor model: capability emit events fire from capability
+// code, never from strategy / loop code.
+//
+// Pre-WS-3 Phase 5a, runner.ts called `verifier.verify(ctx)` and then
+// `yield* emitVerifierVerdict({...})` inline at two sites (the harness-
+// fallback verification path and the post-loop terminal verification path).
+// That coupled the loop to the trace shape. This helper colocates the emit
+// with the verification call so future verifier evolution (new check
+// categories, severity remapping, etc.) updates the emit without touching
+// runner.ts.
+//
+// Same semantics as calling `verifier.verify(ctx)` directly — the result is
+// returned unchanged. The emit is fire-and-forget at the EventBus boundary
+// (it Effect-swallows publish failures via `emitErrorSwallowed`, matching
+// the pre-existing helper behavior).
+export function verifyAndEmit(args: {
+  readonly verifier: Verifier;
+  readonly context: VerificationContext;
+  readonly taskId: string;
+  readonly iteration: number;
+}): Effect.Effect<VerificationResult, never> {
+  const { verifier, context, taskId, iteration } = args;
+  return Effect.gen(function* () {
+    const verdict = verifier.verify(context);
+    yield* emitVerifierVerdict({
+      taskId,
+      iteration,
+      action: verdict.action,
+      terminal: context.terminal === true,
+      verified: verdict.verified,
+      summary: verdict.summary,
+      checks: verdict.checks,
+    });
+    return verdict;
+  });
 }

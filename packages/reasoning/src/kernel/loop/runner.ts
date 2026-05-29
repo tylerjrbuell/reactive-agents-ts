@@ -12,20 +12,15 @@
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
  *   6. Terminal hooks: onDone / onError
  */
-import { Effect, FiberRef } from "effect";
+import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
-import type { HarnessPipeline, Phase } from "@reactive-agents/core";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
-import type { ProviderCapabilities } from "@reactive-agents/llm-provider";
 import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
-import { checkpointStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
 import { buildKernelHooks } from "../../kernel/state/kernel-hooks.js";
-import { terminate } from "./terminate.js";
-import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import {
   initialKernelState,
   transitionState,
@@ -35,48 +30,15 @@ import {
   type KernelRunOptions,
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
-import { evaluateStrategySwitch, buildHandoff } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
-import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
-import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
-import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/reflect/loop-detector.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../../kernel/capabilities/reason/stream-parser.js";
-// Sprint 3.3 — Sole Termination Authority: dispatcher-early-stop now flows
-// through the Arbitrator so the veto applies (catches "framework giving
-// up due to maxIterations approach with tool failures" as exit-failure).
-import {
-  arbitrateAndApply,
-  arbitrationContextFromState,
-} from "../../kernel/capabilities/decide/arbitrator.js";
-import { buildOracleNudge } from "../../kernel/capabilities/decide/oracle-nudge.js";
-import {
-  buildSuccessfulToolCallCounts,
-  getMissingRequiredToolsByCount,
-  getEffectiveMissingRequiredTools,
-  getPermanentlyFailedRequiredTools,
-} from "../../kernel/capabilities/verify/requirement-state.js";
-import {
-  decideExecutionLane,
-  shouldInjectOracleNudge,
-} from "../../kernel/utils/lane-controller.js";
+} from "../../kernel/utils/stream-parser.js";
+import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/requirement-state.js";
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { defaultVerifier, resolveResultSeverity } from "../../kernel/capabilities/verify/verifier.js";
-import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
-import {
-  RecallService,
-  type MemoryRecallResult,
-  type FoundSkill,
-} from "../../kernel/capabilities/recall/recall-service.js";
-import {
-  emitKernelStateSnapshot,
-  emitVerifierVerdict,
-  emitHarnessSignalInjected,
-  emitBudgetSignalCollected,
-} from "../../kernel/utils/diagnostics.js";
-import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
+import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
+import { emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
 import {
   validateOutputFormat,
   validateContentCompleteness,
@@ -85,408 +47,45 @@ import {
   buildSynthesisPrompt,
   type FinalizedOutput,
 } from "./output-synthesis.js";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
-import { META_TOOLS as RUNNER_META_TOOLS } from "../../kernel/state/kernel-constants.js";
-import { emitErrorSwallowed, errorTag, RunControllerRef } from "@reactive-agents/core";
+// ── WS-6 Phase 2 — helper bucket imports ──────────────────────────────────────
+// Tier-aware guard thresholds, deliverable assembly, recovery steering, and
+// state-query helpers all moved to ./runner-helpers/<bucket>.ts. Re-exports
+// below keep `kernel/loop/runner.js` as the stable import surface for callers
+// (output-quality-gate.test.ts, tier-guard-config.test.ts, strategies/*).
+import {
+  TIER_GUARD_THRESHOLDS,
+  resolveMaxSameTool,
+} from "./runner-helpers/tier-guards.js";
+import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
+import {
+  assembleDeliverable,
+  deliverableTerminationReason,
+  countDeliverableCandidates,
+  buildEffectiveToolsUsed,
+} from "./runner-helpers/deliverable.js";
 
-/** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
-const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
-/** Keys referenced by compression hints (e.g. `recall("_tool_result_5", ...)`). */
-const RECALL_TOOL_KEY_RE = /recall\("(_tool_result_\d+)"/g;
+// WS-6 Phase 4 (2026-05-29) — per-iteration body lifted to iterate-pass.ts.
+// The outer while loop stays here; the body invokes runIterationPass() once
+// per pass and honors the control signal it returns.
+import {
+  runIterationPass,
+  type IterationCarrier,
+  type IterationConfig,
+} from "./iterate-pass.js";
 
-function missingRequiredToolsForInput(
-  steps: KernelState["steps"],
-  input: KernelInput,
-): readonly string[] {
-  return getEffectiveMissingRequiredTools(
-    steps,
-    input.requiredTools ?? [],
-    input.requiredToolQuantities,
-  );
-}
-
-/**
- * When an observation is a compressed preview, replace it with full text from the kernel
- * scratchpad so harness / output-gate paths do not hallucinate from ASCII banners only.
- */
-function resolveStoredToolObservation(
-  content: string,
-  scratchpad: ReadonlyMap<string, string>,
-  preferredKey?: string,
-): string {
-  const keys = [...new Set([
-    ...(preferredKey ? [preferredKey] : []),
-    ...[...content.matchAll(STORED_TOOL_KEY_RE)].map((m) => m[1]!),
-    ...[...content.matchAll(RECALL_TOOL_KEY_RE)].map((m) => m[1]!),
-  ])];
-  if (keys.length === 0) return content;
-  const payloads = keys
-    .map((k) => scratchpad.get(k))
-    .filter((v): v is string => typeof v === "string" && v.length > 0);
-  if (payloads.length === 0) return content;
-  return payloads.join("\n\n---\n\n");
-}
-
-// ── Harness deliverable assembly ──────────────────────────────────────────────
-
-/** Minimum thought length to be treated as a model-authored final synthesis. */
-const MIN_MODEL_SYNTHESIS_LENGTH = 100;
-
-/**
- * A harness-assembled deliverable, source-tagged.
- *
- *  - `model_synthesis` — a substantive trailing thought authored by the model.
- *    In React-loop semantics, that thought IS the final answer; raw tool
- *    observations are the evidence that fed it. Downstream gates should treat
- *    this as a model-authored output (no forced LLM re-synthesis).
- *  - `raw_artifacts` — concatenated tool observation bodies. The model never
- *    produced a synthesizing thought, so the harness ships evidence directly.
- *    Downstream gates should attempt LLM synthesis to format it for the user.
- */
-export type Deliverable = {
-  readonly content: string;
-  readonly source: "model_synthesis" | "raw_artifacts";
-};
-
-/**
- * Assemble the harness-owned deliverable.
- *
- * Priority order (design contract):
- *   1. Model's most recent substantive synthesizing thought — when the model
- *      produced a coherent terminal response after tool execution, that text
- *      is the answer. Raw observations are evidence, not output.
- *   2. Concatenated successful non-meta tool observations — last-resort when
- *      no usable model thought exists. Marked `raw_artifacts` so the output
- *      gate knows to synthesize before user delivery.
- *   3. Empty-state sentinel — only when neither path has content.
- *
- * Filters out guard-blocked observations (success=true but warning markers)
- * by requiring the tool to be in `state.toolsUsed` and excluding known
- * guard-block text patterns.
- */
-export function assembleDeliverable(state: KernelState): Deliverable {
-  const lastThought = [...state.steps]
-    .reverse()
-    .find(
-      (s) =>
-        s.type === "thought" &&
-        (s.content ?? "").trim().length >= MIN_MODEL_SYNTHESIS_LENGTH,
-    );
-  if (lastThought?.content) {
-    return { content: lastThought.content, source: "model_synthesis" };
-  }
-
-  const artifacts = collectDeliverableArtifacts(state);
-  if (artifacts.length > 0) {
-    return { content: artifacts.join("\n\n"), source: "raw_artifacts" };
-  }
-
-  return { content: "Task complete.", source: "raw_artifacts" };
-}
-
-/**
- * Map a {@link Deliverable} to the `terminatedBy` reason that preserves its
- * source semantics across the downstream gate. Model-authored synthesis must
- * NOT trigger forced LLM re-synthesis in §9 — it's already a model output.
- */
-function deliverableTerminationReason(
-  d: Deliverable,
-): "harness_deliverable" | "harness_synthesis" {
-  return d.source === "model_synthesis" ? "harness_synthesis" : "harness_deliverable";
-}
-
-function collectDeliverableArtifacts(state: KernelState): string[] {
-  const artifacts: string[] = [];
-  for (const step of state.steps) {
-    const content = getDeliverableObservationContent(state, step);
-    if (content) artifacts.push(content);
-  }
-
-  return artifacts;
-}
-
-function countDeliverableCandidates(state: KernelState): number {
-  let count = 0;
-  for (const step of state.steps) {
-    if (getDeliverableObservationContent(state, step) !== null) count++;
-  }
-
-  return count;
-}
-
-function getDeliverableObservationContent(
-  state: KernelState,
-  step: KernelState["steps"][number],
-): string | null {
-  if (step.type !== "observation") return null;
-
-  const raw = (step.content ?? "").trim();
-  if (raw.length === 0) return null;
-  if (raw.startsWith("⚠️") || raw.includes("[Already done")) return null;
-
-  const observationResult = step.metadata?.observationResult as
-    | { success?: boolean; toolName?: string }
-    | undefined;
-
-  if (observationResult) {
-    if (observationResult.success !== true) return null;
-    if (observationResult.toolName && RUNNER_META_TOOLS.has(observationResult.toolName)) return null;
-    if (observationResult.toolName && !state.toolsUsed.has(observationResult.toolName)) return null;
-  } else {
-    const hasRealUsedTool = [...state.toolsUsed].some((toolName) => !RUNNER_META_TOOLS.has(toolName));
-    if (!hasRealUsedTool) return null;
-  }
-
-  const storedKey = typeof step.metadata?.storedKey === "string" ? step.metadata.storedKey : undefined;
-  return resolveStoredToolObservation(raw, state.scratchpad, storedKey);
-}
-
-function buildEffectiveToolsUsed(state: KernelState): Set<string> {
-  const effective = new Set(state.toolsUsed);
-  for (const step of state.steps) {
-    if (step.type !== "observation") continue;
-    const observationResult = step.metadata?.observationResult as {
-      success?: boolean;
-      delegatedToolsUsed?: readonly string[];
-    } | undefined;
-    if (observationResult?.success !== true || !Array.isArray(observationResult.delegatedToolsUsed)) continue;
-    for (const toolName of observationResult.delegatedToolsUsed) {
-      if (typeof toolName === "string" && toolName.length > 0) {
-        effective.add(toolName);
-      }
-    }
-  }
-  return effective;
-}
-
-// ── Tier-aware guard thresholds ───────────────────────────────────────────────
-
-/** Per-tier thresholds for kernel guards. */
-export interface TierGuardConfig {
-  /** Token delta below which an iteration is considered "low progress". */
-  readonly tokenDeltaThreshold: number;
-  /** Default max same-tool calls before loop detection fires. */
-  readonly maxSameToolDefault: number;
-  /** Number of ignored oracle nudges before force-exit. */
-  readonly oracleNudgeLimit: number;
-}
-
-/** Tier-specific guard thresholds — local is strict, frontier is lenient. */
-export const TIER_GUARD_THRESHOLDS: Record<string, TierGuardConfig> = {
-  // M3 Pivot B (2026-05-06): local-tier oracleNudgeLimit raised from 1 → 2.
-  // Empirical evidence (cogito:14b T4 baseline trace 01KQZFH4YSJX6X4BJA94PEZXWG):
-  // model called `pulse` instead of `final-answer`, oracle injected one
-  // mandatory nudge, model ignored it, oracle force-terminated with empty
-  // output (outputLen=0, status=failed). One nudge wasn't enough for cogito
-  // to translate "you should answer" into an actual final-answer tool call —
-  // the second nudge gives the model a structurally different signal
-  // (verbatim re-injection after seeing the first didn't terminate the run)
-  // that it can recognize as a behavioral imperative.
-  local:    { tokenDeltaThreshold: 300,  maxSameToolDefault: 2, oracleNudgeLimit: 2 },
-  mid:      { tokenDeltaThreshold: 500,  maxSameToolDefault: 3, oracleNudgeLimit: 2 },
-  large:    { tokenDeltaThreshold: 700,  maxSameToolDefault: 4, oracleNudgeLimit: 3 },
-  frontier: { tokenDeltaThreshold: 1000, maxSameToolDefault: 5, oracleNudgeLimit: 3 },
-};
-
-// ── Token-delta guard ─────────────────────────────────────────────────────────
-
-/**
- * Guard: exit when model stops making progress (2 consecutive low-delta iterations).
- *
- * Conditions that must ALL be true to trigger early exit:
- * - iteration >= 3 (give the model at least a few steps before judging)
- * - tokenDelta < threshold (tier-specific, defaults to mid=500)
- * - consecutiveLowDeltaCount >= 2 (two consecutive low-delta iterations in a row)
- */
-export function shouldExitOnLowDelta(opts: {
-  iteration: number
-  tokenDelta: number
-  consecutiveLowDeltaCount: number
-  tier?: string
-}): boolean {
-  const { iteration, tokenDelta, consecutiveLowDeltaCount, tier } = opts
-  const threshold = (TIER_GUARD_THRESHOLDS[tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).tokenDeltaThreshold;
-  return iteration >= 3 && tokenDelta < threshold && consecutiveLowDeltaCount >= 2
-}
-
-// ── Oracle hard gate ──────────────────────────────────────────────────────────
-
-/**
- * Guard: force exit when the pulse oracle has said readyToAnswer=true but the
- * model has ignored it for N consecutive iterations (tier-dependent).
- *
- * Stage 1 (nudgeCount < limit): caller should inject a mandatory steering nudge and
- * increment readyToAnswerNudgeCount.
- * Stage 2 (nudgeCount >= limit): return true → caller terminates with "oracle_forced".
- */
-export function shouldForceOracleExit(opts: {
-  oracleReady: boolean
-  readyToAnswerNudgeCount: number
-  tier?: string
-}): boolean {
-  const nudgeLimit = (TIER_GUARD_THRESHOLDS[opts.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit;
-  return opts.oracleReady && opts.readyToAnswerNudgeCount >= nudgeLimit
-}
-
-/**
- * Resolve the effective maxSameTool loop-detection window.
- *
- * In parallel mode, adaptive classification may require N calls of the same tool
- * (e.g. `web-search×4` for four entities). The loop detector fires when the last
- * `maxSameTool` actions all have identical content — if the window is smaller than N,
- * it can fire prematurely before the required quota is met.
- *
- * This function raises the base tier default to at least the highest required-tool
- * quantity, capped at 20 as a safety net against runaway same-tool loops.
- */
-export function resolveMaxSameTool(
-  baseMax: number,
-  requiredToolQuantities?: Readonly<Record<string, number>>,
-): number {
-  if (!requiredToolQuantities) return baseMax;
-  const values = Object.values(requiredToolQuantities);
-  if (values.length === 0) return baseMax;
-  const maxRequired = Math.max(...values);
-  return Math.min(20, Math.max(baseMax, maxRequired));
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Extract the readyToAnswer flag from the most recent pulse observation step.
- * Returns false when there is no pulse observation or the JSON cannot be parsed.
- */
-function getLastPulseReadyToAnswer(state: KernelState): boolean {
-  const pulseObs = [...state.steps]
-    .reverse()
-    .find(
-      (s) =>
-        s.type === "observation" &&
-        s.metadata?.observationResult?.toolName === "pulse",
-    );
-  if (!pulseObs) return false;
-  try {
-    const parsed = JSON.parse(pulseObs.content ?? "");
-    return parsed?.readyToAnswer === true;
-  } catch {
-    return false;
-  }
-}
-
-/** Error strings from recent failed tool observations — feeds ICS nudge content. */
-function getLastErrors(state: KernelState): readonly string[] {
-  return state.steps
-    .filter(
-      (s) => s.type === "observation" && s.metadata?.observationResult?.success === false,
-    )
-    .slice(-2)
-    .map(
-      (s) =>
-        s.metadata?.observationResult?.displayText ||
-        s.content ||
-        "unknown error",
-    )
-}
-
-type ToolFailureRecovery = {
-  readonly failedUnresolved: readonly string[];
-  readonly alternativeCandidates: readonly string[];
-};
-
-type RecoverySteeringKind = "stall" | "loop";
-
-function buildRecoverySteeringGuidance(
-  recovery: ToolFailureRecovery,
-  failureRecoveryRedirects: number,
-  maxFailureRecoveryRedirects: number,
-  kind: RecoverySteeringKind,
-): string {
-  const nextPath =
-    recovery.alternativeCandidates[0] ??
-    recovery.failedUnresolved[0] ??
-    "an available tool";
-  const failedList = recovery.failedUnresolved.join(", ");
-  const progress = `(${failureRecoveryRedirects}/${maxFailureRecoveryRedirects})`;
-
-  if (recovery.alternativeCandidates.length > 0) {
-    if (kind === "stall") {
-      return (
-        `Recovery required: prior tool path failed (${failedList}). Try an alternate path now: ${nextPath}. Do not finalize yet. ${progress}`
-      );
-    }
-    return (
-      `Recovery required: loop detected after failed tool path (${failedList}). Try alternate path ${nextPath} before completion. ${progress}`
-    );
-  }
-  if (kind === "stall") {
-    return (
-      `Recovery required: prior tool path failed (${failedList}). Retry ${nextPath} with corrected arguments/evidence. Do not finalize yet. ${progress}`
-    );
-  }
-  return (
-    `Recovery required: loop detected after failed tool path (${failedList}). Retry ${nextPath} with corrected arguments before completion. ${progress}`
-  );
-}
-
-/**
- * Identify whether failed tool paths still have viable alternatives.
- *
- * A tool is "failed unresolved" when we saw at least one failed observation and
- * no successful observation for that same tool yet.
- */
-function getToolFailureRecovery(
-  state: KernelState,
-  input: KernelInput,
-): ToolFailureRecovery {
-  const successCounts = buildSuccessfulToolCallCounts(state.steps);
-  const successful = new Set<string>(Object.keys(successCounts));
-  const failed = new Set<string>();
-
-  for (const step of state.steps) {
-    if (step.type !== "observation") continue;
-    const result = step.metadata?.observationResult as
-      | { readonly success?: boolean; readonly toolName?: string }
-      | undefined;
-    const toolName = result?.toolName;
-    if (!toolName || RUNNER_META_TOOLS.has(toolName)) continue;
-
-    if (result.success === false && (successCounts[toolName] ?? 0) === 0) {
-      failed.add(toolName);
-    }
-  }
-
-  const required = input.requiredTools ?? [];
-  const requiredStillNeeded = getEffectiveMissingRequiredTools(
-    state.steps,
-    required,
-    input.requiredToolQuantities,
-  );
-  const relevant = input.relevantTools ?? [];
-  const available = (input.availableToolSchemas ?? []).map((t) => t.name);
-
-  const candidatePool = [...new Set([...requiredStillNeeded, ...required, ...relevant, ...available])]
-    .filter((name) => !RUNNER_META_TOOLS.has(name));
-
-  const failedUnresolved = [...failed].filter((name) => !successful.has(name));
-  if (failedUnresolved.length === 0) {
-    return { failedUnresolved: [], alternativeCandidates: [] };
-  }
-
-  const failedUnresolvedSet = new Set(failedUnresolved);
-  const requiredStillNeededSet = new Set(requiredStillNeeded);
-  const alternativeCandidates = candidatePool.filter((name) => {
-    if (failedUnresolvedSet.has(name)) return false;
-    return requiredStillNeededSet.has(name) || !successful.has(name);
-  });
-
-  return {
-    failedUnresolved,
-    alternativeCandidates,
-  };
-}
-
-// ── Phase hooks helper ─────────────────────────────────────────────────────────
-// `runPhaseHooks` moved to ./phase-hooks.js (shared with act.ts).
+// Re-export the public helper surface so external imports of
+// `kernel/loop/runner.js` remain unchanged.
+export { assembleDeliverable } from "./runner-helpers/deliverable.js";
+export type { Deliverable } from "./runner-helpers/deliverable.js";
+export {
+  TIER_GUARD_THRESHOLDS,
+  shouldExitOnLowDelta,
+  shouldForceOracleExit,
+  resolveMaxSameTool,
+} from "./runner-helpers/tier-guards.js";
+export type { TierGuardConfig } from "./runner-helpers/tier-guards.js";
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
@@ -636,16 +235,8 @@ export function runKernel(
     const mutableScratchpad = new Map<string, string>(state.scratchpad);
 
     // ── 7. Main loop ─────────────────────────────────────────────────────────
-    // Track tool calls per iteration by scanning new action steps since last check.
-    let prevActionCount = 0;
-    let prevStepCount = 0;
-    // Learn capability — per-iter diff cursors for LearningPipeline.write().
-    // Tracked separately from prevStepCount above so the learn write can
-    // pass ONLY the new steps/decisions appended during the current iter
-    // (mission-brief decisions a + b). Coupling to prevStepCount would
-    // break if the action-count delta logic ever resets that cursor.
-    let prevStepCountForLearn = 0;
-    let prevDecisionLogCountForLearn = 0;
+    // Tier-aware guards + loop-detection thresholds. These are immutable per
+    // run and flow into the iteration body via `iterationConfig` below.
     const loopCfg = options.loopDetection;
     const tierGuards = TIER_GUARD_THRESHOLDS[profile.tier] ?? TIER_GUARD_THRESHOLDS["mid"];
     const maxSameTool = resolveMaxSameTool(
@@ -655,10 +246,11 @@ export function runKernel(
     const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
     const maxConsecutiveThoughts = loopCfg?.maxConsecutiveThoughts ?? 3;
 
-    // Required tools guard — tracks redirect attempts to prevent infinite loops
+    // Required tools floor + retry/nudge budgets. The carrier counters
+    // `requiredToolRedirects` and `requiredToolNudgeCount` mirror the
+    // pre-Phase-4 in-loop bookkeeping (1:1 with the original variables).
     const requiredTools = effectiveInput.requiredTools ?? [];
     const maxRequiredToolRetries = effectiveInput.maxRequiredToolRetries ?? 2;
-    let requiredToolRedirects = 0;
 
     // M3 REWORK (2026-05-12): retry loop removed per ablation verdict (0pp
     // accuracy delta across 3 models). The verifier still fires as a terminal
@@ -669,7 +261,6 @@ export function runKernel(
     // nudges injected by stall detection and loop detection paths combined.
     // Without this, the stall and loop paths can compound nudges indefinitely
     // when the model refuses to (or cannot) satisfy the required tool quota.
-    let requiredToolNudgeCount = 0;
     const maxRequiredToolNudges = maxRequiredToolRetries + 2;
 
     // Required-tools availability guard (pre-loop)
@@ -692,29 +283,18 @@ export function runKernel(
       }
     }
 
-    // Strategy switching state
-    let switchCount = 0;
-    const triedStrategies: string[] = [options.strategy ?? "reactive"];
-    // currentOptions tracks the active strategy name for the current pass
+    // Strategy switching state — currentOptions tracks the active strategy
+    // name for the current pass; currentInput carries any handoff priorContext;
+    // currentContext is rebuilt when input changes on switch. All three
+    // round-trip through the carrier so the outer while loop and post-loop
+    // finalization see the latest values after a mid-iteration switch.
     let currentOptions = options;
-    // currentInput tracks per-pass input (may carry handoff priorContext)
     let currentInput: KernelInput = effectiveInput;
-    // currentContext tracks the KernelContext (rebuilt when input changes on switch)
-
     let currentContext: KernelContext = context;
-
-    // Harness stall tracking — counts consecutive iterations with no new non-meta tool results.
-    // When the model has gathered artifacts but stalls, the harness delivers accumulated data.
-    let consecutiveStalled = 0;
-    let prevArtifactCount = 0;
 
     // Failure recovery redirects — when a tool path fails and alternatives exist,
     // force at least a small number of alternate attempts before harness delivery.
-    let failureRecoveryRedirects = 0;
     const maxFailureRecoveryRedirects = Math.max(2, maxRequiredToolRetries);
-
-    // Auto-checkpoint tracking — fires once when context pressure enters the soft zone.
-    let autoCheckpointed = false;
 
     const emitLog = (event: LogEvent): Effect.Effect<void, never> =>
       Effect.serviceOption(ObservableLogger).pipe(
@@ -743,924 +323,77 @@ export function runKernel(
       }
     }
 
+    // ── 7. Main loop ─────────────────────────────────────────────────────────
+    // WS-6 Phase 4 (2026-05-29): the per-iteration body that used to live
+    // inline here moved to `iterate-pass.ts`. The outer while-loop owns
+    // termination + iteration-budget gating; runIterationPass() owns
+    // everything between the opening `while (...)` brace and its closing `}`.
+    // See iterate-pass.ts JSDoc for the carrier/cfg shape + invariants
+    // preserved across the lift (single-owner termination, loop-detector
+    // streak rule, no LLM re-verify, phase-chain ordering).
+    const iterationCarrier: IterationCarrier = {
+      state,
+      currentInput,
+      currentOptions,
+      currentContext,
+      prevActionCount: 0,
+      prevStepCount: 0,
+      // Learn capability — per-iter diff cursors for LearningPipeline.write().
+      // Tracked separately from prevStepCount so the learn write can pass
+      // ONLY the new steps/decisions appended during the current iter
+      // (mission-brief decisions a + b). Coupling to prevStepCount would
+      // break if the action-count delta logic ever resets that cursor.
+      prevStepCountForLearn: 0,
+      prevDecisionLogCountForLearn: 0,
+      prevArtifactCount: 0,
+      consecutiveStalled: 0,
+      requiredToolRedirects: 0,
+      requiredToolNudgeCount: 0,
+      failureRecoveryRedirects: 0,
+      switchCount: 0,
+      triedStrategies: [options.strategy ?? "reactive"],
+      autoCheckpointed: false,
+      mutableScratchpad,
+    };
+    const iterationConfig: IterationConfig = {
+      kernel,
+      hooks,
+      services,
+      profile,
+      tierGuards,
+      maxSameTool,
+      maxRepeatedThought,
+      maxConsecutiveThoughts,
+      requiredTools,
+      maxRequiredToolRetries,
+      maxRequiredToolNudges,
+      maxFailureRecoveryRedirects,
+      verifier,
+      options,
+      context,
+      effectiveInput,
+      input,
+      emitLog,
+    };
+
     while (
-      state.status !== "done" &&
-      state.status !== "failed" &&
-      state.iteration < currentOptions.maxIterations &&
-      (state.llmCalls ?? 0) < currentOptions.maxIterations
+      iterationCarrier.state.status !== "done" &&
+      iterationCarrier.state.status !== "failed" &&
+      iterationCarrier.state.iteration < iterationCarrier.currentOptions.maxIterations &&
+      (iterationCarrier.state.llmCalls ?? 0) < iterationCarrier.currentOptions.maxIterations
     ) {
-      // Pause/stop checkpoint: awaits resume() if paused, returns { stop: true } on stop().
-      const _runCtl = yield* FiberRef.get(RunControllerRef);
-      if (_runCtl) {
-        const ctl = yield* Effect.promise(() => _runCtl.checkpoint());
-        if (ctl?.stop) {
-          state = transitionState(state, { status: "done", output: state.output ?? "" });
-          break;
-        }
-      }
-
-      const prevTokens = state.tokens;
-
-      yield* emitLog({
-        _tag: "iteration",
-        iteration: state.iteration,
-        phase: "thought",
-        timestamp: new Date(),
-      });
-
-      // Snapshot kernel state at iteration start — gives `rax diagnose` and
-      // Cortex UI a per-iteration baseline of what the agent saw.
-      yield* emitKernelStateSnapshot({
-        state,
-        taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
-      });
-
-      // ── Recall capability — per-iter RecallService dispatch ──────────────
-      // Issue #129 / North Star §4.3 / Audit G-C — the per-iter recall seam.
-      // Fires EXACTLY ONCE per iter at iter-start, AFTER the snapshot emit and
-      // BEFORE the think phase dispatches (so Phase 2 consumers can thread
-      // results into the model prompt). Uses `Effect.serviceOption` so the
-      // kernel works with no RecallService layer provided (returns None →
-      // empty locals). Plain `yield*` (NOT `forkDaemon` like Learn) because
-      // recall PRODUCES values consumed in-iter — forking would leave the
-      // per-iter locals empty in the main loop.
-      //
-      // Wire-spot rationale: chosen here (between iter-snapshot and the
-      // `before think` phase hooks) so recall fires for EVERY iter — even
-      // ones a `before think` hook aborts. Phase 1 stores results in
-      // per-iter LOCALS (not KernelState); Phase 2 decides persistence
-      // shape after the migration of upstream recall (engine/bootstrap)
-      // through this seam.
-      let iterRecallContext: MemoryRecallResult = {
-        semanticContext: "",
-        episodic: [],
-      };
-      let iterRecallSkills: readonly FoundSkill[] = [];
-      {
-        const recallOpt = yield* Effect.serviceOption(RecallService);
-        if (recallOpt._tag === "Some") {
-          iterRecallContext = yield* recallOpt.value.recallMemoryContext(
-            state,
-            undefined,
-          );
-          iterRecallSkills = yield* recallOpt.value.findSkills(
-            state,
-            undefined,
-          );
-        }
-      }
-      // Phase 1 leaves iterRecallContext / iterRecallSkills unused beyond
-      // capture — strategies still consume `input.priorContext` /
-      // `input.briefResolvedSkills` as today. Phase 2 (runtime-warden) will
-      // either merge these into the prompt directly or expose via a new
-      // KernelState field once the upstream `engine/bootstrap` recall is
-      // migrated through this seam.
-      void iterRecallContext;
-      void iterRecallSkills;
-
-      const kernelPhaseStart = Date.now();
-      yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
-
-      // 'before think' hooks — may abort iteration
-      const beforeThinkAbort = yield* Effect.promise(() =>
-        runPhaseHooks(effectiveInput.harnessPipeline, 'before', 'think', state.iteration, state)
-      );
-      if (beforeThinkAbort) {
-        state = transitionState(state, {
-          status: beforeThinkAbort.abort === 'terminate' ? 'failed' : 'done',
-          output: state.output ?? '',
-          meta: {
-            ...state.meta,
-            terminatedBy: killswitchTerminatedBy(beforeThinkAbort),
-          },
-        });
-        break;
-      }
-
-      state = yield* kernel(state, currentContext);
-
-      // 'after think' hooks
-      yield* Effect.promise(() =>
-        runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'think', state.iteration, state)
-      );
-
-      yield* emitLog({
-        _tag: "phase_complete",
-        phase: "think",
-        duration: Date.now() - kernelPhaseStart,
-        status: state.status === "failed" ? "error" : "success",
-      });
-
-      // ── Token-delta diminishing-returns guard ────────────────────────────
-      // Track consecutive iterations where the model adds fewer than the
-      // tier-specific token threshold. After 2 such iterations (starting from
-      // iteration 3), exit early to prevent wasted iterations on a stalled model.
-      // Guard is skipped when no LLM calls have been made (e.g. test/mock kernels
-      // that emit 0 tokens) to avoid false positives in non-LLM scenarios.
-      const tokenDelta = state.tokens - prevTokens;
-      if (state.tokens > 0 || prevTokens > 0) {
-        const lowDelta = tokenDelta < tierGuards.tokenDeltaThreshold;
-        const newConsecutiveLowDelta = lowDelta ? (state.consecutiveLowDeltaCount ?? 0) + 1 : 0;
-        state = transitionState(state, { consecutiveLowDeltaCount: newConsecutiveLowDelta });
-
-        // Only fire the guard when there are remaining iterations to save
-        // (if we're already at the last iteration, the loop exits naturally).
-        const hasRemainingIterations = state.iteration < currentOptions.maxIterations - 1;
-        const missingRequiredForLowDelta = missingRequiredToolsForInput(state.steps, currentInput);
-        if (
-          hasRemainingIterations &&
-          missingRequiredForLowDelta.length === 0 &&
-          state.status !== "done" &&
-          state.status !== "failed" &&
-          shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier })
-        ) {
-          yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <${tierGuards.tokenDeltaThreshold} token delta (delta=${tokenDelta}, iter=${state.iteration})`);
-          state = terminate(state, {
-            reason: "low_delta_guard",
-            output: state.output ?? "",
-          });
-          break;
-        }
-      }
-
-      // ── Auto-checkpoint before context pressure gate ────────────────────
-      // When approaching the hard pressure gate (within 5%), auto-save best
-      // observations to the checkpoint store so they survive compaction.
-      if (
-        !autoCheckpointed &&
-        shouldAutoCheckpoint({
-          estimatedTokens: state.tokens,
-          maxTokens: profile.maxTokens ?? Number.MAX_SAFE_INTEGER,
-          tier: profile.tier,
-          alreadyCheckpointed: autoCheckpointed,
-        })
-      ) {
-        const saved = yield* autoCheckpoint(checkpointStoreRef, state.steps);
-        if (saved) {
-          autoCheckpointed = true;
-          yield* emitLog({ _tag: "warning", message: `[auto-checkpoint] Saved best observations before context pressure gate (tokens=${state.tokens})`, timestamp: new Date() });
-        }
-      }
-
-      // Sync scratchpad: kernel may have added entries
-      for (const [k, v] of state.scratchpad) {
-        mutableScratchpad.set(k, v);
-      }
-
-      // ── Entropy scoring + Reactive Controller evaluation ────────────────
-      ({ state, prevStepCount } = yield* runReactiveObserver(
-        state, services, eventBus, prevStepCount, currentOptions, effectiveInput.harnessPipeline,
-      ));
-
-      // Honor early-stop dispatched by the intervention dispatcher.
-      // Sprint 3.3 — flow through the Arbitrator so the veto can convert
-      // a "framework giving up because of approaching maxIterations"
-      // early-stop into status:failed when there's tool-failure evidence.
-      if (state.meta.terminatedBy === "dispatcher-early-stop") {
-        const arbCtx = arbitrationContextFromState(state, {
-          task: input.task,
-          requiredTools: input.requiredTools,
-        });
-        // Issue #128 — surface BudgetSignal whenever the Arbitrator runs.
-        if (arbCtx.budget) {
-          yield* emitBudgetSignalCollected({
-            taskId: effectiveInput.taskId ?? "",
-            iteration: state.iteration,
-            tokensUsed: arbCtx.budget.tokensUsed,
-            costUsd: arbCtx.budget.costUsd,
-            ...(arbCtx.budget.tokenLimit !== undefined
-              ? { tokenLimit: arbCtx.budget.tokenLimit }
-              : {}),
-            ...(arbCtx.budget.costLimit !== undefined
-              ? { costLimit: arbCtx.budget.costLimit }
-              : {}),
-            status: arbCtx.budget.status,
-            ...(arbCtx.budget.reason !== undefined ? { reason: arbCtx.budget.reason } : {}),
-          });
-        }
-        state = arbitrateAndApply(
-          state,
-          {
-            kind: "controller-early-stop",
-            output: state.output ?? "",
-            reason: "dispatcher_early_stop",
-          },
-          arbCtx,
-        );
-        break;
-      }
-
-      // Apply temperature override dispatched by the intervention dispatcher
-      if (typeof (state.meta as Record<string, unknown>).dispatchedTemperature === "number") {
-        currentOptions = {
-          ...currentOptions,
-          temperature: (state.meta as Record<string, unknown>).dispatchedTemperature as number,
-        };
-      }
-
-      // Honor dispatcher-requested strategy switch
-      if (state.meta.terminatedBy === "dispatcher-strategy-switch") {
-        const pending = (state.meta as Record<string, unknown>).dispatchedStrategySwitch as
-          | { to: string; reason: string }
-          | undefined;
-        const switchCfg = options.strategySwitching;
-        const maxSwitches = switchCfg?.maxSwitches ?? 1;
-        if (pending && switchCfg?.enabled && switchCount < maxSwitches) {
-          const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? currentOptions.strategy ?? "unknown";
-          const toStrategy = pending.to;
-          yield* hooks.onStrategySwitched(state, fromStrategy, toStrategy, pending.reason);
-          const handoff = buildHandoff(state, currentInput.task ?? "", fromStrategy, pending.reason, switchCount + 1, currentInput.requiredTools ?? []);
-          const handoffSummary = [
-            `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
-            `Previous strategy: ${handoff.previousStrategy}`,
-            `Steps completed: ${handoff.stepsCompleted}`,
-            `Failure reason: ${handoff.failureReason}`,
-            `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
-            handoff.permanentlyFailedTools.length > 0
-              ? `Permanently unavailable tools (do not retry — synthesize without them): ${handoff.permanentlyFailedTools.join(", ")}`
-              : null,
-            `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
-          ].filter(Boolean).join("\n");
-          switchCount++;
-          triedStrategies.push(toStrategy);
-          currentOptions = { ...options, strategy: toStrategy };
-          state = initialKernelState(currentOptions);
-          // Inject synthetic failure observations so the new strategy immediately
-          // knows which required tools are permanently unavailable.
-          if (handoff.permanentlyFailedTools.length > 0) {
-            const failedSteps = handoff.permanentlyFailedTools.map((toolName) =>
-              makeStep(
-                "observation",
-                `[Carried from prior strategy] Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
-                {
-                  observationResult: {
-                    toolName,
-                    success: false,
-                    displayText: `Tool "${toolName}" permanently unavailable (carried from prior strategy)`,
-                    category: "error" as const,
-                    resultKind: "error" as const,
-                    preserveOnCompaction: false,
-                    // S2.3 — error observations carry framework-generated text only,
-                    // safe to render inline. Mark as trusted with grandfather note.
-                    trustLevel: "trusted" as const,
-                    trustJustification: "grandfather-phase-1",
-                  },
-                },
-              ),
-            );
-            state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
-          }
-          const existingPrior = currentInput.priorContext
-            ? `${currentInput.priorContext}\n\n${handoffSummary}`
-            : handoffSummary;
-          {
-            const failedSet = new Set(handoff.permanentlyFailedTools);
-            currentInput = {
-              ...currentInput,
-              priorContext: existingPrior,
-              requiredTools: failedSet.size > 0
-                ? (currentInput.requiredTools ?? []).filter((t) => !failedSet.has(t))
-                : currentInput.requiredTools,
-            };
-          }
-          currentContext = { ...context, input: currentInput };
-          prevActionCount = 0;
-          requiredToolRedirects = 0;
-          consecutiveStalled = 0;
-          prevArtifactCount = 0;
-          failureRecoveryRedirects = 0;
-          continue;
-        }
-        // Switching not enabled or exhausted — deliver what we have
-        state = terminate(state, {
-          reason: "switching_exhausted",
-          output: state.output ?? "",
-        });
-        break;
-      }
-
-      // ── Iteration progress hook ──────────────────────────────────────────
-      // Compute which tools were called in THIS iteration by scanning new action
-      // steps since prevStepCount. Includes duplicates so parallel batches
-      // (e.g. 4x web-search) report all 4 calls, not just the unique name.
-      const toolsThisStep: string[] = [];
-      for (let i = prevActionCount; i < state.steps.length; i++) {
-        const s = state.steps[i];
-        if (s.type === "action") {
-          const toolName = (s.metadata?.toolUsed ?? (s.metadata?.toolCall && (s.metadata.toolCall as { name?: string }).name)) as string | undefined;
-          if (toolName) toolsThisStep.push(toolName);
-        }
-      }
-      yield* hooks.onIterationProgress(state, toolsThisStep);
-      prevActionCount = state.steps.length;
-
-      // ── Lane controller (gather vs synthesize) ───────────────────────────
-      const laneDecision = decideExecutionLane({
-        requiredTools: currentInput.requiredTools ?? [],
-        requiredToolQuantities: currentInput.requiredToolQuantities,
-        steps: state.steps,
-      });
-      state = transitionState(state, {
-        meta: {
-          ...state.meta,
-          executionLane: laneDecision.lane,
-          missingRequiredTools: laneDecision.missingRequiredTools,
-        },
-      });
-
-      // ── Harness artifact stall tracking ─────────────────────────────────
-      // Track whether this iteration produced new non-meta tool observations.
-      // The harness owns completion: when the model stalls but has gathered
-      // useful data, it assembles and delivers the accumulated artifacts.
-      const totalArtifacts = countDeliverableCandidates(state);
-      const artifactDelta = Math.max(0, totalArtifacts - prevArtifactCount);
-      consecutiveStalled = artifactDelta > 0 ? 0 : consecutiveStalled + 1;
-      prevArtifactCount = totalArtifacts;
-
-      // When reactive intelligence is active it needs at least iteration 2 before it
-      // can evaluate early-stop. Give it runway by raising the stall threshold to 4
-      // so the RI evaluator always gets a chance to act before the harness fires.
-      // Detection is purely structural — `services.reactiveController._tag === "Some"`
-      // avoids importing anything from the reactive-intelligence package.
-      const riActive = services.reactiveController._tag === "Some";
-      const stallThreshold = riActive ? 4 : 2;
-
-      if (
-        consecutiveStalled >= stallThreshold &&
-        state.iteration >= 2 &&
-        state.status === "thinking"
-      ) {
-        const missingRequiredByCount = laneDecision.missingRequiredTools;
-        if (missingRequiredByCount.length > 0) {
-          requiredToolNudgeCount++;
-          if (requiredToolNudgeCount > maxRequiredToolNudges) {
-            if (totalArtifacts > 0) {
-              yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
-              const d = assembleDeliverable(state);
-              state = terminate(state, {
-                reason: deliverableTerminationReason(d),
-                output: d.content,
-              });
-              break;
-            }
-            state = transitionState(state, {
-              status: "failed",
-              error: `Required tool quota not met after ${maxRequiredToolNudges} nudge attempts: ${missingRequiredByCount.join(", ")}`,
-            });
-            break;
-          }
-          const guidance =
-            `Required tool quota not met: ${missingRequiredByCount.join(", ")}. ` +
-            `Continue calling the missing required tool(s) before attempting completion.`;
-          yield* emitHarnessSignalInjected({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            signalKind: "nudge",
-            origin: "runner.ts:875",
-            content: guidance,
-            metadata: { missingTools: missingRequiredByCount, nudgeCount: requiredToolNudgeCount },
-          });
-          state = transitionState(state, {
-            status: "thinking",
-            steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-            pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
-          });
-          continue;
-        }
-
-        const recovery = getToolFailureRecovery(state, currentInput);
-        const shouldNudgeRecovery =
-          recovery.failedUnresolved.length > 0 &&
-          failureRecoveryRedirects < maxFailureRecoveryRedirects;
-
-        if (shouldNudgeRecovery) {
-          failureRecoveryRedirects++;
-          const guidance = buildRecoverySteeringGuidance(
-            recovery,
-            failureRecoveryRedirects,
-            maxFailureRecoveryRedirects,
-            "stall",
-          );
-
-          yield* emitHarnessSignalInjected({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            signalKind: "redirect",
-            origin: "runner.ts:897",
-            content: guidance,
-            metadata: {
-              failedTools: recovery.failedUnresolved,
-              alternatives: recovery.alternativeCandidates,
-              redirectCount: failureRecoveryRedirects,
-            },
-          });
-          state = transitionState(state, {
-            status: "thinking",
-            steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-            pendingGuidance: { errorRecovery: guidance },
-            meta: {
-              ...state.meta,
-              recoveryPending: true,
-              recoveryFailedTools: recovery.failedUnresolved,
-              recoveryAlternativeCandidates: recovery.alternativeCandidates,
-            },
-          });
-          continue;
-        }
-
-        if (totalArtifacts > 0) {
-          // Verifier-driven retry on harness fallback (Pivot A, 2026-05-06).
-          //
-          // Pre-fix: the harness assembled raw `_tool_result_*` artifacts and
-          // shipped them as the final answer. The verifier never saw the
-          // output (loop broke before §9.0 ran), so quality-degraded JSON
-          // dumps silently passed to the user. Empirical evidence: cogito:14b
-          // T5 trace 01KQZFHFQA97RHHCNXQ792VWNQ — verified=true on a raw
-          // JSON dump rated 7% faithfulness by the quality scorer.
-          //
-          // Post-fix: run the verifier on the candidate harness output with
-          // terminatedBy="harness_deliverable" so the new
-          // `output-is-model-authored` check rejects it. If retry budget
-          // allows, inject the verdict-driven signal and continue thinking
-          // — the model gets one more chance to synthesize from the
-          // artifacts before the harness ships them as-is. If retry budget
-          // is exhausted (or verifier passes — should be impossible with
-          // the new check), fall through to the original terminate path.
-          const candidateDeliverable = assembleDeliverable(state);
-          const candidateOutput = candidateDeliverable.content;
-          const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
-          const availableUserToolsForFallback =
-            (currentInput.availableToolSchemas ?? []).map((t) => t.name);
-          const fallbackVerdict = verifier.verify({
-            action: "final-answer",
-            content: candidateOutput,
-            actionSuccess: true,
-            task: currentInput.task,
-            priorSteps: state.steps,
-            requiredTools: currentInput.requiredTools,
-            relevantTools: currentInput.relevantTools,
-            toolsUsed: state.toolsUsed,
-            availableUserTools: availableUserToolsForFallback,
-            terminal: true,
-            terminatedBy: candidateTerminationReason,
-          });
-          yield* emitVerifierVerdict({
-            taskId: currentOptions.taskId ?? state.taskId,
-            iteration: state.iteration,
-            action: fallbackVerdict.action,
-            terminal: true,
-            verified: fallbackVerdict.verified,
-            summary: fallbackVerdict.summary,
-            checks: fallbackVerdict.checks,
-          });
-          // M3 REWORK (2026-05-12): retry loop removed per ablation verdict.
-          // Verifier gate still fires (emitted above); rejection falls through
-          // to the §9.0 post-loop outer gate which marks the run failed.
-          // Proceed with original
-          // harness fallback. terminate() preserves the single-owner invariant.
-          yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations (source=${candidateDeliverable.source})`, timestamp: new Date() });
-          state = terminate(state, {
-            reason: candidateTerminationReason,
-            output: candidateOutput,
-          });
-          break;
-        }
-      }
-
-      // ── Intelligent Context Synthesis (before thinking step) ──
-      // Produces a steering nudge appended to the FC thread — never replaces it.
-      // Skip when status is "acting" — tool calls are pending but haven't executed
-      // yet, so toolsUsed is stale and any nudge would be contradictory.
-      const oracleReady = getLastPulseReadyToAnswer(state);
-      const shouldAllowIcsNudge =
-        state.status === "thinking" && (!oracleReady || laneDecision.lane === "gather");
-      const effectiveToolsUsed = buildEffectiveToolsUsed(state);
-      if (shouldAllowIcsNudge) {
-        const icsResult = yield* coordinateICS(state, {
-          task: currentInput.task,
-          requiredTools: currentInput.requiredTools ?? [],
-          toolsUsed: effectiveToolsUsed,
-          availableTools: (currentInput.availableToolSchemas ?? []) as readonly { name: string; description: string; parameters: unknown[] }[],
-          tier: profile.tier ?? "mid",
-          iteration: state.iteration,
-          maxIterations: (state.meta.maxIterations as number) ?? 10,
-          lastErrors: getLastErrors(state),
-        });
-        if (icsResult.steeringNudge) {
-          state = transitionState(state, { pendingGuidance: { icsGuidance: icsResult.steeringNudge } });
-        }
-      }
-
-      // ── Oracle hard gate (pulse readyToAnswer two-stage escalation) ──────
-      // When the pulse tool has reported readyToAnswer=true but the model
-      // has not called final-answer, escalate in two stages:
-      //   Stage 1: inject a mandatory steering nudge, increment nudge count.
-      //   Stage 2: after N ignored nudges (tier-dependent), force-exit with "oracle_forced".
-      if (state.status !== "done" && state.status !== "failed") {
-        const nudgeCount = state.readyToAnswerNudgeCount ?? 0;
-        const shouldNudgeForOracle = shouldInjectOracleNudge({
-          lane: laneDecision.lane,
-          oracleReady,
-        });
-
-        if (
-          shouldNudgeForOracle &&
-          shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount, tier: profile.tier })
-        ) {
-          // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
-          yield* emitLog({ _tag: "warning", message: `[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`, timestamp: new Date() });
-          // Output-boundary discipline (per types/step.ts isUserVisibleStep):
-          // never substitute a hard-coded harness phrase ("Task complete.")
-          // for missing model output. If neither state.output nor a real
-          // thought exists, fail with a structured reason — the
-          // transitionState invariant nulls the output for the user.
-          const oracleForcedOutput = state.output ?? state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content;
-          if (oracleForcedOutput && oracleForcedOutput.trim().length > 0) {
-            state = terminate(state, {
-              reason: "oracle_forced",
-              output: oracleForcedOutput,
-            });
-          } else {
-            state = transitionState(state, {
-              status: "failed",
-              error: `Oracle forced exit after ${nudgeCount} ignored readyToAnswer signals, but the model never produced a deliverable answer.`,
-              meta: { ...state.meta, terminatedBy: "oracle_forced" },
-            });
-          }
-        } else if (shouldNudgeForOracle) {
-          // Stage 1: inject mandatory oracle guidance, increment count.
-          //
-          // The nudge text is composed by the Layer 1 intelligent default
-          // builder `buildOracleNudge` (Spec: 2026-05-06-intelligent-default-builders).
-          // The builder owns the M3 Pivot B "describe vs emit" example
-          // pair and the final-attempt escalation footer.
-          const nudgeLimit = (TIER_GUARD_THRESHOLDS[profile.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit;
-          const mandatoryNudge = buildOracleNudge({
-            nudgeCount,
-            nudgeLimit,
-          });
-          state = transitionState(state, {
-            readyToAnswerNudgeCount: nudgeCount + 1,
-            pendingGuidance: { oracleGuidance: mandatoryNudge },
-          });
-          yield* emitLog({ _tag: "warning", message: `[oracle-gate] Stage 1 nudge injected (nudgeCount now ${nudgeCount + 1})`, timestamp: new Date() });
-        } else if (nudgeCount > 0) {
-          // Oracle no longer eligible for synthesis nudges — reset count.
-          // This includes both "oracle not ready" and gather-lane runs.
-          state = transitionState(state, { readyToAnswerNudgeCount: 0 });
-        }
-      }
-
-      // ── Early exit: primary scoped tools called ─────────────────────────
-      // For composite steps in plan-execute, exit as soon as all primary
-      // (non-utility) tools have been called.
-      state = checkAllToolsCalled(state, currentInput, currentOptions);
-
-      // ── Loop detection + strategy switching ─────────────────────────────
-      // Check the most recent steps for patterns that indicate a stuck loop.
-      // Only fire if the loop hasn't already terminated (status still active).
-      if (state.status !== "done" && state.status !== "failed") {
-        const loopMsg = detectLoop(
-          state.steps,
-          maxSameTool,
-          maxRepeatedThought,
-          maxConsecutiveThoughts,
-        );
-
-        // ── Strategy switching ────────────────────────────────────────────
-        if (loopMsg !== null) {
-          const switchCfg = options.strategySwitching;
-          const maxSwitches = switchCfg?.maxSwitches ?? 1;
-
-          if (switchCfg?.enabled && switchCount < maxSwitches) {
-            // Transition to "evaluating" while we decide
-            state = transitionState(state, { status: "evaluating" });
-
-            let evaluation: { shouldSwitch: boolean; recommendedStrategy: string; reasoning: string };
-
-            if (switchCfg.fallbackStrategy) {
-              // Skip LLM evaluator — use fallback directly
-              evaluation = {
-                shouldSwitch: true,
-                recommendedStrategy: switchCfg.fallbackStrategy,
-                reasoning: "fallback strategy configured",
-              };
-            } else {
-              // Ask the LLM evaluator to pick the best alternative
-              const available = switchCfg.availableStrategies ?? [];
-              evaluation = yield* evaluateStrategySwitch(
-                state,
-                currentInput.task ?? "",
-                available,
-                triedStrategies,
-              );
-            }
-
-            // Fire evaluated hook regardless of whether switch will happen — observability
-            yield* hooks.onStrategySwitchEvaluated(state, evaluation);
-
-            if (evaluation.shouldSwitch && evaluation.recommendedStrategy) {
-              const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? "unknown";
-              const toStrategy = evaluation.recommendedStrategy;
-
-              // Fire hook
-              yield* hooks.onStrategySwitched(state, fromStrategy, toStrategy, evaluation.reasoning);
-
-              // Build handoff context for the new strategy
-              const handoff = buildHandoff(
-                state,
-                currentInput.task ?? "",
-                fromStrategy,
-                loopMsg,
-                switchCount + 1,
-                currentInput.requiredTools ?? [],
-              );
-
-              const handoffSummary = [
-                `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
-                `Previous strategy: ${handoff.previousStrategy}`,
-                `Steps completed: ${handoff.stepsCompleted}`,
-                `Failure reason: ${handoff.failureReason}`,
-                `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
-                handoff.permanentlyFailedTools.length > 0
-                  ? `Permanently unavailable tools (do not retry — synthesize without them): ${handoff.permanentlyFailedTools.join(", ")}`
-                  : null,
-                `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
-              ].filter(Boolean).join("\n");
-
-              // Re-init state with the new strategy
-              switchCount++;
-              triedStrategies.push(toStrategy);
-
-              currentOptions = {
-                ...options,
-                strategy: toStrategy,
-              };
-
-              // Reset state — fresh iteration count, carry forward toolsUsed
-              state = initialKernelState(currentOptions);
-
-              // Inject synthetic failure observations so the new strategy immediately
-              // knows which required tools are permanently unavailable, without having
-              // to rediscover this through wasted retry iterations.
-              if (handoff.permanentlyFailedTools.length > 0) {
-                const failedSteps = handoff.permanentlyFailedTools.map((toolName) =>
-                  makeStep(
-                    "observation",
-                    `[Carried from prior strategy] Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
-                    {
-                  observationResult: {
-                    toolName,
-                    success: false,
-                    displayText: `Tool "${toolName}" permanently unavailable (carried from prior strategy)`,
-                    category: "error" as const,
-                    resultKind: "error" as const,
-                    preserveOnCompaction: false,
-                    // S2.3 — error observations carry framework-generated text only,
-                    // safe to render inline. Mark as trusted with grandfather note.
-                    trustLevel: "trusted" as const,
-                    trustJustification: "grandfather-phase-1",
-                  },
-                },
-                  ),
-                );
-                state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
-              }
-
-              // Build updated input with handoff context.
-              // Also drop permanently-failed tools from requiredTools — the lane
-              // controller uses this list to decide whether to nudge, and nudging for
-              // a tool that's known to be broken only causes retry loops.
-              const existingPrior = currentInput.priorContext
-                ? `${currentInput.priorContext}\n\n${handoffSummary}`
-                : handoffSummary;
-
-              {
-                const failedSet = new Set(handoff.permanentlyFailedTools);
-                currentInput = {
-                  ...currentInput,
-                  priorContext: existingPrior,
-                  requiredTools: failedSet.size > 0
-                    ? (currentInput.requiredTools ?? []).filter((t) => !failedSet.has(t))
-                    : currentInput.requiredTools,
-                };
-              }
-
-              // Rebuild context with the updated input
-              currentContext = {
-                ...context,
-                input: currentInput,
-              };
-
-              // Reset per-loop tracking
-              prevActionCount = 0;
-              requiredToolRedirects = 0;
-              consecutiveStalled = 0;
-              prevArtifactCount = 0;
-              failureRecoveryRedirects = 0;
-
-              // Continue the outer while loop with fresh state
-              continue;
-            }
-          }
-
-          // Before failing: if the model has gathered artifacts, succeed with them.
-          // Loops with data → deliver. Loops without data → fail.
-          const recovery = getToolFailureRecovery(state, currentInput);
-          const shouldNudgeRecovery =
-            recovery.failedUnresolved.length > 0 &&
-            failureRecoveryRedirects < maxFailureRecoveryRedirects;
-
-          if (shouldNudgeRecovery) {
-            failureRecoveryRedirects++;
-            const guidance = buildRecoverySteeringGuidance(
-              recovery,
-              failureRecoveryRedirects,
-              maxFailureRecoveryRedirects,
-              "loop",
-            );
-            yield* emitHarnessSignalInjected({
-              taskId: currentOptions.taskId ?? state.taskId,
-              iteration: state.iteration,
-              signalKind: "redirect",
-              origin: "runner.ts:1173",
-              content: guidance,
-              metadata: {
-                failedTools: recovery.failedUnresolved,
-                redirectCount: failureRecoveryRedirects,
-                trigger: "loop",
-              },
-            });
-            state = transitionState(state, {
-              status: "thinking",
-              steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-              pendingGuidance: { errorRecovery: guidance },
-              error: null,
-            });
-            continue;
-          }
-
-          const loopArtifactCount = countDeliverableCandidates(state);
-          if (loopArtifactCount > 0) {
-            const missingRequiredByCount = missingRequiredToolsForInput(state.steps, currentInput);
-            if (missingRequiredByCount.length > 0) {
-              requiredToolNudgeCount++;
-              if (requiredToolNudgeCount > maxRequiredToolNudges) {
-                yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`, timestamp: new Date() });
-                const d = assembleDeliverable(state);
-                state = terminate(state, {
-                  reason: deliverableTerminationReason(d),
-                  output: d.content,
-                });
-                break;
-              }
-              const guidance =
-                `Loop detected but required tool quota is still missing: ${missingRequiredByCount.join(", ")}. ` +
-                `Call the missing required tool(s) now instead of finalizing.`;
-              yield* emitHarnessSignalInjected({
-                taskId: currentOptions.taskId ?? state.taskId,
-                iteration: state.iteration,
-                signalKind: "nudge",
-                origin: "runner.ts:1199",
-                content: guidance,
-                metadata: { missingTools: missingRequiredByCount, trigger: "loop-with-missing-tools" },
-              });
-              state = transitionState(state, {
-                status: "thinking",
-                steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
-                pendingGuidance: { loopDetected: true, requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
-                error: null,
-              });
-              continue;
-            }
-
-            const loopDeliverable = assembleDeliverable(state);
-            yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing (source=${loopDeliverable.source})`, timestamp: new Date() });
-            state = terminate(state, {
-              reason: deliverableTerminationReason(loopDeliverable),
-              output: loopDeliverable.content,
-            });
-            break;
-          }
-
-          // Distinguish: if no tool calls were attempted, it's a pure thought loop.
-          // Degrade gracefully — deliver the last thought rather than a cryptic error.
-          // If tool calls were attempted but produced no deliverable results, it IS
-          // a genuine failure (the agent tried tools and got stuck).
-          //
-          // Output-boundary discipline (per types/step.ts isUserVisibleStep):
-          // when the lastThought has no real content, do NOT substitute the
-          // loop-detector diagnostic as the user-visible answer — that's a
-          // harness internal. Instead, fail with the diagnostic in `error`
-          // so the transitionState invariant nulls the output and the user
-          // sees a structured failure rather than developer-targeted advice.
-          const hasToolAttempts = state.steps.some((s) => s.type === "action");
-          if (hasToolAttempts) {
-            state = transitionState(state, {
-              status: "failed",
-              error: loopMsg,
-            });
-          } else {
-            const lastThought = [...state.steps].reverse().find((s) => s.type === "thought");
-            const lastThoughtContent = lastThought?.content;
-            if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
-              state = terminate(state, {
-                reason: "loop_graceful",
-                output: lastThoughtContent,
-              });
-            } else {
-              state = transitionState(state, {
-                status: "failed",
-                error: loopMsg,
-              });
-            }
-          }
-          break;
-        }
-      } // end if (state.status !== "done" && state.status !== "failed")
-
-      // ── Required tools guard (in-loop) ─────────────────────────────────
-      // When the kernel declares "done" but required tools haven't been called,
-      // redirect back to "thinking" with a feedback step — up to the retry limit.
-      if (state.status === "done" && requiredTools.length > 0) {
-        const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
-        if (missingTools.length > 0) {
-          requiredToolRedirects++;
-          if (requiredToolRedirects > maxRequiredToolRetries) {
-            state = transitionState(state, {
-              status: "failed",
-              error: `Task incomplete — the model never called required tool(s): ${missingTools.join(", ")} ` +
-                `(after ${maxRequiredToolRetries} redirect attempts).\n` +
-                `Fix: (1) Make the task description explicitly name the expected output ` +
-                `(e.g. "write the result to ./report.md"), ` +
-                `(2) Add a persona instruction: "You MUST call ${missingTools[0]} as the final step", ` +
-                `(3) Increase retries: .withReasoning({ maxRequiredToolRetries: 4 }).`,
-            });
-            break;
-          }
-          // Inject feedback and redirect back to thinking
-          const feedbackStep = makeStep(
-            "observation",
-            `⚠️ Required tools not yet used: ${missingTools.join(", ")}. ` +
-            `You MUST call ${missingTools.length === 1 ? "this tool" : "these tools"} before completing the task. ` +
-            `(Redirect ${requiredToolRedirects}/${maxRequiredToolRetries})`,
-          );
-          state = transitionState(state, {
-            status: "thinking",
-            output: null,
-            steps: [...state.steps, feedbackStep],
-          });
-          // Continue the loop — kernel will see the feedback in steps
-        }
-      }
-
-      // ── Post-iteration snapshot ──────────────────────────────────────────
-      // Capture state AFTER kernel() ran and post-processing finalized.
-      // Without this, traces only show iter-start (steps=0) and the verifier
-      // verdict — no visibility into step composition, output, or terminatedBy
-      // for the iter that actually produced output. See diagnostic gap found
-      // 2026-04-27 (T4: 6 events, status=done invisible).
-      yield* emitKernelStateSnapshot({
-        state,
-        taskId: currentOptions.taskId ?? state.taskId,
-        iteration: state.iteration,
-      });
-
-      // ── Learn capability — per-iter LearningPipeline write ───────────────
-      // Issue #120 / North Star §4.3 / Audit G-D — the compounding-intelligence
-      // seam. Fires EXACTLY ONCE per iter, after Verify/post-iteration finalize
-      // and BEFORE the next iter dispatches. Uses `Effect.serviceOption` so the
-      // kernel works with no LearningPipeline layer provided (returns None →
-      // no-op). Wrapped in `Effect.forkDaemon` so user-supplied slow writers
-      // (SkillStore disk flush, MemoryStore vector write) cannot block the
-      // kernel hot path. Errors are swallowed by the service contract
-      // (Effect<void, never> in learning-pipeline.ts).
-      //
-      // Args follow mission-brief decisions a–c:
-      //   observations = ReasoningSteps appended during THIS iter only
-      //   decisions    = controllerDecisionLog ADDITIONS this iter
-      //   outcome      = mid-loop snapshot (success only authoritative on
-      //                  the terminal iter — see learning-pipeline.ts JSDoc)
-      {
-        const learnOpt = yield* Effect.serviceOption(LearningPipeline);
-        if (learnOpt._tag === "Some") {
-          const newObservations = state.steps.slice(prevStepCountForLearn);
-          const newDecisions = state.controllerDecisionLog.slice(prevDecisionLogCountForLearn);
-          const outcomeSnapshot = {
-            success: state.status === "done",
-            output: state.output ?? undefined,
-            tokensUsed: state.tokens,
-            costUsd: state.cost,
-          } as const;
-          yield* Effect.forkDaemon(
-            learnOpt.value.write(newObservations, newDecisions, outcomeSnapshot),
-          );
-          prevStepCountForLearn = state.steps.length;
-          prevDecisionLogCountForLearn = state.controllerDecisionLog.length;
-        }
-      }
+      const signal = yield* runIterationPass(iterationCarrier, iterationConfig);
+      if (signal === "break") break;
     }
+
+    // Sync mutable iteration locals back from the carrier for the post-loop
+    // finalization blocks (§8 required-tools / §8.5 non-final-answer fallback /
+    // §9.0 verifier / §9 quality gate). These mirror the original `state`,
+    // `currentInput`, `currentOptions` identifiers the post-loop body already
+    // reads — keeping reassignment local here avoids touching post-loop code.
+    state = iterationCarrier.state;
+    currentInput = iterationCarrier.currentInput;
+    currentOptions = iterationCarrier.currentOptions;
 
     // Fire 'complete' phase hooks once after loop exits normally.
     yield* Effect.promise(() =>
@@ -1785,7 +518,14 @@ export function runKernel(
     // already ensures state.error doesn't leak as state.output; user sees
     // null output + structured error.
     if (process.env.DEBUG_VERIFIER === "1") {
-      console.error(`[VERIFIER-PRE] status=${state.status} hasOutput=${!!state.output} terminatedBy=${state.meta.terminatedBy} outLen=${(state.output ?? "").length} stepsCount=${state.steps.length}`);
+      // WS-5 Phase 3: migrated from console.error to Effect.logDebug. The
+      // [VERIFIER-PRE] trace is a debug-only diagnostic for the verifier-pre
+      // snapshot path; routing through Effect.logDebug threads it into the
+      // structured observability sink instead of stdout. Env-gate preserved
+      // (opt-in semantics — high-frequency message).
+      yield* Effect.logDebug(
+        `[VERIFIER-PRE] status=${state.status} hasOutput=${!!state.output} terminatedBy=${state.meta.terminatedBy} outLen=${(state.output ?? "").length} stepsCount=${state.steps.length}`,
+      );
     }
 
     // ── Terminal snapshot (pre-verifier) ─────────────────────────────────────
@@ -1808,26 +548,25 @@ export function runKernel(
       const availableUserTools = (effectiveInput.availableToolSchemas ?? []).map(
         (t) => t.name,
       );
-      const verdict = verifier.verify({
-        action: "final-answer",
-        content: state.output,
-        actionSuccess: true,
-        task: effectiveInput.task,
-        priorSteps: state.steps,
-        requiredTools: effectiveInput.requiredTools,
-        relevantTools: effectiveInput.relevantTools,
-        toolsUsed: state.toolsUsed,
-        availableUserTools,
-        terminal: true,
-      });
-      yield* emitVerifierVerdict({
+      // WS-3 Phase 5a — verify+emit colocated at the verify capability
+      // boundary. `verdict` is still consumed below (severity branching,
+      // softFail surfacing, escalation tagging).
+      const verdict = yield* verifyAndEmit({
+        verifier,
+        context: {
+          action: "final-answer",
+          content: state.output,
+          actionSuccess: true,
+          task: effectiveInput.task,
+          priorSteps: state.steps,
+          requiredTools: effectiveInput.requiredTools,
+          relevantTools: effectiveInput.relevantTools,
+          toolsUsed: state.toolsUsed,
+          availableUserTools,
+          terminal: true,
+        },
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
-        action: verdict.action,
-        terminal: true,
-        verified: verdict.verified,
-        summary: verdict.summary,
-        checks: verdict.checks,
       });
       if (!verdict.verified) {
         // GH #121 / I5 Loop Controller wire — resolve severity with the

@@ -34,7 +34,7 @@ import { validateGeneralizedGrounding } from "../capabilities/verify/evidence-gr
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../capabilities/reason/stream-parser.js";
+} from "../utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import type { KernelMessage } from "../state/kernel-state.js";
 

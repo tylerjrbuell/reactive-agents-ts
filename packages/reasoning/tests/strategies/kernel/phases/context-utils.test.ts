@@ -22,10 +22,19 @@ const kernelStateSrc = readFileSync(
   new URL("../../../../src/kernel/state/kernel-state.ts", import.meta.url),
   "utf8"
 );
-const kernelRunnerSrc = readFileSync(
-  new URL("../../../../src/kernel/loop/runner.ts", import.meta.url),
-  "utf8"
-);
+// WS-6 Phase 4 (2026-05-29): the per-iteration body that used to live in
+// runner.ts moved to iterate-pass.ts. Structural checks below scan the
+// concatenation of both files so "main loop pattern X" / "anti-pattern Y"
+// assertions remain accurate post-lift.
+const kernelRunnerSrc =
+  readFileSync(
+    new URL("../../../../src/kernel/loop/runner.ts", import.meta.url),
+    "utf8"
+  ) +
+  readFileSync(
+    new URL("../../../../src/kernel/loop/iterate-pass.ts", import.meta.url),
+    "utf8"
+  );
 
 describe("context-utils.ts structural", () => {
   it("does not reference synthesizedContext", () => {
@@ -82,7 +91,7 @@ describe("buildConversationMessages", () => {
     const state = makeBaseState();
     const input = { task: "test task", messages: [{ role: "user", content: "test task" }] } as any;
     const profile = CONTEXT_PROFILES.local;
-    const messages = buildConversationMessages(state, input, profile, defaultAdapter);
+    const { messages } = buildConversationMessages(state, input, profile, defaultAdapter);
     const hasAutoForward = messages.some(
       (m) => typeof m.content === "string" && m.content.includes("[Auto-forwarded:"),
     );

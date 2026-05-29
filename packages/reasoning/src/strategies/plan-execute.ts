@@ -21,20 +21,15 @@ import { PlanStoreService } from "@reactive-agents/memory";
 import {
   LLMPlanOutputSchema,
   hydratePlan,
-  resolveStepReferences,
   computeWaves,
 } from "../types/plan.js";
 import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
-  buildPatchPrompt,
-  buildStepExecutionPrompt,
   buildReflectionPrompt,
-  buildAugmentPrompt,
 } from "./plan-prompts.js";
 import type { ToolSummary, StepResult } from "./plan-prompts.js";
-import { executeReActKernel } from "../kernel/loop/react-kernel.js";
 import type { LogEvent } from "@reactive-agents/observability";
 import {
   resolveStrategyServices,
@@ -45,18 +40,37 @@ import {
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
-import { compressToolResult } from "../kernel/capabilities/attend/tool-formatting.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../kernel/capabilities/reason/stream-parser.js";
+} from "../kernel/utils/stream-parser.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { withEnvContext } from "../context/context-engine.js";
+
+// ── WS-6 Phase 3 — output utilities bucket (B) ──────────────────────────────
+// Goal text extraction, FINAL ANSWER stripping, action-tool sanitization.
+// See ./plan-execute/output-utils.ts for the moved implementations.
+import { extractGoalText } from "./plan-execute/output-utils.js";
+
+// ── WS-6 Phase 3 — plan mutation bucket (A) ─────────────────────────────────
+// patchPlan + augmentPlan helpers (both swallow LLM extraction failures into
+// Effect.succeed(null) so the refinement loop can fall through). See
+// ./plan-execute/plan-mutation.ts for the moved implementations.
+import {
+  patchPlan,
+  augmentPlan,
+} from "./plan-execute/plan-mutation.js";
+
+// ── WS-6 Phase 3 — step executor bucket (C) ─────────────────────────────────
+// Single-step dispatch (tool_call / analysis / composite). StepExecResult is
+// the shared shape consumed by the outer orchestrator. See
+// ./plan-execute/step-executor.ts for the moved implementation.
+import { executeStep } from "./plan-execute/step-executor.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -1041,538 +1055,26 @@ export const executePlanExecute = (
     });
   });
 
+
 // ─── Step Execution Helpers ───
+//
+// `executeStep` (tool_call / analysis / composite branches) and the
+// `StepExecResult` shape were extracted to ./plan-execute/step-executor.ts
+// in WS-6 Phase 3 bucket C. The helper takes a narrowed input shape
+// (`StepExecutorInput`) instead of the full `PlanExecuteInput`. Import at
+// top of file makes the move call-site transparent to the outer orchestrator.
 
-interface StepExecResult {
-  output: string;
-  tokens: number;
-  cost: number;
-  success: boolean;
-  /**
-   * Raw termination reason from a composite step's sub-kernel.
-   * Tool-dispatch + analysis steps do not produce one and leave this
-   * undefined. Aggregated by the outer loop so dynamic killswitch reasons
-   * (e.g. "budget-limit:tokens:1/0") survive narrowing through to
-   * AgentCompleted.terminationReason.
-   */
-  rawTerminatedBy?: string;
-}
-
-/**
- * Execute a single plan step based on its type:
- * - tool_call: direct tool dispatch via toolService.execute
- * - analysis: ReAct kernel with NO tools
- * - composite: ReAct kernel with scoped tools
- */
-function executeStep(
-  step: PlanStep,
-  stepIndex: number,
-  plan: Plan,
-  completedSteps: PlanStep[],
-  input: PlanExecuteInput,
-  toolSummaries: ToolSummary[],
-  services: StrategyServices,
-  maxKernelIter: number,
-  retryErrorContext: string | undefined,
-  emitLog: (event: LogEvent) => Effect.Effect<void, never>,
-): Effect.Effect<StepExecResult, ExecutionError, LLMService> {
-  const { toolService } = services;
-
-  if (step.type === "tool_call" && step.toolName && toolService._tag === "Some") {
-    // Direct tool dispatch — no LLM kernel needed
-    return Effect.gen(function* () {
-      const rawArgs = step.toolArgs ?? {};
-      const resolvedArgs = resolveStepReferences(rawArgs, completedSteps);
-
-      // Strip any remaining unresolved {{from_step:sN}} references (self-ref or
-      // missing step). Rather than hard-failing the step, replace with empty string
-      // and let the tool handle missing/default args. This prevents infinite retry
-      // loops when the LLM generates circular step references (e.g. spawn-agent
-      // with agentId={{from_step:s2}} where s2 is the current step).
-      for (const [key, value] of Object.entries(resolvedArgs)) {
-        if (typeof value === "string" && /\{\{from_step:s\d+\}\}/.test(value)) {
-          resolvedArgs[key] = value.replace(/\{\{from_step:s\d+(?::summary)?\}\}/g, "");
-        }
-      }
-
-      const toolStart = Date.now();
-
-      yield* emitLog({
-        _tag: "tool_call",
-        tool: step.toolName!,
-        iteration: stepIndex + 1,
-        timestamp: new Date(),
-      });
-
-      // Publish ToolCallStarted with the step's intentional rationale so
-      // execution-engine collects it into the debrief. plan-execute owns
-      // tool dispatch directly (no kernel act-phase), so without this
-      // hand-off the rationale never reaches the rationaleLog subscriber.
-      yield* publishReasoningStep(services.eventBus, {
-        _tag: "ToolCallStarted",
-        taskId: input.taskId ?? "plan-execute",
-        toolName: step.toolName!,
-        callId: `${plan.id}_${step.id}`,
-        ...(step.rationale && step.rationale.why
-          ? { rationale: { why: step.rationale.why, ...(typeof step.rationale.confidence === "number" ? { confidence: step.rationale.confidence } : {}) } }
-          : {}),
-        kernelPass: `plan-execute:step-${stepIndex + 1}`,
-      });
-
-      const toolResult = yield* toolService.value
-        .execute({
-          toolName: step.toolName!,
-          arguments: resolvedArgs,
-          agentId: input.agentId ?? "reasoning-agent",
-          sessionId: input.sessionId ?? "reasoning-session",
-        })
-        .pipe(
-          Effect.tapError(
-            (e) => {
-              const toolDurationMs = Date.now() - toolStart;
-              return emitLog({
-                _tag: "tool_result",
-                tool: step.toolName!,
-                duration: toolDurationMs,
-                status: "error",
-                error: String(e),
-                timestamp: new Date(),
-              });
-            }
-          ),
-          Effect.mapError(
-            (e) =>
-              new ExecutionError({
-                strategy: "plan-execute-reflect",
-                message: `Tool ${step.toolName} failed: ${String(e)}`,
-                step: stepIndex,
-                cause: e,
-              }),
-          ),
-        );
-      const toolDurationMs = Date.now() - toolStart;
-
-      yield* emitLog({
-        _tag: "tool_result",
-        tool: step.toolName!,
-        duration: toolDurationMs,
-        status: "success",
-        timestamp: new Date(),
-      });
-
-      // Publish ToolCallCompleted so MetricsCollector tracks tool execution
-      yield* publishReasoningStep(services.eventBus, {
-        _tag: "ToolCallCompleted",
-        taskId: input.taskId ?? "plan-execute",
-        toolName: step.toolName!,
-        callId: `${plan.id}_${step.id}`,
-        durationMs: toolDurationMs,
-        success: toolResult.success !== false,
-        kernelPass: `plan-execute:step-${stepIndex + 1}`,
-        ...(step.toolArgs !== undefined ? { args: step.toolArgs } : {}),
-        ...(toolResult.success !== false ? { result: toolResult.result } : { error: String(toolResult.result) }),
-      });
-
-      const rawOutput =
-        typeof toolResult.result === "string"
-          ? toolResult.result
-          : JSON.stringify(toolResult.result);
-
-      // Sanitize tool_call output: strip internal metadata (args, recipient, raw JSON)
-      // so it doesn't leak into downstream steps or final synthesis.
-      // Data-fetching tools keep full output; action tools get a clean confirmation.
-      const sanitized = sanitizeToolOutput(step.toolName!, rawOutput, resolvedArgs);
-
-      // Structured-result compression — symmetric to kernel/act path. Without
-      // this, plan-execute shipped raw 50KB+ MCP arrays (github/list_commits)
-      // into the next step's prompt AND the reflection prompt, blowing local-tier
-      // context and triggering fabrication-from-training (MCP probe M2/M3:
-      // composite 15-20%). The kernel's `compressToolResult` already produces
-      // a fit-aware preview with scratchpad pointer — reuse it here.
-      const compressionBudget = input.resultCompression?.budget ?? 2000;
-      const compressionPreviewItems = input.resultCompression?.previewItems ?? 8;
-      const compressed = compressToolResult(
-        sanitized,
-        step.toolName!,
-        compressionBudget,
-        compressionPreviewItems,
-      );
-
-      return {
-        output: compressed.content,
-        tokens: 0,
-        cost: 0,
-        success: toolResult.success !== false,
-      };
-    });
-  }
-
-  // Build prior results for analysis/composite step prompts
-  const priorResults = completedSteps
-    .filter((s) => s.result)
-    .map((s) => ({
-      stepId: s.id,
-      title: s.title,
-      result: s.result!,
-    }));
-
-  // Scope tools for composite steps
-  const scopedTools: ToolSummary[] =
-    step.type === "composite" && step.toolHints
-      ? toolSummaries.filter((t) => step.toolHints!.includes(t.name))
-      : [];
-
-  // Build the step execution prompt
-  const stepPrompt = buildStepExecutionPrompt({
-    goal: extractGoalText(input.taskDescription),
-    step,
-    stepIndex,
-    totalSteps: plan.steps.length,
-    priorResults,
-    scopedTools,
-  });
-
-  // Add retry error context if retrying
-  const taskText = retryErrorContext
-    ? `${stepPrompt}\n\nPREVIOUS ATTEMPT FAILED: ${retryErrorContext}\nPlease try a different approach.`
-    : stepPrompt;
-
-  // Analysis steps: single LLM call — no tool loop needed
-  // Note: maxTokens 4096 to accommodate thinking models where num_predict
-  // covers both thinking + content tokens combined.
-  if (step.type === "analysis") {
-    return services.llm
-      .complete({
-        messages: [{ role: "user", content: taskText }],
-        systemPrompt: withEnvContext(
-          input.systemPrompt ??
-            "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
-        ),
-        maxTokens: 4096,
-        temperature: 0.5,
-      })
-      .pipe(
-        Effect.flatMap((response) => {
-          const output = stripFinalAnswerPrefix(
-            extractThinkingSafeContent(response).content,
-          );
-          if (!output.trim()) {
-            return Effect.fail(
-              new ExecutionError({
-                strategy: "plan-execute-reflect",
-                message: `Analysis step ${stepIndex + 1} produced empty output (model may have exhausted token budget on thinking)`,
-                step: stepIndex,
-              }),
-            );
-          }
-          return Effect.succeed({
-            output,
-            tokens: response.usage.totalTokens,
-            cost: response.usage.estimatedCost,
-            success: true,
-          });
-        }),
-        Effect.mapError(
-          (err) =>
-            err instanceof ExecutionError ? err :
-            new ExecutionError({
-              strategy: "plan-execute-reflect",
-              message: `Analysis step ${stepIndex + 1} failed`,
-              step: stepIndex,
-              cause: err,
-            }),
-        ),
-      );
-  }
-
-  // Composite steps: ReAct kernel with scoped tools
-  const kernelToolSchemas =
-    step.toolHints
-      ? (input.availableToolSchemas ?? []).filter((t) =>
-          step.toolHints!.includes(t.name),
-        )
-      : undefined;
-
-  return executeReActKernel({
-    task: taskText,
-    systemPrompt:
-      input.systemPrompt ??
-      "You are a precise task executor. Complete the given step.",
-    availableToolSchemas: kernelToolSchemas,
-    maxIterations: maxKernelIter,
-    temperature: 0.5,
-    taskId: input.taskId,
-    parentStrategy: "plan-execute",
-    kernelPass: `plan-execute:step-${stepIndex + 1}`,
-    resultCompression: input.resultCompression,
-    agentId: input.agentId,
-    sessionId: input.sessionId,
-    requiredTools: input.requiredTools,
-    maxRequiredToolRetries: input.maxRequiredToolRetries,
-    modelId: input.modelId,
-    exitOnAllToolsCalled: true,
-    synthesisConfig: input.synthesisConfig,
-  }).pipe(
-    Effect.map((kernelResult) => ({
-      output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),
-      tokens: kernelResult.totalTokens,
-      cost: kernelResult.totalCost,
-      success: true,
-      ...(kernelResult.rawTerminatedBy !== undefined
-        ? { rawTerminatedBy: kernelResult.rawTerminatedBy }
-        : {}),
-    })),
-    Effect.mapError(
-      (err) =>
-        new ExecutionError({
-          strategy: "plan-execute-reflect",
-          message: `Step ${stepIndex + 1} execution failed`,
-          step: stepIndex,
-          cause: err,
-        }),
-    ),
-  );
-}
-
-/**
- * Attempt to patch remaining plan steps after a failure.
- * Uses extractStructuredOutput with buildPatchPrompt.
- */
-function patchPlan(
-  plan: Plan,
-  failedStepIndex: number,
-  input: PlanExecuteInput,
-  _llm: unknown,
-  _currentTokens: number,
-): Effect.Effect<
-  { steps: PlanStep[]; tokens: number } | null,
-  Error,
-  LLMService
-> {
-  const patchPrompt = buildPatchPrompt(extractGoalText(input.taskDescription), plan.steps);
-
-  return extractStructuredOutput({
-    schema: LLMPlanOutputSchema,
-    prompt: patchPrompt,
-    systemPrompt:
-      "You are a planning agent. Rewrite the failed and pending steps to recover.",
-    maxRetries: 1,
-    temperature: 0.3,
-    maxTokens: 4096,
-  }).pipe(
-    Effect.map((result) => {
-      const patchedPlan = hydratePlan(result.data, {
-        taskId: plan.taskId,
-        agentId: plan.agentId,
-        goal: plan.goal,
-        planMode: plan.mode,
-      });
-      // Re-number patch steps starting after the failed step
-      const patchedSteps = patchedPlan.steps.map((s, idx) => ({
-        ...s,
-        id: `s${failedStepIndex + 2 + idx}`,
-        seq: failedStepIndex + 2 + idx,
-      }));
-      const tokenEst =
-        Math.ceil(result.raw.length / 4) +
-        Math.ceil(patchPrompt.length / 4);
-      return { steps: patchedSteps, tokens: tokenEst };
-    }),
-    Effect.catchAll(() => Effect.succeed(null)),
-  );
-}
-
-/**
- * Generate supplementary plan steps when all existing steps completed but the
- * reflector determined the goal is unmet. Unlike patchPlan (which rewrites
- * failed steps), this appends NEW steps to fill gaps.
- */
-function augmentPlan(
-  plan: Plan,
-  goal: string,
-  reflectionFeedback: string,
-  input: PlanExecuteInput,
-  _llm: unknown,
-  _currentTokens: number,
-): Effect.Effect<
-  { steps: PlanStep[]; tokens: number } | null,
-  Error,
-  LLMService
-> {
-  const toolSummaries: ToolSummary[] = (
-    input.availableToolSchemas ?? []
-  ).map((t) => ({
-    name: t.name,
-    signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
-  }));
-
-  const completedSteps = plan.steps
-    .filter((s) => s.status === "completed")
-    .map((s) => ({
-      stepId: s.id,
-      title: s.title,
-      result: s.result,
-    }));
-
-  const augmentPrompt = buildAugmentPrompt({
-    goal,
-    completedSteps,
-    reflectionFeedback,
-    tools: toolSummaries,
-  });
-
-  const nextSeq = plan.steps.length + 1;
-
-  return extractStructuredOutput({
-    schema: LLMPlanOutputSchema,
-    prompt: augmentPrompt,
-    systemPrompt:
-      "You are a planning agent. Generate supplementary steps to fill gaps in an incomplete plan.",
-    maxRetries: 1,
-    temperature: 0.3,
-    maxTokens: 4096,
-  }).pipe(
-    Effect.map((result) => {
-      const augmentedPlan = hydratePlan(result.data, {
-        taskId: plan.taskId,
-        agentId: plan.agentId,
-        goal: plan.goal,
-        planMode: plan.mode,
-      });
-      const augmentedSteps = augmentedPlan.steps.map((s, idx) => ({
-        ...s,
-        id: `s${nextSeq + idx}`,
-        seq: nextSeq + idx,
-      }));
-      const tokenEst =
-        Math.ceil(result.raw.length / 4) +
-        Math.ceil(augmentPrompt.length / 4);
-      return { steps: augmentedSteps, tokens: tokenEst };
-    }),
-    Effect.catchAll(() => Effect.succeed(null)),
-  );
-}
+// ─── Plan Mutation Helpers ───
+//
+// `patchPlan` (rewrite failed + pending steps) and `augmentPlan` (append
+// supplementary steps to fill goal gaps) were extracted to
+// ./plan-execute/plan-mutation.ts in WS-6 Phase 3 bucket A. Both helpers
+// take a narrowed input shape (PatchInput/AugmentInput) so they don't
+// re-import the full `PlanExecuteInput` type from this module.
 
 // ─── Utility Helpers ───
-
-/**
- * Extract plain goal text from taskDescription which may be JSON-wrapped.
- * The execution engine passes `JSON.stringify(task.input)` which produces
- * `{"question":"actual goal text"}` — unwrap that to get the clean string.
- */
-function extractGoalText(taskDescription: string): string {
-  try {
-    const parsed = JSON.parse(taskDescription);
-    if (typeof parsed === "object" && parsed !== null && typeof parsed.question === "string") {
-      return parsed.question;
-    }
-  } catch {
-    // Not JSON — use as-is
-  }
-  return taskDescription;
-}
-
-/**
- * Strip "FINAL ANSWER:" prefix from LLM output so it doesn't leak into
- * tool arguments or user-visible messages.
- */
-function stripFinalAnswerPrefix(text: string): string {
-  return text.replace(/^FINAL ANSWER:\s*/i, "").trim();
-}
-
-/**
- * Action-oriented tool name patterns — tools that perform side effects
- * (send, write, post, create, delete, etc.) rather than fetching data.
- * Their raw output (JSON with args like recipient/message) should NOT
- * appear in downstream steps or the final synthesis.
- */
-const ACTION_TOOL_PATTERNS = /\b(send|write|post|create|delete|remove|update|set|put|push|publish|notify|deploy|upload)\b/i;
-
-/**
- * Sanitize tool output to prevent internal metadata from leaking into
- * downstream steps or final user-facing synthesis.
- *
- * - Data-fetching tools (list, get, search, read) → keep full output
- * - Action tools (send, write, post, create) → clean confirmation only
- */
-function sanitizeToolOutput(
-  toolName: string,
-  rawOutput: string,
-  args: Record<string, unknown>,
-): string {
-  // shell-execute wraps command output in metadata; prefer the full untruncated
-  // command payload so downstream synthesis can parse complete results.
-  if (toolName.includes("shell-execute")) {
-    const extractText = (value: unknown): string | null => {
-      if (typeof value === "string" && value.trim().length > 0) return value;
-      return null;
-    };
-
-    const parseUnknown = (value: unknown): unknown => {
-      if (typeof value !== "string") return value;
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
-      }
-    };
-
-    // Some integrations return shell payloads as nested objects or as
-    // stringified JSON at one or more levels. Normalize to inspect safely.
-    const parsed = parseUnknown(rawOutput);
-    const normalized =
-      parsed && typeof parsed === "object" && "result" in parsed
-        ? parseUnknown((parsed as { result?: unknown }).result)
-        : parsed;
-
-    if (normalized && typeof normalized === "object") {
-      const payload = normalized as {
-        fullOutput?: unknown;
-        output?: unknown;
-        fullStderr?: unknown;
-        stderr?: unknown;
-      };
-
-      const output =
-        extractText(payload.fullOutput) ??
-        extractText(payload.output) ??
-        "";
-      const stderr =
-        extractText(payload.fullStderr) ??
-        extractText(payload.stderr) ??
-        "";
-
-      if (output.trim().length > 0) return output;
-      if (stderr.trim().length > 0) return stderr;
-    }
-  }
-
-  // If tool name indicates a data-fetching operation, keep full output
-  if (!ACTION_TOOL_PATTERNS.test(toolName)) {
-    return rawOutput;
-  }
-
-  // For action tools, check if the raw output is just echoing back the args
-  // (common MCP pattern: return the request payload as confirmation)
-  const isJsonEcho = (() => {
-    try {
-      const parsed = JSON.parse(rawOutput);
-      if (typeof parsed !== "object" || parsed === null) return false;
-      // If most keys in the output match the input args, it's an echo
-      const outputKeys = Object.keys(parsed);
-      const argKeys = Object.keys(args);
-      const overlap = outputKeys.filter((k) => argKeys.includes(k));
-      return overlap.length >= argKeys.length * 0.5;
-    } catch {
-      return false;
-    }
-  })();
-
-  if (isJsonEcho) {
-    // Replace with clean confirmation — just the tool name and success
-    const friendlyName = toolName.split("/").pop() ?? toolName;
-    return `✓ ${friendlyName} completed successfully`;
-  }
-
-  return rawOutput;
-}
+//
+// Output utilities (extractGoalText, stripFinalAnswerPrefix, sanitizeToolOutput,
+// ACTION_TOOL_PATTERNS) were extracted to ./plan-execute/output-utils.ts in
+// WS-6 Phase 3 bucket B so step-executor and plan-mutation helpers can import
+// without circular dependency. Import added at top of file.

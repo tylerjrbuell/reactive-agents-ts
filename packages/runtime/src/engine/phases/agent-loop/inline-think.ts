@@ -26,7 +26,17 @@ import {
   getSelectedModelName,
 } from "./think-context.js";
 
-type ContextManagerLike = {
+/**
+ * Narrow interface shim for the ContextWindowManager service. The error
+ * channel is intentionally `unknown` — see the doc-block at
+ * `packages/core/src/errors/index.ts` ("Narrow `unknown` error channels —
+ * when intentional"). The framework absorbs/translates errors at the
+ * boundary; cross-package error-type coupling is deliberately avoided.
+ *
+ * Exported (not re-declared) so `execution-engine.ts` does not duplicate
+ * the same Effect<X, unknown> declarations (WS-5 Phase 2 dedupe).
+ */
+export type ContextManagerLike = {
   buildContext: (options: {
     systemPrompt: string;
     messages: readonly unknown[];

@@ -33,7 +33,7 @@ import {
 import {
   buildToolElaborationInjection,
   type ToolElaborationInjectionConfig,
-} from "../kernel/capabilities/act/tool-gating.js";
+} from "../kernel/capabilities/decide/tool-gating.js";
 import { buildStaticContext } from "./context-engine.js";
 import type { GuidanceContext } from "./context-manager.js";
 import type {

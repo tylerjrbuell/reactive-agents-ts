@@ -58,7 +58,7 @@ import { dispatchMemoryFlush } from "./engine/phases/memory-flush-dispatch.js";
 import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
 import { prepareReasoningToolSchemas } from "./engine/phases/agent-loop/setup/tool-schemas.js";
 import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
-import { runInlineThink } from "./engine/phases/agent-loop/inline-think.js";
+import { runInlineThink, type ContextManagerLike } from "./engine/phases/agent-loop/inline-think.js";
 import { runInlineAct } from "./engine/phases/agent-loop/inline-act.js";
 import { runInlineObserve } from "./engine/phases/agent-loop/inline-observe.js";
 import { runInlineHarnessHooks } from "./engine/phases/agent-loop/inline-harness-hooks.js";
@@ -773,21 +773,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   const availableToolNames = functionCallingTools.map((t: any) => t.name as string);
 
                   // H3: Get ContextWindowManager for proper context building (Phase 1.1)
+                  // Type shape shared with inline-think.ts (WS-5 Phase 2 dedupe);
+                  // rationale for the `unknown` error channels lives in the
+                  // ContextManagerLike doc-block in inline-think.ts.
                   const contextManagerOpt = yield* Effect.serviceOption(
-                    Context.GenericTag<{
-                      buildContext: (options: {
-                        systemPrompt: string;
-                        messages: readonly unknown[];
-                        memoryContext?: string;
-                        maxTokens: number;
-                        reserveOutputTokens: number;
-                      }) => Effect.Effect<readonly unknown[], unknown>;
-                      truncate: (
-                        messages: readonly unknown[],
-                        targetTokens: number,
-                        strategy: string,
-                      ) => Effect.Effect<readonly unknown[], unknown>;
-                    }>("ContextWindowManager"),
+                    Context.GenericTag<ContextManagerLike>("ContextWindowManager"),
                   ).pipe(
                     Effect.catchAll(() =>
                       Effect.succeed({ _tag: "None" as const }),

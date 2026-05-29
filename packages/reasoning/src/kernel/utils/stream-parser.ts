@@ -1,4 +1,4 @@
-// File: src/strategies/kernel/thinking-utils.ts
+// File: src/kernel/utils/stream-parser.ts
 /**
  * Thinking model support — extract and strip <think>...</think> blocks.
  *

@@ -27,7 +27,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../reason/stream-parser.js";
+} from "../../utils/stream-parser.js";
 import { withEnvContext } from "../../../context/context-engine.js";
 import { ExecutionError } from "../../../errors/errors.js";
 

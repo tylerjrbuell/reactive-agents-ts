@@ -67,10 +67,27 @@ import type {
     AgentResult,
 } from './builder/types.js'
 
+/**
+ * Narrow widening for the dynamically-imported `ToolService` tag.
+ *
+ * `@reactive-agents/tools` is loaded via `Effect.promise(() => import(...))`
+ * to avoid a static dependency edge into the tools layer at module-eval time.
+ * The dynamic import returns the tag as `unknown`-shaped at the runtime layer
+ * boundary; this helper concentrates the widening cast in one place so the
+ * three call sites (`dispose`, `registerTool`, `unregisterTool`) share a
+ * single reviewable widening surface.
+ *
+ * See `packages/runtime/test/as-unknown-as-ceiling.test.ts` for the §5.5
+ * anti-regression ceiling that feeds off this consolidation.
+ */
+type ToolServiceTag = import('effect').Context.Tag<any, any>
+const asToolServiceTag = (tag: unknown): ToolServiceTag =>
+    tag as unknown as ToolServiceTag
+
 // ── Class ──
 export class ReactiveAgent {
     constructor(
-        private readonly engine: {
+        public readonly engine: {
             execute: (
                 task: Task
             ) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>
@@ -89,17 +106,17 @@ export class ReactiveAgent {
          */
         readonly agentId: string,
         // ManagedRuntime evaluates the layer once; all facade calls share service instances.
-        private readonly runtime: ManagedRuntime.ManagedRuntime<any, never>,
+        public readonly runtime: ManagedRuntime.ManagedRuntime<any, never>,
         /** Names of connected MCP servers — needed for cleanup on dispose(). */
         private readonly _mcpServerNames: readonly string[] = [],
         /** @internal Whether gateway was configured via .withGateway(). */
-        private readonly _gatewayEnabled: boolean = false,
+        public readonly _gatewayEnabled: boolean = false,
         /** @internal Gateway heartbeat interval (ms). Defaults to 60000. */
-        private readonly _gatewayIntervalMs: number = 60_000,
+        public readonly _gatewayIntervalMs: number = 60_000,
         /** @internal Whether a custom heartbeat instruction was configured. */
-        private readonly _hasCustomHeartbeatInstruction: boolean = false,
+        public readonly _hasCustomHeartbeatInstruction: boolean = false,
         /** @internal When true, gateway runs share the stable agent id for memory continuity. */
-        private readonly _gatewayPersistMemory: boolean = false,
+        public readonly _gatewayPersistMemory: boolean = false,
         /** @internal Default stream density set via `.withStreaming()`. */
         private readonly _defaultStreamDensity?: StreamDensity,
         /** @internal Callback to set task description for parent context forwarding. */
@@ -115,13 +132,13 @@ export class ReactiveAgent {
             }
         ) => void,
         /** @internal Whether session persistence was enabled at build time. */
-        private readonly _sessionPersist: boolean = false,
+        public readonly _sessionPersist: boolean = false,
         /** @internal Max age of sessions in days at build time. */
         private readonly _sessionMaxAgeDays?: number,
         /** @internal Reference to the shared RAG memory store for runtime ingestion via ingest(). */
         private readonly _ragStore?: import('@reactive-agents/tools').RagMemoryStore,
         /** @internal Optional external channels (webhooks, bots) from `.withChannels()`. */
-        private readonly _channelsConfig?: ChannelsConfig,
+        public readonly _channelsConfig?: ChannelsConfig,
         /** @internal Harness improvement config fields exposed for testing. */
         private readonly _config?: {
             minIterations?: number
@@ -195,11 +212,7 @@ export class ReactiveAgent {
                     const toolsMod = yield* Effect.promise(
                         () => import('@reactive-agents/tools')
                     )
-                    const ts =
-                        yield* toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                            any,
-                            any
-                        >
+                    const ts = yield* asToolServiceTag(toolsMod.ToolService)
                     for (const name of serverNames) {
                         yield* (ts as any)
                             .disconnectMCPServer(name)
@@ -338,11 +351,7 @@ export class ReactiveAgent {
                 const toolsMod = yield* Effect.promise(
                     () => import('@reactive-agents/tools')
                 )
-                const ts =
-                    yield* toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                        any,
-                        any
-                    >
+                const ts = yield* asToolServiceTag(toolsMod.ToolService)
                 yield* (ts as any).register(definition, handler)
             })
         )
@@ -367,11 +376,7 @@ export class ReactiveAgent {
                 const toolsMod = yield* Effect.promise(
                     () => import('@reactive-agents/tools')
                 )
-                const ts =
-                    yield* toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                        any,
-                        any
-                    >
+                const ts = yield* asToolServiceTag(toolsMod.ToolService)
                 yield* (ts as any).unregisterTool(name)
             })
         )
@@ -1382,7 +1387,7 @@ export class ReactiveAgent {
     async gatewayStatus(): Promise<
         import('@reactive-agents/gateway').GatewayStatus | null
     > {
-        return queryGatewayStatus(this as any)
+        return queryGatewayStatus(this)
     }
 
     /**
@@ -1410,6 +1415,6 @@ export class ReactiveAgent {
      * ```
      */
     start(): GatewayHandle {
-        return startGateway(this as any)
+        return startGateway(this)
     }
 }

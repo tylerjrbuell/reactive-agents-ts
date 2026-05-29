@@ -20,7 +20,7 @@ import {
   buildToolSchemas,
 } from "../attend/context-utils.js";
 import { defaultContextCurator } from "../../../context/context-curator.js";
-import { StreamingTextCallback } from "@reactive-agents/core";
+import { StreamingTextCallback, EventBus } from "@reactive-agents/core";
 import {
   finalAnswerTool,
   shouldShowFinalAnswer,
@@ -43,10 +43,10 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   stripPreamble,
-} from "../act/tool-parsing.js";
+} from "../../utils/tool-parsing.js";
 import {
   gateNativeToolCallsForRequiredTools,
-} from "../act/tool-gating.js";
+} from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
@@ -59,9 +59,9 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
-import { extractThinking, rescueFromThinking } from "../reason/stream-parser.js";
+import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
-import { makeObservationResult } from "../act/tool-execution.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 import {
   transitionState,
   asKernelStateLike,
@@ -73,8 +73,8 @@ import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { detectAssumptions } from "./assumption-detector.js";
-import { emitAssumptionRecorded } from "../../utils/diagnostics.js";
+import { explainProviderError } from "./provider-error-explain.js";
+import { surfaceAssumptions } from "./assumption-surfacing.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -130,102 +130,6 @@ export function looksLikeFinalAnswer(content: string): boolean {
     /\b(?:final answer|in (?:summary|conclusion)|here (?:is|are)|the (?:result|answer|output) is)\b/i,
   ];
   return positiveSignals.some((re) => re.test(trimmed));
-}
-
-/**
- * Translate raw provider errors into actionable messages with provider context
- * and suggested fixes. Falls through to the raw message (with context) if no
- * pattern matches, so no debugging information is lost.
- *
- * Common patterns covered (checked in this order):
- * - Connection refused / fetch failed (service down, wrong endpoint)
- * - 5xx server errors (transient provider failures) — checked before auth so
- *   a server-error body containing stray "401"/"403" digits isn't misclassified
- * - 401 / 403 / Unauthorized (bad/missing API key)
- * - 429 / Rate limit
- * - Timeout / AbortError
- */
-function explainProviderError(
-  rawMessage: string,
-  provider?: string,
-  model?: string,
-): string {
-  const ctx = provider ? ` (${provider}${model ? `:${model}` : ""})` : "";
-  const lower = rawMessage.toLowerCase();
-
-  // Connection refused / fetch failed → service not running or unreachable
-  if (
-    lower.includes("econnrefused") ||
-    lower.includes("fetch failed") ||
-    lower.includes("connect timeout") ||
-    lower.includes("enotfound") ||
-    lower.includes("socket hang up") ||
-    lower.includes("network request failed")
-  ) {
-    if (provider === "ollama") {
-      return `Cannot connect to Ollama${ctx}. Is the service running?\n  Start it with: ollama serve\n  Or set OLLAMA_ENDPOINT to a different host.\n  Original error: ${rawMessage}`;
-    }
-    return `Cannot reach ${provider ?? "LLM provider"}${ctx}. Connection refused or network unreachable.\n  Check network connectivity and provider endpoint.\n  Original error: ${rawMessage}`;
-  }
-
-  // 5xx server errors — checked BEFORE auth so a 5xx body that happens to
-  // contain a stray "401"/"403" digit sequence isn't misclassified as an auth
-  // failure. The connection branch above already eliminated transport failures.
-  if (
-    /\b5\d\d\b/.test(rawMessage) ||
-    lower.includes("internal server error") ||
-    lower.includes("service unavailable") ||
-    lower.includes("bad gateway") ||
-    lower.includes("gateway timeout")
-  ) {
-    return `${provider ?? "LLM provider"}${ctx} returned a server error.\n  This is likely transient — try again in a moment.\n  Original error: ${rawMessage}`;
-  }
-
-  // Auth errors
-  if (
-    lower.includes("401") ||
-    lower.includes("unauthorized") ||
-    lower.includes("invalid api key") ||
-    lower.includes("invalid_api_key") ||
-    lower.includes("authentication") ||
-    lower.includes("403") ||
-    lower.includes("forbidden")
-  ) {
-    const apiKeyEnvByProvider: Record<string, string> = {
-      anthropic: "ANTHROPIC_API_KEY",
-      openai: "OPENAI_API_KEY",
-      gemini: "GOOGLE_API_KEY (or GEMINI_API_KEY)",
-      google: "GOOGLE_API_KEY (or GEMINI_API_KEY)",
-      litellm: "LITELLM_API_KEY (or proxy-specific env vars)",
-    };
-    const envHint =
-      apiKeyEnvByProvider[provider ?? ""] ?? "the appropriate API key env var";
-    return `Authentication failed for ${provider ?? "LLM provider"}${ctx}.\n  Verify ${envHint} is set correctly and has not been revoked.\n  Original error: ${rawMessage}`;
-  }
-
-  // Rate limit
-  if (
-    lower.includes("429") ||
-    lower.includes("rate limit") ||
-    lower.includes("too many requests") ||
-    lower.includes("quota")
-  ) {
-    return `Rate limit hit for ${provider ?? "LLM provider"}${ctx}.\n  Slow down requests or upgrade your provider tier.\n  Original error: ${rawMessage}`;
-  }
-
-  // Timeout / abort
-  if (
-    lower.includes("aborterror") ||
-    lower.includes("operation was aborted") ||
-    lower.includes("request timed out") ||
-    lower.includes("timeout") ||
-    lower.includes("etimedout")
-  ) {
-    return `Request to ${provider ?? "LLM provider"}${ctx} timed out.\n  Provider may be slow or unreachable. Check network and provider status.\n  Original error: ${rawMessage}`;
-  }
-
-  // Generic fallthrough — preserve raw message with provider context
-  return `${provider ?? "LLM"} call failed${ctx}: ${rawMessage}`;
 }
 
 export function handleThinking(
@@ -421,12 +325,38 @@ export function handleThinking(
     const {
       systemPrompt: systemPromptText,
       messages: conversationMessages,
+      compressionApplied,
     } = defaultContextCurator.curate(state, input, profile, guidance, adapter, {
       availableTools: promptSchemas,
       systemPromptBody: effectiveSystemPrompt,
       toolElaboration: input.toolElaboration,
       includeRecentObservations: profile.recentObservationsLimit ?? 0,
     });
+
+    // ── Issue #119 closure (WS-4 Phase 7) — typed CompressionApplied emit ──
+    // When the curator consumed a fresh CompressionRecommendation, publish
+    // the typed `CompressionApplied` event variant (declared in
+    // @reactive-agents/core event-bus.ts AgentEvent union). This is the
+    // sole audit surface for "recommendation → application" closure;
+    // observers see a recommendation→applied pair correlated by taskId +
+    // recommendedAtIteration. EventBus is resolved via serviceOption so the
+    // emit is a no-op when the observability layer is absent.
+    if (compressionApplied) {
+      const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+      );
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "CompressionApplied",
+          taskId: state.taskId,
+          iteration: compressionApplied.iteration,
+          recommendedAtIteration: compressionApplied.recommendedAtIteration,
+          targetTokens: compressionApplied.targetTokens,
+          actualMessageCount: compressionApplied.actualMessageCount,
+          reason: compressionApplied.reason,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+    }
 
     // ── TextParseDriver: inject format instructions into system prompt ────────
     // When the driver is in text-parse mode (local models that can't reliably emit
@@ -783,27 +713,12 @@ export function handleThinking(
 
     // ── v0.11.x: surface model-stated assumptions as AssumptionRecordedEvents.
     // Best-effort; failure is swallowed inside the emitter so think never breaks.
-    {
-      const assumptions = detectAssumptions(thought);
-      if (assumptions.length > 0 && thinking) {
-        // Also scan the hidden thinking trace, capped to the global limit (3).
-        const fromThinking = detectAssumptions(thinking);
-        for (const a of fromThinking) {
-          if (assumptions.length >= 3) break;
-          if (!assumptions.some((x) => x.assumption === a.assumption)) {
-            assumptions.push(a);
-          }
-        }
-      }
-      for (const a of assumptions) {
-        yield* emitAssumptionRecorded({
-          taskId: state.taskId,
-          iteration: state.iteration,
-          assumption: a.assumption,
-          rationale: a.rationale,
-        });
-      }
-    }
+    yield* surfaceAssumptions({
+      thought,
+      thinking,
+      taskId: state.taskId,
+      iteration: state.iteration,
+    });
 
     // Publish thought event with full prompt trace for logModelIO.
     // messages[] carries the complete FC conversation thread with role labels.

@@ -9,15 +9,18 @@ import { evaluateToolInject } from "./evaluators/tool-inject.js";
 import { evaluateToolFailureStreak } from "./evaluators/tool-failure-streak.js";
 import { evaluateStallDetect } from "./evaluators/stall-detect.js";
 
-// ─── Removed evaluators (North Star principle 11) ───
+// ─── Pruned evaluators (North Star principle 11 / WS-4 Phase 2 — 2026-05-28) ───
 //
 // `evaluatePromptSwitch`, `evaluateMemoryBoost`, `evaluateSkillReinject`,
-// `evaluateHumanEscalate` were registered as advisory-only ControllerDecisions
-// with no dispatch handler. They produced telemetry noise and burned
-// evaluator cycles every iteration without ever causing an action.
+// `evaluateHumanEscalate` were originally registered as advisory-only
+// ControllerDecisions with no dispatch handler. They produced telemetry
+// noise and burned evaluator cycles every iteration without ever causing
+// an action.
 //
-// Removed from the evaluate chain in this commit. The evaluator source
-// files remain in `evaluators/` so the logic is recoverable; re-add them
+// First removed from the evaluate chain; the evaluator source files were
+// kept under `evaluators/` for recoverability. WS-4 Phase 2 (master plan
+// §3.6 RC-3 / anti-mission #6) completed the prune: the 4 evaluator files
+// AND their ControllerDecision union members are deleted. Re-introduce
 // only when a real dispatch handler ships alongside.
 
 export class ReactiveControllerService extends Context.Tag("ReactiveControllerService")<

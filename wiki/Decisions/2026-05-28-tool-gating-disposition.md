@@ -1,7 +1,7 @@
 ---
 title: ADR — `act/tool-gating.ts` Disposition (WS-3 Phase 2)
 date: 2026-05-28
-status: PROPOSED (awaiting user/architecture-warden adjudication)
+status: DECIDED 2026-05-28 — option (a) move to `decide/tool-gating.ts`
 decision-driver: WS-3 Phase 2 thin spec — `wiki/Planning/Implementation-Plans/2026-05-28-ws-3-kernel-capability-dag.md` §Phase 2
 related-anchor: architecture-model §2.3 (leaf principle) + §6 capability boundary contracts
 prerequisite: WS-3 Phase 1 shipped (PR #175 — `tool-parsing.ts` extracted to `kernel/utils/`)
@@ -125,7 +125,7 @@ Reasoning chain:
 
 ## Decision
 
-**Pending user / architecture-warden adjudication.**
+**2026-05-28 (evening) — Option (a) ADJUDICATED.** Move `act/tool-gating.ts` → `decide/tool-gating.ts`. WS-3 Phase 2 dispatch authorized.
 
 If adjudicated as option (a): WS-3 Phase 2 dispatch covers the move + 4 inbound + 2 same-dir import updates. Predicted impact:
 - `act/` LOC: 2798 → 2528
@@ -154,3 +154,4 @@ If adjudicated as option (b) or (c): thin spec updates accordingly before re-dis
 | Date | Change | Reason |
 |---|---|---|
 | 2026-05-28 | Initial draft. | WS-3 Phase 2 prerequisite per thin spec; option (a) recommended. |
+| 2026-05-28 (evening) | Option (a) ADJUDICATED. | User decision. WS-3 Phase 2 dispatch authorized; kernel-warden to execute move + 6+ import-site updates. |
