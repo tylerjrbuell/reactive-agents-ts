@@ -15,15 +15,10 @@ import {
   scratchpadStoreRef,
   detectCompletionGaps,
   type FinalAnswerCapture,
-  buildBriefResponse,
-  mergeBriefAvailableSkills,
-  type BriefInput,
-  buildPulseResponse,
-  type PulseInput,
   type ToolCallSpec,
-  activateSkillHandler,
   runHealingPipeline,
 } from "@reactive-agents/tools";
+import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
@@ -140,119 +135,6 @@ function observationReferencesStoredOverflow(content: string): boolean {
       content.includes("full object is stored"))
   );
 }
-
-// ─── Meta-Tool Registry ───────────────────────────────────────────────────────
-
-type MetaToolResult = { readonly content: string; readonly success: boolean };
-
-type MetaToolHandler = (
-  tc: ToolCallSpec,
-  state: KernelState,
-  context: KernelContext,
-  allSteps: readonly import("../../../types/index.js").ReasoningStep[],
-  newToolsUsed: Set<string>,
-) => Effect.Effect<MetaToolResult, never>;
-
-/**
- * brief — situational awareness snapshot (inline, no ToolService round-trip).
- */
-function handleBriefTool(
-  tc: ToolCallSpec,
-  state: KernelState,
-  context: KernelContext,
-  _allSteps: readonly import("../../../types/index.js").ReasoningStep[],
-  _newToolsUsed: Set<string>,
-): Effect.Effect<MetaToolResult, never> {
-  return Effect.gen(function* () {
-    const { input } = context;
-    const liveStore = yield* Ref.get(scratchpadStoreRef);
-    const recallKeys = [...liveStore.keys()];
-    const briefInput: BriefInput = {
-      section: tc.arguments?.section as string | undefined,
-      availableTools: input.availableToolSchemas ?? [],
-      indexedDocuments: input.metaTools?.staticBriefInfo?.indexedDocuments ?? [],
-      availableSkills: mergeBriefAvailableSkills(
-        input.metaTools?.staticBriefInfo?.availableSkills,
-        input.briefResolvedSkills,
-      ),
-      memoryBootstrap: input.metaTools?.staticBriefInfo?.memoryBootstrap ?? { semanticLines: 0, episodicEntries: 0 },
-      recallKeys,
-      tokens: state.tokens,
-      tokenBudget: context.profile.maxTokens ?? 8000,
-      entropy: state.meta.entropy?.latest,
-      controllerDecisionLog: state.controllerDecisionLog,
-      iterationCount: state.iteration,
-    };
-    const briefContent = buildBriefResponse(briefInput);
-    return { content: briefContent, success: true };
-  });
-}
-
-/**
- * pulse — reactive intelligence introspection (inline, no ToolService round-trip).
- */
-function handlePulseTool(
-  tc: ToolCallSpec,
-  state: KernelState,
-  context: KernelContext,
-  allSteps: readonly import("../../../types/index.js").ReasoningStep[],
-  newToolsUsed: Set<string>,
-): Effect.Effect<MetaToolResult, never> {
-  return Effect.gen(function* () {
-    const { input } = context;
-    const pulseInput: PulseInput = {
-      question: tc.arguments?.question as string | undefined,
-      entropy: state.meta.entropy?.latest as PulseInput["entropy"],
-      controllerDecisionLog: state.controllerDecisionLog,
-      steps: allSteps as import("../../../types/index.js").ReasoningStep[],
-      iteration: state.iteration,
-      maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
-      tokens: state.tokens,
-      tokenBudget: context.profile.maxTokens ?? 8000,
-      task: input.task,
-      allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],
-      toolsUsed: newToolsUsed,
-      requiredTools: input.requiredTools ?? [],
-    };
-    const pulseContent = JSON.stringify(buildPulseResponse(pulseInput), null, 2);
-    return { content: pulseContent, success: true };
-  });
-}
-
-/**
- * activate-skill — acknowledge the request inline; the intervention dispatcher
- * handles the actual inject-skill-content patch on the next controller tick.
- */
-function handleActivateSkillTool(
-  tc: ToolCallSpec,
-  _state: KernelState,
-  _context: KernelContext,
-  _allSteps: readonly import("../../../types/index.js").ReasoningStep[],
-  _newToolsUsed: Set<string>,
-): Effect.Effect<MetaToolResult, never> {
-  return activateSkillHandler(tc.arguments ?? {}).pipe(
-    Effect.map((result) => {
-      const content = JSON.stringify(result);
-      return { content, success: (result as { ok?: boolean }).ok === true };
-    }),
-    Effect.catchAll(() =>
-      Effect.succeed({
-        content: JSON.stringify({ ok: false, error: "activate-skill handler failed" }),
-        success: false,
-      }),
-    ),
-  );
-}
-
-/**
- * Open registry — new inline meta-tools are a one-line addition.
- * Tools that go through ToolService (recall, find) are NOT in this registry.
- */
-const metaToolRegistry = new Map<string, MetaToolHandler>([
-  ["brief", handleBriefTool],
-  ["pulse", handlePulseTool],
-  ["activate-skill", handleActivateSkillTool],
-]);
 
 // ─── Act Phase ────────────────────────────────────────────────────────────────
 
