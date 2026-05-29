@@ -12,34 +12,48 @@
  *
  * SHAPE
  * -----
- * Mutable carrier + immutable cfg + control-signal return.
- *   - `IterationCarrier`: mutable holder for all variables that EITHER survive
- *     across iterations (counters, currentInput/Options/Context, switchCount,
- *     triedStrategies, mutableScratchpad) OR are read by the post-loop code
- *     (`currentInput`, `currentOptions`, `state`).
+ * Driver spine + cohesive phase-step helpers + immutable cfg + control-signal.
+ *   - `runIterationPass` is the DRIVER: it runs the spine (pause-checkpoint →
+ *     recall → before-think hooks → think → token-delta guard → auto-checkpoint
+ *     → reactive-observer → dispatcher early-stop/switch → progress → lane →
+ *     stall → ICS → oracle gate → loop-detection → required-tools guard →
+ *     post-iter snapshot → learn) and delegates the three highest-coupling
+ *     blocks to named phase-step helpers under `runner-helpers/`:
+ *       · `applyStrategySwitch`     — reinit for a new strategy + reset counters
+ *                                     (shared by dispatcher + loop-detector switch).
+ *       · `runStallDeliverableStep` — harness stall / deliverable decision tree.
+ *       · `resolveDetectedLoop`     — confirmed-loop recovery / deliver / fail tree.
+ *     Each helper threads IMMUTABLE state through (takes state, returns the new
+ *     state) and surfaces the specific counters it mutates as explicit in/out
+ *     params — no carrier reaches the helpers.
  *   - `IterationConfig`: immutable per-run inputs (kernel, hooks, services,
  *     profile, verifier, etc.).
- *   - Return `"continue"` | `"break"` — outer while honors the signal. Every
- *     original `break;` becomes `return "break";`; every original `continue;`
- *     becomes `return "continue";`; fall-through becomes a final
- *     `return "continue";`.
+ *   - `IterationCarrier`: a MUTABLE holder for the spine locals that survive
+ *     across iterations (counters, currentInput/Options/Context, switchCount,
+ *     triedStrategies, mutableScratchpad) or are read by post-loop code. The
+ *     driver destructures it into locals at entry and `sync()`s them back before
+ *     each return. CORRECTION 5 reduced — NOT removed — the carrier: the three
+ *     extracted phase-steps no longer touch it, but the spine still threads its
+ *     locals through `sync()`. Dissolving it fully would require changing the
+ *     runner.ts boundary (the hottest code path) and is deferred (see follow-up).
+ *   - Return `"continue"` | `"break"` — outer while honors the signal.
  *
  * INVARIANTS PRESERVED (do not violate)
  * -------------------------------------
  *   1. Single-owner termination: `terminate(state, ...)` is the only writer
- *      of state.status to "done"/"failed" outside `kernel-state.ts`. The lift
- *      preserves every call site verbatim — no new state.status writers.
+ *      of state.status to "done"/"failed" outside `kernel-state.ts` — true in
+ *      the driver AND every extracted helper. No new state.status writers.
  *   2. transitionState() discipline: every state mutation routes through
  *      `transitionState(state, patch)`. ESLint enforces.
  *   3. Loop-detector streak rule (`detectLoop` at IC-1): only ACTION steps
- *      reset `maxConsecutiveThoughts`. Observations do NOT. Preserved by
- *      moving the `detectLoop()` call verbatim.
- *   4. No LLM re-verify (M3 REWORK precedent): the verifier emit at the
- *      harness-deliverable branch is preserved exactly as-is — emit-only,
- *      no retry, the post-loop §9.0 gate is the sole consumer of rejection.
+ *      reset `maxConsecutiveThoughts`. Observations do NOT. The `detectLoop()`
+ *      call stays in the driver spine; resolution moved to `resolveDetectedLoop`.
+ *   4. No LLM re-verify (M3 REWORK precedent): the verifier emit in the stall
+ *      step is emit-only — no retry; the post-loop §9.0 gate is the sole
+ *      consumer of rejection.
  *   5. Phase-chain ordering (sense → attend → comprehend → recall → reason →
- *      decide → act → verify → reflect → learn) is structural, not semantic —
- *      preserved by lifting the whole body, not its sub-blocks.
+ *      decide → act → verify → reflect → learn) is preserved by the driver's
+ *      fixed call order; extracting a block doesn't change where it runs.
  *
  * HISTORY
  * -------
@@ -47,9 +61,12 @@
  *     (tier-guards, deliverable, recovery-steering, state-queries) under
  *     `runner-helpers/`. Phase 2 UpwardReport flagged iteration-block lift as
  *     the highest-leverage remaining reduction.
- *   - WS-6 Phase 4 (2026-05-29): this file. Iteration body lifted whole;
- *     runner.ts drops below 1500 LOC (ceiling tightened in
- *     `packages/reasoning/test/runner-loc-ceiling.test.ts`).
+ *   - WS-6 Phase 4 (2026-05-29): iteration body lifted whole into this file via
+ *     a mechanical carrier/sync scaffold (relocation, not decomposition).
+ *   - WS-6 CORRECTION 5 (2026-05-29): replaced the scaffold's LOC-theater with
+ *     real cohesion — extracted the three F2-named coupling blocks (strategy
+ *     switch, stall/deliverable, loop resolution) into named phase-steps with
+ *     immutable state threading + explicit counter params. Carrier reduced.
  *
  * Spec: wiki/Planning/Implementation-Plans/2026-05-28-canonical-refactor.md §3 line 468 + §5.5a.
  */
@@ -216,22 +233,22 @@ export interface IterationConfig {
 }
 
 /**
- * Run one iteration of the kernel main loop.
+ * Run one iteration of the kernel main loop — the DRIVER spine.
  *
- * This body is the verbatim contents of the original `runKernel()` while-loop
- * body (Phase 2 baseline lines 383-1286 of runner.ts). The lift uses
- * destructure-locals at the top + a `sync()` write-back helper so the body
- * itself doesn't need a single identifier rewrite — the original
- * `let state = ...`, `currentInput`, `currentOptions`, counters, etc. all
- * work as written. Only two mechanical changes:
+ * Destructures the mutable {@link IterationCarrier} into spine locals at entry,
+ * runs the phase chain in fixed order (see SHAPE in the file header), delegates
+ * the three high-coupling blocks to `applyStrategySwitch` /
+ * `runStallDeliverableStep` / `resolveDetectedLoop`, and `sync()`s the locals
+ * back to the carrier before every return.
  *
- *   - `break;` becomes `sync(); return "break";`
- *   - `continue;` becomes `sync(); return "continue";`
+ * Returns the outer-loop control signal:
+ *   - `"break"`    — this iteration terminated (delivered or failed); exit loop.
+ *   - `"continue"` — re-run the loop body (an explicit short-circuit OR the
+ *                    body fall-through at the end of a normal iteration).
  *
- * Body fall-through (the original implicit "loop back" at the end of the
- * while body) becomes a final `sync(); return "continue";`.
- *
- * No semantic change. All comments preserved verbatim.
+ * The extracted phase-steps thread immutable state through and take/return only
+ * the specific counters they own; the carrier never reaches them. The spine
+ * itself still uses the carrier/`sync()` mechanism for its remaining locals.
  */
 export function runIterationPass(
   carrier: IterationCarrier,
