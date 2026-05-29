@@ -92,12 +92,14 @@ export const scenario: ScenarioModule = {
 
     // 1b: corpus failure pattern (≥2 stall-detect + tool-failure evidence,
     // no escalation) → veto fires (Sprint 3.3 refinement: requires tool failure)
-    // Lever 8 (2026-05-26) — switched to via:undefined. Tool-mediated
-    // final answers are deliberate and bypass the veto; the corpus pattern
-    // is preserved on the end_turn path where silent mid-loop drops are
-    // the original veto target.
+    // Lever 8 (2026-05-26) — Tool-mediated final answers are deliberate
+    // and bypass the veto; the corpus pattern is preserved on the
+    // end_turn path where silent mid-loop drops are the original veto
+    // target. Test uses `via: "end-turn"` to exercise that path.
+    // (Fix #173 — was `via: undefined` which violates TerminationIntent
+    // type; the comment's framing aligns with `end-turn` semantically.)
     const fa2 = arbitrate(
-      { kind: "agent-final-answer", via: undefined, output: "fake answer" },
+      { kind: "agent-final-answer", via: "end-turn", output: "fake answer" },
       {
         ...ctxWithFailure,
         controllerDecisionLog: [
