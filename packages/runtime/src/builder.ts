@@ -46,6 +46,10 @@ import {
     applyWithMCP,
     applyWithMetaTools,
 } from './builder/withers/tools.js'
+import {
+    applyWithProfile,
+    applyWithErrorHandler,
+} from './builder/withers/profile-error.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -1033,32 +1037,7 @@ export class ReactiveAgentBuilder {
      * ```
      */
     withProfile(profile: HarnessProfilePatch): this {
-        // Lean implies the `_leanHarness` infrastructure flag too —
-        // runtime.ts:206 substitutes `leanModeVerifier` and disables
-        // strategy switching off this flag (existing wire path).
-        if (profile.enableVerifier === false || profile.enableStrategySwitching === false) {
-            this._leanHarness = true
-        }
-        if (profile.enableMemory === false) {
-            this._enableMemory = false
-            this._memoryExplicitlyDisabled = true
-        } else if (profile.enableMemory === true) {
-            this._enableMemory = true
-            this._memoryExplicitlyDisabled = false
-        }
-        if (profile.enableReactiveIntelligence === false) {
-            this._enableReactiveIntelligence = false
-        } else if (profile.enableReactiveIntelligence === true) {
-            this._enableReactiveIntelligence = true
-        }
-        if (profile.enableSkillPersistence === false) {
-            this._skillPersistence = false
-        } else if (profile.enableSkillPersistence === true) {
-            this._skillPersistence = true
-        }
-        // `enableStrategySwitching: true` is the default; `false` is
-        // covered by the `_leanHarness` branch above. No separate field
-        // to flip — runtime.ts gates on the leanHarness flag.
+        applyWithProfile(this, profile)
         return this
     }
 
@@ -1546,17 +1525,7 @@ export class ReactiveAgentBuilder {
             }
         ) => void
     ): this {
-        this._errorHandler = handler
-        // Also register as harness onError hook for Wave D+ error handling pipeline
-        return this.withHarness((h) => {
-            h.onError('*', (err, ctx) => {
-                handler(err as RuntimeErrors | Error, {
-                    taskId: '', // taskId not available in harness ctx
-                    phase: ctx.phase as string,
-                    iteration: ctx.iteration,
-                })
-            })
-        })
+        return this.withHarness(applyWithErrorHandler(this, handler))
     }
 
     /**
