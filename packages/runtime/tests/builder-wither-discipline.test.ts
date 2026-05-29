@@ -103,6 +103,30 @@ function classifyWithers(): readonly WitherClassification[] {
   return result;
 }
 
+interface MethodDecl {
+  readonly lineIdx: number;
+  readonly deprecated: boolean;
+}
+
+/**
+ * Locate a method declaration line by name, regardless of whether its
+ * signature is single- or multi-line (e.g. `withSkills(config?: {`
+ * opens an inline object type with no `):` on the declaration line, so
+ * the wither-signature regex above can't see it). Returns the line
+ * index + whether the preceding JSDoc carries an `@deprecated` tag, or
+ * null when the method is absent.
+ */
+function findMethod(name: string): MethodDecl | null {
+  const decl = new RegExp(`^\\s*${name}\\s*[\\(<]`);
+  for (let i = 0; i < LINES.length; i++) {
+    if (!decl.test(LINES[i] ?? "")) continue;
+    const jsdoc = precedingJsdoc(i);
+    const deprecated = jsdoc !== null && /@deprecated/.test(jsdoc);
+    return { lineIdx: i, deprecated };
+  }
+  return null;
+}
+
 describe("builder.ts wither discipline (CORRECTION 1+2 — happy path stays first-class)", () => {
   it("the additive composable surface (compose, withProfile) exists alongside the withers", () => {
     const withers = classifyWithers();
@@ -148,14 +172,11 @@ describe("builder.ts wither discipline (CORRECTION 1+2 — happy path stays firs
       "withBudget",
       "withTimeout",
     ];
-    const withers = classifyWithers();
     for (const name of documentedHappyPath) {
-      const match = withers.find((w) =>
-        new RegExp(`^\\s*${name}\\(`).test(w.source),
-      );
-      expect(match, `${name}() must be present`).toBeDefined();
+      const method = findMethod(name);
+      expect(method, `${name}() must be present`).not.toBeNull();
       expect(
-        match?.deprecated,
+        method?.deprecated,
         `${name}() must NOT be @deprecated — it is a documented, working ` +
           `capability on the happy path. The composable API is additive, ` +
           `not a replacement (CORRECTION 1+2, 2026-05-29).`,
