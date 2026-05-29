@@ -63,7 +63,7 @@ import {
   shouldInjectOracleNudge,
 } from "../../kernel/utils/lane-controller.js";
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
-import { defaultVerifier, resolveResultSeverity } from "../../kernel/capabilities/verify/verifier.js";
+import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
 import { LearningPipeline } from "../../kernel/capabilities/learn/learning-pipeline.js";
 import {
   RecallService,
@@ -72,7 +72,6 @@ import {
 } from "../../kernel/capabilities/recall/recall-service.js";
 import {
   emitKernelStateSnapshot,
-  emitVerifierVerdict,
   emitHarnessSignalInjected,
   emitBudgetSignalCollected,
 } from "../../kernel/utils/diagnostics.js";
@@ -1192,27 +1191,27 @@ export function runKernel(
           const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
           const availableUserToolsForFallback =
             (currentInput.availableToolSchemas ?? []).map((t) => t.name);
-          const fallbackVerdict = verifier.verify({
-            action: "final-answer",
-            content: candidateOutput,
-            actionSuccess: true,
-            task: currentInput.task,
-            priorSteps: state.steps,
-            requiredTools: currentInput.requiredTools,
-            relevantTools: currentInput.relevantTools,
-            toolsUsed: state.toolsUsed,
-            availableUserTools: availableUserToolsForFallback,
-            terminal: true,
-            terminatedBy: candidateTerminationReason,
-          });
-          yield* emitVerifierVerdict({
+          // M3 REWORK (2026-05-12): the retry path was removed, so the
+          // verdict isn't consumed here — we just need the emit so the
+          // outer post-loop §9.0 gate can read the trace. WS-3 Phase 5a
+          // routes the emit through the verify capability boundary.
+          yield* verifyAndEmit({
+            verifier,
+            context: {
+              action: "final-answer",
+              content: candidateOutput,
+              actionSuccess: true,
+              task: currentInput.task,
+              priorSteps: state.steps,
+              requiredTools: currentInput.requiredTools,
+              relevantTools: currentInput.relevantTools,
+              toolsUsed: state.toolsUsed,
+              availableUserTools: availableUserToolsForFallback,
+              terminal: true,
+              terminatedBy: candidateTerminationReason,
+            },
             taskId: currentOptions.taskId ?? state.taskId,
             iteration: state.iteration,
-            action: fallbackVerdict.action,
-            terminal: true,
-            verified: fallbackVerdict.verified,
-            summary: fallbackVerdict.summary,
-            checks: fallbackVerdict.checks,
           });
           // M3 REWORK (2026-05-12): retry loop removed per ablation verdict.
           // Verifier gate still fires (emitted above); rejection falls through
@@ -1808,26 +1807,25 @@ export function runKernel(
       const availableUserTools = (effectiveInput.availableToolSchemas ?? []).map(
         (t) => t.name,
       );
-      const verdict = verifier.verify({
-        action: "final-answer",
-        content: state.output,
-        actionSuccess: true,
-        task: effectiveInput.task,
-        priorSteps: state.steps,
-        requiredTools: effectiveInput.requiredTools,
-        relevantTools: effectiveInput.relevantTools,
-        toolsUsed: state.toolsUsed,
-        availableUserTools,
-        terminal: true,
-      });
-      yield* emitVerifierVerdict({
+      // WS-3 Phase 5a — verify+emit colocated at the verify capability
+      // boundary. `verdict` is still consumed below (severity branching,
+      // softFail surfacing, escalation tagging).
+      const verdict = yield* verifyAndEmit({
+        verifier,
+        context: {
+          action: "final-answer",
+          content: state.output,
+          actionSuccess: true,
+          task: effectiveInput.task,
+          priorSteps: state.steps,
+          requiredTools: effectiveInput.requiredTools,
+          relevantTools: effectiveInput.relevantTools,
+          toolsUsed: state.toolsUsed,
+          availableUserTools,
+          terminal: true,
+        },
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
-        action: verdict.action,
-        terminal: true,
-        verified: verdict.verified,
-        summary: verdict.summary,
-        checks: verdict.checks,
       });
       if (!verdict.verified) {
         // GH #121 / I5 Loop Controller wire — resolve severity with the
