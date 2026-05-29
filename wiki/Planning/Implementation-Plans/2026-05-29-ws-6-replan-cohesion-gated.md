@@ -34,6 +34,23 @@ The original WS-6 used **LOC ceilings as decomposition drivers**. Phase 4 (runne
 - **arbitrator.ts + event-bus.ts — explicitly NOT decomposed.** Documented as cohesive-by-design. Any future split needs a cohesion justification, not a LOC one.
 - **WS-5d — runtime.ts convergence** (tracked separately; path to `as ComposableLayer` = 1).
 
+## Execution log (2026-05-29)
+
+- **Phase 5 — act.ts ✅ SHIPPED.** 1209→937. Extracted: `meta-tool-handlers.ts` (143), `conversation-assembly.ts` (223). LEFT: pure helpers (no shared theme), `handleActing` tool-loop body (mutable allSteps/newToolsUsed threading → carrier would be theater). 1438=1438 tests.
+- **Phase 6 — think.ts ✅ SHIPPED.** 1366→1255. Extracted: `provider-error-explain.ts` (105, pure formatter), `assumption-surfacing.ts` (52, telemetry side-effect). LEFT: PREP cluster + NATIVE-FC resolver branch + termination-oracle (all thread mutable accumulators / reassign state → cohesive-but-large by design). 1438=1438 tests.
+- **Phase 7 — reactive-agent.ts + execution-engine.ts ✅ TRIAGED → NO EXTRACTION WARRANTED.** Both already at their cohesive floor:
+  - `reactive-agent.ts` (1420 LOC, 60 methods, 32% comment): gateway logic already extracted to `agent/` (gateway-runner / gateway-bootstrap / gateway-driver / gateway-tick / chat-manager-factory / execute-event). The remaining 60 methods ARE the public agent facade (run/subscribe/pause/stream/skills) — documented public API surface + JSDoc, like builder.ts. Decomposing it would relocate the API surface, not improve cohesion. **LEAVE.**
+  - `execution-engine.ts` (1404 LOC): already W24-decomposed into `engine/` (bootstrap / finalize / phases / pipeline / execute-stream / runtime-context). Residual is the cohesive engine spine. **LEAVE.**
+- **arbitrator.ts + event-bus.ts ✅ LEFT (cohesive-by-design)** per triage — documented above.
+- **WS-5d — runtime.ts convergence** remains as separate genuine work (path to `as ComposableLayer` = 1).
+
+### Net WS-6 cohesion-gated result
+- runner.ts: 1976 → 725 (Phase 2+4) + iterate-pass cohesion (Phase 4 + CORRECTION 5)
+- act.ts: 1209 → 937
+- think.ts: 1366 → 1255
+- plan-execute.ts: 1578 → 1080 (Phase 3, pre-correction but cohesive extractions stand)
+- All extractions cohesive; tangled orchestrators correctly left large; zero behavior change throughout.
+
 ## Done criteria
 
 - Each decomposed file's extractions are cohesive (a reader can follow one extracted unit without holding the parent's full mutable state in their head)
