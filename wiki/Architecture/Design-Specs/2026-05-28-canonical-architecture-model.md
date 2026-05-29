@@ -743,17 +743,24 @@ Every default-on registry entry MUST have `liftEvidence !== null` (or the delibe
 
 1. **`HarnessProfile.lean()/balanced()/intelligent()`** — primary. Quickstart docs use this.
 2. **`.compose(harness => ...)`** — advanced. For users overriding specific tags / phases / hooks.
-3. **`.withX()` methods** — backward compat. Marked `@deprecated alias for HarnessProfile.X` when redundant.
+3. **`.withX()` methods** — first-class, documented fluent API. Each carries a `@see {@link HarnessProfile.X}` / "Composable equivalent:" pointer to the preset/compose path as an ADDITIONAL option.
 
-### 11.2 The ≤24 builder method ceiling (anti-mission #3)
+### 11.2 Builder API discipline (anti-mission #3 — AMENDED 2026-05-29)
 
-Mission anti-mission #3: "24 named override methods IS the failure mode." The current `builder.ts` has 59 withers (2.4× threshold). Target:
+> **AMENDMENT 2026-05-29.** The original framing — "24 named override methods IS the failure mode; reduce to ≤24; mark redundant withers `@deprecated alias`" — was **wrong, and was reverted** (CORRECTION 1+2, commits `fe52e9f7` + `e678679e`). Marking 48 working, documented methods `@deprecated` to drop under a count threshold was metric-gaming: it subtracted perceived value (IDE strikethrough, doc-gen deprecation warnings, lint noise in user code) from the documented happy path without simplifying any code. Project-owner directive: *"The composable API offers ADDITIONAL ways to use Reactive Agents, not take away value we already have. Simplify to be more streamlined, more powerful, more efficient — without losing current functionality, only improving it."*
 
-- ≤24 builder methods total
-- Each remaining wither has a justification (no preset covers the case AND `.compose()` is too low-level)
-- Withers with redundant preset coverage are `@deprecated alias`
+**The failure mode is NOT method count.** It is: redundant/confusing API with **no canonical path**, silent duplication, or undiscoverable surface. A large fluent API where each method is documented, discoverable, and maps to one canonical capability is GOOD ergonomics — not a failure.
 
-The runtime API surface gets smaller, not bigger, as capability set grows. New defaults go to registry + presets; new methods do NOT.
+Corrected discipline:
+
+- **Fluent `.withX()` methods stay first-class.** They are the documented, IDE-discoverable happy path. Never `@deprecated` for the crime of "a preset also covers this."
+- **HarnessProfile presets + `.compose()` are ADDITIVE** — power-user bundles/shortcuts layered on top, documented as alternatives, never as replacements.
+- **One canonical path per capability.** If two methods do the exact same thing with no distinction, consolidate or cross-reference (`@see`) — but the documented one keeps working without a deprecation strikethrough.
+- **Genuine dead/no-op methods** (write a field nobody reads) get an honest factual note ("no effect; retained for API compatibility") and are candidates for removal — distinct from value-subtracting deprecation of working methods.
+
+Gate: `packages/runtime/tests/builder-wither-discipline.test.ts` (rewritten) asserts the documented happy-path methods EXIST and are NOT `@deprecated`, plus the additive composable surface (`compose`, `withProfile`) is present. It does NOT cap raw method count.
+
+The runtime API surface grows responsibly as the capability set grows: new defaults go to registry + presets; new fluent methods are added when they improve ergonomics, each with a canonical composable pointer.
 
 ### 11.3 The compose harness API
 
@@ -1003,7 +1010,7 @@ This is the gap analysis at a glance. Full evidence + workstream sequencing live
 | §8 Service Tag pattern | Tags exist for major services | Cross-cap dep enforcement needs lint | **WS-3 Phase 4 lint** |
 | §9 Emit/Consume contract | `confidenceFloor` doc lies; observe pkg 0 callers; 4 dead Compose tags | Wire or delete; add CI lint | **WS-4** |
 | §10 CapabilityRegistry + HarnessProfile | Registry clean ✅; HarnessProfilePatch hard-coded fields | Generalize patch type | **WS-4** |
-| §11 User surface | 59 builder methods (2.4× threshold) | Reduce to ≤24; mark redundant as `@deprecated alias` | **WS-2 Phase 3** |
+| §11 User surface | Large fluent builder surface | ~~Reduce to ≤24; mark redundant as `@deprecated alias`~~ **AMENDED 2026-05-29: keep fluent methods first-class + non-deprecated; HarnessProfile/`.compose()` are additive; gate locks happy-path, not count (CORRECTION 1+2)** | **WS-2 Phase 3 → reverted by CORRECTION 1+2** |
 | §12 Observability | EventBus ✅; trace ✅; observability ✅; observe (0 callers) | Wire or delete observe pkg | **WS-4** |
 | §13 Verification | Verifier exists; severity ladder partial | Multi-severity ladder formalization | **WS-7** |
 | §14 Performance | Per-iter budget unmeasured today | Stage telemetry bus (was MOVE-1) | (deferred to post-refactor) |

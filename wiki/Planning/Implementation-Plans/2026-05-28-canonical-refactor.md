@@ -418,9 +418,11 @@ let runtime: ComposableLayer = Layer.mergeAll(
 
 `evaluateTermination(ctx, evaluators[])` + `TerminationDecision { action: 'exit' | 'redirect' | 'continue' | 'fail', ... }`. Action enum maps cleanly to canon's `continue | exit-success | exit-failure | escalate`. Verdict-Override pattern present (controller signal can override agent's apparent success — anti-mission #4 enforced). **No refactor needed for arbitrator.ts itself.** WS-3 + WS-5 may sharpen the emit + error shapes around it.
 
-#### F5 — `builder.ts` has 59 `withX()` methods (2.4× anti-mission #3 threshold)
+#### F5 — `builder.ts` has 59 `withX()` methods ~~(2.4× anti-mission #3 threshold)~~
 
-Anti-mission #3: "24 named override methods IS the failure mode." Current: 59. HarnessProfile presets shipped but withers proliferated alongside (not replaced). **Implication:** WS-2 co-located cleanup should mark redundant withers `@deprecated alias for HarnessProfile.X` and document HarnessProfile as primary API path.
+> **AMENDED 2026-05-29 (CORRECTION 1+2).** Original framing treated method COUNT as the failure mode and prescribed marking redundant withers `@deprecated alias for HarnessProfile.X`. **This was reverted** — it subtracted value from the documented happy path (IDE strikethrough + doc-gen warnings + lint noise) without simplifying code. The failure mode is redundant/confusing API with no canonical path, NOT count. Corrected discipline (see architecture-model §11.2 AMENDED): fluent `.withX()` methods stay first-class + non-deprecated; HarnessProfile presets + `.compose()` are ADDITIVE shortcuts documented as alternatives; each fluent method carries a `@see`/"Composable equivalent:" pointer. Gate `builder-wither-discipline.test.ts` now locks the happy path first-class instead of capping count.
+
+~~Anti-mission #3: "24 named override methods IS the failure mode." Current: 59. HarnessProfile presets shipped but withers proliferated alongside (not replaced). **Implication:** WS-2 co-located cleanup should mark redundant withers `@deprecated alias for HarnessProfile.X` and document HarnessProfile as primary API path.~~ (Superseded by amendment above.)
 
 #### F6 — `reactive-agent.ts` casts are concentrated at internal-handoff sites
 
@@ -640,7 +642,7 @@ Owner: claude main thread + user authorization (release-warden's manifest is GAT
 - Discriminate `AgentEvent` union on `_tag` for narrowing in user code (closes #163 + collapses 13+ casts at cortex/ui)
 - Add `ReactiveAgentInternalView` interface OR re-type `queryGatewayStatus`/`startGateway` receivers in `agent/gateway-runner.ts` to remove the 2× `this as any` casts at reactive-agent.ts:1385,1413 (HS-A-01)
 
-**Phase 3 — Builder anti-mission #3 mitigation:** `builder.ts` has 59 `withX()` methods (2.4× anti-mission threshold). Mark redundant withers `@deprecated alias for HarnessProfile.{lean,balanced,intelligent}()`. Quickstart docs use `HarnessProfile` as primary API path. Withers stay backward-compatible.
+**Phase 3 — Builder API discipline (AMENDED 2026-05-29; original @deprecated approach REVERTED via CORRECTION 1+2):** ~~Mark redundant withers `@deprecated alias for HarnessProfile.{lean,balanced,intelligent}()`.~~ Fluent `.withX()` methods stay first-class + non-deprecated (documented happy path). HarnessProfile presets + `.compose()` are additive shortcuts. Each fluent method carries a `@see`/"Composable equivalent:" pointer to the composable path. Quickstart docs present BOTH the fluent path AND HarnessProfile, framed as complementary. Withers stay fully supported, not deprecated.
 
 **Scope explicitly OUT of WS-2:**
 - Rewriting layer construction logic (each individual layer's internals)
@@ -762,12 +764,12 @@ The refactor's foundation is declared canonical when ALL of the following hold s
 - [ ] Kernel capability dirs form DAG (zero cycles; first-hand walk + CI lint; baseline 3 cycles)
 - [ ] `state.status =` raw assignment sites ≤ **10** (from baseline 27; migrate to `transitionState()`)
 - [ ] Other raw `state.X =` mutations ≤ **10** (from baseline ~33)
-- [ ] `builder.ts` `withX()` method count ≤ **30** (from baseline 59) — others marked `@deprecated alias for HarnessProfile.X`
+- [x] ~~`builder.ts` `withX()` method count ≤ **30**~~ **AMENDED 2026-05-29 (CORRECTION 1+2): count is not the metric.** Instead: documented happy-path withers EXIST + are NOT `@deprecated`; HarnessProfile/`.compose()` additive; gate `builder-wither-discipline.test.ts` locks happy-path first-class. LOC ceiling tests removed (cohesion over line-count).
 - [ ] `HarnessProfilePatch` type derives from CapabilityRegistry entries (no hard-coded boolean fields)
 - [ ] `StrategyFn` input shape ≤ **15 fields** (from baseline 30+; substrate-derived context object)
 - [ ] Every entry in TagMap / ControllerDecision union / CapabilityRegistry has paired emit + consumer (CI lint)
 - [ ] All 35 packages appear in AGENTS.md package tree (CI diff)
-- [ ] No production file >1500 LOC (relaxed from N* §8.1 ≤500; WS-6 target)
+- [ ] ~~No production file >1500 LOC~~ **AMENDED 2026-05-29: LOC ceiling tests removed (CORRECTION 4). File health judged by COHESION, not line count.** WS-6 decomposes only where a genuine cohesive sub-unit exists; a single cohesive unit is left large rather than split to satisfy a number. (LOC stays a soft signal for "look here for cohesion opportunities," never a gate.)
 - [ ] `runner.ts` emit-related line count ≤ **30** (architecture model §12.2a amendment; runner-orchestrated emits legitimate; WS-3 Phase 5a+5b shipped capability-event migrations for verifier-verdict + BudgetSignal)
 
 ### 8.2 Behavioral (test-checkable)
