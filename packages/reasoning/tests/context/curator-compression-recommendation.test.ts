@@ -80,10 +80,10 @@ describe("buildConversationMessages — Issue #119 CompressionRecommendation con
 
     // With a large profile budget and no recommendation, every message is
     // forwarded as-is (modulo provider mapping).
-    expect(out.length).toBe(messages.length);
-    expect(out[0]?.role).toBe("user");
+    expect(out.messages.length).toBe(messages.length);
+    expect(out.messages[0]?.role).toBe("user");
     // Sanity: first user message preserved (the task).
-    expect((out[0] as { role: string; content: string }).content).toContain("original task");
+    expect((out.messages[0] as { role: string; content: string }).content).toContain("original task");
   });
 
   it("INVARIANT 2: fresh recommendation clamps the effective budget", () => {
@@ -105,9 +105,9 @@ describe("buildConversationMessages — Issue #119 CompressionRecommendation con
     // Compaction must have fired — output is fewer messages than the input
     // thread because applyMessageWindowWithCompact replaced older turns with
     // a `[Prior: ...]` summary.
-    expect(out.length).toBeLessThan(messages.length);
+    expect(out.messages.length).toBeLessThan(messages.length);
     // First message must still be the original task (API cache prefix).
-    expect(out[0]?.role).toBe("user");
+    expect(out.messages[0]?.role).toBe("user");
   });
 
   it("INVARIANT 2b: stale recommendation (older than 1 iteration) is ignored", () => {
@@ -126,7 +126,7 @@ describe("buildConversationMessages — Issue #119 CompressionRecommendation con
 
     const out = buildConversationMessages(state, baseInput, baseProfile, stubAdapter);
     // Stale recommendation ignored — all messages forwarded.
-    expect(out.length).toBe(messages.length);
+    expect(out.messages.length).toBe(messages.length);
   });
 
   it("INVARIANT 3: state.messages is unchanged after curator render", () => {

@@ -19,6 +19,7 @@ import type { KernelMessage } from "../kernel/state/kernel-state.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import {
   buildConversationMessages,
+  type CompressionAppliedSidecar,
 } from "../kernel/capabilities/attend/context-utils.js";
 import {
   type ToolElaborationInjectionConfig,
@@ -64,6 +65,13 @@ export interface ContextManagerOutput {
   readonly systemPrompt: string;
   /** The curated conversation message thread for this iteration. */
   readonly messages: LLMMessage[];
+  /**
+   * Sidecar present when a fresh CompressionRecommendation was consumed by
+   * the curator on this build. Carries the data the Effect-context-capable
+   * caller (think.ts) needs to publish the typed `CompressionApplied` event
+   * via EventBus. Issue #119 closure (WS-4 Phase 7).
+   */
+  readonly compressionApplied?: CompressionAppliedSidecar;
 }
 
 /** Optional extras for ContextManager.build(). */
@@ -129,8 +137,11 @@ export const ContextManager = {
     );
 
     let messages: LLMMessage[];
+    let compressionApplied: CompressionAppliedSidecar | undefined;
     if (adapter) {
-      messages = buildConversationMessages(state, input, profile, adapter);
+      const result = buildConversationMessages(state, input, profile, adapter);
+      messages = result.messages;
+      compressionApplied = result.compressionApplied;
     } else {
       // Adapter-less path (tests / tools) — plain conversion, no compaction.
       messages = buildCuratedMessages(state, profile);
@@ -144,7 +155,9 @@ export const ContextManager = {
       }
     }
 
-    return { systemPrompt, messages };
+    return compressionApplied
+      ? { systemPrompt, messages, compressionApplied }
+      : { systemPrompt, messages };
   },
 };
 

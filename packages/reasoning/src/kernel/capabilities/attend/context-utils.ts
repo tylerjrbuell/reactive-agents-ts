@@ -116,6 +116,40 @@ export function buildToolSchemas(
 // ── buildConversationMessages ─────────────────────────────────────────────────
 
 /**
+ * Sidecar carrying the data needed to construct a typed `CompressionApplied`
+ * EventBus event at the Effect-context-capable caller (think.ts via
+ * defaultContextCurator → ContextManager). Returned by
+ * {@link buildConversationMessages} when a fresh CompressionRecommendation
+ * was consumed.
+ *
+ * `taskId` is intentionally NOT carried here — the caller has access to
+ * `state.taskId` and supplies it directly when publishing.
+ *
+ * Issue #119 closure (WS-4 Phase 7) — replaces the prior console.debug
+ * fallback path with a typed publish lifted to the curator caller.
+ */
+export interface CompressionAppliedSidecar {
+  readonly iteration: number;
+  readonly recommendedAtIteration: number;
+  readonly targetTokens: number;
+  readonly actualMessageCount: number;
+  readonly reason: string;
+}
+
+/**
+ * Return value of {@link buildConversationMessages}.
+ *
+ * `compressionApplied` is present iff a fresh `CompressionRecommendation`
+ * was consumed on this call. The caller (defaultContextCurator → think.ts)
+ * uses the sidecar to publish a typed `CompressionApplied` event via
+ * EventBus.
+ */
+export interface BuildConversationMessagesResult {
+  readonly messages: LLMMessage[];
+  readonly compressionApplied?: CompressionAppliedSidecar;
+}
+
+/**
  * Build the conversation message list for this LLM turn.
  *
  * Applies the sliding message window + task framing on the first iteration.
@@ -126,13 +160,18 @@ export function buildToolSchemas(
  * as-is. Distilled facts (observation extractedFact) are surfaced in the
  * system prompt's Prior work / Observations section, so sliding-window
  * compaction is safe without recall hints.
+ *
+ * When a fresh CompressionRecommendation is consumed, the return value
+ * carries a `compressionApplied` sidecar so the Effect-context-capable
+ * caller can publish the typed `CompressionApplied` EventBus event
+ * (see `BuildConversationMessagesResult`).
  */
 export function buildConversationMessages(
   state: KernelState,
   input: KernelInput,
   profile: ContextProfile,
   adapter: ProviderAdapter,
-): LLMMessage[] {
+): BuildConversationMessagesResult {
   // Issue #119 — Curator as sole prompt author. The reactive-observer's
   // compress-messages patch demoted to advisory: it records a
   // CompressionRecommendation on state.meta.pendingCompressionRecommendation.
@@ -155,21 +194,6 @@ export function buildConversationMessages(
   );
   let workingMessages = compactedMessages;
 
-  // Emit advisory compression-applied log when a fresh recommendation was
-  // consumed. event-bus.ts now ships a typed CompressionApplied variant
-  // (2026-05-24) but buildConversationMessages is a pure synchronous helper
-  // that cannot open an Effect context here. Lifting the publish to the
-  // caller (curator.curate() → think.ts) requires returning richer metadata
-  // and updating both call sites — deferred as a separate followup. The
-  // console.debug fallback stays until that refactor lands; recommendation
-  // side IS typed via EventBus already (reactive-observer.ts).
-  if (recFresh && rec !== undefined) {
-    // eslint-disable-next-line no-console
-    console.debug(
-      `[compression-applied] iteration=${state.iteration} target=${rec.targetTokens} actual=${compactedMessages.length} reason="${rec.reason}"`,
-    );
-  }
-
   // taskFraming hook — on first iteration, let adapter annotate the task message
   // to help local models understand the full sequence of steps required.
   if (
@@ -187,5 +211,26 @@ export function buildConversationMessages(
     }
   }
 
-  return (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
+  const messages = (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
+
+  // Issue #119 closure (WS-4 Phase 7) — when a fresh recommendation was
+  // consumed, return a sidecar so the Effect-context-capable caller (think.ts
+  // via defaultContextCurator → ContextManager) can publish the typed
+  // `CompressionApplied` EventBus variant. The prior console.debug fallback
+  // is gone: typed events are the sole audit surface. `actualMessageCount`
+  // is sampled from the rendered thread length (post-window, post-framing)
+  // so observers see the same count the LLM does.
+  if (recFresh && rec !== undefined) {
+    return {
+      messages,
+      compressionApplied: {
+        iteration: state.iteration,
+        recommendedAtIteration: rec.recommendedAtIteration,
+        targetTokens: rec.targetTokens,
+        actualMessageCount: messages.length,
+        reason: rec.reason,
+      },
+    };
+  }
+  return { messages };
 }

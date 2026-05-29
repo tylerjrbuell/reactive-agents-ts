@@ -20,7 +20,7 @@ import {
   buildToolSchemas,
 } from "../attend/context-utils.js";
 import { defaultContextCurator } from "../../../context/context-curator.js";
-import { StreamingTextCallback } from "@reactive-agents/core";
+import { StreamingTextCallback, EventBus } from "@reactive-agents/core";
 import {
   finalAnswerTool,
   shouldShowFinalAnswer,
@@ -421,12 +421,38 @@ export function handleThinking(
     const {
       systemPrompt: systemPromptText,
       messages: conversationMessages,
+      compressionApplied,
     } = defaultContextCurator.curate(state, input, profile, guidance, adapter, {
       availableTools: promptSchemas,
       systemPromptBody: effectiveSystemPrompt,
       toolElaboration: input.toolElaboration,
       includeRecentObservations: profile.recentObservationsLimit ?? 0,
     });
+
+    // ── Issue #119 closure (WS-4 Phase 7) — typed CompressionApplied emit ──
+    // When the curator consumed a fresh CompressionRecommendation, publish
+    // the typed `CompressionApplied` event variant (declared in
+    // @reactive-agents/core event-bus.ts AgentEvent union). This is the
+    // sole audit surface for "recommendation → application" closure;
+    // observers see a recommendation→applied pair correlated by taskId +
+    // recommendedAtIteration. EventBus is resolved via serviceOption so the
+    // emit is a no-op when the observability layer is absent.
+    if (compressionApplied) {
+      const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+      );
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "CompressionApplied",
+          taskId: state.taskId,
+          iteration: compressionApplied.iteration,
+          recommendedAtIteration: compressionApplied.recommendedAtIteration,
+          targetTokens: compressionApplied.targetTokens,
+          actualMessageCount: compressionApplied.actualMessageCount,
+          reason: compressionApplied.reason,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+    }
 
     // ── TextParseDriver: inject format instructions into system prompt ────────
     // When the driver is in text-parse mode (local models that can't reliably emit

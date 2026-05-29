@@ -31,6 +31,7 @@ import type { ContextProfile } from "./context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ObservationResult } from "../types/observation.js";
 import type { ReasoningStep } from "../types/step.js";
+import type { CompressionAppliedSidecar } from "../kernel/capabilities/attend/context-utils.js";
 import {
   ContextManager,
   type ContextManagerOptions,
@@ -58,6 +59,14 @@ export interface Prompt {
    * curator with updated guidance, not mutate the result.)
    */
   readonly messages: LLMMessage[];
+  /**
+   * Sidecar present when this curator invocation consumed a fresh
+   * CompressionRecommendation (Issue #119 / WS-4 Phase 7). The caller
+   * (think.ts) publishes a typed `CompressionApplied` EventBus event from
+   * this payload — moving the audit signal from console.debug onto the
+   * typed observability surface.
+   */
+  readonly compressionApplied?: CompressionAppliedSidecar;
 }
 
 // ─── CuratorOptions ────────────────────────────────────────────────────────────
@@ -147,7 +156,9 @@ export const defaultContextCurator: ContextCurator = {
       ? `${out.systemPrompt}\n\n${obsSection}`
       : out.systemPrompt;
 
-    return { systemPrompt, messages: out.messages };
+    return out.compressionApplied
+      ? { systemPrompt, messages: out.messages, compressionApplied: out.compressionApplied }
+      : { systemPrompt, messages: out.messages };
   },
 };
 
