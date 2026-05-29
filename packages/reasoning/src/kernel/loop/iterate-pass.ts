@@ -62,7 +62,6 @@ import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import {
-  initialKernelState,
   transitionState,
   type KernelState,
   type KernelContext,
@@ -71,7 +70,8 @@ import {
   type ThoughtKernel,
   type KernelHooks,
 } from "../../kernel/state/kernel-state.js";
-import { evaluateStrategySwitch, buildHandoff } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
+import { evaluateStrategySwitch } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
+import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
@@ -534,68 +534,30 @@ export function runIterationPass(
         const maxSwitches = switchCfg?.maxSwitches ?? 1;
         if (pending && switchCfg?.enabled && switchCount < maxSwitches) {
           const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? currentOptions.strategy ?? "unknown";
-          const toStrategy = pending.to;
-          yield* hooks.onStrategySwitched(state, fromStrategy, toStrategy, pending.reason);
-          const handoff = buildHandoff(state, currentInput.task ?? "", fromStrategy, pending.reason, switchCount + 1, currentInput.requiredTools ?? []);
-          const handoffSummary = [
-            `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
-            `Previous strategy: ${handoff.previousStrategy}`,
-            `Steps completed: ${handoff.stepsCompleted}`,
-            `Failure reason: ${handoff.failureReason}`,
-            `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
-            handoff.permanentlyFailedTools.length > 0
-              ? `Permanently unavailable tools (do not retry — synthesize without them): ${handoff.permanentlyFailedTools.join(", ")}`
-              : null,
-            `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
-          ].filter(Boolean).join("\n");
-          switchCount++;
-          triedStrategies.push(toStrategy);
-          currentOptions = { ...options, strategy: toStrategy };
-          state = initialKernelState(currentOptions);
-          // Inject synthetic failure observations so the new strategy immediately
-          // knows which required tools are permanently unavailable.
-          if (handoff.permanentlyFailedTools.length > 0) {
-            const failedSteps = handoff.permanentlyFailedTools.map((toolName) =>
-              makeStep(
-                "observation",
-                `[Carried from prior strategy] Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
-                {
-                  observationResult: {
-                    toolName,
-                    success: false,
-                    displayText: `Tool "${toolName}" permanently unavailable (carried from prior strategy)`,
-                    category: "error" as const,
-                    resultKind: "error" as const,
-                    preserveOnCompaction: false,
-                    // S2.3 — error observations carry framework-generated text only,
-                    // safe to render inline. Mark as trusted with grandfather note.
-                    trustLevel: "trusted" as const,
-                    trustJustification: "grandfather-phase-1",
-                  },
-                },
-              ),
-            );
-            state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
-          }
-          const existingPrior = currentInput.priorContext
-            ? `${currentInput.priorContext}\n\n${handoffSummary}`
-            : handoffSummary;
-          {
-            const failedSet = new Set(handoff.permanentlyFailedTools);
-            currentInput = {
-              ...currentInput,
-              priorContext: existingPrior,
-              requiredTools: failedSet.size > 0
-                ? (currentInput.requiredTools ?? []).filter((t) => !failedSet.has(t))
-                : currentInput.requiredTools,
-            };
-          }
-          currentContext = { ...context, input: currentInput };
-          prevActionCount = 0;
-          requiredToolRedirects = 0;
-          consecutiveStalled = 0;
-          prevArtifactCount = 0;
-          failureRecoveryRedirects = 0;
+          const switchResult = yield* applyStrategySwitch({
+            state,
+            currentInput,
+            context,
+            options,
+            hooks,
+            triedStrategies,
+            switchCount,
+            fromStrategy,
+            toStrategy: pending.to,
+            failureReason: pending.reason,
+          });
+          state = switchResult.state;
+          currentInput = switchResult.currentInput;
+          currentContext = switchResult.currentContext;
+          currentOptions = switchResult.currentOptions;
+          switchCount = switchResult.switchCount;
+          ({
+            prevActionCount,
+            requiredToolRedirects,
+            consecutiveStalled,
+            prevArtifactCount,
+            failureRecoveryRedirects,
+          } = switchResult.resetCounters);
           sync(); return "continue";
         }
         // Switching not enabled or exhausted — deliver what we have
@@ -928,103 +890,30 @@ export function runIterationPass(
 
             if (evaluation.shouldSwitch && evaluation.recommendedStrategy) {
               const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? "unknown";
-              const toStrategy = evaluation.recommendedStrategy;
-
-              // Fire hook
-              yield* hooks.onStrategySwitched(state, fromStrategy, toStrategy, evaluation.reasoning);
-
-              // Build handoff context for the new strategy
-              const handoff = buildHandoff(
+              const switchResult = yield* applyStrategySwitch({
                 state,
-                currentInput.task ?? "",
+                currentInput,
+                context,
+                options,
+                hooks,
+                triedStrategies,
+                switchCount,
                 fromStrategy,
-                loopMsg,
-                switchCount + 1,
-                currentInput.requiredTools ?? [],
-              );
-
-              const handoffSummary = [
-                `Strategy Switch Handoff (switch #${handoff.switchNumber}):`,
-                `Previous strategy: ${handoff.previousStrategy}`,
-                `Steps completed: ${handoff.stepsCompleted}`,
-                `Failure reason: ${handoff.failureReason}`,
-                `Tools called: ${handoff.toolsCalled.join(", ") || "none"}`,
-                handoff.permanentlyFailedTools.length > 0
-                  ? `Permanently unavailable tools (do not retry — synthesize without them): ${handoff.permanentlyFailedTools.join(", ")}`
-                  : null,
-                `Key observations:\n${handoff.keyObservations.join("\n") || "(none)"}`,
-              ].filter(Boolean).join("\n");
-
-              // Re-init state with the new strategy
-              switchCount++;
-              triedStrategies.push(toStrategy);
-
-              currentOptions = {
-                ...options,
-                strategy: toStrategy,
-              };
-
-              // Reset state — fresh iteration count, carry forward toolsUsed
-              state = initialKernelState(currentOptions);
-
-              // Inject synthetic failure observations so the new strategy immediately
-              // knows which required tools are permanently unavailable, without having
-              // to rediscover this through wasted retry iterations.
-              if (handoff.permanentlyFailedTools.length > 0) {
-                const failedSteps = handoff.permanentlyFailedTools.map((toolName) =>
-                  makeStep(
-                    "observation",
-                    `[Carried from prior strategy] Tool "${toolName}" is permanently unavailable — every call failed. Do not retry it; synthesize your answer without this data.`,
-                    {
-                  observationResult: {
-                    toolName,
-                    success: false,
-                    displayText: `Tool "${toolName}" permanently unavailable (carried from prior strategy)`,
-                    category: "error" as const,
-                    resultKind: "error" as const,
-                    preserveOnCompaction: false,
-                    // S2.3 — error observations carry framework-generated text only,
-                    // safe to render inline. Mark as trusted with grandfather note.
-                    trustLevel: "trusted" as const,
-                    trustJustification: "grandfather-phase-1",
-                  },
-                },
-                  ),
-                );
-                state = transitionState(state, { steps: [...state.steps, ...failedSteps] });
-              }
-
-              // Build updated input with handoff context.
-              // Also drop permanently-failed tools from requiredTools — the lane
-              // controller uses this list to decide whether to nudge, and nudging for
-              // a tool that's known to be broken only causes retry loops.
-              const existingPrior = currentInput.priorContext
-                ? `${currentInput.priorContext}\n\n${handoffSummary}`
-                : handoffSummary;
-
-              {
-                const failedSet = new Set(handoff.permanentlyFailedTools);
-                currentInput = {
-                  ...currentInput,
-                  priorContext: existingPrior,
-                  requiredTools: failedSet.size > 0
-                    ? (currentInput.requiredTools ?? []).filter((t) => !failedSet.has(t))
-                    : currentInput.requiredTools,
-                };
-              }
-
-              // Rebuild context with the updated input
-              currentContext = {
-                ...context,
-                input: currentInput,
-              };
-
-              // Reset per-loop tracking
-              prevActionCount = 0;
-              requiredToolRedirects = 0;
-              consecutiveStalled = 0;
-              prevArtifactCount = 0;
-              failureRecoveryRedirects = 0;
+                toStrategy: evaluation.recommendedStrategy,
+                failureReason: loopMsg,
+              });
+              state = switchResult.state;
+              currentInput = switchResult.currentInput;
+              currentContext = switchResult.currentContext;
+              currentOptions = switchResult.currentOptions;
+              switchCount = switchResult.switchCount;
+              ({
+                prevActionCount,
+                requiredToolRedirects,
+                consecutiveStalled,
+                prevArtifactCount,
+                failureRecoveryRedirects,
+              } = switchResult.resetCounters);
 
               // Continue the outer while loop with fresh state
               sync(); return "continue";
