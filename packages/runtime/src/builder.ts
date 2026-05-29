@@ -50,6 +50,11 @@ import {
     applyWithProfile,
     applyWithErrorHandler,
 } from './builder/withers/profile-error.js'
+import {
+    applyWithSystemPrompt,
+    applyWithReasoning,
+    applyWithVerificationStep,
+} from './builder/withers/prompt-reasoning.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -476,9 +481,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withSystemPrompt(prompt: string): this {
-        this._systemPrompt = prompt
-        // Also register as harness transform for Wave B+ pipeline integration
-        return this.withHarness((h) => h.on('prompt.system', () => prompt))
+        return this.withHarness(applyWithSystemPrompt(this, prompt))
     }
 
     // ─── Environment Context ──────────────────────────────────────────────────
@@ -976,10 +979,7 @@ export class ReactiveAgentBuilder {
      *   compatibility.
      */
     withReasoning(options?: ReasoningOptions): this {
-        this._enableReasoning = true
-        if (options) this._reasoningOptions = options
-        if (options?.maxIterations !== undefined)
-            this._maxIterations = options.maxIterations
+        applyWithReasoning(this, options)
         return this
     }
 
@@ -1609,10 +1609,7 @@ export class ReactiveAgentBuilder {
     withVerificationStep(
         config: { mode?: 'reflect' | 'loop'; prompt?: string } = {}
     ): this {
-        this._verificationStep = {
-            mode: config.mode ?? 'reflect',
-            prompt: config.prompt,
-        }
+        applyWithVerificationStep(this, config)
         return this
     }
 
