@@ -37,10 +37,21 @@
 // ~25–40 LOC of imports + helper re-exports. Initial target: 1,300 LOC (must),
 // 1,200 LOC (stretch).
 //
-// Post-Phase-3 empirical landing is honestly measured below. Headroom is
-// intentionally thin so post-Phase-3 drift triggers this ceiling before it
-// accumulates. If a legitimate addition to `executePlanExecute()` orchestration
-// is required, raise CEILING in this file AND add a rationale comment.
+// Post-Phase-3 empirical landing: 1,080 LOC after all three bucket extractions
+// AND cleanup of six now-unused imports (resolveStepReferences,
+// buildStepExecutionPrompt, executeReActKernel, compressToolResult,
+// stripFinalAnswerPrefix, sanitizeToolOutput). Beats both the 1300 must
+// target and the 1200 stretch.
+//
+// Ratified at 1,100 (+20 LOC headroom) per Phase 1/2 lessons-learned: thin
+// headroom catches post-Phase-3 drift before it accumulates. Phase 1 landed
+// at 2,108 / ratified 2,115 (+7); Phase 2 landed at 1,615 / ratified 1,625
+// (+10). Phase 3 lands further below target because plan-execute.ts is
+// code-heavy (78% code share) — extraction yields proportionally more LOC
+// per bucket than JSDoc-dominant files.
+//
+// If a legitimate addition to `executePlanExecute()` orchestration is required,
+// raise CEILING in this file AND add a rationale comment.
 
 import { describe, it, expect } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -52,7 +63,7 @@ const PLAN_EXECUTE_PATH = resolve(
   "packages/reasoning/src/strategies/plan-execute.ts",
 );
 
-const CEILING = 1300;
+const CEILING = 1100;
 
 describe("WS-6 Phase 3 — plan-execute.ts LOC ceiling", () => {
   it(`plan-execute.ts stays ≤ ${CEILING} LOC after helper bucket extraction`, () => {
