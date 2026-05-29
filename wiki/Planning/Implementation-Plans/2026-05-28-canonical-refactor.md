@@ -643,8 +643,8 @@ Owner: kernel-warden. Estimated 2 sessions (Phase 1+2 = session 1; Phase 3+4+5 =
 
 For every declared surface element without paired live emit + consumer: ship the wiring in this WS, OR delete the declaration. Disposition table:
 
-- `@reactive-agents/observe` package (#170): wire one demo consumer in `examples/` + add to umbrella, OR remove from monorepo.
-- 5 unused M12 hooks (K-08): wire or remove (commit by commit).
+- ~~`@reactive-agents/observe` package (#170): wire one demo consumer in `examples/` + add to umbrella, OR remove from monorepo.~~ **✅ DONE 2026-05-29 (commits `7ff68084` RED + `5c6f5fa1` GREEN)** — wired umbrella sub-export + apps/examples/src/observe/otel-export.ts (O29) + bonus extraOptLayer EventBus wiring fix at `runtime.ts:926`.
+- ~~5 unused M12 hooks (K-08): wire or remove (commit by commit).~~ **✅ ALREADY DONE 2026-05-24** — spec premise stale. Per `packages/llm-provider/tests/m12-provider-adapter-hooks.test.ts` header (HEAD): the original 7 numbered M12 hooks were audited 2026-05-24; 6 declarations with zero call sites + zero impls were removed from `ProviderAdapter`; `parseToolCalls` is the surviving numbered hook (wired across all 5 providers via `selectAdapter`). The 7 named ProviderAdapter methods on `localModelAdapter` (systemPromptPatch / taskFraming / toolGuidance / continuationHint / errorRecovery / synthesisPrompt / qualityCheck) all retain ≥1 production call site under `packages/reasoning/src/` (verified-by `grep adapter\\.<hook>` 2026-05-29). No Phase 4 production code required.
 - 4 dead Compose tags (G-9 / #112): wire in capability emit (depends on WS-3 boundaries).
 - `confidenceFloor` killswitch (#160): ship or unship + docs delta.
 - `strategy-switching` registry entry with null liftEvidence (cf-25): gather evidence OR convert to opt-in.
