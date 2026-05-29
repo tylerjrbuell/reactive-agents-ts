@@ -75,6 +75,23 @@ import {
  */
 type ComposableLayer = Layer.Layer<unknown, unknown, unknown>;
 
+/**
+ * Single widening boundary for runtime composition (WS-5d / §8.1).
+ *
+ * Effect-TS `Layer` is invariant in its requirements channel, so the fully
+ * merged runtime layer cannot be assigned to `ComposableLayer`
+ * (`Layer<unknown, unknown, unknown>`) without an explicit widening. This is
+ * the ONE place that widening happens — both `createRuntime` and
+ * `createLightRuntime` route their terminal `Layer.mergeAll(...)` result
+ * through here, so the `as ComposableLayer` assertion lives exactly once.
+ * Pinned by `composable-layer-ceiling.test.ts`.
+ */
+function finalizeComposition<A, E, R>(
+  merged: Layer.Layer<A, E, R>,
+): ComposableLayer {
+  return merged as ComposableLayer;
+}
+
 // ─── Runtime Options ───
 // Hoisted to ./runtime-types.ts (W26-C redo). Re-exported for backward
 // compatibility with builder.ts and external consumers.
@@ -103,10 +120,10 @@ const leanModeVerifier: Verifier = {
  * `createLightRuntime` previously open-coded as ~70-LOC duplicate blocks.
  *
  * Returns a typed `Layer.Layer<ToolService>` (or `null` when tools are
- * disabled) — no `as ComposableLayer` cast inside. The single terminal
- * cast happens at the consuming `Layer.mergeAll(...)` site, which is the
- * WS-5c / §8.1 invariant pinned by
- * `packages/runtime/test/composable-layer-ceiling.test.ts`.
+ * disabled) — no `as ComposableLayer` cast inside. The single widening cast
+ * happens once in `finalizeComposition()`, through which both factories route
+ * their terminal `Layer.mergeAll(...)` result — the WS-5d / §8.1 invariant
+ * pinned by `packages/runtime/test/composable-layer-ceiling.test.ts`.
  *
  * Note: `createLightRuntime` does not honor `mcpServers` (its tools gate
  * is `options.enableTools` only). To preserve that behavior, the caller
@@ -967,43 +984,45 @@ export const createRuntime = (options: RuntimeOptions) => {
       : Layer.empty;
 
   // ── Terminal canonical composition (WS-2 RC-1) ──
-  // Single declarative Layer.mergeAll over mandatory + optional layers; single
-  // erasure cast at the boundary (mirrors createLightRuntime:1061).
-  return Layer.mergeAll(
-    // Mandatory
-    coreLayer,
-    eventBusLayer,
-    observableLlmLayer,
-    memoryLayer,
-    hookLayer,
-    engineLayer,
-    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
-    // Optional (default Layer.empty when feature disabled)
-    guardrailsOptLayer,
-    killSwitchOptLayer,
-    behavioralContractsOptLayer,
-    verificationOptLayer,
-    costTrackingOptLayer,
-    toolsLayer ?? Layer.empty,
-    toolResultCacheOptLayer,
-    experienceLearningOptLayer,
-    memoryConsolidationOptLayer,
-    sessionStoreOptLayer,
-    skillStoreOptLayer,
-    reasoningOptLayer,
-    identityOptLayer,
-    observabilityOptLayer,
-    telemetryOptLayer,
-    loggerTapOptLayer,
-    healthOptLayer,
-    reactiveIntelOptLayer,
-    interactionOptLayer,
-    promptOptLayer,
-    orchestrationOptLayer,
-    a2aOptLayer,
-    gatewayOptLayer,
-    extraOptLayer,
-  ) as ComposableLayer;
+  // Single declarative Layer.mergeAll over mandatory + optional layers; the
+  // erasure cast lives once in finalizeComposition() (WS-5d / §8.1).
+  return finalizeComposition(
+    Layer.mergeAll(
+      // Mandatory
+      coreLayer,
+      eventBusLayer,
+      observableLlmLayer,
+      memoryLayer,
+      hookLayer,
+      engineLayer,
+      CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
+      // Optional (default Layer.empty when feature disabled)
+      guardrailsOptLayer,
+      killSwitchOptLayer,
+      behavioralContractsOptLayer,
+      verificationOptLayer,
+      costTrackingOptLayer,
+      toolsLayer ?? Layer.empty,
+      toolResultCacheOptLayer,
+      experienceLearningOptLayer,
+      memoryConsolidationOptLayer,
+      sessionStoreOptLayer,
+      skillStoreOptLayer,
+      reasoningOptLayer,
+      identityOptLayer,
+      observabilityOptLayer,
+      telemetryOptLayer,
+      loggerTapOptLayer,
+      healthOptLayer,
+      reactiveIntelOptLayer,
+      interactionOptLayer,
+      promptOptLayer,
+      orchestrationOptLayer,
+      a2aOptLayer,
+      gatewayOptLayer,
+      extraOptLayer,
+    ),
+  );
 };
 
 
@@ -1221,23 +1240,26 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     : Layer.empty;
 
   // ── Terminal canonical composition (WS-2 RC-1) ──
-  return Layer.mergeAll(
-    // Mandatory
-    coreLayer,
-    eventBusLayer,
-    llmLayer,
-    memoryLayer,
-    hookLayer,
-    engineLayer,
-    CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
-    // Optional (default Layer.empty when feature disabled)
-    toolsLayer ?? Layer.empty,
-    lightToolResultCacheOptLayer,
-    lightReasoningOptLayer,
-    lightGuardrailsOptLayer,
-    lightCostTrackingOptLayer,
-    lightObservabilityOptLayer,
-  ) as ComposableLayer;
+  // Erasure cast lives once in finalizeComposition() (WS-5d / §8.1).
+  return finalizeComposition(
+    Layer.mergeAll(
+      // Mandatory
+      coreLayer,
+      eventBusLayer,
+      llmLayer,
+      memoryLayer,
+      hookLayer,
+      engineLayer,
+      CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing
+      // Optional (default Layer.empty when feature disabled)
+      toolsLayer ?? Layer.empty,
+      lightToolResultCacheOptLayer,
+      lightReasoningOptLayer,
+      lightGuardrailsOptLayer,
+      lightCostTrackingOptLayer,
+      lightObservabilityOptLayer,
+    ),
+  );
 };
 
 /**
