@@ -67,6 +67,23 @@ import type {
     AgentResult,
 } from './builder/types.js'
 
+/**
+ * Narrow widening for the dynamically-imported `ToolService` tag.
+ *
+ * `@reactive-agents/tools` is loaded via `Effect.promise(() => import(...))`
+ * to avoid a static dependency edge into the tools layer at module-eval time.
+ * The dynamic import returns the tag as `unknown`-shaped at the runtime layer
+ * boundary; this helper concentrates the widening cast in one place so the
+ * three call sites (`dispose`, `registerTool`, `unregisterTool`) share a
+ * single reviewable widening surface.
+ *
+ * See `packages/runtime/test/as-unknown-as-ceiling.test.ts` for the §5.5
+ * anti-regression ceiling that feeds off this consolidation.
+ */
+type ToolServiceTag = import('effect').Context.Tag<any, any>
+const asToolServiceTag = (tag: unknown): ToolServiceTag =>
+    tag as unknown as ToolServiceTag
+
 // ── Class ──
 export class ReactiveAgent {
     constructor(
@@ -195,11 +212,7 @@ export class ReactiveAgent {
                     const toolsMod = yield* Effect.promise(
                         () => import('@reactive-agents/tools')
                     )
-                    const ts =
-                        yield* toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                            any,
-                            any
-                        >
+                    const ts = yield* asToolServiceTag(toolsMod.ToolService)
                     for (const name of serverNames) {
                         yield* (ts as any)
                             .disconnectMCPServer(name)
@@ -338,11 +351,7 @@ export class ReactiveAgent {
                 const toolsMod = yield* Effect.promise(
                     () => import('@reactive-agents/tools')
                 )
-                const ts =
-                    yield* toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                        any,
-                        any
-                    >
+                const ts = yield* asToolServiceTag(toolsMod.ToolService)
                 yield* (ts as any).register(definition, handler)
             })
         )
@@ -367,11 +376,7 @@ export class ReactiveAgent {
                 const toolsMod = yield* Effect.promise(
                     () => import('@reactive-agents/tools')
                 )
-                const ts =
-                    yield* toolsMod.ToolService as unknown as import('effect').Context.Tag<
-                        any,
-                        any
-                    >
+                const ts = yield* asToolServiceTag(toolsMod.ToolService)
                 yield* (ts as any).unregisterTool(name)
             })
         )

@@ -44,36 +44,41 @@ const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 
 // Verified ceiling at WS-5b GREEN (2026-05-29):
-//   • Baseline pre-sweep: 76 (production src + tests under packages/*/src)
-//   • Helpers extracted in this tranche:
+//   • Baseline pre-sweep: 73 (code positions in packages/*/src; raw grep
+//     reports 76 — the 3-line delta is docstring/JSDoc mentions excluded
+//     by the comment-line filter below).
+//   • Helpers extracted in this tranche (each consolidates N casts → 1 helper
+//     cast, leaving the helper itself as the single concentration point —
+//     the ceiling counts include the helper's own cast):
 //       1. asBuilderState (runtime/src/__tests__/_helpers.ts)
 //          — collapses 8 builder-state casts in 2 test files → 1
-//       2. getOriginalTaggedError / setOriginalTaggedError (runtime/src/errors.ts)
-//          — collapses 3 `_originalTaggedError` widenings → 2 (one inside each
-//          helper). Caller sites at 276/299/313 lose their inline casts.
-//          Net: 3 → 2.
+//          Net: -7
+//       2. setOriginalTaggedError / getOriginalTaggedError (runtime/src/errors.ts)
+//          — collapses 3 `_originalTaggedError` widenings (276/299/313) → 2
+//          (one inside each helper). Net: -1
 //       3. asToolServiceTag (runtime/src/reactive-agent.ts)
 //          — collapses 3 identical ToolService dynamic-import widenings → 1
+//          Net: -2
 //       4. asStrategyFn (reasoning/src/services/strategy-registry.ts)
 //          — collapses 2 StrategyFn function-variance widenings → 1
+//          Net: -1
 //
-//   • Total reduction: 76 → 64 (-12, ~16%).
+//   • Total reduction: 73 → 62 (-11, ~15%). Against raw-grep baseline 76 → 65.
 //
 // Residual disposition (top sites, in priority order — all LEGITIMATE):
 //   • packages/runtime-shim/src/database.ts (4)
 //       — Bun/Node Database constructor interop. Dynamic-runtime shim; the
 //       cast is the shim's purpose. Out of scope.
-//   • packages/runtime/src/builder/build-effect/runtime-construction.ts (1)
-//       — baseRuntime → Layer.Layer<unknown, unknown, unknown> widen at the
-//       runtime-factory boundary. Documented rationale in source.
-//   • packages/runtime/src/builder/build-effect/sub-agent-executor.ts (2)
-//       — sub-runtime ToolService import + Layer.Layer<never> widen. Same
-//       pattern as reactive-agent.ts but in a separate sub-agent scope; the
-//       helper extraction would require a cross-file import that buys back
-//       the cleanup. Deferred to a follow-up tranche.
 //   • packages/llm-provider/src/providers/anthropic.ts (3)
 //       — Anthropic SDK module + content-block narrow widening. SDK types
 //       intentionally widen at ingest. Out of scope.
+//   • packages/runtime/src/execution-engine.ts (3)
+//       — ObsLike narrow, Error coercion (`asErr.cause`), Effect closure
+//       widening. Three distinct narrow boundaries; not foldable.
+//   • packages/runtime/src/errors.ts (3)
+//       — 2 inside helpers (setOriginalTaggedError + getOriginalTaggedError —
+//       the §5.5 concentration point) + 1 at site 355 (`Cause.left`
+//       narrowing — proper fix is `Effect.Cause` types).
 //   • packages/llm-provider/src/providers/litellm.ts (2)
 //       — `LLMConfig` lacks litellm-specific endpoint fields; proper fix is
 //       extending the config schema, not a cast helper. Tracked as follow-up.
@@ -84,23 +89,29 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //   • packages/runtime/src/engine/phases/agent-loop/reasoning-harness-hooks.ts (2)
 //       — ReasoningExecuteRequest widening + Effect closure widening. The
 //       Effect closure cast is generator-flow specific; not foldable.
-//   • Long tail (~17 sites across 14 files at 1 each).
+//   • packages/runtime/src/builder/build-effect/sub-agent-executor.ts (2)
+//       — sub-runtime ToolService import + Layer.Layer<never> widen. Same
+//       pattern as reactive-agent.ts in a separate sub-agent scope.
+//   • packages/runtime/src/builder.ts (2)
+//   • packages/benchmarks/src/runner.ts (2)
+//   • Long tail (~16 sites across 16 files at 1 each — verifier closures,
+//     observability tracers, kernel-state widening, etc.).
 //
 // FOLLOW-UPS TO REACH §5.5 "≤40" TARGET
 // -------------------------------------
 //  (a) Expand `AgentEvent` union with channels events       — collapses 2 sites
-//  (b) Extend `LLMConfig` schema with litellm fields        — collapses 2 sites
+//  (b) Extend `LLMConfig` schema with litellm endpoint fields — collapses 2 sites
 //  (c) Sub-agent-executor: import + reuse asToolServiceTag  — collapses 1 site
-//  (d) Investigate reasoning-think `ReasoningExecuteRequest` shape — owner: reasoning
-//  (e) errors.ts site 355 (`Cause.left` narrowing) — use Effect.Cause types — collapses 1
+//  (d) Reasoning-think `ReasoningExecuteRequest` shape (kernel-warden) — 2 sites
+//  (e) errors.ts site 355 (`Cause.left`) — use Effect.Cause types — 1 site
+//  (f) Anthropic SDK content-block: contribute upstream typings or shim layer — 3 sites
+//  (g) Long-tail extractions across 5–7 1-site files
 //
-// Reaching 40 requires (a)–(e) and ~5 more long-tail extractions; each is its
-// own honest piece of work, not a cast sweep. The §5.5 target's "≥50% drop"
-// scoring should re-baseline against the helper-concentrated count (64), not
-// the pre-sweep raw count.
-// RED phase: pinned 1 below current actual (73 after comment-line exclusion)
-// to prove the test wires up. GREEN phase will lower to the post-sweep floor.
-const CEILING = 72;
+// Reaching 40 requires (a)–(g) and is the work of 2–3 additional tranches;
+// each is its own honest piece of structural work, not a cast sweep. The §5.5
+// target's "≥50% drop" scoring should re-baseline against the helper-
+// concentrated count (62) rather than the pre-sweep raw count.
+const CEILING = 62;
 
 interface Hit {
   file: string;

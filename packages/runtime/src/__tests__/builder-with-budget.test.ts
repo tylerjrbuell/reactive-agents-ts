@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { ReactiveAgents, type BudgetLimits } from "../builder.js";
-import type { BuilderRuntimeStateView } from "../builder/build-effect/runtime-construction.js";
+import { asBuilderState } from "./_helpers.js";
 
 /**
  * `.withBudget()` wiring tests.
@@ -47,7 +47,7 @@ describe(".withBudget() builder", () => {
     const builder = ReactiveAgents.create()
       .withProvider("test")
       .withBudget({ costLimit: 0.01 });
-    const state = builder as unknown as BuilderRuntimeStateView;
+    const state = asBuilderState(builder);
     expect(state._budgetLimits).toBeDefined();
     expect(state._budgetLimits?.costLimit).toBe(0.01);
     expect(state._budgetLimits?.tokenLimit).toBeUndefined();
@@ -57,7 +57,7 @@ describe(".withBudget() builder", () => {
     const builder = ReactiveAgents.create()
       .withProvider("test")
       .withBudget({ tokenLimit: 5000, warningRatio: 0.75 });
-    const state = builder as unknown as BuilderRuntimeStateView;
+    const state = asBuilderState(builder);
     expect(state._budgetLimits?.tokenLimit).toBe(5000);
     expect(state._budgetLimits?.warningRatio).toBe(0.75);
     expect(state._budgetLimits?.costLimit).toBeUndefined();
@@ -65,7 +65,7 @@ describe(".withBudget() builder", () => {
 
   it("leaves _budgetLimits undefined when withBudget() is not called (backward compat)", () => {
     const builder = ReactiveAgents.create().withProvider("test").withReasoning();
-    const state = builder as unknown as BuilderRuntimeStateView;
+    const state = asBuilderState(builder);
     expect(state._budgetLimits).toBeUndefined();
   });
 
@@ -75,7 +75,7 @@ describe(".withBudget() builder", () => {
       .withAgentId("budget-chain-test")
       .withBudget({ costLimit: 0.5, tokenLimit: 10000 })
       .withReasoning();
-    const state = builder as unknown as BuilderRuntimeStateView;
+    const state = asBuilderState(builder);
     expect(state._budgetLimits?.costLimit).toBe(0.5);
     expect(state._budgetLimits?.tokenLimit).toBe(10000);
     expect(state._enableReasoning).toBe(true);

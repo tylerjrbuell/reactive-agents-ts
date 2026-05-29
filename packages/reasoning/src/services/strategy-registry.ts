@@ -126,6 +126,19 @@ export class StrategyRegistry extends Context.Tag("StrategyRegistry")<
   }
 >() {}
 
+/**
+ * Cast a strategy executor (whose input type is a narrower
+ * shape, e.g. `DirectInput` or `CodeActionInput`) to the registry's broader
+ * `StrategyFn` signature. The widening is safe because strategy inputs are
+ * structurally compatible at the runtime call site — the registry passes the
+ * full union shape and each strategy reads only the fields it needs.
+ *
+ * Concentrates the narrow widening cast in one place — see
+ * `packages/runtime/test/as-unknown-as-ceiling.test.ts` for the §5.5 anti-
+ * regression ceiling that feeds off this consolidation.
+ */
+const asStrategyFn = <F>(fn: F): StrategyFn => fn as unknown as StrategyFn;
+
 // ─── Live Layer (Phase 1: reactive only) ───
 
 export const StrategyRegistryLive = Layer.effect(
@@ -142,9 +155,9 @@ export const StrategyRegistryLive = Layer.effect(
         ["tree-of-thought", executeTreeOfThought],
         ["adaptive", executeAdaptive],
         /** Single-shot LLM call (W23 step 3 — replaces inline LLM-call path). */
-        ["direct", executeDirect as unknown as StrategyFn],
+        ["direct", asStrategyFn(executeDirect)],
         /** Code generation strategy — LLM writes an IIFE, runs in Worker sandbox. */
-        ["code-action", executeCodeAction as unknown as StrategyFn],
+        ["code-action", asStrategyFn(executeCodeAction)],
       ]),
     );
 
