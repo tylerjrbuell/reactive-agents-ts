@@ -19,7 +19,7 @@ import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 import type {
   ToolElaborationInjectionConfig,
   NextMovesPlanningConfig,
-} from "../../kernel/capabilities/act/tool-gating.js";
+} from "../../kernel/capabilities/decide/tool-gating.js";
 import type { HarnessPipeline, KernelStateLike } from "@reactive-agents/core";
 
 // ── Cross-package state bridge ───────────────────────────────────────────────
