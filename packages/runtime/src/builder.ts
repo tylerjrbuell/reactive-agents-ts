@@ -34,6 +34,10 @@ import {
     applyWithLeanHarness,
     applyWithMemoryConsolidation,
 } from './builder/withers/memory.js'
+import {
+    applyWithModel,
+    applyWithBudget,
+} from './builder/withers/model-budget.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -607,17 +611,7 @@ export class ReactiveAgentBuilder {
     withModel(model: string): this
     withModel(params: ModelParams): this
     withModel(modelOrParams: string | ModelParams): this {
-        if (typeof modelOrParams === 'string') {
-            this._model = modelOrParams
-        } else {
-            this._model = modelOrParams.model
-            if (modelOrParams.thinking !== undefined)
-                this._thinking = modelOrParams.thinking
-            if (modelOrParams.temperature !== undefined)
-                this._temperature = modelOrParams.temperature
-            if (modelOrParams.maxTokens !== undefined)
-                this._maxTokens = modelOrParams.maxTokens
-        }
+        applyWithModel(this, modelOrParams)
         return this
     }
 
@@ -764,16 +758,7 @@ export class ReactiveAgentBuilder {
      * @throws When neither `tokenLimit` nor `costLimit` is supplied.
      */
     withBudget(limits: BudgetLimits): this {
-        if (limits.tokenLimit === undefined && limits.costLimit === undefined) {
-            throw new Error(
-                'withBudget() requires at least one of `tokenLimit` or `costLimit`.',
-            )
-        }
-        this._budgetLimits = {
-            ...(limits.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
-            ...(limits.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
-            ...(limits.warningRatio !== undefined ? { warningRatio: limits.warningRatio } : {}),
-        }
+        applyWithBudget(this, limits)
         return this
     }
 
