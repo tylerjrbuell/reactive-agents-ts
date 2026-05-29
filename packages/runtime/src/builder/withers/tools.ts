@@ -6,10 +6,9 @@
  * `.withRequiredTools()`, `.withMCP()`, `.withMetaTools()`.
  */
 import type { ReactiveAgentBuilder } from "../../builder.js";
-import type { ToolsOptions, MCPServerConfig } from "../../builder.js";
-import type {
-  ShellExecuteConfig,
-} from "@reactive-agents/tools";
+import type { ToolsOptions } from "../../builder.js";
+import type { MCPServerConfig } from "../../runtime.js";
+import type { ShellExecuteConfig } from "@reactive-agents/tools";
 import type { DocumentSpec } from "../../context-ingestion.js";
 import type { MetaToolsConfig } from "../../types.js";
 import { asBuilderState } from "./_state.js";
