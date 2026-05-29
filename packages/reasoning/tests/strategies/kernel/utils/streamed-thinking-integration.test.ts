@@ -20,7 +20,7 @@ import {
   stripThinking,
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../../../../src/kernel/capabilities/reason/stream-parser.js";
+} from "../../../../src/kernel/utils/stream-parser.js";
 
 // Helper: simulate the kernel's `fullContent +=` accumulation pattern.
 function accumulate(chunks: readonly string[]): string {

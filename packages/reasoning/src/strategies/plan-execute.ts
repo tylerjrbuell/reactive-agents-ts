@@ -50,7 +50,7 @@ import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../kernel/capabilities/reason/stream-parser.js";
+} from "../kernel/utils/stream-parser.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";

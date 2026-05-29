@@ -31,7 +31,7 @@ import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../reason/stream-parser.js";
+} from "../../utils/stream-parser.js";
 import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";

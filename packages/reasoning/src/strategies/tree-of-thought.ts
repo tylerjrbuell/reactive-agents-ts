@@ -21,7 +21,7 @@ import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../kernel/capabilities/reason/stream-parser.js";
+} from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";

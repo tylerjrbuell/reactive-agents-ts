@@ -43,7 +43,7 @@ import { detectLoop, checkAllToolsCalled } from "../../kernel/capabilities/refle
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
-} from "../../kernel/capabilities/reason/stream-parser.js";
+} from "../../kernel/utils/stream-parser.js";
 // Sprint 3.3 — Sole Termination Authority: dispatcher-early-stop now flows
 // through the Arbitrator so the veto applies (catches "framework giving
 // up due to maxIterations approach with tool failures" as exit-failure).

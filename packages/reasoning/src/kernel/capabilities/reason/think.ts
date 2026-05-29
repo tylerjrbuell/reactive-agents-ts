@@ -59,7 +59,7 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
-import { extractThinking, rescueFromThinking } from "../reason/stream-parser.js";
+import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import {
