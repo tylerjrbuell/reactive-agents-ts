@@ -38,6 +38,7 @@ import {
 import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/requirement-state.js";
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
+import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
 import {
   validateOutputFormat,
@@ -229,6 +230,25 @@ export function runKernel(
       state = transitionState(state, {
         meta: { ...state.meta, profileMaxTokens: profile.maxTokens },
       });
+    }
+    // PostCondition spine — derive the run's state-grounded success conditions
+    // ONCE here (deterministic, NO LLM, NO fs) and store on state.meta so BOTH
+    // gates read the SAME set: the Arbitrator's mid-loop steer gate (via
+    // arbitrationContextFromState) and the terminal hard-stop in terminate().
+    // Flag-gated: only seeded when RA_POST_CONDITIONS=1, so flag-off runs keep
+    // serialization byte-identical (meta.postConditions stays absent). Derived
+    // from effectiveInput.requiredTools (resolved below as `requiredTools`) +
+    // the task text; conservative — empty set falls back to the prose verdict.
+    if (process.env.RA_POST_CONDITIONS === "1") {
+      const derived = deriveConditions(
+        effectiveInput.task,
+        effectiveInput.requiredTools ?? [],
+      );
+      if (derived.length > 0) {
+        state = transitionState(state, {
+          meta: { ...state.meta, postConditions: derived },
+        });
+      }
     }
 
     // Mutable scratchpad mirror — synced from state.scratchpad (ReadonlyMap) after each kernel step.

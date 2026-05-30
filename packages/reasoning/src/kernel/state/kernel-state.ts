@@ -283,6 +283,26 @@ export interface KernelMeta {
     readonly warningRatio?: number;
   };
 
+  // ── PostCondition spine — derived-once state-grounded success authority ──────
+  /**
+   * Deterministic post-conditions derived ONCE at kernel-start from the task +
+   * requiredTools (no LLM, no fs). Seeded by runner.ts ONLY when
+   * `RA_POST_CONDITIONS=1` — absent on flag-off runs so serialization stays
+   * byte-identical. Both gates read this SINGLE stored set:
+   *   - the Arbitrator's mid-loop steer gate (`applyPostConditionGate`), via
+   *     `arbitrationContextFromState` → `ArbitrationContext.postConditions`;
+   *   - the terminal hard-stop in `kernel/loop/terminate.ts`, which demotes any
+   *     imperative termination (stall/harness-deliverable, loop-graceful,
+   *     oracle-forced, …) to `status:"failed"` when a stored condition is unmet
+   *     by the ledger — so an exhausted/bypassed stall cannot deliver a false
+   *     success.
+   *
+   * Structural type — declared loosely here to avoid a runtime cycle with the
+   * verify capability; the canonical type is `PostCondition[]` from
+   * `kernel/capabilities/verify/post-conditions.ts`.
+   */
+  readonly postConditions?: readonly import("../capabilities/verify/post-conditions.js").PostCondition[];
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────

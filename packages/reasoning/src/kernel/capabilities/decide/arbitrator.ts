@@ -632,6 +632,15 @@ export interface ArbitrationContext {
    * pre-guard becomes a no-op (backward-compatible).
    */
   readonly budget?: BudgetSignal;
+  /**
+   * PostCondition spine — the run's state-grounded success conditions, derived
+   * ONCE at kernel-start and stored on `state.meta.postConditions`. Surfaced
+   * here by `arbitrationContextFromState` so the steer gate reads the SAME set
+   * the terminal gate (`kernel/loop/terminate.ts`) reads — no double-derivation
+   * divergence. When absent (direct callers / pre-stored runs),
+   * `applyPostConditionGate` falls back to deriving from `task` + `requiredTools`.
+   */
+  readonly postConditions?: readonly import("../verify/post-conditions.js").PostCondition[];
 }
 
 // ─── Veto evaluator (Sprint 3.3 — uses controllerDecisionLog patterns) ───────
@@ -776,6 +785,64 @@ function synthesisQualityRetry(
 // Late binding to avoid cycle ambiguity in tooling. Both files compile fine
 // either way; this keeps the import block at the top tidy.
 import { validateGeneralizedGrounding as validateGroundingForRetry } from "../verify/evidence-grounding.js";
+import { deriveConditions } from "../verify/derive-conditions.js";
+import { verify as verifyPostConditions, describeUnmet } from "../verify/post-conditions.js";
+
+// ─── PostCondition spine — deterministic state-grounded success authority ─────
+//
+// Gated behind RA_POST_CONDITIONS (default OFF = byte-identical to today).
+// When ON and the run has non-empty derived post-conditions, a would-be
+// exit-success Verdict is demoted to a "post-condition-steer" escalation when
+// any condition is unmet: the kernel CANNOT report success while a required
+// deliverable was never produced. The prose verdict becomes a quality signal,
+// not the success authority (canon: tau-bench, DSPy assertions).
+//
+// Sentinel `nextStrategy = "post-condition-steer"` is distinct from
+// "retry-with-feedback": applyTermination rides the steering text on
+// pendingGuidance.errorRecovery WITHOUT setting escalateTo (no strategy switch)
+// and WITHOUT touching synthesisRetryCount (bounded by the existing iteration /
+// budget caps, not the 1-shot synthesis cap).
+const POST_CONDITION_STEER = "post-condition-steer";
+
+function postConditionsEnabled(): boolean {
+  return process.env.RA_POST_CONDITIONS === "1";
+}
+
+/**
+ * Post-verdict override (single chokepoint). Runs AFTER the switch resolves a
+ * Verdict so it covers ALL five exit-success producers (agent-final-answer,
+ * fast-path-completed, loop-detected, controller-early-stop, oracle exit)
+ * without editing each branch. Purely additive:
+ *   - only fires on action === "exit-success"
+ *   - only when the flag is ON and conditions are non-empty
+ *   - exit-failure / escalate / continue verdicts pass through untouched
+ */
+function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verdict {
+  if (verdict.action !== "exit-success") return verdict;
+  if (!postConditionsEnabled()) return verdict;
+
+  // DRY — prefer the run's derived-once stored set (threaded via
+  // arbitrationContextFromState from state.meta.postConditions) so the steer
+  // gate and the terminal gate (terminate.ts) read the SAME conditions. Fall
+  // back to deriving here only for direct callers (tests / pre-stored runs)
+  // that didn't thread postConditions through the context.
+  const conditions =
+    ctx.postConditions ?? deriveConditions(ctx.task, ctx.requiredTools);
+  if (conditions.length === 0) return verdict; // fall back to prose, as today
+
+  const result = verifyPostConditions(conditions, ctx.steps, {
+    output: verdict.output,
+  });
+  if (result.unmet.length === 0) return verdict; // state-grounded success
+
+  // Unmet post-conditions: refuse success, steer and continue (bounded by the
+  // existing iteration / budget caps via the standard loop re-entry).
+  return {
+    action: "escalate",
+    nextStrategy: POST_CONDITION_STEER,
+    reason: describeUnmet(result.unmet),
+  };
+}
 
 /**
  * The Arbitrator's resolution function. Takes a TerminationIntent (what a
@@ -799,6 +866,14 @@ import { validateGeneralizedGrounding as validateGroundingForRetry } from "../ve
  * Bounded by ctx.synthesisRetryCount (default cap: 1).
  */
 export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): Verdict {
+  const verdict = arbitrateInner(intent, ctx);
+  // Post-verdict PostCondition gate (single chokepoint, env-gated, additive).
+  // No-op unless RA_POST_CONDITIONS=1 AND the verdict is exit-success AND the
+  // run has non-empty derived post-conditions with an unmet member.
+  return applyPostConditionGate(verdict, ctx);
+}
+
+function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Verdict {
   // ── Budget pre-intent guard (Issue #128, North Star v5.0 Pillar 6) ─────────
   // When the BudgetSignal reports `exceeded`, terminate immediately as a
   // failure regardless of intent.kind. Budget enforcement is a kernel-level
@@ -1056,6 +1131,23 @@ export function applyTermination(
       // iteration AND increment the retry counter so we don't loop forever.
       // For other escalations (legacy strategy switch), preserve the
       // existing behavior.
+      // PostCondition spine — state-grounded steer. Ride the steering text on
+      // pendingGuidance.errorRecovery so think.ts surfaces it next iteration.
+      // Do NOT set escalateTo (no strategy switch) and do NOT touch
+      // synthesisRetryCount (bounded by the standard iteration / budget caps,
+      // not the synthesis 1-shot cap). Status stays "thinking" → loop re-enters.
+      if (verdict.nextStrategy === "post-condition-steer") {
+        return transitionState(state, {
+          pendingGuidance: {
+            ...(state.pendingGuidance ?? { requiredToolsPending: [], loopDetected: false }),
+            errorRecovery: verdict.reason,
+          },
+          meta: {
+            ...state.meta,
+            ...(extraMeta ?? {}),
+          },
+        });
+      }
       if (verdict.nextStrategy === "retry-with-feedback") {
         const currentRetry =
           ((state.meta as Record<string, unknown>).synthesisRetryCount as number | undefined) ?? 0;
@@ -1082,6 +1174,15 @@ export function applyTermination(
           ...(extraMeta ?? {}),
         },
       });
+    }
+    default: {
+      // Exhaustiveness: Verdict.action is a closed 4-variant union, all
+      // handled above. A new action value would otherwise fall through to
+      // `undefined` and crash the kernel. Mirror the file's `arbitrate`
+      // exhaustive-default pattern; the no-op tail is to return state unchanged.
+      const _exhaust: never = verdict;
+      void _exhaust;
+      return state;
     }
   }
 }
@@ -1204,5 +1305,11 @@ export function arbitrationContextFromState(
     scratchpad: state.scratchpad,
     // Issue #128 — surface BudgetSignal when limits were declared.
     ...(budgetSignal ? { budget: budgetSignal } : {}),
+    // PostCondition spine — surface the derived-once stored set so the steer
+    // gate reads the SAME conditions as the terminal gate (DRY, no
+    // double-derivation). Absent on flag-off runs (runner.ts never seeds it).
+    ...(state.meta.postConditions
+      ? { postConditions: state.meta.postConditions }
+      : {}),
   };
 }

@@ -39,6 +39,9 @@
 // Output: wiki/Research/Harness-Reports/task-quality-gate-<timestamp>.json + console summary
 
 import { ReactiveAgents } from "reactive-agents";
+import type { ReasoningStep } from "@reactive-agents/reasoning";
+import { deriveConditions } from "../../../../packages/reasoning/src/kernel/capabilities/verify/derive-conditions";
+import { verify } from "../../../../packages/reasoning/src/kernel/capabilities/verify/post-conditions";
 import { Effect } from "effect";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -155,7 +158,7 @@ interface TaskResult {
   readonly output: string;
   readonly quality: QualityScore;
   readonly runIndex: number;              // 0-based run index within the N-run set
-  readonly postConditionsMet: null;       // Phase 1 stub — wired to real data in Phase 1
+  readonly postConditionsMet: boolean | null; // null = no conditions derivable (T1); true = all met; false = unmet
 }
 
 // ── Multi-run aggregates ─────────────────────────────────────────────────────
@@ -172,7 +175,9 @@ interface TaskRunSet {
   // T3 strict: how many runs had exact correct top-3-by-comments ids
   readonly t3StrictCorrectCount: number | null;  // null for non-T3 tasks
   readonly t3StrictCorrectLabel: string | null;  // e.g. "2/3" or null
-  readonly postConditionsMet: null;       // Phase 1 stub
+  // postCond: k/n of runs where all conditions were met; null/"—" if no conditions derivable
+  readonly postCondMetCount: number | null;       // null if all runs had no derivable conditions
+  readonly postCondLabel: string;                 // "k/n" or "—"
 }
 
 interface TaskDef {
@@ -520,6 +525,28 @@ async function runTask(task: TaskDef, runIndex: number): Promise<TaskResult> {
 
   const quality = task.score(output, toolCalls);
 
+  // ── PostCondition spine (Phase 1) ──────────────────────────────────────────
+  // requiredTools = tool names this task exposes (T1 exposes none → []).
+  const requiredTools = task.tools.map((t) => t.definition.name);
+  const conditions = deriveConditions(task.task, requiredTools);
+
+  // Narrow the loosely-typed metadata steps to ReasoningStep[]. The runtime
+  // metadata field uses a structurally weaker type (no branded id, no timestamp)
+  // but verify()/requirement-state re-narrow every field they touch via their
+  // own internal `as ...Like` guards — they never access content/timestamp/id.
+  // Double-cast through unknown is required (TS2352: types don't sufficiently
+  // overlap); no `any` introduced.
+  const rawSteps = md.reasoningSteps ?? [];
+  const steps = rawSteps as unknown as readonly ReasoningStep[];
+
+  let postConditionsMet: boolean | null;
+  if (conditions.length === 0) {
+    postConditionsMet = null; // no derivable conditions — honest n/a
+  } else {
+    const { unmet } = verify(conditions, steps, { output });
+    postConditionsMet = unmet.length === 0;
+  }
+
   console.log(`Output (${output.length} chars):`);
   console.log(output.slice(0, 600));
   if (output.length > 600) console.log(`...(truncated)`);
@@ -533,6 +560,7 @@ async function runTask(task: TaskDef, runIndex: number): Promise<TaskResult> {
   if (quality.strictCorrect !== undefined) {
     console.log(`  strictCorrect:  ${quality.strictCorrect ? "YES ✓" : "NO ✗"} (T3 exact top-3 ids)`);
   }
+  console.log(`  postCond:       ${postConditionsMet === null ? "— (no conditions)" : postConditionsMet ? "met ✓" : "UNMET ✗"} [${conditions.length} condition(s)]`);
   console.log(`Notes: ${quality.notes.join("; ")}`);
   console.log(`Wall: ${(wallMs / 1000).toFixed(1)}s | Tokens: ${tokensUsed} (in:${inputTokens} out:${outputTokens}) | Steps: ${stepsCount}`);
 
@@ -549,7 +577,7 @@ async function runTask(task: TaskDef, runIndex: number): Promise<TaskResult> {
     output,
     quality,
     runIndex,
-    postConditionsMet: null, // Phase 1 stub
+    postConditionsMet,
   };
 }
 
@@ -572,6 +600,16 @@ function aggregateRuns(task: TaskDef, runs: readonly TaskResult[]): TaskRunSet {
     t3StrictCorrectLabel = `${t3StrictCorrectCount}/${runs.length}`;
   }
 
+  // postCond aggregation: if every run has null (no conditions), label is "—";
+  // otherwise count runs where postConditionsMet === true.
+  const nonNullPostConds = runs.filter((r) => r.postConditionsMet !== null);
+  const postCondMetCount = nonNullPostConds.length > 0
+    ? nonNullPostConds.filter((r) => r.postConditionsMet === true).length
+    : null;
+  const postCondLabel = postCondMetCount === null
+    ? "—"
+    : `${postCondMetCount}/${runs.length}`;
+
   return {
     taskId: task.id,
     taskDescription: task.description,
@@ -584,7 +622,8 @@ function aggregateRuns(task: TaskDef, runs: readonly TaskResult[]): TaskRunSet {
     compositeSpread,
     t3StrictCorrectCount,
     t3StrictCorrectLabel,
-    postConditionsMet: null, // Phase 1 stub
+    postCondMetCount,
+    postCondLabel,
   };
 }
 
@@ -651,7 +690,7 @@ async function main(): Promise<void> {
         `${(lastRun.quality.completeness * 100).toFixed(0)}%`.padEnd(6),
         `${(lastRun.quality.noFabrication * 100).toFixed(0)}%`.padEnd(8),
         (rs.t3StrictCorrectLabel ?? "—").padEnd(10),
-        "—".padEnd(9),   // postConditionsMet stub
+        rs.postCondLabel.padEnd(9),
         recallLabel,
       ].join(" | "),
     );

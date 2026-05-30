@@ -6,6 +6,10 @@
 // stamps as SATISFIED while the file was never written (spot-test: success:true,
 // no commits.md — the verifier lied). The completion gate must NOT accept
 // "satisfied" while a required tool is still uncalled.
+//
+// Phase 1 Step 4: Also tests the generalized PostCondition spine gate
+// (RA_POST_CONDITIONS=1), which checks ArtifactProduced conditions derived
+// from the task description in addition to the required-tools gate.
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
@@ -89,4 +93,98 @@ describe("reflexion required-tools completion gate", () => {
     );
     expect(result.status).toBe("completed");
   }, 20000);
+});
+
+// ── Phase 1 Step 4: PostCondition spine gate (RA_POST_CONDITIONS=1) ──────────
+
+describe("reflexion PostCondition spine gate (RA_POST_CONDITIONS=1)", () => {
+  // Save and restore RA_POST_CONDITIONS around these tests to avoid leaking
+  // into the required-tools tests above or any tests that run after.
+  const PRIOR_PC = process.env.RA_POST_CONDITIONS;
+  beforeAll(() => { process.env.RA_POST_CONDITIONS = "1"; });
+  afterAll(() => {
+    if (PRIOR_PC === undefined) delete process.env.RA_POST_CONDITIONS;
+    else process.env.RA_POST_CONDITIONS = PRIOR_PC;
+  });
+
+  it(
+    "does NOT report success when ArtifactProduced condition is unmet (file-write never called) with RA_POST_CONDITIONS=1",
+    async () => {
+      // Task: derive-conditions will extract ArtifactProduced('./report.md') from
+      // this description (write verb + file noun + path in parens).
+      // The mock LLM never emits a tool call, so file-write never fires.
+      // With RA_POST_CONDITIONS=1 the spine gate should block "satisfied".
+      const layer = await makeMockLayer();
+      const result = await Effect.runPromise(
+        executeReflexion({
+          taskDescription:
+            "Write a summary report and save it as a markdown file (./report.md).",
+          taskType: "general",
+          memoryContext: "",
+          availableTools: ["file-write"],
+          availableToolSchemas: [
+            {
+              name: "file-write",
+              description: "Write a file",
+              parameters: [
+                { name: "path", type: "string", description: "path", required: true },
+                { name: "content", type: "string", description: "content", required: true },
+              ],
+            },
+          ],
+          // No requiredTools — this test isolates the ArtifactProduced spine gate,
+          // not the existing required-tools B gate. The task description alone drives
+          // the condition derivation when RA_POST_CONDITIONS=1.
+          config: defaultReasoningConfig,
+        } as any).pipe(Effect.provide(layer)),
+      );
+      // file-write never fired → ArtifactProduced('./report.md') unmet
+      // → spine gate must block "satisfied" → status must NOT be "completed".
+      expect(result.status).not.toBe("completed");
+    },
+    20000,
+  );
+
+  it(
+    "reports success normally when RA_POST_CONDITIONS is off (flag-off = existing required-tools-only gate)",
+    async () => {
+      // Same task as above but flag off — no ArtifactProduced check.
+      // No requiredTools either → existing B gate doesn't fire → SATISFIED
+      // critique from mock → should complete normally.
+      const PRIOR = process.env.RA_POST_CONDITIONS;
+      delete process.env.RA_POST_CONDITIONS;
+      try {
+        const layer = await makeMockLayer();
+        const result = await Effect.runPromise(
+          executeReflexion({
+            taskDescription:
+              "Write a summary report and save it as a markdown file (./report.md).",
+            taskType: "general",
+            memoryContext: "",
+            availableTools: ["file-write"],
+            availableToolSchemas: [
+              {
+                name: "file-write",
+                description: "Write a file",
+                parameters: [
+                  { name: "path", type: "string", description: "path", required: true },
+                  { name: "content", type: "string", description: "content", required: true },
+                ],
+              },
+            ],
+            // No requiredTools — flag-off means the spine gate is inactive and only
+            // the narrow required-tools B gate runs (which is a no-op here).
+            config: defaultReasoningConfig,
+          } as any).pipe(Effect.provide(layer)),
+        );
+        // With RA_POST_CONDITIONS off and no requiredTools, critique SATISFIED
+        // should pass through → "completed".
+        expect(result.status).toBe("completed");
+      } finally {
+        if (PRIOR === undefined) delete process.env.RA_POST_CONDITIONS;
+        else process.env.RA_POST_CONDITIONS = PRIOR;
+      }
+    },
+    20000,
+  );
 });

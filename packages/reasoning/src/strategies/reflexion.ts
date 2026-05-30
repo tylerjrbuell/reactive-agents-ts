@@ -34,6 +34,12 @@ import {
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
 import { getMissingRequiredToolsFromSteps } from "../kernel/capabilities/verify/requirement-state.js";
+import { deriveConditions } from "../kernel/capabilities/verify/derive-conditions.js";
+import {
+  verify,
+  describeUnmet,
+  type PostCondition,
+} from "../kernel/capabilities/verify/post-conditions.js";
 import {
   enforceQualityGate,
   collectToolData,
@@ -300,7 +306,9 @@ export const executeReflexion = (
             );
           }
 
-          // Completion gate: the critique judges OUTPUT TEXT quality only — it
+          // ── Completion gate ─────────────────────────────────────────────────
+          //
+          // Gate A (always): the critique judges OUTPUT TEXT quality only — it
           // cannot see whether a required side-effect tool (e.g. file-write)
           // actually fired. A task that says "create a markdown file" produces a
           // good-looking summary the critique rubber-stamps as SATISFIED while the
@@ -311,7 +319,38 @@ export const executeReflexion = (
             s.allSideEffectSteps,
             input.requiredTools ?? [],
           );
-          if (isSatisfied(critique) && missingRequired.length === 0) {
+
+          // Gate B (RA_POST_CONDITIONS=1, ADDITIVE): generalized PostCondition
+          // spine — checks artifact deliverables derived from the task description
+          // IN ADDITION to the required-tools check above. Default OFF so the
+          // behaviour when the flag is absent is byte-identical to today.
+          const postConditionsEnabled =
+            process.env.RA_POST_CONDITIONS === "1";
+          let spineUnmet: readonly PostCondition[] = [];
+          if (postConditionsEnabled && isSatisfied(critique)) {
+            const conditions = deriveConditions(
+              input.taskDescription,
+              input.requiredTools ?? [],
+            );
+            if (conditions.length > 0) {
+              const verifyResult = verify(
+                conditions,
+                s.allSideEffectSteps,
+                { output: s.response },
+              );
+              spineUnmet = verifyResult.unmet;
+              if (spineUnmet.length > 0) {
+                yield* emitLog({
+                  _tag: "warning",
+                  message: `Critique reported SATISFIED but PostCondition spine has unmet conditions: ${describeUnmet(spineUnmet)} — forcing improve pass`,
+                  context: "reflexion",
+                  timestamp: new Date(),
+                });
+              }
+            }
+          }
+
+          if (isSatisfied(critique) && missingRequired.length === 0 && spineUnmet.length === 0) {
             return terminateWith(
               { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
               { kind: "satisfied", detail: `after ${attempt} attempts` },

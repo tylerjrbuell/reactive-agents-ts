@@ -20,6 +20,10 @@
 import type { Rationale } from "@reactive-agents/core";
 import type { KernelMeta, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
+import {
+  verify as verifyPostConditions,
+  describeUnmet,
+} from "../capabilities/verify/post-conditions.js";
 
 /**
  * Enumerable union of kernel-emitted termination reason codes (R23 surface).
@@ -70,15 +74,84 @@ export type TerminateOptions = {
   readonly rationale?: Rationale;
 };
 
+function postConditionsEnabled(): boolean {
+  return process.env.RA_POST_CONDITIONS === "1";
+}
+
+/**
+ * Terminal PostCondition hard-stop — the success authority at the single-owner
+ * imperative gateway (the brief's "verifier.ts + terminate.ts" wiring).
+ *
+ * The Arbitrator's `applyPostConditionGate` STEERS mid-loop: a would-be
+ * exit-success with unmet conditions is converted to a re-entry escalation so
+ * the model gets another shot. But the imperative paths that route through
+ * `terminate()` (stall/harness-deliverable, loop-graceful, oracle-forced,
+ * required-tool-nudge-exhausted) bypass the Arbitrator's verdict — an exhausted
+ * stall can force-deliver around the gated verdict and report a FALSE success
+ * (cogito GitHub-MCP: result.success=true with ./commits.md never written).
+ *
+ * This gate closes that hole: with `RA_POST_CONDITIONS=1` AND a non-empty
+ * stored condition set AND a ledger that leaves a condition unmet, the terminal
+ * state resolves to `status:"failed"` (honest partial failure) regardless of
+ * `opts.reason` — even though output may already be assembled. `status:"failed"`
+ * is the EXISTING channel that surfaces `result.success === false` (same one
+ * max_iterations / kernel_error / the §9.0 verifier-rejection use). The
+ * transitionState invariant nulls the output on failure, matching the §9.0
+ * precedent.
+ *
+ * Reads the conditions DERIVED ONCE at run-start and stored on
+ * `state.meta.postConditions` — the SAME set the Arbitrator's steer gate reads.
+ * NO LLM, NO fs: `verifyPostConditions` is a pure ledger scan.
+ *
+ * Default (flag off) or no stored conditions → byte-identical pass-through to
+ * the original done-transition below.
+ */
+function applyTerminalPostConditionGate(
+  state: KernelState,
+  opts: TerminateOptions,
+): KernelState | null {
+  if (!postConditionsEnabled()) return null;
+  const conditions = state.meta.postConditions;
+  if (!conditions || conditions.length === 0) return null;
+
+  const result = verifyPostConditions(conditions, state.steps, {
+    output: opts.output,
+  });
+  if (result.unmet.length === 0) return null; // state-grounded success — proceed
+
+  // Unmet post-conditions at a forced/imperative termination: refuse success.
+  // The run cannot honestly report a delivered success while a required
+  // deliverable was never produced. status:"failed" → result.success=false.
+  return transitionState(state, {
+    status: "failed" as const,
+    error:
+      `Post-condition(s) unmet at termination (terminatedBy=${opts.reason}): ` +
+      describeUnmet(result.unmet),
+    meta: {
+      ...state.meta,
+      terminatedBy: opts.reason,
+      previousTerminatedBy: state.meta.terminatedBy,
+      ...(opts.rationale ? { terminationRationale: opts.rationale } : {}),
+      ...(opts.extraMeta ?? {}),
+    },
+  });
+}
+
 /**
  * Transition the kernel to `status: "done"` with `terminatedBy` and `output`
  * recorded. Single-owner gateway for all imperative termination paths.
  *
  * The Arbitrator's verdict-driven exit-success branch is the only sanctioned
  * caller outside this helper — see `kernel/capabilities/decide/arbitrator.ts`.
+ *
+ * Terminal PostCondition authority (RA_POST_CONDITIONS=1): before recording a
+ * "done" transition, an unmet stored post-condition demotes the terminal state
+ * to "failed" (honest failure) — see `applyTerminalPostConditionGate`.
  */
-export const terminate = (state: KernelState, opts: TerminateOptions): KernelState =>
-  transitionState(state, {
+export const terminate = (state: KernelState, opts: TerminateOptions): KernelState => {
+  const failed = applyTerminalPostConditionGate(state, opts);
+  if (failed) return failed;
+  return transitionState(state, {
     status: "done" as const,
     output: opts.output,
     meta: {
@@ -88,3 +161,4 @@ export const terminate = (state: KernelState, opts: TerminateOptions): KernelSta
       ...(opts.extraMeta ?? {}),
     },
   });
+};
