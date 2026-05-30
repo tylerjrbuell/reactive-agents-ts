@@ -91,16 +91,25 @@ Full design: [[2026-05-30-recall-redesign-automatic-rehydration]]. Research-refi
   fixture, cross-tier (incl. a genuine sub-7B local model — NOT cogito:3b, it runs
   away; use llama3.2/qwen3.5). Same rigor as Phase 1 (RED tests + live gate + advisor).
 
-## Sequencing
-1. **Spike 1: recall** (this initiative's head; supersedes the Phase-3 gate when B wins).
-2. **Audit pass:** read `find`/`scratchpad`/`discover-tools`/`context-status`/
-   `completion-gaps`/`brief` against the rubric → KEEP/REDESIGN/REMOVE/MERGE verdicts.
-3. **Spike 2..n:** execute the highest-leverage verdicts (likely: merge
-   pulse+context-status; remove completion-gaps in favor of the PostCondition spine;
-   evaluate discover-tools against a stable tool set).
-4. **Cross-cutting: "mask, don't remove"** — also the canon answer to Phase-4
-   tool-stability (lazy-disclosure churn). Fold Phase 4 into this initiative: a
-   stable resident tool set + state-machine masking, not dynamic prune.
+## Sequencing (REORDERED — curation is the root)
+**Root-cause update:** recall is a *symptom* of over-aggressive context curation — RA
+crushes the **current** tool result to 600–4000 chars before the model synthesizes
+from it, then offers `recall` to fetch back what it discarded. Fix the curation and
+recall is largely unnecessary. Full design: [[2026-05-30-context-curation-architecture]].
+
+1. **Spike 1 = CONTEXT CURATION (the root).** Age-aware, window-scaled curation: keep
+   the current/recent tool result FULL, compress only aged results to reversible
+   pointers, auto-re-hydrate by focus. First change = stop crushing the current result
+   + scale budget to window (fixes sonnet's 600-char truncation loop). See the curation spec.
+2. **Recall removal + auto-rehydration** — folds in as the downstream consequence of #1
+   (the curator owns the reversible store; no model-facing recall, no invented keys).
+   Supersedes the Phase-3 gate.
+3. **Meta-tool audit (later, if needed):** `find`/`scratchpad`/`discover-tools`/
+   `context-status`/`completion-gaps`/`brief` vs the rubric. Likely: merge pulse+context-
+   status; remove completion-gaps in favor of the PostCondition spine; discover-tools
+   obviated by a stable set.
+4. **Cross-cutting "mask, don't remove"** (Phase-4 tool-stability) and **Phase-2
+   recitation** ride this architecture (stable resident tool set + recency-span goal state).
 
 ## Connection to the convergence plan
 This initiative subsumes Phase-4 (tool-set stability) and supersedes the Phase-3
