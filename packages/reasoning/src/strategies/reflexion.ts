@@ -33,6 +33,7 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
+import { getMissingRequiredToolsFromSteps } from "../kernel/capabilities/verify/requirement-state.js";
 import {
   enforceQualityGate,
   collectToolData,
@@ -299,11 +300,30 @@ export const executeReflexion = (
             );
           }
 
-          if (isSatisfied(critique)) {
+          // Completion gate: the critique judges OUTPUT TEXT quality only — it
+          // cannot see whether a required side-effect tool (e.g. file-write)
+          // actually fired. A task that says "create a markdown file" produces a
+          // good-looking summary the critique rubber-stamps as SATISFIED while the
+          // file was never written. Never accept "satisfied" while a required tool
+          // is still uncalled — force another improve pass to complete the action.
+          // Scoped to non-empty requiredTools so no-required tasks are unchanged.
+          const missingRequired = getMissingRequiredToolsFromSteps(
+            s.allSideEffectSteps,
+            input.requiredTools ?? [],
+          );
+          if (isSatisfied(critique) && missingRequired.length === 0) {
             return terminateWith(
               { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
               { kind: "satisfied", detail: `after ${attempt} attempts` },
             );
+          }
+          if (isSatisfied(critique) && missingRequired.length > 0) {
+            yield* emitLog({
+              _tag: "warning",
+              message: `Critique reported SATISFIED but required tools not yet called: ${missingRequired.join(", ")} — forcing improve pass`,
+              context: "reflexion",
+              timestamp: new Date(),
+            });
           }
 
           const updatedCritiques = [...s.previousCritiques, critique];
