@@ -92,6 +92,10 @@ interface PlanExecuteInput {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Classifier-relevant tools — visible/usable but not gate-enforced. Forwarded
+   *  to each per-step ReAct kernel so lazy-disclosure pruning keeps planned
+   *  MCP/user tools visible (see reflexion / spot-test GitHub-MCP regression). */
+  readonly relevantTools?: readonly string[];
   /** Per-tool minimum call counts from the classifier (e.g. { "web-search": 4 }). */
   readonly requiredToolQuantities?: Readonly<Record<string, number>>;
   /** Max redirects when required tools are missing (default: 2) */

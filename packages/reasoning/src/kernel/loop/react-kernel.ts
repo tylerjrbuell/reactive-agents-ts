@@ -165,6 +165,11 @@ export const executeReActKernel = (
       sessionId: input.sessionId,
       blockedTools: input.blockedTools,
       requiredTools: input.requiredTools,
+      // Forward classifier-relevant tools so the kernel's lazy-disclosure prune
+      // (required+relevant+used+discovered+meta) keeps MCP/user tools visible.
+      // Without this, plan-execute's per-step ReAct kernel pruned every non-meta
+      // tool — see reflexion / spot-test GitHub-MCP regression.
+      relevantTools: input.relevantTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       strictToolDependencyChain: input.strictToolDependencyChain,
       metaTools: input.metaTools,

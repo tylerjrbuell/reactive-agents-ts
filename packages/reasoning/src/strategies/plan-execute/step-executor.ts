@@ -72,6 +72,9 @@ export interface StepExecutorInput {
   readonly agentId?: string;
   readonly sessionId?: string;
   readonly requiredTools?: readonly string[];
+  /** Classifier-relevant tools — forwarded to each per-step kernel so lazy-
+   *  disclosure pruning keeps planned MCP/user tools visible. */
+  readonly relevantTools?: readonly string[];
   readonly maxRequiredToolRetries?: number;
   readonly modelId?: string;
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
@@ -327,6 +330,7 @@ export function executeStep(
     agentId: input.agentId,
     sessionId: input.sessionId,
     requiredTools: input.requiredTools,
+    relevantTools: input.relevantTools,
     maxRequiredToolRetries: input.maxRequiredToolRetries,
     modelId: input.modelId,
     exitOnAllToolsCalled: true,

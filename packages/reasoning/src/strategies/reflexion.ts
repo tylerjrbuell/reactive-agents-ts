@@ -66,6 +66,12 @@ interface ReflexionInput {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Classifier-relevant tools — visible/usable in the prompt but not gate-enforced.
+   *  MUST be forwarded to the kernel pass: under lazy tool disclosure the kernel's
+   *  per-iteration visible set = required + relevant + used + discovered + meta. If
+   *  relevant is dropped, MCP/user tools are pruned and the model is left blind
+   *  (only meta-tools visible) — see spot-test GitHub-MCP regression. */
+  readonly relevantTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Critiques from prior reflexion runs on similar tasks — populated from episodic memory */
@@ -143,6 +149,7 @@ export const executeReflexion = (
       agentId: input.agentId,
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
+      relevantTools: input.relevantTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       synthesisConfig: input.synthesisConfig,
       metaTools: input.metaTools,
@@ -336,6 +343,7 @@ export const executeReflexion = (
             sessionId: input.sessionId,
             blockedTools,
             requiredTools: input.requiredTools,
+            relevantTools: input.relevantTools,
             maxRequiredToolRetries: input.maxRequiredToolRetries,
             synthesisConfig: input.synthesisConfig,
             metaTools: input.metaTools,

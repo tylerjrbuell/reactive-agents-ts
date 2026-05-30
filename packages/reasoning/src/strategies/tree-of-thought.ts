@@ -79,6 +79,11 @@ interface TreeOfThoughtInput {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Classifier-relevant tools — visible/usable but not gate-enforced. MUST be
+   *  forwarded to each kernel pass; under lazy tool disclosure the kernel prunes
+   *  any tool not in required+relevant+used+discovered+meta, leaving the model
+   *  blind to MCP/user tools (see reflexion / spot-test GitHub-MCP regression). */
+  readonly relevantTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Model identifier for routing/entropy scoring */
@@ -191,6 +196,7 @@ export const executeTreeOfThought = (
         agentId: input.agentId,
         sessionId: input.sessionId,
         requiredTools: input.requiredTools,
+        relevantTools: input.relevantTools,
         maxRequiredToolRetries: input.maxRequiredToolRetries,
         synthesisConfig: input.synthesisConfig,
         metaTools: input.metaTools,
@@ -611,6 +617,7 @@ export const executeTreeOfThought = (
       agentId: input.agentId,
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
+      relevantTools: input.relevantTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       synthesisConfig: input.synthesisConfig,
       metaTools: input.metaTools,
