@@ -1,0 +1,242 @@
+[
+  {
+    "id": 48336233,
+    "title": "Anthropic surpasses OpenAI to become most valuable AI startup",
+    "score": 58,
+    "by": "Bolat14",
+    "descendants": 34,
+    "url": "https://qazinform.com/news/anthropic-surpasses-openai-to-become-worlds-most-valuable-ai-startup"
+  },
+  {
+    "id": 48334515,
+    "title": "Pandoc Templates",
+    "score": 203,
+    "by": "ankitg12",
+    "descendants": 22,
+    "url": "https://pandoc-templates.org/"
+  },
+  {
+    "id": 48334048,
+    "title": "Zig: Build System Reworked",
+    "score": 189,
+    "by": "tosh",
+    "descendants": 96,
+    "url": "https://ziglang.org/devlog/2026/#2026-05-26"
+  },
+  {
+    "id": 48334854,
+    "title": "Openrsync: An implementation of rsync, by the OpenBSD team",
+    "score": 68,
+    "by": "sph",
+    "descendants": 32,
+    "url": "https://github.com/kristapsdz/openrsync"
+  },
+  {
+    "id": 48334710,
+    "title": "Leo's first encyclical attacks technological messianism",
+    "score": 70,
+    "by": "1vuio0pswjnm7",
+    "descendants": 48,
+    "url": "https://www.economist.com/europe/2026/05/28/leos-first-encyclical-attacks-technological-messianism"
+  },
+  {
+    "id": 48335135,
+    "title": "Proposed new US funding rules: We can cancel any grant at any time",
+    "score": 173,
+    "by": "mhalle",
+    "descendants": 114,
+    "url": "https://arstechnica.com/science/2026/05/the-office-of-management-and-budget-tries-again-to-cripple-us-science/"
+  },
+  {
+    "id": 48298912,
+    "title": "IXI's autofocusing lenses are almost ready to replace multifocal glasses",
+    "score": 39,
+    "by": "amichail",
+    "descendants": 10,
+    "url": "https://www.engadget.com/wearables/ixis-autofocusing-lenses-multifocal-glasses-ces-2026-212608427.html"
+  },
+  {
+    "id": 48334949,
+    "title": "Show HN: Helios – what plug-in solar could generate for any address in Britain",
+    "score": 39,
+    "by": "ruaraidh",
+    "descendants": 7,
+    "url": "https://helios.southlondonscientific.com/"
+  },
+  {
+    "id": 48286745,
+    "title": "Navier-Stokes fluid simulation explained with Godot game engine",
+    "score": 15,
+    "by": "myzek",
+    "descendants": 5,
+    "url": "https://myzopotamia.dev/navier-stokes-fluid-simulation-explained-with-godot"
+  },
+  {
+    "id": 48281772,
+    "title": "What Happened to the Locusts?",
+    "score": 82,
+    "by": "explosion-s",
+    "descendants": 20,
+    "url": "https://explosion-scratch.github.io/locusts/"
+  },
+  {
+    "id": 48335640,
+    "title": "Vibe Coding Is Not Engineering",
+    "score": 14,
+    "by": "jhevans",
+    "descendants": 8,
+    "url": "https://phroneses.com/articles/build/notes/vibe-coding-is-not-engineering.html"
+  },
+  {
+    "id": 48326802,
+    "title": "SQLite is all you need for durable workflows",
+    "score": 599,
+    "by": "tomasol",
+    "descendants": 307,
+    "url": "https://obeli.sk/blog/sqlite-is-all-you-need-for-durable-workflows/"
+  },
+  {
+    "id": 48335388,
+    "title": "Corporate America Is Starting to Ration AI as Cost Skyrockets",
+    "score": 56,
+    "by": "1vuio0pswjnm7",
+    "descendants": 45,
+    "url": "https://www.wsj.com/tech/ai/corporate-america-is-starting-to-ration-ai-as-cost-skyrockets-1eb99d7a"
+  },
+  {
+    "id": 48333820,
+    "title": "Danish pension fund excludes SpaceX citing governance and valuation",
+    "score": 323,
+    "by": "vrganj",
+    "descendants": 261,
+    "url": "https://www.reuters.com/legal/transactional/danish-pension-fund-excludes-spacex-citing-governance-valuation-2026-05-29/"
+  },
+  {
+    "id": 48279499,
+    "title": "Floor and Ceil versus Denormals on CPU and GPU",
+    "score": 27,
+    "by": "ibobev",
+    "descendants": 4,
+    "url": "https://asawicki.info/news_1802_floor_and_ceil_versus_denormals_on_cpu_and_gpu"
+  },
+  {
+    "id": 48325340,
+    "title": "Notes from the Mistral AI Now Summit",
+    "score": 405,
+    "by": "vnglst",
+    "descendants": 176,
+    "url": "https://koenvangilst.nl/lab/mistral-ai-now-summit"
+  },
+  {
+    "id": 48284494,
+    "title": "Snowboard Kids 2 is 100% Decompiled",
+    "score": 242,
+    "by": "GaggiX",
+    "descendants": 98,
+    "url": "https://blog.chrislewis.au/snowboard-kids-2-is-100-decompiled/"
+  },
+  {
+    "id": 48283410,
+    "title": "Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer",
+    "score": 190,
+    "by": "rented_mule",
+    "descendants": 51,
+    "url": "https://blog.prusa3d.com/our-new-open-source-colormix-model-in-prusaslicer-and-easyprint_136079/"
+  },
+  {
+    "id": 48333440,
+    "title": "Macsurf, \"modern\" web browser for macOS 9",
+    "score": 33,
+    "by": "gattilorenz",
+    "descendants": 4,
+    "url": "https://github.com/mplsllc/macsurf"
+  },
+  {
+    "id": 48330436,
+    "title": "MCP is dead?",
+    "score": 299,
+    "by": "nadis",
+    "descendants": 290,
+    "url": "https://www.quandri.io/engineering-blog/mcp-is-dead"
+  },
+  {
+    "id": 48324712,
+    "title": "The dead economy theory",
+    "score": 1108,
+    "by": "WillDaSilva",
+    "descendants": 1245,
+    "url": "https://www.owenmcgrann.com/p/the-dead-economy-theory"
+  },
+  {
+    "id": 48328405,
+    "title": "The Last Technical Interview",
+    "score": 153,
+    "by": "headalgorithm",
+    "descendants": 124,
+    "url": "https://steve-yegge.medium.com/the-last-technical-interview-bc13ddcf4564"
+  },
+  {
+    "id": 48323869,
+    "title": "It's hard to justify buying a Framework 12",
+    "score": 339,
+    "by": "watermelon0",
+    "descendants": 542,
+    "url": "https://www.jeffgeerling.com/blog/2026/its-hard-to-justify-framework-12/"
+  },
+  {
+    "id": 48327962,
+    "title": "Shift will clean homes for free to train future robots",
+    "score": 159,
+    "by": "evilsimon",
+    "descendants": 219,
+    "url": "https://www.theverge.com/ai-artificial-intelligence/939765/ai-training-data-startup-shift-free-cleaning"
+  },
+  {
+    "id": 48335442,
+    "title": "Adding Linux support back for the BASIC (free) version of Vivado",
+    "score": 30,
+    "by": "hasheddan",
+    "descendants": 7,
+    "url": "https://adaptivesupport.amd.com/s/question/0D5Pd00001aT5IcKAK/adding-linux-support-back-for-the-basic-free-version-of-vivado?language=en_US"
+  },
+  {
+    "id": 48336312,
+    "title": "Memory decline after menopause linked to loss of estrogen production in brain",
+    "score": 4,
+    "by": "gmays",
+    "descendants": 0,
+    "url": "https://news.northwestern.edu/stories/2026/05/memory-decline-after-menopause-linked-to-loss-of-estrogen-production-in-brain-tissue"
+  },
+  {
+    "id": 48303623,
+    "title": "What It Takes to Preserve Floppy Disks",
+    "score": 74,
+    "by": "pseudolus",
+    "descendants": 16,
+    "url": "https://spectrum.ieee.org/floppy-disk-data-preservation-archives"
+  },
+  {
+    "id": 48321631,
+    "title": "Is AI causing a repeat of frontend’s lost decade?",
+    "score": 384,
+    "by": "xyzal",
+    "descendants": 318,
+    "url": "https://mastrojs.github.io/blog/2026-05-23-is-AI-causing-a-repeat-of-frontends-lost-decade/"
+  },
+  {
+    "id": 48325306,
+    "title": "Liquid AI reveals 8B-A1B MoE trained on 38T",
+    "score": 211,
+    "by": "simjnd",
+    "descendants": 80,
+    "url": "https://www.liquid.ai/blog/lfm2-5-8b-a1b"
+  },
+  {
+    "id": 48323992,
+    "title": "Bijou64: A variable-length integer encoding",
+    "score": 242,
+    "by": "justinweiss",
+    "descendants": 82,
+    "url": "https://www.inkandswitch.com/tangents/bijou64/"
+  }
+]
