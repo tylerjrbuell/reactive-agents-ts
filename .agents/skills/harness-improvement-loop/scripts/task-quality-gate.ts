@@ -484,7 +484,15 @@ async function runTask(task: TaskDef, runIndex: number): Promise<TaskResult> {
   if (process.env.TASK_GATE_NO_MEMORY !== "1") {
     builder.withMemory();
   }
-  builder.withReasoning();
+  // TASK_GATE_OBS ablation arm (Phase 3): "false" disables per-tool-result
+  // observation-fact extraction (the extractObservationFacts LLM call); "true"
+  // forces it; unset = framework default (auto: on for local/mid tier).
+  const obsEnv = process.env.TASK_GATE_OBS;
+  const observationSummary: boolean | "auto" | undefined =
+    obsEnv === "false" ? false : obsEnv === "true" ? true : undefined;
+  builder.withReasoning(
+    observationSummary === undefined ? undefined : { observationSummary },
+  );
 
   // Opt in to model calibration loading. Set TASK_GATE_CALIBRATION=skip to
   // disable for control-arm probes.

@@ -36,6 +36,8 @@ import {
   guardQualityCheck,
   guardDiminishingReturns,
   guardEvidenceGrounding,
+  filterRecallByOverflow,
+  recallGateEnabled,
 } from "./think-guards.js";
 
 import type { ToolSchema } from "../attend/tool-formatting.js";
@@ -333,6 +335,32 @@ export function handleThinking(
       includeRecentObservations: profile.recentObservationsLimit ?? 0,
     });
 
+    // ── Inc 1: recall overflow gate (tier-aware context architecture) ─────────
+    // recall is only usable when a >4000-char tool result was truncated and its
+    // storedKey is surfaced in THIS iteration's window. Below the inline cap the
+    // full data is already inline and no key exists — advertising recall there
+    // lures weak models into BLIND recall with invented keys (trace 01KSV58K:
+    // recall("hn_posts") on a 3928-char inline result → {"found":false}). Gate on
+    // the TRUE post-window messages (conversationMessages), not the all-time
+    // scratchpad — a key that scrolls out of the window is unrecallable.
+    // Calibration may force-enable for models measured as recall-native.
+    //
+    // DEFAULT-ON (opt-out via RA_RECALL_GATE=0) — cleared the project default-on
+    // rule by the Phase-3 cross-tier ablation (ablation-warden, fixture-pinned
+    // N=3, report: wiki/Research/Harness-Reports/phase3-ablation-2026-05-30.md):
+    // gpt-4o-mini pass^k 2/5→5/5, composite +14.7pp, tokens −31.1%, recall-smells
+    // 5→0; cogito tokens −11.2%, +0.9pp, recall-smells 2→0; zero cross-tier
+    // divergence. The blind-recall lure (weak models calling recall() with invented
+    // keys on inline data — recall-as-file-write class) is eliminated.
+    // CAVEAT: MCP array/object data uses several recall-pointer marker formats; a
+    // cross-tier MCP-data ablation is a Phase-4 follow-up before declaring the gate
+    // universal — until then the HN-synthesis/inline-data proof is what justifies
+    // the default. Calibration may force-enable for models measured as recall-native.
+    const recallForceOn = input.calibration?.observationHandling === "uses-recall";
+    const gatedToolSchemas = recallGateEnabled()
+      ? filterRecallByOverflow(filteredToolSchemas, conversationMessages, recallForceOn)
+      : filteredToolSchemas;
+
     // ── Issue #119 closure (WS-4 Phase 7) — typed CompressionApplied emit ──
     // When the curator consumed a fresh CompressionRecommendation, publish
     // the typed `CompressionApplied` event variant (declared in
@@ -371,7 +399,7 @@ export function handleThinking(
     const canInjectDriverInstructions =
       profile.toolSchemaDetail !== "names-only" && profile.toolSchemaDetail !== "names-and-types";
     const driverInstructions = canInjectDriverInstructions
-      ? context.toolCallingDriver.buildPromptInstructions(filteredToolSchemas)
+      ? context.toolCallingDriver.buildPromptInstructions(gatedToolSchemas)
       : "";
 
     // ── Decision Rationale (gated on tool availability) ──────────────────────
@@ -386,7 +414,7 @@ export function handleThinking(
     // capital): RA 485 tok vs Mastra 50 tok for "Paris". Rationale block
     // accounted for ~250 of the 435-tok gap. Gating restores parity on
     // tasks where rationale was never going to be emitted anyway.
-    const hasReachableTools = filteredToolSchemas.length > 0;
+    const hasReachableTools = gatedToolSchemas.length > 0;
     const rationaleInstructions = hasReachableTools
       ? [
           "## Decision Rationale (MANDATORY — every tool call)",
@@ -417,7 +445,7 @@ export function handleThinking(
       frontier: 4000,
     };
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
-    const llmTools = filteredToolSchemas.map((ts) => ({
+    const llmTools = gatedToolSchemas.map((ts) => ({
       name: ts.name,
       description: ts.description,
       inputSchema: {

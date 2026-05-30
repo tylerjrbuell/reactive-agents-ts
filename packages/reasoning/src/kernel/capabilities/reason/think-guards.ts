@@ -464,3 +464,74 @@ export function guardEvidenceGrounding(
     meta: { ...state.meta, evidenceGroundingDone: true },
   });
 }
+
+// ── Recall overflow gate (Inc 1 — tier-aware context architecture) ───────────
+//
+// recall is only ever USABLE when a >4000-char tool result was truncated in the
+// conversation thread and its storedKey was surfaced to the model. Below the
+// inline cap (TOOL_RESULT_INLINE_CAP = 4000) the full data is already inline and
+// NO key is surfaced — so advertising recall there lures weak models into BLIND
+// recall calls with invented keys (trace 01KSV58K: recall("hn_posts") on a
+// 3928-char inline result → {"found":false}). This gate hides recall from the
+// model-visible tool set unless a usable key is present in the CURRENT window.
+//
+// The gate is scoped to the WINDOW (not the all-time scratchpad): message-window
+// compaction leaves no recall pointer, so a key that scrolls out of the window is
+// unrecallable — surfacing recall after it is gone would reintroduce blind recall.
+
+/**
+ * Matches ANY harness-surfaced recall key pointer inside a tool_result. The
+ * harness writes several truncation/overflow markers depending on data shape —
+ * all share the `recall("<key>"...)` prefix:
+ *   - conversation-assembly:118  `recall("k", full: true)`     (inline-cap overflow)
+ *   - tool-formatting:294/376    `recall("k", arrayStart: …)`  (array / commit data)
+ *   - tool-formatting:410/437    `recall("k", start: 0, …)`    (object / CLI output)
+ *   - context-curator:231        `recall("k")`                 (per-observation cap)
+ * Matching the prefix (not one specific arg) keeps the gate fail-safe: when a key
+ * is genuinely surfaced in ANY format, recall stays callable. Inline (≤cap) tool
+ * results carry NO `recall(` marker, so they are still correctly gated out.
+ */
+const SURFACED_RECALL_KEY = /recall\("[^"]+"/;
+
+/**
+ * True iff some message in the current window surfaces a usable recall key
+ * (a truncated/overflowed tool result carrying a `recall("<key>"…)` pointer in
+ * any of its formats). Only `tool_result` content can surface a key — an
+ * assistant turn merely mentioning recall does not count.
+ */
+export function recallKeyVisibleInWindow(
+  windowMessages: readonly { readonly role: string; readonly content: unknown }[],
+): boolean {
+  return windowMessages.some(
+    (m) =>
+      m.role === "tool_result" &&
+      typeof m.content === "string" &&
+      SURFACED_RECALL_KEY.test(m.content),
+  );
+}
+
+/**
+ * Remove `recall` from a model-visible tool schema set unless it is actually
+ * usable this iteration — i.e. a usable key is surfaced in the window, or
+ * calibration force-enables it (`observationHandling === "uses-recall"`).
+ * No-op when recall is not present.
+ */
+export function filterRecallByOverflow<T extends { readonly name: string }>(
+  schemas: readonly T[],
+  windowMessages: readonly { readonly role: string; readonly content: unknown }[],
+  forceRecall = false,
+): readonly T[] {
+  if (!schemas.some((s) => s.name === "recall")) return schemas;
+  if (forceRecall || recallKeyVisibleInWindow(windowMessages)) return schemas;
+  return schemas.filter((s) => s.name !== "recall");
+}
+
+/**
+ * Whether the recall-overflow gate is active for this run. DEFAULT-ON per the
+ * Phase-3 cross-tier ablation (wiki/Research/Harness-Reports/phase3-ablation-2026-05-30.md):
+ * opt-out only via `RA_RECALL_GATE=0`. Extracted as a named seam so the
+ * default-on / opt-out behavior is directly testable.
+ */
+export const recallGateEnabled = (
+  env: NodeJS.ProcessEnv = process.env,
+): boolean => env.RA_RECALL_GATE !== "0";
