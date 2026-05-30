@@ -10,6 +10,23 @@ research:
 
 # Canonical Agentic Convergence — Implementation Plan
 
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development`
+> (recommended) or `superpowers:executing-plans` to implement this plan
+> phase-by-phase. Each phase is one subagent dispatch. Steps use checkbox (`- [ ]`)
+> syntax. **STANDING GATE: no phase is complete on unit-green alone — each ends with
+> a cross-tier `pass^k` live run + `rax:diagnose` trace + advisor() before commit.**
+
+**Architecture:** A single mechanical **post-condition set** (derived
+deterministically, no LLM) becomes the success authority (state-grounded done),
+the progress ledger (recited into recency), and the pulse self-check — built on
+the existing composable kernel + two-record model. Each workstream wires existing
+systems and is proven on real models cross-tier before it lands.
+
+**Tech Stack:** TypeScript (strict), Effect-TS, Bun 1.3.10, turbo, bun:test,
+`@reactive-agents/trace` + `rax:diagnose`.
+
+---
+
 ## Goal
 Bring reactive-agents' agentic core to a converged, canonical design so agents —
 **including local models** — complete complex multi-step, multi-tool tasks with
