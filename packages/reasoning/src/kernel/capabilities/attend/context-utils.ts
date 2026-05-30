@@ -12,6 +12,7 @@ import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider"
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
+import { applyAgeAwareCuration, curationAgeAware } from "../attend/tool-formatting.js";
 import type { KernelState, KernelMessage, KernelInput } from "../../../kernel/state/kernel-state.js";
 import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
@@ -187,8 +188,20 @@ export function buildConversationMessages(
   const recFresh = rec !== undefined && state.iteration - rec.recommendedAtIteration <= 1;
   const effectiveBudget = recFresh ? Math.min(profileBudget, rec.targetTokens) : profileBudget;
 
+  // Spike 1 (curation ROOT) — age-aware tool-result curation. OPT-IN via
+  // RA_CURATION_AGEAWARE=1; default OFF = byte-identical (this block skipped).
+  // When ON, the single most-recent tool_result (K=1) is rehydrated FULL from
+  // the scratchpad up to a window-scaled ceiling (the synthesis target), and
+  // AGED tool_results are recompressed to preview + their existing reversible
+  // storedKey pointer. Runs on state.messages (storedKey still intact, before
+  // toProviderMessage strips it) and BEFORE windowing so applyMessageWindow-
+  // WithCompact keeps its tier-adaptive recent-turns-full guarantee on top.
+  const curatedMessages = curationAgeAware()
+    ? applyAgeAwareCuration(state.messages, state.scratchpad, profile, 1)
+    : state.messages;
+
   const compactedMessages = applyMessageWindowWithCompact(
-    state.messages,
+    curatedMessages,
     profile.tier ?? "mid",
     effectiveBudget,
   );

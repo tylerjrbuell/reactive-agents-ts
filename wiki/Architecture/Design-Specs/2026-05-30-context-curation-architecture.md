@@ -25,16 +25,26 @@ concrete deliverable). The harness's job is to **get out of the way** and interv
 known-good algorithms; don't invent machinery the model must reason around.
 
 ## The current failure (root, evidence-backed)
-RA compresses **every tool result the moment it is produced, before the model sees it
-this turn** (`act/tool-execution.ts` → the `tool_result` message content is the
-compressed preview; the full payload is pulled OUT to a recall key `_tool_result_N`).
-Char budgets (`context-profile.ts`): default 4000/8, mid 1200/5, large 800, **frontier
-600/3**.
+> **Mechanism correction (Spike-1 build, kernel-warden):** the *produce-time*
+> `compressToolResult` budgets in `context-profile.ts` (600–4000) shape the `steps[]`
+> observation record, NOT primarily the model-visible message. The model-visible
+> `tool_result` MESSAGE is rebuilt in `act/conversation-assembly.ts` (~106-128), which
+> rehydrates each result from the scratchpad to full **up to a FLAT
+> `TOOL_RESULT_INLINE_CAP = 4000` chars** — applied to **every** result regardless of
+> age or the model's window size. So the real age-blind/window-blind knob is the **4000
+> inline cap**, not the 600 produce-time budget. (The earlier "frontier sees 600 chars"
+> framing was imprecise — it sees up to 4000; the root holds.)
 
-- The model synthesizes from a **600–4000-char preview**, not the data → low
+RA caps **every** model-visible tool result at a flat **4000 chars**, recency-blind and
+window-blind — including the **current** result the model must synthesize from *this
+turn*, even on a 200k-window frontier model. The full payload is pulled out to a recall
+key (`_tool_result_N`).
+
+- A result over 4000 chars (e.g. 25 HN posts ≈ 5000 chars, 10 commits) is truncated in
+  the model's message → the model synthesizes from a **truncated** view → low
   faithfulness, fabrication (the documented "summarized all 15, fabricated 7 titles"),
-  and "the results were truncated, let me retrieve the full content" loops (sonnet T3,
-  600-char frontier budget).
+  and "the results were truncated, let me retrieve the full content" loops (sonnet T3).
+  sonnet's 200k window is wasted on a 4000-char cap.
 - **`recall` exists only to fetch back what this compression discarded** → invented
   keys, recall-as-file-write. The recall failure mode is a *symptom*; this curation is
   the *disease*.
