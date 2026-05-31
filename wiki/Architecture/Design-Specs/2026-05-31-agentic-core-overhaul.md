@@ -92,6 +92,33 @@ qwen3.5, gpt-4o-mini, sonnet-4-6). Merge ONLY if NEW:
 - **no cross-tier regression** on the HN T3-strict fixture (pass^k flat or up).
 If NEW does not beat OLD on the failure class at acceptable cost → do NOT merge; keep main.
 
+## ⚠️ STATUS CORRECTION (2026-05-31, end of session 1) — integration wired into a DEAD function
+Honest record (the methodology demands it):
+- **Components built + unit-green in ISOLATION:** result-store, render-result, write_result_to_file
+  tool, context-projection. All real, tested.
+- **Architecture premise:** validated by the reference-protocol spike (`2c5d77bf`) — in isolation,
+  cogito/qwen3/qwen3.5 emit clean `write_result_to_file(result_ref)`. Strongest positive signal.
+- **BUT the live integration NEVER RAN.** The projection seam (and the age-aware curation seam)
+  live in `attend/context-utils.ts buildConversationMessages`, whose ONLY caller is
+  `context/context-manager.ts:142` — NOT the live reactive path. `think.ts` assembles via
+  `defaultContextCurator` (context-curator.ts) and imports only `toProviderMessage`/`buildToolSchemas`
+  from context-utils. So: projection ENTRY never logged (even after full rebuild), tool never
+  offered/used (qwen3 + gpt 20c logs: 0 write_result_to_file calls — they wrote clean bullets
+  NATURALLY, which I wrongly read as tool use), and the "NEW vs OLD" grid deltas were stochastic noise.
+- **Retracted claims:** "end-to-end working", "tool materialized via reference", per-tier "lift".
+  None were live. Corrected by reading EXEC logs (real tool names) + the dead-function discovery.
+- **MUST-VERIFY next session:** does the age-aware curation default-on (`c9e6fba2`, main) ALSO sit
+  only in the dead `buildConversationMessages`? If so, Spike 1 / curation-default-on never affected
+  the live reactive loop either — a main-branch correctness issue, separate from this branch.
+
+### Corrected next steps (real)
+1. Find the LIVE assembly path: `defaultContextCurator` in `context/context-curator.ts` (what
+   think.ts actually uses). Wire the projection THERE. Verify curation is there too.
+2. Verify `write_result_to_file` is actually OFFERED in the schema sent to the model (it may be
+   pruned by tool-gating/lazy-disclosure) — confirm via EXEC log / logModelIO, not file format.
+3. Build real tool-call telemetry (principle #4) — EXEC-log parsing worked; metadata.toolCalls is empty.
+4. THEN honest live A/B with N≥3.
+
 ## Sequencing
 1. Build C (wire telemetry) first — it's the measurement substrate (Phase-0 discipline).
 2. Build A (ContextManager) incl. the reference protocol; prove on 20-commit overflow.

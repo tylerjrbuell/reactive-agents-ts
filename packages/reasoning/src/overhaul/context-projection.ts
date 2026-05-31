@@ -57,6 +57,14 @@ export function summarizeStored(ref: string, tool: string | undefined, fullValue
 export function applyOverhaulContextProjection<
   M extends { readonly role: string; readonly content: string; readonly storedKey?: string; readonly toolName?: string },
 >(messages: readonly M[], scratchpad: ReadonlyMap<string, string>, overflowBudget: number): M[] {
+  if (process.env.RA_OVERHAUL_DEBUG === "1") {
+    const trs = messages.filter((m) => m.role === "tool_result");
+    const withKey = trs.filter((m) => (m as { storedKey?: string }).storedKey);
+    // eslint-disable-next-line no-console
+    console.error(
+      `[overhaul-projection] ENTRY msgs=${messages.length} tool_results=${trs.length} withStoredKey=${withKey.length} scratchpadKeys=${[...scratchpad.keys()].join(",") || "(none)"}`,
+    );
+  }
   return messages.map((msg) => {
     if (msg.role !== "tool_result") return msg;
     const tr = msg as M & ToolResultMsg;
@@ -64,7 +72,14 @@ export function applyOverhaulContextProjection<
     if (!ref) return msg; // small result, already fully inline — leave it
     const full = scratchpad.get(ref);
     if (full === undefined) return msg;
-    if (full.length <= overflowBudget) return msg; // fits — keep full (model may reason/transcribe)
+    const fired = full.length > overflowBudget;
+    if (process.env.RA_OVERHAUL_DEBUG === "1") {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[overhaul-projection] ref=${ref} tool=${tr.toolName ?? "?"} fullLen=${full.length} budget=${overflowBudget} fired=${fired}`,
+      );
+    }
+    if (!fired) return msg; // fits — keep full (model may reason/transcribe)
     // Overflows — project to a clean summary+ref. No marker, no preview, no recall.
     return { ...tr, content: summarizeStored(ref, tr.toolName, full) } as M;
   });
