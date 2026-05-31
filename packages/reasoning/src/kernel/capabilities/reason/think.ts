@@ -19,7 +19,10 @@ import {
   toProviderMessage,
   buildToolSchemas,
 } from "../attend/context-utils.js";
-import { defaultContextCurator } from "../../../context/context-curator.js";
+import { defaultContextCurator, type Prompt } from "../../../context/context-curator.js";
+import { project } from "../../../assembly/project.js";
+import { fromKernelState } from "../../../assembly/from-kernel-state.js";
+import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { StreamingTextCallback, EventBus } from "@reactive-agents/core";
 import {
   finalAnswerTool,
@@ -324,16 +327,35 @@ export function handleThinking(
     // - Slice C: profile.recentObservationsLimit threads through here so agents
     //   can opt-in via profileOverrides without touching kernel internals.
     //   Defaults to 0 across all tiers → off by default, preserves prior shape.
-    const {
-      systemPrompt: systemPromptText,
-      messages: conversationMessages,
-      compressionApplied,
-    } = defaultContextCurator.curate(state, input, profile, guidance, adapter, {
-      availableTools: promptSchemas,
-      systemPromptBody: effectiveSystemPrompt,
-      toolElaboration: input.toolElaboration,
-      includeRecentObservations: profile.recentObservationsLimit ?? 0,
-    });
+    // RA_ASSEMBLY (Phase 3.2): flag-gated live seam for the canonical
+    // context-assembly pipeline. Default (unset) preserves the byte-identical
+    // curate() path; =1 sources systemPrompt+messages from project(). The
+    // tools/recall-gate path below is shared by BOTH arms so the A/B isolates
+    // the context-assembly variable only.
+    let systemPromptText: Prompt["systemPrompt"];
+    let conversationMessages: Prompt["messages"];
+    let compressionApplied: Prompt["compressionApplied"];
+    if (process.env.RA_ASSEMBLY === "1") {
+      const { request, trace } = project(
+        fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }),
+      );
+      systemPromptText = request.systemPrompt;
+      conversationMessages = toLLMMessages(request.messages);
+      compressionApplied = undefined;
+      if (process.env.RA_ASSEMBLY_DEBUG === "1")
+        console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
+    } else {
+      ({
+        systemPrompt: systemPromptText,
+        messages: conversationMessages,
+        compressionApplied,
+      } = defaultContextCurator.curate(state, input, profile, guidance, adapter, {
+        availableTools: promptSchemas,
+        systemPromptBody: effectiveSystemPrompt,
+        toolElaboration: input.toolElaboration,
+        includeRecentObservations: profile.recentObservationsLimit ?? 0,
+      }));
+    }
 
     // ── Inc 1: recall overflow gate (tier-aware context architecture) ─────────
     // recall is only usable when a >4000-char tool result was truncated and its
