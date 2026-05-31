@@ -1,7 +1,7 @@
 ---
 title: Canonical Context Assembly — the ideal design (how it should have been built)
 date: 2026-05-31
-status: draft-spec
+status: design-locked (mandate 2026-05-31 — best design over backward-compat; event-log + CAS + pure project() foundational; legacy maze deleted)
 branch: overhaul/agentic-core-2026-05-31
 scope: "The ideal, greenfield architecture for context assembly: ONE append-only event log as the single source of truth; everything the model sees is a pure, deterministic, total projection of (log, capability). No two-record split, no inlined blobs, no model-facing context machinery, no parallel builders. Migration is a subordinate appendix — it adapts us toward this target; it does not shape it."
 relates:
@@ -20,6 +20,27 @@ sources:
 > beginning.** It is the north star. The migration appendix is how we approach it
 > incrementally without a big-bang rewrite — but the design below is **not**
 > compromised by migration concerns.
+
+## Mandate & locked decisions (2026-05-31)
+This is a genuine **overhaul** — unify the design to serve the framework as best as
+possible and fix the pain points + failure modes **at the root**, so RA reaches its
+full potential. Explicit user mandate:
+- **Best design wins over backward-compat.** Some original decisions had reasons; that
+  does not protect them. We do **not** trip over months of misaligned decisions to
+  preserve them. Misaligned mechanisms are in-scope, judged by best-design + ablation,
+  not grandfathered.
+- **Root-cause fixes only** — pure, better architecture, not another compensating layer.
+- **Locked IN (foundational, not optional):** (1) the single append-only **event log**
+  replacing the `messages[]`/`steps[]` two-record split; (2) the content-addressed
+  **`ResultStore`** replacing the model-facing `scratchpad`/`recall`; (3) `project` as
+  the sole, pure, total assembler replacing all legacy builders.
+- **The legacy maze is DELETED, not preserved.** `buildConversationMessages`,
+  `buildCuratedMessages`, `ContextManager.build`, the injectable `defaultContextCurator`,
+  `compressToolResult`'s model-facing output, `TOOL_RESULT_INLINE_CAP`, the `recall`
+  tool, `[STORED:]` markers — all removed once their intent lives in `project`.
+- **Incremental ≠ timid.** The strangler-fig steps exist only to *prove each move with
+  evidence* (this session proved why: dead seams + false "lift" claims). Any transitional
+  shim is a temporary proving scaffold that is itself removed — never a lingering compat layer.
 
 ## The one idea everything derives from
 **The agent's entire state is a single append-only event log. Everything the model
@@ -149,7 +170,8 @@ strangler-fig, control-first, ablation-gated:
    stream/complete branches; produce "what renders the live prompt today."
 2. **Introduce `project` as the single entry, delegating byte-identically** to the
    current live renderer first (trace-diff = control). The live path becomes single +
-   observable with zero behavior change.
+   observable with zero behavior change. **This delegation shim is a temporary proving
+   scaffold — deleted in step 3, never a permanent compat layer.**
 3. **Migrate behind the one entry**: introduce the event-log + `ResultStore`
    projections incrementally; collapse and delete each legacy builder as its logic
    moves into a pure stage; each step gated trace-diff-identical or ablation-justified.
