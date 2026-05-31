@@ -15,8 +15,8 @@ function ctxWith(value: unknown) {
   return { input: { log, capability: cap, store, persona: { system: "" }, tools: { schemas: [] } }, ref };
 }
 
-describe("projectResults — full | summary+ref | cleared", () => {
-  it("OVERFLOW → summary+ref, no marker", () => {
+describe("projectResults — full | preview+ref | cleared", () => {
+  it("OVERFLOW → preview+ref (bounded preview + ref, no marker)", () => {
     const big = Array.from({ length: 50 }, (_, i) => ({ sha: `s${i}`, commit: { message: `message ${i} ${"x".repeat(50)}` } }));
     const { input, ref } = ctxWith(big);
     const ctx = projectResultsStage({ ...input, systemPrompt: "", messages: [], toolSchemas: [], trace: emptyTrace(input.capability) });
@@ -24,7 +24,12 @@ describe("projectResults — full | summary+ref | cleared", () => {
     expect(tr.content).toContain(`result_ref="${ref}"`);
     expect(tr.content).not.toContain("[STORED:");
     expect(tr.content).not.toContain("recall(");
-    expect(ctx.trace.messages.some((m) => m.projection === "summary+ref")).toBe(true);
+    // preview+ref carries CONTENT (some commit messages), not just a bare shape —
+    // the Phase-4 regression was bare-ref stripping all content.
+    expect(tr.content).toContain("message 0");
+    // …but bounded (does not inline all 50 verbose commits).
+    expect(tr.content.length).toBeLessThanOrEqual(input.capability.recencyBudgetChars + 400);
+    expect(ctx.trace.messages.some((m) => m.projection === "preview+ref")).toBe(true);
   });
   it("FITTING result → present full", () => {
     const small = [{ sha: "s0", commit: { message: "tiny" } }];

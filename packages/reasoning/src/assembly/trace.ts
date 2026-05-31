@@ -3,7 +3,7 @@ import type { ResolvedCapability } from "./capability.js";
 export interface MessageTrace {
   readonly role: string;
   readonly chars: number;
-  readonly projection?: "full" | "summary+ref" | "cleared";
+  readonly projection?: "full" | "preview+ref" | "cleared";
 }
 
 export interface AssemblyTrace {

@@ -67,17 +67,21 @@ const tools = { schemas: [{ name: "write_result_to_file" }, { name: "github/list
 const profile = CONTEXT_PROFILES.mid;
 
 describe("golden trace — deterministic overflow projection", () => {
-  it("a 126k-char overflow result projects to summary+ref (no marker, no recall hint)", () => {
+  it("a 126k-char overflow result projects to preview+ref (no marker, no recall hint)", () => {
     const { request, trace } = project(fromKernelState(overflowState, profile, persona, tools));
 
-    // The big result is the failure that experiment (b) chased: it MUST be summarized.
-    const summarized = trace.messages.filter((m) => m.projection === "summary+ref");
+    // The big result is the failure that experiment (b) chased: it MUST be projected
+    // to a bounded preview+ref, never inlined whole. (#1: bounded content preview +
+    // ref, replacing the bare shape-only summarize that regressed Phase-4.)
+    const summarized = trace.messages.filter((m) => m.projection === "preview+ref");
     expect(summarized.length).toBe(1);
 
     const tr = request.messages.find((m) => m.role === "tool_result")!;
     expect(tr.content).toContain(`result_ref="${STORED_KEY}"`);
     expect(tr.content).not.toContain("[STORED:");
     expect(tr.content).not.toContain("recall(");
+    // Bounded: a 126k-char result must not inline whole.
+    expect(tr.content.length).toBeLessThan(126_000 / 2);
 
     // Provider-valid thread: opens user(goal), assistant(tool_use), then the summary.
     expect(request.messages[0]!.role).toBe("user");
@@ -111,6 +115,6 @@ describe("golden trace — deterministic overflow projection", () => {
     });
     const { trace } = project(fromKernelState(smallState, profile, persona, tools));
     expect(trace.messages.some((m) => m.projection === "full")).toBe(true);
-    expect(trace.messages.some((m) => m.projection === "summary+ref")).toBe(false);
+    expect(trace.messages.some((m) => m.projection === "preview+ref")).toBe(false);
   });
 });
