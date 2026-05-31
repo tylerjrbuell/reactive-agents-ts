@@ -10,6 +10,7 @@
  * Pure. No `any`: tool-call entries are narrowed with a guard.
  */
 import type { LLMMessage, ContentBlock } from "@reactive-agents/llm-provider";
+import { sanitizeToolName } from "../kernel/capabilities/attend/context-utils.js";
 import type { ProviderRequest } from "./types.js";
 
 interface ToolCall {
@@ -39,8 +40,11 @@ export function toLLMMessages(messages: ProviderRequest["messages"]): LLMMessage
       if (isToolCallArray(m.toolCalls) && m.toolCalls.length > 0) {
         const blocks: ContentBlock[] = [
           ...(m.content ? [{ type: "text" as const, text: m.content }] : []),
+          // Sanitize on replay: names are stored canonically (e.g. MCP
+          // `github/list_commits`) but the provider payload requires
+          // `^[a-zA-Z0-9_-]+$` — mirror the outbound tools-array sanitization.
           ...m.toolCalls.map(
-            (tc): ContentBlock => ({ type: "tool_use", id: tc.id, name: tc.name, input: tc.arguments }),
+            (tc): ContentBlock => ({ type: "tool_use", id: tc.id, name: sanitizeToolName(tc.name), input: tc.arguments }),
           ),
         ];
         return { role: "assistant", content: blocks };
@@ -51,7 +55,7 @@ export function toLLMMessages(messages: ProviderRequest["messages"]): LLMMessage
       return {
         role: "tool",
         toolCallId: m.toolCallId ?? "",
-        ...(m.toolName !== undefined ? { toolName: m.toolName } : {}),
+        ...(m.toolName !== undefined ? { toolName: sanitizeToolName(m.toolName) } : {}),
         content: m.content,
       };
     }

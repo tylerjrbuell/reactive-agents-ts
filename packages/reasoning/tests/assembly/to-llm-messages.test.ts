@@ -30,6 +30,22 @@ describe("toLLMMessages — ProviderRequest.messages → LLMMessage[]", () => {
     expect(content[1]!.type).toBe("tool_use");
   });
 
+  it("sanitizes tool_use name on replay (MCP slash → underscore) for native-FC validity", () => {
+    const out = toLLMMessages([
+      { role: "assistant", content: "", toolCalls: [{ id: "c1", name: "github/list_commits", arguments: {} }] },
+    ]);
+    const content = (out[0] as { content: Array<{ type: string; name?: string }> }).content;
+    expect(content[0]!.name).toBe("github_list_commits");
+    expect(content[0]!.name!).toMatch(/^[a-zA-Z0-9_-]+$/);
+  });
+
+  it("sanitizes tool_result toolName on replay (Gemini functionResponse.name parity)", () => {
+    const out = toLLMMessages([
+      { role: "tool_result", toolCallId: "c1", toolName: "github/list_commits", content: "x" },
+    ]);
+    expect((out[0] as { toolName?: string }).toolName).toBe("github_list_commits");
+  });
+
   it("assistant without toolCalls → role:assistant, content string", () => {
     const out = toLLMMessages([{ role: "assistant", content: "done" }]);
     expect(out[0]).toEqual({ role: "assistant", content: "done" });

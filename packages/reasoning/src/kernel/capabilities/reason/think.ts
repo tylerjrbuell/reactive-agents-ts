@@ -18,6 +18,7 @@ import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   toProviderMessage,
   buildToolSchemas,
+  sanitizeToolName,
 } from "../attend/context-utils.js";
 import { defaultContextCurator, type Prompt } from "../../../context/context-curator.js";
 import { project } from "../../../assembly/project.js";
@@ -468,7 +469,7 @@ export function handleThinking(
     };
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
     const llmTools = gatedToolSchemas.map((ts) => ({
-      name: ts.name,
+      name: sanitizeToolName(ts.name),
       description: ts.description,
       inputSchema: {
         type: "object" as const,
@@ -614,6 +615,22 @@ export function handleThinking(
           terminatedBy: "llm_error",
         },
       });
+    }
+
+    // ── Native-FC name de-sanitization ───────────────────────────────────────
+    // Outbound, tool schemas were sanitized to satisfy the provider regex
+    // (e.g. MCP `github/list_commits` → `github_list_commits`). Map the returned
+    // tool-call names BACK to the canonical registered names BEFORE either
+    // consumer (the toolCallResolver path and the no-resolver native-FC
+    // fallback) so registry lookup/execution is unchanged. The reverse map is
+    // built from the EXACT schemas offered this turn. accumulatedToolCalls is a
+    // mutable list of objects, so in-place name reassignment is safe.
+    const canonicalBySanitized = new Map(
+      gatedToolSchemas.map((ts) => [sanitizeToolName(ts.name), ts.name] as const),
+    );
+    for (const tc of accumulatedToolCalls) {
+      const canon = canonicalBySanitized.get(tc.name);
+      if (canon !== undefined) tc.name = canon;
     }
 
     // ── 0-token diagnostic ───────────────────────────────────────────────────

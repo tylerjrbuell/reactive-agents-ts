@@ -18,6 +18,25 @@ import type { KernelState, KernelMessage, KernelInput } from "../../../kernel/st
 import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
 
+// ── sanitizeToolName ──────────────────────────────────────────────────────────
+
+/**
+ * Sanitize a registered tool name into the shape native-FC providers accept.
+ *
+ * Anthropic/OpenAI require tool names to match `^[a-zA-Z0-9_-]{1,128}$`. MCP
+ * tools register canonically as `${server}/${tool}` (e.g. `github/list_commits`),
+ * whose `/` is rejected by the provider regex. We replace every disallowed
+ * character with `_` so the outbound schema is valid; the inbound tool-call
+ * name is mapped BACK to the canonical name at the native-FC boundary (think.ts)
+ * so registry lookup/execution is unchanged.
+ *
+ * Pure: identical input → identical output. Names already matching the regex
+ * are returned unchanged.
+ */
+export function sanitizeToolName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 
 /**
@@ -50,7 +69,17 @@ export function buildSystemPrompt(
 
 // ── toProviderMessage ─────────────────────────────────────────────────────────
 
-/** Convert a KernelMessage to provider-native LLMMessage format. */
+/**
+ * Convert a KernelMessage to provider-native LLMMessage format.
+ *
+ * Tool names are stored canonically in state.messages (e.g. MCP
+ * `github/list_commits`) so registry lookup / allowedTools matching stays
+ * intact. The provider payload requires the sanitized form (`^[a-zA-Z0-9_-]+$`),
+ * so on replay we sanitize the tool_use `name` and tool_result `toolName` here —
+ * keeping the rendered thread consistent with the (also-sanitized) outbound
+ * tools array. This is outbound-only: nothing downstream of the provider call
+ * reads these rendered names back.
+ */
 export function toProviderMessage(msg: KernelMessage): LLMMessage {
   if (msg.role === "assistant") {
     if (msg.toolCalls && msg.toolCalls.length > 0) {
@@ -62,7 +91,7 @@ export function toProviderMessage(msg: KernelMessage): LLMMessage {
           ...msg.toolCalls.map((tc) => ({
             type: "tool_use" as const,
             id: tc.id,
-            name: tc.name,
+            name: sanitizeToolName(tc.name),
             input: tc.arguments,
           })),
         ],
@@ -74,7 +103,7 @@ export function toProviderMessage(msg: KernelMessage): LLMMessage {
     return {
       role: "tool" as const,
       toolCallId: msg.toolCallId,
-      toolName: msg.toolName,
+      toolName: sanitizeToolName(msg.toolName),
       content: msg.content,
     } as LLMMessage;
   }
