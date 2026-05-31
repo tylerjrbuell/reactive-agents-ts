@@ -28,10 +28,21 @@ coupling and re-scopes #2 to what "clean and pure" actually requires.
   metric-gaming reverted in the 2026-05-29 course-correction (declaring cutover
   "done" by redefining cutover).
 
-**The honest #2: substrate unification, not assembler unification.** `project()`
+**The honest #2: substrate unification, not assembler unification** — `project()`
 stays the *sole conversation-context assembler*; planners stay single-shot
-task-specs; **but all result-injection flows through the one `ResultStore` +
-`preview+ref` policy, and the projection policy is single (not two).**
+task-specs; all result-injection *should* flow through the one `ResultStore` +
+`preview+ref` policy.
+
+**BUT a code trace (below) then proved the substrate-unification half is GATED BY
+roadmap #4, not independent work.** The `result_ref` resolver (`write_result_to_file`
+→ `scratchpadStoreRef`) lives only in the kernel act path; plan-execute bypasses it.
+A `preview+ref` PUT into a plan-execute-side store resolves nowhere, and
+`compressToolResult` has array competence `preview()` lacks. So #2's near-term,
+honest, independent wins are: **flip `RA_ASSEMBLY` default-on (reactive)**, **delete
+legacy `curate()`** (1 caller), and **strip dead recall/`[STORED:]` hints** from
+results injected into tool-less single-shot prompts. The deep result-injection
+unification (and the reverted projector helper) move into **#4**, where the resolver
+spans plan-execute. See the TRACE FINDING section for the verified evidence.
 
 ## Coupling map (verified, not assumed)
 
@@ -71,71 +82,96 @@ The split is concrete and small:
   stored on `step.result`, then raw-injected into `priorResults` /
   `buildReflectionPrompt` / next step prompt.
 
-Two preview algorithms, two pointer formats, two budgets. Unify on the canonical
-one:
+Two preview algorithms, two pointer formats, two budgets.
 
-- **(3a) Single projection helper.** Introduce a single-shot-appropriate projector
-  that reuses `ResultStore.preview()` (the structure-aware skeleton + honest
-  truncation marker + `result_ref`) for **prompt-embedded result injection**.
-  Non-reactive result-injection sites call it instead of `compressToolResult`:
-  - `step-executor.ts:216` (tool_call step result) + `:238` (`priorResults`)
-  - `buildReflectionPrompt` step-result rendering (`plan-prompts.ts:266`)
-  - `buildStepExecutionPrompt` `priorResults` rendering (`plan-prompts.ts:230`)
-  - ToT prior-thought injection + reflexion prior-result injection
-- **(3b) One ResultStore.** Non-reactive overflow results are `put` into the same
-  `ResultStore` keyed for the run, so the `result_ref` a planner emits is
-  resolvable by the same `materialize`/`write_result_to_file(result_ref=…)` path
-  reactive uses — one pointer namespace, not scratchpad-key vs result-ref.
-- **(3c) Retire `compressToolResult` for these sites** once (3a) covers them
-  (it may survive elsewhere; verify callers before deleting — same discipline as
-  `curate()`).
+### TRACE FINDING (2026-05-31) — the clean swap is blocked; (3) is mostly #4
 
-**Explicitly NOT in (3):** routing planner/critique/JSON prompts through
-`project()`; replacing `state.steps[]` with `EventLog` as the sole record (that is
-roadmap **#3 EventLog sole-record**, larger, separate). (3) is the *result-injection
-substrate* only — the piece that makes the #1 faithfulness lift apply to
-non-reactive and kills the two-policy split.
+A first wiring attempt (3a: a `projectResultForPrompt` helper over
+`ResultStore.preview`) was built, then **reverted** — the trace below proved it has
+no honest non-regressing caller, and the substrate it needs is roadmap **#4**, not
+this spec. Three findings, each verified in code:
 
-## Migration sequence (TDD, each step independently committable)
+1. **The resolver is kernel-only.** `write_result_to_file` resolves a `result_ref`
+   from `scratchpadStoreRef` (a `Ref<Map<string,string>>` keyed `_tool_result_*`),
+   registered at `tool-capabilities.ts:91` and populated **only** at
+   `tool-execution.ts:538` (`scratchpadStore.set`) — inside the **kernel act path**.
+   Plan-execute's top-level `tool_call` steps call `toolService.execute()` directly
+   (`step-executor.ts:144`), bypassing it. **A `result_ref` PUT into any
+   plan-execute-side store resolves NOWHERE** → emitting an actionable
+   `write_result_to_file(result_ref=…)` marker there is a dead pointer with nicer
+   text — the same bug relocated, not fixed. Capture + store + **resolve** is the
+   triad #4 owns; do not half-build it under #2.
+2. **`compressToolResult` has array competence `preview()` lacks.** It renders
+   GitHub-commit arrays with a try-fit-ALL-items anti-fabrication path
+   (`tool-formatting.ts:251-303`); `ResultStore.preview` only does markdown-heading
+   skeleton / bounded-head and would head-truncate a raw JSON array — a
+   faithfulness **regression** on exactly the `github/list_commits` overflow case
+   compressToolResult was built for (`step-executor.ts:209`). **No wholesale
+   renderer swap at the tool_call site.**
+3. **The analysis site isn't a clean home either.** Analysis steps
+   (`step-executor.ts:265`) return generative content the synthesizer must see
+   whole (`plan-execute.ts:891` reads `s.result` into the synthesis prompt);
+   previewing/truncating it is lossy, not a referenceable-data win.
 
-1. **Verify-and-unblock (1)+(2) framing.** Add a test asserting `curate()` has one
-   caller; document that flip-default-on is gated by the cross-tier grid, not by
-   non-reactive. *(No behavior change — this records the corrected framing so the
-   wrong leg-(b) framing can't resurface.)*
-2. **(3a) Build the single-shot projector** over `ResultStore.preview()`. RED:
-   a test that a 50k tool_call step result injected into a step/reflection prompt
-   appears as `preview+ref` (structure skeleton + marker + ref), never raw, never
-   via the old scratchpad-pointer format. GREEN: implement; route step-executor
-   tool_call results through it.
-3. **(3b) One ResultStore for non-reactive.** RED: a `result_ref` emitted by a
-   planner resolves via the same `materialize`/`write_result_to_file` path as
-   reactive. GREEN: `put` non-reactive overflow results into the run's ResultStore.
-4. **(3c) Retire `compressToolResult` at the migrated sites.** Verify callers;
-   delete only the now-unreachable ones.
-5. **Cross-tier proof.** Run the plan-execute / ToT overflow cells of the A/B grid
-   (haiku + a local tier) under the section-coverage grade
-   (`apps/examples/section-coverage-grade.ts`). Honesty gate: faithfulness up or
-   flat, no honesty loosened, tokens within the project rule (≤15% overhead for a
-   default-on change; else opt-in).
+**Net:** the canonical `preview+ref` policy cannot replace `compressToolResult` at
+the plan-execute capture/injection sites until #4 wires a run-scoped store that the
+resolver reads. The (3a)/(3b)/(3c) "unify the injection policy" plan was premised on
+a resolver that doesn't span plan-execute. **#2's substrate-unification thrust is
+therefore gated by #4 — it is not independent work.**
+
+### What IS honest near-term (the residual #2-adjacent win)
+
+One bounded, no-regression, no-#4-dependency fix remains: **strip dead recall /
+`[STORED:]` hints from results injected into TOOL-LESS single-shot prompts.**
+`compressToolResult` emits `recall("_tool_result_N")` + `[STORED: …]` coverage
+hints; in plan-execute those land in analysis/reflection/synthesis prompts where
+recall is uncallable AND (top-level path) the key was never stored. The model is
+told to "call recall(…) for the remaining commits" and cannot — risking fabricated
+tails or echoed scaffolding (which `evidence-grounding.ts:228` then HARD-fails).
+A strip helper already exists for the kernel path (`tool-execution.ts:702`;
+`state-queries.ts` `RECALL_TOOL_KEY_RE`/`STORED_TOOL_KEY_RE`). Reuse it at the
+plan-execute injection sites. This is honesty-to-consumer-capability, not substrate
+unification — a real bug fix that does not pretend to be the cutover.
+
+### Revised dependency verdict
+
+| Goal | Independent? | Gate |
+|---|---|---|
+| Flip `RA_ASSEMBLY` default-on (reactive) | **Yes** | cross-tier A/B grid |
+| Delete legacy `curate()` | **Yes** (1 caller) | follows the flip |
+| Strip dead recall/[STORED:] hints in plan-execute | **Yes** | reuse existing strip helper; no #4 |
+| Substrate unify result-injection on `preview+ref` | **No — gated by #4** | run-scoped store the resolver reads |
+
+So **flip-default-on + delete-`curate()` + the hint-strip** are the available
+near-term wins; the deep substrate unification moves **into #4** (ResultStore as the
+LIVE store + tool-side `result_ref` resolution spanning plan-execute), where the
+projector helper belongs and gets a real, resolving caller.
 
 ## Honesty gates / what would falsify this
 
-- **If (3a) regresses faithfulness or success on any tier** vs `compressToolResult`
-  → the canonical preview is not yet superior for the planner-injection shape; do
-  not migrate that site; record the gap (do not metric-game by re-grading lenient).
-- **If `compressToolResult` has callers outside the result-injection sites** → (3c)
-  is narrower than "delete"; keep it for those, unify only the injection path.
-- **If flipping `RA_ASSEMBLY` default-on fails the cross-tier grid** → (1) is not
-  done regardless of (3); the flag stays opt-in. (3) and (1) are independent —
-  neither blesses the other.
+- **The reverted projector stays reverted** until #4 wires a resolver that reads its
+  store. Re-introducing it before then = a dead-`result_ref` pointer (§9
+  scaffold-without-callers).
+- **No renderer swap at the tool_call site** without a live A/B (compressToolResult
+  vs preview on a real overflowing array, graded by `section-coverage-grade.ts`)
+  showing preview does NOT regress list-all arrays.
+- **If flipping `RA_ASSEMBLY` default-on fails the cross-tier grid** → the flag stays
+  opt-in. Independent of the substrate work — neither blesses the other.
 
 ## After #2
 
-Roadmap then continues: **#3 EventLog sole-record** (collapse `state.steps[]`/
-`messages[]` into the one append-only log — non-reactive strategies append step/
-thought/critique events), **#5 scaffoldProfile governance** (incl. the deferred
-window-source fix: mid tier capped at 32768 not haiku's real 200k,
-`from-kernel-state.ts:112`), **#7 `RA_POST_CONDITIONS` default-on**,
-**#8 KV-cache-friendly assembly**. #2 (this spec) is the substrate seam that makes
-#3 tractable: once result-injection is one policy + one store, replacing the record
-with `EventLog` is a record swap, not a re-derivation of two projection policies.
+The trace re-ordered the roadmap: the deep substrate unification is **#4** (make
+`ResultStore` the LIVE store + extend `result_ref` resolution to span plan-execute,
+so the reverted projector gets a resolving caller). Then **#3 EventLog sole-record**
+(collapse `state.steps[]`/`messages[]` into one append-only log — non-reactive
+strategies append step/thought/critique events), **#5 scaffoldProfile governance**
+(incl. the deferred window-source fix: mid tier capped at 32768 not haiku's real
+200k, `from-kernel-state.ts:112`), **#7 `RA_POST_CONDITIONS` default-on**,
+**#8 KV-cache-friendly assembly**.
+
+**Corrected sequence:** the available near-term wins (flip-default-on,
+delete-`curate()`, hint-strip) are independent and unblocked now. The
+result-injection unification is **#4**, which must wire the resolver across
+plan-execute before any `preview+ref` swap is honest. Only after #4 is one policy +
+one LIVE store does #3 (record swap to `EventLog`) become a record swap rather than
+a re-derivation of two projection policies.
