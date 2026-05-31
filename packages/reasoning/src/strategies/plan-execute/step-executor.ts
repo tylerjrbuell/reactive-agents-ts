@@ -41,6 +41,7 @@ import { withEnvContext } from "../../context/context-engine.js";
 import {
   extractGoalText,
   sanitizeToolOutput,
+  stripDeadStorageHints,
   stripFinalAnswerPrefix,
 } from "./output-utils.js";
 
@@ -220,8 +221,13 @@ export function executeStep(
         compressionPreviewItems,
       );
 
+      // Strip dead [STORED:]/recall() pointers: plan-execute discards the full
+      // data and injects this into tool-less prompts (analysis/reflection/
+      // synthesis), so the recall hints compressToolResult emits are uncallable
+      // dead pointers (invites fabricated tails / scaffolding-echo that
+      // evidence-grounding HARD-fails). Persisting + a resolving ref is #4.
       return {
-        output: compressed.content,
+        output: stripDeadStorageHints(compressed.content, step.toolName!),
         tokens: 0,
         cost: 0,
         success: toolResult.success !== false,

@@ -14,6 +14,8 @@
  * - `ACTION_TOOL_PATTERNS`              → regex used by the sanitizer (also
  *    re-exported so call sites that need to test individual tool names can
  *    do so without re-defining the pattern).
+ * - `stripDeadStorageHints(content, toolName)` → removes dead [STORED:]/recall()
+ *    pointers from compressed tool results before they enter tool-less prompts.
  */
 
 /**
@@ -48,6 +50,35 @@ export function stripFinalAnswerPrefix(text: string): string {
  * appear in downstream steps or the final synthesis.
  */
 export const ACTION_TOOL_PATTERNS = /\b(send|write|post|create|delete|remove|update|set|put|push|publish|notify|deploy|upload)\b/i;
+
+/**
+ * Strip dead `[STORED:]` headers + `recall(…)` coverage hints from a compressed
+ * tool result before it enters a plan-execute prompt.
+ *
+ * `compressToolResult` emits these hints assuming the kernel act path (which
+ * stores the full data under the `_tool_result_*` key the resolver reads, then
+ * re-appends ONE honest recall line — `tool-execution.ts:704-717`). plan-execute
+ * takes a different path: it DISCARDS the full data and injects the result into
+ * tool-less single-shot prompts (analysis/reflection/synthesis) where `recall` is
+ * uncallable. So every hint is a DEAD pointer — the model is told to recall a key
+ * that was never stored and cannot be called, which invites fabricated tails or
+ * echoed framework scaffolding (the latter HARD-fails evidence-grounding).
+ *
+ * This mirrors the kernel's strip set MINUS the re-append: plan-execute stored
+ * nothing, so it must promise nothing. (Persisting the data + a resolving ref is
+ * roadmap #4, not this fix.) The real preview rows are preserved.
+ */
+export function stripDeadStorageHints(content: string, toolName: string): string {
+  return content
+    .replace(/^\[STORED:[^\]]+\]\n?/m, `[${toolName} result — compressed preview]\n`)
+    .replace(/\s*— use recall\("[^"]+",? ?(?:full: ?true)?\)[^\n]*/g, "")
+    .replace(/\s*— call recall[^\n]*/g, "")
+    .replace(/\s*— full (?:text|data|object) is stored[^\n]*/g, "")
+    .replace(/\s*Use recall\([^\n]*/g, "")
+    .replace(/\s*✓ Preview (?:covers|includes)[^\n]*/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 /**
  * Sanitize tool output to prevent internal metadata from leaking into
