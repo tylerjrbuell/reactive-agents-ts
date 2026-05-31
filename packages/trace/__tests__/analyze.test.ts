@@ -78,3 +78,76 @@ describe("analyzeInterventions", () => {
     expect(report).toContain("Failure modes");
   });
 });
+
+import { analyzeRun, renderRunReport } from "../src/analyze.js";
+
+function richFixture(opts: { substantive: boolean }): Trace {
+  let seq = 0;
+  const base = (kind: string, iter: number, extra: Record<string, unknown>): TraceEvent =>
+    ({ kind, runId: "r2", timestamp: 0, iter, seq: seq++, ...extra } as unknown as TraceEvent);
+  const events: TraceEvent[] = [
+    base("kernel-state-snapshot", 0, { status: "thinking", toolsUsed: [], scratchpadKeys: [], stepsCount: 0, stepsByType: {}, outputPreview: null, outputLen: 0, messagesCount: 1, tokens: 0, cost: 0, llmCalls: 0, terminatedBy: undefined, pendingGuidance: undefined }),
+    base("entropy-scored", 0, { composite: 0.8, sources: { token: 0.5, structural: 0.5, semantic: 0.5, behavioral: 0.5, contextPressure: 0.1 } }),
+    base("intervention-suppressed", 1, { decisionType: "compress", reason: "below-entropy-threshold" }),
+    base("decision-evaluated", 1, { decisionType: "continue", confidence: 0.7, reason: "progressing" }),
+  ];
+  if (opts.substantive) {
+    // real read (truncated) + deliverable write
+    events.push(base("tool-call-start", 1, { toolName: "file-read" }));
+    events.push(base("tool-call-end", 1, { toolName: "file-read", ok: true, resultTruncated: true }));
+    events.push(base("tool-call-start", 2, { toolName: "file-write" }));
+    events.push(base("tool-call-end", 2, { toolName: "file-write", ok: true }));
+  } else {
+    // claimed success but ONLY introspection — the prose-lie class
+    events.push(base("tool-call-start", 2, { toolName: "pulse" }));
+    events.push(base("tool-call-end", 2, { toolName: "pulse", ok: true }));
+  }
+  events.push(base("entropy-scored", 2, { composite: 0.3, sources: { token: 0.2, structural: 0.2, semantic: 0.2, behavioral: 0.2, contextPressure: 0.1 } }));
+  events.push(base("kernel-state-snapshot", 2, { status: "done", toolsUsed: ["file-read"], scratchpadKeys: [], stepsCount: 6, stepsByType: { thought: 3, action: 2, observation: 1 }, outputPreview: "x", outputLen: 1, messagesCount: 6, tokens: 5000, cost: 0, llmCalls: 3, terminatedBy: "final_answer_tool", pendingGuidance: undefined }));
+  events.push(base("guard-fired", 2, { guard: "terminal_decision", outcome: "terminate", reason: "final_answer_tool" }));
+  events.push(base("run-completed", -1, { status: "success", totalTokens: 5000, totalCostUsd: 0, durationMs: 100 }));
+  return { runId: "r2", events };
+}
+
+describe("analyzeRun — full decision-grade signal", () => {
+  it("labels claimed-success+deliverable as UNVERIFIED, never bare success", () => {
+    const a = analyzeRun(richFixture({ substantive: true }));
+    expect(a.honesty.label).toBe("claimed-success (unverified)");
+    expect(a.honesty.deliverableProduced).toBe(true);
+  });
+
+  it("flags dishonest-success-suspected when claimed done but no substantive tool work", () => {
+    const a = analyzeRun(richFixture({ substantive: false }));
+    expect(a.honesty.label).toBe("dishonest-success-suspected");
+  });
+
+  it("captures cost (trajectory, intervention estimate) and marks in/out split BLIND", () => {
+    const a = analyzeRun(richFixture({ substantive: true }));
+    expect(a.cost.totalTokens).toBe(5000);
+    expect(a.cost.tokenTrajectory).toEqual([0, 5000]);
+    expect(a.cost.inOutSplitAvailable).toBe(false);
+  });
+
+  it("captures reasoning trajectory (entropy converging) + tool outcomes (truncation)", () => {
+    const a = analyzeRun(richFixture({ substantive: true }));
+    expect(a.reasoning.entropyShape).toBe("converging");
+    const fr = a.tools.find((t) => t.tool === "file-read");
+    expect(fr?.truncated).toBe(1);
+  });
+
+  it("coverage centerpiece: marks blind spots for missing emitters (NOT real zeros)", () => {
+    const a = analyzeRun(richFixture({ substantive: true }));
+    const blind = a.coverage.blindSpots.map((b) => b.metric).join(" | ");
+    expect(blind).toContain("cache"); // llm-exchange missing
+    expect(a.coverage.knownDeadEmitters.join(" ")).toContain("emitCuratorDecision");
+    // guard-fired terminal-only → overlap visibility flagged blind
+    expect(blind.toLowerCase()).toContain("overlap");
+  });
+
+  it("renders a full forensic report", () => {
+    const r = renderRunReport(analyzeRun(richFixture({ substantive: true })));
+    expect(r).toContain("OUTCOME:");
+    expect(r).toContain("COVERAGE:");
+    expect(r).toContain("BLIND");
+  });
+});
