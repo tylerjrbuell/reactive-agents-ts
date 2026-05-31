@@ -17,6 +17,18 @@ export class ResultStore {
     return ref;
   }
 
+  /**
+   * Store a result under an existing key (e.g. `_tool_result_N`) rather than
+   * minting a new content-hash ref. Preserves live tool-result identity so the
+   * adapter and downstream reconciliation can resolve `storedKey` references
+   * back to their original scratchpad keys. Idempotent: no-op if `ref` already
+   * present.
+   */
+  putWithRef(ref: string, tool: string, value: unknown): string {
+    if (!this.map.has(ref)) this.map.set(ref, { ref, tool, value });
+    return ref;
+  }
+
   get(ref: string): StoredResult | undefined {
     return this.map.get(ref);
   }
