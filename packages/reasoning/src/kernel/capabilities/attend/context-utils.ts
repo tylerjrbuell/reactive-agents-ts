@@ -13,6 +13,7 @@ import type { ContextProfile } from "../../../context/context-profile.js";
 import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { applyAgeAwareCuration, curationAgeAware } from "../attend/tool-formatting.js";
+import { applyOverhaulContextProjection, overhaulProjectionEnabled } from "../../../overhaul/context-projection.js";
 import type { KernelState, KernelMessage, KernelInput } from "../../../kernel/state/kernel-state.js";
 import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
@@ -200,8 +201,19 @@ export function buildConversationMessages(
     ? applyAgeAwareCuration(state.messages, state.scratchpad, profile, 1)
     : state.messages;
 
+  // Overhaul (principle #1) — OPT-IN via RA_OVERHAUL=1; default OFF =
+  // byte-identical (curatedMessages passed straight through). When ON, stored
+  // tool_results whose full body OVERFLOWS the recency budget are rewritten to a
+  // clean system summary+ref (NO copyable marker/preview/recall) so weak models
+  // reference via write_result_to_file instead of transcribing. overflowBudget
+  // matches curation's recency budget so "overflows curation → projected".
+  const overflowBudget = Math.max(4000, Math.floor((profile.maxTokens ?? 32_768) * 0.35 * 4));
+  const projectedMessages = overhaulProjectionEnabled()
+    ? applyOverhaulContextProjection(curatedMessages, state.scratchpad, overflowBudget)
+    : curatedMessages;
+
   const compactedMessages = applyMessageWindowWithCompact(
-    curatedMessages,
+    projectedMessages,
     profile.tier ?? "mid",
     effectiveBudget,
   );
