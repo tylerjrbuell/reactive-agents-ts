@@ -196,6 +196,27 @@ exits `done`, the finalizer then nulls it (output-boundary discipline) → the o
 Fix: align the backstop's "has output" notion with the finalizer's, and reconcile the
 terminatedBy provenance (single source).
 
+### ⚠ DISCRIMINATING-CHECK FINDING (2026-05-31, post-DEFECT-1) — D2 mis-targeted, do D3 first
+Before building D2 (a stall-detect progress signal), ran the terminator+behavioral check
+on the false-positive traces (advisor-mandated). Result relocates the work again:
+
+| Trace | Terminating evaluator | `behavioralLoopScore` | Reality |
+|---|---|---|---|
+| `01KSZJTSPJG4` (overflow "false-pos") | **`evaluateEarlyStop`** (`controller_early_stop:dispatcher_early_stop`) | 0.5→0.33 | empty output → `"Reasoning failed"` = **DEFECT 3**, not a stall |
+| `01KSZJRR` (qwen3:4b stuck) | arbitrator repeated-stall (`controller_signal_veto`) | 0.5→0.33 | model genuinely stuck (retrying nonexistent file) — NOT a clean false-pos |
+| `01KSZNHX` (haiku, post-D1) | `low_delta_guard` → `harness_synthesis` | 0.5 | clean |
+
+- **stall-detect never TERMINATED a run** in any trace — it only dispatched a nudge. The
+  overflow harm (the incoherent empty-output terminal state) was caused by **`evaluateEarlyStop`**,
+  which is exactly DEFECT 3. Fixing a stall-detect progress signal would NOT move the
+  overflow case (early-stop still terminates it).
+- **`behavioralLoopScore` is non-discriminating** — clusters 0.33–0.5 across progressing,
+  genuinely-stuck, AND clean runs. No clean one-line reuse exists (advisor option (a) dead by data).
+- **Verdict:** D2 (stall-detect semantic) is real-but-MINOR (a wasted nudge; zero termination
+  harm observed). **DEFECT 3 (early-stop empty-output coherence) is the evidenced failure → do it
+  next.** D2 deferred (fold a progress gate into stall-detect later if the cohort shows nudge-loop
+  cost). Third evidence-driven relocation this cluster — the observability is doing its job.
+
 ### Cluster-1 plan (re-aimed, evidence-backed)
 1. **DEFECT 1 first** — dead tier-gating. Highest leverage, cleanest fix, directly causes
    the premature iter-2 give-up. TDD: RED test asserting mid-tier needs window=3.

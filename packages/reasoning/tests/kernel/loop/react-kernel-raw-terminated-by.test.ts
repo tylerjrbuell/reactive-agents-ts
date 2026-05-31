@@ -54,13 +54,15 @@ function syntheticState(opts: {
 }
 
 describe("deriveTerminatedBy() — rawTerminatedBy parallel open-string channel", () => {
-  it("preserves dynamic killswitch reason while narrowing terminatedBy to final_answer (status=done)", () => {
+  it("preserves dynamic killswitch reason; narrows to end_turn NOT final_answer (status=done, DEFECT 3)", () => {
     const result = deriveTerminatedBy(
       syntheticState({ terminatedBy: "budget-limit:tokens:1/0", status: "done" }),
     );
-    // Narrowed: status=done + unknown raw → final_answer (existing semantics)
-    expect(result.terminatedBy).toBe("final_answer");
-    // Raw: preserved verbatim for downstream observability
+    // DEFECT 3 (2026-05-31): a killswitch cut-off is NOT a model final answer.
+    // The old catch-all `done → final_answer` was a codified lie (→ goalAchieved
+    // true on a forced stop). Truthful: catch-all done → end_turn (goalAchieved null).
+    expect(result.terminatedBy).toBe("end_turn");
+    // Raw: preserved verbatim for downstream observability (unchanged contract).
     expect(result.rawTerminatedBy).toBe("budget-limit:tokens:1/0");
   });
 
@@ -74,10 +76,47 @@ describe("deriveTerminatedBy() — rawTerminatedBy parallel open-string channel"
 
   it("OMITS rawTerminatedBy (does not set to undefined) when meta.terminatedBy is absent", () => {
     const result = deriveTerminatedBy(syntheticState({ status: "done" }));
-    expect(result.terminatedBy).toBe("final_answer");
+    // DEFECT 3: an unclassifiable done with no reason is honest "unknown" (end_turn
+    // → goalAchieved null), never an asserted final_answer.
+    expect(result.terminatedBy).toBe("end_turn");
     // The field must be ABSENT, not explicitly undefined — guards against
     // spread-based consumers polluting downstream metadata.
     expect("rawTerminatedBy" in result).toBe(false);
+  });
+
+  // ── DEFECT 3 (2026-05-31): terminatedBy must be truthful ──────────────────
+  // The catch-all `done → final_answer` mislabeled EVERY harness/give-up done
+  // reason as a model answer → deriveGoalAchieved returned true on failed runs
+  // (success:false + goalAchieved:true incoherence). Fix = whitelist genuine
+  // model-answer reasons → final_answer; all other done reasons → end_turn.
+  describe("DEFECT 3 — harness/give-up done reasons are NOT final_answer", () => {
+    const giveUpDoneReasons = [
+      "controller_early_stop:dispatcher_early_stop",
+      "dispatcher-early-stop",
+      "low_delta_guard",
+      "switching_exhausted",
+      "oracle_forced",
+      "harness_deliverable",
+      "harness_synthesis",
+      "loop_graceful",
+      "controller_signal_veto",
+    ];
+    for (const reason of giveUpDoneReasons) {
+      it(`'${reason}' (status=done) → end_turn, NOT final_answer`, () => {
+        const result = deriveTerminatedBy(syntheticState({ terminatedBy: reason, status: "done" }));
+        expect(result.terminatedBy).toBe("end_turn");
+        expect(result.rawTerminatedBy).toBe(reason);
+      });
+    }
+
+    const genuineAnswerReasons = ["final_answer", "final_answer_regex", "content_stable", "entropy_converged"];
+    for (const reason of genuineAnswerReasons) {
+      it(`'${reason}' (status=done) → final_answer (genuine model answer, whitelisted)`, () => {
+        const result = deriveTerminatedBy(syntheticState({ terminatedBy: reason, status: "done" }));
+        expect(result.terminatedBy).toBe("final_answer");
+        expect(result.rawTerminatedBy).toBe(reason);
+      });
+    }
   });
 
   it("preserves all five killswitch reason families verbatim while narrowing to max_iterations when status != done", () => {

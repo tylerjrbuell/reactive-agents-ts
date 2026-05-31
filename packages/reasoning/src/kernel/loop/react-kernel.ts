@@ -97,6 +97,19 @@ export const reactKernel: ThoughtKernel = makeKernel();
  * absent, so spread-based consumers don't pollute their result with
  * `{ rawTerminatedBy: undefined }`.
  *
+ * Narrowing to `"final_answer"` is WHITELIST-gated (DEFECT 3, 2026-05-31):
+ * only genuine model-answer reasons — `final_answer`, `final_answer_regex`,
+ * `content_stable`, `entropy_converged` — map to `"final_answer"`. Any other
+ * `status === "done"` (harness/give-up reasons such as
+ * `controller_early_stop:*`, `low_delta_guard`, `oracle_forced`,
+ * `harness_deliverable`, `loop_graceful`, killswitch cut-offs, etc.) narrows
+ * to `"end_turn"`, NOT `"final_answer"`. The old catch-all `done → final_answer`
+ * was a codified lie: it forced `deriveGoalAchieved` to return `true` on FAILED
+ * runs (the observed `success:false` + `goalAchieved:true` incoherence).
+ * `end_turn` yields an honest `goalAchieved` null ("unknown") instead of the lie.
+ * A whitelist miss under-claims (honest, loud); a blacklist miss would
+ * over-claim (silent lie) — so whitelist is the chosen error-asymmetry.
+ *
  * Pure / synchronous / no Effect — exported for unit testability.
  */
 export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; status: KernelState["status"] }): {
@@ -117,10 +130,13 @@ export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; st
         ? "final_answer_tool"
         : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
           ? "end_turn"
-          : rawTerminatedBy === "final_answer_regex"
+          : rawTerminatedBy === "final_answer" ||
+              rawTerminatedBy === "final_answer_regex" ||
+              rawTerminatedBy === "content_stable" ||
+              rawTerminatedBy === "entropy_converged"
             ? "final_answer"
             : state.status === "done"
-              ? "final_answer"
+              ? "end_turn"
               : "max_iterations";
   return rawTerminatedBy !== undefined
     ? { terminatedBy, rawTerminatedBy }
