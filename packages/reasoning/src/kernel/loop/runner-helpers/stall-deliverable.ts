@@ -37,7 +37,10 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
-import { emitHarnessSignalInjected } from "../../../kernel/utils/diagnostics.js";
+import {
+  emitHarnessSignalInjected,
+  emitGuardFired,
+} from "../../../kernel/utils/diagnostics.js";
 import { verifyAndEmit, type Verifier } from "../../../kernel/capabilities/verify/verifier.js";
 import {
   assembleDeliverable,
@@ -121,6 +124,14 @@ export function runStallDeliverableStep(
         if (totalArtifacts > 0) {
           yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
           const d = assembleDeliverable(state);
+          yield* emitGuardFired({
+            taskId: currentOptions.taskId ?? state.taskId,
+            iteration: state.iteration,
+            guard: "stall_deliverable",
+            outcome: "terminate",
+            reason: deliverableTerminationReason(d),
+            metadata: { totalArtifacts, trigger: "required_tool_nudge_exhausted" },
+          });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
             output: d.content,
@@ -243,6 +254,14 @@ export function runStallDeliverableStep(
       // Proceed with original
       // harness fallback. terminate() preserves the single-owner invariant.
       yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Assembling output from ${totalArtifacts} tool artifacts after ${consecutiveStalled} stalled iterations (source=${candidateDeliverable.source})`, timestamp: new Date() });
+      yield* emitGuardFired({
+        taskId: currentOptions.taskId ?? state.taskId,
+        iteration: state.iteration,
+        guard: "stall_deliverable",
+        outcome: "terminate",
+        reason: candidateTerminationReason,
+        metadata: { totalArtifacts, consecutiveStalled, source: candidateDeliverable.source },
+      });
       state = terminate(state, {
         reason: candidateTerminationReason,
         output: candidateOutput,

@@ -90,3 +90,119 @@ that would have shipped real artifacts. Making this explicit is the capability w
 4. **Re-run cohort** → `compareCohorts(baseline, collapsed)`.
 5. Merge ONLY if verdict = "B improves" or "B neutral" (honesty held); revert on
    "B regresses"; wire the blind signal if "inconclusive (blind)".
+
+---
+
+## ⚠ BASELINE-SMOKE FINDING (2026-05-31) — re-aim the first cluster
+Step 2 instrumentation landed (7 emit-only guards at sites 2,5,6,7 via kernel-warden,
+build+1557 tests green). Then **3 baseline smokes** (qwen3:4b ×2, qwen3.5 ×1, reactive,
+across stuck/overflow tasks) before spending the full grid. Result: **ZERO of sites
+2,5,6,7 fired in any run.** The traces show why — and it relocates the refactor.
+
+### What actually terminates runs (the hot path)
+All 3 runs ended at **iter 2–3** via the **reactive-observer's `stall-detect`
+intervention** (`decisionType: stall-detect`, "Entropy flat at ≤0.2 for 2 consecutive
+iterations — model appears stuck") → **dispatcher-early-stop** (`iterate-pass.ts` L525-542)
+→ arbitrator. Terminal reasons observed: `final_answer` (site 1),
+`controller_signal_veto` + `controller_early_stop:dispatcher_early_stop` (site 3, the
+arbitrator — ALREADY the collapse target), `max_iterations` (site 10).
+
+### Why sites 5,6,7 are masked (not cold)
+`iterate-pass.ts` call order is decisive:
+- L469 `shouldExitOnLowDelta` (site 2) — runs first, but **accumulation-starved**:
+  needs 2 consecutive sub-threshold deltas; runs resolve before it accumulates.
+- L517 `runReactiveObserver` → L525 `dispatcher-early-stop` → **L542 `return "break"`**.
+- L647 `runStallDeliverableStep` (5), L707 `shouldForceOracleExit` (6), L850
+  `resolveDetectedLoop` (7) — **all sit AFTER L542's break**. When the dispatcher
+  early-stops (the common case), they are **never reached**. Masked, not cold.
+
+So the premise "5 deciders race + bypass the arbitrator" is **refuted in practice**:
+the arbitrator (via dispatcher-early-stop) wins by firing first/early at iter 2. It is
+already the de facto single decider. The give-up guards only get a turn on runs that
+survive past iter 2 without an early-stop — which these tasks/tiers don't produce.
+
+### The real failure modes (on the HOT path)
+1. **Premature early-stop:** `stall-detect` fired at iter 2 on the overflow task with
+   **17k tokens of genuine work** in hand — "model appears stuck" after 2 flat-entropy
+   iters is too trigger-happy; it gives up on productive runs.
+2. **Incoherent terminal state:** the overflow early-stop produced
+   `success:false` + `goalAchieved:true` + `outputLen:0` + `error:"Reasoning failed"`
+   + `terminatedBy:final_answer` simultaneously — finalization downstream of the
+   early-stop emits garbage (M7 status/output coherence territory).
+3. **`terminatedBy` provenance disagreement:** `analyzeRun` reads
+   `lastSnapshot.terminatedBy` (raw internal, e.g. `controller_signal_veto`);
+   `result.terminatedBy` reports the post-loop mapped value (e.g. `max_iterations`).
+   Two subsystems disagree on *why* a run ended. Comparator is internally consistent
+   (keys on snapshot) but this is a real coherence smell.
+4. **Fabrication-honesty:** qwen3.5 on the stuck task (nonexistent file) **fabricated**
+   a summary and claimed `success:true` / `final_answer_tool` — the dishonest-success
+   the trace honesty-check was built to catch.
+
+### Recommendation — re-aim cluster 1
+From "collapse the 5 give-up guards" → **"the dispatcher-early-stop / `stall-detect`
+path + finalization coherence."** That is the hot path (where termination actually
+happens) AND where the live failure modes are. The 7 emit-only guards stay (behavior-
+neutral; they fire when those paths trigger; `terminal_decision` already instruments
+the hot path). Sites 5,6,7 collapse becomes downstream cleanup once the dispatcher is
+the explicit single decider. **Genuine scope change — pending user confirm.**
+
+### Evidence (trace runIds)
+- `01KSZJMT8GMJ1YW8G0TANDN6PW` — qwen3.5 stuck → fabricated success (honesty fail).
+- `01KSZJRR2DNTP859CF66AHX8DK` — qwen3:4b stuck → controller_signal_veto / result says max_iterations (provenance).
+- `01KSZJTSPJG4MXA636ZATXSGDD` — qwen3:4b overflow → dispatcher-early-stop iter 2 → incoherent terminal state.
+
+---
+
+## ROOT-CAUSE INVESTIGATION (2026-05-31) — cluster-1 target, defined
+Read-only dive into the hot path. Source lives in **`packages/reactive-intelligence/`**
+(RI controller), NOT the reasoning kernel — the flow is: RI evaluators →
+`controller-service.ts` → kernel `reactive-observer.ts` builds `ControllerEvalParams`
++ consumes patches → `dispatcher-early-stop`. Three concrete defects, ranked by leverage.
+
+### DEFECT 1 — stall-detect tier-gating is DEAD (root cause of iter-2 give-up)
+`reactive-intelligence/src/controller/evaluators/stall-detect.ts:28`:
+```ts
+const tier = "local"; // conservative default — actual tier not in params yet
+const window = STALL_WINDOW_BY_TIER[tier] ?? 3;
+```
+`tier` is **hardcoded "local"** → `window` is **always 2** → stall-detect fires after 2
+flat-entropy iters on EVERY tier. The `STALL_WINDOW_BY_TIER` table (local:2, mid:3,
+large:4, frontier:5) is **dead scaffold** — never reached. Confirmed: `ControllerEvalParams`
+(`types.ts:229`) carries no `tier`/`modelTier`; the kernel builder
+(`reactive-observer.ts:222-238`) passes `maxIterations`/`hasUserOutput` but NOT tier.
+**Effect:** premature give-up at iter 2 on mid/large/frontier (should be 3/4/5).
+**Fix (cross-package):** add `tier` to `ControllerEvalParams` (RI, direct edit) + populate
+from `profile.tier` in `reactive-observer.ts` (kernel → kernel-warden) + read it in
+stall-detect. Clean, testable, high-confidence. Directly explains the observed iter-2 stop.
+
+### DEFECT 2 — low-flat entropy ≠ "stuck" (false-positive give-up)
+`stall-detect.ts:35` treats `composite ≤ 0.20` as stuck. But low/flat entropy also means
+**converged/confident** — a productively-progressing run (steady read→write) has low flat
+entropy. The overflow run had **17k tokens of genuine work** and was flagged "stuck."
+The doc comment (lines 12-17) claims the intent includes "no new tool calls," but the code
+checks only entropy + `consecutiveToolFailures` — the **progress/tool-call guard described
+is not implemented** (second dead intent). Fix: gate stall-detect on an actual
+no-progress signal (no new tool calls / token-delta flat / no artifact growth), not just
+low entropy.
+
+### DEFECT 3 — empty-output early-stop slips the FM-A3 backstop (incoherent terminal state)
+`early-stop.ts` has `suppressForEmptyOutput` (the FM-A3 backstop), but it's bypassed when
+`atLastIteration` (`iteration >= maxIterations-1`) — and `hasUserOutput`
+(`reactive-observer.ts:238`, checks `s.output` non-empty) **diverges from the finalizer's
+user-visible-output notion**: a non-user-visible thought counts as "output," early-stop
+exits `done`, the finalizer then nulls it (output-boundary discipline) → the observed
+`success:false` + `goalAchieved:true` + `outputLen:0` + `error:"Reasoning failed"`. Also the
+`terminatedBy` provenance split (snapshot=`controller_signal_veto` vs result=`max_iterations`).
+Fix: align the backstop's "has output" notion with the finalizer's, and reconcile the
+terminatedBy provenance (single source).
+
+### Cluster-1 plan (re-aimed, evidence-backed)
+1. **DEFECT 1 first** — dead tier-gating. Highest leverage, cleanest fix, directly causes
+   the premature iter-2 give-up. TDD: RED test asserting mid-tier needs window=3.
+   Cross-package (RI direct + reactive-observer via kernel-warden).
+2. **DEFECT 2** — add a real no-progress signal to stall-detect (kill the false positive
+   on converged-but-working runs).
+3. **DEFECT 3** — finalization coherence + terminatedBy provenance.
+4. **Baseline cohort** then runs against the re-aimed target with the 7 emits + the
+   `terminal_decision` instrumentation already capturing the hot path; comparator gates
+   each fix (honesty held, fewer premature give-ups, coherent terminal state).

@@ -14,6 +14,7 @@ import { transitionState } from "../../../kernel/state/kernel-state.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../../kernel/state/kernel-state.js";
 import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
+import type { ModelTier } from "../../../context/context-profile.js";
 import { evaluateVerbosity } from "./verbosity-detector.js";
 
 /**
@@ -52,6 +53,7 @@ export function runReactiveObserver(
   eventBus: MaybeService<EventBusInstance>,
   prevStepCount: number,
   currentOptions: KernelRunOptions,
+  tier: ModelTier,
   harnessPipeline?: import("@reactive-agents/core").HarnessPipeline,
 ): Effect.Effect<{ state: KernelState; prevStepCount: number }, never> {
   return Effect.gen(function* () {
@@ -236,6 +238,10 @@ export function runReactiveObserver(
           failingToolName,
           // FM-A3 backstop — empty-output invariant for RI early-stop.
           hasUserOutput: typeof s.output === "string" && s.output.trim().length > 0,
+          // DEFECT 1 fix — thread the real model tier so stall-detect uses the
+          // correct tier-scaled stall window (mid=3/large=4/frontier=5) instead
+          // of the hardcoded local=2 that caused premature give-up at iter 2.
+          tier,
         });
 
         for (const decision of decisions) {

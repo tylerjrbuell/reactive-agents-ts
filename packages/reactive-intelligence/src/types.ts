@@ -272,6 +272,17 @@ export type ControllerEvalParams = {
    * own output bookkeeping).
    */
   readonly hasUserOutput?: boolean;
+  /**
+   * Operational model tier — drives tier-gated evaluator thresholds (e.g.
+   * stall-detect's STALL_WINDOW_BY_TIER: local=2, mid=3, large=4, frontier=5).
+   *
+   * Caller (kernel `reactive-observer`) supplies `profile.tier`. When omitted,
+   * evaluators default to `"local"` (most conservative window) so outer-loop
+   * synthetic callers (plan-execute / ToT) that don't plumb tier keep prior
+   * behavior. DEFECT 1 fix (2026-05-31): before this field the tier was
+   * hardcoded `"local"` in stall-detect, making the per-tier table dead.
+   */
+  readonly tier?: "local" | "mid" | "large" | "frontier";
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {

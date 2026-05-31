@@ -113,6 +113,7 @@ import {
 } from "../../kernel/capabilities/recall/recall-service.js";
 import {
   emitKernelStateSnapshot,
+  emitGuardFired,
 } from "../../kernel/utils/diagnostics.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import { RunControllerRef } from "@reactive-agents/core";
@@ -468,6 +469,18 @@ export function runIterationPass(
           shouldExitOnLowDelta({ iteration: state.iteration, tokenDelta, consecutiveLowDeltaCount: newConsecutiveLowDelta, tier: profile.tier })
         ) {
           yield* Effect.log(`[token-delta-guard] Early exit: 2 consecutive iterations with <${tierGuards.tokenDeltaThreshold} token delta (delta=${tokenDelta}, iter=${state.iteration})`);
+          yield* emitGuardFired({
+            taskId: currentOptions.taskId ?? state.taskId,
+            iteration: state.iteration,
+            guard: "low_delta_guard",
+            outcome: "terminate",
+            reason: "low_delta",
+            metadata: {
+              tokenDelta,
+              consecutiveLowDeltaCount: newConsecutiveLowDelta,
+              artifactsAvailable: countDeliverableCandidates(state),
+            },
+          });
           state = terminate(state, {
             reason: "low_delta_guard",
             output: state.output ?? "",
@@ -502,7 +515,7 @@ export function runIterationPass(
 
       // ── Entropy scoring + Reactive Controller evaluation ────────────────
       ({ state, prevStepCount } = yield* runReactiveObserver(
-        state, services, eventBus, prevStepCount, currentOptions, effectiveInput.harnessPipeline,
+        state, services, eventBus, prevStepCount, currentOptions, profile.tier, effectiveInput.harnessPipeline,
       ));
 
       // Honor early-stop dispatched by the intervention dispatcher.
@@ -694,6 +707,20 @@ export function runIterationPass(
           shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount, tier: profile.tier })
         ) {
           // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
+          yield* emitGuardFired({
+            taskId: currentOptions.taskId ?? state.taskId,
+            iteration: state.iteration,
+            guard: "oracle_forced",
+            outcome: "terminate",
+            reason: "oracle_forced",
+            metadata: {
+              nudgeCount,
+              willDeliver: !!(
+                state.output ??
+                state.steps.filter((s) => s.type === "thought").slice(-1)[0]?.content
+              )?.trim(),
+            },
+          });
           yield* emitLog({ _tag: "warning", message: `[oracle-gate] Forcing exit after ${nudgeCount} ignored readyToAnswer signals`, timestamp: new Date() });
           // Output-boundary discipline (per types/step.ts isUserVisibleStep):
           // never substitute a hard-coded harness phrase ("Task complete.")

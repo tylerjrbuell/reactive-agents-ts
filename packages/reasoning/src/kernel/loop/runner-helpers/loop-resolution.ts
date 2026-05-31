@@ -38,7 +38,10 @@ import {
   type KernelInput,
   type KernelRunOptions,
 } from "../../../kernel/state/kernel-state.js";
-import { emitHarnessSignalInjected } from "../../../kernel/utils/diagnostics.js";
+import {
+  emitHarnessSignalInjected,
+  emitGuardFired,
+} from "../../../kernel/utils/diagnostics.js";
 import { missingRequiredToolsForInput } from "./state-queries.js";
 import {
   assembleDeliverable,
@@ -139,6 +142,14 @@ export function resolveDetectedLoop(
         if (requiredToolNudgeCount > maxRequiredToolNudges) {
           yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted in loop detection (${maxRequiredToolNudges}) — delivering ${loopArtifactCount} artifacts`, timestamp: new Date() });
           const d = assembleDeliverable(state);
+          yield* emitGuardFired({
+            taskId: currentOptions.taskId ?? state.taskId,
+            iteration: state.iteration,
+            guard: "loop_resolution",
+            outcome: "terminate",
+            reason: deliverableTerminationReason(d),
+            metadata: { loopArtifactCount, trigger: "loop_required_tool_exhausted" },
+          });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
             output: d.content,
@@ -167,6 +178,14 @@ export function resolveDetectedLoop(
 
       const loopDeliverable = assembleDeliverable(state);
       yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Loop detected but ${loopArtifactCount} artifacts gathered — delivering instead of failing (source=${loopDeliverable.source})`, timestamp: new Date() });
+      yield* emitGuardFired({
+        taskId: currentOptions.taskId ?? state.taskId,
+        iteration: state.iteration,
+        guard: "loop_resolution",
+        outcome: "terminate",
+        reason: deliverableTerminationReason(loopDeliverable),
+        metadata: { loopArtifactCount, source: loopDeliverable.source },
+      });
       state = terminate(state, {
         reason: deliverableTerminationReason(loopDeliverable),
         output: loopDeliverable.content,
@@ -195,6 +214,14 @@ export function resolveDetectedLoop(
       const lastThought = [...state.steps].reverse().find((s) => s.type === "thought");
       const lastThoughtContent = lastThought?.content;
       if (lastThoughtContent && lastThoughtContent.trim().length > 0) {
+        yield* emitGuardFired({
+          taskId: currentOptions.taskId ?? state.taskId,
+          iteration: state.iteration,
+          guard: "loop_resolution",
+          outcome: "terminate",
+          reason: "loop_graceful",
+          metadata: { loopArtifactCount: 0, trigger: "graceful_thought" },
+        });
         state = terminate(state, {
           reason: "loop_graceful",
           output: lastThoughtContent,
