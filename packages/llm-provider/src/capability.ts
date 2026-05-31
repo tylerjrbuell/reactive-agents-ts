@@ -243,14 +243,18 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
 
   // ── Ollama (local) ───────────────────────────────────────────────────────
   // Ollama defaults to num_ctx=2048 if not set — that's the G-1 truncation
-  // bug. Recommended values here lean toward common task sizes (8K) for the
-  // most-tested local models. Users can override via CompletionRequest.numCtx.
+  // bug. recommendedNumCtx is set to 32K (== maxContextTokens here, == the
+  // probe's VRAM-conservative cap from local-probe.ts) so real MCP/persona
+  // workloads aren't silently truncated at 8K. Both 14B models report a far
+  // larger real window via /api/show (cogito qwen2.context_length=131072,
+  // qwen3.context_length=40960) but 32K is the VRAM-safe ceiling for a 16GB
+  // GPU. Users can override via CompletionRequest.numCtx.
   "ollama/cogito:14b": {
     provider: "ollama",
     model: "cogito:14b",
     tier: "local",
     maxContextTokens: 32_768,
-    recommendedNumCtx: 8192,
+    recommendedNumCtx: 32_768,
     maxOutputTokens: 4096,
     tokenizerFamily: "llama",
     supportsPromptCaching: false,
@@ -265,7 +269,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     model: "qwen3:14b",
     tier: "local",
     maxContextTokens: 32_768,
-    recommendedNumCtx: 8192,
+    recommendedNumCtx: 32_768,
     maxOutputTokens: 4096,
     tokenizerFamily: "llama",
     supportsPromptCaching: false,
