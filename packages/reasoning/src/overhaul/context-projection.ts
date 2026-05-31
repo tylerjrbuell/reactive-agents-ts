@@ -57,6 +57,11 @@ export function summarizeStored(ref: string, tool: string | undefined, fullValue
 export function applyOverhaulContextProjection<
   M extends { readonly role: string; readonly content: string; readonly storedKey?: string; readonly toolName?: string },
 >(messages: readonly M[], scratchpad: ReadonlyMap<string, string>, overflowBudget: number): M[] {
+  // Test knob: RA_OVERFLOW_BUDGET forces the summary+ref path deterministically
+  // (exercise the overflow branch without depending on result-size variance).
+  // Production leaves it unset → the caller-derived budget stands.
+  const envBudget = process.env.RA_OVERFLOW_BUDGET ? Number(process.env.RA_OVERFLOW_BUDGET) : undefined;
+  if (envBudget !== undefined && Number.isFinite(envBudget)) overflowBudget = Math.min(overflowBudget, envBudget);
   if (process.env.RA_OVERHAUL_DEBUG === "1") {
     const trs = messages.filter((m) => m.role === "tool_result");
     const withKey = trs.filter((m) => (m as { storedKey?: string }).storedKey);
