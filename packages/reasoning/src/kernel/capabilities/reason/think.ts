@@ -42,6 +42,7 @@ import {
   guardEvidenceGrounding,
   filterRecallByOverflow,
   recallGateEnabled,
+  assemblyEnabled,
 } from "./think-guards.js";
 
 import type { ToolSchema } from "../attend/tool-formatting.js";
@@ -328,15 +329,22 @@ export function handleThinking(
     // - Slice C: profile.recentObservationsLimit threads through here so agents
     //   can opt-in via profileOverrides without touching kernel internals.
     //   Defaults to 0 across all tiers → off by default, preserves prior shape.
-    // RA_ASSEMBLY (Phase 3.2): flag-gated live seam for the canonical
-    // context-assembly pipeline. Default (unset) preserves the byte-identical
-    // curate() path; =1 sources systemPrompt+messages from project(). The
-    // tools/recall-gate path below is shared by BOTH arms so the A/B isolates
-    // the context-assembly variable only.
+    // RA_ASSEMBLY: canonical context-assembly seam — DEFAULT-ON, opt-out only
+    // via RA_ASSEMBLY=0. Sources systemPrompt+messages from project(); the
+    // opt-out (=0) falls back to the legacy byte-identical curate() path (kept
+    // reachable as a killswitch — deletion deferred). The tools/recall-gate path
+    // below is shared by BOTH arms so they differ only on the context-assembly
+    // variable. Cleared the default-on bar by the hardened cross-tier A/B grid
+    // (N=3, 2 tiers, faithfulness-graded:
+    // wiki/Research/Harness-Reports/assembly-ab-grid-hardened-2026-05-31.md):
+    // project() deterministic 1.0/1.0/1.0 section-coverage both tiers vs legacy
+    // 0.82–0.91 + a hard runaway, −57% local tokens on compact, and terminates
+    // final_answer_tool everywhere (legacy had end_turn/goalAchieved:null
+    // coherence gaps on mid). No cell regresses. Mirrors recallGateEnabled().
     let systemPromptText: Prompt["systemPrompt"];
     let conversationMessages: Prompt["messages"];
     let compressionApplied: Prompt["compressionApplied"];
-    if (process.env.RA_ASSEMBLY === "1") {
+    if (assemblyEnabled()) {
       const { request, trace } = project(
         fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }),
       );

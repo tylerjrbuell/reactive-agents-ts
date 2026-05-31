@@ -64,9 +64,22 @@ for tier in "${TIERS[@]}"; do
         ec=$?
         sj=$(grep -m1 '^SPOT_RESULT_JSON=' "$log" | sed 's/^SPOT_RESULT_JSON=//')
         traces=$(grep -c 'RA_ASSEMBLY_TRACE' "$log")
-        summref=$(grep -o 'summary+ref' "$log" | wc -l)
+        # #1 renamed the overflow projection label summary+ref → preview+ref;
+        # match both so the signal survives the rename (older logs/back-compat).
+        summref=$(grep -oE 'preview\+ref|summary\+ref' "$log" | wc -l)
         [ -z "$sj" ] && sj='{"success":null,"note":"no SPOT_RESULT_JSON (timeout/crash)"}'
-        echo "{\"cell\":\"$cell\",\"tier\":\"$tname\",\"task\":\"$kind\",\"arm\":$arm,\"run\":$r,\"exit\":$ec,\"traces\":$traces,\"summref_lines\":$summref,\"result\":$sj}" >> "$REPORT"
+        # Snapshot the deliverable BEFORE the next cell rm's it, and grade
+        # faithfulness in-grid (the flag ≠ the file — #1 lesson). overflow →
+        # section-coverage vs the 22-section fixture; compact → keep commits.md.
+        cov=null
+        if [ "$kind" = "overflow" ] && [ -f agents-summary.md ]; then
+          cp agents-summary.md "$OUT/$cell.deliverable.md"
+          c=$(bun run section-coverage-grade.ts overflow-fixture.md "$OUT/$cell.deliverable.md" 2>/dev/null | grep -oE '"coverage":[[:space:]]*[0-9.]+' | grep -oE '[0-9.]+$')
+          [ -n "$c" ] && cov=$c
+        elif [ "$kind" = "compact" ] && [ -f commits.md ]; then
+          cp commits.md "$OUT/$cell.deliverable.md"
+        fi
+        echo "{\"cell\":\"$cell\",\"tier\":\"$tname\",\"task\":\"$kind\",\"arm\":$arm,\"run\":$r,\"exit\":$ec,\"traces\":$traces,\"summref_lines\":$summref,\"coverage\":$cov,\"result\":$sj}" >> "$REPORT"
       done
     done
   done
