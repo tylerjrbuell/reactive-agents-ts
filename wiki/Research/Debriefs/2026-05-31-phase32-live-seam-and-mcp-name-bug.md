@@ -47,7 +47,30 @@ Two-way name mapping at the FC boundary:
 - On tool-call parse (act/think native-FC path), map the returned name back to the canonical `server/tool` before registry lookup/execution.
 Touches kernel FC wiring (think.ts llmTools + tool-call parsing) → kernel-warden. Possibly tool-service registration. Affects ALL native-FC MCP usage, not just this A/B.
 
-## Status of Phase 3.2
-- Assembly seam: ✅ proven live (multi-turn thread accepted).
-- Deterministic overflow: ✅ golden-trace.
-- **Live-OVERFLOW multi-turn end-to-end: BLOCKED** — the only large-result tool available (MCP github) is unreachable on native-FC until the name bug is fixed. Decision pending (user): fix MCP name-sanitization now (unblocks + fixes a real framework gap) vs file it and complete 3.2 on golden-trace + live-multi-turn proof.
+## Post-fix live verification (MCP name-sanitize landed, `34dc70cf`)
+Re-ran the `=1` overflow task on Anthropic haiku with the fix in place:
+- **`success:true`, 17 steps, 5 think-iterations**, toolCalls `brief → github/list_commits → file-write×3`.
+- **5 `RA_ASSEMBLY_TRACE` lines** (one per think iteration) — the multi-turn reconstructed thread (`user(goal)` + grouped `assistant{tool_use}` + projected `tool_result`) was **accepted by a real native-FC provider across the full loop**. Thread-validity + MCP-name round-trip both proven live, multi-turn.
+- Projection stayed `full` every iteration (`1 full … 4 full`, never `summary+ref`) because this MCP `list_commits` returns a **compact** payload (largest tool_result 8534 chars ≪ 45875 recencyBudgetChars). Overflow simply didn't trigger — correct behaviour, not a bug. (The 126k figure in the original wire debrief was a verbose/full-object variant.)
+- `file-write×3` but no file on disk — a file-write tool sandbox/cwd quirk, orthogonal to assembly.
+
+So after the fix: live multi-turn = ✅ proven; live **overflow** (summary+ref mid-loop) requires a genuinely large payload — separate targeted run (fetch a big file).
+
+## Controlled live-OVERFLOW proof (`034fcebd`)
+MCP tools (`list_commits` 8534 chars, `get_file_contents` 81 chars) return payloads
+too compact to cross the 45875-char mid budget, so a natural live overflow was
+unreliable. Added a test-only knob `RA_RECENCY_BUDGET_CHARS` to `resolveCapability`
+(mirrors legacy `RA_OVERFLOW_BUDGET`; unset in prod). Re-ran the known-good
+`list_commits` task with `RA_RECENCY_BUDGET_CHARS=2000` on Anthropic haiku:
+- **`success:true`, 0 `llm_error`.**
+- iter 1: `0 full, 1 summary+ref` — the 8534-char result **overflowed the forced budget and projected to summary+ref LIVE**.
+- iter 2: `1 full, 1 summary+ref` — the summarized thread **persisted + was accepted across iterations**; run completed.
+⟹ the last combo closes: **live + overflow + multi-turn, real native-FC provider, success.** The summary+ref render is provider-valid mid-loop.
+
+## Status of Phase 3.2 — COMPLETE (proof set)
+- ✅ **Golden-trace** — deterministic overflow→summary+ref, byte-identical ×3 (`181afdf2`).
+- ✅ **Live multi-turn thread accepted** — 5 think-iterations, real MCP tool use, Anthropic strict-FC.
+- ✅ **MCP tool-name bug fixed + live-verified** (`34dc70cf`) — github tool now reachable on native-FC.
+- ✅ **Live overflow** — summary+ref fires mid-loop, thread stays valid, run succeeds (`034fcebd`).
+
+Remaining (Phase 4+): collapse + delete legacy builders (buildConversationMessages / ContextManager.build / injectable defaultContextCurator) into project(); full cross-tier A/B grid (now unblocked); then delete recall/[STORED:]/inline-cap. Pre-existing orthogonal issue noted: file-write tool wrote 3× but produced no file (sandbox/cwd) — separate ticket.
