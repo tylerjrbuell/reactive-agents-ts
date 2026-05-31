@@ -28,9 +28,14 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   let summarized = 0;
 
   // 1. Opening user turn = goal. Provider threads must begin with a user message.
+  // project-results is the SOLE builder of c.messages, so it is also the SOLE
+  // trace recorder — record each turn here, in thread order (finalize must NOT
+  // re-record, or assistants double-count and the goal lands last → a trace that
+  // lies about the real thread).
   const goal = c.log.byKind("goal").at(-1)?.text;
   if (goal) {
     messages = [...messages, { role: "user", content: goal }];
+    trace = recordMessage(trace, { role: "user", chars: goal.length });
   }
 
   // 2. Reconstruct turns. Consecutive tool_called events (a parallel batch)

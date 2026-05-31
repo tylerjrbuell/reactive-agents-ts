@@ -16,11 +16,12 @@ it("selectTools passes a stable deduped set + records names", () => {
   expect(c.toolSchemas.length).toBe(1); // deduped
   expect(c.trace.tools).toEqual(["file-write"]);
 });
-it("finalize records non-tool_result messages into the trace", () => {
+it("finalize is a pure stage-marker — does NOT record messages (single-source by projectResults)", () => {
+  // Trace.messages is recorded single-source by projectResults (the sole c.messages
+  // builder), in thread order. finalize must NOT re-record — re-recording double-
+  // counted assistants and appended the goal last, producing a lying trace.
   const c0 = { ...base(), messages: [{ role: "user", content: "hi" }, { role: "tool_result", content: "X" }] };
   const c = finalizeStage(c0);
-  // only the user message is recorded here (tool_result already recorded by projectResults upstream)
-  expect(c.trace.messages.length).toBe(1);
-  expect(c.trace.messages[0]!.role).toBe("user");
-  expect(c.trace.messages[0]!.chars).toBe(2);
+  expect(c.trace.messages.length).toBe(0); // finalize records nothing
+  expect(c.trace.stages.at(-1)?.name).toBe("finalize"); // it only marks the stage
 });
