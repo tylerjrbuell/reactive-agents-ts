@@ -20,7 +20,16 @@ export interface ResolvedCapability {
 const BUCKETS = [8192, 16384, 32768, 65536, 131072] as const;
 
 export function resolveCapability(input: CapabilityInput): ResolvedCapability {
-  const recencyBudgetChars = Math.floor(input.window * 0.35 * 4);
+  // Test knob (mirrors the legacy RA_OVERFLOW_BUDGET): force the recency budget
+  // low so a normal-sized tool result deterministically exercises the
+  // summary+ref overflow branch. Unset in production → derived budget stands.
+  const envBudget = process.env.RA_RECENCY_BUDGET_CHARS
+    ? Number(process.env.RA_RECENCY_BUDGET_CHARS)
+    : undefined;
+  const recencyBudgetChars =
+    envBudget !== undefined && Number.isFinite(envBudget) && envBudget > 0
+      ? envBudget
+      : Math.floor(input.window * 0.35 * 4);
   const agedBudgetChars = Math.max(600, Math.min(4000, Math.floor(input.window * 0.04 * 4)));
   return {
     ...input,
