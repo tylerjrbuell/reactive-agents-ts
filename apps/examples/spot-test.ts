@@ -64,6 +64,10 @@ console.log(
         JSON.stringify({
             provider: PROVIDER,
             model: MODEL,
+            // taskId == the trace runId (~/.reactive-agents/traces/<taskId>.jsonl).
+            // The grid records this per cell so the comparator can group cohorts
+            // by arm without fragile timestamp correlation.
+            taskId: result.taskId,
             success: result.success,
             error: result.error ?? null,
             goalAchieved: result.goalAchieved ?? null,

@@ -24,6 +24,8 @@ export type {
   InterventionPressure,
   CoverageReport,
 } from "./analyze.js"
+export { aggregateCohort, compareCohorts, renderCohortDelta } from "./cohort.js"
+export type { CohortStats, CohortDelta } from "./cohort.js"
 export { TraceBridgeLayer } from "./layer.js"
 export { validateRationale, isRationale } from "./rationale.js"
 export type { Rationale } from "./rationale.js"
