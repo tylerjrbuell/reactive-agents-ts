@@ -43,7 +43,7 @@ const agent = await ReactiveAgents.create()
                 process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
         },
     })
-    .withObservability({ verbosity: 'debug', live: true, logModelIO: false })
+    .withObservability({ verbosity: 'debug', live: true, logModelIO: process.env.SPOT_LOG_IO === '1' })
     .build()
 
 const result = await agent.run(TASK)

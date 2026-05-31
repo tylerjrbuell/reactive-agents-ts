@@ -5,6 +5,7 @@ import { CapabilityRegistryLive } from "./capabilities/registry.js";
 import type { ReactiveAgentsConfig } from "./types.js";
 import { defaultReactiveAgentsConfig } from "./types.js";
 import { CoreServicesLive, EventBusLive, EventBus } from "@reactive-agents/core";
+import { META_TOOLS } from "@reactive-agents/reasoning";
 import type { AgentEvent } from "@reactive-agents/core";
 import {
   createLLMProviderLayer,
@@ -158,11 +159,15 @@ function buildToolsLayer(
   // reject the legitimate `recall` tool. Keeping the comparison lenient here is
   // safer than making users debug invisible whitespace; `checkAllowedToolsMismatch`
   // at bootstrap surfaces the normalized→registered match for visibility.
-  const allowed = new Set(
-    options.allowedTools
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0),
-  );
+  // Meta-tools (recall, write_result_to_file, brief, pulse, …) bypass the user
+  // allowlist at EXECUTION, mirroring the kernel guard's unconditional META_TOOLS
+  // bypass (guard.ts:84). Without this, setting an explicit allowedTools silently
+  // blocks every meta-tool at ToolService.execute even though it is offered to the
+  // model — the bug that hid write_result_to_file behind "not in the allowed tools list".
+  const allowed = new Set([
+    ...options.allowedTools.map((name) => name.trim()).filter((name) => name.length > 0),
+    ...META_TOOLS,
+  ]);
 
   return Layer.effect(
     ToolService,
