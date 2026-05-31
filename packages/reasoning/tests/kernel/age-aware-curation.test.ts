@@ -9,10 +9,11 @@
 // history is ALSO kept full-up-to-4000 (token bloat). The canon (Anthropic
 // tool-result clearing) says keep the CURRENT body full, clear OLD bodies.
 //
-// When RA_CURATION_AGEAWARE=1: the most-recent K=1 tool_result is kept FULL
-// (rehydrated from scratchpad up to a window-scaled ceiling), and AGED results
-// are compressed to a preview + their existing reversible storedKey pointer.
-// Default OFF = byte-identical to today (no rehydration, no compression here).
+// DEFAULT-ON (opt-out via RA_CURATION_AGEAWARE=0): the most-recent K=1
+// tool_result is kept FULL (rehydrated from scratchpad up to a window-scaled
+// ceiling), and AGED results are compressed to a preview + their existing
+// reversible storedKey pointer. Setting RA_CURATION_AGEAWARE=0 = byte-identical
+// to the pre-curation path (no rehydration, no compression here).
 import { describe, it, expect } from "bun:test";
 import {
   curationAgeAware,
@@ -51,11 +52,11 @@ function thread(): KernelMessage[] {
 const frontier = CONTEXT_PROFILES.frontier; // maxTokens 128000
 
 describe("age-aware curation flag seam", () => {
-  it("curationAgeAware: DEFAULT-OFF; opt-in only via RA_CURATION_AGEAWARE=1", () => {
-    expect(curationAgeAware({})).toBe(false);
+  it("curationAgeAware: DEFAULT-ON; opt-out only via RA_CURATION_AGEAWARE=0", () => {
+    expect(curationAgeAware({})).toBe(true); // empty env → ON
     expect(curationAgeAware({ RA_CURATION_AGEAWARE: "1" })).toBe(true);
-    expect(curationAgeAware({ RA_CURATION_AGEAWARE: "0" })).toBe(false);
-    expect(curationAgeAware({ RA_CURATION_AGEAWARE: "" })).toBe(false);
+    expect(curationAgeAware({ RA_CURATION_AGEAWARE: "0" })).toBe(false); // sole opt-out
+    expect(curationAgeAware({ RA_CURATION_AGEAWARE: "" })).toBe(true); // "" !== "0" → ON
   });
 });
 

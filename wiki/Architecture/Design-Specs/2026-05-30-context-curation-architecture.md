@@ -1,7 +1,7 @@
 ---
 title: Context Curation Architecture — the optimal-stream root
 date: 2026-05-30
-status: rfc
+status: "PARTIALLY SHIPPED — age-aware curation DEFAULT-ON (opt-out RA_CURATION_AGEAWARE=0); wire-verified 2026-05-31 (cogito:14b 2-3→10 commits, sole root cause = 4000-char truncation). Recall-removal + budget-vs-num_ctx coupling = open follow-ups."
 priority: "ROOT — Spike 1 of the meta-tool initiative; recall-removal is downstream of this"
 research:
   - "[[2026-05-30-harness-engineering-canon]]"
@@ -122,11 +122,23 @@ fast, measurable first step inside the spike.
   "truncated/re-fetch" loop incidence. Bar: B ≥ A on faithfulness + pass^k at ≤ tokens,
   on overflow tasks (T3 >4000 + a real MCP large-result). RED tests + live gate + advisor.
 
-## Predictive bucketed num_ctx (companion to curation — speed↔capacity tradeoff)
-**Context:** the num_ctx regression (`b1561303`) fixed the stale 8192 pin, but a blanket
-32768 has a cost — Ollama allocates the **full num_ctx KV-cache up front** (slower inference
-+ more VRAM) AND **reloads the model when num_ctx changes** (so it can't vary per call). The
-optimum is to **predict the need and size to it** (user insight, 2026-05-30).
+## Predictive bucketed num_ctx (DEPRIORITIZED — wire-disproven as a failure mode)
+> **Wire verdict (2026-05-31, logging-proxy capture of the literal Ollama round-trip):**
+> num_ctx is **NOT** a failure mode for the regression. The "only 2 commits" symptom was
+> diagnosed end-to-end on the wire as a **single** cause: the flat 4000-char tool_result
+> truncation in `act/conversation-assembly.ts` (curation OFF) — chat-after-`list_commits`
+> received `tool_result len=4087, truncated=true` → model wrote 2-3 of 10. With age-aware
+> curation ON the same call received 21646 chars → **10/10 commits**. Both runs: `num_ctx=15360`
+> (operator-set "half for speed"), `prompt_eval ≈ 1s`, `done_reason=stop` — num_ctx was fast,
+> the output budget (`num_predict=2000`, `eval≈360 < 2000`) was never hit. **The only changed
+> variable was input truncation.** Predictive sizing remains a valid *speed/VRAM* optimization
+> at large windows, but it is **not** a correctness fix — deprioritized below curation +
+> recall-removal. (b1561303's 8192→32768 was chasing this non-cause; operator since set 15360.)
+
+**Original context (retained for the speed-optimization track):** Ollama allocates the
+**full num_ctx KV-cache up front** (slower inference + more VRAM) AND **reloads the model
+when num_ctx changes** (so it can't vary per call). The optimum is to **predict the need and
+size to it** (user insight, 2026-05-30).
 
 **RA can predict — it assembles the prompt, so it knows the token count before the call**
 (already counted for curation budgets). Design:

@@ -503,21 +503,30 @@ function buildPlainTextToolPreview(
 //   - aged tool_results → compressToolResult preview + the SAME storedKey
 //     pointer (recall/rehydration stays intact — this is NOT recall removal).
 //
-// DEFAULT-OFF: the kernel only calls applyAgeAwareCuration when
-// `curationAgeAware()` is true. With the flag off, the produce-time +
-// conversation-assembly path is byte-identical to today. The function itself
-// is pure and never mutates its input.
+// DEFAULT-ON (opt-out via RA_CURATION_AGEAWARE=0): the kernel calls
+// applyAgeAwareCuration whenever `curationAgeAware()` is true. With the flag
+// explicitly off, the produce-time + conversation-assembly path is
+// byte-identical to today. The function itself is pure and never mutates input.
 
 /**
- * Whether age-aware tool-result curation is active for this run. DEFAULT-OFF —
- * opt-in only via `RA_CURATION_AGEAWARE=1`. Extracted as a named seam mirroring
- * `recallGateEnabled()` so the default-off / opt-in behavior is directly
- * testable and the controller can run a clean A/B faithfulness ablation
- * (arm A off vs arm B on).
+ * Whether age-aware tool-result curation is active for this run. DEFAULT-ON —
+ * opt-out only via `RA_CURATION_AGEAWARE=0`, mirroring `recallGateEnabled()`'s
+ * exact env idiom. Extracted as a named seam so the default-on / opt-out
+ * behavior is directly testable and the controller can run a clean A/B
+ * faithfulness ablation (arm A = RA_CURATION_AGEAWARE=0 off, arm B = on).
+ *
+ * Default flipped from opt-in 2026-05-30 on wire ground truth + user mandate
+ * ("present optimally, don't hide data"): with curation OFF the flat 4000-char
+ * conversation-assembly truncation crushed the synthesis target — cogito:14b
+ * received a 4087-char truncated commit list and wrote only 2-3 of 10 commits
+ * (done_reason=stop, not an output cap). With curation ON the same call
+ * received 21646 chars and the model wrote all 10. Spike1 cross-tier ablation
+ * (799487c1): sonnet T3-strict 1/3→3/3, gpt+qwen flat, ZERO regression on the
+ * trusted metric.
  */
 export const curationAgeAware = (
   env: NodeJS.ProcessEnv = process.env,
-): boolean => env.RA_CURATION_AGEAWARE === "1";
+): boolean => env.RA_CURATION_AGEAWARE !== "0";
 
 /** Window-scaled char ceiling for the most-recent (synthesis-target) result.
  *  maxTokens × fraction × ~4 chars/token, with a floor so tiny local windows
