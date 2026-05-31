@@ -39,7 +39,7 @@ import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
-import { emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
+import { emitGuardFired, emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
 import {
   validateOutputFormat,
   validateContentCompleteness,
@@ -731,6 +731,16 @@ export function runKernel(
         });
       }
     }
+
+    // Observe the already-decided terminal decision (emit-only; no control flow).
+    yield* emitGuardFired({
+      taskId: currentOptions.taskId ?? state.taskId,
+      iteration: state.iteration,
+      guard: "terminal_decision",
+      outcome: "terminate",
+      reason: typeof state.meta.terminatedBy === "string" ? state.meta.terminatedBy : (state.status === "failed" ? "failed" : "done"),
+      metadata: { terminatedBy: state.meta.terminatedBy ?? null, status: state.status },
+    });
 
     // ── 10. Terminal hooks ────────────────────────────────────────────────────
     if (state.status === "done") {
