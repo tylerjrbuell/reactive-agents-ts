@@ -63,6 +63,7 @@ console.log(
             steps: result.metadata.stepsCount,
             durationMs: result.metadata.duration,
             outputLen: result.output.length,
+            toolCalls: (result.metadata.toolCalls ?? []).map((t) => t.name),
         }),
 )
 await agent.dispose()

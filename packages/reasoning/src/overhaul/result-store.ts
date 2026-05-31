@@ -13,7 +13,9 @@
  * the kernel-warden pilot; the kernel calls it through one flag-gated seam.
  */
 
-export type ResultFormat = "bullets" | "json" | "table" | "lines";
+import { renderValue, describeShape, type ResultFormat } from "@reactive-agents/tools";
+
+export type { ResultFormat };
 
 export interface StoredResult {
   /** Stable reference id, e.g. "commits_1". Model references this; never sees the bulk. */
@@ -67,105 +69,4 @@ export class ResultStore {
     if (!s) return `[unknown result_ref="${ref}"]`;
     return renderValue(s.value, format);
   }
-}
-
-// ─── pure rendering helpers ──────────────────────────────────────────────────
-
-/** Salient one-line field for an object (commit.message, issue.title, etc.). */
-const SALIENT_FIELDS = ["message", "title", "name", "text", "summary", "content"];
-
-function pickSalient(item: Record<string, unknown>): string | undefined {
-  // direct salient field
-  for (const f of SALIENT_FIELDS) {
-    const v = item[f];
-    if (typeof v === "string" && v.length > 0) return firstLine(v);
-  }
-  // one level of nesting (e.g. { commit: { message } })
-  for (const v of Object.values(item)) {
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      const nested = pickSalient(v as Record<string, unknown>);
-      if (nested) return nested;
-    }
-  }
-  return undefined;
-}
-
-function firstLine(s: string): string {
-  const nl = s.indexOf("\n");
-  return nl >= 0 ? s.slice(0, nl) : s;
-}
-
-function asArray(value: unknown): unknown[] | undefined {
-  if (Array.isArray(value)) return value;
-  // common wrappers: { items: [...] } / { data: [...] } / { results: [...] }
-  if (value && typeof value === "object") {
-    for (const k of ["items", "data", "results", "commits", "value"]) {
-      const v = (value as Record<string, unknown>)[k];
-      if (Array.isArray(v)) return v;
-    }
-  }
-  return undefined;
-}
-
-export function renderValue(value: unknown, format: ResultFormat): string {
-  if (format === "json") return JSON.stringify(value, null, 2);
-
-  const arr = asArray(value);
-  if (!arr) {
-    // scalar / non-array object — render as-is
-    return typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  }
-
-  if (format === "table") return renderTable(arr);
-
-  // bullets | lines — one rendered item per row
-  const prefix = format === "bullets" ? "- " : "";
-  return arr
-    .map((item) => {
-      if (item && typeof item === "object" && !Array.isArray(item)) {
-        const salient = pickSalient(item as Record<string, unknown>);
-        return prefix + (salient ?? compactObject(item as Record<string, unknown>));
-      }
-      return prefix + String(item);
-    })
-    .join("\n");
-}
-
-function compactObject(item: Record<string, unknown>): string {
-  return Object.entries(item)
-    .filter(([, v]) => v !== null && typeof v !== "object")
-    .map(([k, v]) => `${k}=${String(v)}`)
-    .join(" | ");
-}
-
-function renderTable(arr: unknown[]): string {
-  const objs = arr.filter(
-    (i): i is Record<string, unknown> => !!i && typeof i === "object" && !Array.isArray(i),
-  );
-  if (objs.length === 0) return arr.map(String).join("\n");
-  const cols = Array.from(
-    objs.reduce<Set<string>>((set, o) => {
-      for (const k of Object.keys(o)) if (typeof o[k] !== "object") set.add(k);
-      return set;
-    }, new Set()),
-  );
-  const head = `| ${cols.join(" | ")} |`;
-  const sep = `| ${cols.map(() => "---").join(" | ")} |`;
-  const rows = objs.map((o) => `| ${cols.map((c) => String(o[c] ?? "")).join(" | ")} |`);
-  return [head, sep, ...rows].join("\n");
-}
-
-function describeShape(value: unknown): string {
-  const arr = asArray(value);
-  if (arr) {
-    const sample = arr.find((i) => i && typeof i === "object") as
-      | Record<string, unknown>
-      | undefined;
-    const keys = sample ? Object.keys(sample).slice(0, 6).join(", ") : "scalar";
-    return `Array(${arr.length}) of {${keys}}`;
-  }
-  if (value && typeof value === "object") {
-    return `Object {${Object.keys(value as object).slice(0, 6).join(", ")}}`;
-  }
-  return typeof value;
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { ResultStore, renderValue } from "../../src/overhaul/result-store.js";
+import { ResultStore } from "../../src/overhaul/result-store.js";
+import { renderValue } from "@reactive-agents/tools";
 
 // A realistic list_commits shape (nested commit.message, like GitHub MCP).
 const commits = Array.from({ length: 20 }, (_, i) => ({

@@ -93,6 +93,12 @@ export {
   fileWriteHandler,
 } from "./skills/file-operations.js";
 export { httpGetTool, httpGetHandler } from "./skills/http-client.js";
+// Overhaul — pure result renderer (shared by reasoning ContextManager + write-result-to-file).
+export { renderValue, describeShape, asArray, type ResultFormat } from "./skills/render-result.js";
+export {
+  writeResultToFileTool,
+  makeWriteResultToFileHandler,
+} from "./skills/write-result-to-file.js";
 export {
   codeExecuteTool,
   codeExecuteHandler,

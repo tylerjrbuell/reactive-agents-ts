@@ -30,6 +30,10 @@ export const KernelMetaToolsSchema = Schema.Struct({
   find: Schema.optional(Schema.Boolean),
   pulse: Schema.optional(Schema.Boolean),
   recall: Schema.optional(Schema.Boolean),
+  /** Overhaul (RA_OVERHAUL) — register write_result_to_file: the model orchestrates
+   *  a deliverable by REFERENCING a stored result; the system materializes the full
+   *  data. Replaces the marker-copy / transcription path. */
+  writeResultToFile: Schema.optional(Schema.Boolean),
   checkpoint: Schema.optional(Schema.Boolean),
   staticBriefInfo: Schema.optional(StaticBriefInfoSchema),
   harnessContent: Schema.optional(Schema.String),
