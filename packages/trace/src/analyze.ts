@@ -119,9 +119,24 @@ export function analyzeInterventions(
     .map(([guard, s]) => ({ guard, count: s.count, outcomes: s.outcomes, iters: s.iters }))
     .sort((a, b) => b.count - a.count);
 
-  // ── Overlap storms (≥2 distinct guards in one iter) ──────────────────────
+  // ── Overlap storms (≥2 distinct deciders in one iter) ────────────────────
+  // IMPORTANT (2026-05-31 artifact correction): `terminal_decision` is the
+  // post-loop MIRROR emit (runner.ts §10) — it fires once at the terminating
+  // iteration carrying the final terminatedBy, NOT a per-iteration decider. It
+  // co-occurs with whichever guard terminated, so counting it inflates every
+  // terminating run into a false "≥2 guard" storm. It is EXCLUDED here.
+  //
+  // With it excluded, real same-iteration overlap is STRUCTURALLY IMPOSSIBLE in
+  // the current kernel: `terminate()` is the single writer and every give-up
+  // site does `return "break"`, so the first decider to trip ends the loop —
+  // two give-up deciders cannot fire in one iteration. This metric therefore
+  // reads ~0 by construction today; it stays as a forward guard for any future
+  // multi-decider iteration. (The USEFUL signal — "condition-met overlap" /
+  // wrong-winner, where a weak give-up terminates while a stronger deliverable
+  // signal was also true — needs condition-emits, not terminate-emits; deferred.)
   const guardsByIter = new Map<number, Set<string>>();
   for (const g of guards) {
+    if (g.guard === "terminal_decision") continue; // post-loop mirror, not a decider
     const set = guardsByIter.get(g.iter) ?? new Set<string>();
     set.add(g.guard);
     guardsByIter.set(g.iter, set);

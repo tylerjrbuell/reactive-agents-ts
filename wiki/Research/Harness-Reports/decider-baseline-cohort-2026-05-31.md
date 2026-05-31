@@ -26,9 +26,9 @@ arm gets gated against (honesty-first `compareCohorts`).
 | tokens p50 / p95 | 20812 / 22854 | 10630 / 27357 |
 | avg llmCalls | 4.2 | 4.4 |
 | avg guards-fired | 1.3 | 1.7 |
-| **overlap-storm rate** | **28%** | **67%** |
+| ~~overlap-storm rate~~ | ~~28%~~ → **0% (artifact, see below)** | ~~67%~~ → **0% (artifact)** |
 | guard frequency | terminal_decision:18, loop_resolution:4, stall_deliverable:1 | low_delta_guard:5, terminal_decision:12, stall_deliverable:3 |
-| failure-mode rates | overlap-storm:0.28 | overlap-storm:0.67 |
+| failure-mode rates | (none) | (none) |
 
 ## Findings
 
@@ -44,12 +44,26 @@ label is correct (the model satisfied the literal "write a file" step honestly; 
 assert the goal was met). **D3 coherence holds live:** honest-failures report `failed`/
 `controller_signal_veto`; non-answers → `end_turn` → goalAchieved null (no `final_answer` lie).
 
-### 2. Overlap-storm is REAL and tier-scaled — the measured thick-mesh disease (HEADLINE)
-≥2 termination deciders firing the same iteration: **28% of local runs, 67% of mid runs.** On mid,
-`low_delta_guard` (5) + `stall_deliverable` (3) + `terminal_decision` (12) race across 12 runs.
-This is the evidence the cluster-1 "ordered arbiter / precedence" thesis was reaching for —
-now measured, and WORSE on the more-capable tier. Justifies the capability lever (early-stop /
-give-up deciders need explicit evidence-ranked precedence, not call-order racing).
+### 2. ⛔ RETRACTED — the "overlap-storm" headline was an INSTRUMENTATION ARTIFACT
+The original headline claimed 28%/67% overlap-storm (≥2 deciders racing). **That was wrong.**
+Read the actual storm composition: every flagged iter was `[<give-up site>, terminal_decision]` —
+my per-site emit PLUS the `runner.ts §10` `terminal_decision` post-loop MIRROR, co-occurring at the
+terminating iteration (sometimes with different reasons only because §8.5 relabeled between them,
+e.g. `[low_delta_guard(low_delta), terminal_decision(harness_synthesis)]`). The analyzer counted
+distinct guard NAMES → the mirror inflated every terminating run into a false 2-guard storm.
+
+**Same-iteration decider overlap is STRUCTURALLY IMPOSSIBLE in the current kernel** (not "0%" —
+not-applicable): `terminate()` is the single writer, every give-up site does `return "break"`, so
+the first decider to trip ends the loop. Two give-up deciders cannot fire in one iteration.
+
+Metric corrected (`analyze.ts`): `terminal_decision` excluded from overlap counting → 0% both tiers.
+The 7 emit-only guards + `guardFrequency` stay (real signal).
+
+**The cluster-1 "collapse racing deciders / ordered arbiter" thesis is REFUTED** — there is no race
+to collapse. What IS real (deferred, see below): the **wrong-winner** phenomenon — a weak give-up
+(`low_delta_guard`) terminates and §8.5 then *salvages* it into `harness_synthesis`; whether
+evidence-ranked precedence would beat that salvage needs a COUNTERFACTUAL cohort (down-rank
+low_delta, re-run, grade faithfulness), not a metric we have.
 
 ### 3. Give-up deciders are NOT cold (corrects the 3-smoke "masked" read)
 Across the fuller grid, `loop_resolution` (4 local), `stall_deliverable` (1 local / 3 mid),
@@ -67,9 +81,22 @@ kept/dropped/compressed (budget-inversion evidence), intervention overlap-storm 
 verifier accept/reject reasons. The comparator caveats these; a token/honesty-grounded verdict
 stands, a "neutral" verdict with a decisive blind metric → "inconclusive (blind)".
 
-## Next — the capability lever, now gated
-With this baseline locked + terminatedBy truthful (DEFECT 3 → trustworthy `failureModeRates`),
-the deferred capability lever (early-stop loses to deliverable-availability + evidence-ranked
-give-up precedence) runs as arm B → `compareCohorts(thick-baseline, B)`. Merge ONLY if honesty
-held (dishonest flat-or-down, deliverable flat-or-up) AND overlap-storm ↓ / tokens ↓ at flat
-success. The 67% mid overlap-storm is the number the lever must move.
+## Cluster CLOSED — D1 + D3 are the wins; arm B DEFERRED (not abandoned)
+The termination-decider cluster is closed honestly. The real ships: **D1** (tier-gated stall window,
+killed the `tier="local"` dead-scaffold) and **D3** (terminatedBy truthfulness, killed the
+`done→final_answer` goalAchieved lie). Both unit-proven + live-validated; neither leaned on the
+retracted overlap metric.
+
+The cluster relocated four times under evidence (collapse-deciders → masked → stall-detect →
+early-stop coherence → artifact). The honest close: the cheap "overlap" justification for arm B
+evaporated; the real "wrong-winner" justification needs an expensive faithfulness cohort; the
+architecture priority (strangler-fig cutover) is where the leverage is. So arm B is parked, not
+chased into a fifth relocation.
+
+### Deferred hypotheses (candidates, NOT today's work)
+1. **Wrong-winner precedence (arm B proper):** down-rank `low_delta_guard`/`switching_exhausted`
+   below deliverable-producing signals; counterfactual cohort + faithfulness grading vs §8.5 salvage.
+2. **§8.5 relabel-set string mismatch (concrete bug):** `runner.ts` `nonFinalAnswerTerminations`
+   contains `"dispatcher-early-stop"` (hyphen) but the live value is
+   `"controller_early_stop:dispatcher_early_stop"` (colon/prefix) → the deliverable-salvage MISSES
+   that variant. Real, small, but parked — must not become arm-B-prime.
