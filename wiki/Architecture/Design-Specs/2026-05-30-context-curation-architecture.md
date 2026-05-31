@@ -122,6 +122,30 @@ fast, measurable first step inside the spike.
   "truncated/re-fetch" loop incidence. Bar: B ≥ A on faithfulness + pass^k at ≤ tokens,
   on overflow tasks (T3 >4000 + a real MCP large-result). RED tests + live gate + advisor.
 
+## Predictive bucketed num_ctx (companion to curation — speed↔capacity tradeoff)
+**Context:** the num_ctx regression (`b1561303`) fixed the stale 8192 pin, but a blanket
+32768 has a cost — Ollama allocates the **full num_ctx KV-cache up front** (slower inference
++ more VRAM) AND **reloads the model when num_ctx changes** (so it can't vary per call). The
+optimum is to **predict the need and size to it** (user insight, 2026-05-30).
+
+**RA can predict — it assembles the prompt, so it knows the token count before the call**
+(already counted for curation budgets). Design:
+- `num_ctx = smallest BUCKET ≥ (assembled-prompt-tokens + maxOutputTokens + headroom)`, capped
+  at `min(model_real_window, VRAM-fit-ceiling)`.
+- **Buckets** (e.g. 8k/16k/32k/64k) avoid reload-thrash — a typical task stays in one bucket;
+  only a big task bumps up. Do NOT size to the exact count (every call would reload).
+- **Predict the peak at run start** from the known-up-front pieces: system prompt + tool-def
+  tokens (≈40 MCP tools is *measurable*) + expected history growth (strategy × max-iterations).
+  Set the bucket once; re-bucket only when a real prompt nears the ceiling.
+
+**Unifies three threads:** (1) replaces the static 32768 ceiling with fit-to-need (fast small,
+full-window big); (2) **fixes the maxContextTokens(131072)-vs-num_ctx(32768) mismatch the
+provider-warden flagged** — curation must budget against the ACTUAL num_ctx, and with
+predictive sizing the curation budget and num_ctx are the same number by construction; (3)
+subsumes the VRAM-aware-cap recommendation (bucket ceiling = VRAM-fit). Provider-layer
+(`local-probe.ts` cap + a num_ctx selector fed the assembled-prompt token count) + curation
+(`attend/` budget reads the chosen num_ctx). Spike after the curation default-on path.
+
 ## Sequencing (reordered)
 1. **Spike 1 = context curation (THIS, the root)** — age-aware, window-scaled, current-
    full; first change = stop crushing current + scale budget.
