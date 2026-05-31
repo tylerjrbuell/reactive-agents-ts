@@ -2,6 +2,106 @@
 
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
+## ▶ OVERHAUL BRANCH `overhaul/agentic-core-2026-05-31` — clean-room core refactor, PROOF-GATED
+Re-architect agent loop + context systems in-place (keep providers/MCP/memory/public API + phase
+structure). Replace model-facing context indirection (recall tool + [STORED:] markers) with a
+SYSTEM-OWNED ContextManager + content-aware honesty + always-on wire telemetry. 8-principle spec
+`wiki/Architecture/Design-Specs/2026-05-31-agentic-core-overhaul.md` (`cc39912e`).
+- **✅ `2c5d77bf` reference-protocol spike PASS** — riskiest assumption validated (advisor risk-first).
+  cogito:14b + qwen3:14b + qwen3.5 ALL emit clean `write_result_to_file(result_ref=commits_1)` given
+  system-summary + ref tool alongside plain file_write — the two that failed marker-copy reference
+  cleanly. llama3.2 sub-3B = honest floor (ref-as-text + fabricate). `apps/examples/overhaul-spike-ref.ts`.
+- **⚠️ `86ce02d9` HONEST CORRECTION — integration wired into a DEAD function; NOTHING ran live.**
+  Projection seam + age-aware curation seam live in `attend/context-utils.ts buildConversationMessages`,
+  only caller `context/context-manager.ts:142` — NOT live. `think.ts` assembles via `defaultContextCurator`
+  (context-curator.ts). After full rebuild: projection ENTRY never logs; write_result_to_file called by ZERO
+  models (qwen3/gpt EXEC logs = 0 — clean bullets were NATURAL, I mis-inferred tool use from file format).
+  RETRACTED "end-to-end working"/"lift" (dead-fn + stochastic noise). Components unit-green in ISOLATION; spike
+  `2c5d77bf` valid. **CRITICAL NEXT:** wire projection into `defaultContextCurator` (LIVE path); **VERIFY
+  curation-default-on `c9e6fba2` isn't ALSO dead** (if only in buildConversationMessages → Spike-1 never hit
+  live loop, main bug); verify write_result_to_file is OFFERED not gated-pruned (EXEC/logModelIO not file
+  format); real tool-call telemetry; THEN N≥3.
+- **`another non-canonical code path` (user, conclusive):** the context-assembly layer is a MAZE of
+  overlapping/swappable/partially-dead builders — `buildConversationMessages` (only via
+  ContextManager.build's `if(adapter)` branch), `buildCuratedMessages` (its `else` branch),
+  `ContextManager.build` (context-manager.ts), `defaultContextCurator.curate` (context-curator.ts:131
+  wraps build; ContextCurator is INJECTABLE/swappable). CORRECTION to prior "runs from dist": bun
+  resolves reasoning from **SRC** (`require.resolve` → packages/reasoning/src/index.ts; "bun" export says
+  dist but src wins) — so src IS live, NO rebuild needed, my rebuilds were wasted. YET instrumenting
+  ContextManager.build (RA_OVERHAUL_DEBUG branch log) NEVER fired in a live cogito run → ContextManager.build
+  is NOT on the live path despite curate→build being a direct call. So the live assembler is some OTHER
+  curator binding or a think.ts streaming branch that bypasses curate. **The multiplicity + inability to
+  cheaply confirm which path renders the live prompt IS the disease.** OVERHAUL FIRST TASK (reframed):
+  (a) PIN the live assembly path (instrument defaultContextCurator.curate ENTRY in context-curator.ts +
+  read think.ts ~320-340 for stream-vs-complete branches + how the curator is injected), (b) CANONICALIZE
+  to ONE assembler, (c) add "what did the model actually receive" observability (principle #4) — THEN wire
+  projection/tool there. LESSON: a passing unit test + a present src edit prove NOTHING about live behavior;
+  must confirm the seam is on the executing path via runtime instrumentation, not caller-grep alone.
+- **NEXT (advisor order):** telemetry-BOTH-paths + LOCK OLD baseline (tier×task grid) BEFORE new →
+  marginal 3rd arm (OLD + strip-[STORED:]-from-file-write point-fix) → ContextManager + ref
+  materialization (NEW MODULE outside kernel/**, A/B-able; one flag-gated kernel seam via warden) →
+  content-aware honesty → cross-tier proof-gate, attribute lift PER-component. Merge only on measured
+  lift (20-commit overflow faithful + dishonest-success caught) ≤ tokens. LEASH: KEEP phase structure
+  (user rejected collapse-to-canonical); principle #6 minimal-reducer is north-star only.
+
+## ▶ EXECUTING — Canonical Convergence Plan (2026-05-30) — Phases 0+1 SHIPPED
+Subagent-driven; cross-tier `pass^k` live gate per phase. Branch `main`, unpushed.
+- Plan: `wiki/Planning/Implementation-Plans/2026-05-30-canonical-agentic-convergence-plan.md`
+- Thesis: one mechanical **post-condition set** = state-grounded done + progress
+  recitation (recency) + pulse self-check. Local-first, control-first, anti-scaffold.
+- **Phase 0 ✅ `91924103`** — `pass^k` harness (`RUNS_PER_TASK`, strict-T3, postCond stub,
+  `TASK_GATE_HN_FIXTURE` data-pinning). Baseline + `hn-fixture-2026-05-30.json`.
+- **Phase 1 ✅ `0d05fbe3`** — PostCondition spine = state-grounded success authority,
+  gated `RA_POST_CONDITIONS` (**default OFF**). Two seams: arbitrator mid-loop steer +
+  `terminate()` TERMINAL hard-stop (single-owner; arbitrator-only first pass leaked via
+  stall/`low_delta_guard` → fixed). Conditions derived once → `state.meta.postConditions`,
+  both gates DRY-read. reflexion B generalized; probe `postConditionsMet` wired. Live gate
+  proven BOTH directions (flag-off lied; flag-on 6/6 honest + met→success live). Suite 1486/0.
+  **OPEN: default-flip ON is a clean follow-up (evidence supports).**
+- **Phase 3 ✅ `0bfad06d`** — recall-overflow gate OPT-IN→DEFAULT-ON (opt-out `RA_RECALL_GATE=0`).
+  Ablation (fixture N=3): gpt-4o-mini pass^k 2/5→5/5, −31% tok, recall-smells 5→0; cogito −11% tok
+  → **first measured COMPLETION lift**. `extractObservationFacts` KEEP (removal REFUTED — it's
+  token-PROTECTIVE; "44% removable" was wrong). llama3.2 sub-7B local 4/5 default-on. Caveats:
+  ablation models both tier `mid`; MCP-overflow path = Phase-4 follow-up.
+- **Spike 1 ✅ `799487c1` — AGE-AWARE CURATION (curation root, the BIG win).** `RA_CURATION_AGEAWARE`
+  (default OFF, opt-in). Keep most-recent TURN's tool results FULL (window-scaled), compress only
+  AGED. Root was a flat `TOOL_RESULT_INLINE_CAP=4000` (conversation-assembly.ts), age/window-blind →
+  truncated the synthesis-target. Ablation (T3-strict, trusted metric): **sonnet 1/3→3/3 (T3 faith
+  0→100, truncation loop ELIMINATED, avg 91→100)**, gpt+qwen flat, ZERO regression. (qwen composite
+  dip = over-listing penalty only, faith identical — metric rewarding starvation, not a regression.)
+  Suite 1496/0 both arms. Built in attend/ (tool-formatting.ts applyAgeAwareCuration + context-utils.ts).
+- **✅ `c9e6fba2` (2026-05-31) — CURATION FLIPPED DEFAULT-ON (opt-out `RA_CURATION_AGEAWARE=0`).**
+  WIRE-PROVEN sole root cause via logging reverse-proxy on literal Ollama /api/chat. cogito:14b
+  num_ctx=15360: OFF → synthesis tool_result 4087 chars + REAL `...truncated (17646 chars)` marker,
+  **3 of 10** commit objects → wrote 2-3. ON → 21646 chars, no marker, **10/10** objects → wrote 10
+  (payload-verified faithful; advisor caught "wrote 10 ≠ saw 10", grepped `"sha"` objects).
+  **num_ctx + output-cap REFUTED as failure modes** (15360 fast prompt_eval~1s; done_reason=stop,
+  eval<<num_predict). Default-on overrides Spike1 "opt-in" on USER MANDATE + cogito proof; other tiers
+  ride Spike1 ablation; NOT lift-rule re-gated. Debrief `wiki/Research/Debriefs/2026-05-31-context-truncation-wire-debrief.md`.
+  **NEXT:** recall removal + auto-rehydration (curator owns reversible store now); RECENT_WINDOW_FRACTION 0.35 tune.
+  Method lesson: read the WIRE not steps[]; `done_reason` discriminates input-vs-output failure.
+- **(superseded framing) CONTEXT CURATION = THE ROOT (Spike 1 done above).** Reframe: recall is a
+  SYMPTOM. RA crushes the CURRENT tool result to 600–4000 chars (frontier/sonnet **600**,
+  inverted vs 200k window) BEFORE synthesis (`act/tool-execution.ts` `compressToolResult`,
+  `context-profile.ts`), stashing full for recall → preview-synthesis (low faithfulness,
+  fabrication, "truncated, let me retrieve" loops). Known-good algo: keep CURRENT result FULL
+  (budget scaled to window), compress only AGED → reversible pointer, auto-re-hydrate by focus
+  (obviates recall), compact near limit, re-fetch from source. First change: stop crushing
+  current + window-scale budget. Then recall-removal folds in; meta-tool audit later. Spec
+  `wiki/Architecture/Design-Specs/2026-05-30-context-curation-architecture.md` (c3eeca53); RFC
+  c8cbe49f. Deferred: Phase 2 recitation, Phase 4 mask-don't-remove tool-stability, Phase 5 experience-reuse.
+- **num_ctx `b1561303` — REFUTED as a failure mode (2026-05-31 wire hunt).** Set `capability.ts`
+  recommendedNumCtx 8192→32768; operator since set **15_360** on both 14b models ("half for speed").
+  Wire proof: num_ctx is NOT the regression cause — 15360 is fast (prompt_eval~1s), prompt fits.
+  The real cause was the 4000-char tool-result cap (curation, fixed `c9e6fba2`). **PREDICTIVE
+  BUCKETED num_ctx DEPRIORITIZED** — speed/VRAM optimization only, not a correctness fix. Stale
+  "set to 32K" comment + reformatting churn live in capability.ts working tree (operator's to commit).
+- **OLLAMA OPS:** cogito:3b = runaway (~9.5min/chat) — never probe with it; verify `nvidia-smi`
+  + real latency after any `systemctl restart ollama` (restart can leave it CPU-bound — check n_ctx
+  in `journalctl -u ollama`); use llama3.2/qwen3.5 local; wrap probes in `timeout`.
+- GATE: each phase ends with cross-tier `pass^k` live run + `rax:diagnose` + advisor()
+  before commit. No phase done on unit-green alone. Kernel edits → `kernel-warden`+MissionBrief.
+
 ## Read first
 
 Before doing any work in this repo:
@@ -17,6 +117,32 @@ Before doing any work in this repo:
 The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.md`.
 
 ---
+
+## ACTIVE — Harness Perf Cross-Tier Campaign (2026-05-29)
+
+Tier-aware context architecture redesign. Branch `main` (canonical-refactor merged `d783c876`, unpushed). Goal: harness adapts to model tier + provider quirks → consistent agentic perf frontier/mid/local; transparent control-first; wire existing systems (don't rebuild).
+
+Docs: `wiki/Planning/Implementation-Plans/2026-05-29-harness-perf-cross-tier-campaign.md` + `wiki/Architecture/Design-Specs/2026-05-29-tier-aware-context-architecture.md` + `wiki/Research/2026-05-29-agentic-context-engineering-findings.md`.
+
+Canonical model (research-grounded: Anthropic context-eng, RULER, Context Rot, MemGPT): recent obs inline-full · old obs cleared · recall only for NOT-in-context data — × tier-calibration scaled to EFFECTIVE context. Reduce PROSE verbosity for weak tiers; KEEP tool-result DATA budget (local=4000 deliberately largest).
+
+Cross-tier N=3 baseline (proof gate T1–T5) = 3 distinct failure modes: gpt-4o-mini redundant-recall; qwen3.5 2× tokens; cogito:14b degraded correctness (T3=34%, never recalls). Composite scorer too lenient (hides cogito) → strict per-item check needed.
+
+- **Inc 1 recall-gating (BUILT, OPT-IN `RA_RECALL_GATE=1`, default off):** stale buildRules plan SCRATCHED — both prompt-rule lure sites are dead in default lazy mode (`RA_LAZY_TOOLS` gates buildRules + recent-obs off). Trace `01KSV58K`: model recalled BLIND (invented key `hn_posts`) on a 3928-char INLINE result purely because `recall` was in the tool schema. Fix = `think-guards.filterRecallByOverflow` gates recall OUT of `think.ts` per-iteration `gatedToolSchemas` unless a `recall("<key>"…)` marker is surfaced in the CURRENT window (or calibration `uses-recall`). Default off until cross-tier MCP ablation proves ≥3pp/no-regression (project default-on rule).
+- **Inc 2 token bloat PINNED:** `extractObservationFacts` (`tool-execution.ts:822`) per-tool-result LLM extraction, gated `act.ts:143-144` `shouldExtract` → local+mid only. 44% of local tokens. Likely redundant (full data already inline). Ablation: local obsMode=false, composite vs tokens.
+- Refuted by evidence before any code: history-resend, output-verbosity, reasoning-input, debrief/memory.
+- Instrumentation shipped: input/output token split in `task-quality-gate.ts` probe (`TASK_GATE_NO_MEMORY=1` toggle). Production path already wired (`step-utils.ts:90` → `execution-engine.ts:1116`).
+- Secondary track: entropy stall-detect non-discriminating (flat 0.15) → structural boredom-detection.
+
+### MCP relevantTools-drop fix (2026-05-30) — shipped, separate concern
+reflexion/ToT/plan-execute strategies never forwarded classifier `relevantTools` into their kernel passes (forwarded `requiredTools` only). Under lazy disclosure the kernel visible set = `required+relevant+used+discovered+meta` (`think.ts:232`) → relevant empty → ALL MCP/user tools pruned → model blind (spot-test cogito+GitHub-MCP looped on `find`, `success:false`). Fixed: forward `relevantTools` in `reflexion.ts`/`tree-of-thought.ts`/`plan-execute.ts`→`step-executor.ts`→`react-kernel.ts`. Proof: spot-test success false→true, 17959→8219 tok (−54%), github/list_commits called with real data. RED-verified `tests/strategies/strategy-relevant-tools-forwarding.test.ts`. See `[[project_mcp_relevant_tools_drop_fix]]`.
+
+### Follow-on: file-write never happened (2026-05-30) — routing NOT the bug
+adaptive routed task → reflexion on "self-critique and improve" keyword (`heuristicClassify` adaptive.ts:471/506). Advisor: routing DEFENSIBLE, not the bug; adding write/create patterns to a keyword matcher deepens brittleness — don't reroute. Real chain why success:true but no commits.md:
+- **C (root, DEFERRED):** classifier correctly required `[github/list_commits, file-write]` → `classifier.ts:216` literal-mention demotion stripped both to relevant ("create a markdown file" ≠ literal "file-write") → required empty. Clean fix = reliability-gate demotion, but cogito:14b `classifierReliability` UNSET (not "high"); un-gating for all unset models is broad/needs cross-model validation. Not shipped.
+- **B (FIXED+proven):** reflexion `isSatisfied(critique)` text-only → declared done with no file (success:true LIE). Fix `reflexion.ts:~302` gate satisfied-termination on `getMissingRequiredToolsFromSteps(...).length===0`, scoped to non-empty requiredTools. RED-verified `reflexion-required-completion-gate.test.ts`. 1449 reasoning pass.
+- **cogito limit:** even forced-required, cogito (14b local) failed to reliably call file-write (toolsUsed=[]). Harness enforces+reports honestly; can't make weak model competent.
+- Honest: B DORMANT in real spot-test path (file-write demoted→not required→B no-op). Real path still success:true+no-file until C lands or user adds `.withRequiredTools`. Filed (don't sweep): keyword-brittle heuristic router, text-only isSatisfied, literal-mention demotion too strict for semantic deliverables.
 
 ## ACTIVE — Harness Convergence Sweep (2026-05-23)
 
