@@ -1,5 +1,13 @@
 import { ReactiveAgents } from 'reactive-agents'
 
+// Env-parametrized so spot-test variants run without re-editing.
+const PROVIDER = process.env.SPOT_PROVIDER ?? 'ollama'
+const MODEL = process.env.SPOT_MODEL ?? 'cogito:14b'
+const TASK =
+    process.env.SPOT_TASK ??
+    'Fetch the last 10 commits to tylerjrbuell/reactive-agents-ts then write a local markdown file (./commits.md) with all 10 commit messages.'
+const TOOLS = (process.env.SPOT_TOOLS ?? 'file-write,github/list_commits').split(',')
+
 const agent = await ReactiveAgents.create()
     .withPersona({
         role: 'Github Agent',
@@ -7,15 +15,17 @@ const agent = await ReactiveAgents.create()
         instructions: 'Use github provided tools to solve your task',
         tone: 'friendly, concise',
     })
-    .withProvider('ollama')
-    .withModel('qwen3.5:latest')
+    .withProvider(PROVIDER as 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'litellm')
+    .withModel(MODEL)
     .withCortex()
     .withMemory()
     .withReasoning({
         defaultStrategy: 'adaptive',
         enableStrategySwitching: false,
     })
-    .withTools()
+    .withTools({
+        allowedTools: TOOLS,
+    })
     .withMCP({
         name: 'github',
         transport: 'stdio',
@@ -33,11 +43,26 @@ const agent = await ReactiveAgents.create()
                 process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
         },
     })
-    .withObservability({ verbosity: 'debug', live: true, logModelIO: true })
+    .withObservability({ verbosity: 'debug', live: true, logModelIO: false })
     .build()
 
-const result = await agent.run(
-    'Fetch the last 10 commits to tylerjrbuell/reactive-agents-ts and create a markdown file (./commits.md) with commit categories (feat/fix/refactor/docs), a 1-sentence summary per category, and any breaking changes. Self-critique and improve the format.'
-)
+const result = await agent.run(TASK)
 console.log(result.output)
+// Structured metrics line for the baseline/grid runner (single greppable line).
+console.log(
+    'SPOT_RESULT_JSON=' +
+        JSON.stringify({
+            provider: PROVIDER,
+            model: MODEL,
+            success: result.success,
+            goalAchieved: result.goalAchieved ?? null,
+            terminatedBy: result.terminatedBy ?? null,
+            tokensUsed: result.metadata.tokensUsed,
+            inputTokens: result.metadata.inputTokens ?? null,
+            outputTokens: result.metadata.outputTokens ?? null,
+            steps: result.metadata.stepsCount,
+            durationMs: result.metadata.duration,
+            outputLen: result.output.length,
+        }),
+)
 await agent.dispose()
