@@ -2,7 +2,7 @@ import { ReactiveAgents } from 'reactive-agents'
 
 // Env-parametrized so spot-test variants run without re-editing.
 const PROVIDER = process.env.SPOT_PROVIDER ?? 'ollama'
-const MODEL = process.env.SPOT_MODEL ?? 'cogito:14b'
+const MODEL = process.env.SPOT_MODEL ?? 'gemma4:e4b'
 const TASK =
     process.env.SPOT_TASK ??
     'Fetch the last 10 commits to tylerjrbuell/reactive-agents-ts then write a local markdown file (./commits.md) with all 10 commit messages.'
@@ -55,6 +55,7 @@ console.log(
             provider: PROVIDER,
             model: MODEL,
             success: result.success,
+            error: result.error ?? null,
             goalAchieved: result.goalAchieved ?? null,
             terminatedBy: result.terminatedBy ?? null,
             tokensUsed: result.metadata.tokensUsed,
