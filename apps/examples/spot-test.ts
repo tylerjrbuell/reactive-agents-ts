@@ -7,6 +7,16 @@ const TASK =
     process.env.SPOT_TASK ??
     'Fetch the last 10 commits to tylerjrbuell/reactive-agents-ts then write a local markdown file (./commits.md) with all 10 commit messages.'
 const TOOLS = (process.env.SPOT_TOOLS ?? 'file-write,github/list_commits').split(',')
+// Pin the strategy so the RA_ASSEMBLY A/B isolates context-assembly on a single
+// think path. adaptive may pick plan-execute/ToT (separate assembly) → the seam
+// wouldn't fire on both arms. 'reactive' routes through kernel think.ts where the
+// seam lives. Default reactive for the grid; override via SPOT_STRATEGY.
+const STRATEGY = (process.env.SPOT_STRATEGY ?? 'reactive') as
+    | 'reactive'
+    | 'adaptive'
+    | 'reflexion'
+    | 'plan-execute-reflect'
+    | 'tree-of-thought'
 
 const agent = await ReactiveAgents.create()
     .withPersona({
@@ -20,7 +30,7 @@ const agent = await ReactiveAgents.create()
     .withCortex()
     .withMemory()
     .withReasoning({
-        defaultStrategy: 'adaptive',
+        defaultStrategy: STRATEGY,
         enableStrategySwitching: false,
     })
     .withTools({
