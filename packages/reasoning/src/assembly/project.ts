@@ -13,7 +13,7 @@ export interface AssemblyInput {
   readonly log: EventLog;
   readonly capability: ResolvedCapability;
   readonly store: ResultStore;
-  readonly persona: { system: string };
+  readonly persona: { system: string; environmentContext?: Readonly<Record<string, string>> };
   readonly tools: { schemas: readonly unknown[] };
 }
 

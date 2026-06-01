@@ -14,8 +14,14 @@ it("renders persona + goal + remaining post-conditions", () => {
   expect(c.systemPrompt).toContain("write_file");
 });
 
-it("persona-only when no goal/goal_state events", () => {
+it("Environment block + persona when no goal/goal_state events", () => {
+  // The Environment block (date/time/timezone/platform) is ALWAYS injected — ported
+  // from legacy buildStaticContext so project() doesn't drop temporal grounding
+  // (date-hallucination regression). Persona follows; no goal/remaining sections here.
   const cap = resolveCapability({ window: 15360, outputBudget: 2000, dialect: "native-fc", tier: "local" });
   const c = systemPromptStage({ log: new EventLog(), capability: cap, store: new ResultStore(), persona: { system: "Base." }, tools: { schemas: [] }, systemPrompt: "", messages: [], toolSchemas: [], trace: emptyTrace(cap) });
-  expect(c.systemPrompt).toBe("Base.");
+  expect(c.systemPrompt).toContain("Environment:");
+  expect(c.systemPrompt).toContain("Date:");
+  expect(c.systemPrompt).toContain("Base.");
+  expect(c.systemPrompt).not.toContain("Goal:");
 });
