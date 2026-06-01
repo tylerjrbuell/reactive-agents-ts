@@ -113,6 +113,25 @@ describe("PostCondition gate — flag ON", () => {
     expect(v.action).toBe("exit-success");
   }, 15000);
 
+  it("demotes when the write was ATTEMPTED but FAILED (cogito shape: 2026-06-01 refresh counterexample)", () => {
+    // The dishonest-success case from the evidence refresh: file-write was
+    // called but errored (no file), then final-answer claimed success.
+    // isArtifactProduced requires a SUCCESSFUL write observation → a failed
+    // write leaves ArtifactProduced(./commits.md) UNMET → the verdict must demote.
+    // This proves the GATE LOGIC is sound for a failed write; the live cogito
+    // miss is therefore a ctx-population/threading gap at the arbitrator seam,
+    // NOT a hole in this gate.
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "The summary has been written." },
+      ctxWith(writeObs(false, "tc-failed")),
+    );
+    expect(v.action).toBe("escalate");
+    if (v.action === "escalate") {
+      expect(v.nextStrategy).toBe("post-condition-steer");
+      expect(v.reason).toContain("./commits.md");
+    }
+  }, 15000);
+
   it("steer escalation keeps status thinking + sets errorRecovery, no escalateTo", () => {
     const v = arbitrate(
       { kind: "agent-final-answer", via: "tool", output: "summary" },
