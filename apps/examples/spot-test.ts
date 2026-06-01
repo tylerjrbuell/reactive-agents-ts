@@ -18,7 +18,7 @@ const STRATEGY = (process.env.SPOT_STRATEGY ?? 'reactive') as
     | 'plan-execute-reflect'
     | 'tree-of-thought'
 
-const agent = await ReactiveAgents.create()
+let builder = ReactiveAgents.create()
     .withPersona({
         role: 'Github Agent',
         background: 'Expert in Github task execution',
@@ -36,7 +36,19 @@ const agent = await ReactiveAgents.create()
     .withTools({
         allowedTools: TOOLS,
     })
-    .withMCP({
+
+// Window A/B knob (#5 MEASURED gate): SPOT_MAXTOKENS forces an explicit
+// contextProfile.maxTokens (caller-provided → defeats model-window resolution,
+// reproducing the pre-#5 32768 tier-placeholder window). Unset → the builder
+// resolves the model's real window (e.g. haiku 200k).
+if (process.env.SPOT_MAXTOKENS) {
+    builder = builder.withContextProfile({ maxTokens: Number(process.env.SPOT_MAXTOKENS) })
+}
+
+// Only wire the github MCP (docker) when a github/* tool is actually requested —
+// the file-summary A/B uses local file tools and must not depend on docker.
+if (TOOLS.some((t) => t.startsWith('github/'))) {
+    builder = builder.withMCP({
         name: 'github',
         transport: 'stdio',
         command: 'docker',
@@ -53,6 +65,9 @@ const agent = await ReactiveAgents.create()
                 process.env.GITHUB_PERSONAL_ACCESS_TOKEN ?? '',
         },
     })
+}
+
+const agent = await builder
     .withObservability({ verbosity: 'debug', live: true, logModelIO: process.env.SPOT_LOG_IO === '1' })
     .build()
 
