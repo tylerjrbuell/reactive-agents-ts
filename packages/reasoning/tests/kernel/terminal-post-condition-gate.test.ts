@@ -222,6 +222,39 @@ describe("runStallDeliverableStep — terminal gate via the real stall path", ()
     expect(result.state.output).toBeNull();
   }, 15000);
 
+  it("DEFAULT (env unset): real stall path resolves to failed — the regime users actually get", async () => {
+    // The "flag ON" case above sets ="1"; this pins the UNSET default regime
+    // (gate is `!== "0"`, seed is `!== "0"` — equivalence-proven ≡ "1") through
+    // the REAL imperative stall path, per the "measure the default regime users
+    // get, not the convenient one" meta-rule. The top-level beforeEach deletes
+    // RA_POST_CONDITIONS, so no env is set here.
+    const state = baseState({
+      steps: ledgerWithArtifactButNoWrite(),
+      meta: { postConditions: [...unmetConditions] },
+    });
+    const { Effect } = await import("effect");
+    const result = await Effect.runPromise(
+      runStallDeliverableStep({
+        state,
+        currentInput: input,
+        currentOptions: options,
+        missingRequiredByCount: [],
+        stallTriggered: true,
+        totalArtifacts: 1,
+        consecutiveStalled: 4,
+        requiredToolNudgeCount: 0,
+        failureRecoveryRedirects: 99,
+        maxRequiredToolNudges: 4,
+        maxFailureRecoveryRedirects: 2,
+        verifier: defaultVerifier,
+        emitLog: () => Effect.void,
+      }),
+    );
+    expect(result.outcome).toBe("break");
+    expect(result.state.status).toBe("failed"); // honest failure in the default regime
+    expect(result.state.output).toBeNull();
+  }, 15000);
+
   it("opt-out (RA_POST_CONDITIONS=0): same stall path delivers (unchanged) with status done", async () => {
     process.env.RA_POST_CONDITIONS = "0";
     const state = baseState({

@@ -1,0 +1,242 @@
+[
+  {
+    "id": 48353348,
+    "title": "A 10 year old Xeon is all you need",
+    "score": 193,
+    "by": "cafkafk",
+    "descendants": 71,
+    "url": "https://point.free/blog/gemma-4-on-a-2016-xeon/"
+  },
+  {
+    "id": 48311587,
+    "title": "Tracing HTTP Requests with Go's net/HTTP/httptrace",
+    "score": 45,
+    "by": "speckx",
+    "descendants": 0,
+    "url": "https://blainsmith.com/articles/httptrace-with-go/"
+  },
+  {
+    "id": 48350598,
+    "title": "Chuwi Minibook X",
+    "score": 303,
+    "by": "thcipriani",
+    "descendants": 228,
+    "url": "https://tylercipriani.com/blog/2026/05/28/chuwi-minibook-x/"
+  },
+  {
+    "id": 48323844,
+    "title": "Benchmarking SurrealDB 3.x vs. Postgres, Mongo, Neo4j and Redis (With Fsync)",
+    "score": 22,
+    "by": "itsezc",
+    "descendants": 0,
+    "url": "https://surrealdb.com/blog/surrealdb-3-x-by-the-numbers"
+  },
+  {
+    "id": 48345840,
+    "title": "Cloudflare Turnstile requiring fingerprintable WebGL",
+    "score": 690,
+    "by": "HypnoticOcelot",
+    "descendants": 390,
+    "url": "https://hacktivis.me/articles/cloudflare-turnstile-webgl-fingerprinting"
+  },
+  {
+    "id": 48354414,
+    "title": "two strangers. one call. no names",
+    "score": 9,
+    "by": "whatis1215",
+    "descendants": 2,
+    "url": "https://just2voices.com/"
+  },
+  {
+    "id": 48333823,
+    "title": "The SLAX Scripting Language: An Alternate Syntax for XSLT",
+    "score": 8,
+    "by": "thefilmore",
+    "descendants": 1,
+    "url": "http://juniper.github.io/libslax/slax-manual.html"
+  },
+  {
+    "id": 48327453,
+    "title": "Decades of Effort Restore Steelhead and Salmon Passage on Alameda Creek",
+    "score": 137,
+    "by": "rawgabbit",
+    "descendants": 21,
+    "url": "https://www.fisheries.noaa.gov/feature-story/decades-effort-restore-steelhead-and-salmon-passage-californias-alameda-creek"
+  },
+  {
+    "id": 48354224,
+    "title": "Cessation of public development of Kefir C compiler",
+    "score": 38,
+    "by": "f311a",
+    "descendants": 7,
+    "url": "https://kefir.protopopov.lv/posts/announce2.html"
+  },
+  {
+    "id": 48349487,
+    "title": "ChatGPT for Google Sheets exfiltrates workbooks",
+    "score": 236,
+    "by": "hackerBanana",
+    "descendants": 84,
+    "url": "https://www.promptarmor.com/resources/gpt-for-google-sheets-data-exfiltration"
+  },
+  {
+    "id": 48346257,
+    "title": "1-Bit Bonsai Image 4B Image Generation for Local Devices",
+    "score": 403,
+    "by": "modinfo",
+    "descendants": 167,
+    "url": "https://prismml.com/news/bonsai-image-4b"
+  },
+  {
+    "id": 48344961,
+    "title": "Dav2d",
+    "score": 500,
+    "by": "captain_bender",
+    "descendants": 177,
+    "url": "https://jbkempf.com/blog/2026/dav2d/"
+  },
+  {
+    "id": 48314719,
+    "title": "Two Ways to Draw Infinite Jest's Sierpinski Gasket",
+    "score": 31,
+    "by": "chiply",
+    "descendants": 30,
+    "url": "https://www.chiply.dev/post-ij-sierpinski"
+  },
+  {
+    "id": 48345248,
+    "title": "United Airlines 767 returns to Newark after Bluetooth name sparks alert",
+    "score": 368,
+    "by": "Eridanus2",
+    "descendants": 721,
+    "url": "https://simpleflying.com/united-airlines-767-returns-newark-bluetooth-name-alert/"
+  },
+  {
+    "id": 48352500,
+    "title": "Rubin Tracks Skyscraper-Size Asteroids and Failed Supernovas",
+    "score": 32,
+    "by": "adm4",
+    "descendants": 10,
+    "url": "https://www.quantamagazine.org/rubin-tracks-skyscraper-size-asteroids-failed-supernovas-and-interstellar-visitors-20260515/"
+  },
+  {
+    "id": 48347354,
+    "title": "Meta launches Instagram, Facebook, and WhatsApp subscriptions",
+    "score": 236,
+    "by": "tambourine_man",
+    "descendants": 377,
+    "url": "https://techcrunch.com/2026/05/27/meta-officially-launches-instagram-facebook-and-whatsapp-subscriptions-with-more-to-come-including-ai-plans/"
+  },
+  {
+    "id": 48353694,
+    "title": "Blorp Language",
+    "score": 14,
+    "by": "croottree",
+    "descendants": 5,
+    "url": "https://blorp-lang.org/"
+  },
+  {
+    "id": 48316350,
+    "title": "The Genius of the Barn Owl's Feathers",
+    "score": 41,
+    "by": "EA-3167",
+    "descendants": 10,
+    "url": "https://thereader.mitpress.mit.edu/the-genius-of-the-barn-owls-feathers/"
+  },
+  {
+    "id": 48306225,
+    "title": "The four programming questions from my 1994 Microsoft internship interview (2023)",
+    "score": 149,
+    "by": "tosh",
+    "descendants": 61,
+    "url": "https://www.computerenhance.com/p/the-four-programming-questions-from"
+  },
+  {
+    "id": 48354405,
+    "title": "Why are large language models so terrible at video games?",
+    "score": 22,
+    "by": "sxx0",
+    "descendants": 33,
+    "url": "https://spectrum.ieee.org/ai-video-games-llms-togelius"
+  },
+  {
+    "id": 48324288,
+    "title": "Unix in East Germany (GDR) (1990)",
+    "score": 83,
+    "by": "downbad_",
+    "descendants": 22,
+    "url": "https://groups.google.com/g/comp.unix.wizards/c/QX_dxElrVNs"
+  },
+  {
+    "id": 48326721,
+    "title": "What if remote working, not AI, is to blame for weak junior hiring?",
+    "score": 189,
+    "by": "uxhacker",
+    "descendants": 245,
+    "url": "https://www.ft.com/content/2205e2d0-50dc-4e80-9bf7-78d0272276c0"
+  },
+  {
+    "id": 48353920,
+    "title": "Is Python Becoming Pinyin?",
+    "score": 9,
+    "by": "reuven",
+    "descendants": 3,
+    "url": "https://lernerpython.com/2026/05/19/is-python-becoming-pinyin/"
+  },
+  {
+    "id": 48322134,
+    "title": "Finding success in industry as a chip designer",
+    "score": 46,
+    "by": "jnord",
+    "descendants": 6,
+    "url": "https://spectrum.ieee.org/chip-design-academic-vs-industry"
+  },
+  {
+    "id": 48309492,
+    "title": "Websites have a new way to spy on visitors: analyzing their SSD activity",
+    "score": 195,
+    "by": "Brajeshwar",
+    "descendants": 50,
+    "url": "https://arstechnica.com/security/2026/05/websites-have-a-new-way-to-spy-on-visitors-analyzing-their-ssd-activity/"
+  },
+  {
+    "id": 48301135,
+    "title": "Sony Launches Bravia 9 II and Bravia 7 II with 'True RGB'",
+    "score": 36,
+    "by": "ksec",
+    "descendants": 33,
+    "url": "https://www.flatpanelshd.com/news.php?subaction=showfull&id=1779897602"
+  },
+  {
+    "id": 48322984,
+    "title": "New Beam Spring Keyboards",
+    "score": 105,
+    "by": "recursivedoubts",
+    "descendants": 74,
+    "url": "https://www.modelfkeyboards.com/product/beam-spring-b104-keyboard/"
+  },
+  {
+    "id": 48343683,
+    "title": "The Website Specification",
+    "score": 506,
+    "by": "k1m",
+    "descendants": 203,
+    "url": "https://specification.website/"
+  },
+  {
+    "id": 48343714,
+    "title": "London's Free Roof Terraces",
+    "score": 308,
+    "by": "zeristor",
+    "descendants": 144,
+    "url": "https://diamondgeezer.blogspot.com/2026/05/londons-free-roof-terraces.html"
+  },
+  {
+    "id": 48347153,
+    "title": "The Speed of Prototyping in the Age of AI",
+    "score": 171,
+    "by": "mooreds",
+    "descendants": 88,
+    "url": "https://darylcecile.net/notes/speed-of-prototyping-age-of-ai"
+  }
+]
