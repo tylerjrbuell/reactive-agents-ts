@@ -346,7 +346,7 @@ export function handleThinking(
     let compressionApplied: Prompt["compressionApplied"];
     if (assemblyEnabled()) {
       const { request, trace } = project(
-        fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }),
+        fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }, input.task),
       );
       systemPromptText = request.systemPrompt;
       conversationMessages = toLLMMessages(request.messages);

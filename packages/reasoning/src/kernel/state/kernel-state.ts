@@ -386,6 +386,16 @@ export interface KernelState {
   readonly readyToAnswerNudgeCount?: number;
 
   /**
+   * Custom environment context (date overrides + caller-supplied key-value
+   * fields) threaded onto the system-prompt Environment block. Seeded once from
+   * KernelInput.environmentContext by runner.ts; read by the assembly adapter
+   * (from-kernel-state.ts) so project() reproduces the caller's custom fields.
+   * Was previously only on KernelInput and never copied to state → custom
+   * fields dropped under RA_ASSEMBLY (subkernel-env-threading regression).
+   */
+  readonly environmentContext?: Readonly<Record<string, string>>;
+
+  /**
    * The last meta-tool that was called (brief, pulse, find, recall).
    * Used by the meta-tool dedup guard to detect consecutive identical calls.
    */

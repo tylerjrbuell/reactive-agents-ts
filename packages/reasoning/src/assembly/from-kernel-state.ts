@@ -35,6 +35,18 @@ export function fromKernelState(
   profile: ContextProfile,
   persona: { system: string },
   tools: { schemas: readonly unknown[] },
+  /**
+   * Canonical task text (KernelInput.task). Used as the goal fallback when the
+   * conversation thread has not been seeded with a user turn — `state.messages`
+   * is seeded ONLY from `initialMessages` (runner.ts:204), so a strategy invoked
+   * without seeding (e.g. `executeReactive({...})` with no `initialMessages`)
+   * leaves `state.messages` empty. Legacy `curate()` always sourced the prompt
+   * from `input.task` regardless of seeding; project() must do the same or the
+   * task is silently dropped (no goal in the system prompt, empty messages[] →
+   * provider rejects a zero-user-turn request). `input.task` is required + always
+   * present, unlike the conditional `state.meta.taskDescription`.
+   */
+  task?: string,
 ): AssemblyInput {
   // ── 1. Seed ResultStore from scratchpad ──────────────────────────────────
   //
@@ -66,8 +78,10 @@ export function fromKernelState(
   let log = new EventLog();
 
   const firstUser = state.messages.find((m) => m.role === "user");
-  if (firstUser && firstUser.role === "user") {
-    log = log.append({ kind: "goal", text: firstUser.content });
+  const goalText =
+    firstUser && firstUser.role === "user" ? firstUser.content : task;
+  if (goalText) {
+    log = log.append({ kind: "goal", text: goalText });
   }
 
   for (const msg of state.messages) {
@@ -121,7 +135,7 @@ export function fromKernelState(
   // from state/profile here — no caller (think.ts) change needed.
   const toolsWithPolicy = {
     ...tools,
-    ...(state.requiredTools ? { requiredTools: state.requiredTools } : {}),
+    ...(state.meta.requiredTools ? { requiredTools: state.meta.requiredTools } : {}),
     ...((profile as { toolSchemaDetail?: "names-only" | "names-and-types" | "full" }).toolSchemaDetail
       ? { detail: (profile as { toolSchemaDetail?: "names-only" | "names-and-types" | "full" }).toolSchemaDetail }
       : {}),

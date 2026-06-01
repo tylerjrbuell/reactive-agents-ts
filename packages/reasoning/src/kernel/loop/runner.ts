@@ -204,6 +204,13 @@ export function runKernel(
     let state = effectiveInput.initialMessages?.length
       ? transitionState(baseState, { messages: effectiveInput.initialMessages })
       : baseState;
+    // Seed environmentContext onto state so project()/fromKernelState can
+    // reproduce the Environment block (incl. caller custom fields). It lives on
+    // KernelInput (react-kernel.ts:193) but was never copied to state, so under
+    // RA_ASSEMBLY custom caller env fields dropped (subkernel-env-threading regression).
+    if (effectiveInput.environmentContext) {
+      state = transitionState(state, { environmentContext: effectiveInput.environmentContext });
+    }
     // HS-115 — seed nominated tools BEFORE other meta-merging blocks so
     // subsequent meta updates compose cleanly. Skipped when no nominations
     // were produced to avoid spurious meta churn.
