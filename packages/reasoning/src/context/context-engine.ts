@@ -27,20 +27,56 @@ export interface StaticContextInput {
 // ── Static Context Builders ─────────────────────────────────────────────────
 
 /**
- * Build environment context — date, time, timezone, platform, and custom fields.
- * Always included so the agent knows the current temporal context without tool calls.
+ * Time granularity of the `Environment:` block. The block is part of the cached
+ * system-prompt PREFIX (Anthropic `cache_control: ephemeral`; OpenAI auto-prefix).
+ * A minute-precision `Time:` line changes every call → invalidates that prefix
+ * every minute → multi-iteration runs and repeat sessions miss the cache and
+ * re-bill the full system prompt + tool list at full price instead of ~10%
+ * (`cache_read`). Default `"date"` keeps the temporal grounding agents actually
+ * need (the DATE — prevents stale-date hallucination) while leaving the prefix
+ * STABLE across the cache TTL. `"minute"`/`"second"` restore precise time for
+ * agents that genuinely need it (control-first opt-in).
+ */
+export type EnvTimePrecision = "date" | "minute" | "second";
+
+/** Resolve the env-block time precision: explicit > `RA_ENV_TIME_PRECISION` > "date". */
+export function resolveEnvTimePrecision(
+  env: NodeJS.ProcessEnv = process.env,
+): EnvTimePrecision {
+  const v = env.RA_ENV_TIME_PRECISION;
+  return v === "minute" || v === "second" ? v : "date";
+}
+
+/**
+ * Build environment context — date, (optional) time, timezone, platform, and
+ * custom fields. Always included so the agent knows the current temporal context
+ * without tool calls. The TIME line is gated by `precision` (default "date") for
+ * KV-cache prefix stability — see {@link EnvTimePrecision}.
  */
 export function buildEnvironmentContext(
   custom?: Readonly<Record<string, string>>,
+  precision: EnvTimePrecision = resolveEnvTimePrecision(),
 ): string {
   const now = new Date();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const lines: string[] = [
     `Date: ${now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`,
-    `Time: ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`,
-    `Timezone: ${tz}`,
-    `Platform: ${typeof process !== "undefined" ? `${process.platform} (${process.arch})` : "unknown"}`,
   ];
+  // Minute/second precision is opt-in: it breaks the cached system-prompt prefix.
+  if (precision === "minute" || precision === "second") {
+    lines.push(
+      `Time: ${now.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        ...(precision === "second" ? { second: "2-digit" as const } : {}),
+        hour12: true,
+      })}`,
+    );
+  }
+  lines.push(`Timezone: ${tz}`);
+  lines.push(
+    `Platform: ${typeof process !== "undefined" ? `${process.platform} (${process.arch})` : "unknown"}`,
+  );
   if (custom) {
     for (const [k, v] of Object.entries(custom)) {
       lines.push(`${k}: ${v}`);

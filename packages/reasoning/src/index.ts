@@ -111,11 +111,13 @@ export {
   resolveProfileWithWindow,
   buildStaticContext,
   buildEnvironmentContext,
+  resolveEnvTimePrecision,
   buildRules,
 } from "./context/index.js";
 export type {
   ContextProfile,
   StaticContextInput,
+  EnvTimePrecision,
 } from "./context/index.js";
 
 // ─── Message Window Compaction ───

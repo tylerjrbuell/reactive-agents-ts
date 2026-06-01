@@ -12,9 +12,10 @@ export { resolveProfile, resolveProfileWithWindow } from "./profile-resolver.js"
 export {
   buildStaticContext,
   buildEnvironmentContext,
+  resolveEnvTimePrecision,
   buildRules,
 } from "./context-engine.js";
-export type { StaticContextInput } from "./context-engine.js";
+export type { StaticContextInput, EnvTimePrecision } from "./context-engine.js";
 
 export { applyMessageWindowWithCompact } from "./message-window.js";
 
