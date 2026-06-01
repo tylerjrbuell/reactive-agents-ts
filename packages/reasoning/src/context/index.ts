@@ -7,7 +7,7 @@ export {
 } from "./context-profile.js";
 export type { ContextProfile } from "./context-profile.js";
 
-export { resolveProfile } from "./profile-resolver.js";
+export { resolveProfile, resolveProfileWithWindow } from "./profile-resolver.js";
 
 export {
   buildStaticContext,

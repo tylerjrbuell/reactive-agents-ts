@@ -108,6 +108,7 @@ export {
   CONTEXT_PROFILES,
   mergeProfile,
   resolveProfile,
+  resolveProfileWithWindow,
   buildStaticContext,
   buildEnvironmentContext,
   buildRules,

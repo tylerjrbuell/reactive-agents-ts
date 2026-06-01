@@ -1,6 +1,6 @@
 // File: src/context/profile-resolver.ts
 import type { ContextProfile, ModelTier } from "./context-profile.js";
-import { CONTEXT_PROFILES, mergeProfile } from "./context-profile.js";
+import { CONTEXT_PROFILES, mergeProfile, applyCapabilityMaxTokens } from "./context-profile.js";
 
 // ─── Model Name → Tier Heuristics ───
 
@@ -188,4 +188,29 @@ export function resolveProfile(
 
   const base = CONTEXT_PROFILES[tier];
   return customOverrides ? mergeProfile(base, customOverrides) : base;
+}
+
+/**
+ * Resolve a context profile AND bind its operational window to the model.
+ *
+ * `resolveProfile` picks the tier and returns `CONTEXT_PROFILES[tier]`, whose
+ * `maxTokens` is a tier PLACEHOLDER (e.g. 32768 for mid), NOT a deliberate cap.
+ * Downstream, `applyCapabilityMaxTokens` (the runner) treats any present
+ * `maxTokens` as caller-authoritative and skips model resolution — so a profile
+ * carrying the placeholder makes builder-constructed agents run at the tier
+ * placeholder (mid haiku at 32768) instead of the model's real window (200k).
+ * This binds the window to the model up-front (`recommendedNumCtx` per the
+ * static capability table / fallback), making capability the single source of
+ * truth and matching the createRuntime/runner path. Per-model resolution keeps
+ * the intentional ollama-safe fallbacks (e.g. unknown ollama → 2048) intact.
+ *
+ * Used by the builder's auto-resolution (no explicit caller profile). Pure /
+ * synchronous.
+ */
+export function resolveProfileWithWindow(
+  model: string,
+  provider?: string,
+): ContextProfile {
+  const base = resolveProfile(model, undefined, provider);
+  return applyCapabilityMaxTokens(base, provider, model, undefined);
 }

@@ -1812,14 +1812,19 @@ export class ReactiveAgentBuilder {
      * @throws Error if configuration is invalid or API keys are missing
      */
     async build(): Promise<ReactiveAgent> {
-        // Auto-resolve context profile from model name if not explicitly set
+        // Auto-resolve context profile from model name if not explicitly set.
+        // resolveProfileWithWindow binds maxTokens to the MODEL's real window
+        // (recommendedNumCtx) instead of the tier placeholder — otherwise the
+        // placeholder (e.g. mid=32768) masqueraded as a caller-set cap and the
+        // runner's applyCapabilityMaxTokens skipped resolution, so builder agents
+        // ran at 32768 instead of e.g. haiku's 200k (createRuntime resolved fine
+        // → a same-model asymmetry between the two construction paths).
         if (!this._contextProfile && this._model) {
-            const { resolveProfile } = await import(
+            const { resolveProfileWithWindow } = await import(
                 '@reactive-agents/reasoning'
             )
-            this._contextProfile = resolveProfile(
+            this._contextProfile = resolveProfileWithWindow(
                 this._model,
-                undefined,
                 this._provider
             )
         }
