@@ -71,6 +71,11 @@ type ReactiveControllerInstance = {
     readonly failingToolName?: string;
     /** FM-A3 backstop — see reactive-intelligence/src/types.ts ControllerEvalParams.hasUserOutput. */
     readonly hasUserOutput?: boolean;
+    /** Operational model tier — mirrors reactive-intelligence/src/types.ts
+     *  ControllerEvalParams.tier (DEFECT 1, 2026-05-31). Threaded from profile.tier by
+     *  reactive-observer so stall-detect uses the tier-scaled window. Optional → synthetic
+     *  outer-loop callers (plan-execute/ToT) that omit it keep prior behavior. */
+    readonly tier?: "local" | "mid" | "large" | "frontier";
   }) => Effect.Effect<readonly { readonly decision: string; readonly reason: string }[]>;
 };
 

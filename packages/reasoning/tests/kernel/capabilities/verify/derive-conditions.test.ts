@@ -101,3 +101,60 @@ describe("deriveConditions — prose abbreviation precision (no phantom artifact
     );
   }, 15000);
 });
+
+// ── WRITE-anchored deliverable class (2026-05-31) ──────────────────────────────
+// The deliverable must bind to a WRITE verb, never a READ input. Caught by the #7
+// ablation: read-X-then-write-Y tasks derived ArtifactProduced(<READ input>) — a file
+// the run only reads — permanently UNMET → false-blocked the run to max_iterations.
+const hasArtifact = (c: ReturnType<typeof deriveConditions>): boolean =>
+  c.some((x) => x.kind === "ArtifactProduced");
+const artifactPath = (
+  c: ReturnType<typeof deriveConditions>,
+): string | undefined => c.find((x) => x.kind === "ArtifactProduced")?.path;
+
+describe("deriveDeliverablePath — binds to the WRITE verb, not the first path", () => {
+  it("read-then-write summary task -> WRITE target, NOT the read input", () => {
+    const t =
+      "Read the file ./overflow-fixture.md (in the current directory) then " +
+      "write a local markdown file ./agents-summary.md summarizing its " +
+      "top-level (##) sections.";
+    const c = deriveConditions(t, ["file-read", "file-write"]);
+    expect(c).toEqual(
+      expect.arrayContaining([
+        artifactProduced("./agents-summary.md"),
+        toolCalled("file-write"),
+      ]),
+    );
+    expect(artifactPath(c)).toBe("./agents-summary.md");
+  }, 15000);
+
+  it("read-then-write: 'Read ./in.md then write ./out.md' -> ./out.md", () => {
+    const c = deriveConditions("Read ./in.md then write ./out.md", ["file-write"]);
+    expect(artifactPath(c)).toBe("./out.md");
+  }, 15000);
+
+  it("fetch-then-save: 'Fetch the commits then save them to ./commits.md' -> ./commits.md", () => {
+    const c = deriveConditions("Fetch the commits then save them to ./commits.md", ["file-write"]);
+    expect(artifactPath(c)).toBe("./commits.md");
+  }, 15000);
+
+  it("write-only: 'write a file ./report.md' -> ./report.md (unchanged)", () => {
+    const c = deriveConditions("write a file ./report.md", ["file-write"]);
+    expect(artifactPath(c)).toBe("./report.md");
+  }, 15000);
+
+  it("parenthesized: 'create a markdown file (./summary.md)' -> ./summary.md (unchanged)", () => {
+    const c = deriveConditions("create a markdown file (./summary.md)", ["file-write"]);
+    expect(artifactPath(c)).toBe("./summary.md");
+  }, 15000);
+
+  it("read-only (no write verb): 'Read ./config.json and explain it' -> NO ArtifactProduced", () => {
+    const c = deriveConditions("Read ./config.json and explain it", ["file-read"]);
+    expect(hasArtifact(c)).toBe(false);
+  }, 15000);
+
+  it("multiple writes: takes the LAST write target", () => {
+    const c = deriveConditions("First write ./draft.md, then write the final ./report.md", ["file-write"]);
+    expect(artifactPath(c)).toBe("./report.md");
+  }, 15000);
+});

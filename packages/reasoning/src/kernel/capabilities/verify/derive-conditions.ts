@@ -44,7 +44,7 @@ function pickWritingTool(requiredTools: readonly string[]): string {
 // Path token: optional leading "./", at least one path segment, a ".ext"
 // (2-5 alnum). We require the path to look like a real filename, not prose.
 const PATH_TOKEN = /(\.?\/?[\w./-]*[\w-]+\.[A-Za-z0-9]{1,5})/;
-const WRITE_VERB = /\b(write|create|save|generate|produce|output)\b/i;
+const WRITE_VERB = /\b(write|create|save|generate|produce|output)\b/gi;
 const FILE_NOUN = /\b(file|document|report|markdown|md|json|csv|txt)\b/i;
 
 // Real file extensions we accept when the candidate has NO explicit path
@@ -95,15 +95,28 @@ const PROSE_ABBREVIATIONS = new Set<string>([
 ]);
 
 function deriveDeliverablePath(task: string): string | undefined {
-  if (!WRITE_VERB.test(task)) return undefined;
+  // Bind the deliverable to a WRITE verb, never to a READ/fetch input. For the
+  // common read-X-then-write-Y shape, the artifact is the path that FOLLOWS the
+  // (last) write verb — not the first path token in the string (which is often
+  // the read input). Scope ALL candidate selection + precision gates to the
+  // post-write-verb substring so a read-side path can never be chosen.
+  const writeVerbs = [...task.matchAll(WRITE_VERB)];
+  if (writeVerbs.length === 0) return undefined;
 
-  // Find a path-like token. Prefer one inside parentheses (the brief's
-  // canonical "create a markdown file (./commits.md)" form) but accept any.
-  const parenMatch = task.match(/\(([^)]*?\.[A-Za-z0-9]{1,5})[^)]*\)/);
+  const lastWrite = writeVerbs[writeVerbs.length - 1];
+  const after = task.slice((lastWrite.index ?? 0) + lastWrite[0].length);
+
+  // Find a path-like token in the post-write substring. Prefer one inside
+  // parentheses (the brief's canonical "create a markdown file (./commits.md)"
+  // form) but accept any. A path that follows only a read verb cannot appear
+  // here, so the read input is never a candidate.
+  const parenMatch = after.match(/\(([^)]*?\.[A-Za-z0-9]{1,5})[^)]*\)/);
   const candidate = parenMatch
     ? parenMatch[1]?.match(PATH_TOKEN)?.[1]
-    : task.match(PATH_TOKEN)?.[1];
+    : after.match(PATH_TOKEN)?.[1];
 
+  // No path follows a write verb -> derive NO ArtifactProduced (stay
+  // conservative; do NOT fall back to a read-side path).
   if (!candidate) return undefined;
 
   const hasSeparator = candidate.includes("/") || candidate.startsWith("./");
