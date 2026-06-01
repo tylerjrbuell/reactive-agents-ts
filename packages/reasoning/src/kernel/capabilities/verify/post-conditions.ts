@@ -91,6 +91,33 @@ function normalizePath(p: string): string {
   return p.trim().replace(/^\.\//, "");
 }
 
+/**
+ * Does a WRITTEN path satisfy a derived TARGET path? Asymmetric on purpose:
+ * the derived target is always the short relative side ("./out.md",
+ * "dir/out.md") and the written path the long, often-absolute side
+ * ("/abs/dir/out.md") — the file-write tool writes to the resolved absolute
+ * path, which is what lands in the ledger action's toolCall.arguments.path.
+ *
+ * Matches iff the written path EQUALS the target, or the target is a trailing
+ * PATH-SEGMENT suffix of the written path (a "/" boundary before it). Both
+ * sides are normalized (leading "./" stripped). So:
+ *   "/abs/dir/out.md"  ⊇ "out.md"           ✓ (suffix after "/")
+ *   "/abs/dir/out.md"  ⊇ "dir/out.md"       ✓ (multi-segment suffix)
+ *   "/abs/dir/my-out.md" ⊉ "out.md"         ✗ (no "/" boundary — basename collision)
+ *   "/abs/dir/other.md"  ⊉ "out.md"         ✗ (different file)
+ *
+ * The "/" boundary requirement is what keeps this from being a loose
+ * `.includes()` / basename match — false-met is the dangerous direction for a
+ * success authority, so we never match across a non-separator boundary and
+ * never run the reverse direction (target ⊇ written). Pure: no fs, no cwd.
+ */
+function writtenPathSatisfies(written: string, target: string): boolean {
+  const w = normalizePath(written);
+  const t = normalizePath(target);
+  if (t.length === 0) return false;
+  return w === t || w.endsWith(`/${t}`);
+}
+
 interface ToolCallLike {
   readonly id?: string;
   readonly name?: string;
@@ -121,6 +148,37 @@ function isWritingTool(toolName: string | undefined): boolean {
 }
 
 /**
+ * Argument keys whose VALUE names the written file path. Restricting extraction
+ * to these keys (rather than scanning every string arg) is load-bearing for the
+ * no-false-met DBC: under the trailing-path-segment suffix match, a non-path arg
+ * like `content` that merely ENDS WITH the derived path (e.g. a document body
+ * "...see docs/agents-summary.md") would otherwise falsely satisfy
+ * ArtifactProduced. If an exotic write tool uses an unknown key the artifact
+ * simply won't match (false-UNMET) — the acceptable direction.
+ */
+const PATH_ARG_KEYS: ReadonlySet<string> = new Set([
+  "path",
+  "filepath",
+  "file_path",
+  "file",
+  "filename",
+  "file_name",
+  "dest",
+  "destination",
+  "outputpath",
+  "output_path",
+  "outpath",
+  "out_path",
+  "target",
+  "targetpath",
+  "target_path",
+]);
+
+function isPathArgKey(key: string): boolean {
+  return PATH_ARG_KEYS.has(key.toLowerCase());
+}
+
+/**
  * ArtifactProduced is met iff a SUCCESSFUL WRITE observation can be tied to the
  * target path. "Write" is judged from the observation's own toolName (DBC: tied
  * to the write's success, not to any-tool-succeeded), and the path must be tied
@@ -146,26 +204,29 @@ function isArtifactProduced(
   path: string,
   steps: readonly ReasoningStep[],
 ): boolean {
-  const target = normalizePath(path);
-
-  // Collect WRITING-tool action steps' (id -> path-args). Non-writing tools
+  // Collect WRITING-tool action steps' (id -> raw path-args). Non-writing tools
   // (e.g. file-read) are excluded so a read of the path cannot satisfy
   // "produced". Keyed by toolCallId only — the union of all write paths is
-  // deliberately NOT collected (see doc comment).
-  const writeActionPathsById = new Map<string, Set<string>>();
+  // deliberately NOT collected (see doc comment). Paths are stored raw (only
+  // trimmed); the absolute-vs-relative reconciliation happens at match time via
+  // writtenPathSatisfies (the written side is the long/absolute path).
+  const writeActionPathsById = new Map<string, string[]>();
   for (const step of steps) {
     if (step.type !== "action") continue;
     const tc = step.metadata?.toolCall as ToolCallLike | undefined;
     if (!tc?.arguments) continue;
     if (!isWritingTool(tc.name)) continue;
     if (typeof tc.id !== "string" || tc.id.length === 0) continue;
-    const paths = new Set<string>();
-    for (const value of Object.values(tc.arguments)) {
+    const paths: string[] = [];
+    for (const [key, value] of Object.entries(tc.arguments)) {
+      // Only path-naming keys — a `content` body that ends with the target path
+      // must NOT be treated as the written path (no-false-met DBC).
+      if (!isPathArgKey(key)) continue;
       if (typeof value === "string" && value.trim().length > 0) {
-        paths.add(normalizePath(value));
+        paths.push(value);
       }
     }
-    if (paths.size === 0) continue;
+    if (paths.length === 0) continue;
     writeActionPathsById.set(tc.id, paths);
   }
 
@@ -183,7 +244,11 @@ function isArtifactProduced(
     // own-path and so cannot satisfy ArtifactProduced(target).
     const linkId = step.metadata?.toolCallId;
     if (typeof linkId === "string" && writeActionPathsById.has(linkId)) {
-      if (writeActionPathsById.get(linkId)!.has(target)) return true;
+      const written = writeActionPathsById.get(linkId)!;
+      // The written path is the long/absolute side; the derived `path` the
+      // short/relative target. A path-segment-suffix match reconciles them
+      // without opening a false-met door (see writtenPathSatisfies).
+      if (written.some((w) => writtenPathSatisfies(w, path))) return true;
       // Linked but path mismatched — keep scanning other observations.
     }
   }

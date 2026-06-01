@@ -178,6 +178,87 @@ describe("verify(ArtifactProduced)", () => {
     const r = verify([artifactProduced("./commits.md")], steps);
     expect(r.unmet).toHaveLength(1);
   }, 15000);
+
+  // ── Absolute-vs-relative path reconciliation (false-UNMET fix) ──────────────
+  // Reproduces the ablation bug: the model/file-write tool writes to an ABSOLUTE
+  // path (what lands in the action's toolCall.arguments.path), but deriveConditions
+  // derives a RELATIVE ArtifactProduced("./out.md") from the task string. The
+  // derived path is a trailing path-segment suffix of the written absolute path;
+  // it must MATCH. (Linkage is intact in the real wire — act.ts pairs the action's
+  // toolCall.id with the observation's toolCallId — so this is a path-norm bug only.)
+  it("met when the write path is ABSOLUTE and the derived condition is relative", () => {
+    const steps = [
+      action(
+        "file-write",
+        { path: "/home/user/apps/examples/agents-summary.md", content: "x" },
+        "tc1",
+      ),
+      obs("file-write", true, "tc1"),
+    ];
+    const r = verify([artifactProduced("./agents-summary.md")], steps);
+    expect(r.unmet).toHaveLength(0);
+  }, 15000);
+
+  it("met when the derived condition is a multi-segment suffix of the absolute write", () => {
+    const steps = [
+      action(
+        "file-write",
+        { path: "/home/user/apps/examples/agents-summary.md", content: "x" },
+        "tc1",
+      ),
+      obs("file-write", true, "tc1"),
+    ];
+    const r = verify([artifactProduced("examples/agents-summary.md")], steps);
+    expect(r.unmet).toHaveLength(0);
+  }, 15000);
+
+  it("no false-met: an absolute write to a DIFFERENT file does not satisfy the target", () => {
+    const steps = [
+      action(
+        "file-write",
+        { path: "/home/user/apps/examples/other.md", content: "x" },
+        "tc1",
+      ),
+      obs("file-write", true, "tc1"),
+    ];
+    const r = verify([artifactProduced("./agents-summary.md")], steps);
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
+
+  it("no false-met: a content arg that merely ENDS WITH the path does NOT match a different write", () => {
+    // The write targets /abs/other.md; its `content` arg happens to end with the
+    // derived target path ("...see docs/agents-summary.md"). Under a naive
+    // all-args suffix scan this would falsely report agents-summary.md as
+    // produced. Path-candidate extraction must be restricted to path-like keys.
+    const steps = [
+      action(
+        "file-write",
+        {
+          path: "/home/user/apps/examples/other.md",
+          content: "preamble — see docs/agents-summary.md",
+        },
+        "tc1",
+      ),
+      obs("file-write", true, "tc1"),
+    ];
+    const r = verify([artifactProduced("./agents-summary.md")], steps);
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
+
+  it("no false-met: a non-boundary basename collision (my-out.md vs out.md) does NOT match", () => {
+    // The written file ends with "...my-out.md"; the target is "out.md". Without a
+    // path-segment boundary ("/" before the target) this must NOT match.
+    const steps = [
+      action(
+        "file-write",
+        { path: "/home/user/apps/examples/my-out.md", content: "x" },
+        "tc1",
+      ),
+      obs("file-write", true, "tc1"),
+    ];
+    const r = verify([artifactProduced("./out.md")], steps);
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
 });
 
 describe("verify(OutputContains)", () => {
