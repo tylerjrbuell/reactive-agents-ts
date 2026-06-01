@@ -112,3 +112,24 @@ regression by default — net-worse. Fix toward project()+Environment:
 4. Re-certify: add a DATE-SENSITIVE cell to the assembly A/B (the grid's blind spot).
 PROCESS LESSON: the full 1535 suite is the default-on gate, not warden subsets. Run it
 before any default-on commit.
+
+## RA_ASSEMBLY parity — PROGRESS + precise remaining 8 (2026-05-31)
+PRODUCTION FIXES SHIPPED: Environment block port (0408f5d1), tier-adaptive tool-reference
+port (e0e35ad5 — requiredTools seeded by runner.ts = LIVE), custom-env persona thread
+(forward-wired). Full reasoning suite 1527/8 (was 18 red post-flip).
+REMAINING 8 to full-green:
+- **1 real (narrow): custom-env fields.** `state.environmentContext` is declared
+  (kernel-state:483) but POPULATED NOWHERE — react-kernel sets it on KernelInput (:193)
+  only. Fix: copy input.environmentContext → state.environmentContext in the state init
+  (kernel-state/runner — WARDEN). Base env works; only caller custom fields/date-override
+  dropped. Test: subkernel-env-threading.test.ts.
+- **7 legacy-capture-shape test migrations** (test-only, NOT production — project()
+  distributes content correctly: task→USER message, env+persona+tools→system prompt; the
+  tests capture only the system prompt + assert the task there):
+  - model-context-verification: reactive/ToT/adaptive "sends clean task text" (assert task
+    in the USER message, not systemPrompt).
+  - reactive real-tool-execution ×3 ("executes tool…", "includes registered tool names")
+    — update capture to the thread shape.
+  - toolSchemaDetail "names-only detail shows comma list" — assert against the new
+    buildToolReference location/format.
+PROCESS LESSON (banked): full 1535 suite is the default-on gate, not warden subsets.
