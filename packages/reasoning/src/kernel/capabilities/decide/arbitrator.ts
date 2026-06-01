@@ -790,7 +790,7 @@ import { verify as verifyPostConditions, describeUnmet } from "../verify/post-co
 
 // ─── PostCondition spine — deterministic state-grounded success authority ─────
 //
-// Gated behind RA_POST_CONDITIONS (default OFF = byte-identical to today).
+// DEFAULT-ON, opt-out only via RA_POST_CONDITIONS=0 (prose-only success = legacy).
 // When ON and the run has non-empty derived post-conditions, a would-be
 // exit-success Verdict is demoted to a "post-condition-steer" escalation when
 // any condition is unmet: the kernel CANNOT report success while a required
@@ -804,8 +804,14 @@ import { verify as verifyPostConditions, describeUnmet } from "../verify/post-co
 // budget caps, not the 1-shot synthesis cap).
 const POST_CONDITION_STEER = "post-condition-steer";
 
+// DEFAULT-ON, opt-out only via RA_POST_CONDITIONS=0. Cleared the default-on bar by the
+// cross-tier ablation + frontier-judge verdict (wiki/Research/Harness-Reports/
+// postconditions-ablation-2026-05-31.md): the state-grounded spine steers incomplete
+// deliverable runs to completion — cogito summary success 1/3→3/3, per-run judged
+// quality 0.31→0.72, mid parity, no false-block, token-neutral. Prose-only success
+// (legacy) remains reachable via RA_POST_CONDITIONS=0. Mirrors assemblyEnabled().
 function postConditionsEnabled(): boolean {
-  return process.env.RA_POST_CONDITIONS === "1";
+  return process.env.RA_POST_CONDITIONS !== "0";
 }
 
 /**

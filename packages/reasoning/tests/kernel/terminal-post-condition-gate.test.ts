@@ -4,11 +4,11 @@
 // imperative gateway (kernel/loop/terminate.ts). The Arbitrator's steer gate
 // only covers verdict-driven exit-success; imperative paths that route through
 // terminate() (stall/harness-deliverable, loop-graceful, oracle-forced,
-// required-tool-nudge-exhausted) bypass the verdict. This proves that with
-// RA_POST_CONDITIONS=1 + non-empty stored conditions + an unmet ledger, a
-// forced termination (e.g. the stall/harness-deliverable path) resolves to
-// status:"failed" (honest failure → result.success=false) instead of
-// delivering a false success. Flag OFF → byte-identical delivered success.
+// required-tool-nudge-exhausted) bypass the verdict. This proves that by default
+// (opt-out via RA_POST_CONDITIONS=0) + non-empty stored conditions + an unmet
+// ledger, a forced termination (e.g. the stall/harness-deliverable path) resolves
+// to status:"failed" (honest failure → result.success=false) instead of
+// delivering a false success. Opt-out (=0) → byte-identical delivered success.
 //
 // This is the reproducible proof for the cogito GitHub-MCP false-success
 // (trace 01KSWR3S5FEW0KM61PCF1M6946): result.success=TRUE with ./commits.md
@@ -169,7 +169,9 @@ describe("terminate() terminal PostCondition gate — flag ON", () => {
   }, 15000);
 });
 
-describe("terminate() terminal PostCondition gate — flag OFF (byte-identical)", () => {
+describe("terminate() terminal PostCondition gate — opt-out (RA_POST_CONDITIONS=0)", () => {
+  beforeEach(() => { process.env.RA_POST_CONDITIONS = "0"; });
+
   it("delivers success even with unmet stored conditions", () => {
     const state = baseState({
       steps: ledgerWithArtifactButNoWrite(),
@@ -220,8 +222,8 @@ describe("runStallDeliverableStep — terminal gate via the real stall path", ()
     expect(result.state.output).toBeNull();
   }, 15000);
 
-  it("flag OFF: same stall path delivers (unchanged) with status done", async () => {
-    delete process.env.RA_POST_CONDITIONS;
+  it("opt-out (RA_POST_CONDITIONS=0): same stall path delivers (unchanged) with status done", async () => {
+    process.env.RA_POST_CONDITIONS = "0";
     const state = baseState({
       steps: ledgerWithArtifactButNoWrite(),
       meta: { postConditions: [...unmetConditions] },

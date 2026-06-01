@@ -74,8 +74,14 @@ export type TerminateOptions = {
   readonly rationale?: Rationale;
 };
 
+// DEFAULT-ON, opt-out only via RA_POST_CONDITIONS=0 — mirrors the Arbitrator's gate
+// (arbitrator.ts) and assemblyEnabled(). Cleared the default-on bar by the cross-tier
+// ablation + frontier-judge verdict (wiki/Research/Harness-Reports/
+// postconditions-ablation-2026-05-31.md). Prose-only success (legacy, where an
+// exhausted imperative path can force-deliver around an unmet condition) remains
+// reachable via RA_POST_CONDITIONS=0.
 function postConditionsEnabled(): boolean {
-  return process.env.RA_POST_CONDITIONS === "1";
+  return process.env.RA_POST_CONDITIONS !== "0";
 }
 
 /**
@@ -90,7 +96,8 @@ function postConditionsEnabled(): boolean {
  * stall can force-deliver around the gated verdict and report a FALSE success
  * (cogito GitHub-MCP: result.success=true with ./commits.md never written).
  *
- * This gate closes that hole: with `RA_POST_CONDITIONS=1` AND a non-empty
+ * This gate closes that hole: by default (opt-out via RA_POST_CONDITIONS=0) AND
+ * with a non-empty
  * stored condition set AND a ledger that leaves a condition unmet, the terminal
  * state resolves to `status:"failed"` (honest partial failure) regardless of
  * `opts.reason` — even though output may already be assembled. `status:"failed"`
@@ -103,8 +110,8 @@ function postConditionsEnabled(): boolean {
  * `state.meta.postConditions` — the SAME set the Arbitrator's steer gate reads.
  * NO LLM, NO fs: `verifyPostConditions` is a pure ledger scan.
  *
- * Default (flag off) or no stored conditions → byte-identical pass-through to
- * the original done-transition below.
+ * Opt-out (RA_POST_CONDITIONS=0) or no stored conditions → byte-identical
+ * pass-through to the original done-transition below.
  */
 function applyTerminalPostConditionGate(
   state: KernelState,

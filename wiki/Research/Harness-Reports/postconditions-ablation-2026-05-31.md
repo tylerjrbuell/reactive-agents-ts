@@ -55,3 +55,62 @@ deliverable task). #7 is gated on a fix:
 This is the ablation working as intended: a default-on flip that *felt* safe (the
 mechanism is carefully built + honesty-first) was empirically catastrophic due to a
 ledger-shape mismatch invisible from code review. Read the wire, grade the deliverable.
+
+---
+
+## RE-ABLATION (post-fix) — VERDICT FLIPS POSITIVE (2026-05-31)
+
+After two fixes — path-norm absolute-vs-relative (`17a7169c`) + write-verb-anchored
+derivation (`463fbcee`) + the tier type-mirror sync — re-ran mid (b8uf4pdgg) then
+cogito (bjam40031), N=3.
+
+**mid haiku (honest control):** false-block GONE. commits 3/3 + summary 3/3 on BOTH
+arms; comparable tokens; pc1 summary even terminates cleaner (final_answer_tool vs
+pc0 end_turn). RISK cleared.
+
+**cogito:14b (local):** the WIN — completion-steering, not dishonest-catch (no
+dishonest-success appeared; cogito fails honestly, doesn't fake):
+
+| task | pc0 (off) | pc1 (on) |
+|---|---|---|
+| commits | 3/3 success | 3/3 (parity) |
+| summary | **1/3** (2× max_iter, NO file) | **3/3** (all produced the file) |
+
+- fail/block: pc0=2, pc1=**0** — arm B recovers runs that else max-iter without
+  delivering. Does NOT false-block.
+- Tokens: cogito summary pc1 total 59.9k vs pc0 68.8k — arm B is **cheaper** (pc0
+  burns max-iter tokens on failures). Lift with NEGATIVE token overhead.
+- CAVEAT: steered completions thinner — pc1 coverage 0.45/0.77/0.77 vs pc0's one
+  success 0.95. The gate makes cogito PRODUCE the file but rushed. file-presence ≠
+  faithfulness.
+
+**Lift-rule check:** first-attempt success up (cogito summary 1/3→3/3 ≈ +67pp on that
+task; commits parity; mid parity), token overhead ≤0 (cheaper), no false-block,
+cross-tier safe. CLEARS the default-on bar — EXCEPT the coverage caveat is unmeasured
+by success-flag.
+
+**Recommendation:** flip is JUSTIFIED by the ablation. The one open question is whether
+the steered output is QUALITY or just present — answerable by a frontier judge.
+
+## JUDGED QUALITY (haiku over the REAL cogito summary deliverables) — FLIP CONFIRMED
+
+`apps/examples/judge-deliverables.ts` — haiku scores each produced summary 0-1 on
+faithful/useful coverage of the 57k source (rubric: pass=0.6).
+
+| arm | per-deliverable score | per-RUN expected quality (max-iter failure = 0) |
+|---|---|---|
+| pc0 (gate OFF) | 0.92 (the 1 success of 3 runs) | (0 + 0.92 + 0)/3 = **0.31** |
+| pc1 (gate ON) | 0.72 / 0.72 / 0.72 (all 3 runs) | **0.72** |
+
+- Steered output IS thinner per-deliverable (0.72 < 0.92 — judge: "covers most major
+  sections, thin on execution detail") — the caveat is real.
+- BUT all 3 pc1 outputs PASS the 0.6 quality bar, and per-RUN expected quality MORE
+  THAN DOUBLES (0.31 → **0.72**, +0.41) because the gate converts 2 zero-quality
+  max-iter failures into passing reports. A reliable 0.72 beats a 1-in-3 shot at 0.92.
+
+**VERDICT: FLIP RA_POST_CONDITIONS default-on.** Clears every gate — judged quality
+lift +0.41/run, cross-tier safe (mid parity, no false-block), token-neutral-to-cheaper.
+Flip with an opt-out killswitch (reversible, like RA_ASSEMBLY). Documented FOLLOW-UP:
+tune the steer to preserve faithfulness (push pc1 0.72 → 0.92 by steering toward
+completeness, not just file-presence); broaden task/model coverage (N=3, 1 task,
+cogito — the lift is clear on this probe but not yet broad).

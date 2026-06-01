@@ -146,13 +146,15 @@ describe("reflexion PostCondition spine gate (RA_POST_CONDITIONS=1)", () => {
   );
 
   it(
-    "reports success normally when RA_POST_CONDITIONS is off (flag-off = existing required-tools-only gate)",
+    "reports success normally when RA_POST_CONDITIONS=0 (opt-out = existing required-tools-only gate)",
     async () => {
-      // Same task as above but flag off — no ArtifactProduced check.
-      // No requiredTools either → existing B gate doesn't fire → SATISFIED
-      // critique from mock → should complete normally.
+      // Same task as above but spine OPTED OUT (RA_POST_CONDITIONS=0) — no
+      // ArtifactProduced check. No requiredTools either → existing B gate doesn't
+      // fire → SATISFIED critique from mock → should complete normally.
+      // (Default-on flip 2026-05-31: unset now means gate ACTIVE, so the legacy
+      // prose-only path must be exercised via the explicit =0 opt-out.)
       const PRIOR = process.env.RA_POST_CONDITIONS;
-      delete process.env.RA_POST_CONDITIONS;
+      process.env.RA_POST_CONDITIONS = "0";
       try {
         const layer = await makeMockLayer();
         const result = await Effect.runPromise(

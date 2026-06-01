@@ -1,10 +1,10 @@
 // Run: bun test packages/reasoning/tests/kernel/capabilities/decide/post-condition-gate.test.ts --timeout 15000
 //
 // Arbitrator PostCondition gate — the state-grounded success authority wired at
-// the verdict seam. With RA_POST_CONDITIONS=1, a would-be exit-success verdict
-// is demoted to a "post-condition-steer" escalation when a derived
-// post-condition is unmet (e.g. the required ./commits.md was never written).
-// Default (flag unset) behavior is byte-identical to today.
+// the verdict seam. DEFAULT-ON (opt-out via RA_POST_CONDITIONS=0): a would-be
+// exit-success verdict is demoted to a "post-condition-steer" escalation when a
+// derived post-condition is unmet (e.g. the required ./commits.md was never
+// written). Legacy prose-only success is reachable via RA_POST_CONDITIONS=0.
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import {
   arbitrate,
@@ -134,7 +134,24 @@ describe("PostCondition gate — flag ON", () => {
   }, 15000);
 });
 
-describe("PostCondition gate — flag OFF (default, byte-identical)", () => {
+describe("PostCondition gate — DEFAULT-ON (env unset → gate ACTIVE)", () => {
+  // No env set here: the top-level beforeEach deletes RA_POST_CONDITIONS, so this
+  // exercises the unset → enabled contract directly.
+  it("demotes exit-success on unmet conditions with the flag UNSET (default-on)", () => {
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "summary" },
+      ctxWith([]),
+    );
+    expect(v.action).toBe("escalate");
+    if (v.action === "escalate") {
+      expect(v.nextStrategy).toBe("post-condition-steer");
+    }
+  }, 15000);
+});
+
+describe("PostCondition gate — opt-out (RA_POST_CONDITIONS=0, legacy prose-only)", () => {
+  beforeEach(() => { process.env.RA_POST_CONDITIONS = "0"; });
+
   it("does NOT demote exit-success even with unmet conditions", () => {
     const v = arbitrate(
       { kind: "agent-final-answer", via: "tool", output: "summary" },
