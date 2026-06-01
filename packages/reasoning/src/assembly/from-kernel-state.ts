@@ -126,5 +126,11 @@ export function fromKernelState(
       ? { detail: (profile as { toolSchemaDetail?: "names-only" | "names-and-types" | "full" }).toolSchemaDetail }
       : {}),
   };
-  return { log, capability, store, persona, tools: toolsWithPolicy };
+  // Thread the run's custom environmentContext (date overrides + caller fields) onto
+  // the persona so systemPromptStage's Environment block reproduces them — state-read,
+  // no think.ts change. (state.environmentContext is set from input by react-kernel.)
+  const personaWithEnv = state.environmentContext
+    ? { ...persona, environmentContext: state.environmentContext }
+    : persona;
+  return { log, capability, store, persona: personaWithEnv, tools: toolsWithPolicy };
 }
