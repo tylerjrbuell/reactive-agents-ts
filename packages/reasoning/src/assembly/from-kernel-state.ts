@@ -115,5 +115,16 @@ export function fromKernelState(
     tier: (profile.tier as Tier) ?? "mid",
   });
 
-  return { log, capability, store, persona, tools };
+  // Augment tools with the dispatcher's requiredTools + the profile's schema-detail
+  // so the in-prompt tool reference (systemPromptStage) can render the tier-adaptive
+  // "Required tools (call these)" grouping for weak-FC local models. Both are read
+  // from state/profile here — no caller (think.ts) change needed.
+  const toolsWithPolicy = {
+    ...tools,
+    ...(state.requiredTools ? { requiredTools: state.requiredTools } : {}),
+    ...((profile as { toolSchemaDetail?: "names-only" | "names-and-types" | "full" }).toolSchemaDetail
+      ? { detail: (profile as { toolSchemaDetail?: "names-only" | "names-and-types" | "full" }).toolSchemaDetail }
+      : {}),
+  };
+  return { log, capability, store, persona, tools: toolsWithPolicy };
 }

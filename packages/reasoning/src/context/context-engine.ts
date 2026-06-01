@@ -101,7 +101,7 @@ export function buildStaticContext(input: StaticContextInput): string {
  * Build the initial tool section from schemas.
  * Native FC is always active — lists tool names/purposes without ACTION: instructions.
  */
-function buildToolReference(
+export function buildToolReference(
   _task: string,
   availableToolSchemas?: readonly ToolSchema[],
   requiredTools?: readonly string[],

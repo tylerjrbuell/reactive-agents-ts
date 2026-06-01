@@ -14,7 +14,14 @@ export interface AssemblyInput {
   readonly capability: ResolvedCapability;
   readonly store: ResultStore;
   readonly persona: { system: string; environmentContext?: Readonly<Record<string, string>> };
-  readonly tools: { schemas: readonly unknown[] };
+  readonly tools: {
+    schemas: readonly unknown[];
+    /** Tools the dispatcher requires — drives the tier-adaptive in-prompt
+     *  "Required tools (call these)" grouping for weak-FC local models. */
+    requiredTools?: readonly string[];
+    /** Schema verbosity for the in-prompt tool reference (from profile). */
+    detail?: "names-only" | "names-and-types" | "full";
+  };
 }
 
 export interface AssemblyCtx extends AssemblyInput {
