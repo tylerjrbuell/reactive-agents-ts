@@ -9,8 +9,10 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import {
   arbitrate,
   applyTermination,
+  arbitrationContextFromState,
   type ArbitrationContext,
 } from "../../../../src/kernel/capabilities/decide/arbitrator.js";
+import { deriveConditions } from "../../../../src/kernel/capabilities/verify/derive-conditions.js";
 import type { KernelState } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import type { ObservationResult } from "../../../../src/types/observation.js";
@@ -165,6 +167,68 @@ describe("PostCondition gate — DEFAULT-ON (env unset → gate ACTIVE)", () => 
     if (v.action === "escalate") {
       expect(v.nextStrategy).toBe("post-condition-steer");
     }
+  }, 15000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE-COMPOSITION SEAM (2026-06-01): the existing cases above build the
+// ArbitrationContext BY HAND (`ctxWith`), which leaves `postConditions` absent so
+// the gate always RE-DERIVES from task+requiredTools. The runtime final-answer
+// path (act.ts:388) instead routes through `arbitrationContextFromState`, which
+// surfaces the SEEDED `state.meta.postConditions` (runner.ts:257) — a code path
+// the hand-built ctx never exercised. The evidence-refresh cogito counterexample
+// (`01KT1BQ6Z5`) exited success on a failed-write → final-answer; this pins that
+// the live builder seam + seeded conditions DEMOTE it, ruling out candidate (a)
+// "postConditions not threaded to the arbitrator at runtime".
+describe("PostCondition gate — live seam via arbitrationContextFromState + SEEDED conditions", () => {
+  beforeEach(() => { delete process.env.RA_POST_CONDITIONS; });
+
+  // Mirror runner.ts:257 — seed meta.postConditions exactly as the kernel does.
+  function seededState(steps: readonly ReasoningStep[]): KernelState {
+    const derived = deriveConditions(taskWithDeliverable, ["file-write"]);
+    return {
+      ...baseState,
+      steps: [...steps],
+      toolsUsed: new Set(steps.filter((s) => s.type === "observation").map(() => "file-write")),
+      meta: { ...baseState.meta, postConditions: derived },
+    } as KernelState;
+  }
+
+  it("seeds a non-empty ArtifactProduced set the builder surfaces onto the ctx", () => {
+    const ctx = arbitrationContextFromState(seededState(writeObs(false, "tc-failed")), {
+      task: taskWithDeliverable,
+      requiredTools: ["file-write"],
+    });
+    expect(ctx.postConditions).toBeDefined();
+    expect(ctx.postConditions!.some((c) => c.kind === "ArtifactProduced")).toBe(true);
+  }, 15000);
+
+  it("DEMOTES a failed-write → final-answer through the real builder seam (the cogito counterexample, deterministic)", () => {
+    const ctx = arbitrationContextFromState(seededState(writeObs(false, "tc-failed")), {
+      task: taskWithDeliverable,
+      requiredTools: ["file-write"],
+    });
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "The summary has been written." },
+      ctx,
+    );
+    expect(v.action).toBe("escalate");
+    if (v.action === "escalate") {
+      expect(v.nextStrategy).toBe("post-condition-steer");
+      expect(v.reason).toContain("./commits.md");
+    }
+  }, 15000);
+
+  it("ALLOWS exit-success through the seam once the write succeeds (positive control)", () => {
+    const ctx = arbitrationContextFromState(seededState(writeObs(true, "tc-ok")), {
+      task: taskWithDeliverable,
+      requiredTools: ["file-write"],
+    });
+    const v = arbitrate(
+      { kind: "agent-final-answer", via: "tool", output: "Done." },
+      ctx,
+    );
+    expect(v.action).toBe("exit-success");
   }, 15000);
 });
 

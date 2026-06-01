@@ -136,8 +136,40 @@ resolved `conditions`/`verifyPostConditions` result at the live final-answer
 seam. Discriminate (a)/(b)/(c), then fix the one that fires. The unit gate is
 already guarded (this report's new test); the gap is purely in live wiring.
 
-### #7 status (final, precise)
+### Live-seam test — RUN (2026-06-01). Candidate (a) RULED OUT; counterexample = noise.
+The deterministic gate test proved the LOGIC; the open question was the live
+COMPOSITION — does the runtime final-answer path (`act.ts:388`, which routes
+through `arbitrationContextFromState` + SEEDED `meta.postConditions`, NOT the
+hand-built `ctxWith` the unit cases used) demote a failed-write → final-answer?
+Added 3 cases to `post-condition-gate.test.ts` exercising the real builder seam
+with the runner-seeded set (`deriveConditions(task, ["file-write"])`):
+- the builder surfaces a non-empty `ArtifactProduced` set onto `ctx` ✓
+- a failed-write → `agent-final-answer` through the seam **DEMOTES** to
+  `post-condition-steer` ✓ (deterministic repro of the cogito shape, but via the
+  LIVE builder, not a hand ctx)
+- a successful write through the seam exits success (positive control) ✓
+10/10 green.
+
+All three candidate causes are now closed by read + test:
+- **(a) postConditions not threaded to the arbitrator at runtime** — RULED OUT:
+  the seam test routes through `arbitrationContextFromState` with the seeded set
+  and demotes correctly.
+- **(b) verify-linkage on cogito's messy 3×file-write ledger** — RULED OUT by
+  reading `isArtifactProduced`: it links a successful write to the target by
+  `toolCallId` ONLY (no union fallback), and cogito's writes were MALFORMED (no
+  path arg → never collected into `writeActionPathsById`), so none could
+  false-satisfy `ArtifactProduced(./agents-summary.md)`.
+- **(c) act.ts:334 completion-gap pre-gate** — RULED OUT by reading the flow: 334
+  only LOWERS `canComplete` (→ final-answer rejected → loop continues), it can
+  never false-ACCEPT; whenever `canComplete=true` the path reaches the
+  proven-sound `arbitrate()` at 388.
+
+### #7 status (final, RESOLVED)
 VERIFIED: seed fires by default (`2c9cb155`); gate demotes seeded/derived unmet
-conditions incl. failed-write (unit, 7/7). UNRESOLVED: one live final-answer
-counterexample on cogito — a wiring/composition miss, NOT a gate-logic regression.
-"0.31→0.72" stays retired (unmeasured on current code).
+conditions incl. failed-write, through BOTH the re-derive path (unit) AND the
+live builder seam with the seeded set (`arbitrationContextFromState`, this
+report). The single live cogito counterexample (`01KT1BQ6Z5`) is attributed to an
+N=2 cogito tool-malfunction artifact (malformed write args), NOT a gate hole —
+all three candidate causes ruled out. The #7 gate is sound in live composition.
+"0.31→0.72" stays retired (lift unmeasured on current code — the honest next step
+is the `pass^k` harness, not more #7 polish).
