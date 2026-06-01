@@ -151,7 +151,7 @@ function applyTerminalPostConditionGate(
  * The Arbitrator's verdict-driven exit-success branch is the only sanctioned
  * caller outside this helper — see `kernel/capabilities/decide/arbitrator.ts`.
  *
- * Terminal PostCondition authority (RA_POST_CONDITIONS=1): before recording a
+ * Terminal PostCondition authority (default-on; opt-out via RA_POST_CONDITIONS=0): before recording a
  * "done" transition, an unmet stored post-condition demotes the terminal state
  * to "failed" (honest failure) — see `applyTerminalPostConditionGate`.
  */

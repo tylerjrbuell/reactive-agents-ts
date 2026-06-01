@@ -242,11 +242,12 @@ export function runKernel(
     // ONCE here (deterministic, NO LLM, NO fs) and store on state.meta so BOTH
     // gates read the SAME set: the Arbitrator's mid-loop steer gate (via
     // arbitrationContextFromState) and the terminal hard-stop in terminate().
-    // Flag-gated: only seeded when RA_POST_CONDITIONS=1, so flag-off runs keep
+    // Seeded by default (opt-out only via RA_POST_CONDITIONS=0), coherent with
+    // the consuming gates which are likewise default-on (!== "0"); =0 keeps
     // serialization byte-identical (meta.postConditions stays absent). Derived
     // from effectiveInput.requiredTools (resolved below as `requiredTools`) +
     // the task text; conservative — empty set falls back to the prose verdict.
-    if (process.env.RA_POST_CONDITIONS === "1") {
+    if (process.env.RA_POST_CONDITIONS !== "0") {
       const derived = deriveConditions(
         effectiveInput.task,
         effectiveInput.requiredTools ?? [],
