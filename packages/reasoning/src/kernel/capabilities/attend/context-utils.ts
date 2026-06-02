@@ -12,9 +12,30 @@ import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider"
 import type { ContextProfile } from "../../../context/context-profile.js";
 import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
+import { applyAgeAwareCuration, curationAgeAware } from "../attend/tool-formatting.js";
+import { applyOverhaulContextProjection, overhaulProjectionEnabled } from "../../../overhaul/context-projection.js";
 import type { KernelState, KernelMessage, KernelInput } from "../../../kernel/state/kernel-state.js";
 import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
+
+// ── sanitizeToolName ──────────────────────────────────────────────────────────
+
+/**
+ * Sanitize a registered tool name into the shape native-FC providers accept.
+ *
+ * Anthropic/OpenAI require tool names to match `^[a-zA-Z0-9_-]{1,128}$`. MCP
+ * tools register canonically as `${server}/${tool}` (e.g. `github/list_commits`),
+ * whose `/` is rejected by the provider regex. We replace every disallowed
+ * character with `_` so the outbound schema is valid; the inbound tool-call
+ * name is mapped BACK to the canonical name at the native-FC boundary (think.ts)
+ * so registry lookup/execution is unchanged.
+ *
+ * Pure: identical input → identical output. Names already matching the regex
+ * are returned unchanged.
+ */
+export function sanitizeToolName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
 
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 
@@ -48,7 +69,17 @@ export function buildSystemPrompt(
 
 // ── toProviderMessage ─────────────────────────────────────────────────────────
 
-/** Convert a KernelMessage to provider-native LLMMessage format. */
+/**
+ * Convert a KernelMessage to provider-native LLMMessage format.
+ *
+ * Tool names are stored canonically in state.messages (e.g. MCP
+ * `github/list_commits`) so registry lookup / allowedTools matching stays
+ * intact. The provider payload requires the sanitized form (`^[a-zA-Z0-9_-]+$`),
+ * so on replay we sanitize the tool_use `name` and tool_result `toolName` here —
+ * keeping the rendered thread consistent with the (also-sanitized) outbound
+ * tools array. This is outbound-only: nothing downstream of the provider call
+ * reads these rendered names back.
+ */
 export function toProviderMessage(msg: KernelMessage): LLMMessage {
   if (msg.role === "assistant") {
     if (msg.toolCalls && msg.toolCalls.length > 0) {
@@ -60,7 +91,7 @@ export function toProviderMessage(msg: KernelMessage): LLMMessage {
           ...msg.toolCalls.map((tc) => ({
             type: "tool_use" as const,
             id: tc.id,
-            name: tc.name,
+            name: sanitizeToolName(tc.name),
             input: tc.arguments,
           })),
         ],
@@ -72,7 +103,7 @@ export function toProviderMessage(msg: KernelMessage): LLMMessage {
     return {
       role: "tool" as const,
       toolCallId: msg.toolCallId,
-      toolName: msg.toolName,
+      toolName: sanitizeToolName(msg.toolName),
       content: msg.content,
     } as LLMMessage;
   }
@@ -116,6 +147,40 @@ export function buildToolSchemas(
 // ── buildConversationMessages ─────────────────────────────────────────────────
 
 /**
+ * Sidecar carrying the data needed to construct a typed `CompressionApplied`
+ * EventBus event at the Effect-context-capable caller (think.ts via
+ * defaultContextCurator → ContextManager). Returned by
+ * {@link buildConversationMessages} when a fresh CompressionRecommendation
+ * was consumed.
+ *
+ * `taskId` is intentionally NOT carried here — the caller has access to
+ * `state.taskId` and supplies it directly when publishing.
+ *
+ * Issue #119 closure (WS-4 Phase 7) — replaces the prior console.debug
+ * fallback path with a typed publish lifted to the curator caller.
+ */
+export interface CompressionAppliedSidecar {
+  readonly iteration: number;
+  readonly recommendedAtIteration: number;
+  readonly targetTokens: number;
+  readonly actualMessageCount: number;
+  readonly reason: string;
+}
+
+/**
+ * Return value of {@link buildConversationMessages}.
+ *
+ * `compressionApplied` is present iff a fresh `CompressionRecommendation`
+ * was consumed on this call. The caller (defaultContextCurator → think.ts)
+ * uses the sidecar to publish a typed `CompressionApplied` event via
+ * EventBus.
+ */
+export interface BuildConversationMessagesResult {
+  readonly messages: LLMMessage[];
+  readonly compressionApplied?: CompressionAppliedSidecar;
+}
+
+/**
  * Build the conversation message list for this LLM turn.
  *
  * Applies the sliding message window + task framing on the first iteration.
@@ -126,13 +191,18 @@ export function buildToolSchemas(
  * as-is. Distilled facts (observation extractedFact) are surfaced in the
  * system prompt's Prior work / Observations section, so sliding-window
  * compaction is safe without recall hints.
+ *
+ * When a fresh CompressionRecommendation is consumed, the return value
+ * carries a `compressionApplied` sidecar so the Effect-context-capable
+ * caller can publish the typed `CompressionApplied` EventBus event
+ * (see `BuildConversationMessagesResult`).
  */
 export function buildConversationMessages(
   state: KernelState,
   input: KernelInput,
   profile: ContextProfile,
   adapter: ProviderAdapter,
-): LLMMessage[] {
+): BuildConversationMessagesResult {
   // Issue #119 — Curator as sole prompt author. The reactive-observer's
   // compress-messages patch demoted to advisory: it records a
   // CompressionRecommendation on state.meta.pendingCompressionRecommendation.
@@ -148,27 +218,35 @@ export function buildConversationMessages(
   const recFresh = rec !== undefined && state.iteration - rec.recommendedAtIteration <= 1;
   const effectiveBudget = recFresh ? Math.min(profileBudget, rec.targetTokens) : profileBudget;
 
+  // Spike 1 (curation ROOT) — age-aware tool-result curation. OPT-IN via
+  // RA_CURATION_AGEAWARE=1; default OFF = byte-identical (this block skipped).
+  // When ON, the single most-recent tool_result (K=1) is rehydrated FULL from
+  // the scratchpad up to a window-scaled ceiling (the synthesis target), and
+  // AGED tool_results are recompressed to preview + their existing reversible
+  // storedKey pointer. Runs on state.messages (storedKey still intact, before
+  // toProviderMessage strips it) and BEFORE windowing so applyMessageWindow-
+  // WithCompact keeps its tier-adaptive recent-turns-full guarantee on top.
+  const curatedMessages = curationAgeAware()
+    ? applyAgeAwareCuration(state.messages, state.scratchpad, profile, 1)
+    : state.messages;
+
+  // Overhaul (principle #1) — OPT-IN via RA_OVERHAUL=1; default OFF =
+  // byte-identical (curatedMessages passed straight through). When ON, stored
+  // tool_results whose full body OVERFLOWS the recency budget are rewritten to a
+  // clean system summary+ref (NO copyable marker/preview/recall) so weak models
+  // reference via write_result_to_file instead of transcribing. overflowBudget
+  // matches curation's recency budget so "overflows curation → projected".
+  const overflowBudget = Math.max(4000, Math.floor((profile.maxTokens ?? 32_768) * 0.35 * 4));
+  const projectedMessages = overhaulProjectionEnabled()
+    ? applyOverhaulContextProjection(curatedMessages, state.scratchpad, overflowBudget)
+    : curatedMessages;
+
   const compactedMessages = applyMessageWindowWithCompact(
-    state.messages,
+    projectedMessages,
     profile.tier ?? "mid",
     effectiveBudget,
   );
   let workingMessages = compactedMessages;
-
-  // Emit advisory compression-applied log when a fresh recommendation was
-  // consumed. event-bus.ts now ships a typed CompressionApplied variant
-  // (2026-05-24) but buildConversationMessages is a pure synchronous helper
-  // that cannot open an Effect context here. Lifting the publish to the
-  // caller (curator.curate() → think.ts) requires returning richer metadata
-  // and updating both call sites — deferred as a separate followup. The
-  // console.debug fallback stays until that refactor lands; recommendation
-  // side IS typed via EventBus already (reactive-observer.ts).
-  if (recFresh && rec !== undefined) {
-    // eslint-disable-next-line no-console
-    console.debug(
-      `[compression-applied] iteration=${state.iteration} target=${rec.targetTokens} actual=${compactedMessages.length} reason="${rec.reason}"`,
-    );
-  }
 
   // taskFraming hook — on first iteration, let adapter annotate the task message
   // to help local models understand the full sequence of steps required.
@@ -187,5 +265,26 @@ export function buildConversationMessages(
     }
   }
 
-  return (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
+  const messages = (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
+
+  // Issue #119 closure (WS-4 Phase 7) — when a fresh recommendation was
+  // consumed, return a sidecar so the Effect-context-capable caller (think.ts
+  // via defaultContextCurator → ContextManager) can publish the typed
+  // `CompressionApplied` EventBus variant. The prior console.debug fallback
+  // is gone: typed events are the sole audit surface. `actualMessageCount`
+  // is sampled from the rendered thread length (post-window, post-framing)
+  // so observers see the same count the LLM does.
+  if (recFresh && rec !== undefined) {
+    return {
+      messages,
+      compressionApplied: {
+        iteration: state.iteration,
+        recommendedAtIteration: rec.recommendedAtIteration,
+        targetTokens: rec.targetTokens,
+        actualMessageCount: messages.length,
+        reason: rec.reason,
+      },
+    };
+  }
+  return { messages };
 }

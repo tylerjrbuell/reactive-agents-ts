@@ -40,8 +40,10 @@ describe("Bug 1b — compaction reads resolved profile.maxTokens, not input.cont
     const out = buildConversationMessages(state, input, profile, stubAdapter);
 
     // 13 raw messages, 6 turns; local keeps first user + last 2 turns + [Prior:].
-    expect(out.length).toBeLessThan(state.messages.length);
-    const joined = out.map((m) => (typeof m.content === "string" ? m.content : "")).join(" ");
+    expect(out.messages.length).toBeLessThan(state.messages.length);
+    const joined = out.messages
+      .map((m) => (typeof m.content === "string" ? m.content : ""))
+      .join(" ");
     expect(joined).toContain("[Prior:");
   });
 
@@ -51,6 +53,6 @@ describe("Bug 1b — compaction reads resolved profile.maxTokens, not input.cont
     const profile = { ...CONTEXT_PROFILES.frontier, maxTokens: 128_000 };
 
     const out = buildConversationMessages(state, input, profile, stubAdapter);
-    expect(out.length).toBe(state.messages.length);
+    expect(out.messages.length).toBe(state.messages.length);
   });
 });

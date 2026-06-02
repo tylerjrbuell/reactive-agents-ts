@@ -10,14 +10,13 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
-import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
-import type { TerminatedBy } from "@reactive-agents/core";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 
@@ -25,7 +24,7 @@ import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils
 
 export type { CompressResult } from "../kernel/capabilities/attend/tool-formatting.js";
 export { compressToolResult } from "../kernel/capabilities/attend/tool-formatting.js";
-export { evaluateTransform } from "../kernel/capabilities/act/tool-parsing.js";
+export { evaluateTransform } from "../kernel/utils/tool-parsing.js";
 // parseToolRequestWithTransform re-export removed — use parseToolRequest from kernel/tool-utils directly
 export { truncateForDisplay } from "../kernel/capabilities/act/tool-execution.js";
 
@@ -241,20 +240,13 @@ export const executeReactive = (
     const state = pass.state;
     const output = pass.output;
 
-    // Derive terminatedBy from kernel state — map oracle reasons to canonical types
-    const rawTerminatedBy = state.meta.terminatedBy as string | undefined;
-    const terminatedBy: TerminatedBy =
-      rawTerminatedBy === "llm_error"
-        ? "llm_error"
-        : rawTerminatedBy === "final_answer_tool"
-          ? "final_answer_tool"
-          : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
-            ? "end_turn"
-            : rawTerminatedBy === "final_answer_regex"
-              ? "final_answer"
-              : state.status === "done"
-                ? "final_answer"
-                : "max_iterations";
+    // Derive terminatedBy + the raw open-string channel from kernel state via the
+    // canonical helper (react-kernel.ts) — single source of truth for the narrowing
+    // whitelist. DEFECT 3 (2026-05-31): the inline duplicate here used to map every
+    // `done` reason to `final_answer` (a lie → goalAchieved true on harness give-ups);
+    // calling the helper keeps the truthful whitelist in ONE place (DRY = the fix
+    // can't drift back). The helper omits rawTerminatedBy when absent.
+    const { terminatedBy, rawTerminatedBy } = deriveTerminatedBy(state);
 
     yield* emitPhaseEnd({
       emitLog,

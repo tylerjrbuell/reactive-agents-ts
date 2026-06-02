@@ -1,0 +1,892 @@
+
+  Running session: Context-Assembly Stress A/B (project vs legacy) (context-stress v1.0.0)
+  Tasks: 4 | Models: 1 | Variants: 2 | Runs: 3
+
+→ [phase:execution] Starting...
+ℹ️ Reactive Intelligence — Anonymous entropy data helps improve the framework. Disable with .withReactiveIntelligence({ telemetry: false }) (https://docs.reactiveagents.dev/telemetry)
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 8.7s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:file-write] call 1
+  ✗ [tool:file-write] 0.00s — [Tool error: Missing required parameter "path"]
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.0s
+  📊 [metric:entropy] 0.15 composite
+  [iter:3:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 3
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.9s
+✓ [phase:reactive:kernel] 17.2s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 14169 tokens
+  📊 [metric:cost_usd] 0.0035569875 usd
+✓ [completion] Task completed in 27.9s with 14169 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 8.1s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+✓ [phase:reactive:kernel] 9.6s
+✓ [completion] Reactive strategy terminated: final_answer_tool
+  📊 [metric:tokens_used] 5807 tokens
+  📊 [metric:cost_usd] 0.0019038375 usd
+✓ [completion] Task completed in 17.7s with 5807 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.1s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 8.7s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:file-write] call 1
+  ✗ [tool:file-write] 0.00s — [Tool error: Missing required parameter "path"]
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.1s
+  📊 [metric:entropy] 0.15 composite
+  [iter:3:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 3
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.6s
+✓ [phase:reactive:kernel] 17.5s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 14180 tokens
+  📊 [metric:cost_usd] 0.0035472 usd
+✓ [completion] Task completed in 26.9s with 14180 tokens
+.→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 9.0s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:file-write] call 1
+  ✗ [tool:file-write] 0.00s — [Tool error: Missing required parameter "path"]
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.3s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 8.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:3:thought]
+→ [phase:think] Starting...
+  → [tool:file-write] call 3
+  ✗ [tool:file-write] 0.00s — [Tool error: Missing required parameter "path"]
+✓ [phase:think] 0.0s
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.0s
+  📊 [metric:entropy] 0.38249999999999995 composite
+  [iter:4:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 4
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+⚠️ [warning] [harness-deliverable] Assembling output from 1 tool artifacts after 8 stalled iterations (source=model_synthesis)
+✓ [phase:reactive:kernel] 22.8s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 15595 tokens
+  📊 [metric:cost_usd] 0.0045521625 usd
+✓ [completion] Task completed in 33.3s with 15595 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.7s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 8.3s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+✓ [phase:reactive:kernel] 10.0s
+✓ [completion] Reactive strategy terminated: final_answer_tool
+  📊 [metric:tokens_used] 5811 tokens
+  📊 [metric:cost_usd] 0.0018984375000000002 usd
+✓ [completion] Task completed in 18.2s with 5811 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 7.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 7.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+✓ [phase:reactive:kernel] 17.0s
+✓ [completion] Reactive strategy terminated: final_answer_tool
+  📊 [metric:tokens_used] 7503 tokens
+  📊 [metric:cost_usd] 0.0032358375 usd
+✓ [completion] Task completed in 25.6s with 7503 tokens
+.→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+⚠️ [warning] [harness-deliverable] Assembling output from 1 tool artifacts after 4 stalled iterations (source=model_synthesis)
+✓ [phase:reactive:kernel] 4.9s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 11594 tokens
+  📊 [metric:cost_usd] 0.0017786999999999998 usd
+✓ [completion] Task completed in 13.0s with 11594 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+⚠️ [warning] [harness-deliverable] Assembling output from 1 tool artifacts after 4 stalled iterations (source=model_synthesis)
+✓ [phase:reactive:kernel] 4.6s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 11532 tokens
+  📊 [metric:cost_usd] 0.0017690999999999998 usd
+✓ [completion] Task completed in 49.6s with 11532 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.8s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.8s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+⚠️ [warning] [harness-deliverable] Assembling output from 1 tool artifacts after 4 stalled iterations (source=raw_artifacts)
+⚠️ [warning] [output-gate] Synthesized output to match requested format: prose
+✓ [phase:reactive:kernel] 8.0s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 11788 tokens
+  📊 [metric:cost_usd] 0.0017810999999999999 usd
+✓ [completion] Task completed in 19.6s with 11788 tokens
+.→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.2s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 6.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:file-write] call 1
+  ✓ [tool:file-write] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+✓ [phase:reactive:kernel] 9.6s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 8954 tokens
+  📊 [metric:cost_usd] 0.0019257749999999998 usd
+✓ [completion] Task completed in 25.0s with 8954 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 6.2s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:file-write] call 2
+  ✓ [tool:file-write] 0.00s
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.8s
+✓ [phase:reactive:kernel] 12.6s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 9347 tokens
+  📊 [metric:cost_usd] 0.0022447875 usd
+✓ [completion] Task completed in 21.0s with 9347 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.0s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.8s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+✓ [phase:reactive:kernel] 5.4s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 8209 tokens
+  📊 [metric:cost_usd] 0.0014409375 usd
+✓ [completion] Task completed in 13.8s with 8209 tokens
+.→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.9s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.7s
+  📊 [metric:entropy] 0.15 composite
+✓ [phase:reactive:kernel] 4.0s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 10234 tokens
+  📊 [metric:cost_usd] 0.0014871 usd
+✓ [completion] Task completed in 9.2s with 10234 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 11.0s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+✓ [phase:reactive:kernel] 13.8s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 10119 tokens
+  📊 [metric:cost_usd] 0.0014865 usd
+✓ [completion] Task completed in 17.3s with 10119 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.2s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.7s
+  📊 [metric:entropy] 0.15 composite
+⚠️ [warning] [output-gate] Synthesized output to match requested format: prose
+✓ [phase:reactive:kernel] 5.7s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 10120 tokens
+  📊 [metric:cost_usd] 0.0014678999999999998 usd
+✓ [completion] Task completed in 12.1s with 10120 tokens
+.→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.3s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.8s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.3s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+⚠️ [warning] [harness-deliverable] Assembling output from 1 tool artifacts after 4 stalled iterations (source=model_synthesis)
+✓ [phase:reactive:kernel] 5.5s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 11499 tokens
+  📊 [metric:cost_usd] 0.0017504999999999999 usd
+✓ [completion] Task completed in 13.9s with 11499 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.7s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+⚠️ [warning] [harness-deliverable] Assembling output from 1 tool artifacts after 4 stalled iterations (source=model_synthesis)
+✓ [phase:reactive:kernel] 4.7s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 11566 tokens
+  📊 [metric:cost_usd] 0.0017566500000000002 usd
+✓ [completion] Task completed in 12.6s with 11566 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 0
+  ✓ [tool:file-read] 0.00s
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 2
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+⚠️ [warning] [harness-deliverable] Assembling output from 1 tool artifacts after 4 stalled iterations (source=model_synthesis)
+✓ [phase:reactive:kernel] 4.6s
+✓ [completion] Reactive strategy terminated: end_turn
+  📊 [metric:tokens_used] 11578 tokens
+  📊 [metric:cost_usd] 0.00176355 usd
+✓ [completion] Task completed in 13.7s with 11578 tokens
+.→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.0s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:discover-tools] call 2
+  ✓ [tool:discover-tools] 0.00s
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.545258346581876 composite
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.0s
+  📊 [metric:entropy] 0.5714711257309941 composite
+  [iter:5:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.7s
+  📊 [metric:entropy] 0.5638541666666667 composite
+✗ [phase:reactive:kernel] 9.3s
+✗ [completion] Reactive strategy terminated: max_iterations
+  📊 [metric:tokens_used] 17482 tokens
+  📊 [metric:cost_usd] 0.0027663 usd
+✗ [completion] Task failed in 21.8s with 17482 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.2s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:discover-tools] call 2
+  ✓ [tool:discover-tools] 0.00s
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.1s
+  📊 [metric:entropy] 0.5331756756756756 composite
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.5606433823529412 composite
+  [iter:5:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.5655095720720721 composite
+✗ [phase:reactive:kernel] 9.0s
+✗ [completion] Reactive strategy terminated: max_iterations
+  📊 [metric:tokens_used] 17556 tokens
+  📊 [metric:cost_usd] 0.0027735 usd
+✗ [completion] Task failed in 19.0s with 17556 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.1s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:discover-tools] call 2
+  ✓ [tool:discover-tools] 0.00s
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 6.3s
+  📊 [metric:entropy] 0.5431430155210644 composite
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.5718327702702704 composite
+  [iter:5:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.5707904411764706 composite
+✗ [phase:reactive:kernel] 13.5s
+✗ [completion] Reactive strategy terminated: max_iterations
+  📊 [metric:tokens_used] 17410 tokens
+  📊 [metric:cost_usd] 0.0027548999999999994 usd
+✗ [completion] Task failed in 22.4s with 17410 tokens
+.→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.1s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.3s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:recall] call 1
+  ✓ [tool:recall] 0.00s
+✓ [phase:think] 0.0s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 2
+  ✗ [tool:file-read] 0.30s — [Tool error: File read failed: Error: ENOENT: no such file or directory, open '/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.env']
+✓ [phase:think] 0.3s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.7s
+  📊 [metric:entropy] 0.15 composite
+  [iter:3:thought]
+→ [phase:think] Starting...
+  → [tool:discover-tools] call 3
+  ✓ [tool:discover-tools] 0.00s
+✓ [phase:think] 0.0s
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.8s
+  📊 [metric:entropy] 0.5487445278298937 composite
+  [iter:5:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.8s
+  📊 [metric:entropy] 0.38249999999999995 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✗ [phase:think] 0.1s
+✗ [phase:reactive:kernel] 11.4s
+✗ [completion] Reactive strategy terminated: llm_error
+  📊 [metric:tokens_used] 1080 tokens
+  📊 [metric:cost_usd] 0 usd
+✗ [completion] Task failed in 16.8s with 1080 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.2s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.2s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 1
+  ✗ [tool:file-read] 0.30s — [Tool error: File read failed: Error: ENOENT: no such file or directory, open '/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.env']
+✓ [phase:think] 0.3s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.5s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:discover-tools] call 2
+  ✓ [tool:discover-tools] 0.00s
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.4s
+  📊 [metric:entropy] 0.5090705128205129 composite
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.5420192307692309 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✗ [phase:think] 0.1s
+✗ [phase:reactive:kernel] 11.5s
+✗ [completion] Reactive strategy terminated: llm_error
+  📊 [metric:tokens_used] 986 tokens
+  📊 [metric:cost_usd] 0 usd
+✗ [completion] Task failed in 16.8s with 986 tokens
+→ [phase:execution] Starting...
+→ [phase:reactive:kernel] Starting...
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.4s
+  📊 [metric:entropy] 0.15 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 0.0s
+  [iter:1:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.0s
+  📊 [metric:entropy] 0.15 composite
+  [iter:1:thought]
+→ [phase:think] Starting...
+  → [tool:file-read] call 1
+  ✗ [tool:file-read] 0.30s — [Tool error: File read failed: Error: ENOENT: no such file or directory, open '/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/.env']
+✓ [phase:think] 0.3s
+  [iter:2:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.6s
+  📊 [metric:entropy] 0.15 composite
+  [iter:2:thought]
+→ [phase:think] Starting...
+  → [tool:discover-tools] call 2
+  ✓ [tool:discover-tools] 0.00s
+✓ [phase:think] 0.0s
+  [iter:3:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 2.2s
+  📊 [metric:entropy] 0.5160466306775875 composite
+  [iter:4:thought]
+→ [phase:think] Starting...
+✓ [phase:think] 1.7s
+  📊 [metric:entropy] 0.38249999999999995 composite
+  [iter:0:thought]
+→ [phase:think] Starting...
+✗ [phase:think] 0.1s
+✗ [phase:reactive:kernel] 11.3s
+✗ [completion] Reactive strategy terminated: llm_error
+  📊 [metric:tokens_used] 993 tokens
+  📊 [metric:cost_usd] 0 usd
+✗ [completion] Task failed in 16.8s with 993 tokens
+.
+
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Session: context-stress v1.0.0
+  │  SHA: 697a37f4  ·  Tasks: 4  ·  Models: 1  ·  Variants: ra-full vs ra-full-assembly-off
+  ├─────────────────────────────────────────────────────────────┤
+
+  Model: claude-haiku-4-5  ·  Variant: ra-full, ra-full-assembly-off
+  Task                           Acc      Tokens   Dur    Status
+  ────────────────────────────────────────────────────────────────────────
+  cs-overflow-transcribe             0%  11385    24.3s  ✓
+  cs-overflow-transcribe             0%  9636     25.8s  ✓
+  cs-overflow-summarize             33%  11638    27.4s  ✓
+  cs-overflow-summarize             33%  8837     20.0s  ✓
+  cs-recall-temptation              33%  10158    12.9s  ✓
+  cs-recall-temptation               0%  11548    13.5s  ✓
+  cs-dishonest-bait                  0%  17483    21.1s  ✓
+  cs-dishonest-bait                  0%  1020     16.9s  ✓
+
+  Dimension scores by variant:
+    accuracy               ra-full: 17%  ra-full-assembly-off: 8%
+    reliability            ra-full: 53%  ra-full-assembly-off: 76%
+
+  └─────────────────────────────────────────────────────────────┘
+

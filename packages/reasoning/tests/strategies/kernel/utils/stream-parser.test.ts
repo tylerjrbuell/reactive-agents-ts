@@ -1,11 +1,11 @@
-// File: tests/kernel/capabilities/reason/stream-parser.test.ts
+// File: tests/kernel/utils/stream-parser.test.ts
 import { describe, it, expect } from "bun:test";
 import {
   extractThinking,
   extractThinkingSafeContent,
   stripThinking,
   THINKING_SAFE_MIN_TOKENS,
-} from "../../../../src/kernel/capabilities/reason/stream-parser.js";
+} from "../../../../src/kernel/utils/stream-parser.js";
 
 describe("thinking-utils", () => {
   describe("extractThinking", () => {

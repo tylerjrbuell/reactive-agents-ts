@@ -248,24 +248,52 @@ async function runLiveDemo(detected: ProviderInfo): Promise<void> {
     agentResponse(result.output ? String(result.output) : '(no output)')
     console.log()
 
-    // Read real metadata where available — fall back gracefully if a field
-    // is missing. `toolsUsed` is set by the runtime debrief; for older
-    // metadata shapes we count distinct names from toolCallHistory.
+    // Count distinct tools the agent invoked. The canonical source is
+    // `metadata.toolCalls` (one entry per action step, derived from
+    // reasoningSteps by the execution engine). Fall back to debrief/legacy
+    // shapes if a build doesn't surface it.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const meta = (result.metadata ?? {}) as any
-    const toolsUsedArr: unknown =
-        meta.toolsUsed ??
-        meta.debrief?.toolsUsed ??
-        (Array.isArray(meta.toolCallHistory)
+    // Terminal/orchestration plumbing — not "real work" tools. Mirrors
+    // META_TOOL_NAMES in sub-agent-executor.ts so the count reflects the
+    // tools the agent actually used (e.g. get-hn-posts), not final-answer.
+    const META_TOOL_NAMES: ReadonlySet<string> = new Set([
+        'final-answer',
+        'task-complete',
+        'context-status',
+        'brief',
+        'pulse',
+        'find',
+        'recall',
+        'checkpoint',
+    ])
+    // Accepts string[] (names) or {name}[] (toolCalls / history entries).
+    const namesFrom = (arr: unknown): string[] =>
+        Array.isArray(arr)
             ? Array.from(
                   new Set(
-                      meta.toolCallHistory.map(
-                          (t: { name?: string }) => t?.name ?? ''
-                      )
+                      arr
+                          .map((t: unknown) =>
+                              typeof t === 'string'
+                                  ? t
+                                  : (t as { name?: string })?.name ?? ''
+                          )
+                          .filter(
+                              (n: string) =>
+                                  n.length > 0 && !META_TOOL_NAMES.has(n)
+                          )
                   )
               )
-            : [])
-    const toolsCount = Array.isArray(toolsUsedArr) ? toolsUsedArr.length : 0
+            : []
+    const toolsUsedArr: string[] =
+        namesFrom(meta.toolCalls).length > 0
+            ? namesFrom(meta.toolCalls)
+            : namesFrom(
+                  meta.toolsUsed ??
+                      meta.debrief?.toolsUsed ??
+                      meta.toolCallHistory
+              )
+    const toolsCount = toolsUsedArr.length
 
     metricsSummary({
         duration: meta.duration ?? duration,

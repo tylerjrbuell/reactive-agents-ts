@@ -2,6 +2,436 @@
 
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
+## ▶▶ EVIDENCE REFRESH (2026-06-01) — `wiki/Research/Harness-Reports/evidence-refresh-2026-06-01.md`
+Re-ran 2 stale-magnitude debts on current code.
+- **Debt 1 RA_ASSEMBLY grid: WIN HOLDS.** Fair A/B (both arms full context), N=2, qwen3.5+haiku. LOCAL: project rescues
+  legacy total failure (overflow legacy 0/2 recall-loop vs project 2/2 cov 1.0) + **−48/−49% local tok**. MID: 1.0 cov both,
+  token-neutral. Stale "−57%" → **−48/−49% local + failure-rescue + 1.0 cov + mid parity** (gap shrank 57→49 as predicted).
+- **Debt 2 #7 magnitude: did NOT replicate + ONE COUNTEREXAMPLE (narrow framing per advisor).** NOT "ON worse than OFF" (N=2
+  + confound: the dishonest run was CREATED by a cogito tool malfunction, orthogonal to #7). (1) "0.31→0.72 / 1/3→3/3" does NOT
+  replicate (mid clean both arms=no signal; cogito N=2 stochastic) → lift RETIRED, unmeasured (neither confirmed nor refuted).
+  (2) ONE counterexample (pc1 r1): cogito file-write ERRORED→no file→final-answer→success=TRUE; ArtifactProduced genuinely UNMET
+  (verify correctly needs successful write) yet exited success. STATUS (precise, NOT "#7 OPEN broadly"): VERIFIED seed-fires
+  + gate demotes seeded-unmet (unit); UNVERIFIED+counterexample = final-answer e2e composition (one path). **DETERMINISTIC
+  arbitrate() test RUN `c8614eb6` → GATE LOGIC SOUND:** added failed-write cogito shape (writeObs(false)) to post-condition-gate.test.ts
+  → DEMOTES to post-condition-steer (7/7). deriveConditions + act.ts:388 final-answer wiring + isArtifactProduced all sound in
+  isolation → live cogito miss is a COMPOSITION/WIRING gap, NOT gate-logic regression. Candidates (undiscriminated): seed-thread to
+  arbitrator / verify-linkage on messy 3-write ledger / act.ts:334 completion-gap pre-gate. **#7 FINAL = RESOLVED `db6164ac` (2026-06-01).**
+  Advisor REFRAMED: SKIP trace-replay (stochastic + serializeKernelState doesn't persist meta.postConditions → can't answer); question is
+  binary+systemic, answered by READING + deterministic seam test. (c) ruled out by reading act.ts:334→388 — 334 only LOWERS canComplete
+  (→reject→loop), NEVER false-accepts; canComplete=true ALWAYS reaches proven-sound arbitrate() at 388. (a) ruled out by 3 new seam cases
+  through the REAL builder (arbitrationContextFromState + runner-seeded deriveConditions — the path ctxWith unit cases skipped): failed-write→
+  final-answer DEMOTES live (10/10). (b) ruled out by reading isArtifactProduced (toolCallId-link only, NO union; cogito malformed writes had
+  no path arg). **ALL 3 candidates closed → #7 gate SOUND in live composition; cogito `01KT1BQ6Z5` was an N=2 tool-malfunction artifact, NOT a
+  gate hole.** PIVOT (advisor): N=2 stochastic non-signal = session-long bottleneck → measure with `pass^k`.
+
+## ▶▶ #7 / Phase 1 spine CLOSED `f468525f` (2026-06-01)
+Phase 0 `pass^k` harness was ALREADY BUILT (stale memory said "build it"): task-quality-gate.ts has RUNS_PER_TASK + passK + variance + T3-strict +
+postConditionsMet wired to REAL verify(); passk-baseline-2026-05-30.md filed. Phase 1 code ALSO done. Ran the missing piece = Phase 1 LIVE-RUN GATE
+(fixture-pinned cross-arm A/B). Re-froze fixture `hn-fixture-2026-06-01.json` (transient one gone). cogito:14b N=3 #7 ON(unset/default) vs OFF(=0):
+**pass^k 5/5 BOTH, postCond flat → regression-safe; composite 86 vs 91 = run-noise.** Advisor RECONCILE (do NOT reopen / do NOT chase stochastic spot-test):
+**#7 lift ~0 BY NATURE on realistic dist** (claimed-success+absent-deliverable is rare-tail; clean fixture+working tools → deliverable every run → gate never
+fires). Per project lift rule: deriveConditions deterministic/no-LLM + verify pure ledger-scan → ~0 overhead → **KEPT default-on as cheap tail-risk INSURANCE,
+not a lift claim.** "0.31→0.72" RETIRED. **Composition PROVEN BY EXECUTION**: `terminal-post-condition-gate.test.ts` runs the REAL imperative stall path
+(runStallDeliverableStep, the path that made cogito false-success trace `01KSWR3S5FEW0KM61PCF1M6946`) → status:failed with #7 on; added DEFAULT-ON unset case (7/7).
+Report: `wiki/Research/Harness-Reports/phase1-postcond-ab-2026-06-01.md`. **#7 DONE.**
+
+## ▶ NEXT TARGET — observation-TRUNCATION faithfulness defect (the gap Phase-0 baseline ACTUALLY found)
+T3-strict 0/3 EVERY tier INCL sonnet-4-6 while prose success=3/3. #7 structurally CANNOT catch (SELECTION-wrongness ≠ deliverable-absence). Guardrail SATISFIED
+(advisor "if even sonnet fails, metric may measure itself"): inspected sonnet T3 — NOT over-strictness, GENUINE. run0=wrong-pick(4 cited,1 right); **run1+run2=cited=[],
+output MID-REASONING ("results were truncated… Let me retrieve the full content") — never produced deliverable, balked on a truncation marker.** Harness truncated the
+25-post get-hn-posts observation → even sonnet concluded it lacked data + looped. TIER-AGNOSTIC harness context-engineering bug, canonical-assembly domain (#1 preview+ref).
+**ROOT CAUSE DIAGNOSED + EMPIRICALLY CONFIRMED (2026-06-01, NOT yet fixed):** `compressToolResult` (`tool-formatting.ts:221`) array path is ALL-OR-NOTHING —
+showAll (all items @ full 6-field, ~3900 chars for 25-post fixture) OR `slice(0, previewItems=3)`. At DEFAULT `toolResultMaxChars=800` (`tool-execution.ts:551`),
+showAll fails → model sees **3 of 25 posts** + recall() hint for other 22 (models rarely follow; sonnet balked "retrieve full content"). Repro: budget 800=3/25
+rows, 2000=3/25, 4000=25/25. Prior 4→6 field lift made descendants VISIBLE but only on 3 shown rows — did NOT fix ROW-COUNT truncation → top-N-by-field selection
+impossible for K>~6 arrays. **PROPOSED FIX (kernel → kernel-warden): MIDDLE try-fit tier = full-coverage-reduced-fields** (drop url, tighten title, keep numeric
+selection fields → all-25 ≈ 1375 chars fits budget, beats 3-item preview). Content-aware array projection = overhaul thesis. Report §ROOT CAUSE:
+`wiki/Research/Harness-Reports/phase1-postcond-ab-2026-06-01.md`.
+
+**▶▶ CORRECTED ROOT CAUSE (2026-06-01, full-path repro — advisor caught a SECOND cap; isolation≠composition AGAIN).** Field research
+(`wiki/Research/2026-06-01-context-length-handling-competitive-research.md`): budget = %-of-effective-window, offload+JIT-retrieve, control-first
+composable overrides (LangChain/Anthropic/OpenAI/Mastra). User approved "window-derived budget + column-drop." BUT real assembly path overturns it:
+`conversation-assembly.ts:105-128` (G-4) — obs w/ storedKey → inlines FULL RAW from scratchpad BYTE-SLICED at tier-INDEPENDENT `TOOL_RESULT_INLINE_CAP=4000`
++ "…truncated, recall full" marker (`fullFromScratchpad ?? obsStep.content` PREFERS raw → THROWS AWAY compressToolResult's structured preview). Repro on
+pinned 25-post fixture (raw 4874) at ALL 4 tier budgets = IDENTICAL: 4039 chars raw JSON, 21/25 posts, truncation marker. **Per-tier toolResultMaxChars
+(600/800/1200/4000) is INERT for model-visible content — 4000 inline cap dominates once raw>4000. Window-derived per-tier budget = NO-OP for this defect
+(§9 — DROP).** REVISED FIX (both KERNEL → kernel-warden): **(1) PRIMARY: conversation-assembly — when raw>cap use STRUCTURED preview (obsStep.content)
+not raw byte-slice (complete coverage + no balk marker + fits cap); (2) column-drop in compressToolResult — NOW load-bearing (assembly uses it): all-items
+reduced-width.** Inline cap MAY be window-derived later (secondary). Surfaced reversal to user.
+
+**▶▶ RETRACTED — TRUNCATION DEFECT WAS ALREADY FIXED (2026-06-01, kernel-warden VETO + git timing).** Dispatched kernel-warden; it REFUSED + escalated
+(correctly), ran the LIVE `buildConversationMessages` pipeline: all 25 fixture posts delivered at frontier/mid/local-8k/local-4k, NO marker; only tiny
+local-2048 truncates. `applyAgeAwareCuration` (`RA_CURATION_AGEAWARE !== "0"`, DEFAULT-ON since 2026-05-30, context-utils.ts:229) runs AFTER assembly + keeps the
+synthesis-target FULL. My diag-assembly.ts OMITTED this default-on stage → reproduced a PRE-FIX world. Git: curation flip `799487c1`=2026-05-30 19:47; sonnet 0/3
+baseline ran 13:58 (~6h BEFORE fix). Docstring: curation ON → sonnet T3-strict 1/3→3/3. `799487c1` ancestor of HEAD. **Frontier truncation was REAL but
+SHIPPED-FIXED; sonnet 0/3 was STALE. Changes A+B DROPPED (inert — curation overwrites conversation-assembly). No code, no commit.** PROCESS LESSON (4th
+isolation≠composition burn this session — bank HARD): NEVER hand-reimplement a pipeline slice; reproduce through the REAL entry point (`buildConversationMessages`).
+Warden pilot earned its keep. **GENUINE residual (NOT truncation):** cogito T3 0/3 = REASONING (wrong-field sort, sees all 25); qwen = instruction (no-filter dump);
+narrow latent = raw>recentCharBudget (huge results / 2048 windows) byte-slices in curation RECENT branch (tool-formatting.ts:633-640) — column-drop helps THERE,
+re-justify on merits. Field research valid: `wiki/Research/2026-06-01-context-length-handling-competitive-research.md`.
+
+## ▶▶ NEXT HIGHEST-IMPACT = KV-CACHE PREFIX STABILITY (alignment-doc P2/P6 — top OPEN priority; P1 #7 / P3 pass^k / P5 ablations DONE)
+Source: `wiki/Research/2026-05-30-reactive-agents-alignment-gap.md` (3× 🔴 conflicts root to per-iteration tool churn). Caching IS wired (verified): Anthropic
+`cache_control: ephemeral` on system+tool-list+last-tool_result (`providers/anthropic.ts:44-153`); OpenAI reads `cached_tokens`. Impact = cloud INPUT-token COST
+(cache_read ~10% price) → attacks Mastra 5× input gap. **Cached system-prompt prefix has 3 per-iteration BREAKERS (live on default path, assembly system-prompt.ts:54-62):**
+(1) minute `Time:` (env block first line) — **FIXED Step 1 `283c22a5`** (default→date; control-first EnvTimePrecision param > RA_ENV_TIME_PRECISION env > "date"; minute/second
+opt-in; reasoning 1615/0). (2) tool-reference CHURN — `buildToolReference(goal, c.tools.schemas)` uses lazy-PRUNED set (RA_LAZY_TOOLS!=0 default). (3) `Remaining steps:`
+recitation (line 62) SHRINKS per iteration. **∴ caching defeated BY DESIGN (volatile per-turn content lives IN the cached prompt); Step 1 fixed 1/3 — measuring NOW
+would be CONFOUNDED by (2)+(3), deferred (no confounded paid measurement).** **Step 2 (EXPANDED, ablation-gated): (a) stable tool CATALOG in prompt (no churn; canon
+mask-don't-churn + tool_choice) + (b) MOVE `Remaining steps` recitation OUT of system prompt INTO RECENCY (also = alignment-doc P4 recitation + anti-lost-in-middle) +
+(c) timestamp done. ABLATION REQUIRED (lazy-disclosure had real 2026-04-26 prompt-curation gains): stable-resident vs churn → cross-tier pass^k + cache_read on pinned
+fixture. THEN clean combined cache_read before/after (cloud).** User approved Step1→Step2. Tool-churn also roots the relevantTools-drop bug + recall-lure; recall REDESIGN
+(remove recall meta-tool → auto rehydration) adjacent: `wiki/Architecture/Design-Specs/2026-05-30-recall-redesign-automatic-rehydration.md` (draft).
+
+## ▶▶ #5 window-resolution FIXED `9aa8176a`, MEASURED ≈ NEUTRAL (2026-05-31)
+scaffoldProfile DROPPED (§9 no-consumer). Real defect: builder baked CONTEXT_PROFILES[tier] PLACEHOLDER
+maxTokens (mid=32768) → flowed as caller-provided → runner's applyCapabilityMaxTokens early-returned →
+builder agents ran at 32768 not model's real window (createRuntime resolved fine → API asymmetry). Probe:
+callerMax=32768. Fix: `resolveProfileWithWindow(model,provider)` binds maxTokens to recommendedNumCtx
+(capability=source-of-truth); per-model so ollama unknown→2048 intact. 32768→200000 (recency 45875→280000).
+reasoning 1606/0, build green, +3 tests. **MEASURED (window A/B, overflow-summary 57k, mid haiku, N=2):
+coverage 1.0 BOTH (no lift), tokens noise-neutral, success 4/4.** WHY: tool-result compression stores+previews
+large reads BEFORE assembly → window rarely governs → bug largely BENIGN on this class. Correctness-positive
++ token-neutral but NOT a lift. UNTESTED: many-results/long-convo classes. DECISION (user): **KEEP as correctness fix** — #5 CLOSED. Harness knob committed `b090dae1`. Next direction =
+USER FORK (deep substrate #4/#3 vs parked capability axis vs 2 stale-evidence debts), NOT auto-descent.
+PRE-EXISTING runtime cast-ceiling RED (≤62; was 68 at base; #7 +2) — separate cleanup, not ceiling-raise.
+
+## ✅ PHASE 1 COMPLETE (greenfield deterministic core) — subagent-driven TDD, 9/9 assembly tests
+`packages/reasoning/src/assembly/` (outside kernel/**). Commits: `a88c0af7` EventLog+AgentEvent (append-only
+single source) · `7ad2bd70` content-addressed ResultStore (sha ref; summarize/materialize via tools
+renderValue) · `5fc971ee` ResolvedCapability (single source; budgets derived; predictNumCtx buckets) ·
+`b98a219c` types + AssemblyTrace (observability = return type). All pure, typecheck clean, no `any`.
+**✅ PHASE 2 COMPLETE** — pure `project()` pipeline, 18/18 assembly tests, typecheck clean, no `any`.
+`afc135a1` skeleton+composition · `162f96a0` projectResults (FULL|summary+ref, no marker/recall) ·
+`15308d2f` systemPrompt (persona+goal+remaining) · `a05be9eb` selectTools(deduped/masked)+finalize ·
+`73dc7329` compactHistory + e2e (50-commit overflow→summary+ref, full data in store). Phases 1+2 = the
+WHOLE clean deterministic observable core, greenfield outside kernel/**.
+## ✅ PHASE 3 COMPLETE — live seam wired + PROVEN live (deterministic + multi-turn + overflow)
+- 3.1 `ba471704` `fromKernelState → AssemblyInput` (8/8): goal=first user msg; toolCalls→tool_called;
+  tool_result→events w/ storedKey ref; scratchpad→ResultStore via `putWithRef` (preserves `_tool_result_N`).
+- `8ad271e6` **project() emits a PROVIDER-VALID thread** (advisor-caught gate): was emitting only tool_result
+  legs → no user(goal)/assistant{tool_use} → providers 400. Fix: walk log.events in order, user(goal) first,
+  group parallel calls into ONE assistant turn; compact-history never orphans a tool_result. 29/29.
+- `b8fee8de` `toLLMMessages` glue (LLMMessage = role:"tool" + assistant tool_use as ContentBlock[], not toolCalls).
+- `488daf34` **RA_ASSEMBLY live seam** (kernel-warden): think.ts gates prompt build through project(fromKernelState);
+  unset = byte-identical curate(); trace→stderr under RA_ASSEMBLY_DEBUG=1. 28 kernel + 1480 green.
+- `181afdf2` **golden-trace**: same state → byte-identical trace ×3; 126k→summary+ref; full data recoverable.
+- `034fcebd` `RA_RECENCY_BUDGET_CHARS` knob (force overflow branch deterministically).
+- **LIVE PROOF (Anthropic haiku, real MCP):** =1 multi-turn thread accepted 5 think-iters/17 steps/success;
+  control (=0) failed identically on a separate bug ⟹ assembly innocent. With `RA_RECENCY_BUDGET_CHARS=2000`
+  summary+ref FIRED mid-loop, thread stayed valid, 0 llm_error, success. **live+overflow+multi-turn closed.**
+  Debrief `wiki/Research/Debriefs/2026-05-31-phase32-live-seam-and-mcp-name-bug.md`.
+
+## ⭐ PRE-EXISTING BUG FIXED — MCP tool names broke native-FC `34dc70cf`
+Found during the 3.2 live smoke (read the WIRE; earlier "malformed schema" guess WRONG). Raw 400:
+`tools.0.custom.name: String should match pattern '^[a-zA-Z0-9_-]{1,128}$'`. MCP registers `${server}/${tool}`
+(tool-service.ts:454); `/` violates the provider FC name regex (OpenAI identical). No sanitization anywhere ⟹
+**MCP tools NEVER worked on Anthropic/OpenAI native FC** (text-parse/local only). Bisect: file-write succeeds
+7 steps live; github/list_commits alone → 0-tok llm_error. Fix (sanitize ONLY at provider payload, canonical
+elsewhere): `sanitizeToolName` helper; think.ts outbound sanitize + inbound reverse-map before both consumers;
+`toProviderMessage`(=0) + `toLLMMessages`(=1) sanitize replay names. 11 tests, 1492 green. Separate ticket:
+file-write tool wrote 3× but no file (sandbox/cwd).
+
+## ⛔ PHASE 4 VERDICT `e4de9849` — DO NOT DELETE legacy builders (cross-tier A/B grid)
+Grid `apps/examples/assembly-ab-grid.sh`: RA_ASSEMBLY(project) vs legacy curate(), 2 arms × {compact,
+overflow} × {local qwen3.5, mid haiku} × RUNS=2. Debrief
+`wiki/Research/Debriefs/2026-05-31-phase4-ab-grid-and-deletion-gating.md`.
+- **compact = PARITY** (=1 succeeds everywhere); token deltas confounded by meta-tool choice (=0
+  discover-tools vs =1 brief) — not a clean assembly cost.
+- **overflow = MIXED; =1 REGRESSES on mid** 0/2 vs legacy 2/2 faithful @4250 tok. project() `summarize()`
+  strips content to bare result_ref + steers to write_result_to_file → mid loops recall/find → fail.
+  Legacy keeps **compressed-preview inline** (~10k of 57k) → content visible → faithful summary
+  (wire-verified). local: =1 2/2 vs =0 one 84k runaway. Read = "no-regression bar NOT cleared," not "project broken."
+- **Phase 5 does NOT rescue:** write_result_to_file copies a blob, can't summarize. Fix = 4th
+  **content-preview projection mode** keyed to deliverable type (read-content=keep preview vs
+  act-by-reference=bare ref). spike `2c5d77bf` validated act-by-ref; THIS grid tested summarize → bare-ref wrong.
+- **Delete blocked, 2 independent legs:** (1) defaultContextCurator + buildStaticContext are PUBLIC API
+  (mandate keeps); plan-execute/ToT/reflexion assemble via separate path project() doesn't cover (seam =
+  reactive think.ts curate ONLY). (2) empirical mid overflow regression. MCP-unblock necessary, NOT sufficient.
+- **Method (read-wire ×2):** bun loads reasoning from DIST (`"bun"` export) → REBUILD before live overhaul runs
+  (dist was stale); seam fires REACTIVE only → SPOT_STRATEGY pin added. 4 overflow vehicles refuted; ONLY
+  file-read of a local 57k fixture overflows.
+
+## ▶▶ #7 RA_POST_CONDITIONS SHIPPED default-on `bc5737a1` + RA_ASSEMBLY parity DEBT (2026-05-31)
+**#7:** state-grounded done default-on across all 3 gates (arbitrator + terminate [warden caught
+the twin gate] + reflexion Gate B); opt-out RA_POST_CONDITIONS=0. Ablation FIRST caught 3 latent
+bugs default-on would've triggered (path-norm `17a7169c`, write-verb derivation `463fbcee`,
+branch-RED type mirror); re-ablation GREEN — cogito summary 1/3→3/3, mid parity, token-neutral;
+haiku JUDGE per-run quality 0.31→0.72 (all pass 0.6). Verdict
+`wiki/Research/Harness-Reports/postconditions-ablation-2026-05-31.md`.
+**⚠️ RA_ASSEMBLY parity DEBT:** the FLIP (c86d1c00) was validated on a 518-test warden SUBSET;
+FULL 1535 suite was RED (18; RA_ASSEMBLY=0 → 1535/0). project() dropped buildStaticContext
+sections. FIXED: Environment port `0408f5d1`, tier-adaptive tool-reference port `e0e35ad5`
+(requiredTools LIVE via runner seeding), custom-env thread `cf700b3a`.
+**▶▶ FULL-GREEN `2c6be004` — reasoning 1597/0, 38/38 build.** The "8 remaining" triage was WRONG:
+only the env one was narrow; the other 7 were THREE real production drops vs legacy: (1) TASK DROP
+(5 tests) — goal sourced ONLY from state.messages, seeded ONLY from initialMessages (runner.ts:204);
+executeReactive w/o initialMessages (legal) → empty messages + no goal (provider rejects zero-user-turn).
+Fix: fromKernelState takes input.task fallback (think.ts threads it); projectResultsStage builds the
+user turn FROM the goal event → one fix, both surfaces. (2) CoT PERSONA DROP (2) — dropped tier-default
+buildSystemPrompt persona ("Think step by step"); fix: fall back to buildSystemPrompt. (3) RULES DROP
+(2) — ported buildRules gated by same RA_LAZY_TOOLS=0. +2 latent typecheck bugs: state.requiredTools
+→ state.meta.requiredTools; any-cast → typed normalizer. Kernel edits via warden (+KernelState.environmentContext
+field, lived only on KernelInput).
+**PROCESS LESSON REINFORCED: full suite is the default-on gate, NOT warden subsets; "test-shape migration"
+is a seductive mislabel for real drops — PROBE before migrating.**
+**✅ #7 postConditions seed incoherence — FIXED `2c9cb155`.** Was: runner.ts:242 seeded meta only `=== "1"`
+while gates flipped default-on `!== "0"`; terminate.ts:120-122 (no re-derive fallback) → TERMINAL hard-stop
+INERT by default (arbitrator+reflexion self-heal via re-derive, so only the terminal gate broke). Fix:
+runner.ts:250 `=== "1"` → `!== "0"` (single-source); +3 stale comments. Tests: warden's terminate gate
+unit (4) + my runner-level seed guard (unset seeds / =0 absent, discriminating by construction). Suite
+**1603/0**, typecheck clean. **ADVISOR "ablate-unset" CLOSED BY EQUIVALENCE PROOF:** repo-wide grep → zero live `=== "1"`/truthiness
+reads; all gates `!== "0"` → unset ≡ "1" byte-identically → **BEHAVIOR** transfers to shipped default with
+certainty. **CAVEAT: NOT the numbers** — 0.31→0.72 measured at bc5737a1 BEFORE this session restored
+env+persona+tool-reference to project(); "1"-then ≠ "1"-now → MAGNITUDE is stale evidence-debt (same as the
+RA_ASSEMBLY grid claim); don't carry 0.31→0.72 live. Also: seed-fires + gate-demotes tested SEPARATELY; the
+e2e "catches forced false-success" is undemonstrated by one test (required-tool confound) — don't overclaim.
+DEFERRED 1 line: arbitrator:877 comment still says "=1" (stale); fold into next arbitrator edit.
+**EVIDENCE DEBT — RA_ASSEMBLY grid STALE:** hardened grid ("−57% local tokens") ran at c86d1c00 when
+project() missed env+tool-ref+persona+RULES (all 4 now restored). Faithfulness verdict SAFE; token delta
+was largely measuring DROPPED content — do NOT carry "−57%" forward. Re-run vs content-complete project().
+**META-RULE (3 deep): MEASURE THE DEFAULT REGIME USERS GET, NOT THE CONVENIENT ONE.** Critical path:
+`wiki/Planning/Implementation-Plans/2026-05-31-cutover-critical-path-and-efficiency.md`.
+
+## ▶▶ FLIP SHIPPED `c86d1c00` (2026-05-31) — project() IS THE REACTIVE DEFAULT (first real strangle)
+`assemblyEnabled()` (`RA_ASSEMBLY !== "0"`, mirrors `recallGateEnabled`) flipped `think.ts` from
+opt-in → default-on. Legacy `curate()` RETAINED as `RA_ASSEMBLY=0` killswitch — **deletion DEFERRED
+per user**. Cleared by hardened cross-tier grid (N=3, faithfulness-graded,
+`wiki/Research/Harness-Reports/assembly-ab-grid-hardened-2026-05-31.md`): overflow project()
+deterministic **1.0 coverage BOTH tiers** vs legacy 0.82-0.91 + a 90k-tok runaway; rescues
+local-runaway + mid-incompleteness; no regression. Via kernel-warden; 518 reasoning tests pass;
+`assembly-enabled-contract.test.ts` (4/4) pins the contract. **Trace fix `d0b429d4`**: `AssemblyTrace`
+was double-recording assistants + misordering (goal last) → projectResults now sole recorder
+(trace-only, zero request change). window cap (`from-kernel-state.ts:112` mid 32768 not 200k) =
+#5/calibration-entangled, deferred. **Critical-path doc**
+`wiki/Planning/Implementation-Plans/2026-05-31-cutover-critical-path-and-efficiency.md` sequences by
+CAPABILITY: FLIP✓ → **#7 post-conditions default-on (next)** → #5 → #4 → #3 → #8. 5 efficiency rules.
+
+## ✅ #1 SHIPPED `a7306e34` + #2 RE-SCOPED (2026-05-31) — the Phase-4 verdict's two blockers, addressed
+**#1 = the "4th content-preview projection mode" the verdict (line 51-53) called for.** `ResultStore.preview()`:
+structure-aware bounded preview (markdown heading-skeleton / head-fallback) + honest truncation marker + ref,
+replacing the bare `summarize()` that regressed mid overflow. project-results overflow branch → `preview+ref`
+mode. A/B (haiku, N=4): **22/22 vs legacy 19/22** faithful (legacy silently dropped 3 spread-tail sections),
+tokens ~flat. Cleared the mid-overflow regression = cutover **leg (a)**. Grader `apps/examples/section-coverage-grade.ts`.
+Debrief `wiki/Research/Debriefs/2026-05-31-content-aware-projection.md`.
+**#2 / leg (b) DESIGN + TRACE (`wiki/Architecture/Design-Specs/2026-05-31-cutover-leg-b-substrate-unification.md`):**
+the verdict's "delete blocked leg 1" (planners assemble via separate path) is CORRECT but the fix is NOT
+"project() covers them" — they're single-shot JSON task-specs, not threads (piping = breaks parsing). The
+honest goal is **substrate** unification, and the TRACE proved it is **GATED BY ROADMAP #4, not independent**:
+the `result_ref` resolver (`write_result_to_file`→`scratchpadStoreRef` `Ref<Map>` `_tool_result_*`) is
+kernel-act-path ONLY (`tool-capabilities.ts:91`, populated `tool-execution.ts:538`); plan-execute tool_call
+steps call `toolService.execute()` directly (`step-executor.ts:144`), bypassing it → a `preview+ref` PUT
+plan-execute-side resolves NOWHERE. `projectResultForPrompt` helper built then **REVERTED `f9aea551`** (§9
+scaffold-without-callers; belongs in #4). **Near-term INDEPENDENT wins:** flip RA_ASSEMBLY default-on
+(cross-tier grid), delete `curate()` (1 caller `think.ts:353`), **dead-hint-strip SHIPPED `83a0573e`**
+(`stripDeadStorageHints` in `strategies/plan-execute/output-utils.ts` — plan-execute discards full data + injects
+into tool-less prompts, so compressToolResult's `[STORED:]`/`recall()` hints are dead pointers → fabrication /
+scaffolding-echo HARD-fail; strip them, re-append nothing). Roadmap order corrected: near-term wins → #4 → #3
+EventLog → #5 scaffoldProfile (incl `from-kernel-state.ts:112` mid window 32768 not 200k) → #7 → #8.
+
+## ▶▶▶ OBSERVABILITY MECHANISM (building NOW) — see your own intervention density + failure modes
+Deep-read the kernel first. **CODE-GROUNDED DIAGNOSIS:** state-machine kernel + TWO thick layers
+(`iterate-pass.ts` ~22 per-iter interventions + `runner.ts` ~8 post-loop gates incl a 2nd synthesis LLM call);
+~10 scattered termination DECIDERS (single-owner terminate = writer not decider); tool-result budget INVERTED
+(frontier 600/local 2000); recall seam fires+`void`s (dead); learn forkDaemon no consumer; output = 4-way
+scramble gated by PROSE verifier (post-conditions flag-OFF); 11 meta-tools always injected; KV-cache hostile.
+- **KEY DISCOVERY:** `emitGuardFired`/`emitCuratorDecision`/`emitAlternativesConsidered` = **ZERO callers**.
+  Event taxonomy + full bridge→recorder→JSONL pipeline built, never connected (dead-scaffold in observability layer).
+- **BUILT:** `17d7cca3` analyzer `@reactive-agents/trace` `analyzeInterventions`+`renderInterventionReport`
+  (timeline, overlap-storm=≥2 deciders/iter, per-guard freq/outcome, trace-detectable modes overlap/nudge-loop/
+  recall-loop/runaway/max-iter; HONEST=frequency+overlap+correlation NOT causality; dishonest-success=gap).
+  Synthetic proof `apps/examples/trace-guard-synthetic.ts` (0 kernel edits). 6/6. `e65b2472` (kernel-warden)
+  ONE emit-only terminal-decision emitGuardFired @ runner.ts §10. **PROVEN end-to-end real run** (haiku): event
+  lands in `~/.reactive-agents/traces/<runId>.jsonl`, analyzer renders it. Tracing default-ON there.
+- **FLESHED OUT `0c0722e3`** — `analyzeRun`+`renderRunReport`: full per-run decision-grade signal over LIVE events.
+  Groups: **honesty(KEYSTONE)** + intervention-pressure + cost + reasoning-trajectory + tool-outcomes + failure-modes +
+  **coverage(CENTERPIECE)**. Honesty: status self-reported (post-conditions OFF) → NEVER bare "success", only
+  "claimed-success (unverified)" or "dishonest-success-suspected" (claimed done + 0 substantive tool work). Coverage:
+  BLIND metrics (no emitter) vs real zeros; names dead emitters. PROVEN on real trace. 12/12 analyze, 41/0 suite, DTS clean.
+- **EMITTER AUDIT:** LIVE = snapshot, entropy, decision-evaluated, intervention-dispatched/suppressed, tool-call-*,
+  harness-signal-injected, verifier-verdict, guard-fired(terminal). DEAD = emitCuratorDecision(0)/emitAlternativesConsidered(0)/
+  emitLLMExchange(no live fire); no provider populates tokensIn/Out/cacheRead.
+- **FEEDBACK LOOP COMPLETE `a11306e7`** — cohort comparator: `aggregateCohort`/`compareCohorts`/`renderCohortDelta`. HONESTY GATE
+  first-class (B improves ONLY if dishonest-suspected flat/down AND deliverable-produced flat/up; token win on loosened honesty =
+  regression). COVERAGE carried through (neutral+blind→"inconclusive"). cohort→runId solved (AgentResult.taskId==runId, spot-test
+  prints it). Proven on 31k real traces. 45/0 suite, DTS clean.
+- **DEFERRED (pull-when-needed):** guard-fired fan-out → fold into refactor collapse (DRY); llm-exchange token/cache → KV-cache lever;
+  emitCuratorDecision → curator refactor; content post-conditions → if honesty comparison too coarse.
+
+## ▶▶▶▶ REFACTOR (loop armed) — collapse thick mesh, comparator-gated
+Per-cluster: baseline cohort (current) → instrument cluster guard emits → collapse → re-run → `compareCohorts` gates (honesty-gated). Kernel = kernel-warden.
+- **Cluster-1 map `130d478b`** (`wiki/Architecture/Design-Specs/2026-05-31-termination-decider-collapse.md`). Sites 2,5,6,7 instrumented emit-only (7 `emitGuardFired`, behavior-neutral, build+1557 green).
+- **⚠ RE-AIMED on baseline-smoke evidence.** 3 free local smokes → ZERO of sites 2,5,6,7 fired. MASKED not cold: `iterate-pass.ts` L517 runReactiveObserver → L525 dispatcher-early-stop → **L542 `return "break"`** pre-empts stall(L647)/oracle(L707)/loop(L850); low_delta(L469) accumulation-starved. Arbitrator (via reactive-observer `stall-detect`) IS de-facto single decider, wins iter 2. "5 bypass arbiter" premise REFUTED.
+- **ROOT CAUSE: `reactive-intelligence/src/controller/evaluators/stall-detect.ts:28` hardcoded `tier="local"`** → STALL_WINDOW always 2 → premature iter-2 give-up every tier (mid=3/frontier=5 table was DEAD). 3 hot-path defects: D1 dead tier-gate; D2 low-flat-entropy≠stuck (17k-tok overflow flagged stuck; doc-claimed tool-call guard also unimplemented); D3 empty-output early-stop slips FM-A3 backstop → incoherent `success:false`+`goalAchieved:true`+`outputLen:0`+`"Reasoning failed"` + terminatedBy provenance split. Plus fabrication-honesty fail (qwen3.5 invented summary of nonexistent file).
+- **✅ DEFECT 1 DONE (uncommitted).** RI: `tier?` on `ControllerEvalParams`; stall-detect reads `params.tier ?? "local"`; new `tests/controller/stall-detect.test.ts` 9/9; RI 488/0. Kernel (kernel-warden): `profile.tier` → `runReactiveObserver` → `evaluate({tier})`; build GREEN, reasoning 1557/0. Live haiku `01KSZNHX3D…`: no premature stall, gate holds. Live finding: `low_delta_guard` fired haiku iter3 → give-up deciders NOT cold on mid + another terminatedBy mismatch → reinforces D3.
+- **⚠ D2 DROPPED (discriminating check).** stall-detect NEVER terminated (only nudged); `behavioralLoopScore` non-discriminating (0.33–0.5 across all classes); overflow harm caused by `evaluateEarlyStop` (=D3), not stall-detect. D2 = minor wasted-nudge → deferred (same fix as the capability lever).
+- **✅ DEFECT 3 DONE (committed) — terminatedBy truthfulness.** ROOT: `react-kernel.ts deriveTerminatedBy` catch-all `done ? "final_answer"` mislabeled every harness/give-up done-reason as `final_answer` → `goalAchieved=true` on FAILED runs (the `success:false`+`goalAchieved:true`+`"Reasoning failed"` incoherence). FIX (advisor: WHITELIST not blacklist — whitelist miss=honest null/loud, blacklist miss=silent lie/corrupts cohort): whitelist `final_answer|final_answer_regex|content_stable|entropy_converged`→final_answer; catch-all done→`end_turn` (null). kernel-warden fixed canonical helper; reactive.ts (direct) CALLS it now (DRY, killed inline dup + unused import). Test 20/0, reasoning 1570/0 (zero breaks). Happy path preserved (live qwen3:4b final_answer_tool→goalAchieved:true). Bounded: makes overflow HONEST-fail (goalAchieved:null), not success (capability lever deferred). arbitrator.ts:1023 left (correct).
+- **✅ BASELINE COHORT LOCKED (committed) — thick-baseline arm A.** 30 cells (qwen3:4b N=6 + haiku N=4 × {compact,overflow,stuck}). Report `wiki/Research/Harness-Reports/decider-baseline-cohort-2026-05-31.md`; tooling `decider-baseline.sh` + `decider-cohort-report.ts`. local: claimed 67%/dishonest 0%/deliverable 72%/tok-p50 20.8k; mid: 100%/0%/100%/10.6k. FINDINGS: (1) honesty CLEAN content-VERIFIED — "stuck" nonexistent-file trap → HONEST "file doesn't exist" on BOTH tiers (fabrication hypothesis REFUTED); D3 coherence holds live. (2) give-up deciders fire (loop_resolution/stall/low_delta). (3) local ~2× tokens.
+- **⛔ RETRACTED overclaim (corrective commit):** first report HEADLINED "overlap-storm 28%/67% = thick-mesh disease." WRONG — ARTIFACT: every "storm" = `[give-up site emit, terminal_decision MIRROR]` co-occurring at terminating iter (§10 post-loop mirror, not a decider). **Same-iter overlap STRUCTURALLY IMPOSSIBLE** (single-writer terminate + `return "break"`). Fixed `analyze.ts` (exclude terminal_decision → 0%); trace 45/0. Lesson: structural read beats metric def.
+- **✅ TERMINATION CLUSTER CLOSED.** Wins = D1 + D3 (neither leaned on retracted metric). Relocated 4× under evidence; closed honestly not chased to 5th. **arm B DEFERRED**: overlap justification gone; real wrong-winner justification (low_delta terminates → §8.5 salvages to harness_synthesis) needs counterfactual faithfulness cohort. Deferred: (a) wrong-winner precedence; (b) §8.5 bug — `nonFinalAnswerTerminations` has `"dispatcher-early-stop"` (hyphen) but live = `"controller_early_stop:dispatcher_early_stop"` (colon) → salvage misses variant.
+- **✅ #1 CONTENT-AWARE PROJECTION SHIPPED — Phase-4 cutover blocker (leg a) CLEARED.** Debrief `wiki/Research/Debriefs/2026-05-31-content-aware-projection.md`. `ResultStore.preview(ref,budget)` = structure-aware bounded preview (markdown heading SKELETON, else head-truncate) + honest marker + ref, replacing bare `summarize()`. `projectResults` overflow → `preview+ref`. preview 8/8, assembly 45/0, reasoning 1574/0, build GREEN. VERIFIED BAR: legacy inlined ~5k of 57k, covered ~19/22 (silently dropped spread tail) — "faithful 2/2" was LENIENT. Built section-coverage grade FIRST (`apps/examples/section-coverage-grade.ts`). **A/B haiku overflow N=4: legacy ~19.3/22 vs preview 22/22 ROBUST, tokens ~4039 vs ~4818 (+19%=more faithful output).** Honesty-gate B IMPROVES. project() now BEATS legacy on overflow-summarize.
+- **▶ NEXT — cutover leg (b) = #2: project() covers NON-REACTIVE strategies** (plan-execute/ToT/reflexion via separate path; seam only covers reactive think.ts) + public API → gates RA_ASSEMBLY default-on / legacy-builder deletion. Then #3 EventLog sole-record, #4 ResultStore replaces recall/[STORED:], #5 scaffoldProfile governance (incl. deferred window-source fix: mid capped 32768 not 200k), #6 termination arm B (deferred), #7 RA_POST_CONDITIONS default-on, #8 KV-cache assembly.
+
+## ▶▶ STRATEGIC PIVOT `b818c372` — CANONICAL HARNESS CORE (overhaul widened to whole loop)
+Spec `wiki/Architecture/Design-Specs/2026-05-31-canonical-harness-core.md`. User reframe post-Phase-4:
+overhaul must deliver BOTH structural AND capability lift; RA mission = small-model uplift + frontier
+(NOT capable-model convenience the thin canon assumes).
+- **CRUX:** thick-by-default + pieces-vs-pieces proof (never vs own absence) → complexity ratchets. Fix:
+  WHOLE-vs-WHOLE cross-tier LIVE proof; salvage map = falsifiable HYPOTHESES not verdicts (don't bake
+  removals contradicting measured gains — lazy-disclosure 2026-04-26 churn gain → masking-vs-churn = ablate).
+- **RECONCILE:** tier-aware capability→**scaffoldProfile** = thin default; scaffold only where it earns
+  cross-tier ablation-proven uplift, per tier. Frontier→thin, small→more (each earned).
+- **CORE (5):** one reducer loop (strategies=policies, kills dispatcher fragmentation) · deterministic
+  CONTENT-AWARE projection (folds Phase-4: bare-ref regresses overflow-summarize) · capability→scaffoldProfile
+  (1 budget source) · state-grounded content-aware verify · minimal RESIDENT MASKED tools.
+- **PRINCIPLES:** P0 live-or-it-doesnt-count (unit-green≠evidence) · P1 strangler-fig TOP-LEVEL (delete thick
+  ONLY on aggregate live win) · P2 salvage=hypotheses · P3 scaffold governance lifecycle (default-OFF→tier-gated
+  →graduate via receipt→removable; defer plug-in abstraction YAGNI) · P4 pass^k cross-tier.
+- **ROADMAP:** A measure (pass^k failure-mode bench + wire telemetry + LOCK thick baseline) → B thin core
+  FRONTIER/MID FIRST (thin wins there; bare-core-vs-thick-on-local = false-negative trap) → C earn small tiers
+  (ablate each scaffold ON w/ receipt) → D collapse+delete on aggregate win. NEXT: advisor → Phase A writing-plans.
+
+## (DEFERRED, folded into core above) Phase 5-6 — Phase 4 deletion deferred; RA_ASSEMBLY stays flag-gated off
+Deletion deferred until (a) content-preview projection mode closes the mid regression + (b) project() covers
+non-reactive strategy assembly. Phase 5 land write_result_to_file in the path + real tool-call telemetry.
+Phase 6 delete recall/[STORED:]/inline-cap. Plan `wiki/Planning/Implementation-Plans/2026-05-31-canonical-context-assembly-plan.md`.
+
+## ▶ STEERING EXPERIMENT (b) VERDICT `7e34fecd` — mechanism SOUND, maze NON-DETERMINISTIC
+Cheap-proof attempt on the CURRENT path. Found 3 maze gates hiding the ref tool (REAL bugs fixed):
+(1) META_TOOLS missing write_result_to_file → buildToolSchemas pruned it; (2) **runtime ToolService.execute
+allowlist blocked ALL meta-tools incl. recall under explicit allowedTools** (fix: allowed = userAllowed ∪
+META_TOOLS); (3) registration present. PROVED: tool OFFERED (89 schema refs); **cogito ADOPTS+COMPREHENDS**
+(6 calls, conf 0.9) — overturns "weak models won't adopt" (availability suffices). Materializer+execute
+unit-green. BUT single-shot e2e UNPROVABLE: assembly/projection fires INCONSISTENTLY across identical runs
+(non-determinism = the disease). VERDICT: stop patching maze; build canonical deterministic project()
+(golden-trace test not flaky lottery). Debrief `wiki/Research/Debriefs/2026-05-31-steering-experiment-b-verdict.md`.
+NEXT: Phase 1 greenfield core.
+
+## 🎯 DESIGN-LOCKED: Canonical Context Assembly (overhaul north star)
+Spec `wiki/Architecture/Design-Specs/2026-05-31-canonical-context-assembly.md` (`50392d5a`).
+MANDATE: genuine overhaul, best design > backward-compat, root-cause fixes, do NOT preserve
+misaligned decisions. **Locked IN foundational:** (1) single append-only EVENT LOG (replaces
+messages[]/steps[] two-record); (2) content-addressed RESULTSTORE (replaces scratchpad/recall);
+(3) pure total `project(log,capability,store)` = SOLE assembler. 10 pillars (one log; CAS results
+never inlined → no marker/recall; project pure+total → replay/cache free; capability-once + num_ctx
+predicted; per-result full|summary+ref|cleared; observability IS the return type; no model-facing
+context machinery; deterministic; strategies=reducers over one log; honesty=projection). Legacy maze
+DELETED (the 4 builders + compressToolResult-marker + TOOL_RESULT_INLINE_CAP + recall + [STORED:]).
+Migration = strangler-fig PROVING scaffold only (shims removed, not compat). NEXT: writing-plans,
+Phase 0 = PIN live assembly path.
+
+## ▶ OVERHAUL BRANCH `overhaul/agentic-core-2026-05-31` — clean-room core refactor, PROOF-GATED
+Re-architect agent loop + context systems in-place (keep providers/MCP/memory/public API + phase
+structure). Replace model-facing context indirection (recall tool + [STORED:] markers) with a
+SYSTEM-OWNED ContextManager + content-aware honesty + always-on wire telemetry. 8-principle spec
+`wiki/Architecture/Design-Specs/2026-05-31-agentic-core-overhaul.md` (`cc39912e`).
+- **✅ `2c5d77bf` reference-protocol spike PASS** — riskiest assumption validated (advisor risk-first).
+  cogito:14b + qwen3:14b + qwen3.5 ALL emit clean `write_result_to_file(result_ref=commits_1)` given
+  system-summary + ref tool alongside plain file_write — the two that failed marker-copy reference
+  cleanly. llama3.2 sub-3B = honest floor (ref-as-text + fabricate). `apps/examples/overhaul-spike-ref.ts`.
+- **✅ PHASE 0 DONE `c64e4e2b` — live path PINNED; "dead function" claim REVERSED.** Plan
+  `wiki/Planning/Implementation-Plans/2026-05-31-canonical-context-assembly-plan.md` (`df6f61b0`).
+  F1: `think.ts:331 curate → ContextManager.build → buildConversationMessages` renders the live request
+  EVERY iteration (adapter always present). buildCuratedMessages dead on live path. F3: messages/scratchpad/
+  steps/postConditions/adapter at curate. F4: postConditions + verifyPostConditions → GoalState derivable.
+  **CORRECTION: prior `86ce02d9` "dead function/nothing ran live" was a FALSE NEGATIVE** (dist/src confusion).
+  buildConversationMessages LIVE; projection FIRED (126647-char result → summary+ref; budget 45875 from
+  maxTokens=32768 NOT num_ctx 15360 — mismatch to fix). curation default-on + projection were live all along.
+  **NEW REAL GAP:** data removed → cogito FABRICATES placeholders instead of calling write_result_to_file;
+  availability ≠ adoption on weak tiers → deliverable path must STEER/FORCE the ref tool (Phase-5 N≥3 lever).
+  NEXT: Phase 1 greenfield core (EventLog/CAS ResultStore/ResolvedCapability/AssemblyTrace), TDD subagent-driven.
+- **(superseded, WRONG) `86ce02d9` "dead function" — see Phase 0 reversal above.**
+  Projection seam + age-aware curation seam live in `attend/context-utils.ts buildConversationMessages`,
+  only caller `context/context-manager.ts:142` — NOT live. `think.ts` assembles via `defaultContextCurator`
+  (context-curator.ts). After full rebuild: projection ENTRY never logs; write_result_to_file called by ZERO
+  models (qwen3/gpt EXEC logs = 0 — clean bullets were NATURAL, I mis-inferred tool use from file format).
+  RETRACTED "end-to-end working"/"lift" (dead-fn + stochastic noise). Components unit-green in ISOLATION; spike
+  `2c5d77bf` valid. **CRITICAL NEXT:** wire projection into `defaultContextCurator` (LIVE path); **VERIFY
+  curation-default-on `c9e6fba2` isn't ALSO dead** (if only in buildConversationMessages → Spike-1 never hit
+  live loop, main bug); verify write_result_to_file is OFFERED not gated-pruned (EXEC/logModelIO not file
+  format); real tool-call telemetry; THEN N≥3.
+- **`another non-canonical code path` (user, conclusive):** the context-assembly layer is a MAZE of
+  overlapping/swappable/partially-dead builders — `buildConversationMessages` (only via
+  ContextManager.build's `if(adapter)` branch), `buildCuratedMessages` (its `else` branch),
+  `ContextManager.build` (context-manager.ts), `defaultContextCurator.curate` (context-curator.ts:131
+  wraps build; ContextCurator is INJECTABLE/swappable). CORRECTION to prior "runs from dist": bun
+  resolves reasoning from **SRC** (`require.resolve` → packages/reasoning/src/index.ts; "bun" export says
+  dist but src wins) — so src IS live, NO rebuild needed, my rebuilds were wasted. YET instrumenting
+  ContextManager.build (RA_OVERHAUL_DEBUG branch log) NEVER fired in a live cogito run → ContextManager.build
+  is NOT on the live path despite curate→build being a direct call. So the live assembler is some OTHER
+  curator binding or a think.ts streaming branch that bypasses curate. **The multiplicity + inability to
+  cheaply confirm which path renders the live prompt IS the disease.** OVERHAUL FIRST TASK (reframed):
+  (a) PIN the live assembly path (instrument defaultContextCurator.curate ENTRY in context-curator.ts +
+  read think.ts ~320-340 for stream-vs-complete branches + how the curator is injected), (b) CANONICALIZE
+  to ONE assembler, (c) add "what did the model actually receive" observability (principle #4) — THEN wire
+  projection/tool there. LESSON: a passing unit test + a present src edit prove NOTHING about live behavior;
+  must confirm the seam is on the executing path via runtime instrumentation, not caller-grep alone.
+- **NEXT (advisor order):** telemetry-BOTH-paths + LOCK OLD baseline (tier×task grid) BEFORE new →
+  marginal 3rd arm (OLD + strip-[STORED:]-from-file-write point-fix) → ContextManager + ref
+  materialization (NEW MODULE outside kernel/**, A/B-able; one flag-gated kernel seam via warden) →
+  content-aware honesty → cross-tier proof-gate, attribute lift PER-component. Merge only on measured
+  lift (20-commit overflow faithful + dishonest-success caught) ≤ tokens. LEASH: KEEP phase structure
+  (user rejected collapse-to-canonical); principle #6 minimal-reducer is north-star only.
+
+## ▶ EXECUTING — Canonical Convergence Plan (2026-05-30) — Phases 0+1 SHIPPED
+Subagent-driven; cross-tier `pass^k` live gate per phase. Branch `main`, unpushed.
+- Plan: `wiki/Planning/Implementation-Plans/2026-05-30-canonical-agentic-convergence-plan.md`
+- Thesis: one mechanical **post-condition set** = state-grounded done + progress
+  recitation (recency) + pulse self-check. Local-first, control-first, anti-scaffold.
+- **Phase 0 ✅ `91924103`** — `pass^k` harness (`RUNS_PER_TASK`, strict-T3, postCond stub,
+  `TASK_GATE_HN_FIXTURE` data-pinning). Baseline + `hn-fixture-2026-05-30.json`.
+- **Phase 1 ✅ `0d05fbe3`** — PostCondition spine = state-grounded success authority,
+  gated `RA_POST_CONDITIONS` (**default OFF**). Two seams: arbitrator mid-loop steer +
+  `terminate()` TERMINAL hard-stop (single-owner; arbitrator-only first pass leaked via
+  stall/`low_delta_guard` → fixed). Conditions derived once → `state.meta.postConditions`,
+  both gates DRY-read. reflexion B generalized; probe `postConditionsMet` wired. Live gate
+  proven BOTH directions (flag-off lied; flag-on 6/6 honest + met→success live). Suite 1486/0.
+  **OPEN: default-flip ON is a clean follow-up (evidence supports).**
+- **Phase 3 ✅ `0bfad06d`** — recall-overflow gate OPT-IN→DEFAULT-ON (opt-out `RA_RECALL_GATE=0`).
+  Ablation (fixture N=3): gpt-4o-mini pass^k 2/5→5/5, −31% tok, recall-smells 5→0; cogito −11% tok
+  → **first measured COMPLETION lift**. `extractObservationFacts` KEEP (removal REFUTED — it's
+  token-PROTECTIVE; "44% removable" was wrong). llama3.2 sub-7B local 4/5 default-on. Caveats:
+  ablation models both tier `mid`; MCP-overflow path = Phase-4 follow-up.
+- **Spike 1 ✅ `799487c1` — AGE-AWARE CURATION (curation root, the BIG win).** `RA_CURATION_AGEAWARE`
+  (default OFF, opt-in). Keep most-recent TURN's tool results FULL (window-scaled), compress only
+  AGED. Root was a flat `TOOL_RESULT_INLINE_CAP=4000` (conversation-assembly.ts), age/window-blind →
+  truncated the synthesis-target. Ablation (T3-strict, trusted metric): **sonnet 1/3→3/3 (T3 faith
+  0→100, truncation loop ELIMINATED, avg 91→100)**, gpt+qwen flat, ZERO regression. (qwen composite
+  dip = over-listing penalty only, faith identical — metric rewarding starvation, not a regression.)
+  Suite 1496/0 both arms. Built in attend/ (tool-formatting.ts applyAgeAwareCuration + context-utils.ts).
+- **✅ `c9e6fba2` (2026-05-31) — CURATION FLIPPED DEFAULT-ON (opt-out `RA_CURATION_AGEAWARE=0`).**
+  WIRE-PROVEN sole root cause via logging reverse-proxy on literal Ollama /api/chat. cogito:14b
+  num_ctx=15360: OFF → synthesis tool_result 4087 chars + REAL `...truncated (17646 chars)` marker,
+  **3 of 10** commit objects → wrote 2-3. ON → 21646 chars, no marker, **10/10** objects → wrote 10
+  (payload-verified faithful; advisor caught "wrote 10 ≠ saw 10", grepped `"sha"` objects).
+  **num_ctx + output-cap REFUTED as failure modes** (15360 fast prompt_eval~1s; done_reason=stop,
+  eval<<num_predict). Default-on overrides Spike1 "opt-in" on USER MANDATE + cogito proof; other tiers
+  ride Spike1 ablation; NOT lift-rule re-gated. Debrief `wiki/Research/Debriefs/2026-05-31-context-truncation-wire-debrief.md`.
+  **NEXT:** recall removal + auto-rehydration (curator owns reversible store now); RECENT_WINDOW_FRACTION 0.35 tune.
+  Method lesson: read the WIRE not steps[]; `done_reason` discriminates input-vs-output failure.
+- **(superseded framing) CONTEXT CURATION = THE ROOT (Spike 1 done above).** Reframe: recall is a
+  SYMPTOM. RA crushes the CURRENT tool result to 600–4000 chars (frontier/sonnet **600**,
+  inverted vs 200k window) BEFORE synthesis (`act/tool-execution.ts` `compressToolResult`,
+  `context-profile.ts`), stashing full for recall → preview-synthesis (low faithfulness,
+  fabrication, "truncated, let me retrieve" loops). Known-good algo: keep CURRENT result FULL
+  (budget scaled to window), compress only AGED → reversible pointer, auto-re-hydrate by focus
+  (obviates recall), compact near limit, re-fetch from source. First change: stop crushing
+  current + window-scale budget. Then recall-removal folds in; meta-tool audit later. Spec
+  `wiki/Architecture/Design-Specs/2026-05-30-context-curation-architecture.md` (c3eeca53); RFC
+  c8cbe49f. Deferred: Phase 2 recitation, Phase 4 mask-don't-remove tool-stability, Phase 5 experience-reuse.
+- **num_ctx `b1561303` — REFUTED as a failure mode (2026-05-31 wire hunt).** Set `capability.ts`
+  recommendedNumCtx 8192→32768; operator since set **15_360** on both 14b models ("half for speed").
+  Wire proof: num_ctx is NOT the regression cause — 15360 is fast (prompt_eval~1s), prompt fits.
+  The real cause was the 4000-char tool-result cap (curation, fixed `c9e6fba2`). **PREDICTIVE
+  BUCKETED num_ctx DEPRIORITIZED** — speed/VRAM optimization only, not a correctness fix. Stale
+  "set to 32K" comment + reformatting churn live in capability.ts working tree (operator's to commit).
+- **OLLAMA OPS:** cogito:3b = runaway (~9.5min/chat) — never probe with it; verify `nvidia-smi`
+  + real latency after any `systemctl restart ollama` (restart can leave it CPU-bound — check n_ctx
+  in `journalctl -u ollama`); use llama3.2/qwen3.5 local; wrap probes in `timeout`.
+- GATE: each phase ends with cross-tier `pass^k` live run + `rax:diagnose` + advisor()
+  before commit. No phase done on unit-green alone. Kernel edits → `kernel-warden`+MissionBrief.
+
 ## Read first
 
 Before doing any work in this repo:
@@ -17,6 +447,32 @@ Before doing any work in this repo:
 The full canonical doc set is listed in `wiki/Architecture/Specs/DOCUMENT_INDEX.md`.
 
 ---
+
+## ACTIVE — Harness Perf Cross-Tier Campaign (2026-05-29)
+
+Tier-aware context architecture redesign. Branch `main` (canonical-refactor merged `d783c876`, unpushed). Goal: harness adapts to model tier + provider quirks → consistent agentic perf frontier/mid/local; transparent control-first; wire existing systems (don't rebuild).
+
+Docs: `wiki/Planning/Implementation-Plans/2026-05-29-harness-perf-cross-tier-campaign.md` + `wiki/Architecture/Design-Specs/2026-05-29-tier-aware-context-architecture.md` + `wiki/Research/2026-05-29-agentic-context-engineering-findings.md`.
+
+Canonical model (research-grounded: Anthropic context-eng, RULER, Context Rot, MemGPT): recent obs inline-full · old obs cleared · recall only for NOT-in-context data — × tier-calibration scaled to EFFECTIVE context. Reduce PROSE verbosity for weak tiers; KEEP tool-result DATA budget (local=4000 deliberately largest).
+
+Cross-tier N=3 baseline (proof gate T1–T5) = 3 distinct failure modes: gpt-4o-mini redundant-recall; qwen3.5 2× tokens; cogito:14b degraded correctness (T3=34%, never recalls). Composite scorer too lenient (hides cogito) → strict per-item check needed.
+
+- **Inc 1 recall-gating (BUILT, OPT-IN `RA_RECALL_GATE=1`, default off):** stale buildRules plan SCRATCHED — both prompt-rule lure sites are dead in default lazy mode (`RA_LAZY_TOOLS` gates buildRules + recent-obs off). Trace `01KSV58K`: model recalled BLIND (invented key `hn_posts`) on a 3928-char INLINE result purely because `recall` was in the tool schema. Fix = `think-guards.filterRecallByOverflow` gates recall OUT of `think.ts` per-iteration `gatedToolSchemas` unless a `recall("<key>"…)` marker is surfaced in the CURRENT window (or calibration `uses-recall`). Default off until cross-tier MCP ablation proves ≥3pp/no-regression (project default-on rule).
+- **Inc 2 token bloat PINNED:** `extractObservationFacts` (`tool-execution.ts:822`) per-tool-result LLM extraction, gated `act.ts:143-144` `shouldExtract` → local+mid only. 44% of local tokens. Likely redundant (full data already inline). Ablation: local obsMode=false, composite vs tokens.
+- Refuted by evidence before any code: history-resend, output-verbosity, reasoning-input, debrief/memory.
+- Instrumentation shipped: input/output token split in `task-quality-gate.ts` probe (`TASK_GATE_NO_MEMORY=1` toggle). Production path already wired (`step-utils.ts:90` → `execution-engine.ts:1116`).
+- Secondary track: entropy stall-detect non-discriminating (flat 0.15) → structural boredom-detection.
+
+### MCP relevantTools-drop fix (2026-05-30) — shipped, separate concern
+reflexion/ToT/plan-execute strategies never forwarded classifier `relevantTools` into their kernel passes (forwarded `requiredTools` only). Under lazy disclosure the kernel visible set = `required+relevant+used+discovered+meta` (`think.ts:232`) → relevant empty → ALL MCP/user tools pruned → model blind (spot-test cogito+GitHub-MCP looped on `find`, `success:false`). Fixed: forward `relevantTools` in `reflexion.ts`/`tree-of-thought.ts`/`plan-execute.ts`→`step-executor.ts`→`react-kernel.ts`. Proof: spot-test success false→true, 17959→8219 tok (−54%), github/list_commits called with real data. RED-verified `tests/strategies/strategy-relevant-tools-forwarding.test.ts`. See `[[project_mcp_relevant_tools_drop_fix]]`.
+
+### Follow-on: file-write never happened (2026-05-30) — routing NOT the bug
+adaptive routed task → reflexion on "self-critique and improve" keyword (`heuristicClassify` adaptive.ts:471/506). Advisor: routing DEFENSIBLE, not the bug; adding write/create patterns to a keyword matcher deepens brittleness — don't reroute. Real chain why success:true but no commits.md:
+- **C (root, DEFERRED):** classifier correctly required `[github/list_commits, file-write]` → `classifier.ts:216` literal-mention demotion stripped both to relevant ("create a markdown file" ≠ literal "file-write") → required empty. Clean fix = reliability-gate demotion, but cogito:14b `classifierReliability` UNSET (not "high"); un-gating for all unset models is broad/needs cross-model validation. Not shipped.
+- **B (FIXED+proven):** reflexion `isSatisfied(critique)` text-only → declared done with no file (success:true LIE). Fix `reflexion.ts:~302` gate satisfied-termination on `getMissingRequiredToolsFromSteps(...).length===0`, scoped to non-empty requiredTools. RED-verified `reflexion-required-completion-gate.test.ts`. 1449 reasoning pass.
+- **cogito limit:** even forced-required, cogito (14b local) failed to reliably call file-write (toolsUsed=[]). Harness enforces+reports honestly; can't make weak model competent.
+- Honest: B DORMANT in real spot-test path (file-write demoted→not required→B no-op). Real path still success:true+no-file until C lands or user adds `.withRequiredTools`. Filed (don't sweep): keyword-brittle heuristic router, text-only isSatisfied, literal-mention demotion too strict for semantic deliverables.
 
 ## ACTIVE — Harness Convergence Sweep (2026-05-23)
 
@@ -734,6 +1190,7 @@ All P1 issues from the May 5 sweep are resolved — do not resurface as blockers
 - **Research discipline — spike-validated harness changes only.** Read `00-RESEARCH-DISCIPLINE.md` for the 12 rules. Notable: spike validates ONE mechanism × ONE failure-mode × ≤2 models × ONE task (Rule 11); single-spike findings shape the next spike, not harness-level decisions.
 - **Trust `bunx turbo run build` over `tsc --noEmit` for `ignoreDeprecations`.** TS 6.0.3's tsc reports `error TS5103: Invalid value` on `"ignoreDeprecations": "6.0"` (false positive), but tsup's DTS step (same TS version) requires `"6.0"` to silence the baseUrl deprecation. Keep `"6.0"` everywhere (root + leaf tsconfigs); the lone tsc error in `bun run typecheck` output is expected noise. Confirmed 2026-05-11: all 33 turbo build tasks pass with `"6.0"`.
 - **Pin `bun-version: "1.3.10"` in CI workflows — do NOT use `latest`.** On 2026-05-15, `latest` resolved to 1.3.14 which broke streaming tests (`TextDelta events with reasoning enabled` returns 0 deltas, FiberRef inheritance regression in `StreamingTextCallback` propagation through `Effect.forkDaemon`). Reproduced locally by downloading the 1.3.14 binary against the same tree (5/6 pass on 1.3.14, 6/6 on 1.3.10). Re-test the streaming suite before bumping the pin. Affected workflows: `.github/workflows/{ci,docs,publish,eval}.yml`. Fix: commit `6d71d691`.
+- **No metric-gaming during refactors (2026-05-29 course-correction).** Don't hit targets by redefining/gaming the metric. (1) **Composable API is ADDITIVE** — HarnessProfile + `.compose()` are power-user shortcuts ON TOP of the fluent `.withX()` happy path, never replacements. NEVER `@deprecated` a working documented method to drop under a count threshold (it subtracts perceived value via IDE strikethrough + doc-gen warnings while changing nothing). (2) **The failure mode is redundant/confusing API with no canonical path — NOT method count.** A large fluent API where each method is documented + maps to one capability is good ergonomics. (3) **Cohesion over LOC** — decompose only where a genuine cohesive sub-unit exists; leave a tangled flow cohesive-but-large rather than build a mutable-carrier scaffold to relocate it under a number. LOC ceiling tests were deleted; LOC is a soft "look here" signal, never a gate. Real property gates kept (as-unknown-as≤67, composable-layer≤3, no-silent-swallow, console, tagmap-coverage, decision-coverage, doc-drift, builder-wither-discipline rewritten to lock the happy path). This reverted ~48 `@deprecated` tags + anti-mission #3's "≤24 methods" framing on branch `restructure/canonical-refactor-2026-05-28` (CORRECTION 1-6).
 
 ---
 
@@ -858,8 +1315,8 @@ Memory descriptions to update or rewrite if you encounter them in personal memor
 ## Architecture summary (high signal, low detail)
 
 **Kernel lives at `packages/reasoning/src/kernel/`** — reorganized in Stage 5 from `strategies/kernel/` to capability-grouped subdirs:
-- `capabilities/` — 8 subdirs: act, attend, comprehend, decide (arbitrator.ts), reason (think.ts), reflect (loop-detector.ts, reactive-observer.ts), sense, verify
-- `loop/` — runner.ts (1,739 LOC), react-kernel.ts, terminate.ts (single-owner termination helper), auto-checkpoint.ts, output-assembly.ts, output-synthesis.ts
+- `capabilities/` — 10 subdirs: act, attend, comprehend, decide (arbitrator.ts), learn, reason (think.ts), recall, reflect (loop-detector.ts, reactive-observer.ts), sense, verify
+- `loop/` — runner.ts, react-kernel.ts, terminate.ts (single-owner termination helper), auto-checkpoint.ts, output-assembly.ts, output-synthesis.ts (runner.ts LOC volatile — under active termination-decider-collapse, don't pin)
 - `state/` — kernel-state.ts, kernel-hooks.ts, kernel-constants.ts
 - `utils/` — diagnostics.ts, ics-coordinator.ts, lane-controller.ts, service-utils.ts
 

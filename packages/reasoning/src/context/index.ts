@@ -7,27 +7,24 @@ export {
 } from "./context-profile.js";
 export type { ContextProfile } from "./context-profile.js";
 
-export { resolveProfile } from "./profile-resolver.js";
+export { resolveProfile, resolveProfileWithWindow } from "./profile-resolver.js";
 
 export {
   buildStaticContext,
   buildEnvironmentContext,
+  resolveEnvTimePrecision,
   buildRules,
 } from "./context-engine.js";
-export type { StaticContextInput } from "./context-engine.js";
+export type { StaticContextInput, EnvTimePrecision } from "./context-engine.js";
 
 export { applyMessageWindowWithCompact } from "./message-window.js";
 
 export { ContextManager } from "./context-manager.js";
 export type { GuidanceContext, ContextManagerOutput } from "./context-manager.js";
 
-export {
-  defaultContextCurator,
-  renderObservationForPrompt,
-  buildRecentObservationsSection,
-  RECENT_OBSERVATIONS_HEADER,
-} from "./context-curator.js";
-export type { Prompt, ContextCurator, CuratorOptions } from "./context-curator.js";
+// defaultContextCurator + Prompt/ContextCurator/CuratorOptions DELETED in
+// Sprint-1 A3 (2026-06-02). Canonical project() is the sole assembler;
+// see packages/reasoning/src/assembly/project.ts.
 
 // ── Adaptive Prompt Composer (APC-2) ─────────────────────────────────────────
 export {

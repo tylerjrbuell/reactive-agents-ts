@@ -434,6 +434,22 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: true,
         path: './src/messaging/signal-telegram-hub.ts',
     },
+    // observe — offline (OTel exporter exercised, in-memory span witness)
+    {
+        num: 'O29',
+        label: 'otel-export',
+        category: 'observe',
+        requiresKey: false,
+        path: './src/observe/otel-export.ts',
+    },
+    // research — offline (crypto-price built-in shadowed by a mock in test mode)
+    {
+        num: 'RS1',
+        label: 'crypto-research-agent',
+        category: 'research',
+        requiresKey: false,
+        path: './src/research/crypto-research-agent.ts',
+    },
 ]
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────

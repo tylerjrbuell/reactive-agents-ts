@@ -33,6 +33,13 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
+import { getMissingRequiredToolsFromSteps } from "../kernel/capabilities/verify/requirement-state.js";
+import { deriveConditions } from "../kernel/capabilities/verify/derive-conditions.js";
+import {
+  verify,
+  describeUnmet,
+  type PostCondition,
+} from "../kernel/capabilities/verify/post-conditions.js";
 import {
   enforceQualityGate,
   collectToolData,
@@ -66,6 +73,12 @@ interface ReflexionInput {
   readonly sessionId?: string;
   /** Tools that MUST be called before the agent can declare success */
   readonly requiredTools?: readonly string[];
+  /** Classifier-relevant tools — visible/usable in the prompt but not gate-enforced.
+   *  MUST be forwarded to the kernel pass: under lazy tool disclosure the kernel's
+   *  per-iteration visible set = required + relevant + used + discovered + meta. If
+   *  relevant is dropped, MCP/user tools are pruned and the model is left blind
+   *  (only meta-tools visible) — see spot-test GitHub-MCP regression. */
+  readonly relevantTools?: readonly string[];
   /** Max redirects when required tools are missing (default: 2) */
   readonly maxRequiredToolRetries?: number;
   /** Critiques from prior reflexion runs on similar tasks — populated from episodic memory */
@@ -143,6 +156,7 @@ export const executeReflexion = (
       agentId: input.agentId,
       sessionId: input.sessionId,
       requiredTools: input.requiredTools,
+      relevantTools: input.relevantTools,
       maxRequiredToolRetries: input.maxRequiredToolRetries,
       synthesisConfig: input.synthesisConfig,
       metaTools: input.metaTools,
@@ -292,11 +306,61 @@ export const executeReflexion = (
             );
           }
 
+          // ── Completion gate ─────────────────────────────────────────────────
+          //
+          // Gate A (always): the critique judges OUTPUT TEXT quality only — it
+          // cannot see whether a required side-effect tool (e.g. file-write)
+          // actually fired. A task that says "create a markdown file" produces a
+          // good-looking summary the critique rubber-stamps as SATISFIED while the
+          // file was never written. Never accept "satisfied" while a required tool
+          // is still uncalled — force another improve pass to complete the action.
+          // Scoped to non-empty requiredTools so no-required tasks are unchanged.
+          const missingRequired = getMissingRequiredToolsFromSteps(
+            s.allSideEffectSteps,
+            input.requiredTools ?? [],
+          );
+
+          // Generalized PostCondition spine — checks artifact deliverables
+          // derived from the task description IN ADDITION to the required-tools
+          // check above. Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS flag
+          // deleted; spine is unconditional. Uniform with the arbitrator gate.
+          let spineUnmet: readonly PostCondition[] = [];
           if (isSatisfied(critique)) {
+            const conditions = deriveConditions(
+              input.taskDescription,
+              input.requiredTools ?? [],
+            );
+            if (conditions.length > 0) {
+              const verifyResult = verify(
+                conditions,
+                s.allSideEffectSteps,
+                { output: s.response },
+              );
+              spineUnmet = verifyResult.unmet;
+              if (spineUnmet.length > 0) {
+                yield* emitLog({
+                  _tag: "warning",
+                  message: `Critique reported SATISFIED but PostCondition spine has unmet conditions: ${describeUnmet(spineUnmet)} — forcing improve pass`,
+                  context: "reflexion",
+                  timestamp: new Date(),
+                });
+              }
+            }
+          }
+
+          if (isSatisfied(critique) && missingRequired.length === 0 && spineUnmet.length === 0) {
             return terminateWith(
               { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
               { kind: "satisfied", detail: `after ${attempt} attempts` },
             );
+          }
+          if (isSatisfied(critique) && missingRequired.length > 0) {
+            yield* emitLog({
+              _tag: "warning",
+              message: `Critique reported SATISFIED but required tools not yet called: ${missingRequired.join(", ")} — forcing improve pass`,
+              context: "reflexion",
+              timestamp: new Date(),
+            });
           }
 
           const updatedCritiques = [...s.previousCritiques, critique];
@@ -336,6 +400,7 @@ export const executeReflexion = (
             sessionId: input.sessionId,
             blockedTools,
             requiredTools: input.requiredTools,
+            relevantTools: input.relevantTools,
             maxRequiredToolRetries: input.maxRequiredToolRetries,
             synthesisConfig: input.synthesisConfig,
             metaTools: input.metaTools,

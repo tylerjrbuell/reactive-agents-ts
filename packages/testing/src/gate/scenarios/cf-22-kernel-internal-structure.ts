@@ -35,10 +35,11 @@ import {
   filterToolsByRelevance,
   // From src/kernel/capabilities/act/ (was utils/tool-gating)
   planNextMoveBatches,
-  // From src/context/ (ContextCurator — already in correct home)
-  defaultContextCurator,
-  RECENT_OBSERVATIONS_HEADER,
 } from "@reactive-agents/reasoning";
+// Sprint-1 A3 (2026-06-02): defaultContextCurator + RECENT_OBSERVATIONS_HEADER
+// deleted with the curator module. Canonical project() is the sole assembler
+// (see packages/reasoning/src/assembly/project.ts). The two curator assertions
+// below were removed; the structural pins on state/decide/attend/act survive.
 import type { ScenarioModule } from "../types.js";
 
 export const scenario: ScenarioModule = {
@@ -72,12 +73,9 @@ export const scenario: ScenarioModule = {
       // Act capability
       "act.planNextMoveBatches_is_function":
         typeof planNextMoveBatches === "function",
-      // Curator (Attend's authoritative implementation)
-      "curator.defaultContextCurator_curate_is_function":
-        typeof defaultContextCurator?.curate === "function",
-      "curator.RECENT_OBSERVATIONS_HEADER_is_string":
-        typeof RECENT_OBSERVATIONS_HEADER === "string" &&
-        RECENT_OBSERVATIONS_HEADER.length > 0,
+      // Curator assertions REMOVED Sprint-1 A3 (2026-06-02): defaultContextCurator
+      // + RECENT_OBSERVATIONS_HEADER deleted with the curator module. project()
+      // is the sole assembler now.
     };
   },
 };

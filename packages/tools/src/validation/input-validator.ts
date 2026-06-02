@@ -76,6 +76,27 @@ export const validateToolInput = (
         continue;
       }
 
+      // Coerce stringified boolean: small models (qwen3.5, cogito) emit
+      // `"full": "true"` instead of `"full": true`. Only accept canonical forms.
+      if (param.type === "boolean" && typeof value === "string") {
+        const lowered = value.trim().toLowerCase();
+        if (lowered === "true" || lowered === "false") {
+          validated[param.name] = lowered === "true";
+          continue;
+        }
+      }
+
+      // Coerce stringified number: same models often emit `"limit": "5"`.
+      // Only accept clean numeric literals so non-numeric strings still fail
+      // the type check below (preserves typo-detection behavior).
+      if (param.type === "number" && typeof value === "string") {
+        const trimmed = value.trim();
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+          validated[param.name] = Number(trimmed);
+          continue;
+        }
+      }
+
       // Type check
       const actualType = Array.isArray(value) ? "array" : typeof value;
       if (

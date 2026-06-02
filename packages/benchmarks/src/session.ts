@@ -34,6 +34,10 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
     type: "internal", id: "ra-full-noop-verifier", label: "RA Full (No Verifier)",
     config: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true, verifier: "noop" },
   },
+
+  // (Sprint-1 A2, 2026-06-02) The `ra-full-assembly-off` ablation variant
+  // was removed when RA_ASSEMBLY flag + legacy curate() were deleted. The
+  // env passthrough (config.env) remains for future env-gated arms.
 ]
 
 // ── Session utilities ─────────────────────────────────────────────────────────

@@ -69,6 +69,8 @@ describe("Multi-Source Layer", () => {
     const mockLLM = {
       complete: (_req: any) =>
         Effect.succeed({ content: '["TypeScript was created by Microsoft"]' }),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     try {
@@ -90,6 +92,8 @@ describe("Multi-Source Layer", () => {
     const mockLLM = {
       complete: (_req: any) =>
         Effect.fail(new Error("LLM unavailable")),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     try {
@@ -111,6 +115,8 @@ describe("Multi-Source Layer", () => {
 
     const mockLLM = {
       complete: (_req: any) => Effect.succeed({ content: "[]" }),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     try {
@@ -132,6 +138,8 @@ describe("Multi-Source Layer", () => {
 
     const mockLLM = {
       complete: (_req: any) => Effect.succeed({ content: "not valid json" }),
+      embed: (_texts: readonly string[], _model?: string) =>
+        Effect.succeed([] as readonly (readonly number[])[]),
     };
 
     try {

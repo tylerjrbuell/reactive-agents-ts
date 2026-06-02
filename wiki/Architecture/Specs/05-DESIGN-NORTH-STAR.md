@@ -612,6 +612,84 @@ Detailed tactical plans live in `wiki/Planning/Implementation-Plans/` and are wr
 
 ---
 
+## 6.5 Canonical Contracts & Architecture Completion (2026-06-02 addendum)
+
+**Status:** AUTHORITATIVE forward plan for the `overhaul/agentic-core-2026-05-31` branch arc. Folds in the 10 gaps surfaced by the Phase-A 2026-06-02 triage session (commit `7b0a089b`). Companion spec: [[2026-06-02-canonical-contracts-and-invariants]].
+
+**Origin:** The Phase-A bench surfaced 7 cascading non-architectural bugs that masked the real arm-level signal for six hours. Root-cause analysis: every bug matched a missing typed-contract layer at a system boundary. The existing canonical-harness-core + canonical-context-assembly specs nail the mechanism + data-flow shape; the contract layer is what mechanically forces those mechanisms to honor the missions in `06-MISSION-STATEMENTS.md`.
+
+**The 4 sprints (close the gaps, land the branch, unlock full potential):**
+
+### Sprint 1 — Branch Closure + Foundation Contracts (1-2 weeks)
+Land `overhaul/agentic-core-2026-05-31` into `main` cleanly with **canonical-only** code (no flags, no legacy paths).
+
+| # | Gap | Action | Validation |
+|---|---|---|---|
+| C1.1 | RA_ASSEMBLY / RA_OVERHAUL / RA_POST_CONDITIONS flag scaffolding | Delete flags; canonical becomes the only path | Test suite green; bench equal-or-better invariant holds |
+| C1.2 | Legacy `defaultContextCurator.curate()` (1 caller, 13 src + 9 tests) | Delete; project() is sole assembler (invariant I2) | Cross-tier bench: ≥ equal-or-better cs-overflow + comfort tasks |
+| C1.3 | `TaskContract` type (gap 2) | New type in `packages/core/src/contracts/task-contract.ts`; bench tasks migrate | Bench preflight refuses cells where contract can't be honored |
+| C1.4 | `DeliverableProvenance` (gap 3) | Typed channel into `state.output`; `commitDeliverable()` sole writer | Test: zero raw-string mutations of `state.output` |
+| C1.5 | `Capability` consolidation (gap 1) | One source-tagged resolver; 6 entry points → re-export shims | `Capability.source` exposed; fallback fires loudly |
+
+**Exit gate:** branch merges to `main`. Bench `cs-overflow-*` reproduces post-fix result (project ≥ legacy) WITHOUT the legacy code path being available. Test suite ≥ 1614 reasoning + 71 benchmarks green.
+
+### Sprint 2 — Bench Honesty + Pre-flight (1 week)
+Make measurement structurally honest so the next 5 sprints can't be derailed by setup confounds.
+
+| # | Gap | Action |
+|---|---|---|
+| C2.1 | `PreFlight.validate(builder, task)` at `agent.build()` (gap 8) | Hard fail on capability-source-fallback, tool-not-exposed, contract violation |
+| C2.2 | `BenchCellOutcome = measured \| inconclusive` (gap 8) | Bench refuses to score cells hitting preflight violations |
+| C2.3 | Phase-A redo with contracts on | Cross-tier (frontier + mid + local) re-run; equal-or-better cleared with zero inconclusive cells |
+
+**Exit gate:** bench produces no "INCONCLUSIVE" rows on the standard session; cross-tier Phase-A receipts archived under `wiki/Research/Harness-Reports/`.
+
+### Sprint 3 — Mechanism Completion (2-3 weeks)
+The remaining canonical-harness-core mechanisms hardened into typed contracts.
+
+| # | Gap | Action |
+|---|---|---|
+| C3.1 | Effective-window budgets (gap 9) | `Capability.effectiveWindowChars` ≈ 65% of claimed; all budgets %-of-effective |
+| C3.2 | Verifier severity ladder (gap 7) | `VerifierVerdict { checks: {name, severity, reason}[] }`; arbitrator routes |
+| C3.3 | Strategies as reducer policies (gap 6) | plan-execute / ToT / reflexion migrate to compose API over single reducer |
+| C3.4 | Recency-aware projection invariant (already shipped) | Pin tests cover the latest=full / older=preserve contract |
+| ~~C3.5~~ | ~~U3: hybrid steering channel~~ **RETRACTED 2026-06-02** | Hypothesis invalidated by prompt dump — actual cause was haiku capability-alias fallback (`claude-haiku-4-5` not in STATIC_CAPABILITIES → fallback window=2048 → recencyBudget=2867 → preview+ref fired on 28K-char tool_result → haiku perceived truncation, refused to summarize). Fixed by adding suffix-less alias to STATIC_CAPABILITIES. See cross-tier-investigation-2026-06-02.md. |
+
+**Exit gate:** cross-tier ablation receipts for each: ≥3pp lift OR ≤15% overhead. Strategy LOC drops ≥40% (Pillar-3 mission target).
+
+### Sprint 4 — Salvage Map Execution (2 weeks)
+Settle the open hypotheses canonical-harness-core left to bench adjudication.
+
+| # | Gap | Action |
+|---|---|---|
+| C4.1 | Mask-don't-churn for tools (gap 4) | `RA_LAZY_TOOLS` → masking primary; cross-tier ablation receipt |
+| C4.2 | Recall / `[STORED:]` demote to opt-in (gap 10) | Recall removed from default LLM tool set; cross-tier receipt |
+| C4.3 | Boundary coercion centralization (gap 5) | Single coercion seam; per-tool ad-hoc paths deleted |
+| C4.4 | Classifier honesty (deferred I7) | `ClassifierResult` typed signal; cannot override `TaskContract.tools` |
+
+**Exit gate:** all 7 mission failure modes from §1 of the contracts spec are constructively impossible; full-bench cross-tier pass^k ≥ pre-overhaul baseline aggregate.
+
+### Final delete (after Sprint 4 aggregate live win)
+Per canonical-harness-core P1 strangler-fig discipline: deletion authorized only after aggregate cross-tier live win. Then:
+- `RA_TOOL_RESULT_BUDGET_CHARS` stays as the ablation knob; all other RA_* flags removed
+- Legacy `CONTEXT_PROFILES` table merges into the single resolver
+- Dead capability/profile entry points removed
+- Public API preserved via shims
+
+### What this unlocks (when all 4 sprints land)
+- **Trust** — every deliverable is typed-provenance traceable to a model thought or validated tool result. The "errors leaked as output" class is constructively impossible.
+- **Cost** — recency-aware projection + effective-window budgets deliver measured token efficiency without accuracy regression (proven 2026-06-02: −3% tokens / +8pp acc / +24pp reliability on qwen3.5 local).
+- **Model-adaptive intelligence** — capability source-tagging surfaces "fallback" loudly; tier-aware projection adapts to actual model behavior, not claimed window.
+- **Anti-black-box** — every termination path through arbitrator; every output through `commitDeliverable`; every tool through one dispatch; every prompt through one `project()`.
+- **Anti-hallucination** — preview+ref with `ResultStore` makes full data recoverable system-side; honesty rubric in bench catches dishonest-success.
+- **Observability** — single trace event taxonomy; bench cells labeled measured/inconclusive; capability/deliverable/projection events typed.
+- **Self-improvement** — bench is honest substrate for measuring every future change; classifier signals are typed (can learn from honesty over time).
+- **Deterministic results** — recency-split projection + KV-cache-stable assembly + single arbitrator = N=3 reliability close to 100% (proven 2026-06-02).
+
+**Reading order for new contributors:** [[2026-05-31-canonical-harness-core]] → [[2026-05-31-canonical-context-assembly]] → [[2026-06-02-canonical-contracts-and-invariants]] → this section.
+
+---
+
 ## 7. Validation Discipline
 
 ### 7.1 The N=3 corpus rule

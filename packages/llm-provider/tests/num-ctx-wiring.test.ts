@@ -56,7 +56,7 @@ const makeTestConfigLayer = (overrides: Partial<{ defaultNumCtx: number }> = {})
   } as LLMConfig["Type"]);
 
 describe("Ollama provider — num_ctx wiring (G-1)", () => {
-  it("sets options.num_ctx on complete() requests when defaultNumCtx is configured", async () => {
+  it("sets options.num_ctx on complete() requests (capability.recommendedNumCtx wins over defaultNumCtx)", async () => {
     mockChat.mockClear();
 
     await Effect.runPromise(
@@ -75,16 +75,18 @@ describe("Ollama provider — num_ctx wiring (G-1)", () => {
       options?: { num_ctx?: number };
     };
     expect(chatArgs.options).toBeDefined();
-    expect(chatArgs.options?.num_ctx).toBe(8192);
+    // cogito:14b is in the static table → capability.recommendedNumCtx (32768)
+    // wins over config.defaultNumCtx (8192). Proves num_ctx is always set.
+    expect(chatArgs.options?.num_ctx).toBe(32768);
   }, 15000);
 
   // Phase 1 S1.3 changed this assertion: capability-driven resolution now
   // always supplies num_ctx for known models. Static table for cogito:14b
-  // declares recommendedNumCtx=8192 — that's what the Ollama request gets,
+  // declares recommendedNumCtx=32768 — that's what the Ollama request gets,
   // even with no defaultNumCtx config and no explicit request.numCtx. The
   // Phase 0 surgical fix's "respect Ollama default 2048" path is replaced
   // by Phase 1's "respect the model's documented context window".
-  it("uses capability.recommendedNumCtx when defaultNumCtx is not configured (cogito:14b → 8192 from static table)", async () => {
+  it("uses capability.recommendedNumCtx when defaultNumCtx is not configured (cogito:14b → 32768 from static table)", async () => {
     mockChat.mockClear();
 
     await Effect.runPromise(
@@ -101,7 +103,7 @@ describe("Ollama provider — num_ctx wiring (G-1)", () => {
     const chatArgs = mockChat.mock.calls[0]![0] as {
       options?: { num_ctx?: number };
     };
-    expect(chatArgs.options?.num_ctx).toBe(8192);
+    expect(chatArgs.options?.num_ctx).toBe(32768);
   }, 15000);
 
   it("unknown model falls back to capability fallback (2048) when no other override", async () => {
@@ -146,9 +148,9 @@ describe("Ollama provider — num_ctx wiring (G-1)", () => {
     const chatArgs = mockChat.mock.calls[0]![0] as {
       options?: { num_ctx?: number };
     };
-    // cogito:14b's capability.recommendedNumCtx=8192 must win over the
+    // cogito:14b's capability.recommendedNumCtx=32768 must win over the
     // deprecated config.defaultNumCtx=99999. Confirms the new precedence.
-    expect(chatArgs.options?.num_ctx).toBe(8192);
+    expect(chatArgs.options?.num_ctx).toBe(32768);
   }, 15000);
 
   it("allows per-request override via request.numCtx", async () => {

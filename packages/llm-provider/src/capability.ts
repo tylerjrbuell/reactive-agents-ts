@@ -176,6 +176,30 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // Suffix-less alias: callers using `claude-haiku-4-5` (the marketing name
+  // without the 20251001 date suffix) previously fell through to the 2048
+  // conservative fallback, which under-sized the recencyBudgetChars gate in
+  // assembly and triggered preview+ref on a 28K-char tool result — haiku
+  // then read the structural-preview heading skeleton, perceived it as a
+  // truncation marker ("file-read is truncating at 29487 chars"), and
+  // narrated honest failure instead of summarizing. Phase-A 2026-06-02
+  // bench cells used `claude-haiku-4-5` (suffix-less); this entry collapses
+  // the resolution to the same capability as the dated alias.
+  "anthropic/claude-haiku-4-5": {
+    provider: "anthropic",
+    model: "claude-haiku-4-5",
+    tier: "mid",
+    maxContextTokens: 200_000,
+    recommendedNumCtx: 200_000,
+    maxOutputTokens: 8192,
+    tokenizerFamily: "claude",
+    supportsPromptCaching: true,
+    supportsVision: true,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
 
   // ── OpenAI ───────────────────────────────────────────────────────────────
   "openai/gpt-4o": {
@@ -243,14 +267,18 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
 
   // ── Ollama (local) ───────────────────────────────────────────────────────
   // Ollama defaults to num_ctx=2048 if not set — that's the G-1 truncation
-  // bug. Recommended values here lean toward common task sizes (8K) for the
-  // most-tested local models. Users can override via CompletionRequest.numCtx.
+  // bug. recommendedNumCtx is set to 32K (== maxContextTokens here, == the
+  // probe's VRAM-conservative cap from local-probe.ts) so real MCP/persona
+  // workloads aren't silently truncated at 8K. Both 14B models report a far
+  // larger real window via /api/show (cogito qwen2.context_length=131072,
+  // qwen3.context_length=40960) but 32K is the VRAM-safe ceiling for a 16GB
+  // GPU. Users can override via CompletionRequest.numCtx.
   "ollama/cogito:14b": {
     provider: "ollama",
     model: "cogito:14b",
     tier: "local",
     maxContextTokens: 32_768,
-    recommendedNumCtx: 8192,
+    recommendedNumCtx: 32_768,
     maxOutputTokens: 4096,
     tokenizerFamily: "llama",
     supportsPromptCaching: false,
@@ -265,7 +293,27 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     model: "qwen3:14b",
     tier: "local",
     maxContextTokens: 32_768,
-    recommendedNumCtx: 8192,
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  // qwen3.5 family — Phase-A canonical-harness-core local-tier baseline.
+  // Resolver previously fell back to recommendedNumCtx=2048 because the
+  // `:latest` tag carries no `Nb` size hint and the static table lacked
+  // an entry. That under-sizing produced a window-truncated capability
+  // (window=2048, tier=mid) on bench cells, distorting Phase-A measurements.
+  "ollama/qwen3.5:latest": {
+    provider: "ollama",
+    model: "qwen3.5:latest",
+    tier: "local",
+    maxContextTokens: 32_768,
+    recommendedNumCtx: 32_768,
     maxOutputTokens: 4096,
     tokenizerFamily: "llama",
     supportsPromptCaching: false,

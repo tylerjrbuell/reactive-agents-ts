@@ -19,14 +19,17 @@ const STALL_WINDOW_BY_TIER: Record<string, number> = {
 export function evaluateStallDetect(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "stall-detect" }) | null {
-  const { entropyHistory, iteration, priorDecisionsThisRun = [], consecutiveToolFailures } = params;
+  const { entropyHistory, iteration, priorDecisionsThisRun = [], consecutiveToolFailures, tier } = params;
 
   // Don't overlap with tool-failure-streak — that handler covers repeated tool errors
   if (consecutiveToolFailures && consecutiveToolFailures >= 2) return null;
 
-  // Need enough history to judge
-  const tier = "local"; // conservative default — actual tier not in params yet
-  const window = STALL_WINDOW_BY_TIER[tier] ?? 3;
+  // Tier-gated window: higher tiers get a longer stall window before the harness
+  // calls a give-up. DEFECT 1 fix (2026-05-31): `tier` is now threaded through
+  // ControllerEvalParams (kernel reactive-observer supplies profile.tier). When
+  // omitted (outer-loop synthetic callers), default to "local" — the shortest,
+  // most conservative window — preserving prior behavior.
+  const window = STALL_WINDOW_BY_TIER[tier ?? "local"] ?? 3;
   if (iteration < window) return null;
 
   // Check if all recent entropy values are flat near the baseline

@@ -12,7 +12,7 @@ import { Effect, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractStructuredOutput } from "./pipeline.js";
-import { THINKING_SAFE_MIN_TOKENS } from "../kernel/capabilities/reason/stream-parser.js";
+import { THINKING_SAFE_MIN_TOKENS } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 // ── Schema for the inference result ──

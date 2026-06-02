@@ -3,7 +3,7 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   evaluateTransform,
-} from "../../../../src/kernel/capabilities/act/tool-parsing.js";
+} from "../../../../src/kernel/utils/tool-parsing.js";
 import {
   compressToolResult,
   formatToolSchemas,
@@ -15,7 +15,7 @@ import {
   gateNativeToolCallsForRequiredTools,
   buildToolElaborationInjection,
   planNextMoveBatches,
-} from "../../../../src/kernel/capabilities/act/tool-gating.js";
+} from "../../../../src/kernel/capabilities/decide/tool-gating.js";
 
 describe("hasFinalAnswer", () => {
   it("returns true for FINAL ANSWER: prefix", () => {

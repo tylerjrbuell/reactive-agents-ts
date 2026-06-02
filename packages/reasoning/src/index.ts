@@ -108,26 +108,24 @@ export {
   CONTEXT_PROFILES,
   mergeProfile,
   resolveProfile,
+  resolveProfileWithWindow,
   buildStaticContext,
   buildEnvironmentContext,
+  resolveEnvTimePrecision,
   buildRules,
 } from "./context/index.js";
 export type {
   ContextProfile,
   StaticContextInput,
+  EnvTimePrecision,
 } from "./context/index.js";
 
 // ─── Message Window Compaction ───
 export { applyMessageWindowWithCompact } from "./context/message-window.js";
 
-// ─── ContextCurator (Phase 1 Sprint 2 S2.5) ───
-export {
-  defaultContextCurator,
-  renderObservationForPrompt,
-  buildRecentObservationsSection,
-  RECENT_OBSERVATIONS_HEADER,
-} from "./context/context-curator.js";
-export type { Prompt, ContextCurator, CuratorOptions } from "./context/context-curator.js";
+// ContextCurator + curate() DELETED in Sprint-1 A3 (2026-06-02). Canonical
+// project() from assembly/ is the sole assembler. See spec
+// wiki/Architecture/Design-Specs/2026-06-02-canonical-contracts-and-invariants.md.
 
 // ─── Adaptive Prompt Composer (APC-2) ───
 export {
@@ -161,7 +159,7 @@ export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 
 // ─── Shared Utilities ───
 export { filterToolsByRelevance } from "./kernel/capabilities/attend/tool-formatting.js";
-export { planNextMoveBatches } from "./kernel/capabilities/act/tool-gating.js";
+export { planNextMoveBatches } from "./kernel/capabilities/decide/tool-gating.js";
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
 export type { KernelMessage, EntropyScoreLike } from "./kernel/state/kernel-state.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";

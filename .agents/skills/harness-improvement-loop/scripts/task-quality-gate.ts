@@ -39,13 +39,17 @@
 // Output: wiki/Research/Harness-Reports/task-quality-gate-<timestamp>.json + console summary
 
 import { ReactiveAgents } from "reactive-agents";
+import type { ReasoningStep } from "@reactive-agents/reasoning";
+import { deriveConditions } from "../../../../packages/reasoning/src/kernel/capabilities/verify/derive-conditions";
+import { verify } from "../../../../packages/reasoning/src/kernel/capabilities/verify/post-conditions";
 import { Effect } from "effect";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const MODEL = process.env.TASK_GATE_MODEL ?? process.env.PROBE_MODEL ?? "gemma4:e4b";
 const PROVIDER = process.env.TASK_GATE_PROVIDER ?? "ollama";
 const RECENT_OBS_LIMIT = Number(process.env.TASK_GATE_RECENT_OBS_LIMIT ?? "5");
+const RUNS_PER_TASK = Math.max(1, Number(process.env.RUNS_PER_TASK ?? "3"));
 const REPORTS_DIR = resolve(process.cwd(), "wiki/Research/Harness-Reports");
 const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 
@@ -59,7 +63,14 @@ type HnPost = {
   descendants?: number;
 };
 
+const HN_FIXTURE = process.env.TASK_GATE_HN_FIXTURE;
+
 const HN_CACHE: HnPost[] = await (async () => {
+  if (HN_FIXTURE && existsSync(HN_FIXTURE)) {
+    const posts = JSON.parse(readFileSync(HN_FIXTURE, "utf8")) as HnPost[];
+    console.log(`Loaded ${posts.length} HN posts from fixture ${HN_FIXTURE}`);
+    return posts;
+  }
   const ids = ((await (await fetch(
     "https://hacker-news.firebaseio.com/v0/topstories.json",
   )).json()) as number[]).slice(0, 30);
@@ -71,7 +82,7 @@ const HN_CACHE: HnPost[] = await (async () => {
       return r as Partial<HnPost>;
     }),
   );
-  return items.map((it, i): HnPost => ({
+  const posts = items.map((it, i): HnPost => ({
     id: ids[i] as number,
     title: it.title ?? "(no title)",
     score: it.score ?? 0,
@@ -79,9 +90,18 @@ const HN_CACHE: HnPost[] = await (async () => {
     descendants: it.descendants ?? 0,
     url: it.url ?? `https://news.ycombinator.com/item?id=${ids[i]}`,
   }));
+  if (HN_FIXTURE) {
+    writeFileSync(HN_FIXTURE, JSON.stringify(posts, null, 2));
+    console.log(`Froze ${posts.length} HN posts to fixture ${HN_FIXTURE}`);
+  }
+  return posts;
 })();
 
 console.log(`Cached ${HN_CACHE.length} HN posts. All tasks will see identical source data.`);
+
+if (process.env.TASK_GATE_FREEZE_ONLY === "1") {
+  process.exit(0);
+}
 
 // ── Tool: cached HN posts (deterministic) ───────────────────────────────────
 const hnTool = {
@@ -122,6 +142,7 @@ interface QualityScore {
   readonly callsRecall: boolean;          // ★ key signal — agent shouldn't NEED recall() for synthesis
   readonly composite: number;             // weighted average (0..1)
   readonly notes: readonly string[];      // human-readable assessment lines
+  readonly strictCorrect?: boolean;       // T3 only — exact match of top-3-by-comments ids (set in Phase 1)
 }
 
 interface TaskResult {
@@ -129,11 +150,34 @@ interface TaskResult {
   readonly taskDescription: string;
   readonly success: boolean;
   readonly tokensUsed: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
   readonly stepsCount: number;
   readonly toolCallCount: number;
   readonly wallMs: number;
   readonly output: string;
   readonly quality: QualityScore;
+  readonly runIndex: number;              // 0-based run index within the N-run set
+  readonly postConditionsMet: boolean | null; // null = no conditions derivable (T1); true = all met; false = unmet
+}
+
+// ── Multi-run aggregates ─────────────────────────────────────────────────────
+interface TaskRunSet {
+  readonly taskId: string;
+  readonly taskDescription: string;
+  readonly runs: readonly TaskResult[];
+  readonly passK: boolean;               // true iff ALL runs succeeded
+  readonly passKLabel: string;           // e.g. "3/3" or "1/3"
+  readonly compositeMean: number;
+  readonly compositeMin: number;
+  readonly compositeMax: number;
+  readonly compositeSpread: number;      // max − min
+  // T3 strict: how many runs had exact correct top-3-by-comments ids
+  readonly t3StrictCorrectCount: number | null;  // null for non-T3 tasks
+  readonly t3StrictCorrectLabel: string | null;  // e.g. "2/3" or null
+  // postCond: k/n of runs where all conditions were met; null/"—" if no conditions derivable
+  readonly postCondMetCount: number | null;       // null if all runs had no derivable conditions
+  readonly postCondLabel: string;                 // "k/n" or "—"
 }
 
 interface TaskDef {
@@ -145,16 +189,19 @@ interface TaskDef {
 }
 
 // ── Scoring helpers ─────────────────────────────────────────────────────────
-const top5ByScore = [...HN_CACHE].sort((a, b) => b.score - a.score).slice(0, 5);
-const top3ByComments = [...HN_CACHE]
+const top5ByScore = [...HN_CACHE.slice(0, 25)].sort((a, b) => b.score - a.score).slice(0, 5);
+const top3ByComments = [...HN_CACHE.slice(0, 25)]
   .sort((a, b) => (b.descendants ?? 0) - (a.descendants ?? 0))
   .slice(0, 3);
+
+// The expected IDs for T3 strict correctness
+const top3ByCommentsIds = new Set(top3ByComments.map((p) => p.id));
 
 function snippet(t: string, n = 30): string {
   return t.slice(0, Math.min(n, t.length));
 }
 
-function compositeOf(s: Omit<QualityScore, "composite" | "notes" | "callsRecall" | "toolSuccess">): number {
+function compositeOf(s: Omit<QualityScore, "composite" | "notes" | "callsRecall" | "toolSuccess" | "strictCorrect">): number {
   // Weights: faithfulness and noFabrication matter most for trust;
   // completeness and format are user-experience quality.
   return (
@@ -173,9 +220,33 @@ function buildQuality(args: {
   noFabrication: number;
   callsRecall: boolean;
   notes: string[];
+  strictCorrect?: boolean;
 }): QualityScore {
   const composite = compositeOf(args);
   return { ...args, composite };
+}
+
+// ── T3 strict correctness: resolve cited post ids from output ────────────────
+// Match title snippets (first 20 chars, case-insensitive) from HN_CACHE against
+// the agent's output. A run is strict-correct iff the set of distinct cited post
+// ids equals EXACTLY the 3 top3ByComments ids — no more, no fewer.
+// Order-insensitive. If the agent names 6 posts (3 right + 3 wrong), returns false.
+function citedT3Ids(output: string): number[] {
+  // Distinct HN_CACHE ids whose 20-char title snippet appears in the output.
+  return HN_CACHE.filter((p) => {
+    const snip = snippet(p.title, 20).toLowerCase();
+    return snip.length > 0 && output.toLowerCase().includes(snip);
+  }).map((p) => p.id);
+}
+
+function resolveT3StrictCorrect(output: string): boolean {
+  const citedIds = new Set(citedT3Ids(output));
+
+  // Exact-set match: must cite exactly the 3 required ids and nothing else.
+  return (
+    citedIds.size === 3 &&
+    [...top3ByCommentsIds].every((id) => citedIds.has(id))
+  );
 }
 
 // ── Task definitions ────────────────────────────────────────────────────────
@@ -276,6 +347,12 @@ const TASKS: TaskDef[] = [
       const lineCount = output.split("\n").filter((l) => /^\s*\d+[\.\)]/.test(l)).length;
       const callsRecall = toolCalls.some((c) => c.name === "recall");
 
+      // STRICT check: exact match of top-3-by-comments post ids
+      const strictCorrect = resolveT3StrictCorrect(output);
+      const expectedIds = [...top3ByCommentsIds];
+      const citedIds = citedT3Ids(output);
+      const strictAudit = `strict ${strictCorrect ? "✓" : "✗"} expected=[${expectedIds.join(",")}] cited=[${citedIds.join(",")}]`;
+
       return buildQuality({
         toolSuccess: toolCalls.some((c) => c.name === "get-hn-posts"),
         formatAdherence: isNumberedList ? Math.min(1, lineCount / 3) : 0.3,
@@ -283,10 +360,13 @@ const TASKS: TaskDef[] = [
         completeness: lineCount >= 3 ? 1 : lineCount / 3,
         noFabrication: 1 - wrongPicks * 0.33, // each wrong pick docks 1/3
         callsRecall,
+        strictCorrect,
         notes: [
           `${titlesFound}/3 correct titles`,
           `${commentsFound}/3 correct comment counts`,
           wrongPicks > 0 ? `★ ${wrongPicks} score-confusion picks` : "no confusion",
+          strictCorrect ? "strict ✓ (exact top-3 ids)" : "★ strict ✗ (wrong post ids)",
+          strictAudit,
           callsRecall ? "★ called recall()" : "",
         ].filter((n) => n.length > 0),
       });
@@ -387,17 +467,32 @@ const TASKS: TaskDef[] = [
 ];
 
 // ── Runner ──────────────────────────────────────────────────────────────────
-async function runTask(task: TaskDef): Promise<TaskResult> {
+async function runTask(task: TaskDef, runIndex: number): Promise<TaskResult> {
+  const runLabel = RUNS_PER_TASK > 1 ? ` [run ${runIndex + 1}/${RUNS_PER_TASK}]` : "";
   console.log(`\n${"=".repeat(72)}`);
-  console.log(`[${task.id}] ${task.description}`);
+  console.log(`[${task.id}]${runLabel} ${task.description}`);
   console.log("=".repeat(72));
 
   const builder = ReactiveAgents.create()
     .withName(`task-gate-${task.id}`)
     .withProvider(PROVIDER as never)
-    .withModel(MODEL)
-    .withMemory()
-    .withReasoning();
+    .withModel(MODEL);
+
+  // TASK_GATE_NO_MEMORY=1 disables memory — which ALSO disables debrief synthesis
+  // (debrief only fires on the memory-enabled path). Used to attribute the
+  // tokensUsed − (in+out) auxiliary-call gap (Inc 2 confirmation).
+  if (process.env.TASK_GATE_NO_MEMORY !== "1") {
+    builder.withMemory();
+  }
+  // TASK_GATE_OBS ablation arm (Phase 3): "false" disables per-tool-result
+  // observation-fact extraction (the extractObservationFacts LLM call); "true"
+  // forces it; unset = framework default (auto: on for local/mid tier).
+  const obsEnv = process.env.TASK_GATE_OBS;
+  const observationSummary: boolean | "auto" | undefined =
+    obsEnv === "false" ? false : obsEnv === "true" ? true : undefined;
+  builder.withReasoning(
+    observationSummary === undefined ? undefined : { observationSummary },
+  );
 
   // Opt in to model calibration loading. Set TASK_GATE_CALIBRATION=skip to
   // disable for control-arm probes.
@@ -418,6 +513,8 @@ async function runTask(task: TaskDef): Promise<TaskResult> {
   const wallMs = performance.now() - start;
   const output = String(result.output ?? "");
   const tokensUsed = (result.metadata?.tokensUsed as number | undefined) ?? 0;
+  const inputTokens = (result.metadata?.inputTokens as number | undefined) ?? 0;
+  const outputTokens = (result.metadata?.outputTokens as number | undefined) ?? 0;
   const stepsCount = (result.metadata?.stepsCount as number | undefined) ?? 0;
 
   // Tool calls now derived in builder.ts and exposed at result.metadata.toolCalls.
@@ -436,6 +533,28 @@ async function runTask(task: TaskDef): Promise<TaskResult> {
 
   const quality = task.score(output, toolCalls);
 
+  // ── PostCondition spine (Phase 1) ──────────────────────────────────────────
+  // requiredTools = tool names this task exposes (T1 exposes none → []).
+  const requiredTools = task.tools.map((t) => t.definition.name);
+  const conditions = deriveConditions(task.task, requiredTools);
+
+  // Narrow the loosely-typed metadata steps to ReasoningStep[]. The runtime
+  // metadata field uses a structurally weaker type (no branded id, no timestamp)
+  // but verify()/requirement-state re-narrow every field they touch via their
+  // own internal `as ...Like` guards — they never access content/timestamp/id.
+  // Double-cast through unknown is required (TS2352: types don't sufficiently
+  // overlap); no `any` introduced.
+  const rawSteps = md.reasoningSteps ?? [];
+  const steps = rawSteps as unknown as readonly ReasoningStep[];
+
+  let postConditionsMet: boolean | null;
+  if (conditions.length === 0) {
+    postConditionsMet = null; // no derivable conditions — honest n/a
+  } else {
+    const { unmet } = verify(conditions, steps, { output });
+    postConditionsMet = unmet.length === 0;
+  }
+
   console.log(`Output (${output.length} chars):`);
   console.log(output.slice(0, 600));
   if (output.length > 600) console.log(`...(truncated)`);
@@ -446,64 +565,164 @@ async function runTask(task: TaskDef): Promise<TaskResult> {
   console.log(`  completeness:   ${(quality.completeness * 100).toFixed(0)}%`);
   console.log(`  no-fabrication: ${(quality.noFabrication * 100).toFixed(0)}%`);
   console.log(`  callsRecall:    ${quality.callsRecall ? "YES (smell)" : "no"}`);
+  if (quality.strictCorrect !== undefined) {
+    console.log(`  strictCorrect:  ${quality.strictCorrect ? "YES ✓" : "NO ✗"} (T3 exact top-3 ids)`);
+  }
+  console.log(`  postCond:       ${postConditionsMet === null ? "— (no conditions)" : postConditionsMet ? "met ✓" : "UNMET ✗"} [${conditions.length} condition(s)]`);
   console.log(`Notes: ${quality.notes.join("; ")}`);
-  console.log(`Wall: ${(wallMs / 1000).toFixed(1)}s | Tokens: ${tokensUsed} | Steps: ${stepsCount}`);
+  console.log(`Wall: ${(wallMs / 1000).toFixed(1)}s | Tokens: ${tokensUsed} (in:${inputTokens} out:${outputTokens}) | Steps: ${stepsCount}`);
 
   return {
     taskId: task.id,
     taskDescription: task.description,
     success: result.success,
     tokensUsed,
+    inputTokens,
+    outputTokens,
     stepsCount,
     toolCallCount: toolCalls.length,
     wallMs,
     output,
     quality,
+    runIndex,
+    postConditionsMet,
+  };
+}
+
+// ── Aggregate N runs into a TaskRunSet ───────────────────────────────────────
+function aggregateRuns(task: TaskDef, runs: readonly TaskResult[]): TaskRunSet {
+  const successCount = runs.filter((r) => r.success).length;
+  const passK = successCount === runs.length;
+  const passKLabel = `${successCount}/${runs.length}`;
+
+  const composites = runs.map((r) => r.quality.composite);
+  const compositeMin = composites.length ? Math.min(...composites) : 0;
+  const compositeMax = composites.length ? Math.max(...composites) : 0;
+  const compositeMean = composites.length ? composites.reduce((s, v) => s + v, 0) / composites.length : 0;
+  const compositeSpread = compositeMax - compositeMin;
+
+  let t3StrictCorrectCount: number | null = null;
+  let t3StrictCorrectLabel: string | null = null;
+  if (task.id === "T3-selective-filter") {
+    t3StrictCorrectCount = runs.filter((r) => r.quality.strictCorrect === true).length;
+    t3StrictCorrectLabel = `${t3StrictCorrectCount}/${runs.length}`;
+  }
+
+  // postCond aggregation: if every run has null (no conditions), label is "—";
+  // otherwise count runs where postConditionsMet === true.
+  const nonNullPostConds = runs.filter((r) => r.postConditionsMet !== null);
+  const postCondMetCount = nonNullPostConds.length > 0
+    ? nonNullPostConds.filter((r) => r.postConditionsMet === true).length
+    : null;
+  const postCondLabel = postCondMetCount === null
+    ? "—"
+    : `${postCondMetCount}/${runs.length}`;
+
+  return {
+    taskId: task.id,
+    taskDescription: task.description,
+    runs,
+    passK,
+    passKLabel,
+    compositeMean,
+    compositeMin,
+    compositeMax,
+    compositeSpread,
+    t3StrictCorrectCount,
+    t3StrictCorrectLabel,
+    postCondMetCount,
+    postCondLabel,
   };
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
   console.log(
-    `\nTask Quality Gate — ${MODEL} via ${PROVIDER} | recentObservationsLimit=${RECENT_OBS_LIMIT}\n`,
+    `\nTask Quality Gate — ${MODEL} via ${PROVIDER} | recentObservationsLimit=${RECENT_OBS_LIMIT} | runsPerTask=${RUNS_PER_TASK}\n`,
   );
 
-  const results: TaskResult[] = [];
+  const runSets: TaskRunSet[] = [];
+
   for (const task of TASKS) {
-    const r = await runTask(task);
-    results.push(r);
+    const runs: TaskResult[] = [];
+    for (let i = 0; i < RUNS_PER_TASK; i++) {
+      const r = await runTask(task, i);
+      runs.push(r);
+    }
+    runSets.push(aggregateRuns(task, runs));
   }
 
   // Summary table
-  console.log(`\n${"=".repeat(95)}`);
+  const tableWidth = 120;
+  console.log(`\n${"=".repeat(tableWidth)}`);
   console.log("TASK QUALITY GATE SUMMARY");
-  console.log("=".repeat(95));
+  console.log(`Model: ${MODEL} | Provider: ${PROVIDER} | Runs/task: ${RUNS_PER_TASK}`);
+  console.log("=".repeat(tableWidth));
+
+  // Header
   console.log(
-    "task                          | composite | faith | format | complete | no-fabr | recall? | tok"
-      .padEnd(95),
+    [
+      "task".padEnd(30),
+      "pass^k".padEnd(7),
+      "composite(runs)".padEnd(22),
+      "faith".padEnd(6),
+      "format".padEnd(7),
+      "compl".padEnd(6),
+      "no-fabr".padEnd(8),
+      "T3-strict".padEnd(10),
+      "postCond".padEnd(9),
+      "recall?",
+    ].join(" | "),
   );
-  console.log("-".repeat(95));
-  for (const r of results) {
+  console.log("-".repeat(tableWidth));
+
+  for (const rs of runSets) {
+    // Per-run composite scores as a string, e.g. "82%,75%,90%"
+    const runComposites = rs.runs.map((r) => `${(r.quality.composite * 100).toFixed(0)}%`).join(",");
+    const compositeCol = RUNS_PER_TASK > 1
+      ? `${(rs.compositeMean * 100).toFixed(0)}% [${runComposites}]`
+      : `${(rs.compositeMean * 100).toFixed(0)}%`;
+
+    // Use last run's quality dimensions for the detail columns (representative)
+    const lastRun = rs.runs[rs.runs.length - 1] as TaskResult;
+    const recallCount = rs.runs.filter((r) => r.quality.callsRecall).length;
+    const recallLabel = recallCount > 0 ? `YES(${recallCount}/${rs.runs.length})` : "no";
+
     console.log(
       [
-        r.taskId.padEnd(30),
-        `${(r.quality.composite * 100).toFixed(0)}%`.padEnd(9),
-        `${(r.quality.faithfulness * 100).toFixed(0)}%`.padEnd(5),
-        `${(r.quality.formatAdherence * 100).toFixed(0)}%`.padEnd(6),
-        `${(r.quality.completeness * 100).toFixed(0)}%`.padEnd(8),
-        `${(r.quality.noFabrication * 100).toFixed(0)}%`.padEnd(7),
-        (r.quality.callsRecall ? "YES" : "no ").padEnd(7),
-        String(r.tokensUsed),
+        rs.taskId.padEnd(30),
+        (rs.passK ? "✓ " : "✗ ") + rs.passKLabel.padEnd(4),
+        compositeCol.padEnd(22),
+        `${(lastRun.quality.faithfulness * 100).toFixed(0)}%`.padEnd(6),
+        `${(lastRun.quality.formatAdherence * 100).toFixed(0)}%`.padEnd(7),
+        `${(lastRun.quality.completeness * 100).toFixed(0)}%`.padEnd(6),
+        `${(lastRun.quality.noFabrication * 100).toFixed(0)}%`.padEnd(8),
+        (rs.t3StrictCorrectLabel ?? "—").padEnd(10),
+        rs.postCondLabel.padEnd(9),
+        recallLabel,
       ].join(" | "),
     );
   }
 
-  const avgComposite =
-    results.reduce((s, r) => s + r.quality.composite, 0) / results.length;
-  const recallSmellCount = results.filter((r) => r.quality.callsRecall).length;
-  console.log("-".repeat(95));
+  // Variance / spread line
+  console.log("-".repeat(tableWidth));
+  if (RUNS_PER_TASK > 1) {
+    console.log("VARIANCE (composite spread per task):");
+    for (const rs of runSets) {
+      const spread = (rs.compositeSpread * 100).toFixed(0);
+      const min = (rs.compositeMin * 100).toFixed(0);
+      const max = (rs.compositeMax * 100).toFixed(0);
+      console.log(`  ${rs.taskId.padEnd(30)} min=${min}% max=${max}% spread=${spread}pp`);
+    }
+    console.log("-".repeat(tableWidth));
+  }
+
+  const allRuns = runSets.flatMap((rs) => rs.runs);
+  const avgComposite = allRuns.length ? allRuns.reduce((s, r) => s + r.quality.composite, 0) / allRuns.length : 0;
+  const recallSmellCount = allRuns.filter((r) => r.quality.callsRecall).length;
+  const passKCount = runSets.filter((rs) => rs.passK).length;
   console.log(
-    `Average composite quality: ${(avgComposite * 100).toFixed(0)}% | recall() smells: ${recallSmellCount}/${results.length}`,
+    `pass^k tasks: ${passKCount}/${runSets.length} | avg composite: ${(avgComposite * 100).toFixed(0)}% | recall() smells: ${recallSmellCount}/${allRuns.length} runs`,
   );
 
   // Persist
@@ -516,12 +735,18 @@ async function main(): Promise<void> {
         model: MODEL,
         provider: PROVIDER,
         recentObservationsLimit: RECENT_OBS_LIMIT,
+        runsPerTask: RUNS_PER_TASK,
         timestamp: TIMESTAMP,
-        results,
+        runSets,
+        // Legacy flat results for backward-compat readers (last run of each task)
+        results: runSets.map((rs) => rs.runs[rs.runs.length - 1]),
         summary: {
           avgComposite,
           recallSmellCount,
-          taskCount: results.length,
+          taskCount: runSets.length,
+          totalRuns: allRuns.length,
+          passKCount,
+          passKRate: passKCount / runSets.length,
         },
       },
       null,

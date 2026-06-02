@@ -1,3 +1,43 @@
+// ─── Canonical Contracts (Sprint-1 typed-contract foundation) ───
+// See wiki/Architecture/Design-Specs/2026-06-02-canonical-contracts-and-invariants.md
+export type {
+  TaskContract,
+  ToolRequirement,
+  FixtureContract,
+  ModelFloor,
+  SuccessCriterion,
+  OutputContract,
+} from "./contracts/task-contract.js";
+export { toolsToExpose } from "./contracts/task-contract.js";
+
+export type {
+  Deliverable,
+  ValidatedObservation,
+  ThoughtStepRef,
+  LLMRoundTripRef,
+} from "./contracts/deliverable.js";
+export {
+  deliverableToContent,
+  modelSynthesisDeliverable,
+  sentinelDeliverable,
+} from "./contracts/deliverable.js";
+
+export type {
+  Capability as ContractCapability,
+  CapabilitySource,
+  CapabilitySupports,
+  CapabilityCache,
+  CapabilityProbe,
+  CapabilityResolveOptions,
+  CapabilityResolver,
+  Tier as CapabilityTier,
+} from "./contracts/capability.js";
+export {
+  TIER_TOOL_RESULT_PRESERVE,
+  fallbackCapability,
+  effectiveWindowFromClaimedTokens,
+} from "./contracts/capability.js";
+
 // ─── Types (pure type-only exports) ───
 export type { Agent, AgentDefinition, Capability } from "./types/agent.js";
 export type { Task, TaskConfig, TaskMetadata } from "./types/task.js";

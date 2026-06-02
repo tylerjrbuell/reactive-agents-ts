@@ -18,9 +18,13 @@ import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   toProviderMessage,
   buildToolSchemas,
+  sanitizeToolName,
 } from "../attend/context-utils.js";
-import { defaultContextCurator } from "../../../context/context-curator.js";
-import { StreamingTextCallback } from "@reactive-agents/core";
+import type { LLMMessage } from "@reactive-agents/llm-provider";
+import { project } from "../../../assembly/project.js";
+import { fromKernelState } from "../../../assembly/from-kernel-state.js";
+import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
+import { StreamingTextCallback, EventBus } from "@reactive-agents/core";
 import {
   finalAnswerTool,
   shouldShowFinalAnswer,
@@ -36,6 +40,8 @@ import {
   guardQualityCheck,
   guardDiminishingReturns,
   guardEvidenceGrounding,
+  filterRecallByOverflow,
+  recallGateEnabled,
 } from "./think-guards.js";
 
 import type { ToolSchema } from "../attend/tool-formatting.js";
@@ -43,10 +49,10 @@ import {
   hasFinalAnswer,
   extractFinalAnswer,
   stripPreamble,
-} from "../act/tool-parsing.js";
+} from "../../utils/tool-parsing.js";
 import {
   gateNativeToolCallsForRequiredTools,
-} from "../act/tool-gating.js";
+} from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsFromSteps,
@@ -59,9 +65,9 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
-import { extractThinking, rescueFromThinking } from "../reason/stream-parser.js";
+import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
-import { makeObservationResult } from "../act/tool-execution.js";
+import { makeObservationResult } from "../../utils/observation-helpers.js";
 import {
   transitionState,
   asKernelStateLike,
@@ -73,8 +79,8 @@ import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { detectAssumptions } from "./assumption-detector.js";
-import { emitAssumptionRecorded } from "../../utils/diagnostics.js";
+import { explainProviderError } from "./provider-error-explain.js";
+import { surfaceAssumptions } from "./assumption-surfacing.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -130,102 +136,6 @@ export function looksLikeFinalAnswer(content: string): boolean {
     /\b(?:final answer|in (?:summary|conclusion)|here (?:is|are)|the (?:result|answer|output) is)\b/i,
   ];
   return positiveSignals.some((re) => re.test(trimmed));
-}
-
-/**
- * Translate raw provider errors into actionable messages with provider context
- * and suggested fixes. Falls through to the raw message (with context) if no
- * pattern matches, so no debugging information is lost.
- *
- * Common patterns covered (checked in this order):
- * - Connection refused / fetch failed (service down, wrong endpoint)
- * - 5xx server errors (transient provider failures) — checked before auth so
- *   a server-error body containing stray "401"/"403" digits isn't misclassified
- * - 401 / 403 / Unauthorized (bad/missing API key)
- * - 429 / Rate limit
- * - Timeout / AbortError
- */
-function explainProviderError(
-  rawMessage: string,
-  provider?: string,
-  model?: string,
-): string {
-  const ctx = provider ? ` (${provider}${model ? `:${model}` : ""})` : "";
-  const lower = rawMessage.toLowerCase();
-
-  // Connection refused / fetch failed → service not running or unreachable
-  if (
-    lower.includes("econnrefused") ||
-    lower.includes("fetch failed") ||
-    lower.includes("connect timeout") ||
-    lower.includes("enotfound") ||
-    lower.includes("socket hang up") ||
-    lower.includes("network request failed")
-  ) {
-    if (provider === "ollama") {
-      return `Cannot connect to Ollama${ctx}. Is the service running?\n  Start it with: ollama serve\n  Or set OLLAMA_ENDPOINT to a different host.\n  Original error: ${rawMessage}`;
-    }
-    return `Cannot reach ${provider ?? "LLM provider"}${ctx}. Connection refused or network unreachable.\n  Check network connectivity and provider endpoint.\n  Original error: ${rawMessage}`;
-  }
-
-  // 5xx server errors — checked BEFORE auth so a 5xx body that happens to
-  // contain a stray "401"/"403" digit sequence isn't misclassified as an auth
-  // failure. The connection branch above already eliminated transport failures.
-  if (
-    /\b5\d\d\b/.test(rawMessage) ||
-    lower.includes("internal server error") ||
-    lower.includes("service unavailable") ||
-    lower.includes("bad gateway") ||
-    lower.includes("gateway timeout")
-  ) {
-    return `${provider ?? "LLM provider"}${ctx} returned a server error.\n  This is likely transient — try again in a moment.\n  Original error: ${rawMessage}`;
-  }
-
-  // Auth errors
-  if (
-    lower.includes("401") ||
-    lower.includes("unauthorized") ||
-    lower.includes("invalid api key") ||
-    lower.includes("invalid_api_key") ||
-    lower.includes("authentication") ||
-    lower.includes("403") ||
-    lower.includes("forbidden")
-  ) {
-    const apiKeyEnvByProvider: Record<string, string> = {
-      anthropic: "ANTHROPIC_API_KEY",
-      openai: "OPENAI_API_KEY",
-      gemini: "GOOGLE_API_KEY (or GEMINI_API_KEY)",
-      google: "GOOGLE_API_KEY (or GEMINI_API_KEY)",
-      litellm: "LITELLM_API_KEY (or proxy-specific env vars)",
-    };
-    const envHint =
-      apiKeyEnvByProvider[provider ?? ""] ?? "the appropriate API key env var";
-    return `Authentication failed for ${provider ?? "LLM provider"}${ctx}.\n  Verify ${envHint} is set correctly and has not been revoked.\n  Original error: ${rawMessage}`;
-  }
-
-  // Rate limit
-  if (
-    lower.includes("429") ||
-    lower.includes("rate limit") ||
-    lower.includes("too many requests") ||
-    lower.includes("quota")
-  ) {
-    return `Rate limit hit for ${provider ?? "LLM provider"}${ctx}.\n  Slow down requests or upgrade your provider tier.\n  Original error: ${rawMessage}`;
-  }
-
-  // Timeout / abort
-  if (
-    lower.includes("aborterror") ||
-    lower.includes("operation was aborted") ||
-    lower.includes("request timed out") ||
-    lower.includes("timeout") ||
-    lower.includes("etimedout")
-  ) {
-    return `Request to ${provider ?? "LLM provider"}${ctx} timed out.\n  Provider may be slow or unreachable. Check network and provider status.\n  Original error: ${rawMessage}`;
-  }
-
-  // Generic fallthrough — preserve raw message with provider context
-  return `${provider ?? "LLM"} call failed${ctx}: ${rawMessage}`;
 }
 
 export function handleThinking(
@@ -366,13 +276,13 @@ export function handleThinking(
         )) ?? rawSystemPrompt
       : rawSystemPrompt;
 
-    // ── Context assembly: ContextManager.build() is the sole path ────────────
-    // All sections (identity + adapter patch, static context, tool guidance,
-    // tool elaboration, progress, prior work, guidance) are rendered by
-    // ContextManager. Think.ts supplies promptSchemas (classification-pruned)
-    // and the effective system prompt body (harness-skill-wrapped when active).
-    // profileOverrides were already merged into `profile` by kernel-runner;
-    // here we only need the adapter.
+    // ── Context assembly: canonical project() is the sole path ────────────────
+    // Sprint-1 A2 (2026-06-02): canonical assembly is the only assembler.
+    // project() walks the append-only EventLog + ResultStore to emit a
+    // pure ProviderRequest. Think.ts supplies promptSchemas (classification-
+    // pruned) and the effective system prompt body (harness-skill-wrapped
+    // when active). profileOverrides were already merged into `profile` by
+    // kernel-runner; here we only need the adapter.
     const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
 
     // Read pending guidance signals, clear from state before LLM call.
@@ -418,15 +328,98 @@ export function handleThinking(
     // - Slice C: profile.recentObservationsLimit threads through here so agents
     //   can opt-in via profileOverrides without touching kernel internals.
     //   Defaults to 0 across all tiers → off by default, preserves prior shape.
-    const {
-      systemPrompt: systemPromptText,
-      messages: conversationMessages,
-    } = defaultContextCurator.curate(state, input, profile, guidance, adapter, {
-      availableTools: promptSchemas,
-      systemPromptBody: effectiveSystemPrompt,
-      toolElaboration: input.toolElaboration,
-      includeRecentObservations: profile.recentObservationsLimit ?? 0,
-    });
+    // RA_ASSEMBLY: canonical context-assembly seam — DEFAULT-ON, opt-out only
+    // via RA_ASSEMBLY=0. Sources systemPrompt+messages from project(); the
+    // opt-out (=0) falls back to the legacy byte-identical curate() path (kept
+    // reachable as a killswitch — deletion deferred). The tools/recall-gate path
+    // below is shared by BOTH arms so they differ only on the context-assembly
+    // variable. Cleared the default-on bar by the hardened cross-tier A/B grid
+    // (N=3, 2 tiers, faithfulness-graded:
+    // wiki/Research/Harness-Reports/assembly-ab-grid-hardened-2026-05-31.md):
+    // project() deterministic 1.0/1.0/1.0 section-coverage both tiers vs legacy
+    // 0.82–0.91 + a hard runaway, −57% local tokens on compact, and terminates
+    // final_answer_tool everywhere (legacy had end_turn/goalAchieved:null
+    // coherence gaps on mid). No cell regresses. Mirrors recallGateEnabled().
+    // Canonical assembly is the SOLE path (Sprint-1 A2, 2026-06-02). The
+    // legacy defaultContextCurator else-branch + the assemblyEnabled gate were
+    // deleted after cross-tier finalbase cleared the equal-or-better invariant
+    // on every tier:
+    //   local (qwen3.5):    project 75% / 100% rel  vs legacy 58% / 76%
+    //   mid (haiku-4-5):    project 50% / 100% rel  vs legacy 50% / 100%  (TIED)
+    //   frontier (sonnet):  project 58% / 76%  rel  vs legacy 58% / 76%   (TIED)
+    // See: wiki/Research/Harness-Reports/sprint1-canonical-collapse/
+    //      finalbase-{local,mid,frontier}.json + frontier-final.json.
+    const { request, trace } = project(
+      fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }, input.task),
+    );
+    const systemPromptText: string = request.systemPrompt;
+    const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
+    const compressionApplied: undefined = undefined;
+    if (process.env.RA_ASSEMBLY_DEBUG === "1") {
+      console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
+    }
+
+    // RA_PROMPT_DUMP — write the assembled prompt+messages to disk for diff.
+    // Strictly diagnostic. Off by default. Path: /tmp/ra-prompt-dump-iter{N}.json
+    if (process.env.RA_PROMPT_DUMP) {
+      const path = `${process.env.RA_PROMPT_DUMP}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require("node:fs") as typeof import("node:fs");
+        fs.writeFileSync(path, JSON.stringify({ iteration: state.iteration, systemPromptText, conversationMessages }, null, 2));
+      } catch { /* diagnostic only — never fail the run */ }
+    }
+
+    // ── Inc 1: recall overflow gate (tier-aware context architecture) ─────────
+    // recall is only usable when a >4000-char tool result was truncated and its
+    // storedKey is surfaced in THIS iteration's window. Below the inline cap the
+    // full data is already inline and no key exists — advertising recall there
+    // lures weak models into BLIND recall with invented keys (trace 01KSV58K:
+    // recall("hn_posts") on a 3928-char inline result → {"found":false}). Gate on
+    // the TRUE post-window messages (conversationMessages), not the all-time
+    // scratchpad — a key that scrolls out of the window is unrecallable.
+    // Calibration may force-enable for models measured as recall-native.
+    //
+    // DEFAULT-ON (opt-out via RA_RECALL_GATE=0) — cleared the project default-on
+    // rule by the Phase-3 cross-tier ablation (ablation-warden, fixture-pinned
+    // N=3, report: wiki/Research/Harness-Reports/phase3-ablation-2026-05-30.md):
+    // gpt-4o-mini pass^k 2/5→5/5, composite +14.7pp, tokens −31.1%, recall-smells
+    // 5→0; cogito tokens −11.2%, +0.9pp, recall-smells 2→0; zero cross-tier
+    // divergence. The blind-recall lure (weak models calling recall() with invented
+    // keys on inline data — recall-as-file-write class) is eliminated.
+    // CAVEAT: MCP array/object data uses several recall-pointer marker formats; a
+    // cross-tier MCP-data ablation is a Phase-4 follow-up before declaring the gate
+    // universal — until then the HN-synthesis/inline-data proof is what justifies
+    // the default. Calibration may force-enable for models measured as recall-native.
+    const recallForceOn = input.calibration?.observationHandling === "uses-recall";
+    const gatedToolSchemas = recallGateEnabled()
+      ? filterRecallByOverflow(filteredToolSchemas, conversationMessages, recallForceOn)
+      : filteredToolSchemas;
+
+    // ── Issue #119 closure (WS-4 Phase 7) — typed CompressionApplied emit ──
+    // When the curator consumed a fresh CompressionRecommendation, publish
+    // the typed `CompressionApplied` event variant (declared in
+    // @reactive-agents/core event-bus.ts AgentEvent union). This is the
+    // sole audit surface for "recommendation → application" closure;
+    // observers see a recommendation→applied pair correlated by taskId +
+    // recommendedAtIteration. EventBus is resolved via serviceOption so the
+    // emit is a no-op when the observability layer is absent.
+    if (compressionApplied) {
+      const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
+        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+      );
+      if (ebOpt._tag === "Some") {
+        yield* ebOpt.value.publish({
+          _tag: "CompressionApplied",
+          taskId: state.taskId,
+          iteration: compressionApplied.iteration,
+          recommendedAtIteration: compressionApplied.recommendedAtIteration,
+          targetTokens: compressionApplied.targetTokens,
+          actualMessageCount: compressionApplied.actualMessageCount,
+          reason: compressionApplied.reason,
+        }).pipe(Effect.catchAll(() => Effect.void));
+      }
+    }
 
     // ── TextParseDriver: inject format instructions into system prompt ────────
     // When the driver is in text-parse mode (local models that can't reliably emit
@@ -441,7 +434,7 @@ export function handleThinking(
     const canInjectDriverInstructions =
       profile.toolSchemaDetail !== "names-only" && profile.toolSchemaDetail !== "names-and-types";
     const driverInstructions = canInjectDriverInstructions
-      ? context.toolCallingDriver.buildPromptInstructions(filteredToolSchemas)
+      ? context.toolCallingDriver.buildPromptInstructions(gatedToolSchemas)
       : "";
 
     // ── Decision Rationale (gated on tool availability) ──────────────────────
@@ -456,7 +449,7 @@ export function handleThinking(
     // capital): RA 485 tok vs Mastra 50 tok for "Paris". Rationale block
     // accounted for ~250 of the 435-tok gap. Gating restores parity on
     // tasks where rationale was never going to be emitted anyway.
-    const hasReachableTools = filteredToolSchemas.length > 0;
+    const hasReachableTools = gatedToolSchemas.length > 0;
     const rationaleInstructions = hasReachableTools
       ? [
           "## Decision Rationale (MANDATORY — every tool call)",
@@ -487,8 +480,8 @@ export function handleThinking(
       frontier: 4000,
     };
     const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
-    const llmTools = filteredToolSchemas.map((ts) => ({
-      name: ts.name,
+    const llmTools = gatedToolSchemas.map((ts) => ({
+      name: sanitizeToolName(ts.name),
       description: ts.description,
       inputSchema: {
         type: "object" as const,
@@ -634,6 +627,22 @@ export function handleThinking(
           terminatedBy: "llm_error",
         },
       });
+    }
+
+    // ── Native-FC name de-sanitization ───────────────────────────────────────
+    // Outbound, tool schemas were sanitized to satisfy the provider regex
+    // (e.g. MCP `github/list_commits` → `github_list_commits`). Map the returned
+    // tool-call names BACK to the canonical registered names BEFORE either
+    // consumer (the toolCallResolver path and the no-resolver native-FC
+    // fallback) so registry lookup/execution is unchanged. The reverse map is
+    // built from the EXACT schemas offered this turn. accumulatedToolCalls is a
+    // mutable list of objects, so in-place name reassignment is safe.
+    const canonicalBySanitized = new Map(
+      gatedToolSchemas.map((ts) => [sanitizeToolName(ts.name), ts.name] as const),
+    );
+    for (const tc of accumulatedToolCalls) {
+      const canon = canonicalBySanitized.get(tc.name);
+      if (canon !== undefined) tc.name = canon;
     }
 
     // ── 0-token diagnostic ───────────────────────────────────────────────────
@@ -783,27 +792,12 @@ export function handleThinking(
 
     // ── v0.11.x: surface model-stated assumptions as AssumptionRecordedEvents.
     // Best-effort; failure is swallowed inside the emitter so think never breaks.
-    {
-      const assumptions = detectAssumptions(thought);
-      if (assumptions.length > 0 && thinking) {
-        // Also scan the hidden thinking trace, capped to the global limit (3).
-        const fromThinking = detectAssumptions(thinking);
-        for (const a of fromThinking) {
-          if (assumptions.length >= 3) break;
-          if (!assumptions.some((x) => x.assumption === a.assumption)) {
-            assumptions.push(a);
-          }
-        }
-      }
-      for (const a of assumptions) {
-        yield* emitAssumptionRecorded({
-          taskId: state.taskId,
-          iteration: state.iteration,
-          assumption: a.assumption,
-          rationale: a.rationale,
-        });
-      }
-    }
+    yield* surfaceAssumptions({
+      thought,
+      thinking,
+      taskId: state.taskId,
+      iteration: state.iteration,
+    });
 
     // Publish thought event with full prompt trace for logModelIO.
     // messages[] carries the complete FC conversation thread with role labels.

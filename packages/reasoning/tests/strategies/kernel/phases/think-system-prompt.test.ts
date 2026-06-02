@@ -7,20 +7,31 @@ const src = readFileSync(
   "utf8"
 )
 
-describe("think.ts structural: no hasICS branch", () => {
+describe("think.ts structural: canonical assembly is the sole path", () => {
   it("does not contain hasICS variable", () => {
     expect(src).not.toContain("const hasICS")
     expect(src).not.toContain("if (hasICS)")
   })
-  it("routes context assembly through ContextManager.build()", () => {
-    // Task 10: think.ts no longer calls buildStaticContext directly;
-    // it delegates to ContextManager.build() which renders the static context.
-    expect(src).toContain("ContextManager.build")
+  it("routes context assembly through canonical project()", () => {
+    // Sprint-1 A2 (2026-06-02): the legacy ContextManager.build → curate()
+    // else-branch was deleted. Canonical project() from
+    // `packages/reasoning/src/assembly/project.ts` is the sole assembler.
+    expect(src).toContain("project(")
+    expect(src).toContain("fromKernelState")
   })
-  it("supports tool elaboration injection via ContextManager options", () => {
-    // Task 10: toolElaboration flows through ContextManager.build() options,
-    // not a direct buildToolElaborationInjection call in think.ts.
-    expect(src).toContain("toolElaboration")
+  it("does not call legacy ContextManager.build or defaultContextCurator.curate", () => {
+    // Canonical sole path — both legacy seams removed. Comments are allowed
+    // (historical context); we pin on actual invocation patterns: a left
+    // paren after the symbol or a structured destructure assignment.
+    expect(src).not.toMatch(/ContextManager\.build\s*\(/)
+    expect(src).not.toMatch(/defaultContextCurator\.curate\s*\(/)
+  })
+  it("does not reference the deleted RA_ASSEMBLY gate", () => {
+    // Sprint-1 A2: flag deletion. The runtime gate `assemblyEnabled()` is gone.
+    // RA_ASSEMBLY_DEBUG (diagnostic env flag) is allowed; the runtime gate
+    // `assemblyEnabled(` is not.
+    expect(src).not.toContain("assemblyEnabled(")
+    expect(src).not.toContain('env.RA_ASSEMBLY ')
   })
   it("does not call buildDynamicContext", () => {
     expect(src).not.toContain("buildDynamicContext")

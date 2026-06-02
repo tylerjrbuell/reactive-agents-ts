@@ -55,6 +55,11 @@ export type {
 export { resolveCapability } from "./capability-resolver.js";
 export type { CapabilityCache, ResolveCapabilityOptions } from "./capability-resolver.js";
 
+// Canonical capability resolver (Sprint-1 B3β). The single function consumers
+// should call when they need model-capability info; returns the canonical
+// `Capability` shape from `@reactive-agents/core/contracts/capability`.
+export { resolveCanonical, warnCapabilityFallback } from "./canonical-resolver.js";
+
 // ─── Types ───
 export type {
   LLMProvider,

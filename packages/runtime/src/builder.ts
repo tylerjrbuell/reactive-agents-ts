@@ -28,6 +28,33 @@ import {
     applyMemoryOptions,
     applyHookRegistration,
 } from './builder/wither-applies.js'
+import {
+    applyWithoutMemory,
+    applyWithLearning,
+    applyWithLeanHarness,
+    applyWithMemoryConsolidation,
+} from './builder/withers/memory.js'
+import {
+    applyWithModel,
+    applyWithBudget,
+} from './builder/withers/model-budget.js'
+import {
+    applyWithTools,
+    applyWithTerminalTools,
+    applyWithDocuments,
+    applyWithRequiredTools,
+    applyWithMCP,
+    applyWithMetaTools,
+} from './builder/withers/tools.js'
+import {
+    applyWithProfile,
+    applyWithErrorHandler,
+} from './builder/withers/profile-error.js'
+import {
+    applyWithSystemPrompt,
+    applyWithReasoning,
+    applyWithVerificationStep,
+} from './builder/withers/prompt-reasoning.js'
 import { wireRiHooks, type RiHooks } from './builder/ri-wiring.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -355,6 +382,10 @@ export class ReactiveAgentBuilder {
      * - `ModelCalibration` object: provide calibration data directly (e.g. after running
      *   the calibration probe suite).
      *
+     * Calibration mode is also resolved automatically from the model id;
+     * explicit override here is most useful with the calibration probe
+     * harness. Composable equivalent: `HarnessProfile.balanced()` ships
+     * registry-driven calibration defaults.
      */
     withCalibration(mode: CalibrationMode): this {
         this._calibration = mode
@@ -372,6 +403,10 @@ export class ReactiveAgentBuilder {
      * and attached to the agent's kernel input. Wave B wires the pipeline into
      * kernel chokepoints; Wave A makes the infrastructure available.
      *
+     * @see {@link compose} — the composable equivalent (architecture-model
+     *   §11.3). The two methods are identical (`compose` is defined as
+     *   `this.withHarness(fn)`); use whichever reads more clearly at the
+     *   call site.
      */
     withHarness(fn: (harness: import('@reactive-agents/core').Harness) => void): this {
         this._harnessRegistrations = [...this._harnessRegistrations, fn]
@@ -446,9 +481,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withSystemPrompt(prompt: string): this {
-        this._systemPrompt = prompt
-        // Also register as harness transform for Wave B+ pipeline integration
-        return this.withHarness((h) => h.on('prompt.system', () => prompt))
+        return this.withHarness(applyWithSystemPrompt(this, prompt))
     }
 
     // ─── Environment Context ──────────────────────────────────────────────────
@@ -461,6 +494,9 @@ export class ReactiveAgentBuilder {
      *
      * @param context - Key-value pairs (e.g., `{ "User Location": "San Francisco, CA" }`)
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(h => h.on('prompt.system', ...))`
+     *   reaches the same prompt-augmentation chokepoint when you need
+     *   full control over the injected text.
      */
     withEnvironment(context: Record<string, string>): this {
         this._environmentContext = { ...this._environmentContext, ...context }
@@ -590,17 +626,7 @@ export class ReactiveAgentBuilder {
     withModel(model: string): this
     withModel(params: ModelParams): this
     withModel(modelOrParams: string | ModelParams): this {
-        if (typeof modelOrParams === 'string') {
-            this._model = modelOrParams
-        } else {
-            this._model = modelOrParams.model
-            if (modelOrParams.thinking !== undefined)
-                this._thinking = modelOrParams.thinking
-            if (modelOrParams.temperature !== undefined)
-                this._temperature = modelOrParams.temperature
-            if (modelOrParams.maxTokens !== undefined)
-                this._maxTokens = modelOrParams.maxTokens
-        }
+        applyWithModel(this, modelOrParams)
         return this
     }
 
@@ -647,6 +673,9 @@ export class ReactiveAgentBuilder {
      * @param enabled - When `true` (default), wire `SkillStoreServiceLive`;
      *                  when `false`, explicitly disable even if memory is on.
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.intelligent} — composable preset that
+     *   bundles this (`enableSkillPersistence: true`) with compounding
+     *   cross-session learning. `HarnessProfile.lean()` is the opt-out.
      */
     withSkillPersistence(enabled: boolean = true): this {
         this._skillPersistence = enabled
@@ -675,12 +704,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withoutMemory(): this {
-        this._enableMemory = false
-        this._memoryExplicitlyDisabled = true
-        this._skillPersistence = false
-        this._sessionPersist = false
-        this._enableExperienceLearning = false
-        this._enableMemoryConsolidation = false
+        applyWithoutMemory(this)
         return this
     }
 
@@ -703,15 +727,13 @@ export class ReactiveAgentBuilder {
      *
      * @param opts - Memory tier + path overrides
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.intelligent} — composable preset that
+     *   bundles memory + skill persistence + reactive intelligence. For
+     *   memory path overrides, compose:
+     *   `.withProfile(HarnessProfile.intelligent()).withMemory({ dbPath })`.
      */
     withLearning(opts?: { tier?: 'standard' | 'enhanced'; dbPath?: string }): this {
-        this._enableMemory = true
-        this._memoryExplicitlyDisabled = false
-        this._memoryTier = opts?.tier === 'enhanced' ? '2' : '1'
-        if (opts?.dbPath) {
-            this._memoryOptions = { ...this._memoryOptions, dbPath: opts.dbPath }
-        }
-        this._skillPersistence = true
+        applyWithLearning(this, opts)
         return this
     }
 
@@ -750,16 +772,7 @@ export class ReactiveAgentBuilder {
      * @throws When neither `tokenLimit` nor `costLimit` is supplied.
      */
     withBudget(limits: BudgetLimits): this {
-        if (limits.tokenLimit === undefined && limits.costLimit === undefined) {
-            throw new Error(
-                'withBudget() requires at least one of `tokenLimit` or `costLimit`.',
-            )
-        }
-        this._budgetLimits = {
-            ...(limits.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
-            ...(limits.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
-            ...(limits.warningRatio !== undefined ? { warningRatio: limits.warningRatio } : {}),
-        }
+        applyWithBudget(this, limits)
         return this
     }
 
@@ -773,6 +786,9 @@ export class ReactiveAgentBuilder {
      *
      * @param hook - Lifecycle hook configuration
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(h => h.before(phase, fn) /
+     *   h.after(phase, fn))` — lifecycle phase chokepoints are also
+     *   first-class on the `Harness` compose API (master plan §11.3).
      */
     withHook(hook: LifecycleHook): this {
         return this.withHarness(applyHookRegistration(this, hook))
@@ -801,6 +817,10 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Optional verification configuration
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.balanced} — composable preset with the
+     *   verifier default-on; `HarnessProfile.lean()` opts out. For
+     *   configuration overrides, compose:
+     *   `.withProfile(HarnessProfile.balanced()).compose(...)`.
      */
     withVerification(options?: VerificationOptions): this {
         this._enableVerification = true
@@ -815,6 +835,9 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Optional budget limit configuration (USD)
      * @returns `this` for chaining
+     * Composable equivalent: `.withObservability({ costs: ... })` for the
+     *   tracking, `.withBudget(...)` for spend caps (master plan §11.4).
+     *   Cost tracking also rides the observability stack.
      */
     withCostTracking(options?: CostTrackingOptions): this {
         this._enableCostTracking = true
@@ -828,6 +851,9 @@ export class ReactiveAgentBuilder {
      *
      * @param registry - Record mapping model IDs to input/output token cost per 1 million tokens
      * @returns `this` for chaining
+     * The `CapabilityRegistry` also resolves model pricing automatically
+     * from the provider's published rates; use this explicit override for
+     * custom / proxied models whose pricing the registry can't infer.
      */
     withModelPricing(
         registry: Record<
@@ -845,6 +871,9 @@ export class ReactiveAgentBuilder {
      *
      * @param provider - PricingProvider implementation (e.g., `openRouterPricingProvider`)
      * @returns `this` for chaining
+     * Dynamic pricing providers can also register with the
+     * `CapabilityRegistry` directly; this explicit builder wiring is handy
+     * for ad-hoc overrides scoped to a single agent.
      */
     withDynamicPricing(
         provider: import('@reactive-agents/llm-provider').PricingProvider
@@ -862,6 +891,9 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Optional circuit breaker thresholds
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.balanced} — composable preset that ships
+     *   the breaker enabled with sensible thresholds. Use this method (or
+     *   `.compose(...)` / environment config) to override those thresholds.
      */
     withCircuitBreaker(
         config?: Partial<
@@ -880,6 +912,9 @@ export class ReactiveAgentBuilder {
      *
      * @returns `this` for chaining
      * @example .withoutCircuitBreaker()
+     * @see {@link HarnessProfile.lean} — composable preset that disables
+     *   registry default-on capabilities (including the breaker) wholesale.
+     *   Use this method when you want to drop only the breaker.
      */
     withoutCircuitBreaker(): this {
         this._circuitBreakerConfig = false
@@ -896,6 +931,8 @@ export class ReactiveAgentBuilder {
      * @param config - Optional rate limiter thresholds (defaults: 60 RPM, 100k TPM, 10 concurrent)
      * @returns `this` for chaining
      * @example .withRateLimiting({ requestsPerMinute: 30, tokensPerMinute: 50_000 })
+     * Limits are also resolved from provider metadata + `CapabilityRegistry`
+     * defaults; use this explicit override to pin a per-deployment policy.
      */
     withRateLimiting(
         config?: import('@reactive-agents/llm-provider').RateLimiterConfig
@@ -910,6 +947,9 @@ export class ReactiveAgentBuilder {
      * Audit logs record all phase transitions, tool invocations, and decision points.
      *
      * @returns `this` for chaining
+     * Composable equivalent: `.withObservability({ audit: true })` /
+     *   `@reactive-agents/observe` exporters — audit is also a verbosity
+     *   tier on the observability stack.
      */
     withAudit(): this {
         this._enableAudit = true
@@ -924,12 +964,13 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Reasoning configuration overrides
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.balanced} — composable preset with
+     *   reasoning + strategy switching default-on; `HarnessProfile.lean()`
+     *   opts out entirely. For strategy overrides, compose:
+     *   `.withProfile(HarnessProfile.balanced()).compose(...)`.
      */
     withReasoning(options?: ReasoningOptions): this {
-        this._enableReasoning = true
-        if (options) this._reasoningOptions = options
-        if (options?.maxIterations !== undefined)
-            this._maxIterations = options.maxIterations
+        applyWithReasoning(this, options)
         return this
     }
 
@@ -943,17 +984,14 @@ export class ReactiveAgentBuilder {
      * the task does not require grounding or synthesis validation.
      *
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.lean} — composable preset for the
+     *   truly-lean composition (MOVE-6 also disables reactive intelligence,
+     *   which the standalone `.withLeanHarness()` flag historically left on).
+     *   Both wire the same `_leanHarness` substrate flag; use the preset when
+     *   you also want RI off.
      */
     withLeanHarness(): this {
-        this._leanHarness = true
-        // Memory v2 spec §lean-mode-interaction: lean mode forces memory
-        // off. Latency- + cost-sensitive workloads do not pay for the
-        // memory stack. User can re-enable explicitly via `.withMemory()`
-        // / `.withLearning()` AFTER `.withLeanHarness()` if they want a
-        // non-standard hybrid.
-        this._enableMemory = false
-        this._memoryExplicitlyDisabled = true
-        this._skillPersistence = false
+        applyWithLeanHarness(this)
         return this
     }
 
@@ -990,32 +1028,7 @@ export class ReactiveAgentBuilder {
      * ```
      */
     withProfile(profile: HarnessProfilePatch): this {
-        // Lean implies the `_leanHarness` infrastructure flag too —
-        // runtime.ts:206 substitutes `leanModeVerifier` and disables
-        // strategy switching off this flag (existing wire path).
-        if (profile.enableVerifier === false || profile.enableStrategySwitching === false) {
-            this._leanHarness = true
-        }
-        if (profile.enableMemory === false) {
-            this._enableMemory = false
-            this._memoryExplicitlyDisabled = true
-        } else if (profile.enableMemory === true) {
-            this._enableMemory = true
-            this._memoryExplicitlyDisabled = false
-        }
-        if (profile.enableReactiveIntelligence === false) {
-            this._enableReactiveIntelligence = false
-        } else if (profile.enableReactiveIntelligence === true) {
-            this._enableReactiveIntelligence = true
-        }
-        if (profile.enableSkillPersistence === false) {
-            this._skillPersistence = false
-        } else if (profile.enableSkillPersistence === true) {
-            this._skillPersistence = true
-        }
-        // `enableStrategySwitching: true` is the default; `false` is
-        // covered by the `_leanHarness` branch above. No separate field
-        // to flip — runtime.ts gates on the leanHarness flag.
+        applyWithProfile(this, profile)
         return this
     }
 
@@ -1029,20 +1042,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withTools(options?: ToolsOptions): this {
-        this._enableTools = true
-        if (options) {
-            const previous = this._toolsOptions
-            this._toolsOptions = {
-                ...previous,
-                ...options,
-                tools: options.tools
-                    ? [...(previous?.tools ?? []), ...options.tools]
-                    : previous?.tools,
-            }
-        }
-        if (options?.resultCompression) {
-            this._resultCompression = options.resultCompression
-        }
+        applyWithTools(this, options)
         return this
     }
 
@@ -1058,13 +1058,11 @@ export class ReactiveAgentBuilder {
      * Equivalent to calling `.withTools({ terminal: options ?? true })`.
      *
      * @returns `this` for chaining
+     * Composable equivalent: `.withTools({ terminal: options ?? true })` —
+     *   terminal access is also a `ToolsOptions` field.
      */
     withTerminalTools(options?: ShellExecuteConfig): this {
-        this._enableTools = true
-        this._toolsOptions = {
-            ...this._toolsOptions,
-            terminal: options ?? true,
-        }
+        applyWithTerminalTools(this, options)
         return this
     }
 
@@ -1077,11 +1075,11 @@ export class ReactiveAgentBuilder {
      *
      * @param docs - Array of document specifications to ingest
      * @returns `this` for chaining
-     *
+     * Composable equivalent: `.withTools({ rag: { documents: docs } })` —
+     *   RAG ingestion is also reachable as a tool-layer concern.
      */
     withDocuments(docs: DocumentSpec[]): this {
-        this._documents = [...this._documents, ...docs]
-        this._enableTools = true // rag-search needs tools enabled
+        applyWithDocuments(this, docs)
         return this
     }
 
@@ -1105,7 +1103,7 @@ export class ReactiveAgentBuilder {
         /** Max redirect attempts before failing (default: 2) */
         maxRetries?: number
     }): this {
-        this._requiredToolsConfig = config
+        applyWithRequiredTools(this, config)
         return this
     }
 
@@ -1115,6 +1113,9 @@ export class ReactiveAgentBuilder {
      * Allows the agent to sign messages and verify the identity of other agents in a network.
      *
      * @returns `this` for chaining
+     * Pair with `.withA2A()` / `.withGateway()` for cross-agent
+     * verification; identity is also available as a registry-driven
+     * capability.
      */
     withIdentity(): this {
         this._enableIdentity = true
@@ -1155,6 +1156,9 @@ export class ReactiveAgentBuilder {
      * 1) explicit `url` argument
      * 2) `CORTEX_URL` environment variable
      * 3) `http://localhost:4321`
+     *
+     * Composable equivalent: `.withObservability({ cortex: { url } })` —
+     *   Cortex is also one of the observability exporters.
      */
     withCortex(url?: string): this {
         this._cortexUrl =
@@ -1167,6 +1171,9 @@ export class ReactiveAgentBuilder {
      *
      * @param options.density - `"tokens"` (default) for TextDelta only, `"full"` for all events
      * @returns `this` for chaining
+     * Per-call equivalent: pass `density` directly to
+     *   `agent.runStream({ density })`. Use this method to set a build-time
+     *   default that every `runStream()` call inherits.
      */
     withStreaming(options?: { density?: StreamDensity }): this {
         this._streamDensity = options?.density ?? 'tokens'
@@ -1182,7 +1189,8 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Telemetry mode and privacy settings
      * @returns `this` for chaining
-     *
+     * Composable equivalent: `.withObservability({ telemetry: ... })` —
+     *   telemetry is also a verbosity tier on the observability stack.
      */
     withTelemetry(config?: TelemetryConfig): this {
         this._telemetryConfig = config ?? { mode: 'isolated' }
@@ -1203,6 +1211,9 @@ export class ReactiveAgentBuilder {
      * @param config.maxFileSizeBytes - Max file size before rotation (default: 10MB)
      * @param config.maxFiles - Max rotated files to keep (default: 5)
      * @returns `this` for chaining
+     * Composable equivalent: `.withObservability({ logging: ... })` —
+     *   structured logging is also a verbosity tier on the observability
+     *   stack.
      */
     withLogging(config: {
         level?: 'debug' | 'info' | 'warn' | 'error'
@@ -1222,6 +1233,9 @@ export class ReactiveAgentBuilder {
      * Allows the agent to pause and request human approval for critical operations.
      *
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(requireApprovalFor(...))` killswitch
+     *   (master plan §11.4) — approval gates also compose through the
+     *   killswitch set.
      */
     withInteraction(): this {
         this._enableInteraction = true
@@ -1236,6 +1250,9 @@ export class ReactiveAgentBuilder {
      *
      * @param options - Custom prompt template definitions
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(h => h.on('prompt.system', ...))` /
+     *   the `@reactive-agents/prompts` template registry — prompt templates
+     *   also flow through the compose chokepoint.
      */
     withPrompts(options?: PromptsOptions): this {
         this._enablePrompts = true
@@ -1249,6 +1266,9 @@ export class ReactiveAgentBuilder {
      * Allows defining and executing complex workflows with approval gates and task dependencies.
      *
      * @returns `this` for chaining
+     * Related primitives: `.withAgentTool()` / `.withDynamicSubAgents()` /
+     *   `.compose(...)` workflow composition can build orchestration from
+     *   the sub-agent + compose primitives directly.
      */
     withOrchestration(): this {
         this._enableOrchestration = true
@@ -1262,6 +1282,12 @@ export class ReactiveAgentBuilder {
      * Required for `.pause()`, `.resume()`, `.stop()`, and `.terminate()` methods on ReactiveAgent.
      *
      * @returns `this` for chaining
+     * Composable equivalent: the 5 shipped killswitches (master plan §11.4 —
+     *   `budgetLimit`, `maxIterations`, `timeoutAfter`, `watchdog`,
+     *   `requireApprovalFor`) via `.compose(killSwitch(...))`.
+     *   Note: `confidenceFloor` was unshipped 2026-05-19 (Tier 0 honesty sweep,
+     *   GH #160) — verify-phase killswitches cannot fire at runtime per the
+     *   compose pipeline contract; see `packages/compose/test/killswitches.test.ts`.
      */
     withKillSwitch(): this {
         this._enableKillSwitch = true
@@ -1276,6 +1302,9 @@ export class ReactiveAgentBuilder {
      *
      * @param contract - Behavioral contract specification
      * @returns `this` for chaining
+     * Composable equivalent: `.withGuardrails(...)` +
+     *   `.compose(h => h.before('act', ...))` — behavioural contracts also
+     *   compose from guardrails plus the pre-act chokepoint.
      */
     withBehavioralContracts(
         contract: import('@reactive-agents/guardrails').BehavioralContract
@@ -1293,6 +1322,8 @@ export class ReactiveAgentBuilder {
      * strategies with higher success rates.
      *
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.intelligent} — composable preset that
+     *   bundles this into the compounding cross-session learning surface.
      */
     withSelfImprovement(): this {
         this._enableSelfImprovement = true
@@ -1306,6 +1337,8 @@ export class ReactiveAgentBuilder {
      * prior runs. Tips are injected into the execution context as `experienceTips`.
      *
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.intelligent} — composable preset that
+     *   bundles this into the cross-agent learning surface.
      */
     withExperienceLearning(): this {
         this._enableExperienceLearning = true
@@ -1320,14 +1353,16 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Optional consolidation thresholds
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.intelligent} — composable preset that
+     *   activates memory consolidation as part of the compounding-
+     *   intelligence stack. Use this method for explicit threshold overrides.
      */
     withMemoryConsolidation(config?: {
         threshold?: number
         decayFactor?: number
         pruneThreshold?: number
     }): this {
-        this._enableMemoryConsolidation = true
-        if (config) this._consolidationConfig = config
+        applyWithMemoryConsolidation(this, config)
         return this
     }
 
@@ -1339,6 +1374,9 @@ export class ReactiveAgentBuilder {
      * whether or not `withEvents()` was called.
      *
      * @returns `this` for chaining
+     * Note: the EventBus is always active; this method is retained for API
+     * compatibility / readability and has no functional effect. Calling
+     * `agent.subscribe(...)` works whether or not `withEvents()` was called.
      */
     withEvents(): this {
         this._enableEvents = true
@@ -1353,6 +1391,10 @@ export class ReactiveAgentBuilder {
      *
      * @param profile - Partial context profile with overrides
      * @returns `this` for chaining
+     * The model id also drives profile auto-resolution by default (see
+     * `resolveProfile()` in `@reactive-agents/reasoning`); use this explicit
+     * override when a specific deployment needs to deviate from the tier
+     * defaults.
      */
     withContextProfile(profile: Partial<ContextProfile>): this {
         this._contextProfile = profile
@@ -1372,9 +1414,7 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withMCP(config: MCPServerConfig | MCPServerConfig[]): this {
-        const configs = Array.isArray(config) ? config : [config]
-        this._mcpServers.push(...configs)
-        this._enableTools = true
+        applyWithMCP(this, config)
         return this
     }
 
@@ -1410,6 +1450,9 @@ export class ReactiveAgentBuilder {
     /**
      * Enable strict build-time validation. Missing API keys and model/provider
      * mismatches become hard errors instead of warnings.
+     *
+     * Equivalent env config: `REACTIVE_AGENTS_STRICT_VALIDATION=1`.
+     *   `HarnessProfile.balanced()` also enables strict build defaults.
      */
     withStrictValidation(): this {
         this._strictValidation = true
@@ -1433,6 +1476,8 @@ export class ReactiveAgentBuilder {
      * @param policy.maxRetries - Maximum number of retries (default: 0 = no retries)
      * @param policy.backoffMs - Base backoff duration in milliseconds (doubled each retry)
      * @example .withRetryPolicy({ maxRetries: 3, backoffMs: 1000 })
+     * The default retry policy also resolves from `CapabilityRegistry`; use
+     * this explicit override to pin a per-deployment policy.
      */
     withRetryPolicy(policy: { maxRetries: number; backoffMs: number }): this {
         this._retryPolicy = policy
@@ -1460,17 +1505,7 @@ export class ReactiveAgentBuilder {
             }
         ) => void
     ): this {
-        this._errorHandler = handler
-        // Also register as harness onError hook for Wave D+ error handling pipeline
-        return this.withHarness((h) => {
-            h.onError('*', (err, ctx) => {
-                handler(err as RuntimeErrors | Error, {
-                    taskId: '', // taskId not available in harness ctx
-                    phase: ctx.phase as string,
-                    iteration: ctx.iteration,
-                })
-            })
-        })
+        return this.withHarness(applyWithErrorHandler(this, handler))
     }
 
     /**
@@ -1480,6 +1515,8 @@ export class ReactiveAgentBuilder {
      * with individual check results. Useful for Kubernetes liveness/readiness probes.
      *
      * @returns `this` for chaining
+     * Composable equivalent: `.withObservability({ health: true })` —
+     *   health checks also ride the observability stack.
      */
     withHealthCheck(): this {
         this._enableHealthCheck = true
@@ -1492,6 +1529,8 @@ export class ReactiveAgentBuilder {
      * is reached. Only iterations that include at least one tool call count.
      * @param n - Minimum number of iterations required
      * @returns `this` for chaining
+     * Composable equivalent: the `.compose(...)` minimum-iteration
+     *   killswitch variant.
      */
     withMinIterations(n: number): this {
         this._minIterations = n
@@ -1504,6 +1543,8 @@ export class ReactiveAgentBuilder {
      * data — facts about the current task, project, or environment.
      * @param context - Key-value pairs injected as a "Task Context" section
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(h => h.on('prompt.system', ...))`
+     *   with task-context formatting.
      */
     withTaskContext(context: Record<string, string>): this {
         this._taskContext = context
@@ -1521,6 +1562,9 @@ export class ReactiveAgentBuilder {
      * @param every - Checkpoint interval in iterations
      * @param options.autoResume - Automatically resume from last checkpoint (default: false)
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(h => h.after('iteration', ...))` +
+     *   the `@reactive-agents/replay` checkpoint store (full PlanStore
+     *   wiring lands in V1.1).
      */
     withProgressCheckpoint(
         every: number,
@@ -1537,14 +1581,13 @@ export class ReactiveAgentBuilder {
      * @param config.mode - "reflect" (default) or "loop"
      * @param config.prompt - Custom verification prompt (optional)
      * @returns `this` for chaining
+     * @see {@link HarnessProfile.balanced} — composable preset with the
+     *   verifier default-on; use `.compose(...)` for custom prompts.
      */
     withVerificationStep(
         config: { mode?: 'reflect' | 'loop'; prompt?: string } = {}
     ): this {
-        this._verificationStep = {
-            mode: config.mode ?? 'reflect',
-            prompt: config.prompt,
-        }
+        applyWithVerificationStep(this, config)
         return this
     }
 
@@ -1554,6 +1597,8 @@ export class ReactiveAgentBuilder {
      * @param validator - Returns { valid, feedback? }; feedback is shown to the agent on retry
      * @param options.maxRetries - Max retry attempts on validation failure (default: 2)
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(h => h.before('finalize', validatorFn))`
+     *   on the output-assembly chokepoint.
      */
     withOutputValidator(
         validator: (output: string) => { valid: boolean; feedback?: string },
@@ -1570,6 +1615,9 @@ export class ReactiveAgentBuilder {
      * with the prior output as context, up to 3 additional times.
      * @param fn - Predicate receiving { output: string }; return true to accept the result
      * @returns `this` for chaining
+     * Composable equivalent: `.compose(h => h.on('arbitrator.decide', fn))`
+     *   — termination predicates also compose through the arbitrator
+     *   chokepoint.
      */
     withCustomTermination(fn: (state: { output: string }) => boolean): this {
         this._customTermination = fn
@@ -1587,6 +1635,10 @@ export class ReactiveAgentBuilder {
      *
      * @example .withReactiveIntelligence(false) // disable RI
      * @example .withReactiveIntelligence({ controller: { earlyStop: true } })
+     * @see {@link HarnessProfile.balanced} (RI default-on) /
+     *   {@link HarnessProfile.lean} (RI off) — composable presets. Config
+     *   overrides also flow through `.compose(...)` or the
+     *   `@reactive-agents/reactive-intelligence` layer.
      */
     withReactiveIntelligence(enabled: boolean): this
     withReactiveIntelligence(
@@ -1623,6 +1675,9 @@ export class ReactiveAgentBuilder {
      * and evolved over time based on agent performance.
      *
      * @param config - Optional skills configuration
+     * @see {@link HarnessProfile.intelligent} — composable preset where
+     *   skills graduate as part of the compounding-intelligence stack. Use
+     *   this method for explicit path / evolution overrides.
      */
     withSkills(config?: {
         paths?: string[]
@@ -1642,19 +1697,11 @@ export class ReactiveAgentBuilder {
      * Enable the Conductor's Suite meta-tools: brief, find, pulse, recall.
      * Also injects the harness skill into the agent's operating context.
      *
+     * Composable equivalent: `.withTools({ metaTools: ... })` — meta-tools
+     *   are also a `ToolsOptions` field.
      */
     withMetaTools(config?: import('./types.js').MetaToolsConfig | false): this {
-        if (config === false) {
-            this._metaTools = false
-        } else {
-            this._metaTools = config ?? {
-                brief: true,
-                find: true,
-                pulse: true,
-                recall: true,
-                harnessSkill: true,
-            }
-        }
+        applyWithMetaTools(this, config)
         return this
     }
 
@@ -1663,6 +1710,8 @@ export class ReactiveAgentBuilder {
      * this duration will be evicted.
      * @param ms - Cache TTL in milliseconds (default: 3,600,000 = 1 hour)
      * @example .withCacheTimeout(600_000) // 10 minutes
+     * Cache lifetime also resolves from `CapabilityRegistry` defaults; use
+     * this explicit override for per-deployment tuning.
      */
     withCacheTimeout(ms: number): this {
         this._cacheTimeoutMs = ms
@@ -1678,6 +1727,8 @@ export class ReactiveAgentBuilder {
      *
      * @param config - Fallback chain configuration with provider, model, and error threshold
      * @returns `this` for chaining
+     * Fallback order also resolves from `CapabilityRegistry` provider tiers;
+     * use this explicit override to pin a multi-provider deployment chain.
      */
     withFallbacks(config: {
         providers?: string[]
@@ -1711,6 +1762,10 @@ export class ReactiveAgentBuilder {
      * (entropy scores, reactive decisions, strategy switches).
      *
      * @param opts.dir - Directory to write JSONL files (default: `.reactive-agents/traces`)
+     *
+     * Composable equivalent: `.withObservability({ tracing: { dir } })` or
+     *   the `REACTIVE_AGENTS_TRACE` env config (process-wide) — tracing also
+     *   rides the observability stack.
      */
     withTracing(opts: { dir?: string } = {}): this {
         this._tracingConfig = { dir: opts.dir ?? `.reactive-agents/traces` }
@@ -1757,14 +1812,19 @@ export class ReactiveAgentBuilder {
      * @throws Error if configuration is invalid or API keys are missing
      */
     async build(): Promise<ReactiveAgent> {
-        // Auto-resolve context profile from model name if not explicitly set
+        // Auto-resolve context profile from model name if not explicitly set.
+        // resolveProfileWithWindow binds maxTokens to the MODEL's real window
+        // (recommendedNumCtx) instead of the tier placeholder — otherwise the
+        // placeholder (e.g. mid=32768) masqueraded as a caller-set cap and the
+        // runner's applyCapabilityMaxTokens skipped resolution, so builder agents
+        // ran at 32768 instead of e.g. haiku's 200k (createRuntime resolved fine
+        // → a same-model asymmetry between the two construction paths).
         if (!this._contextProfile && this._model) {
-            const { resolveProfile } = await import(
+            const { resolveProfileWithWindow } = await import(
                 '@reactive-agents/reasoning'
             )
-            this._contextProfile = resolveProfile(
+            this._contextProfile = resolveProfileWithWindow(
                 this._model,
-                undefined,
                 this._provider
             )
         }

@@ -252,6 +252,10 @@ export const buildBaseRuntimeAndEngine = (
         find: mt.find,
         pulse: mt.pulse,
         recall: mt.recall,
+        // Overhaul A/B (branch overhaul/agentic-core): register write_result_to_file
+        // when RA_OVERHAUL=1 so the model can materialize a deliverable by reference
+        // instead of transcribing / copying the [STORED:] marker.
+        writeResultToFile: process.env.RA_OVERHAUL === "1",
         staticBriefInfo: {
           indexedDocuments: [],
           availableSkills: [],

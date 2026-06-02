@@ -418,9 +418,11 @@ let runtime: ComposableLayer = Layer.mergeAll(
 
 `evaluateTermination(ctx, evaluators[])` + `TerminationDecision { action: 'exit' | 'redirect' | 'continue' | 'fail', ... }`. Action enum maps cleanly to canon's `continue | exit-success | exit-failure | escalate`. Verdict-Override pattern present (controller signal can override agent's apparent success — anti-mission #4 enforced). **No refactor needed for arbitrator.ts itself.** WS-3 + WS-5 may sharpen the emit + error shapes around it.
 
-#### F5 — `builder.ts` has 59 `withX()` methods (2.4× anti-mission #3 threshold)
+#### F5 — `builder.ts` has 59 `withX()` methods ~~(2.4× anti-mission #3 threshold)~~
 
-Anti-mission #3: "24 named override methods IS the failure mode." Current: 59. HarnessProfile presets shipped but withers proliferated alongside (not replaced). **Implication:** WS-2 co-located cleanup should mark redundant withers `@deprecated alias for HarnessProfile.X` and document HarnessProfile as primary API path.
+> **AMENDED 2026-05-29 (CORRECTION 1+2).** Original framing treated method COUNT as the failure mode and prescribed marking redundant withers `@deprecated alias for HarnessProfile.X`. **This was reverted** — it subtracted value from the documented happy path (IDE strikethrough + doc-gen warnings + lint noise) without simplifying code. The failure mode is redundant/confusing API with no canonical path, NOT count. Corrected discipline (see architecture-model §11.2 AMENDED): fluent `.withX()` methods stay first-class + non-deprecated; HarnessProfile presets + `.compose()` are ADDITIVE shortcuts documented as alternatives; each fluent method carries a `@see`/"Composable equivalent:" pointer. Gate `builder-wither-discipline.test.ts` now locks the happy path first-class instead of capping count.
+
+~~Anti-mission #3: "24 named override methods IS the failure mode." Current: 59. HarnessProfile presets shipped but withers proliferated alongside (not replaced). **Implication:** WS-2 co-located cleanup should mark redundant withers `@deprecated alias for HarnessProfile.X` and document HarnessProfile as primary API path.~~ (Superseded by amendment above.)
 
 #### F6 — `reactive-agent.ts` casts are concentrated at internal-handoff sites
 
@@ -433,6 +435,8 @@ Anti-mission #3: "24 named override methods IS the failure mode." Current: 59. H
 `packages/runtime/src/capabilities/profile.ts` (`HarnessProfile.lean()/balanced()/intelligent()`) ships clean presets. **But `HarnessProfilePatch` hard-codes 5 boolean fields** (enableMemory / enableReactiveIntelligence / enableVerifier / enableStrategySwitching / enableSkillPersistence). As registry grows, patch type must grow in lockstep — risks the same anti-mission #3 pattern at the preset layer.
 
 **Implication for plan:** WS-4 (anti-scaffold purge) should generalize `HarnessProfilePatch` to derive from registry (e.g., `Partial<Record<RegisteredCapabilityName, boolean>>`) so adding a registry entry doesn't require touching profile.ts.
+
+**Update 2026-05-29 (WS-4 Phase 5b):** **DEFERRED.** Audit confirms the existing test gate `packages/runtime/tests/harness-profile.test.ts:174-198` ("HarnessProfile registry-drift guard (MOVE-6)") already pins `lean()` patch field count at 5 — any new registry default-on entry without a matching patch field surfaces immediately as a test failure. This is sufficient mitigation: the *risk* of silent drift is closed by the drift detector. The structural refactor (Partial<Record<RegisteredCapabilityName, …>>) would add type-level complexity for zero runtime improvement until the registry actually grows. Re-open when the registry adds its 5th default-on entry (MOVE-2 adaptive-routing being the most likely trigger).
 
 #### F8 — `@reactive-agents/reactive-intelligence` is a substantial framework piece (50+ exports)
 
@@ -552,6 +556,34 @@ After WS-5 ships, re-run the audit (codebase-health-sweep skill v3) and confirm:
 
 ---
 
+#### 5.5a — Re-baselined thresholds (2026-05-29; Branch A decision)
+
+After WS-5b + WS-5c shipped the residual sweep, the original §5.5 thresholds proved unreachable without out-of-scope structural work in 6 different domains. Per re-audit gate report (`wiki/Research/Refactor-Reports/2026-05-29-re-audit-gate.md`) and user adjudication, the gate is re-baselined against **AST-counted floors + ceiling tests**:
+
+| Metric | Original target | Re-baselined target | Locked by |
+|---|---|---|---|
+| `as any` | ≤245 | ≤106 (current actual) | none yet — candidate for follow-up ceiling test |
+| `as unknown as` | ≤40 | ≤67 | `packages/runtime/test/as-unknown-as-ceiling.test.ts` (WS-5b) |
+| `as ComposableLayer` | = 0 | **= 1** (single `finalizeComposition` widening boundary — WS-5d closed the ≤3 re-baseline back to the original =1 intent) | `packages/runtime/test/composable-layer-ceiling.test.ts` (ceiling ≤1, WS-5c→WS-5d) |
+| `Effect<X, unknown>` | ≤52 | ≤20 (AST-counted) | `packages/runtime/test/no-silent-swallow-floor.test.ts` (WS-5 Phase 2) |
+| `console.warn` (active) | n/a | ≤9 | `packages/observability/.../console-ceiling.test.ts` (WS-5 Phase 3) |
+| `console.error` (active) | n/a | ≤0 | (same) |
+| Dead-surface (TagMap/ControllerDecision/Registry) | 0 | 0 | `packages/compose/test/anti-scaffold-tagmap.test.ts` (WS-4 Phase 6) + `decision-coverage.test.ts` (WS-4 Phase 2) + `harness-profile.test.ts` registry-drift guard |
+| Lying-comment | 0 | 0 | manual audit (B-series clean) |
+| AGENTS.md package-tree drift | 0 | 0 | `packages/core/tests/doc-drift.test.ts` (WS-5 Phase 4) |
+
+**Rationale:** The original §5.5 thresholds were grep-derived and overcounted by 5× for `Effect<X,unknown>` and `console.*` (docstring + comment contamination). For `as unknown as` and `as ComposableLayer`, the residual is structurally legitimate type-widening at module/shim/dynamic-import boundaries — not silent swallow. The **4 active ceiling tests** (Phase 2/3 + WS-5b/5c) provide durable anti-regression mechanism replacing the one-time threshold gate.
+
+**WS-6 status: UNBLOCKED 2026-05-29.** Follow-up structural work tracked separately:
+- AgentEvent union expansion (channels owner)
+- LLMConfig schema extension (llm-provider owner)
+- ReasoningExecuteRequest typing (kernel owner)
+- Anthropic SDK typings shim
+- Effect.Cause refactor for errors.ts:355
+- createLightRuntime ↔ createRuntime convergence (path to `as ComposableLayer` = 1)
+
+---
+
 ## 6. Per-Workstream Anatomy
 
 Each workstream gets a **thin spec doc** under `wiki/Planning/Implementation-Plans/2026-05-28-ws-N-<name>.md` with a uniform shape. The master plan does not duplicate per-WS detail.
@@ -610,7 +642,7 @@ Owner: claude main thread + user authorization (release-warden's manifest is GAT
 - Discriminate `AgentEvent` union on `_tag` for narrowing in user code (closes #163 + collapses 13+ casts at cortex/ui)
 - Add `ReactiveAgentInternalView` interface OR re-type `queryGatewayStatus`/`startGateway` receivers in `agent/gateway-runner.ts` to remove the 2× `this as any` casts at reactive-agent.ts:1385,1413 (HS-A-01)
 
-**Phase 3 — Builder anti-mission #3 mitigation:** `builder.ts` has 59 `withX()` methods (2.4× anti-mission threshold). Mark redundant withers `@deprecated alias for HarnessProfile.{lean,balanced,intelligent}()`. Quickstart docs use `HarnessProfile` as primary API path. Withers stay backward-compatible.
+**Phase 3 — Builder API discipline (AMENDED 2026-05-29; original @deprecated approach REVERTED via CORRECTION 1+2):** ~~Mark redundant withers `@deprecated alias for HarnessProfile.{lean,balanced,intelligent}()`.~~ Fluent `.withX()` methods stay first-class + non-deprecated (documented happy path). HarnessProfile presets + `.compose()` are additive shortcuts. Each fluent method carries a `@see`/"Composable equivalent:" pointer to the composable path. Quickstart docs present BOTH the fluent path AND HarnessProfile, framed as complementary. Withers stay fully supported, not deprecated.
 
 **Scope explicitly OUT of WS-2:**
 - Rewriting layer construction logic (each individual layer's internals)
@@ -643,11 +675,13 @@ Owner: kernel-warden. Estimated 2 sessions (Phase 1+2 = session 1; Phase 3+4+5 =
 
 For every declared surface element without paired live emit + consumer: ship the wiring in this WS, OR delete the declaration. Disposition table:
 
-- `@reactive-agents/observe` package (#170): wire one demo consumer in `examples/` + add to umbrella, OR remove from monorepo.
-- 5 unused M12 hooks (K-08): wire or remove (commit by commit).
-- 4 dead Compose tags (G-9 / #112): wire in capability emit (depends on WS-3 boundaries).
-- `confidenceFloor` killswitch (#160): ship or unship + docs delta.
+- ~~`@reactive-agents/observe` package (#170): wire one demo consumer in `examples/` + add to umbrella, OR remove from monorepo.~~ **✅ DONE 2026-05-29 (commits `7ff68084` RED + `5c6f5fa1` GREEN)** — wired umbrella sub-export + apps/examples/src/observe/otel-export.ts (O29) + bonus extraOptLayer EventBus wiring fix at `runtime.ts:926`.
+- ~~5 unused M12 hooks (K-08): wire or remove (commit by commit).~~ **✅ ALREADY DONE 2026-05-24** — spec premise stale. Per `packages/llm-provider/tests/m12-provider-adapter-hooks.test.ts` header (HEAD): the original 7 numbered M12 hooks were audited 2026-05-24; 6 declarations with zero call sites + zero impls were removed from `ProviderAdapter`; `parseToolCalls` is the surviving numbered hook (wired across all 5 providers via `selectAdapter`). The 7 named ProviderAdapter methods on `localModelAdapter` (systemPromptPatch / taskFraming / toolGuidance / continuationHint / errorRecovery / synthesisPrompt / qualityCheck) all retain ≥1 production call site under `packages/reasoning/src/` (verified-by `grep adapter\\.<hook>` 2026-05-29). No Phase 4 production code required.
+- ~~4 dead Compose tags (G-9 / #112): wire in capability emit (depends on WS-3 boundaries).~~ **✅ DONE in WS-4 Phase 1 (2026-05-28 verified) + Phase 6 (2026-05-29)** — 7/7 TagMap entries have emit+consumer pairs; Phase 6 plugged 2 emits firing into void (`nudge.loop-detected`, `lifecycle.failure`) with documented consumers in `apps/examples/src/advanced/20-compose-harness.ts`. Gate pinned at `packages/compose/test/anti-scaffold-tagmap.test.ts` (commit `9f99afda`).
+- ~~`confidenceFloor` killswitch (#160): ship or unship + docs delta.~~ **✅ DONE in WS-4 Phase 5a (2026-05-29 commit `baf459b8`)** — unship-mode confirmed; docstring at `builder.ts:1362-1370` no longer lists confidenceFloor in the killswitch set; honesty footnote added citing `compose/test/killswitches.test.ts` un-registration assertion.
 - `strategy-switching` registry entry with null liftEvidence (cf-25): gather evidence OR convert to opt-in.
+- **Verifier severity ladder (#121)** ~~severity-ladder scaffold~~ **✅ ALREADY SHIPPED (issue CLOSED on GH; verified 2026-05-29)**. Severity contract typed at `packages/reasoning/src/kernel/capabilities/verify/verifier.ts:126` (`VerificationSeverity = "pass" | "warn" | "reject" | "escalate"`); helpers `checkSeverity()` (line 159) + `resolveResultSeverity()` (line 229); 4 producer sites (lines 280, 295, 322, 500); aggregation `hasEscalate` → `overallSeverity` (lines 582-587); arbitrator escalate consumption at `decide/arbitrator.ts:491,939,1052`. F4 reproduction success metric pinned at `packages/reasoning/tests/kernel/capabilities/verify/verifier.test.ts:335` ("rationale XML leak → output-not-harness-parrot severity=reject"). No production code required.
+- **Cross-session skill persistence default-on (#122)** ~~verify default+evidence pair~~ **✅ ALREADY SHIPPED (issue CLOSED on GH; verified 2026-05-29)**. Per `packages/runtime/src/builder.ts:185,309,667`: `_enableMemory: boolean = true` + `_skillPersistence?: boolean = undefined` ⇒ default-on policy. Test coverage: `packages/runtime/src/__tests__/builder-with-skill-persistence.test.ts` invariants (a)(b)(c)(d) — invariant (d) explicitly pins "skillPersistence unset + enableMemory:true → wired". Cross-session lift evidence: `packages/memory/tests/skill-cross-session-recall.test.ts` ("M6 acceptance: >70%"). Memory ref [[project_v011_1_shipped]] confirms HS-122 graduated 2026-05-22 via commit `44e4fbcf`. No production code required.
 
 Owner: compose-warden (Compose) + ablation-warden (registry).
 
@@ -730,12 +764,13 @@ The refactor's foundation is declared canonical when ALL of the following hold s
 - [ ] Kernel capability dirs form DAG (zero cycles; first-hand walk + CI lint; baseline 3 cycles)
 - [ ] `state.status =` raw assignment sites ≤ **10** (from baseline 27; migrate to `transitionState()`)
 - [ ] Other raw `state.X =` mutations ≤ **10** (from baseline ~33)
-- [ ] `builder.ts` `withX()` method count ≤ **30** (from baseline 59) — others marked `@deprecated alias for HarnessProfile.X`
+- [x] ~~`builder.ts` `withX()` method count ≤ **30**~~ **AMENDED 2026-05-29 (CORRECTION 1+2): count is not the metric.** Instead: documented happy-path withers EXIST + are NOT `@deprecated`; HarnessProfile/`.compose()` additive; gate `builder-wither-discipline.test.ts` locks happy-path first-class. LOC ceiling tests removed (cohesion over line-count).
 - [ ] `HarnessProfilePatch` type derives from CapabilityRegistry entries (no hard-coded boolean fields)
 - [ ] `StrategyFn` input shape ≤ **15 fields** (from baseline 30+; substrate-derived context object)
 - [ ] Every entry in TagMap / ControllerDecision union / CapabilityRegistry has paired emit + consumer (CI lint)
 - [ ] All 35 packages appear in AGENTS.md package tree (CI diff)
-- [ ] No production file >1500 LOC (relaxed from N* §8.1 ≤500; WS-6 target)
+- [ ] ~~No production file >1500 LOC~~ **AMENDED 2026-05-29: LOC ceiling tests removed (CORRECTION 4). File health judged by COHESION, not line count.** WS-6 decomposes only where a genuine cohesive sub-unit exists; a single cohesive unit is left large rather than split to satisfy a number. (LOC stays a soft signal for "look here for cohesion opportunities," never a gate.)
+- [ ] `runner.ts` emit-related line count ≤ **30** (architecture model §12.2a amendment; runner-orchestrated emits legitimate; WS-3 Phase 5a+5b shipped capability-event migrations for verifier-verdict + BudgetSignal)
 
 ### 8.2 Behavioral (test-checkable)
 

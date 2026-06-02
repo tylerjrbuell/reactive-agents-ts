@@ -917,7 +917,22 @@ describe("runKernel — required tools guard", () => {
             steps: [
               ...state.steps,
               makeStep("action", "web-search"),
-              makeStep("observation", "artifact-data"),
+              // observationResult required for deliverable eligibility after
+              // 2026-06-01 strict-metadata fix (deliverable.ts). Test intent
+              // is "deliverable IS eligible, but required-tools gate overrides
+              // it" — so explicitly mark the observation as a successful tool
+              // result. Without metadata, the deliverable count is zero and
+              // the runner takes the required-tool-nudge path instead.
+              makeStep("observation", "artifact-data", {
+                observationResult: {
+                  success: true,
+                  toolName: "web-search",
+                  displayText: "preview",
+                  category: "web-search" as const,
+                  resultKind: "data" as const,
+                  preserveOnCompaction: false,
+                },
+              }),
             ],
           }),
         );

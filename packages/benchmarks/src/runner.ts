@@ -6,6 +6,7 @@
  * measuring real-world latency, token usage, cost, and correctness.
  */
 import type { BenchmarkTask, TaskResult, OverheadMeasurement, BenchmarkReport, Tier } from "./types.js";
+import { toolsToExpose } from "@reactive-agents/core";
 import { BENCHMARK_TASKS } from "./task-registry.js";
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
@@ -21,8 +22,26 @@ import type {
   SessionReproducibility,
 } from "./types.js"
 import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
+import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs } from "./session.js"
+
+/**
+ * Apply env vars for the duration of a variant's run, return a restore fn.
+ * Generalises the VERIFIER_ENV pattern so env-gated arms (e.g. `RA_ASSEMBLY=0`)
+ * can run as `HarnessConfig.env` on a normal InternalVariant.
+ */
+export function withConfigEnv(env: Readonly<Record<string, string>> | undefined): () => void {
+  if (!env) return () => {};
+  const prev: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(env)) { prev[k] = process.env[k]; process.env[k] = v; }
+  return () => {
+    for (const k of Object.keys(env)) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  };
+}
 import { scoreTask, computeReliability } from "./judge.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
@@ -538,7 +557,7 @@ export const runBenchmarks = async (
 
 // ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
 
-const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS] as const
+const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...CONTEXT_STRESS_TASKS] as const
 
 function getGitSha(): string {
   try { return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim() }
@@ -569,7 +588,32 @@ async function runInternal(
       .withModel(model.model)
       .withMaxIterations(maxIter)
 
-    if (config.tools) builder.withTools()
+    if (config.tools) {
+      // Sprint-1 TaskContract bridge: prefer explicit task.tools when present
+      // (toolsToExpose returns required+available names + auto-adds file-read
+      // for fixture-bearing tasks). Falls back to legacy fixtures-heuristic for
+      // tasks not yet migrated to the contract.
+      const declared = task.tools
+        ? toolsToExpose({
+            prompt: task.prompt,
+            tools: task.tools,
+            fixtures: task.fixtures,
+            success: { type: "regex", pattern: "" }, // unused by toolsToExpose
+          })
+        : undefined
+      // Always include file-write alongside file-read so write-flow tasks
+      // (e.g. summary-to-file) work whenever fixtures exist.
+      const builtins = declared
+        ? [...new Set([...declared, ...(task.fixtures?.length ? ["file-write"] : [])])]
+        : task.fixtures && task.fixtures.length > 0
+          ? ["file-read", "file-write"]
+          : undefined
+      if (builtins && builtins.length > 0) {
+        builder.withTools({ builtins })
+      } else {
+        builder.withTools()
+      }
+    }
     if (config.guardrails || task.requiresGuardrails) builder.withGuardrails()
 
     if (config.reasoning) {
@@ -607,10 +651,30 @@ async function runInternal(
     if (config.verifier === "noop") {
       process.env[VERIFIER_ENV] = "1";
     }
+    // Generalised env-arm passthrough: variants like ra-full-assembly-off set
+    // `config.env = { RA_ASSEMBLY: "0" }` to flip framework env-gated paths for
+    // the duration of this cell. Same try/finally discipline as VERIFIER_ENV.
+    const restoreConfigEnv = withConfigEnv(config.env);
 
     try {
+      // Path-resilient prompt construction (2026-06-02 sprint-1 U2 fix).
+      // Previously prepended "Working directory: <tmpDir>. Use full path..."
+      // as an advisory. Frontier models (sonnet) and weak local models both
+      // dropped the working-dir prefix and emitted file-read("report.md")
+      // relative → ENOENT → N=3 measurement noise that masked the real
+      // arm-level signal on cs-overflow-* cells. The fix: substitute each
+      // declared fixture's relative path with its absolute path INSIDE the
+      // task prompt itself, so the model has nothing relative to drop.
+      let resolvedPrompt = task.prompt
+      for (const fixture of task.fixtures ?? []) {
+        const absPath = join(tmpDir, fixture.path)
+        // Word-boundary replacement so "report.md" inside "my-report.md"
+        // doesn't get corrupted; preserves the original task prose otherwise.
+        const re = new RegExp(`\\b${fixture.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g")
+        resolvedPrompt = resolvedPrompt.replace(re, absPath)
+      }
       const prompt = task.fixtures?.length
-        ? `Working directory for this task: ${tmpDir}\n\nAll task files (e.g. ${task.fixtures.map(f => f.path).join(", ")}) are located in that directory. Use the full path when reading files.\n\n${task.prompt}`
+        ? `Working directory for this task: ${tmpDir}\n\n${resolvedPrompt}`
         : task.prompt
       const timeoutP = new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs))
       const result = await Promise.race([agent.run(prompt), timeoutP])
@@ -627,6 +691,7 @@ async function runInternal(
         if (prevVerifierEnv === undefined) delete process.env[VERIFIER_ENV];
         else process.env[VERIFIER_ENV] = prevVerifierEnv;
       }
+      restoreConfigEnv();
     }
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e)

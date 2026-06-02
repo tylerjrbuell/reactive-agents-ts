@@ -166,17 +166,15 @@ export type ReactiveIntelligenceConfig = {
 
 // ─── Controller Types (Phase 2) ───
 //
-// Disposition (HS-116 / Audit R3 — sweep-2026-05-23): 13 declared variants;
-// 5 fire in failure-corpus (✅ ACTIVE), 4 have evaluators+handlers but no
-// corpus-confirmed firing (🟡 UNFIRED — corpus expansion follow-up), 4 have
-// evaluators but no registered handler (⚠ UNWIRED — handler-registration
-// follow-up). Each variant below is tagged with its current state. Anti-
-// scaffold discipline (North Star §9): variants without a wired-and-fired
-// path SHOULD NOT graduate from `@experimental` to public API.
-//
-// Followups filed: corpus expansion (failure-corpus to trigger UNFIRED
-// variants), handler registration (wire UNWIRED variants OR delete after
-// review).
+// Disposition (HS-116 / Audit R3 / WS-4 Phase 2 prune — 2026-05-28):
+// 9 declared variants; 5 fire in failure-corpus (✅ ACTIVE), 4 have
+// evaluators+handlers but no corpus-confirmed firing (🟡 UNFIRED — corpus
+// expansion follow-up). The 4 prior handler-less variants
+// (prompt-switch / memory-boost / skill-reinject / human-escalate) were
+// pruned per master plan §3.6 RC-3 + anti-mission #6 — evaluators existed
+// but no handlers were registered, so the dispatcher rejected them with
+// `no-handler`. Re-introduce only when a real dispatch handler ships
+// alongside the variant (anti-scaffold discipline, North Star §9).
 
 export type ControllerDecision =
   /** ✅ ACTIVE — fires on entropy convergence / iteration budget low. */
@@ -200,12 +198,6 @@ export type ControllerDecision =
    * scenarios in corpus.
    */
   | { readonly decision: "skill-activate"; readonly skillName: string; readonly trigger: "entropy-match" | "task-match"; readonly confidence: string }
-  /**
-   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/prompt-switch.ts)
-   * but NO handler registered in handlers/index.ts. Decision will never
-   * reach a handler. Either register handler OR delete variant + evaluator.
-   */
-  | { readonly decision: "prompt-switch"; readonly fromVariant: string; readonly toVariant: string; readonly reason: string }
   /** ✅ ACTIVE — fires on detected missing required tool / capability gap. */
   | { readonly decision: "tool-inject"; readonly toolName: string; readonly reason: string }
   /**
@@ -214,23 +206,6 @@ export type ControllerDecision =
    * tool with consistent error).
    */
   | { readonly decision: "tool-failure-redirect"; readonly failingTool: string; readonly streakCount: number; readonly reason: string }
-  /**
-   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/memory-boost.ts)
-   * but NO handler registered. Decision will never reach a handler.
-   */
-  | { readonly decision: "memory-boost"; readonly from: "recent" | "keyword"; readonly to: "semantic"; readonly reason: string }
-  /**
-   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/skill-reinject.ts)
-   * but NO handler registered. Decision will never reach a handler.
-   */
-  | { readonly decision: "skill-reinject"; readonly skillName: string; readonly reason: string }
-  /**
-   * @experimental ⚠ UNWIRED — evaluator exists (controller/evaluators/human-escalate.ts)
-   * but NO handler registered. HITL approval gate exists separately at
-   * `packages/interaction/services/interaction-manager.ts:approvalGate`; this
-   * variant is the auto-escalation trigger — needs handler bridging to HITL.
-   */
-  | { readonly decision: "human-escalate"; readonly reason: string; readonly decisionsExhausted: readonly string[] }
   /** ✅ ACTIVE — fires on N consecutive non-progressing iterations. */
   | { readonly decision: "stall-detect"; readonly reason: string; readonly stalledIterations: number }
   /**
@@ -297,6 +272,17 @@ export type ControllerEvalParams = {
    * own output bookkeeping).
    */
   readonly hasUserOutput?: boolean;
+  /**
+   * Operational model tier — drives tier-gated evaluator thresholds (e.g.
+   * stall-detect's STALL_WINDOW_BY_TIER: local=2, mid=3, large=4, frontier=5).
+   *
+   * Caller (kernel `reactive-observer`) supplies `profile.tier`. When omitted,
+   * evaluators default to `"local"` (most conservative window) so outer-loop
+   * synthetic callers (plan-execute / ToT) that don't plumb tier keep prior
+   * behavior. DEFECT 1 fix (2026-05-31): before this field the tier was
+   * hardcoded `"local"` in stall-detect, making the per-tier table dead.
+   */
+  readonly tier?: "local" | "mid" | "large" | "frontier";
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {

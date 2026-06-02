@@ -485,6 +485,177 @@ function buildPlainTextToolPreview(
   return { previewStart, previewText, bannerLinesSkipped: previewStart };
 }
 
+// ── Age-aware tool-result curation (Spike 1 — curation ROOT) ─────────────────
+//
+// ROOT cause (2026-05-30 curation spec): RA compresses every tool result at
+// PRODUCE time, size-only, before the model synthesizes; conversation-assembly
+// then rehydrates each result to full-up-to-4000 regardless of age. The single
+// most-recent tool result IS the synthesis target the model reasons over THIS
+// turn — a fixed 4000 cap (or the 600-char produce-time preview that bleeds in
+// when no storedKey is present) starves frontier/mid faithfulness and triggers
+// the "the results were truncated, let me retrieve the full content" loop.
+//
+// The canon (Anthropic tool-result clearing) keeps the CURRENT body full and
+// clears OLD bodies. This seam does exactly that, OPT-IN and reversible:
+//   - most-recent K tool_results → rehydrated FULL from scratchpad up to a
+//     WINDOW-SCALED ceiling (so a single current result is virtually never
+//     crushed on frontier/mid; a sane floor protects tiny local windows).
+//   - aged tool_results → compressToolResult preview + the SAME storedKey
+//     pointer (recall/rehydration stays intact — this is NOT recall removal).
+//
+// DEFAULT-ON (opt-out via RA_CURATION_AGEAWARE=0): the kernel calls
+// applyAgeAwareCuration whenever `curationAgeAware()` is true. With the flag
+// explicitly off, the produce-time + conversation-assembly path is
+// byte-identical to today. The function itself is pure and never mutates input.
+
+/**
+ * Whether age-aware tool-result curation is active for this run. DEFAULT-ON —
+ * opt-out only via `RA_CURATION_AGEAWARE=0`, mirroring `recallGateEnabled()`'s
+ * exact env idiom. Extracted as a named seam so the default-on / opt-out
+ * behavior is directly testable and the controller can run a clean A/B
+ * faithfulness ablation (arm A = RA_CURATION_AGEAWARE=0 off, arm B = on).
+ *
+ * Default flipped from opt-in 2026-05-30 on wire ground truth + user mandate
+ * ("present optimally, don't hide data"): with curation OFF the flat 4000-char
+ * conversation-assembly truncation crushed the synthesis target — cogito:14b
+ * received a 4087-char truncated commit list and wrote only 2-3 of 10 commits
+ * (done_reason=stop, not an output cap). With curation ON the same call
+ * received 21646 chars and the model wrote all 10. Spike1 cross-tier ablation
+ * (799487c1): sonnet T3-strict 1/3→3/3, gpt+qwen flat, ZERO regression on the
+ * trusted metric.
+ */
+export const curationAgeAware = (
+  env: NodeJS.ProcessEnv = process.env,
+): boolean => env.RA_CURATION_AGEAWARE !== "0";
+
+/** Window-scaled char ceiling for the most-recent (synthesis-target) result.
+ *  maxTokens × fraction × ~4 chars/token, with a floor so tiny local windows
+ *  still keep a usable current result. These fractions are the genuinely
+ *  tunable knobs the cross-tier ablation will calibrate. */
+const RECENT_WINDOW_FRACTION = 0.35;
+const RECENT_CHAR_FLOOR = 4000;
+/** Aged results get a much smaller budget so multi-iteration token cost stays
+ *  bounded (consistent with the Phase-3 obs-digest KEEP verdict). */
+const AGED_WINDOW_FRACTION = 0.04;
+const AGED_CHAR_FLOOR = 600;
+const AGED_CHAR_CEIL = 4000;
+
+const CHARS_PER_TOKEN = 4;
+
+function recentCharBudget(maxTokens: number | undefined): number {
+  const win = maxTokens ?? 32_768;
+  return Math.max(RECENT_CHAR_FLOOR, Math.floor(win * RECENT_WINDOW_FRACTION * CHARS_PER_TOKEN));
+}
+
+function agedCharBudget(maxTokens: number | undefined): number {
+  const win = maxTokens ?? 32_768;
+  const scaled = Math.floor(win * AGED_WINDOW_FRACTION * CHARS_PER_TOKEN);
+  return Math.min(AGED_CHAR_CEIL, Math.max(AGED_CHAR_FLOOR, scaled));
+}
+
+/**
+ * Age-aware tool-result curation. Operates on KernelMessage[] BEFORE
+ * `toProviderMessage` strips `storedKey`, so the reversible pointer is visible.
+ *
+ * - "keep-full" is the most-recent K TURNS (default K=1): every tool_result
+ *   after the K-th-from-last `assistant` message carrying tool calls. A turn is
+ *   the synthesis unit — a parallel batch lands as one assistant message +
+ *   several tool_results, and ALL of those siblings are the data the model
+ *   reasons over THIS turn, so they are all kept full. (Position-based K=1 would
+ *   wrongly compress same-turn siblings of a parallel batch.) Each kept result
+ *   that carries a `storedKey` is rehydrated to the FULL scratchpad body,
+ *   truncated only at the window-scaled recent ceiling.
+ * - All older tool_result messages that carry a `storedKey` are recompressed to
+ *   a preview via `compressToolResult` with the aged budget; the storedKey is
+ *   preserved on the message so recall still works.
+ * - tool_results WITHOUT a storedKey (small, already fully inline) and all
+ *   non-tool_result messages pass through untouched.
+ *
+ * Pure — returns a new array; never mutates the input. The caller gates the
+ * whole invocation behind `curationAgeAware()`.
+ *
+ * @param messages   conversation thread (KernelMessage[], storedKey intact)
+ * @param scratchpad full-body store keyed by storedKey
+ * @param profile    context profile (maxTokens drives the window-scaled budget)
+ * @param k          number of most-recent TURNS to keep full (K=1 start)
+ */
+export function applyAgeAwareCuration<
+  M extends
+    | { readonly role: string; readonly content: string }
+    | { readonly role: "assistant"; readonly content: string; readonly toolCalls?: readonly unknown[] }
+    | { readonly role: "tool_result"; readonly toolCallId: string; readonly toolName: string; readonly content: string; readonly storedKey?: string },
+>(
+  messages: readonly M[],
+  scratchpad: ReadonlyMap<string, string>,
+  profile: { readonly maxTokens?: number },
+  k = 1,
+): M[] {
+  // Indices of tool_result messages, oldest → newest in array order.
+  const toolResultIdxs: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i]!.role === "tool_result") toolResultIdxs.push(i);
+  }
+  if (toolResultIdxs.length === 0) return [...messages];
+
+  // "Recent" = tool_results belonging to the most-recent K turns. A turn opens
+  // at an assistant message carrying tool calls. We find the index of the
+  // K-th-from-last such assistant message; every tool_result at or after it is
+  // kept full (covers all siblings of a final parallel batch).
+  const turnStartIdxs: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i]!;
+    if (
+      m.role === "assistant" &&
+      Array.isArray((m as { toolCalls?: readonly unknown[] }).toolCalls) &&
+      ((m as { toolCalls?: readonly unknown[] }).toolCalls?.length ?? 0) > 0
+    ) {
+      turnStartIdxs.push(i);
+    }
+  }
+  const kTurns = Math.max(0, k);
+  const cutoffIdx =
+    kTurns === 0 || turnStartIdxs.length === 0
+      ? Number.POSITIVE_INFINITY // keep nothing full when K=0
+      : (turnStartIdxs[Math.max(0, turnStartIdxs.length - kTurns)] ?? 0);
+  const recentSet = new Set(toolResultIdxs.filter((i) => i >= cutoffIdx));
+  const recentBudget = recentCharBudget(profile.maxTokens);
+  const agedBudget = agedCharBudget(profile.maxTokens);
+
+  return messages.map((msg, i) => {
+    if (msg.role !== "tool_result") return msg;
+    const tr = msg as M & { toolName: string; storedKey?: string; content: string };
+    const storedKey = tr.storedKey;
+    // No storedKey → result was small enough to live fully inline already.
+    if (!storedKey) return msg;
+    const full = scratchpad.get(storedKey);
+    if (full === undefined) return msg;
+
+    if (recentSet.has(i)) {
+      // Synthesis target — keep FULL up to the window-scaled recent ceiling.
+      const content =
+        full.length <= recentBudget
+          ? full
+          : full.slice(0, recentBudget) +
+            `\n  ...truncated (${full.length - recentBudget} chars). Full available via recall("${storedKey}", full: true).`;
+      return { ...tr, content } as M;
+    }
+
+    // Aged — compress to a preview + reversible pointer. `compressToolResult`
+    // mints its OWN fresh `_tool_result_N` key (and stashes nothing here — its
+    // `stored` side-channel is ignored). The full body already lives under the
+    // message's existing `storedKey`, so we remap every minted-key reference in
+    // the preview text back to that real key. Otherwise a recall against the
+    // minted key would miss (body is under storedKey), breaking reversibility.
+    const compressed = compressToolResult(full, tr.toolName, agedBudget, 3);
+    const mintedKey = compressed.stored?.key;
+    const content =
+      mintedKey && mintedKey !== storedKey
+        ? compressed.content.split(mintedKey).join(storedKey)
+        : compressed.content;
+    return { ...tr, content } as M;
+  });
+}
+
 /**
  * Computes the novelty ratio of new text vs accumulated prior content.
  * Returns 0.0 (entirely duplicate) to 1.0 (entirely new).

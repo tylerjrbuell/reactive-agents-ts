@@ -19,7 +19,7 @@ import type { KernelMetaToolsConfig } from "../../types/kernel-meta-tools.js";
 import type {
   ToolElaborationInjectionConfig,
   NextMovesPlanningConfig,
-} from "../../kernel/capabilities/act/tool-gating.js";
+} from "../../kernel/capabilities/decide/tool-gating.js";
 import type { HarnessPipeline, KernelStateLike } from "@reactive-agents/core";
 
 // ── Cross-package state bridge ───────────────────────────────────────────────
@@ -283,6 +283,26 @@ export interface KernelMeta {
     readonly warningRatio?: number;
   };
 
+  // ── PostCondition spine — derived-once state-grounded success authority ──────
+  /**
+   * Deterministic post-conditions derived ONCE at kernel-start from the task +
+   * requiredTools (no LLM, no fs). Seeded by runner.ts by default; opt-out via
+   * `RA_POST_CONDITIONS=0` — absent on opt-out runs so serialization stays
+   * byte-identical. Both gates read this SINGLE stored set:
+   *   - the Arbitrator's mid-loop steer gate (`applyPostConditionGate`), via
+   *     `arbitrationContextFromState` → `ArbitrationContext.postConditions`;
+   *   - the terminal hard-stop in `kernel/loop/terminate.ts`, which demotes any
+   *     imperative termination (stall/harness-deliverable, loop-graceful,
+   *     oracle-forced, …) to `status:"failed"` when a stored condition is unmet
+   *     by the ledger — so an exhausted/bypassed stall cannot deliver a false
+   *     success.
+   *
+   * Structural type — declared loosely here to avoid a runtime cycle with the
+   * verify capability; the canonical type is `PostCondition[]` from
+   * `kernel/capabilities/verify/post-conditions.ts`.
+   */
+  readonly postConditions?: readonly import("../capabilities/verify/post-conditions.js").PostCondition[];
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
@@ -364,6 +384,16 @@ export interface KernelState {
    * Stage 2: after 2 nudges, force-exit with terminatedBy: "oracle_forced".
    */
   readonly readyToAnswerNudgeCount?: number;
+
+  /**
+   * Custom environment context (date overrides + caller-supplied key-value
+   * fields) threaded onto the system-prompt Environment block. Seeded once from
+   * KernelInput.environmentContext by runner.ts; read by the assembly adapter
+   * (from-kernel-state.ts) so project() reproduces the caller's custom fields.
+   * Was previously only on KernelInput and never copied to state → custom
+   * fields dropped under RA_ASSEMBLY (subkernel-env-threading regression).
+   */
+  readonly environmentContext?: Readonly<Record<string, string>>;
 
   /**
    * The last meta-tool that was called (brief, pulse, find, recall).

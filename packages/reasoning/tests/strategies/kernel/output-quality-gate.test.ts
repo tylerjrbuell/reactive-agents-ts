@@ -437,4 +437,34 @@ describe("output quality gate", () => {
     expect(assembled).toContain("Bitcoin: 70836.96");
     expect(assembled).toContain("XLM: 0.1508");
   });
+
+  it("assembleDeliverable rejects observations without observationResult metadata", () => {
+    // Repro: Phase-A context-stress 2026-06-01 — model calls a non-existent
+    // tool (`code-execute`), native-fc dispatch emits an observation with
+    // content = the rejection string ("Tool call used unavailable name(s)...")
+    // and NO `observationResult` metadata. The prior fall-through accepted
+    // such observations if any real tool was in state.toolsUsed, leaking
+    // dispatch-error strings into the harness deliverable.
+    const rejection =
+      "Tool call used unavailable name(s): code-execute. Available tools: file-read, brief. Use exact tool names from Available Tools.";
+    const dispatchReject = makeStep("observation", rejection);
+    const realObs = makeStep("observation", "Real tool output: ZEBRA-CODA", {
+      observationResult: {
+        success: true,
+        toolName: "file-read",
+        displayText: "real output",
+        category: "filesystem" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-reject" });
+    const st = transitionState(base, {
+      steps: [realObs, dispatchReject],
+      toolsUsed: new Set(["file-read"]),
+    });
+    const assembled = assembleDeliverable(st).content;
+    expect(assembled).toContain("ZEBRA-CODA");
+    expect(assembled).not.toContain("unavailable name(s)");
+  });
 });

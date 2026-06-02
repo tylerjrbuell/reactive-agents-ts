@@ -10,9 +10,12 @@
 //   - human-escalate
 //
 // They contributed cycles in the controller-evaluate path AND telemetry
-// noise without producing any action. This test pins their removal.
-// If a future iteration re-introduces one of these decisions, it must
-// also register a real dispatch handler before the test will let it ship.
+// noise without producing any action. WS-4 Phase 2 (2026-05-28, master
+// plan §3.6 RC-3) completed the prune: evaluator files deleted AND
+// ControllerDecision union members removed. This test pins their absence
+// at runtime — if a future iteration re-introduces one of these
+// decisions, it MUST also register a real dispatch handler before the
+// test will let it ship.
 
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";

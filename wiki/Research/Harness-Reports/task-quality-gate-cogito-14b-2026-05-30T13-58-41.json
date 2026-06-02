@@ -1,0 +1,674 @@
+{
+  "model": "cogito:14b",
+  "provider": "ollama",
+  "recentObservationsLimit": 5,
+  "runsPerTask": 3,
+  "timestamp": "2026-05-30T13-58-41",
+  "runSets": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "runs": [
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 589,
+          "inputTokens": 117,
+          "outputTokens": 36,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 6738.322382,
+          "output": "1. **Monday**\n2. **Tuesday**\n3. **Wednesday**\n4. **Thursday**\n5. **Friday**\n6. **Saturday**\n7. **Sunday**",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 145,
+          "inputTokens": 117,
+          "outputTokens": 28,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 616.1255050000009,
+          "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T1-knowledge-recall",
+          "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+          "success": true,
+          "tokensUsed": 145,
+          "inputTokens": 117,
+          "outputTokens": 28,
+          "stepsCount": 1,
+          "toolCallCount": 0,
+          "wallMs": 588.3743790000008,
+          "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "7/7 days found",
+              "numbered list ✓"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "runs": [
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 6296,
+          "inputTokens": 5004,
+          "outputTokens": 385,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 12851.075448,
+          "output": "1. Pandoc Templates (score: 188)\n2. Zig: Build System Reworked (score: 181)\n3. Leo's first encyclical attacks technological messianism (score: 58)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 47)\n5. Proposed new US funding rules: We can cancel any grant at any time (score: 151)\n6. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 34)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 30)\n8. What Happened to the Locusts? (score: 70)\n9. SQLite is all you need for durable workflows (score: 593)\n10. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 39)\n11. Floor and Ceil versus Denormals on CPU and GPU (score: 27)\n12. Danish pension fund excludes SpaceX citing governance and valuation (score: 307)\n13. Notes from the Mistral AI Now Summit (score: 404)\n14. Snowboard Kids 2 is 100% Decompiled (score: 239)\n15. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 188)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 6356,
+          "inputTokens": 5004,
+          "outputTokens": 439,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 14289.579883999999,
+          "output": "1. Pandoc Templates (score: 188)\n2. Zig: Build System Reworked (score: 181)\n3. Leo's first encyclical attacks technological messianism (score: 58)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 47)\n5. Proposed new US funding rules: We can cancel any grant at any time (score: 151)\n6. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 34)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 30)\n8. What Happened to the Locusts? (score: 70)\n9. SQLite is all you need for durable workflows (score: 593)\n10. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 39)\n11. Floor and Ceil versus Denormals on CPU and GPU (score: 27)\n12. Danish pension fund excludes SpaceX citing governance and valuation (score: 307)\n13. Notes from the Mistral AI Now Summit (score: 404)\n14. Snowboard Kids 2 is 100% Decompiled (score: 239)\n15. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 188)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T2-single-tool-synthesis",
+          "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+          "success": true,
+          "tokensUsed": 6350,
+          "inputTokens": 5004,
+          "outputTokens": 435,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 14812.867672,
+          "output": "1. Pandoc Templates (score: 188)\n2. Zig: Build System Reworked (score: 181)\n3. Leo's first encyclical attacks technological messianism (score: 58)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 47)\n5. Proposed new US funding rules: We can cancel any grant at any time (score: 151)\n6. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 34)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 30)\n8. What Happened to the Locusts? (score: 70)\n9. SQLite is all you need for durable workflows (score: 593)\n10. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 39)\n11. Floor and Ceil versus Denormals on CPU and GPU (score: 27)\n12. Danish pension fund excludes SpaceX citing governance and valuation (score: 307)\n13. Notes from the Mistral AI Now Summit (score: 404)\n14. Snowboard Kids 2 is 100% Decompiled (score: 239)\n15. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 188)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 1,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "15/15 titles cited",
+              "15/15 scores cited",
+              "15 numbered lines",
+              "real synthesis",
+              "no recall needed"
+            ],
+            "composite": 0.9999999999999999
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.9999999999999999,
+      "compositeMin": 0.9999999999999999,
+      "compositeMax": 0.9999999999999999,
+      "compositeSpread": 0,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "runs": [
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 6325,
+          "inputTokens": 5389,
+          "outputTokens": 170,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 13993.617776,
+          "output": "1. The dead economy theory — comments: 1232\n2. Is AI causing a repeat of frontend's lost decade? — comments: 318\n3. SQLite is all you need for durable workflows — comments: 305",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.6666666666666666,
+            "completeness": 1,
+            "noFabrication": 0.6699999999999999,
+            "callsRecall": false,
+            "strictCorrect": false,
+            "notes": [
+              "2/3 correct titles",
+              "2/3 correct comment counts",
+              "★ 1 score-confusion picks",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48321631] cited=[48326802,48324712,48321631]"
+            ],
+            "composite": 0.7843333333333333
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 6319,
+          "inputTokens": 5389,
+          "outputTokens": 218,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 12302.224918999993,
+          "output": "1. Pandoc Templates — comments: 15\n2. ZIG: Build System Reworked — comments: 84\n3. Leo's first encyclical attacks technological messianism — comments: 33",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "strictCorrect": false,
+            "notes": [
+              "0/3 correct titles",
+              "0/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48321631] cited=[48334515,48334048,48334710]"
+            ],
+            "composite": 0.65
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T3-selective-filter",
+          "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+          "success": true,
+          "tokensUsed": 10507,
+          "inputTokens": 9412,
+          "outputTokens": 282,
+          "stepsCount": 9,
+          "toolCallCount": 3,
+          "wallMs": 13501.16210799999,
+          "output": "1. The dead economy theory — comments: 1232\n2. Pandoc Templates — comments: 155\n3. Openrsync: An implementation of rsync, by the OpenBSD team — comments: 158",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.3333333333333333,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "strictCorrect": false,
+            "notes": [
+              "1/3 correct titles",
+              "1/3 correct comment counts",
+              "no confusion",
+              "★ strict ✗ (wrong post ids)",
+              "strict ✗ expected=[48324712,48323869,48321631] cited=[48334515,48334854,48324712]"
+            ],
+            "composite": 0.7666666666666667
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.7336666666666667,
+      "compositeMin": 0.65,
+      "compositeMax": 0.7843333333333333,
+      "compositeSpread": 0.1343333333333333,
+      "t3StrictCorrectCount": 0,
+      "t3StrictCorrectLabel": "0/3",
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "runs": [
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 8765,
+          "inputTokens": 7688,
+          "outputTokens": 198,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 18722.917665,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (593)\n2. The dead economy theory (1103)\n3. Pandoc Templates (188)\n\n## Most Comments\n1. What Happened to the Locusts? (16 comments)\n2. Show HN: Helios – what plug-in solar could generate for any address in Britain (6 comments)\n3. Adding Linux support back for the BASIC (free) version of Vivado (6 comments)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.6666666666666666,
+            "completeness": 0.6666666666666666,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "4/6 correct titles"
+            ],
+            "composite": 0.8166666666666667
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": true,
+          "tokensUsed": 8721,
+          "inputTokens": 7688,
+          "outputTokens": 211,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 18949.77631999999,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (593)\n2. Pandoc Templates (188)\n3. Danish pension fund excludes SpaceX citing governance and valuation (307)\n\n## Most Comments\n1. The dead economy theory (1,232 comments)\n2. Notes from the Mistral AI Now Summit (176 comments)\n3. Proposed new US funding rules: We can cancel any grant at any time (93 comments)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.8333333333333334,
+            "completeness": 0.8333333333333334,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "5/6 correct titles"
+            ],
+            "composite": 0.9083333333333333
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T4-multi-criteria",
+          "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+          "success": false,
+          "tokensUsed": 6304,
+          "inputTokens": 5379,
+          "outputTokens": 205,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 11179.557841000002,
+          "output": "## Highest Score\n1. SQLite is all you need for durable workflows (593)\n2. Notes from the Mistral AI Now Summit (404)\n3. Danish pension fund excludes SpaceX citing governance and valuation (307)\n\n## Most Comments\n1. The dead economy theory (1232)\n2. The Last Technical Interview (117)\n3. Proposed new US funding rules: We can cancel any grant at any time (93)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.8333333333333334,
+            "completeness": 0.8333333333333334,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "Highest Score section ✓",
+              "Most Comments section ✓",
+              "5/6 correct titles"
+            ],
+            "composite": 0.9083333333333333
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": false,
+      "passKLabel": "2/3",
+      "compositeMean": 0.8777777777777778,
+      "compositeMin": 0.8166666666666667,
+      "compositeMax": 0.9083333333333333,
+      "compositeSpread": 0.09166666666666667,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "runs": [
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 6805,
+          "inputTokens": 5097,
+          "outputTokens": 592,
+          "stepsCount": 4,
+          "toolCallCount": 1,
+          "wallMs": 17564.337155999994,
+          "output": "Let me process these stories into a structured markdown report.\n\n# Today on Hacker News\n\n## AI/ML & Technology Governance\nThe technology sector is grappling with both advancements and governance challenges. Notable posts include discussions about [AI cost rationing in Corporate America](https://www.wsj.com/tech/ai/corporate-america-is-starting-to-ration-ai-as-cost-skyrockets-1eb99d7a), reflecting growing concerns over the financial impact of AI implementation. Additionally, there's significant interest in [Mistral AI Now Summit notes](https://koenvangilst.nl/lab/mistral-ai-now-summit) sharing insights from recent developments in the field.\n\n## Open Source & Tools\nOpen source projects continue to make waves across various domains. The Zig programming language has undergone a major build system rework, as announced by [their development team](https://ziglang.org/devlog/2026/#2026-05-26). On the database front, there's substantial discussion around [SQLite as a comprehensive solution for durable workflows](https://obeli.sk/blog/sqlite-is-all-you-need-for-durable-workflows/), which has garnered significant engagement from developers.\n\n## Hardware & Sustainability\nSeveral posts highlight advancements in hardware and sustainable technologies. A notable entry is [Helios](https://helios.southlondonscientific.com/), an innovative tool showing potential solar energy generation capabilities for British addresses, aligning with growing sustainability trends. In another development, the Danish pension fund's decision to exclude SpaceX due to governance and valuation concerns has sparked discussions about corporate accountability in technology ventures.\n\n## Software Development & Analysis\nThe software community is engaged in various technical analyses and tool developments. [Pandoc Templates](https://pandoc-templates.org/) have been updated with new features, while a detailed analysis of [floor/ceil operations versus denormals on CPU/GPU architectures](https://asawicki.info/news_1802_floor_and_ceil_versus_denormals_on_cpu_and_gpu) provides insights for developers working in low-level optimization.\n\nThis report captures the major trends and discussions currently shaping the technology landscape, from AI governance to sustainable technologies. Each category reflects a significant aspect of ongoing technological development and its societal impact.\n\n(250 words)",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.06666666666666667,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "1/15 titles cited",
+              "266 words"
+            ],
+            "composite": 0.6733333333333333
+          },
+          "runIndex": 0,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 10502,
+          "inputTokens": 8797,
+          "outputTokens": 615,
+          "stepsCount": 9,
+          "toolCallCount": 3,
+          "wallMs": 18619.759479,
+          "output": "# Today on Hacker News\n\n## Technology & Innovation\nThe top stories this week cover a range of technological developments spanning from software to hardware innovations. Pandoc Templates (188 points) introduces an innovative approach to document conversion, while Mistral AI Now Summit (404 points) provides insights into the latest advancements in artificial intelligence.\n\nAnother significant development comes from Zig's reworked build system (181 points), aimed at improving developer workflows and reducing friction. The Openrsync project by the OpenBSD team (47 points) also deserves mention, offering a new implementation of the rsync protocol for enhanced efficiency.\n\n## Science & Research\nIn science news, we find an interesting article about technological messianism from Leo's encyclical (58 points), which raises important questions about our relationship with technology. The Office of Management and Budget's proposed funding rules could have significant implications for scientific research in the US (151 points).\n\n## Business & Economics\nThe business section highlights corporate America's response to AI cost increases, with companies beginning to ration their usage due to rising expenses (39 points). In another development, a Danish pension fund has excluded SpaceX from its portfolio citing governance and valuation concerns (307 points), signaling potential shifts in investment priorities.\n\n## Hardware & Consumer Tech\nHardware innovations are also well-represented. Helios is showcasing plug-in solar generation capabilities for addresses across Britain (34 points). In the consumer electronics space, IXI's autofocusing lenses offer a potential replacement for multifocal glasses (30 points), while PrusaSlicer introduces an open-source ColorMix enabling dozens of colors in printing (188 points).\n\nThis snapshot reflects a diverse technological landscape, with innovations in software, hardware, and business models shaping our future.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.13333333333333333,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "2/15 titles cited",
+              "271 words"
+            ],
+            "composite": 0.6966666666666667
+          },
+          "runIndex": 1,
+          "postConditionsMet": null
+        },
+        {
+          "taskId": "T5-long-form-synthesis",
+          "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+          "success": true,
+          "tokensUsed": 7215,
+          "inputTokens": 5097,
+          "outputTokens": 828,
+          "stepsCount": 6,
+          "toolCallCount": 2,
+          "wallMs": 22356.633870999998,
+          "output": "# Today on Hacker News\n\n## AI/Technology & Society\nPandoc Templates (https://pandoc-templates.org/) introduces a novel approach to document formatting, leveraging the power of Pandoc's engine for more flexible template management. This tool could revolutionize how technical writers and documentation teams handle large-scale projects.\n\nThe Economist reports on Pope Leo XIII's encyclical criticizing technological messianism (https://www.economist.com/europe/2026/05/28/leos-first-encyclical-attacks-technological-messianism), highlighting ethical considerations around rapid tech advancement. This adds to the ongoing debate on technology's role in society.\n\nZig's recent blog post (https://ziglang.org/devlog/2026/#2026-05-26) outlines significant reworks of their build system, promising improved efficiency and reliability for developers using the language. This update could have widespread impact on software development workflows.\n\n## Software Development & Engineering\nMistral AI Now Summit (https://koenvangilst.nl/lab/mistral-ai-now-summit) offers insights into current trends in large-scale language models, providing valuable perspectives from industry leaders and researchers.\n\nAn interesting exploration of Snowboard Kids 2's decompilation (https://blog.chrislewis.au/snowboard-kids-2-is-100-decompiled/) demonstrates advances in reverse engineering techniques and their applications. This showcases the evolving nature of software analysis tools.\n\n## Infrastructure & Hardware\nSQLite emerges as a cornerstone for durable workflows (https://obeli.sk/blog/sqlite-is-all-you-need-for-durable-workflows/), with its robust reliability making it an essential tool for mission-critical systems.\n\nThe Danish pension fund's exclusion of SpaceX (https://www.reuters.com/legal/transactional/danish-pension-fund-excludes-spacex-citing-governance-valuation-2026-05-29/) underscores concerns over corporate governance and valuation metrics, reflecting broader shifts in investment strategy.\n\nA new feature called ColorMix for PrusaSlicer (https://blog.prusa3d.com/our-new-open-source-colormix-model-in-prusaslicer-and-easyprint_136079/) enables users to print with dozens of colors, expanding possibilities for 3D printing applications.\n\n## Miscellaneous\nHelios explores the potential of plug-in solar energy in Britain (https://helios.southlondonscientific.com/), contributing to discussions on renewable energy solutions and their practical implementation. This project illustrates the intersection of technology and environmental sustainability.\n\nWSJ reports that Corporate America is rationing AI resources due to cost concerns (https://www.wsj.com/tech/ai/corporate-america-is-starting-to-ration-ai-as-cost-skyrockets-1eb99d7a), reflecting the economic challenges facing tech adoption. This highlights the need for balanced approaches in implementing cutting-edge technologies.\n\nThis report covers a diverse range of topics, from software development and hardware innovation to societal implications of technology.",
+          "quality": {
+            "toolSuccess": true,
+            "formatAdherence": 1,
+            "faithfulness": 0.06666666666666667,
+            "completeness": 1,
+            "noFabrication": 1,
+            "callsRecall": false,
+            "notes": [
+              "title ✓",
+              "4 category sections",
+              "1/15 titles cited",
+              "313 words"
+            ],
+            "composite": 0.6733333333333333
+          },
+          "runIndex": 2,
+          "postConditionsMet": null
+        }
+      ],
+      "passK": true,
+      "passKLabel": "3/3",
+      "compositeMean": 0.6811111111111111,
+      "compositeMin": 0.6733333333333333,
+      "compositeMax": 0.6966666666666667,
+      "compositeSpread": 0.023333333333333317,
+      "t3StrictCorrectCount": null,
+      "t3StrictCorrectLabel": null,
+      "postConditionsMet": null
+    }
+  ],
+  "results": [
+    {
+      "taskId": "T1-knowledge-recall",
+      "taskDescription": "Pure knowledge — no tools needed. Tests baseline arch isn't broken.",
+      "success": true,
+      "tokensUsed": 145,
+      "inputTokens": 117,
+      "outputTokens": 28,
+      "stepsCount": 1,
+      "toolCallCount": 0,
+      "wallMs": 588.3743790000008,
+      "output": "1. Monday\n2. Tuesday\n3. Wednesday\n4. Thursday\n5. Friday\n6. Saturday\n7. Sunday",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "7/7 days found",
+          "numbered list ✓"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T2-single-tool-synthesis",
+      "taskDescription": "Fetch HN posts → produce a numbered markdown list summary. Tests the scratch.ts pattern that exposed the recall-echo bug.",
+      "success": true,
+      "tokensUsed": 6350,
+      "inputTokens": 5004,
+      "outputTokens": 435,
+      "stepsCount": 4,
+      "toolCallCount": 1,
+      "wallMs": 14812.867672,
+      "output": "1. Pandoc Templates (score: 188)\n2. Zig: Build System Reworked (score: 181)\n3. Leo's first encyclical attacks technological messianism (score: 58)\n4. Openrsync: An implementation of rsync, by the OpenBSD team (score: 47)\n5. Proposed new US funding rules: We can cancel any grant at any time (score: 151)\n6. Show HN: Helios – what plug-in solar could generate for any address in Britain (score: 34)\n7. IXI's autofocusing lenses are almost ready to replace multifocal glasses (score: 30)\n8. What Happened to the Locusts? (score: 70)\n9. SQLite is all you need for durable workflows (score: 593)\n10. Corporate America Is Starting to Ration AI as Cost Skyrockets (score: 39)\n11. Floor and Ceil versus Denormals on CPU and GPU (score: 27)\n12. Danish pension fund excludes SpaceX citing governance and valuation (score: 307)\n13. Notes from the Mistral AI Now Summit (score: 404)\n14. Snowboard Kids 2 is 100% Decompiled (score: 239)\n15. Print with dozens of colors: Our new open-source ColorMix for PrusaSlicer (score: 188)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 1,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "15/15 titles cited",
+          "15/15 scores cited",
+          "15 numbered lines",
+          "real synthesis",
+          "no recall needed"
+        ],
+        "composite": 0.9999999999999999
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T3-selective-filter",
+      "taskDescription": "Fetch 25 posts; output top 3 by COMMENTS (not score). Tests filtering accuracy + faithful citation under selection pressure.",
+      "success": true,
+      "tokensUsed": 10507,
+      "inputTokens": 9412,
+      "outputTokens": 282,
+      "stepsCount": 9,
+      "toolCallCount": 3,
+      "wallMs": 13501.16210799999,
+      "output": "1. The dead economy theory — comments: 1232\n2. Pandoc Templates — comments: 155\n3. Openrsync: An implementation of rsync, by the OpenBSD team — comments: 158",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.3333333333333333,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "strictCorrect": false,
+        "notes": [
+          "1/3 correct titles",
+          "1/3 correct comment counts",
+          "no confusion",
+          "★ strict ✗ (wrong post ids)",
+          "strict ✗ expected=[48324712,48323869,48321631] cited=[48334515,48334854,48324712]"
+        ],
+        "composite": 0.7666666666666667
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T4-multi-criteria",
+      "taskDescription": "Fetch 20 posts; output 'highest score' AND 'most comments' as two separate sections. Tests synthesis of multiple slices from one observation.",
+      "success": false,
+      "tokensUsed": 6304,
+      "inputTokens": 5379,
+      "outputTokens": 205,
+      "stepsCount": 4,
+      "toolCallCount": 1,
+      "wallMs": 11179.557841000002,
+      "output": "## Highest Score\n1. SQLite is all you need for durable workflows (593)\n2. Notes from the Mistral AI Now Summit (404)\n3. Danish pension fund excludes SpaceX citing governance and valuation (307)\n\n## Most Comments\n1. The dead economy theory (1232)\n2. The Last Technical Interview (117)\n3. Proposed new US funding rules: We can cancel any grant at any time (93)",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.8333333333333334,
+        "completeness": 0.8333333333333334,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "Highest Score section ✓",
+          "Most Comments section ✓",
+          "5/6 correct titles"
+        ],
+        "composite": 0.9083333333333333
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    },
+    {
+      "taskId": "T5-long-form-synthesis",
+      "taskDescription": "Fetch top 15 HN posts and write a paragraph-style summary categorizing them by topic. Tests substantive synthesis from observation data.",
+      "success": true,
+      "tokensUsed": 7215,
+      "inputTokens": 5097,
+      "outputTokens": 828,
+      "stepsCount": 6,
+      "toolCallCount": 2,
+      "wallMs": 22356.633870999998,
+      "output": "# Today on Hacker News\n\n## AI/Technology & Society\nPandoc Templates (https://pandoc-templates.org/) introduces a novel approach to document formatting, leveraging the power of Pandoc's engine for more flexible template management. This tool could revolutionize how technical writers and documentation teams handle large-scale projects.\n\nThe Economist reports on Pope Leo XIII's encyclical criticizing technological messianism (https://www.economist.com/europe/2026/05/28/leos-first-encyclical-attacks-technological-messianism), highlighting ethical considerations around rapid tech advancement. This adds to the ongoing debate on technology's role in society.\n\nZig's recent blog post (https://ziglang.org/devlog/2026/#2026-05-26) outlines significant reworks of their build system, promising improved efficiency and reliability for developers using the language. This update could have widespread impact on software development workflows.\n\n## Software Development & Engineering\nMistral AI Now Summit (https://koenvangilst.nl/lab/mistral-ai-now-summit) offers insights into current trends in large-scale language models, providing valuable perspectives from industry leaders and researchers.\n\nAn interesting exploration of Snowboard Kids 2's decompilation (https://blog.chrislewis.au/snowboard-kids-2-is-100-decompiled/) demonstrates advances in reverse engineering techniques and their applications. This showcases the evolving nature of software analysis tools.\n\n## Infrastructure & Hardware\nSQLite emerges as a cornerstone for durable workflows (https://obeli.sk/blog/sqlite-is-all-you-need-for-durable-workflows/), with its robust reliability making it an essential tool for mission-critical systems.\n\nThe Danish pension fund's exclusion of SpaceX (https://www.reuters.com/legal/transactional/danish-pension-fund-excludes-spacex-citing-governance-valuation-2026-05-29/) underscores concerns over corporate governance and valuation metrics, reflecting broader shifts in investment strategy.\n\nA new feature called ColorMix for PrusaSlicer (https://blog.prusa3d.com/our-new-open-source-colormix-model-in-prusaslicer-and-easyprint_136079/) enables users to print with dozens of colors, expanding possibilities for 3D printing applications.\n\n## Miscellaneous\nHelios explores the potential of plug-in solar energy in Britain (https://helios.southlondonscientific.com/), contributing to discussions on renewable energy solutions and their practical implementation. This project illustrates the intersection of technology and environmental sustainability.\n\nWSJ reports that Corporate America is rationing AI resources due to cost concerns (https://www.wsj.com/tech/ai/corporate-america-is-starting-to-ration-ai-as-cost-skyrockets-1eb99d7a), reflecting the economic challenges facing tech adoption. This highlights the need for balanced approaches in implementing cutting-edge technologies.\n\nThis report covers a diverse range of topics, from software development and hardware innovation to societal implications of technology.",
+      "quality": {
+        "toolSuccess": true,
+        "formatAdherence": 1,
+        "faithfulness": 0.06666666666666667,
+        "completeness": 1,
+        "noFabrication": 1,
+        "callsRecall": false,
+        "notes": [
+          "title ✓",
+          "4 category sections",
+          "1/15 titles cited",
+          "313 words"
+        ],
+        "composite": 0.6733333333333333
+      },
+      "runIndex": 2,
+      "postConditionsMet": null
+    }
+  ],
+  "summary": {
+    "avgComposite": 0.8585111111111112,
+    "recallSmellCount": 0,
+    "taskCount": 5,
+    "totalRuns": 15,
+    "passKCount": 4,
+    "passKRate": 0.8
+  }
+}

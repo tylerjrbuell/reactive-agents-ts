@@ -11,6 +11,8 @@ import {
   makeCheckpointHandler,
   discoverToolsTool,
   makeDiscoverToolsHandler,
+  writeResultToFileTool,
+  makeWriteResultToFileHandler,
   discoveredToolsStoreRef,
   scratchpadStoreRef,
   checkpointStoreRef,
@@ -82,6 +84,13 @@ export const resolveExecutableToolCapabilities = (input: {
           .register(recallTool, makeRecallHandler(scratchpadStoreRef))
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:79", tag: errorTag(err) })));
         append(toToolSchema(recallTool));
+      }
+
+      if (input.metaTools?.writeResultToFile) {
+        yield* toolService
+          .register(writeResultToFileTool, makeWriteResultToFileHandler(scratchpadStoreRef))
+          .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/act/tool-capabilities.ts:92", tag: errorTag(err) })));
+        append(toToolSchema(writeResultToFileTool));
       }
 
       if (input.metaTools?.find) {

@@ -22,6 +22,7 @@ export const META_TOOLS = new Set([
   "checkpoint",
   "activate-skill",
   "discover-tools",
+  "write_result_to_file",
 ]) as ReadonlySet<string>;
 
 /**

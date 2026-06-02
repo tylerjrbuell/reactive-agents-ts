@@ -22,8 +22,8 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { Effect, Layer } from "effect";
 import { ReactiveAgents } from "../builder.js";
-import type { BuilderRuntimeStateView } from "../builder/build-effect/runtime-construction.js";
 import { createRuntime } from "../runtime.js";
+import { asBuilderState } from "./_helpers.js";
 import { SkillStoreService } from "@reactive-agents/memory";
 import type { SkillRecord } from "@reactive-agents/core";
 
@@ -35,7 +35,7 @@ describe(".withSkillPersistence() builder + runtime wiring", () => {
       .withSkillPersistence()
       .withReasoning();
     expect(builder).toBeDefined();
-    const state = builder as unknown as BuilderRuntimeStateView;
+    const state = asBuilderState(builder);
     expect(state._skillPersistence).toBe(true);
   });
 
@@ -48,9 +48,9 @@ describe(".withSkillPersistence() builder + runtime wiring", () => {
       .withSkillPersistence(false);
     const untouched = ReactiveAgents.create().withProvider("test");
 
-    expect((enabled as unknown as BuilderRuntimeStateView)._skillPersistence).toBe(true);
-    expect((disabled as unknown as BuilderRuntimeStateView)._skillPersistence).toBe(false);
-    expect((untouched as unknown as BuilderRuntimeStateView)._skillPersistence).toBeUndefined();
+    expect(asBuilderState(enabled)._skillPersistence).toBe(true);
+    expect(asBuilderState(disabled)._skillPersistence).toBe(false);
+    expect(asBuilderState(untouched)._skillPersistence).toBeUndefined();
   });
 });
 

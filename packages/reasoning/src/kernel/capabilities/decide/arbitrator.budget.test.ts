@@ -45,6 +45,8 @@ const baseState: KernelState = {
   scratchpad: new Map(),
   iteration: 0,
   tokens: 0,
+  inputTokens: 0,
+  outputTokens: 0,
   cost: 0,
   status: "thinking",
   output: null,

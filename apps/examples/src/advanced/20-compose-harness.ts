@@ -71,6 +71,20 @@ export async function run(): Promise<ExampleResult> {
         } iter=${ctx.iteration}`);
       });
 
+      // Tap loop-detection nudges (live in v0.11). Documents the consumer side
+      // of the nudge.loop-detected chokepoint so the TagMap coverage gate can
+      // verify emit+consumer parity (packages/compose/test/anti-scaffold-tagmap.test.ts).
+      h.tap("nudge.loop-detected", (nudge, ctx) => {
+        log.push(`[nudge.loop-detected] iter=${ctx.iteration} severity=${ctx.severity} len=${String(nudge).length}`);
+      });
+
+      // Tap lifecycle failures (live in v0.11). Emitted from act.ts (tool errors)
+      // and reactive-intelligence dispatcher (harness-harm / stall-detect).
+      // Documents the consumer side for the TagMap coverage gate.
+      h.tap("lifecycle.failure", (payload, ctx) => {
+        log.push(`[lifecycle.failure] iter=${ctx.iteration} reason=${payload.reason} attempt=${payload.attemptNumber} streak=${payload.failureStreak}`);
+      });
+
       // Phase hooks (Wave C; registered here for forward-compatibility).
       h.before("think", (_state) => {
         log.push("[phase] before:think");

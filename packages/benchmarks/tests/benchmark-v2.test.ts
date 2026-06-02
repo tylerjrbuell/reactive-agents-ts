@@ -115,7 +115,9 @@ test("rw-7 fixture includes three buggy TypeScript files", () => {
 })
 
 test("ABLATION_VARIANTS has exactly 10 variants", () => {
-  // 9 production variants + 1 ablation variant (ra-full-noop-verifier, M3).
+  // 9 production variants + 1 ablation variant (ra-full-noop-verifier for M3).
+  // (Sprint-1 A2, 2026-06-02): ra-full-assembly-off removed alongside the
+  // RA_ASSEMBLY flag deletion — canonical project() is the sole assembler.
   expect(ABLATION_VARIANTS).toHaveLength(10)
 })
 
