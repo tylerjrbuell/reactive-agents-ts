@@ -74,6 +74,7 @@ import { Effect, FiberRef } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { checkpointStoreRef } from "@reactive-agents/tools";
+import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
@@ -347,7 +348,13 @@ export function runIterationPass(
       if (_runCtl) {
         const ctl = yield* Effect.promise(() => _runCtl.checkpoint());
         if (ctl?.stop) {
-          state = transitionState(state, { status: "done", output: state.output ?? "" });
+          // Sprint-1 B2: typed DeliverableProvenance channel. Stop-checkpoint
+          // is a sentinel termination — preserve any existing committed output,
+          // else emit a structured sentinel (NOT a raw empty string).
+          const sentinelText = deliverableToContent(
+            sentinelDeliverable("no_substantive_output"),
+          );
+          state = transitionState(state, { status: "done", output: state.output ?? sentinelText });
           sync(); return "break";
         }
       }

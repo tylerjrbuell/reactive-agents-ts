@@ -16,6 +16,7 @@ import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
+import { deliverableToContent, modelSynthesisDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -527,7 +528,16 @@ export function runKernel(
         .filter((s) => s.type === "thought")
         .pop();
       if (lastThought?.content && lastThought.content.trim().length > 0) {
-        state = transitionState(state, { output: lastThought.content });
+        // Sprint-1 B2: typed DeliverableProvenance channel. Construct a
+        // model_synthesis Deliverable and pass its content to transitionState.
+        // The contract type makes provenance explicit; raw-string mutations of
+        // state.output are an anti-pattern that the migration is collapsing.
+        const deliverable = modelSynthesisDeliverable({
+          type: "thought",
+          content: lastThought.content,
+          iteration: state.iteration,
+        });
+        state = transitionState(state, { output: deliverableToContent(deliverable) });
       }
     }
 
