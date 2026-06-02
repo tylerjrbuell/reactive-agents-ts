@@ -11,7 +11,7 @@ import { config as dotenvConfig } from "dotenv";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-dotenvConfig({ path: resolve(__dirname, "../../../.env") });
+dotenvConfig({ path: resolve(__dirname, "../../../../.env") });
 
 import { TASKS, type Task as BenchTask } from "../tasks.js";
 import { verify } from "../verifier.js";

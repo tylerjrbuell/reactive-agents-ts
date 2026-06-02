@@ -1,13 +1,13 @@
-# bench/mastra-vs-ra
+# packages/benchmarks/mastra-vs-ra
 
 **Private** head-to-head benchmark: Reactive Agents vs Mastra.
 
-Not published. Not part of release. Used to characterize where each framework wins / falls short before deciding whether to publicize.
+Not published. Not part of release. Used to characterize where each framework wins / falls short before deciding whether to publicize. Lives under `@reactive-agents/benchmarks` (moved from the repo-root `bench/` dir 2026-06-01 to consolidate all competition/benchmark code in one package). It is a standalone runnable (own `package.json`, own `node_modules`), not a workspace member.
 
 ## Layout
 
 ```
-bench/mastra-vs-ra/
+packages/benchmarks/mastra-vs-ra/
   package.json
   tasks.ts        # shared task corpus (10-12 tasks, 6 categories)
   tools.ts        # per-framework tool factories from shared ToolSpec
@@ -28,7 +28,7 @@ bench/mastra-vs-ra/
 ## Run
 
 ```bash
-cd bench/mastra-vs-ra
+cd packages/benchmarks/mastra-vs-ra
 bun install
 
 # Smoke test first

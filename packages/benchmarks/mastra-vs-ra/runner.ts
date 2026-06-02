@@ -22,8 +22,8 @@ import { config as dotenvConfig } from "dotenv";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-// Load repo-root .env (bench cwd is bench/mastra-vs-ra; keys live at repo root).
-dotenvConfig({ path: resolve(__dirname, "../../.env") });
+// Load repo-root .env (cwd is packages/benchmarks/mastra-vs-ra; keys live at repo root).
+dotenvConfig({ path: resolve(__dirname, "../../../.env") });
 dotenvConfig(); // also try local .env if present (no override)
 
 import { TASKS, type Task } from "./tasks.js";
@@ -335,7 +335,7 @@ async function main() {
   console.log("SUMMARY");
   console.log("=".repeat(70));
   console.log(summary(cells));
-  console.log(`\nResults: bench/mastra-vs-ra/results/cells-${ts}.json`);
+  console.log(`\nResults: packages/benchmarks/mastra-vs-ra/results/cells-${ts}.json`);
 }
 
 main().catch((err) => {
