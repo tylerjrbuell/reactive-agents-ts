@@ -17,7 +17,8 @@
     "interaction": "bun run index.ts --filter interaction",
     "gateway": "bun run index.ts --filter gateway",
     "streaming": "bun run index.ts --filter streaming",
-    "observe": "bun run index.ts --filter observe"
+    "observe": "bun run index.ts --filter observe",
+    "research": "bun run index.ts --filter research"
   },
   "dependencies": {
     "effect": "^3.10.0",

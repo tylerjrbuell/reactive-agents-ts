@@ -442,6 +442,14 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/observe/otel-export.ts',
     },
+    // research — offline (crypto-price built-in shadowed by a mock in test mode)
+    {
+        num: 'RS1',
+        label: 'crypto-research-agent',
+        category: 'research',
+        requiresKey: false,
+        path: './src/research/crypto-research-agent.ts',
+    },
 ]
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────
