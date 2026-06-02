@@ -74,3 +74,5 @@ wiki/Research/Harness-Reports/gate-traces/
 wiki/Research/Harness-Reports/integration-control-flow-scenario-health.json
 # Per-run cohort probe dumps (scratch; curated evidence lives in the *.md reports)
 wiki/Research/Harness-Reports/task-quality-gate-*.json
+# Bench runtime output (manifests, deliverables, traces grading)
+apps/examples/bench-out/
