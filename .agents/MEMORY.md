@@ -2,6 +2,14 @@
 
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
+## ▶▶ CAPABILITY-SOURCE HONESTY GATES SHIPPED (2026-06-02) — branch `refactor/canonical-sprint2-2026-06-02` (unpushed)
+Code dive corrected the canonical-refactor plan: **its RCs are a sprint stale.** WS-2 already done (runtime.ts = 6 `Layer.merge` / 3 casts / 10 `Layer.mergeAll`, not 40/44; runner.ts 771 not 1986; **0 raw `state.status=`**). WS-3 ~80% done (`tool-parsing`→`kernel/utils/`, `tool-gating`→`decide/`; `tool-execution` 0 external inbound; **kernel mesh = 0 cycles**, 16 acyclic edges — plan's "7 cycles/38 edges" wrong). RC-4 honesty 34 `Effect<X,unknown>` / 103 `as any` (modest). **Remaining structural work is low-value purism (metric-gaming risk) — the real lever is the measurement/honesty spine via `Capability.source`.**
+Shipped 2 gates on that spine (close bench↔runtime asymmetry; attack the claude-haiku-4-5 silent-fallback root cause):
+- `8c56a774` **bench preflight** — `runSession` refuses to SCORE a `source==="fallback"` cell. `packages/benchmarks/src/preflight.ts`, `RA_BENCH_ALLOW_FALLBACK=1` override. 7 tests.
+- `b8c13f0f` **runtime build gate** — `validateBuild` surfaces fallback at agent build: warn default / error under `strictValidation`. `packages/runtime/src/build-validation.ts`. 3 tests; runtime suite 888/0; turbo build green (ESM+DTS).
+- `afeaea62` doc addendum → `wiki/Research/2026-06-02-issue-canonical-cross-reference.md`.
+NEXT (honesty spine): route the runtime warning through ObservabilityService (not just warnings[]) + surface `capabilitySource` on AgentResult metadata; Sprint-2 bench-honesty contract; raise N + bring judge-server online (dishonest-bait ungraded while offline). Branch unpushed — user decides push/PR.
+
 ## ▶▶ EVIDENCE REFRESH (2026-06-01) — `wiki/Research/Harness-Reports/evidence-refresh-2026-06-01.md`
 Re-ran 2 stale-magnitude debts on current code.
 - **Debt 1 RA_ASSEMBLY grid: WIN HOLDS.** Fair A/B (both arms full context), N=2, qwen3.5+haiku. LOCAL: project rescues
