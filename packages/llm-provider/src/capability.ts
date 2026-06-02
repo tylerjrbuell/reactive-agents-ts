@@ -279,6 +279,26 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // qwen3.5 family — Phase-A canonical-harness-core local-tier baseline.
+  // Resolver previously fell back to recommendedNumCtx=2048 because the
+  // `:latest` tag carries no `Nb` size hint and the static table lacked
+  // an entry. That under-sizing produced a window-truncated capability
+  // (window=2048, tier=mid) on bench cells, distorting Phase-A measurements.
+  "ollama/qwen3.5:latest": {
+    provider: "ollama",
+    model: "qwen3.5:latest",
+    tier: "local",
+    maxContextTokens: 32_768,
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
   // ── Static table is intentionally small ─────────────────────────────────
   //
   // Only "tested baseline" models the framework has explicitly validated

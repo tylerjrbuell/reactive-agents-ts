@@ -200,6 +200,49 @@ describe("validateToolInput", () => {
     expect(result).toEqual({ coins: ["BTC"] });
   });
 
+  it("should coerce stringified boolean 'true'/'false' for boolean params", async () => {
+    // Repro: qwen3.5 / cogito emit `"full": "true"` instead of `"full": true`.
+    // Surfaced in Phase-A context-stress bench 2026-06-01 — recall tool dropped
+    // the `full` flag on every call from local-tier models.
+    const def = makeDef([
+      { name: "full", type: "boolean", description: "Full mode", required: false },
+    ]);
+    expect(await Effect.runPromise(validateToolInput(def, { full: "true" }))).toEqual({ full: true });
+    expect(await Effect.runPromise(validateToolInput(def, { full: "false" }))).toEqual({ full: false });
+    expect(await Effect.runPromise(validateToolInput(def, { full: "TRUE" }))).toEqual({ full: true });
+  });
+
+  it("should reject non-canonical strings for boolean params", async () => {
+    const def = makeDef([
+      { name: "full", type: "boolean", description: "Full mode", required: false },
+    ]);
+    const error = await Effect.runPromise(
+      validateToolInput(def, { full: "yes" }).pipe(Effect.flip),
+    );
+    expect(error._tag).toBe("ToolValidationError");
+    expect(error.expected).toBe("boolean");
+  });
+
+  it("should coerce stringified number for number params", async () => {
+    const def = makeDef([
+      { name: "limit", type: "number", description: "Limit", required: true },
+    ]);
+    expect(await Effect.runPromise(validateToolInput(def, { limit: "5" }))).toEqual({ limit: 5 });
+    expect(await Effect.runPromise(validateToolInput(def, { limit: "-3.14" }))).toEqual({ limit: -3.14 });
+  });
+
+  it("should still reject non-numeric strings for number params", async () => {
+    // Preserves the existing fail-on-typo behavior.
+    const def = makeDef([
+      { name: "count", type: "number", description: "Count", required: true },
+    ]);
+    const error = await Effect.runPromise(
+      validateToolInput(def, { count: "not-a-number" }).pipe(Effect.flip),
+    );
+    expect(error._tag).toBe("ToolValidationError");
+    expect(error.expected).toBe("number");
+  });
+
   it("should validate object types", async () => {
     const def = makeDef([
       {

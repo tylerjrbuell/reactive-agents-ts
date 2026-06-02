@@ -119,14 +119,18 @@ export function getDeliverableObservationContent(
     | { success?: boolean; toolName?: string }
     | undefined;
 
-  if (observationResult) {
-    if (observationResult.success !== true) return null;
-    if (observationResult.toolName && RUNNER_META_TOOLS.has(observationResult.toolName)) return null;
-    if (observationResult.toolName && !state.toolsUsed.has(observationResult.toolName)) return null;
-  } else {
-    const hasRealUsedTool = [...state.toolsUsed].some((toolName) => !RUNNER_META_TOOLS.has(toolName));
-    if (!hasRealUsedTool) return null;
-  }
+  // Strict success gate: only observations carrying explicit `success: true`
+  // metadata are eligible. Observations without metadata are dispatch-level
+  // emissions — tool-name rejections, parse errors, recovery notes — and must
+  // not leak into the harness deliverable. Repro: Phase-A context-stress
+  // 2026-06-01 surfaced "Tool call used unavailable name(s): ..." appearing
+  // as the final output for cells where the model emitted an invalid tool name
+  // alongside successful tool calls. See test "assembleDeliverable rejects
+  // observations without observationResult metadata".
+  if (!observationResult) return null;
+  if (observationResult.success !== true) return null;
+  if (observationResult.toolName && RUNNER_META_TOOLS.has(observationResult.toolName)) return null;
+  if (observationResult.toolName && !state.toolsUsed.has(observationResult.toolName)) return null;
 
   const storedKey = typeof step.metadata?.storedKey === "string" ? step.metadata.storedKey : undefined;
   return resolveStoredToolObservation(raw, state.scratchpad, storedKey);

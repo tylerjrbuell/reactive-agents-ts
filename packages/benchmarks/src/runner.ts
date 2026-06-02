@@ -587,7 +587,22 @@ async function runInternal(
       .withModel(model.model)
       .withMaxIterations(maxIter)
 
-    if (config.tools) builder.withTools()
+    if (config.tools) {
+      // Tasks with fixtures need file-read (and may need file-write for
+      // produce-file flows). The default `.withTools()` filters out the
+      // builtin file-* tools (rationale: surface area minimization for
+      // generic agents) — so a fixture-bearing bench task without explicit
+      // builtins exposure would hand the model NO way to read its fixture.
+      // Surfaced 2026-06-02 during Phase-A context-stress triage: cs-overflow-*
+      // cells were measuring "model gropes for non-existent file-read" instead
+      // of arm-level assembly behavior. Tasks declare fixtures → runner
+      // exposes the file tools.
+      if (task.fixtures && task.fixtures.length > 0) {
+        builder.withTools({ builtins: ["file-read", "file-write"] })
+      } else {
+        builder.withTools()
+      }
+    }
     if (config.guardrails || task.requiresGuardrails) builder.withGuardrails()
 
     if (config.reasoning) {

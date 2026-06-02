@@ -70,4 +70,4 @@ On the failed V3 loop, the verifier rejected the output: `output-not-harness-par
 - Three tuning levers (B1 earlier stall cutoff, B2 stall-triggered compression, B3 flush windowing) + one correctness follow-up (fallback-path strip chokepoint).
 - All are independent, non-blocking, and orthogonal to the merge.
 
-Harness: `apps/examples/scratch-perf.ts` (controlled-variant timing probe) retained for re-measurement.
+Harness: `apps/examples/src/research/perf-bottleneck-isolation.ts` (renamed from `scratch-perf.ts` 2026-06-01; controlled-variant timing probe retained for re-measurement).

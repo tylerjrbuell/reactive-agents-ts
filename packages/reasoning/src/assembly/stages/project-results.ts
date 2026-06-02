@@ -41,6 +41,19 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   // 2. Reconstruct turns. Consecutive tool_called events (a parallel batch)
   //    collapse into one assistant turn; flush that turn when the first of its
   //    results arrives (subsequent parallel results just append after it).
+  //
+  // Recency-aware per-result projection (2026-06-02):
+  //   • Latest tool_result   → FULL if ≤ recencyBudgetChars (model attention).
+  //                            That's the result the model is acting on NOW.
+  //   • Older tool_results   → FULL if ≤ toolResultPreserveBudget (tight legacy
+  //                            cap, tier-aware). Otherwise preview+ref so the
+  //                            thread doesn't bloat with stale full payloads.
+  //
+  // Phase-A 2026-06-02 measurement: a flat per-result preserve cap (legacy's
+  // 4000-chars for local tier) regressed transcribe 100→0% and recall 100→33%
+  // because preview+ref stripped the verbatim content the SOLE/latest result
+  // carried. The recency split preserves the latest result's content (large
+  // budget, model can act) while still collapsing accumulated history.
   let pending: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [];
   const flush = () => {
     if (pending.length === 0) return;
@@ -48,6 +61,12 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
     trace = recordMessage(trace, { role: "assistant", chars: 0 });
     pending = [];
   };
+
+  // Pre-pass: index the last tool_result event so we can route it to the
+  // recency budget while older results take the preserve budget.
+  const toolResultEvents = c.log.events.filter((e) => e.kind === "tool_result");
+  const lastResultIdx = toolResultEvents.length - 1;
+  let resultSeen = 0;
 
   for (const e of c.log.events) {
     if (e.kind === "tool_called") {
@@ -58,20 +77,23 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
       if (!stored) continue;
       const call = c.log.byKind("tool_called").find((x) => x.callId === e.callId);
       const fullText = c.store.materialize(e.ref, "bullets");
+      const isLatest = resultSeen === lastResultIdx;
+      // Latest result keeps the generous attention budget so verbatim-style
+      // tasks (transcribe / recall a specific sentinel) don't have their
+      // content stripped by preview+ref. Older results compress aggressively
+      // (legacy tier cap) so the message thread doesn't accumulate stale
+      // full payloads across iterations.
+      const budget = isLatest
+        ? c.capability.recencyBudgetChars
+        : c.capability.toolResultPreserveBudget;
       let content: string;
       let projection: "full" | "preview+ref";
-      if (fullText.length <= c.capability.recencyBudgetChars) {
+      if (fullText.length <= budget) {
         content = fullText;
         projection = "full";
         full++;
       } else {
-        // Content-aware overflow (#1, 2026-05-31): a bounded STRUCTURAL preview
-        // (heading skeleton + lead lines) within budget, NOT a bare shape+ref.
-        // Bare-ref stripped the content the model needs to summarize (Phase-4
-        // regression: bare-ref 0/2 vs legacy faithful); preview keeps every
-        // section visible AND carries the ref so the model can still act by
-        // reference. Full data stays recoverable system-side via the store.
-        content = c.store.preview(e.ref, c.capability.recencyBudgetChars);
+        content = c.store.preview(e.ref, budget);
         projection = "preview+ref";
         summarized++;
       }
@@ -80,6 +102,7 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
         { role: "tool_result", toolCallId: e.callId, toolName: call?.tool ?? "tool", content },
       ];
       trace = recordMessage(trace, { role: "tool_result", chars: content.length, projection });
+      resultSeen++;
     }
   }
   flush(); // trailing unanswered calls (defensive; mirrors legacy faithfulness)
