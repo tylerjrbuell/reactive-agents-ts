@@ -1,4 +1,5 @@
 import { resolveCanonical } from "@reactive-agents/llm-provider";
+import { capabilitySourcePreflight } from "@reactive-agents/core";
 
 type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" | "custom";
 
@@ -64,22 +65,24 @@ export function validateBuild(
     }
   }
 
-  // Capability-source honesty gate (mirrors the bench preflight at agent build
-  // time). When the canonical resolver finds no probe/cache/static-table entry,
-  // it returns a conservative 2048-ctx fallback that silently under-sizes every
-  // downstream context budget (root cause of the 2026-06-02 claude-haiku-4-5
+  // Capability-source honesty gate — runtime consumer of the canonical PreFlight
+  // contract (`@reactive-agents/core` contracts/preflight.ts), shared with the
+  // bench gate. When the canonical resolver finds no probe/cache/static-table
+  // entry it returns a conservative 2048-ctx fallback that silently under-sizes
+  // every downstream context budget (root cause of the 2026-06-02 claude-haiku-4-5
   // baseline regression). Surface it loudly — warning by default, error under
   // strictValidation — rather than running silently degraded (anti-mission #4).
-  // `provider: "test"` is exempt (deterministic provider, no real capability).
+  // `provider: "test"`/"custom" are exempt (no real capability to resolve).
   if (model && provider !== "test" && provider !== "custom") {
     const cap = resolveCanonical(provider, model);
-    if (cap.source === "fallback") {
-      const msg =
-        `Capability for ${provider}/${model} resolved from source="fallback" ` +
-        `(no probe/cache/static-table entry) — running at a conservative ${cap.recommendedNumCtx}-token ` +
-        `context window, which silently under-sizes every context budget. ` +
-        `Fix: add "${model}" to STATIC_CAPABILITIES in @reactive-agents/llm-provider, ` +
-        `or enable a live capability probe. Build with strict validation to make this an error.`;
+    const violation = capabilitySourcePreflight({
+      provider,
+      model,
+      source: cap.source,
+      recommendedNumCtx: cap.recommendedNumCtx,
+    });
+    if (violation) {
+      const msg = `${violation.message} Build with strict validation to make this an error.`;
       if (strict) {
         errors.push(msg);
       } else {

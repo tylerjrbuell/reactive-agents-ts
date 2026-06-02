@@ -23,7 +23,7 @@ describe("capability-source preflight gate", () => {
 
     expect(violations.length).toBe(1);
     const v = violations[0] as PreFlightViolation;
-    expect(v.kind).toBe("capability-source-fallback");
+    expect(v.kind).toBe("capability-source");
     expect(v.provider).toBe("ollama");
     expect(v.model).toBe("definitely-not-a-real-model-xyz");
     expect(v.source).toBe("fallback");
