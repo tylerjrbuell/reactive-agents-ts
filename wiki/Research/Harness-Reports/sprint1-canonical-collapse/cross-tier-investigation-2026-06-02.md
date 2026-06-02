@@ -85,3 +85,56 @@ This route stays disciplined (no false-pass) while distinguishing **arm-level ar
 
 - `sonnet-stdout.log` / `sonnet-trace.log` — frontier diag (this directory)
 - The bench JSONs at `frontier.json` + `mid.json` contain per-run output text used for diagnosis
+
+## Update 2026-06-02 (after U2 fix + cross-tier rebaseline)
+
+The U2 path-fix (commit landing `bench-u2 substitute absolute fixture paths`) shipped
+and closed the frontier summarize regression entirely (50% → 67% project, +17pp lift).
+Mid summarize partially recovered (project arm reads file content cleanly now) but a
+**new arm-level gap surfaced**: project arm 0% / legacy arm 67% on mid summarize, with
+haiku producing freeform prose under project's prompt vs structured `## Summary` output
+under legacy's prompt.
+
+### U3 — hybrid steering channel missing from project() for local/mid tiers
+
+**Mechanism:** legacy `ContextManager.build()` (`context-manager.ts:151-156`) uses a
+**hybrid steering channel** for local/mid tiers — system prompt + an appended user-
+message reminder built by `buildShortGuidanceReminder()`. When guidance signals fire
+(required tools pending, loop detected, error recovery, oracle guidance), the reminder
+is appended to the message thread. Legacy also runs `buildConversationMessages()` which
+applies tier-adaptive `applyMessageWindowWithCompact()` + per-iteration `adapter.taskFraming`
+hooks that wrap the user task message for local tier.
+
+Canonical `project()` walks the log purely (goal + tool_called + tool_result) and emits
+clean turns with no tier-aware reminder, no message-window compaction tuned to tier, and
+no adapter `taskFraming` integration. For frontier the missing pieces are no loss (pure
+system-prompt steering works). For local/mid the hybrid signals are what cue weaker
+models to produce structured output formats.
+
+**Evidence:** mid haiku project-arm `cs-overflow-summarize` produces narration like
+"the raw data contains only placeholder lorem ipsum text" without a `## Summary`
+heading — content is right, structure is wrong. Legacy arm output: "I'll write the
+`## Summary` section to `report.md` with a one-line summary for each section."
+
+**Verdict for A2 deletion:**
+- Strict per-cell equal-or-better at mid is failed by U3 on `cs-overflow-summarize`.
+- AGGREGATE cross-tier equal-or-better (canonical-harness-core P1):
+  - Mean accuracy: project 56% / legacy 50% → **project +6pp**
+  - Mean reliability: project 92% / legacy 84% → **project +8pp**
+  - Tokens: project +29% aggregate (dominated by mid dishonest-bait runaway; judge offline)
+- Aggregate gate passes. A2 deletion authorized under aggregate rule.
+
+**Carry U3 as Sprint-3 work:** add a hybrid-steering stage to project() that ports the
+legacy reminder + adapter.taskFraming logic for local/mid tiers. Tier-gated, on by default
+for local/mid, off for frontier. Expected: closes the mid summarize regression while
+preserving frontier's pure system-prompt steering.
+
+## Post-pathfix cross-tier table (authoritative)
+
+| tier | project acc/rel/tok | legacy acc/rel/tok | aggregate verdict |
+|---|---|---|---|
+| local | 75% / 100% / 16774 | 75% / 100% / 14902 | tied acc/rel; project +12% tok |
+| mid | 25% / 100% / 11279 | 17% / 76% / 6432 | project +8pp acc, +24pp rel; +75% tok (U3 + dishonest-bait runaway) |
+| frontier | 67% / 76% / 3341 | 58% / 76% / 3474 | project +9pp acc; tied rel; -4% tok |
+
+Authoritative receipt files: `pathfix-local.json`, `pathfix-mid.json`, `pathfix-frontier.json`.

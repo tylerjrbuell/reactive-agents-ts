@@ -653,6 +653,7 @@ The remaining canonical-harness-core mechanisms hardened into typed contracts.
 | C3.2 | Verifier severity ladder (gap 7) | `VerifierVerdict { checks: {name, severity, reason}[] }`; arbitrator routes |
 | C3.3 | Strategies as reducer policies (gap 6) | plan-execute / ToT / reflexion migrate to compose API over single reducer |
 | C3.4 | Recency-aware projection invariant (already shipped) | Pin tests cover the latest=full / older=preserve contract |
+| C3.5 | **U3: hybrid steering channel for local/mid tiers** | Port the legacy reminder + adapter.taskFraming logic for local/mid into a tier-gated project() stage. Frontier keeps pure system-prompt steering. Surfaced 2026-06-02 by mid haiku summarize regression (cross-tier-investigation-2026-06-02.md). |
 
 **Exit gate:** cross-tier ablation receipts for each: ≥3pp lift OR ≤15% overhead. Strategy LOC drops ≥40% (Pillar-3 mission target).
 
