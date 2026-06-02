@@ -41,10 +41,14 @@ async function runOnce(arm: "project" | "legacy"): Promise<{
   if (arm === "legacy") process.env.RA_ASSEMBLY = "0";
   else delete process.env.RA_ASSEMBLY;
 
+  // Provider/model selected via DIAG_PROVIDER / DIAG_MODEL env (default qwen3.5).
+  const provider = (process.env.DIAG_PROVIDER ?? "ollama") as "ollama" | "anthropic" | "openai" | "gemini" | "litellm";
+  const model = process.env.DIAG_MODEL ?? "qwen3.5:latest";
+
   const agent = await ReactiveAgents.create()
     .withName(`diag-sum-${arm}`)
-    .withProvider("ollama")
-    .withModel("qwen3.5:latest")
+    .withProvider(provider)
+    .withModel(model)
     .withMaxIterations(15)
     .withTools({ builtins: ["file-read", "file-write"] })
     .withReasoning({ defaultStrategy: "reactive" })
@@ -71,7 +75,9 @@ async function runOnce(arm: "project" | "legacy"): Promise<{
 }
 
 async function main(): Promise<void> {
-  console.log("Phase-A summarize-arms diagnostic (qwen3.5:latest)\n");
+  const provider = process.env.DIAG_PROVIDER ?? "ollama";
+  const model = process.env.DIAG_MODEL ?? "qwen3.5:latest";
+  console.log(`Phase-A summarize-arms diagnostic (${provider}/${model})\n`);
 
   for (const arm of ["project", "legacy"] as const) {
     process.stdout.write(`  ${arm}... `);
