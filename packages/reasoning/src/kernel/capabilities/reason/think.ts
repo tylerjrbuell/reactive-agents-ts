@@ -366,6 +366,18 @@ export function handleThinking(
       }));
     }
 
+    // RA_PROMPT_DUMP — write the assembled prompt+messages to disk for diff.
+    // Strictly diagnostic. Off by default. Path: /tmp/ra-prompt-dump-{arm}-{iter}.json
+    if (process.env.RA_PROMPT_DUMP) {
+      const arm = assemblyEnabled() ? "project" : "legacy";
+      const path = `${process.env.RA_PROMPT_DUMP}-${arm}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require("node:fs") as typeof import("node:fs");
+        fs.writeFileSync(path, JSON.stringify({ arm, iteration: state.iteration, systemPromptText, conversationMessages }, null, 2));
+      } catch { /* diagnostic only — never fail the run */ }
+    }
+
     // ── Inc 1: recall overflow gate (tier-aware context architecture) ─────────
     // recall is only usable when a >4000-char tool result was truncated and its
     // storedKey is surfaced in THIS iteration's window. Below the inline cap the

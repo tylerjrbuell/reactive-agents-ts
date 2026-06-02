@@ -176,6 +176,30 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // Suffix-less alias: callers using `claude-haiku-4-5` (the marketing name
+  // without the 20251001 date suffix) previously fell through to the 2048
+  // conservative fallback, which under-sized the recencyBudgetChars gate in
+  // assembly and triggered preview+ref on a 28K-char tool result — haiku
+  // then read the structural-preview heading skeleton, perceived it as a
+  // truncation marker ("file-read is truncating at 29487 chars"), and
+  // narrated honest failure instead of summarizing. Phase-A 2026-06-02
+  // bench cells used `claude-haiku-4-5` (suffix-less); this entry collapses
+  // the resolution to the same capability as the dated alias.
+  "anthropic/claude-haiku-4-5": {
+    provider: "anthropic",
+    model: "claude-haiku-4-5",
+    tier: "mid",
+    maxContextTokens: 200_000,
+    recommendedNumCtx: 200_000,
+    maxOutputTokens: 8192,
+    tokenizerFamily: "claude",
+    supportsPromptCaching: true,
+    supportsVision: true,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
 
   // ── OpenAI ───────────────────────────────────────────────────────────────
   "openai/gpt-4o": {

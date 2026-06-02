@@ -95,7 +95,37 @@ Mid summarize partially recovered (project arm reads file content cleanly now) b
 haiku producing freeform prose under project's prompt vs structured `## Summary` output
 under legacy's prompt.
 
-### U3 — hybrid steering channel missing from project() for local/mid tiers
+### U3 — RETRACTED: actual cause was haiku capability fallback, not steering
+
+**The earlier U3 "hybrid steering channel missing" hypothesis below is INVALIDATED.**
+Advisor flagged it as inferred-not-observed; subsequent prompt-dump showed the real
+root cause was the same model-alias mismatch class as qwen3.5:latest.
+
+**Actual root cause:**
+- `packages/llm-provider/src/capability.ts` STATIC_CAPABILITIES has `anthropic/claude-haiku-4-5-20251001` (date-suffixed) but bench uses `claude-haiku-4-5` (no suffix).
+- Lookup misses → conservative fallback (recommendedNumCtx=2048) fires.
+- `fromKernelState` reads profile.maxTokens=2048 → `resolveCapability` derives `recencyBudgetChars = 2048 * 0.35 * 4 = 2867 chars`.
+- bigReport ≈ 28800 chars >> 2867 → `preview()` fires on the SINGLE tool_result → haiku sees an 829-char heading-skeleton with a "[content truncated — 28934 chars total; full data held system-side as result_ref=...]" footer.
+- Haiku honestly narrates "file-read is truncating at 29487 chars" and refuses to summarize from a truncation marker.
+
+**Evidence (commit landing the fix):**
+Single-run prompt dump at `/tmp/promptdiff/bench-project-iter2-...json` showed the
+tool_result body as 829 chars heading-only ("## Section 1 / ## Section 2 / ...")
+instead of the expected ~29K full content. After adding the suffix-less alias
+`anthropic/claude-haiku-4-5` to STATIC_CAPABILITIES (commit landing), bench
+re-run N=3: project 100% / legacy 100% / 100% reliability both arms / ~4800
+tokens both arms. Regression fully closed.
+
+**Lesson:** the "U3 hybrid steering channel" was a BUCKET name applied without
+inspecting the actual assembled prompt. The advisor's competing hypothesis
+("look at the prompt — preview+ref vs full") proved correct. Diagnostic
+prompt-dump under `RA_PROMPT_DUMP` env added to `think.ts` to make this
+class catchable in seconds instead of hours.
+
+**Below kept for historical record only — DO NOT use as authoritative analysis:**
+
+---
+### [HISTORICAL] U3 hypothesis (INVALIDATED 2026-06-02)
 
 **Mechanism:** legacy `ContextManager.build()` (`context-manager.ts:151-156`) uses a
 **hybrid steering channel** for local/mid tiers — system prompt + an appended user-
