@@ -2,6 +2,7 @@
 /**
  * Benchmark types — task definitions, run results, and report shape.
  */
+import type { ToolRequirement } from "@reactive-agents/core";
 
 /** Complexity tier for benchmark tasks. */
 export type Tier = "trivial" | "simple" | "moderate" | "complex" | "expert" | "real-world";
@@ -20,6 +21,15 @@ export interface BenchmarkTask {
   readonly benchmark?: string;
   /** Whether tools are required. */
   readonly requiresTools?: boolean;
+  /**
+   * Sprint-1 TaskContract bridge: explicit tool requirements. When present,
+   * the bench runner uses `toolsToExpose()` from `@reactive-agents/core` to
+   * drive `.withTools({builtins: [...]})` exposure. Coexists with the legacy
+   * `requiresTools: true` boolean during migration. Defaults: when omitted,
+   * runner falls back to the fixtures-heuristic (any task with fixtures
+   * exposes file-read/file-write).
+   */
+  readonly tools?: ReadonlyArray<ToolRequirement>;
   /** Whether security guardrails are required. */
   readonly requiresGuardrails?: boolean;
   /** Whether dynamic sub-agent spawning is required (spawn-agent tool). */

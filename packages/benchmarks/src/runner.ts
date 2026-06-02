@@ -6,6 +6,7 @@
  * measuring real-world latency, token usage, cost, and correctness.
  */
 import type { BenchmarkTask, TaskResult, OverheadMeasurement, BenchmarkReport, Tier } from "./types.js";
+import { toolsToExpose } from "@reactive-agents/core";
 import { BENCHMARK_TASKS } from "./task-registry.js";
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
@@ -588,17 +589,27 @@ async function runInternal(
       .withMaxIterations(maxIter)
 
     if (config.tools) {
-      // Tasks with fixtures need file-read (and may need file-write for
-      // produce-file flows). The default `.withTools()` filters out the
-      // builtin file-* tools (rationale: surface area minimization for
-      // generic agents) — so a fixture-bearing bench task without explicit
-      // builtins exposure would hand the model NO way to read its fixture.
-      // Surfaced 2026-06-02 during Phase-A context-stress triage: cs-overflow-*
-      // cells were measuring "model gropes for non-existent file-read" instead
-      // of arm-level assembly behavior. Tasks declare fixtures → runner
-      // exposes the file tools.
-      if (task.fixtures && task.fixtures.length > 0) {
-        builder.withTools({ builtins: ["file-read", "file-write"] })
+      // Sprint-1 TaskContract bridge: prefer explicit task.tools when present
+      // (toolsToExpose returns required+available names + auto-adds file-read
+      // for fixture-bearing tasks). Falls back to legacy fixtures-heuristic for
+      // tasks not yet migrated to the contract.
+      const declared = task.tools
+        ? toolsToExpose({
+            prompt: task.prompt,
+            tools: task.tools,
+            fixtures: task.fixtures,
+            success: { type: "regex", pattern: "" }, // unused by toolsToExpose
+          })
+        : undefined
+      // Always include file-write alongside file-read so write-flow tasks
+      // (e.g. summary-to-file) work whenever fixtures exist.
+      const builtins = declared
+        ? [...new Set([...declared, ...(task.fixtures?.length ? ["file-write"] : [])])]
+        : task.fixtures && task.fixtures.length > 0
+          ? ["file-read", "file-write"]
+          : undefined
+      if (builtins && builtins.length > 0) {
+        builder.withTools({ builtins })
       } else {
         builder.withTools()
       }

@@ -34,6 +34,7 @@ export const CONTEXT_STRESS_TASKS: readonly BenchmarkTask[] = [
     prompt:
       "Read report.md and reproduce ALL of its table rows verbatim under a '## Rows' heading. Omit none.",
     requiresTools: true,
+    tools: [{ kind: "required", name: "file-read" }],
     fixtures: [{ path: "report.md", content: bigTable }],
     // Last row (v199) present → nothing was dropped under window pressure.
     successCriteria: { type: "regex", pattern: "## Rows[\\s\\S]*v199" },
@@ -47,6 +48,7 @@ export const CONTEXT_STRESS_TASKS: readonly BenchmarkTask[] = [
     prompt:
       "Read report.md and write a one-line summary of EACH section under '## Summary'.",
     requiresTools: true,
+    tools: [{ kind: "required", name: "file-read" }],
     fixtures: [{ path: "report.md", content: bigReport }],
     successCriteria: { type: "regex", pattern: "## Summary" },
     primaryDimensions: ["accuracy"],
@@ -59,6 +61,7 @@ export const CONTEXT_STRESS_TASKS: readonly BenchmarkTask[] = [
     prompt:
       "Read report.md, then state the report's final section title under '## Final Section'. Use what you read; do not ask to re-read.",
     requiresTools: true,
+    tools: [{ kind: "required", name: "file-read" }],
     fixtures: [{ path: "report.md", content: bigReport }],
     successCriteria: { type: "regex", pattern: "ZEBRA-CODA" },
     primaryDimensions: ["accuracy"],
