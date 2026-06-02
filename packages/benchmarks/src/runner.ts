@@ -25,6 +25,7 @@ import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
 import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs } from "./session.js"
+import { checkCapabilitySourcePreflight, formatPreflightViolations } from "./preflight.js"
 
 /**
  * Apply env vars for the duration of a variant's run, return a restore fn.
@@ -898,6 +899,23 @@ export async function runSession(
         );
       }
     }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // ── Capability-source preflight (Sprint-2 measurement honesty) ────────────
+  // Refuse to score any cell whose model capability resolved from
+  // `source === "fallback"`. Fallback means the resolver had no probe/cache/
+  // static-table entry and silently used a conservative 2048-ctx default,
+  // under-sizing every downstream budget — the score would be a misconfigured-
+  // budget artifact, not a model result (root cause of the 2026-06-02
+  // claude-haiku-4-5 baseline regression). Override with RA_BENCH_ALLOW_FALLBACK=1.
+  // See `core/contracts/capability.ts` + `src/preflight.ts`.
+  const fallbackViolations = checkCapabilitySourcePreflight(
+    session.models.map((m) => ({ provider: m.provider, model: m.model })),
+    { allowFallback: process.env.RA_BENCH_ALLOW_FALLBACK === "1" },
+  );
+  if (fallbackViolations.length > 0) {
+    throw new Error(formatPreflightViolations(fallbackViolations));
   }
   // ──────────────────────────────────────────────────────────────────────────
 
