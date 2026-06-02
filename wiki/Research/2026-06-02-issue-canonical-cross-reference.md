@@ -22,6 +22,33 @@ git-state:
 
 ---
 
+## ⚠️ Code-Verified Addendum (2026-06-02, post-dive) — the plan's RCs are a sprint stale
+
+Direct measurement against the tree (branch `refactor/canonical-sprint2-2026-06-02`) contradicts the plan's "not started" framing for the two biggest workstreams. **The structural refactor is mostly already done.**
+
+| Plan claim (canonical-refactor §3) | Code reality (measured 2026-06-02) | Status |
+|---|---|---|
+| RC-1/WS-2: `runtime.ts` 40× `Layer.merge`, 44 casts | **6 merge, 3 casts, 10 `Layer.mergeAll`** | WS-2 ✅ effectively done |
+| runner.ts 1986 LOC | **771** | re-decomposed |
+| Pillar-4: 27 raw `state.status=` | **0** (106 `transitionState`) | invariant holds |
+| RC-2/WS-3: `act/` 3053 LOC monolith + tool-* conflation | **act/ 2602; `tool-parsing.ts`→`kernel/utils/`, `tool-gating.ts`→`decide/` already moved; `tool-execution.ts` 863 LOC, 0 external inbound** | WS-3 ~80% done |
+| RC-2: kernel mesh "7 cycles / 38 edges" | **0 cycles** — 16 directed cross-cap edges, fully acyclic (DAG) | cycles gone |
+| RC-4: 105 `Effect<X,unknown>`, ~490 `as any` | **34 / 103** (matches the plan's own corrected first-hand counts) | modest, real |
+
+**What actually remains of the structural refactor:**
+- Leaf-principle purism: 16 acyclic sibling-internal imports could route through Tags. **Low value** — no cycles to break; Tag-ifying acyclic edges risks metric-gaming (`[[feedback_no_metric_gaming_refactor]]`).
+- Cosmetic: `tool-parsing.ts` (consumed by reactive/act/reason/decide — genuinely substrate-shaped) sits in `utils/` not a `substrate/` dir. Organizational only.
+- `arbitrator.ts` grew 992→1320 LOC — a size/decomp candidate (WS-6, deferred), NOT a coupling problem. Per no-metric-gaming: leave-large is valid absent a cohesion win.
+
+**The real remaining lever is NOT structural — it's the measurement/honesty spine.** The `Capability.source` provenance discriminator (Sprint-1 B3) is the load-bearing primitive; "never silently act on fallback data" makes both the harness AND the eval honest. Two gates shipped this session on top of it:
+
+1. **Bench preflight** (`packages/benchmarks/src/preflight.ts`, commit `8c56a774`) — `runSession` refuses to SCORE a `source==="fallback"` cell.
+2. **Runtime build gate** (`packages/runtime/src/build-validation.ts`, commit `b8c13f0f`) — agent build SURFACES fallback (warn default / error under `strictValidation`) instead of running silently degraded.
+
+Together they close the bench↔runtime asymmetry and attack the documented root cause (silent budget misconfiguration → the claude-haiku-4-5 mid-tier baseline regression) at both layers.
+
+---
+
 ## 0. Headline Numbers
 
 | Bucket | Count | What it means |
