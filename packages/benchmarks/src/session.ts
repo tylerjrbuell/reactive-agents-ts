@@ -34,6 +34,17 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
     type: "internal", id: "ra-full-noop-verifier", label: "RA Full (No Verifier)",
     config: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true, verifier: "noop" },
   },
+
+  // Tier 3 (ablation): RA Full with the canonical project() context-assembly
+  // path disabled — flips RA_ASSEMBLY=0 so think.ts falls back to legacy
+  // defaultContextCurator.curate(). Paired against the default `ra-full`
+  // (project() default-on) by `sessions/context-stress.ts` for the Phase-A
+  // cross-tier A/B. The env passthrough is generic (config.env), so future
+  // env-gated arms graduate the same way.
+  {
+    type: "internal", id: "ra-full-assembly-off", label: "RA Full (legacy curate, RA_ASSEMBLY=0)",
+    config: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true, env: { RA_ASSEMBLY: "0" } },
+  },
 ]
 
 // ── Session utilities ─────────────────────────────────────────────────────────
