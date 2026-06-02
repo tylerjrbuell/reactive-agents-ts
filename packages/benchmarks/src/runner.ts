@@ -23,6 +23,23 @@ import type {
 import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs } from "./session.js"
+
+/**
+ * Apply env vars for the duration of a variant's run, return a restore fn.
+ * Generalises the VERIFIER_ENV pattern so env-gated arms (e.g. `RA_ASSEMBLY=0`)
+ * can run as `HarnessConfig.env` on a normal InternalVariant.
+ */
+export function withConfigEnv(env: Readonly<Record<string, string>> | undefined): () => void {
+  if (!env) return () => {};
+  const prev: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(env)) { prev[k] = process.env[k]; process.env[k] = v; }
+  return () => {
+    for (const k of Object.keys(env)) {
+      if (prev[k] === undefined) delete process.env[k];
+      else process.env[k] = prev[k];
+    }
+  };
+}
 import { scoreTask, computeReliability } from "./judge.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
@@ -607,6 +624,10 @@ async function runInternal(
     if (config.verifier === "noop") {
       process.env[VERIFIER_ENV] = "1";
     }
+    // Generalised env-arm passthrough: variants like ra-full-assembly-off set
+    // `config.env = { RA_ASSEMBLY: "0" }` to flip framework env-gated paths for
+    // the duration of this cell. Same try/finally discipline as VERIFIER_ENV.
+    const restoreConfigEnv = withConfigEnv(config.env);
 
     try {
       const prompt = task.fixtures?.length
@@ -627,6 +648,7 @@ async function runInternal(
         if (prevVerifierEnv === undefined) delete process.env[VERIFIER_ENV];
         else process.env[VERIFIER_ENV] = prevVerifierEnv;
       }
+      restoreConfigEnv();
     }
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : String(e)

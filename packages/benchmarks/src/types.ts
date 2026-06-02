@@ -218,6 +218,12 @@ export interface HarnessConfig {
    * production behavior (defaultVerifier).
    */
   readonly verifier?: "default" | "noop";
+  /**
+   * Arbitrary env vars to set for the duration of this variant's run (set before
+   * agent build, restored in finally). Used for env-gated arms like the context
+   * assembly A/B (`{ RA_ASSEMBLY: "0" }`). Generalizes the verifier:"noop" pattern.
+   */
+  readonly env?: Readonly<Record<string, string>>;
 }
 
 export interface InternalVariant {
