@@ -646,8 +646,24 @@ async function runInternal(
     const restoreConfigEnv = withConfigEnv(config.env);
 
     try {
+      // Path-resilient prompt construction (2026-06-02 sprint-1 U2 fix).
+      // Previously prepended "Working directory: <tmpDir>. Use full path..."
+      // as an advisory. Frontier models (sonnet) and weak local models both
+      // dropped the working-dir prefix and emitted file-read("report.md")
+      // relative → ENOENT → N=3 measurement noise that masked the real
+      // arm-level signal on cs-overflow-* cells. The fix: substitute each
+      // declared fixture's relative path with its absolute path INSIDE the
+      // task prompt itself, so the model has nothing relative to drop.
+      let resolvedPrompt = task.prompt
+      for (const fixture of task.fixtures ?? []) {
+        const absPath = join(tmpDir, fixture.path)
+        // Word-boundary replacement so "report.md" inside "my-report.md"
+        // doesn't get corrupted; preserves the original task prose otherwise.
+        const re = new RegExp(`\\b${fixture.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g")
+        resolvedPrompt = resolvedPrompt.replace(re, absPath)
+      }
       const prompt = task.fixtures?.length
-        ? `Working directory for this task: ${tmpDir}\n\nAll task files (e.g. ${task.fixtures.map(f => f.path).join(", ")}) are located in that directory. Use the full path when reading files.\n\n${task.prompt}`
+        ? `Working directory for this task: ${tmpDir}\n\n${resolvedPrompt}`
         : task.prompt
       const timeoutP = new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs))
       const result = await Promise.race([agent.run(prompt), timeoutP])
