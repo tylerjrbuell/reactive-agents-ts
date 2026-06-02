@@ -21,6 +21,7 @@ import type {
   SessionReproducibility,
 } from "./types.js"
 import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
+import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs } from "./session.js"
 
@@ -555,7 +556,7 @@ export const runBenchmarks = async (
 
 // ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
 
-const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS] as const
+const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...CONTEXT_STRESS_TASKS] as const
 
 function getGitSha(): string {
   try { return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim() }
