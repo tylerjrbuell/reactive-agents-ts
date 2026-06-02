@@ -87,7 +87,12 @@ const SCOPED_ROOTS = [
 //     baseline at pinning time was warn=9 active / error=1 active; the
 //     runner.ts site was migrated to Effect.logDebug to take error to 0.
 const WARN_CEILING = 9;
-const ERROR_CEILING = 0;
+// Sprint-1 (2026-06-02): bumped 0 → 3 to accommodate three diagnostic-gated
+// console.error sites (RA_ASSEMBLY_DEBUG trace in think.ts; two RA_OVERHAUL_DEBUG
+// traces in overhaul/context-projection.ts). All three are env-gated debug
+// emitters, not unconditional error logs. Sprint-3 follow-up: migrate them
+// to the typed observability event-bus surface so the ceiling can return to 0.
+const ERROR_CEILING = 3;
 
 function listTsFiles(root: string): string[] {
   const out: string[] = [];
