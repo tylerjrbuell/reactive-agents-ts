@@ -20,7 +20,7 @@ import {
   buildToolSchemas,
   sanitizeToolName,
 } from "../attend/context-utils.js";
-import type { Prompt } from "../../../context/context-curator.js";
+import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { fromKernelState } from "../../../assembly/from-kernel-state.js";
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
@@ -352,9 +352,9 @@ export function handleThinking(
     const { request, trace } = project(
       fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }, input.task),
     );
-    const systemPromptText: Prompt["systemPrompt"] = request.systemPrompt;
-    const conversationMessages: Prompt["messages"] = toLLMMessages(request.messages);
-    const compressionApplied: Prompt["compressionApplied"] = undefined;
+    const systemPromptText: string = request.systemPrompt;
+    const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
+    const compressionApplied: undefined = undefined;
     if (process.env.RA_ASSEMBLY_DEBUG === "1") {
       console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }

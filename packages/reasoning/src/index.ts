@@ -123,14 +123,9 @@ export type {
 // ─── Message Window Compaction ───
 export { applyMessageWindowWithCompact } from "./context/message-window.js";
 
-// ─── ContextCurator (Phase 1 Sprint 2 S2.5) ───
-export {
-  defaultContextCurator,
-  renderObservationForPrompt,
-  buildRecentObservationsSection,
-  RECENT_OBSERVATIONS_HEADER,
-} from "./context/context-curator.js";
-export type { Prompt, ContextCurator, CuratorOptions } from "./context/context-curator.js";
+// ContextCurator + curate() DELETED in Sprint-1 A3 (2026-06-02). Canonical
+// project() from assembly/ is the sole assembler. See spec
+// wiki/Architecture/Design-Specs/2026-06-02-canonical-contracts-and-invariants.md.
 
 // ─── Adaptive Prompt Composer (APC-2) ───
 export {
