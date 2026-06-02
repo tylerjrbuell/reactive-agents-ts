@@ -74,15 +74,10 @@ export type TerminateOptions = {
   readonly rationale?: Rationale;
 };
 
-// DEFAULT-ON, opt-out only via RA_POST_CONDITIONS=0 — mirrors the Arbitrator's gate
-// (arbitrator.ts) and assemblyEnabled(). Cleared the default-on bar by the cross-tier
-// ablation + frontier-judge verdict (wiki/Research/Harness-Reports/
-// postconditions-ablation-2026-05-31.md). Prose-only success (legacy, where an
-// exhausted imperative path can force-deliver around an unmet condition) remains
-// reachable via RA_POST_CONDITIONS=0.
-function postConditionsEnabled(): boolean {
-  return process.env.RA_POST_CONDITIONS !== "0";
-}
+// Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS flag deleted. Terminal
+// post-condition verification is unconditional — closes the false-success
+// hole at the imperative gateway. Aligns with canonical-harness-core
+// part 4 (state-grounded verification as success authority).
 
 /**
  * Terminal PostCondition hard-stop — the success authority at the single-owner
@@ -117,7 +112,6 @@ function applyTerminalPostConditionGate(
   state: KernelState,
   opts: TerminateOptions,
 ): KernelState | null {
-  if (!postConditionsEnabled()) return null;
   const conditions = state.meta.postConditions;
   if (!conditions || conditions.length === 0) return null;
 

@@ -99,17 +99,9 @@ describe("terminate() terminal PostCondition gate — default-on (#7 seed flip)"
     expect(result.output).toBe("Wrote ./out.md.");
   });
 
-  it("opt-out (RA_POST_CONDITIONS=0): gate is inert — legacy pass-through to done despite unmet condition", () => {
-    process.env.RA_POST_CONDITIONS = "0";
-    const state = stateWith({ postConditions: [toolCalled("file-write")] });
-    const result = terminate(state, {
-      reason: "harness_deliverable",
-      output: "Forced success.",
-    });
-
-    expect(result.status).toBe("done");
-    expect(result.output).toBe("Forced success.");
-  });
+  // Sprint-1 A4 (2026-06-02): opt-out via RA_POST_CONDITIONS=0 removed
+  // alongside the flag itself; gate is unconditional. The legacy pass-through
+  // case is no longer reachable.
 
   it("no stored conditions (empty/absent): byte-identical pass-through to done", () => {
     const state = stateWith({}); // no postConditions seeded at all

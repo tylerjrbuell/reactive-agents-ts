@@ -77,9 +77,6 @@ describe("PostCondition seed is default-on (runner.ts:250 regression guard)", ()
     expect(hasArtifact).toBe(true);
   });
 
-  it("OPT-OUT (RA_POST_CONDITIONS=0): does NOT seed — byte-identical legacy", async () => {
-    process.env.RA_POST_CONDITIONS = "0";
-    const state = await runSeed();
-    expect(state.meta.postConditions).toBeUndefined();
-  });
+  // Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS=0 opt-out removed; seeding
+  // is unconditional. The "byte-identical legacy" case is no longer reachable.
 });

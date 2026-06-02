@@ -145,48 +145,6 @@ describe("reflexion PostCondition spine gate (RA_POST_CONDITIONS=1)", () => {
     20000,
   );
 
-  it(
-    "reports success normally when RA_POST_CONDITIONS=0 (opt-out = existing required-tools-only gate)",
-    async () => {
-      // Same task as above but spine OPTED OUT (RA_POST_CONDITIONS=0) — no
-      // ArtifactProduced check. No requiredTools either → existing B gate doesn't
-      // fire → SATISFIED critique from mock → should complete normally.
-      // (Default-on flip 2026-05-31: unset now means gate ACTIVE, so the legacy
-      // prose-only path must be exercised via the explicit =0 opt-out.)
-      const PRIOR = process.env.RA_POST_CONDITIONS;
-      process.env.RA_POST_CONDITIONS = "0";
-      try {
-        const layer = await makeMockLayer();
-        const result = await Effect.runPromise(
-          executeReflexion({
-            taskDescription:
-              "Write a summary report and save it as a markdown file (./report.md).",
-            taskType: "general",
-            memoryContext: "",
-            availableTools: ["file-write"],
-            availableToolSchemas: [
-              {
-                name: "file-write",
-                description: "Write a file",
-                parameters: [
-                  { name: "path", type: "string", description: "path", required: true },
-                  { name: "content", type: "string", description: "content", required: true },
-                ],
-              },
-            ],
-            // No requiredTools — flag-off means the spine gate is inactive and only
-            // the narrow required-tools B gate runs (which is a no-op here).
-            config: defaultReasoningConfig,
-          } as any).pipe(Effect.provide(layer)),
-        );
-        // With RA_POST_CONDITIONS off and no requiredTools, critique SATISFIED
-        // should pass through → "completed".
-        expect(result.status).toBe("completed");
-      } finally {
-        if (PRIOR === undefined) delete process.env.RA_POST_CONDITIONS;
-        else process.env.RA_POST_CONDITIONS = PRIOR;
-      }
-    },
-    20000,
-  );
+  // Sprint-1 A4 (2026-06-02): the "RA_POST_CONDITIONS=0 opt-out" case was
+  // removed alongside the flag itself. PostCondition spine is unconditional.
 });

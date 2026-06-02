@@ -232,14 +232,7 @@ describe("PostCondition gate — live seam via arbitrationContextFromState + SEE
   }, 15000);
 });
 
-describe("PostCondition gate — opt-out (RA_POST_CONDITIONS=0, legacy prose-only)", () => {
-  beforeEach(() => { process.env.RA_POST_CONDITIONS = "0"; });
-
-  it("does NOT demote exit-success even with unmet conditions", () => {
-    const v = arbitrate(
-      { kind: "agent-final-answer", via: "tool", output: "summary" },
-      ctxWith([]),
-    );
-    expect(v.action).toBe("exit-success");
-  }, 15000);
-});
+// Sprint-1 A4 (2026-06-02): the "opt-out (RA_POST_CONDITIONS=0, legacy
+// prose-only)" describe block was removed alongside the flag itself.
+// Post-condition gating is unconditional via canonical-harness-core
+// part 4 (state-grounded verification as the sole success authority).

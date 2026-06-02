@@ -320,17 +320,12 @@ export const executeReflexion = (
             input.requiredTools ?? [],
           );
 
-          // Gate B (RA_POST_CONDITIONS, ADDITIVE): generalized PostCondition spine —
-          // checks artifact deliverables derived from the task description IN ADDITION
-          // to the required-tools check above. DEFAULT-ON, opt-out via
-          // RA_POST_CONDITIONS=0 — mirrors the arbitrator/terminate gates flipped on
-          // the cross-tier ablation + judge verdict (wiki/Research/Harness-Reports/
-          // postconditions-ablation-2026-05-31.md). Kept uniform so the spine is not
-          // on-for-reactive / off-for-reflexion.
-          const postConditionsEnabled =
-            process.env.RA_POST_CONDITIONS !== "0";
+          // Generalized PostCondition spine — checks artifact deliverables
+          // derived from the task description IN ADDITION to the required-tools
+          // check above. Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS flag
+          // deleted; spine is unconditional. Uniform with the arbitrator gate.
           let spineUnmet: readonly PostCondition[] = [];
-          if (postConditionsEnabled && isSatisfied(critique)) {
+          if (isSatisfied(critique)) {
             const conditions = deriveConditions(
               input.taskDescription,
               input.requiredTools ?? [],

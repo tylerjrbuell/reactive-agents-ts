@@ -169,19 +169,10 @@ describe("terminate() terminal PostCondition gate — flag ON", () => {
   }, 15000);
 });
 
-describe("terminate() terminal PostCondition gate — opt-out (RA_POST_CONDITIONS=0)", () => {
-  beforeEach(() => { process.env.RA_POST_CONDITIONS = "0"; });
-
-  it("delivers success even with unmet stored conditions", () => {
-    const state = baseState({
-      steps: ledgerWithArtifactButNoWrite(),
-      meta: { postConditions: [...unmetConditions] },
-    });
-    const next = terminate(state, { reason: "harness_deliverable", output: "Summary." });
-    expect(next.status).toBe("done");
-    expect(next.output).toBe("Summary.");
-  }, 15000);
-});
+// Sprint-1 A4 (2026-06-02): the "opt-out (RA_POST_CONDITIONS=0)" describe
+// block was removed when the flag itself was deleted. Post-condition
+// terminal gating is unconditional now; the legacy prose-only success
+// path is unreachable.
 
 // ── Integration: the actual stall/harness-deliverable terminate() path ────────
 
@@ -255,31 +246,7 @@ describe("runStallDeliverableStep — terminal gate via the real stall path", ()
     expect(result.state.output).toBeNull();
   }, 15000);
 
-  it("opt-out (RA_POST_CONDITIONS=0): same stall path delivers (unchanged) with status done", async () => {
-    process.env.RA_POST_CONDITIONS = "0";
-    const state = baseState({
-      steps: ledgerWithArtifactButNoWrite(),
-      meta: { postConditions: [...unmetConditions] },
-    });
-    const { Effect } = await import("effect");
-    const result = await Effect.runPromise(
-      runStallDeliverableStep({
-        state,
-        currentInput: input,
-        currentOptions: options,
-        missingRequiredByCount: [],
-        stallTriggered: true,
-        totalArtifacts: 1,
-        consecutiveStalled: 4,
-        requiredToolNudgeCount: 0,
-        failureRecoveryRedirects: 99,
-        maxRequiredToolNudges: 4,
-        maxFailureRecoveryRedirects: 2,
-        verifier: defaultVerifier,
-        emitLog: () => Effect.void,
-      }),
-    );
-    expect(result.outcome).toBe("break");
-    expect(result.state.status).toBe("done");
-  }, 15000);
+  // Sprint-1 A4 (2026-06-02): the "opt-out (RA_POST_CONDITIONS=0)" stall-path
+  // case was removed alongside the flag itself. Post-condition gating is
+  // unconditional via the canonical-harness-core success-authority mandate.
 });

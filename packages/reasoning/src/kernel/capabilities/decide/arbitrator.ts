@@ -809,10 +809,10 @@ const POST_CONDITION_STEER = "post-condition-steer";
 // postconditions-ablation-2026-05-31.md): the state-grounded spine steers incomplete
 // deliverable runs to completion — cogito summary success 1/3→3/3, per-run judged
 // quality 0.31→0.72, mid parity, no false-block, token-neutral. Prose-only success
-// (legacy) remains reachable via RA_POST_CONDITIONS=0. Mirrors assemblyEnabled().
-function postConditionsEnabled(): boolean {
-  return process.env.RA_POST_CONDITIONS !== "0";
-}
+// Sprint-1 A4 (2026-06-02): RA_POST_CONDITIONS flag DELETED. Post-condition
+// state-grounded verification is unconditional — the prose-only legacy
+// success path is no longer reachable. Aligns with canonical-harness-core
+// part 4 (state-grounded verification as the success authority).
 
 /**
  * Post-verdict override (single chokepoint). Runs AFTER the switch resolves a
@@ -825,7 +825,6 @@ function postConditionsEnabled(): boolean {
  */
 function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verdict {
   if (verdict.action !== "exit-success") return verdict;
-  if (!postConditionsEnabled()) return verdict;
 
   // DRY — prefer the run's derived-once stored set (threaded via
   // arbitrationContextFromState from state.meta.postConditions) so the steer
