@@ -2,7 +2,7 @@
 title: Cutover Critical Path + Efficiency Reframe
 date: 2026-05-31
 branch: overhaul/agentic-core-2026-05-31
-status: ACTIVE — sequencing decision (stop serial-discovery; sequence by capability)
+status: ✅ DONE (code-verified 2026-06-02) — FLIP, DEL curate(), #7 default-on, #5 window-source all landed
 ---
 
 # Cutover Critical Path + Efficiency Reframe

@@ -23,6 +23,8 @@ companion-thin-specs:
 
 # Canonical Refactor — Reactive Agents (Fresh-Start)
 
+> **⚠️ STATUS RECONCILED (code-verified 2026-06-02):** The RC counts below are a sprint stale. WS-1/WS-2 ✅ DONE; WS-3 🟡 ~80% (0 kernel cycles); WS-4/WS-5/WS-6 🟡 PARTIAL. Real remaining lever is the **measurement/honesty spine** (`Capability.source`) + **convergence Phase 2** (recitation + experience-reuse, NOT started), NOT the structural RCs. See `wiki/Research/2026-06-02-issue-canonical-cross-reference.md` §Code-Verified Addendum + the per-WS frontmatter.
+
 > **One sentence.** Bring the runtime in line with the canonical architecture already specified in `00-VISION` / `06-MISSION-STATEMENTS` / `07-OPTIMAL-EXECUTION-ALGORITHM`, by closing the five structural root causes the 2026-05-27 audit revealed, in a priority-ordered sequence where every workstream has a falsifiable verification gate.
 
 ---

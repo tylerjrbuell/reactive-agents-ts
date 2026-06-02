@@ -1,5 +1,7 @@
 # Canonical Context Assembly Implementation Plan
 
+> **STATUS (code-verified 2026-06-02):** 🟡 MOSTLY SHIPPED — `project()` is the sole live kernel context path; `curate()` deleted (A3 `c378796b`). Strangler INCOMPLETE: `context-manager.ts` survives (9 inbound from `context/` subsystem + `reactive.ts`); Phase-6 full deletion pending.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace RA's 4+ overlapping context-assembly paths with ONE pure, deterministic, observable `project(log, capability, store)` over a single append-only event log, fixing the marker/recall/dead-seam/two-record failure modes at the root.

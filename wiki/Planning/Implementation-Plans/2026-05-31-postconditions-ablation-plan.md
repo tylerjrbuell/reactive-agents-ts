@@ -2,7 +2,7 @@
 title: "#7 PostCondition spine — default-on ablation plan"
 date: 2026-05-31
 branch: overhaul/agentic-core-2026-05-31
-status: ABLATION DESIGNED — probe building, run pending
+status: ✅ SHIPPED (code-verified 2026-06-02) — #7 RA_POST_CONDITIONS default-on (bc5737a1) + A4 made it unconditional (82f53cca)
 ---
 
 # #7 PostCondition spine — RA_POST_CONDITIONS default-on ablation

@@ -1,7 +1,7 @@
 ---
 title: WS-4 — Anti-Scaffold Purge (declared-surface emit/consumer reconciliation)
 date: 2026-05-28
-status: pending
+status: 🟡 PARTIAL (code-verified 2026-06-02) — convergence Phase 1 wired the Compose tags; @reactive-agents/observe + compose still dead (1 caller each)
 master-plan: 2026-05-28-canonical-refactor.md (§4 RC-3 + §6.2 WS-4 summary)
 architecture-model: 2026-05-28-canonical-architecture-model.md (§9 emit/consume contract)
 root-cause-closed: RC-3 (declared surface elements without paired emit + consumer)

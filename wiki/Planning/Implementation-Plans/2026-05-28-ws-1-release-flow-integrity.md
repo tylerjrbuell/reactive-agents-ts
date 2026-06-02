@@ -2,7 +2,7 @@
 title: WS-1 — Release-Flow Residual Fixes (REVISED post-warden-audit)
 date: 2026-05-28
 revised: 2026-05-28 (evening)
-status: pending execution
+status: ✅ SHIPPED (code-verified 2026-06-02) — F2 verification typecheck clean, F3 judge-server private:true, #165 draft gone
 master-plan: 2026-05-28-canonical-refactor.md (§4 RC-5 REVISED)
 architecture-model: 2026-05-28-canonical-architecture-model.md
 audit-evidence: wiki/Research/Release-Audits/0.11.1-current-drift-2026-05-28.md (release-warden Phase 0)

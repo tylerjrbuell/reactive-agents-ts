@@ -1,7 +1,7 @@
 ---
 title: WS-2 — Runtime Composition + Agent-Facade Canonical Seam
 date: 2026-05-28
-status: pending
+status: ✅ SHIPPED (code-verified 2026-06-02) — runtime.ts on Layer.mergeAll (3 ComposableLayer casts, not 44); runner.ts 771 LOC
 master-plan: 2026-05-28-canonical-refactor.md
 architecture-model: 2026-05-28-canonical-architecture-model.md
 root-cause-closed: RC-1 (mutation-chain Layer composition; agent-facade type debt)

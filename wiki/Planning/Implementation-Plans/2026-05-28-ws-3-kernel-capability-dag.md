@@ -1,7 +1,7 @@
 ---
 title: WS-3 — Kernel `act/` Decomposition + Capability DAG
 date: 2026-05-28
-status: pending
+status: 🟡 ~80% SHIPPED (code-verified 2026-06-02) — 0 kernel cycles, tool-parsing→utils, tool-gating→decide; remaining = leaf-principle purism (low value, metric-gaming risk)
 master-plan: 2026-05-28-canonical-refactor.md (§4 RC-2 + §6.2 WS-3 summary)
 architecture-model: 2026-05-28-canonical-architecture-model.md (§2 kernel arch + §2.4 substrate distinction)
 evidence-base: wiki/Research/Refactor-Reports/2026-05-28-ws-3-import-graph.md (Phase 0 import-graph dump)
