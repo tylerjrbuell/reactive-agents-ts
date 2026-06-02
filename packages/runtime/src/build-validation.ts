@@ -1,3 +1,5 @@
+import { resolveCanonical } from "@reactive-agents/llm-provider";
+
 type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" | "custom";
 
 const PROVIDER_API_KEY_MAP: Record<string, string> = {
@@ -58,6 +60,30 @@ export function validateBuild(
             `Expected model prefix: ${prefixes.join(", ")}. ` +
             `The provider's default model will be used if this model is unavailable.`,
         );
+      }
+    }
+  }
+
+  // Capability-source honesty gate (mirrors the bench preflight at agent build
+  // time). When the canonical resolver finds no probe/cache/static-table entry,
+  // it returns a conservative 2048-ctx fallback that silently under-sizes every
+  // downstream context budget (root cause of the 2026-06-02 claude-haiku-4-5
+  // baseline regression). Surface it loudly — warning by default, error under
+  // strictValidation — rather than running silently degraded (anti-mission #4).
+  // `provider: "test"` is exempt (deterministic provider, no real capability).
+  if (model && provider !== "test" && provider !== "custom") {
+    const cap = resolveCanonical(provider, model);
+    if (cap.source === "fallback") {
+      const msg =
+        `Capability for ${provider}/${model} resolved from source="fallback" ` +
+        `(no probe/cache/static-table entry) — running at a conservative ${cap.recommendedNumCtx}-token ` +
+        `context window, which silently under-sizes every context budget. ` +
+        `Fix: add "${model}" to STATIC_CAPABILITIES in @reactive-agents/llm-provider, ` +
+        `or enable a live capability probe. Build with strict validation to make this an error.`;
+      if (strict) {
+        errors.push(msg);
+      } else {
+        warnings.push(msg);
       }
     }
   }
