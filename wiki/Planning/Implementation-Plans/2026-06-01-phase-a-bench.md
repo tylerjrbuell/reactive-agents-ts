@@ -1,5 +1,15 @@
 # Phase-A Bench Implementation Plan
 
+> ⚠️ **SUPERSEDED 2026-06-01 — DO NOT EXECUTE AS WRITTEN.** This plan built a parallel
+> bench under `apps/examples/bench/`, which duplicated the existing
+> `@reactive-agents/benchmarks` package (HarnessVariant arms, cross-tier sessions,
+> judge, ablation, competitors). That duplication was the maze the overhaul fights;
+> `apps/examples/bench/` was deleted. **Phase A is re-scoped to extend
+> `packages/benchmarks/` instead** — see the revised plan
+> `2026-06-01-phase-a-bench-in-benchmarks.md`. The task DESIGNS below (failure-mode
+> task set, faithfulness grading, equal-or-better verdict) remain useful as content to
+> port INTO benchmarks; the FILE LOCATIONS (`apps/examples/bench/*`) are obsolete.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a turnkey, cross-tier, pass^k, failure-mode bench that runs the WHOLE agent loop under two arms (baseline vs candidate) and renders a verdict that fails any refactor dropping value on any axis — the equal-or-better invariant, mechanized.

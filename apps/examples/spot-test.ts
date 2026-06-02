@@ -1,12 +1,12 @@
 import { ReactiveAgents } from 'reactive-agents'
-import { resolveSpotTask } from './bench/spot-task.js'
 
 // Env-parametrized so spot-test variants run without re-editing.
 const PROVIDER = process.env.SPOT_PROVIDER ?? 'ollama'
 const MODEL = process.env.SPOT_MODEL ?? 'gemma4:e4b'
-const resolved = resolveSpotTask(process.env)
-const TASK = resolved.prompt
-const TOOLS = resolved.tools
+const TASK =
+    process.env.SPOT_TASK ??
+    'Fetch the last 10 commits to tylerjrbuell/reactive-agents-ts then write a local markdown file (./commits.md) with all 10 commit messages.'
+const TOOLS = (process.env.SPOT_TOOLS ?? 'file-write,github/list_commits').split(',')
 // Pin the strategy so the RA_ASSEMBLY A/B isolates context-assembly on a single
 // think path. adaptive may pick plan-execute/ToT (separate assembly) → the seam
 // wouldn't fire on both arms. 'reactive' routes through kernel think.ts where the
@@ -94,8 +94,6 @@ console.log(
             durationMs: result.metadata.duration,
             outputLen: result.output.length,
             toolCalls: (result.metadata.toolCalls ?? []).map((t) => t.name),
-            benchTaskId: resolved.taskId ?? null,
-            expectedSections: resolved.expectedSections,
         }),
 )
 await agent.dispose()

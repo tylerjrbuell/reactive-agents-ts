@@ -110,6 +110,19 @@ default-on with documented opt-out killswitch (harmless); dead orphan gone; tree
 
 ## §3 — Phase A bench (start now): the measurement substrate
 
+> **CORRECTION 2026-06-01:** Phase A is built by **extending the existing
+> `@reactive-agents/benchmarks` package** — the canonical bench (HarnessVariant arms,
+> cross-tier `sessions`, judge + `AblationResult` quality lift, competitor runners,
+> reproducibility, `rax bench` CLI). An earlier attempt built a parallel bench under
+> `apps/examples/bench/`; that was duplication (the maze) and was deleted. Phase A adds
+> only the **three genuine gaps** to benchmarks: (1) a failure-mode context-stress task
+> set (overflow-summarize/transcribe, recall-temptation, dishonest-bait); (2)
+> `HarnessConfig.env` passthrough so `RA_ASSEMBLY`/`RA_OVERHAUL` arms run as
+> InternalVariants (the `verifier:"noop"` env pattern already exists in `runSession`);
+> (3) the honesty axis — use the existing **judge** as quality authority, add a
+> trace-honesty dimension only if the judge proves insufficient. The design below
+> (whole-vs-whole, pass^k, equal-or-better verdict) is the intent; benchmarks is the home.
+
 This is `canonical-harness-core` **Phase A**, made concrete. It is the substrate the entire
 redesign rides on — **no core/redesign code until the bench exists + the thick baseline is
 locked.**
