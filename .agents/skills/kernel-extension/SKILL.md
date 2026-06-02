@@ -28,14 +28,16 @@ When in doubt: Guards are simpler than Phases. Phases are simpler than custom ke
 
 ### File location
 
-`packages/reasoning/src/strategies/kernel/phases/<name>.ts`
+`packages/reasoning/src/kernel/capabilities/<cap>/<name>.ts` (pick the capability that
+fits: `reason/`, `act/`, `reflect/`, `verify/`, `attend/`, etc. The old
+`strategies/kernel/phases/` tree was removed in the Stage-5 capability re-layout.)
 
 ### Exact type signature (no deviations)
 
 ```typescript
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { KernelState, KernelContext } from "../kernel-state.js";
+import { KernelState, KernelContext } from "../../state/kernel-state.js";
 
 export const myPhase = (
   state: KernelState,
@@ -59,21 +61,20 @@ export const myPhase = (
 ### Wire into the kernel
 
 ```typescript
-// In your strategy file or react-kernel.ts:
-import { makeKernel } from "./react-kernel.js";
-import { contextBuilder } from "./phases/context-builder.js";
-import { think } from "./phases/think.js";
-import { guard } from "./phases/guard.js";
-import { act } from "./phases/act.js";
-import { myPhase } from "./phases/my-phase.js";
+// In your strategy file or kernel/loop/react-kernel.ts:
+import { makeKernel } from "../loop/react-kernel.js";
+import { handleThinking } from "./reason/think.js";
+import { handleActing } from "./act/act.js";
+import { myPhase } from "./reason/my-phase.js";
 
-// Insert your phase at the right position in the pipeline:
-// - Before think: pre-processing, context enrichment
-// - Between think and guard: post-LLM analysis
-// - Between guard and act: pre-execution enrichment
-// - After act: post-execution reflection
+// The DEFAULT pipeline is two phases: makeKernel() === [handleThinking, handleActing].
+// Context assembly + guards run INSIDE handleThinking/handleActing — they are not
+// separate top-level phases. Insert your phase relative to those two:
+// - Before handleThinking: pre-processing, context enrichment
+// - Between thinking and acting: post-LLM analysis / pre-execution enrichment
+// - After handleActing: post-execution reflection
 const kernel = makeKernel({
-  phases: [contextBuilder, think, guard, myPhase, act],
+  phases: [handleThinking, myPhase, handleActing],
 });
 ```
 
@@ -81,14 +82,14 @@ const kernel = makeKernel({
 
 - Phases are pure functions of `(state, context)` → `Effect<state>`
 - NEVER mutate `state` directly — always return a new object via spread
-- NEVER add per-turn logic to `kernel-runner.ts` — that's what phases are for
+- NEVER add per-turn logic to `kernel/loop/runner.ts` — that's what phases are for
 - A phase that calls LLMService should be placed where `think.ts` is or alongside it
 
 ## Adding a Guard
 
 ### Location
 
-`packages/reasoning/src/strategies/kernel/phases/guard.ts`
+`packages/reasoning/src/kernel/capabilities/act/guard.ts`
 
 ### Exact type signature
 
@@ -140,7 +141,7 @@ const kernel = makeKernel({
 
 ### Location
 
-`packages/reasoning/src/strategies/kernel/phases/act.ts`
+`packages/reasoning/src/kernel/capabilities/act/act.ts`
 
 ### Pattern
 
@@ -173,11 +174,12 @@ const metaToolRegistry: Record<string, MetaToolHandler> = {
 Use when a strategy needs a fundamentally different phase sequence:
 
 ```typescript
-import { makeKernel } from "./react-kernel.js";
+import { makeKernel } from "../loop/react-kernel.js";
+import { handleActing } from "./act/act.js";
 
 // Compose only the phases you need:
 export const myCustomKernel = makeKernel({
-  phases: [contextBuilder, myThink, act],
+  phases: [myThink, handleActing],
   // Phases are executed in order, left to right, each turn
 });
 
@@ -197,11 +199,11 @@ export const myStrategy: ReasoningStrategy = {
 Every phase test needs a timeout. Use a mock LLMService layer.
 
 ```typescript
-// tests/phases/my-phase.test.ts
-// Run: bun test packages/reasoning/tests/phases/my-phase.test.ts --timeout 15000
+// tests/kernel/capabilities/reason/my-phase.test.ts
+// Run: bun test packages/reasoning/tests/kernel/capabilities/reason/my-phase.test.ts --timeout 15000
 import { Effect, Layer } from "effect";
 import { describe, it, expect } from "bun:test";
-import { myPhase } from "../../src/strategies/kernel/phases/my-phase.js";
+import { myPhase } from "../../../../src/kernel/capabilities/reason/my-phase.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { makeMockLLM } from "@reactive-agents/testing";
 
@@ -247,6 +249,6 @@ describe("myPhase", () => {
 
 ## Critical: Do NOT Touch
 
-- `kernel-runner.ts` main loop — extend via phases, not inline logic
-- `context-engine.ts` dead sections (`buildDynamicContext`, `buildStaticContext`, ~560–690 LOC) — disabled, do not re-enable
+- `kernel/loop/runner.ts` main loop — extend via phases, not inline logic
+- `context-engine.ts`: `buildStaticContext` is LIVE (the static system-prompt builder, called from `context/prompt-sections-default.ts`) — do NOT treat it as dead. Only `buildDynamicContext` was removed (Apr 2026). Earlier versions of this skill wrongly listed `buildStaticContext` as disabled.
 - `state.messages[]` via direct mutation — return new state object from phases

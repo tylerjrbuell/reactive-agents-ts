@@ -10,18 +10,27 @@ The composable kernel maps every failure symptom to a specific phase and file. U
 
 ## Symptom → Phase → File
 
-| Symptom | Phase | Files to Read |
-|---------|-------|--------------|
-| Agent never calls tools | `think.ts` (FC parsing) + `guard.ts` | `phases/think.ts`, `phases/guard.ts`, `utils/tool-execution.ts` |
-| Agent repeats the same tool call | `guard.ts` (dedup guard) | `phases/guard.ts` → `deduplicationGuard` |
-| Infinite thought loop (no tools) | `loop-detector.ts` | `utils/loop-detector.ts` → `maxConsecutiveThoughts: 3` |
-| Agent never reaches final answer | `act.ts` (final-answer gate) + `think.ts` (oracle) | `phases/act.ts` → final-answer gate, `phases/think.ts` → oracle hard gate |
-| Tool call silently rejected | `guard.ts` | `phases/guard.ts` → `defaultGuards[]` + `GuardOutcome` |
-| Context too large / compaction fired | `context-builder.ts` | `phases/context-builder.ts` → compaction circuit breaker |
+> Kernel paths reflect the Stage-5 capability layout (`kernel/capabilities/<cap>/`). The
+> old `strategies/kernel/phases/` + `kernel-runner.ts` tree no longer exists.
+>
+> **Context assembly is mid-migration (branch `overhaul/agentic-core-2026-05-31`):** the
+> LIVE default is `assembly/project()` + `assembly/stages/` (`RA_ASSEMBLY` default-on);
+> `context/context-manager.ts` (`ContextManager.build` / `curate()`) is the LEGACY fallback,
+> reached only under `RA_ASSEMBLY=0`, slated for deletion. The shared low-level builders
+> `buildSystemPrompt`/`buildToolSchemas` (`attend/context-utils.ts`) are used by BOTH paths.
+
+| Symptom | Capability | Files to Read |
+|---------|------------|--------------|
+| Agent never calls tools | `think.ts` (FC parsing) + `guard.ts` | `kernel/capabilities/reason/think.ts`, `kernel/capabilities/act/guard.ts`, `kernel/capabilities/act/tool-execution.ts` |
+| Agent repeats the same tool call | `guard.ts` (dedup guard) | `kernel/capabilities/act/guard.ts` → `deduplicationGuard` |
+| Infinite thought loop (no tools) | `loop-detector.ts` | `kernel/capabilities/reflect/loop-detector.ts` → `maxConsecutiveThoughts: 3` |
+| Agent never reaches final answer | `act.ts` (final-answer gate) + `think.ts` (oracle) | `kernel/capabilities/act/act.ts` → final-answer gate, `kernel/capabilities/reason/think.ts` → oracle hard gate |
+| Tool call silently rejected | `guard.ts` | `kernel/capabilities/act/guard.ts` → `defaultGuards[]` + `GuardOutcome` |
+| Context too large / compaction fired | context assembly | LIVE: `assembly/project()` + `assembly/stages/`. LEGACY (`RA_ASSEMBLY=0`): `context/context-manager.ts` (`ContextManager.build`) |
 | Agent fails immediately with 0 tokens | `execution-engine.ts` (withheld error) | `packages/runtime/src/execution-engine.ts` → withheld error pattern |
-| `max_output_tokens` error surfaces immediately | `kernel-runner.ts` (missing recovery) | `kernel-runner.ts` → `withheldError` + recovery count |
-| System prompt not reaching LLM | `context-builder.ts` | `phases/context-builder.ts` → `buildSystemPrompt()` |
-| Tool schemas not in LLM call | `context-builder.ts` | `phases/context-builder.ts` → `buildToolSchemas()` |
+| `max_output_tokens` error surfaces immediately | `runner.ts` (missing recovery) | `kernel/loop/runner.ts` → `withheldError` + recovery count |
+| System prompt not reaching LLM | context assembly | `kernel/capabilities/attend/context-utils.ts` → `buildSystemPrompt()` |
+| Tool schemas not in LLM call | context assembly | `kernel/capabilities/attend/context-utils.ts` → `buildToolSchemas()` |
 | EventBus events not firing | `execution-engine.ts` | `packages/runtime/src/execution-engine.ts` → ManagedRuntime shared instance |
 | Memory not persisting between turns | `think.ts` / `act.ts` | `state.messages[]` vs `state.steps[]` — see Two Records section |
 
@@ -30,11 +39,11 @@ The composable kernel maps every failure symptom to a specific phase and file. U
 ```
 state.messages[]  ← What the LLM sees (multi-turn FC conversation thread)
                      Inspect for: wrong context, missing tool results, bad message order
-                     Modified by: context-builder.ts, think.ts, act.ts
+                     Modified by: context-manager.ts (ContextManager.build), think.ts, act.ts
 
 state.steps[]     ← What systems observe (entropy scoring, metrics, debrief)
                      Inspect for: wrong step counts, entropy values, tool stats
-                     Modified by: act.ts, kernel-runner.ts post-step hooks
+                     Modified by: act.ts, kernel/loop/runner.ts post-step hooks
 ```
 
 Debug LLM behavior issues → `state.messages[]`
@@ -45,29 +54,30 @@ Debug metrics/entropy/observability issues → `state.steps[]`
 ```bash
 # "Agent not calling tools" — check FC strategy negotiation
 grep -n "toolSchemas\|buildToolSchemas\|fc_strategy" \
-  packages/reasoning/src/strategies/kernel/phases/context-builder.ts
+  packages/reasoning/src/kernel/capabilities/attend/context-utils.ts
 
 # "Tool call blocked" — check guard chain
 grep -n "defaultGuards\|GuardOutcome\|block:" \
-  packages/reasoning/src/strategies/kernel/phases/guard.ts
+  packages/reasoning/src/kernel/capabilities/act/guard.ts
 
 # "Loop detected" — check loop detector thresholds
 grep -n "maxConsecutiveThoughts\|loopDetected\|nudge" \
-  packages/reasoning/src/strategies/kernel/utils/loop-detector.ts
+  packages/reasoning/src/kernel/capabilities/reflect/loop-detector.ts
 
 # "Final answer never fires" — check oracle and final-answer gate
 grep -n "final.answer\|oracle\|readyToAnswer\|hardGate" \
-  packages/reasoning/src/strategies/kernel/phases/act.ts \
-  packages/reasoning/src/strategies/kernel/phases/think.ts
+  packages/reasoning/src/kernel/capabilities/act/act.ts \
+  packages/reasoning/src/kernel/capabilities/reason/think.ts
 
 # "0 token failure" — check withheld error pattern
 grep -n "withheld\|recoveryCount\|max_output_tokens" \
   packages/runtime/src/execution-engine.ts \
-  packages/reasoning/src/strategies/kernel/kernel-runner.ts
+  packages/reasoning/src/kernel/loop/runner.ts
 
 # "Context too large" — check compaction trigger
 grep -n "compact\|contextPressure\|budget" \
-  packages/reasoning/src/strategies/kernel/phases/context-builder.ts
+  packages/reasoning/src/context/context-manager.ts \
+  packages/reasoning/src/kernel/capabilities/attend/context-utils.ts
 ```
 
 ## Enable Full Prompt Logging
