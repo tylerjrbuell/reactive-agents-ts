@@ -26,7 +26,7 @@ export const contextStressSession: BenchmarkSession = {
     { id: "claude-haiku", provider: "anthropic", model: "claude-haiku-4-5", contextTier: "standard" },
     { id: "claude-sonnet", provider: "anthropic", model: "claude-sonnet-4-6", contextTier: "frontier" },
   ],
-  harnessVariants: [getVariant("ra-full"), getVariant("ra-full-assembly-off")],
+  harnessVariants: [getVariant("ra-full")],
   runs: 3, // pass^k, N≥3 (canonical-harness-core P4)
   timeoutMs: 180_000,
 };

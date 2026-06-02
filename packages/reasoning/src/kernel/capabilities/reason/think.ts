@@ -20,7 +20,7 @@ import {
   buildToolSchemas,
   sanitizeToolName,
 } from "../attend/context-utils.js";
-import { defaultContextCurator, type Prompt } from "../../../context/context-curator.js";
+import type { Prompt } from "../../../context/context-curator.js";
 import { project } from "../../../assembly/project.js";
 import { fromKernelState } from "../../../assembly/from-kernel-state.js";
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
@@ -42,7 +42,6 @@ import {
   guardEvidenceGrounding,
   filterRecallByOverflow,
   recallGateEnabled,
-  assemblyEnabled,
 } from "./think-guards.js";
 
 import type { ToolSchema } from "../attend/tool-formatting.js";
@@ -277,13 +276,13 @@ export function handleThinking(
         )) ?? rawSystemPrompt
       : rawSystemPrompt;
 
-    // ── Context assembly: ContextManager.build() is the sole path ────────────
-    // All sections (identity + adapter patch, static context, tool guidance,
-    // tool elaboration, progress, prior work, guidance) are rendered by
-    // ContextManager. Think.ts supplies promptSchemas (classification-pruned)
-    // and the effective system prompt body (harness-skill-wrapped when active).
-    // profileOverrides were already merged into `profile` by kernel-runner;
-    // here we only need the adapter.
+    // ── Context assembly: canonical project() is the sole path ────────────────
+    // Sprint-1 A2 (2026-06-02): canonical assembly is the only assembler.
+    // project() walks the append-only EventLog + ResultStore to emit a
+    // pure ProviderRequest. Think.ts supplies promptSchemas (classification-
+    // pruned) and the effective system prompt body (harness-skill-wrapped
+    // when active). profileOverrides were already merged into `profile` by
+    // kernel-runner; here we only need the adapter.
     const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
 
     // Read pending guidance signals, clear from state before LLM call.
@@ -341,40 +340,33 @@ export function handleThinking(
     // 0.82–0.91 + a hard runaway, −57% local tokens on compact, and terminates
     // final_answer_tool everywhere (legacy had end_turn/goalAchieved:null
     // coherence gaps on mid). No cell regresses. Mirrors recallGateEnabled().
-    let systemPromptText: Prompt["systemPrompt"];
-    let conversationMessages: Prompt["messages"];
-    let compressionApplied: Prompt["compressionApplied"];
-    if (assemblyEnabled()) {
-      const { request, trace } = project(
-        fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }, input.task),
-      );
-      systemPromptText = request.systemPrompt;
-      conversationMessages = toLLMMessages(request.messages);
-      compressionApplied = undefined;
-      if (process.env.RA_ASSEMBLY_DEBUG === "1")
-        console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
-    } else {
-      ({
-        systemPrompt: systemPromptText,
-        messages: conversationMessages,
-        compressionApplied,
-      } = defaultContextCurator.curate(state, input, profile, guidance, adapter, {
-        availableTools: promptSchemas,
-        systemPromptBody: effectiveSystemPrompt,
-        toolElaboration: input.toolElaboration,
-        includeRecentObservations: profile.recentObservationsLimit ?? 0,
-      }));
+    // Canonical assembly is the SOLE path (Sprint-1 A2, 2026-06-02). The
+    // legacy defaultContextCurator else-branch + the assemblyEnabled gate were
+    // deleted after cross-tier finalbase cleared the equal-or-better invariant
+    // on every tier:
+    //   local (qwen3.5):    project 75% / 100% rel  vs legacy 58% / 76%
+    //   mid (haiku-4-5):    project 50% / 100% rel  vs legacy 50% / 100%  (TIED)
+    //   frontier (sonnet):  project 58% / 76%  rel  vs legacy 58% / 76%   (TIED)
+    // See: wiki/Research/Harness-Reports/sprint1-canonical-collapse/
+    //      finalbase-{local,mid,frontier}.json + frontier-final.json.
+    const { request, trace } = project(
+      fromKernelState(state, profile, { system: effectiveSystemPrompt ?? "" }, { schemas: promptSchemas }, input.task),
+    );
+    const systemPromptText: Prompt["systemPrompt"] = request.systemPrompt;
+    const conversationMessages: Prompt["messages"] = toLLMMessages(request.messages);
+    const compressionApplied: Prompt["compressionApplied"] = undefined;
+    if (process.env.RA_ASSEMBLY_DEBUG === "1") {
+      console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }
 
     // RA_PROMPT_DUMP — write the assembled prompt+messages to disk for diff.
-    // Strictly diagnostic. Off by default. Path: /tmp/ra-prompt-dump-{arm}-{iter}.json
+    // Strictly diagnostic. Off by default. Path: /tmp/ra-prompt-dump-iter{N}.json
     if (process.env.RA_PROMPT_DUMP) {
-      const arm = assemblyEnabled() ? "project" : "legacy";
-      const path = `${process.env.RA_PROMPT_DUMP}-${arm}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
+      const path = `${process.env.RA_PROMPT_DUMP}-iter${state.iteration}-${state.taskId.slice(-8)}.json`;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const fs = require("node:fs") as typeof import("node:fs");
-        fs.writeFileSync(path, JSON.stringify({ arm, iteration: state.iteration, systemPromptText, conversationMessages }, null, 2));
+        fs.writeFileSync(path, JSON.stringify({ iteration: state.iteration, systemPromptText, conversationMessages }, null, 2));
       } catch { /* diagnostic only — never fail the run */ }
     }
 

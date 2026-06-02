@@ -536,15 +536,8 @@ export const recallGateEnabled = (
   env: NodeJS.ProcessEnv = process.env,
 ): boolean => env.RA_RECALL_GATE !== "0";
 
-/**
- * Canonical context-assembly seam — DEFAULT-ON, opt-out only via RA_ASSEMBLY=0.
- * Cleared the default-on bar by the hardened cross-tier A/B grid (N=3, faithfulness-
- * graded): wiki/Research/Harness-Reports/assembly-ab-grid-hardened-2026-05-31.md —
- * project() deterministic 1.0 section-coverage both tiers vs legacy 0.82–0.91 + a
- * runaway; rescues local-runaway + mid-incompleteness; no regression. Legacy
- * curate() retained as the opt-out killswitch (deletion deferred). Mirrors
- * recallGateEnabled().
- */
-export const assemblyEnabled = (
-  env: NodeJS.ProcessEnv = process.env,
-): boolean => env.RA_ASSEMBLY !== "0";
+// RA_ASSEMBLY flag REMOVED Sprint-1 A2 (2026-06-02). Canonical assembly
+// is the sole path. The opt-out killswitch is gone — cross-tier finalbase
+// (local/mid/frontier) cleared equal-or-better across every axis.
+// See: wiki/Research/Harness-Reports/sprint1-canonical-collapse/
+//      finalbase-{local,mid,frontier}.json + frontier-final.json.

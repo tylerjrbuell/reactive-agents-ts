@@ -6,9 +6,12 @@ import { REAL_WORLD_TASKS } from "../src/tasks/real-world.js";
 import { CONTEXT_STRESS_TASKS } from "../src/tasks/context-stress.js";
 
 describe("context-stress session", () => {
-  it("pairs project() vs legacy across tiers on the failure-mode tasks", () => {
-    const armIds = contextStressSession.harnessVariants.map((v) => v.id).sort();
-    expect(armIds).toEqual(["ra-full", "ra-full-assembly-off"]);
+  it("runs canonical project() arm cross-tier on the failure-mode tasks", () => {
+    // Sprint-1 A2 (2026-06-02): the legacy `ra-full-assembly-off` arm was
+    // removed when RA_ASSEMBLY flag + curate() else-branch were deleted.
+    // Canonical project() is the sole assembler; session is single-arm.
+    const armIds = contextStressSession.harnessVariants.map((v) => v.id);
+    expect(armIds).toEqual(["ra-full"]);
     expect(contextStressSession.models.some((m) => m.contextTier === "local")).toBe(true);
     expect(contextStressSession.runs).toBeGreaterThanOrEqual(3);
   });

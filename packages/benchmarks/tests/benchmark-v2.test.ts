@@ -114,18 +114,18 @@ test("rw-7 fixture includes three buggy TypeScript files", () => {
   expect(paths).toContain("src/pipeline.ts")
 })
 
-test("ABLATION_VARIANTS has exactly 11 variants", () => {
-  // 9 production variants + 2 ablation variants (ra-full-noop-verifier for M3;
-  // ra-full-assembly-off for Phase-A context-assembly A/B).
-  expect(ABLATION_VARIANTS).toHaveLength(11)
+test("ABLATION_VARIANTS has exactly 10 variants", () => {
+  // 9 production variants + 1 ablation variant (ra-full-noop-verifier for M3).
+  // (Sprint-1 A2, 2026-06-02): ra-full-assembly-off removed alongside the
+  // RA_ASSEMBLY flag deletion — canonical project() is the sole assembler.
+  expect(ABLATION_VARIANTS).toHaveLength(10)
 })
 
-test("ABLATION_VARIANTS has 6 internal variants and 5 competitor variants", () => {
-  // Internal: bare-llm, manual-react, ra-reasoning, ra-full, ra-full-noop-verifier,
-  // ra-full-assembly-off.
+test("ABLATION_VARIANTS has 5 internal variants and 5 competitor variants", () => {
+  // Internal: bare-llm, manual-react, ra-reasoning, ra-full, ra-full-noop-verifier.
   const internal = ABLATION_VARIANTS.filter(v => v.type === "internal")
   const competitor = ABLATION_VARIANTS.filter(v => v.type === "competitor")
-  expect(internal).toHaveLength(6)
+  expect(internal).toHaveLength(5)
   expect(competitor).toHaveLength(5)
 })
 
@@ -348,8 +348,8 @@ test("regressionGateSession has ra-full only and 1 run", () => {
   expect(regressionGateSession.runs).toBe(1)
 })
 
-test("realWorldFullSession has all 11 variants and 3 runs", () => {
-  expect(realWorldFullSession.harnessVariants).toHaveLength(11)
+test("realWorldFullSession has all 10 variants and 3 runs", () => {
+  expect(realWorldFullSession.harnessVariants).toHaveLength(10)
   expect(realWorldFullSession.runs).toBe(3)
   expect(realWorldFullSession.tiers).toContain("real-world")
 })
@@ -358,7 +358,7 @@ test("competitorComparisonSession has both Anthropic and OpenAI models", () => {
   const providers = competitorComparisonSession.models.map(m => m.provider)
   expect(providers).toContain("anthropic")
   expect(providers).toContain("openai")
-  expect(competitorComparisonSession.harnessVariants).toHaveLength(11)
+  expect(competitorComparisonSession.harnessVariants).toHaveLength(10)
 })
 
 test("localModelsSession has only bare-llm and ra-full variants", () => {
@@ -395,7 +395,7 @@ test("parseArgs: --save-baseline and --ci flags parsed", () => {
 
 test("index.ts exports all v2 public APIs", () => {
   expect(typeof runSession).toBe("function")
-  expect(ABLATION_VARIANTS).toHaveLength(11)
+  expect(ABLATION_VARIANTS).toHaveLength(10)
   expect(REAL_WORLD_TASKS).toHaveLength(10)
   expect(regressionGateSession.id).toBe("regression-gate")
   expect(realWorldFullSession.id).toBe("real-world-full")
