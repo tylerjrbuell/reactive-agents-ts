@@ -1,5 +1,7 @@
 # Phase-A Bench (in @reactive-agents/benchmarks) Implementation Plan
 
+> **STATUS (code-verified 2026-06-02):** ✅ SHIPPED — context-stress cross-tier bench live in `packages/benchmarks` (76 tests pass); grid runner + faithfulness grader + BenchVerdict + capability-source preflight landed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Add cross-tier, env-arm, honesty-graded **context-stress** benchmarking to the existing `@reactive-agents/benchmarks` package — so the RA_ASSEMBLY (and future overhaul) A/B runs whole-vs-whole, cross-tier, with the equal-or-better invariant enforced — WITHOUT building a parallel bench.

@@ -1,5 +1,7 @@
 # Canonical-Collapse Branch Landing — Sprint 1 Implementation Plan
 
+> **STATUS (code-verified 2026-06-02):** ✅ LANDED — branch `overhaul/agentic-core-2026-05-31` merged to `main` (#180). Stage A flags removed (A2/A3/A4); Stage B 3 contracts typed (B1 TaskContract, B2 DeliverableProvenance, B3 Capability).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Land `overhaul/agentic-core-2026-05-31` into `main` clean — flags removed, legacy maze deleted, three foundation contracts (TaskContract, DeliverableProvenance, Capability) typed-and-pinned — so the next sprints have a maze-free base.

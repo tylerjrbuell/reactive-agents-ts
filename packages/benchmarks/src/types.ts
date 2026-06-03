@@ -2,7 +2,7 @@
 /**
  * Benchmark types — task definitions, run results, and report shape.
  */
-import type { ToolRequirement } from "@reactive-agents/core";
+import type { ToolRequirement, PreFlightViolation } from "@reactive-agents/core";
 
 /** Complexity tier for benchmark tasks. */
 export type Tier = "trivial" | "simple" | "moderate" | "complex" | "expert" | "real-world";
@@ -134,6 +134,13 @@ export interface TaskVariantReport {
   readonly meanTokens: number;
   readonly meanDurationMs: number;
   readonly passRate: number;
+  /**
+   * Set when the cell was NOT measured because a preflight contract was
+   * violated (today: capability source=fallback). An inconclusive cell carries
+   * `runs: []` and zeroed scores — it is excluded from aggregation, ablation,
+   * and equal-or-better verdicts. `BenchCellOutcome` per canonical-contracts §6.
+   */
+  readonly inconclusive?: PreFlightViolation;
 }
 
 export interface AblationResult {
@@ -203,6 +210,20 @@ export interface SessionReport extends MultiModelReport {
    * See `SessionReproducibility` for the contract.
    */
   readonly reproducibility: SessionReproducibility;
+  /**
+   * Cells skipped because a preflight contract was violated (canonical-contracts
+   * §6). Each entry names the (task × model × variant) cell + the reason. When
+   * non-empty, `partialMeasurement` is true and the equal-or-better invariant
+   * cannot be evaluated until every cell is conclusive.
+   */
+  readonly inconclusiveCells?: ReadonlyArray<{
+    readonly taskId: string;
+    readonly modelVariantId: string;
+    readonly variantId: string;
+    readonly reason: PreFlightViolation;
+  }>;
+  /** True iff any cell is inconclusive. A report with this set is PARTIAL. */
+  readonly partialMeasurement?: boolean;
 }
 
 export interface DriftReport {

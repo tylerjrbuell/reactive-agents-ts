@@ -1,7 +1,7 @@
 ---
 title: WS-5 — Honesty Pass (tagged-error algebra + warning routes + doc-drift CI)
 date: 2026-05-28
-status: pending
+status: 🟡 PARTIAL (code-verified 2026-06-02) — ceiling tests shipped; 34 Effect<X,unknown> remain; +capability-source honesty gates 2026-06-02 (bench preflight + runtime build gate)
 master-plan: 2026-05-28-canonical-refactor.md (§4 RC-4 + §6.2 WS-5 summary)
 architecture-model: 2026-05-28-canonical-architecture-model.md (§6.5 typed errors + §13 honest-fail invariant)
 root-cause-closed: RC-4 (silent error swallow at type level; lying comments; console bypass; doc drift)

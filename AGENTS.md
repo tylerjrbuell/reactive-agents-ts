@@ -605,6 +605,8 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Architecture Debt
 
+> **▶ Latest audit: 2026-06-02 — `wiki/Research/Audit-Reports-2026-06-02/architecture-health-audit.md`.** Verdict: foundation strong (clean layers, acyclic kernel/0 cycles, single arbitrator, canonical `project()` data-flow); typed-guarantee layer mid-migration ON-PLAN (3/5 contracts as types); ONE earned enforcement gap = **I4 single capability resolver** (5 entry points, caused the qwen3.5→fallback bug); real vision-gap = **Pillar 8 capability axis parked** (convergence Phase 2 recitation + experience-reuse = 0 matches). Structural hygiene near-done; don't polish cleanliness (A−) while capability axis (D) is where the vision lives.
+
 > Last audited: 2026-06-01 (agentic-core scope: `packages/reasoning`). Status column reflects current code reality.
 >
 > **2026-06-01 note (branch `overhaul/agentic-core-2026-05-31`):** most structural

@@ -1,7 +1,7 @@
 ---
 title: WS-6 Re-Plan — Cohesion-Gated Decomposition
 date: 2026-05-29
-status: active
+status: 🟡 PARTIAL (code-verified 2026-06-02) — act.ts decomposed 1209→937; think.ts 1334 LOC pending; arbitrator/event-bus correctly LEFT large
 supersedes: WS-6 Phases 5-7 (LOC-driven)
 related: [[2026-05-28-canonical-refactor]]
 ---

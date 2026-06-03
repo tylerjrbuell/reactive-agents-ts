@@ -1,7 +1,7 @@
 ---
 title: Canonical Agentic Convergence — Implementation Plan
 date: 2026-05-30
-status: ready
+status: 🟡 PARTIAL (code-verified 2026-06-02) — PostCondition spine SHIPPED (#7 bc5737a1 / A4 unconditional); recitation + experience-reuse NOT wired (the parked capability axis — next real lever)
 spec: "[[2026-05-30-canonical-agentic-convergence]]"
 research:
   - "[[2026-05-30-harness-engineering-canon]]"

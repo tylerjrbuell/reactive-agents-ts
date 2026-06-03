@@ -38,6 +38,18 @@ export {
   effectiveWindowFromClaimedTokens,
 } from "./contracts/capability.js";
 
+export type {
+  PreFlightViolation,
+  PreFlightWarning,
+  PreFlightReport,
+  CapabilityFactsForPreflight,
+} from "./contracts/preflight.js";
+export {
+  emptyPreFlightReport,
+  capabilitySourcePreflight,
+  formatViolations,
+} from "./contracts/preflight.js";
+
 // ─── Types (pure type-only exports) ───
 export type { Agent, AgentDefinition, Capability } from "./types/agent.js";
 export type { Task, TaskConfig, TaskMetadata } from "./types/task.js";

@@ -1,3 +1,6 @@
+import { resolveCanonical } from "@reactive-agents/llm-provider";
+import { capabilitySourcePreflight } from "@reactive-agents/core";
+
 type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" | "custom";
 
 const PROVIDER_API_KEY_MAP: Record<string, string> = {
@@ -58,6 +61,32 @@ export function validateBuild(
             `Expected model prefix: ${prefixes.join(", ")}. ` +
             `The provider's default model will be used if this model is unavailable.`,
         );
+      }
+    }
+  }
+
+  // Capability-source honesty gate — runtime consumer of the canonical PreFlight
+  // contract (`@reactive-agents/core` contracts/preflight.ts), shared with the
+  // bench gate. When the canonical resolver finds no probe/cache/static-table
+  // entry it returns a conservative 2048-ctx fallback that silently under-sizes
+  // every downstream context budget (root cause of the 2026-06-02 claude-haiku-4-5
+  // baseline regression). Surface it loudly — warning by default, error under
+  // strictValidation — rather than running silently degraded (anti-mission #4).
+  // `provider: "test"`/"custom" are exempt (no real capability to resolve).
+  if (model && provider !== "test" && provider !== "custom") {
+    const cap = resolveCanonical(provider, model);
+    const violation = capabilitySourcePreflight({
+      provider,
+      model,
+      source: cap.source,
+      recommendedNumCtx: cap.recommendedNumCtx,
+    });
+    if (violation) {
+      const msg = `${violation.message} Build with strict validation to make this an error.`;
+      if (strict) {
+        errors.push(msg);
+      } else {
+        warnings.push(msg);
       }
     }
   }
