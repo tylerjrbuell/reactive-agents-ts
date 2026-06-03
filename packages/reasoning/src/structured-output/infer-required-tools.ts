@@ -319,13 +319,23 @@ Rules:
     for (const e of requiredEntries) {
       const llmMinCalls = Math.max(1, e.minCalls);
       const tool = toolByName.get(e.name);
-      const cardinality = (tool as { cardinality?: "single" | "batch" | "per-entity" } | undefined)
-        ?.cardinality;
+      const declaredCardinality = tool?.cardinality;
+      // Schema-detected batch: a tool whose REQUIRED input is an array covers all
+      // entities in ONE call by construction (e.g. crypto-price `coins: array`).
+      // Treat it as batch even when the author didn't declare cardinality — most
+      // tools don't, and an inflated LLM minCalls (gemma4:e4b: "4 coins → 4
+      // calls") otherwise sets an unsatisfiable required-call floor that loops the
+      // nudge to max_iterations despite a successful single batched call.
+      const hasArrayInput =
+        tool?.parameters.some((p) => p.required && p.type === "array") ?? false;
+      const cardinality = declaredCardinality ?? (hasArrayInput ? "batch" : undefined);
 
       let minCalls: number;
       if (cardinality === "batch") {
-        // Batch tools: one call returns N items. Never multiply.
-        minCalls = llmMinCalls;
+        // Batch tools: one call returns N items. Floor is 1 — never multiply, and
+        // override an inflated LLM/heuristic estimate (the prior `llmMinCalls`
+        // passthrough let a classifier's minCalls=4 survive, re-creating the bug).
+        minCalls = 1;
       } else if (cardinality === "per-entity") {
         // Per-entity tools: always scale to entity count.
         minCalls = Math.max(llmMinCalls, entityCount);

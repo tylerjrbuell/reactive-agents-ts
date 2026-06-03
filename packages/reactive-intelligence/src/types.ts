@@ -258,6 +258,16 @@ export type ControllerEvalParams = {
   /** Name of the tool currently on a failure streak, if any. */
   readonly failingToolName?: string;
   /**
+   * Number of consecutive THOUGHT steps at the tail of the ledger with no
+   * intervening tool ACTION/observation — i.e. how long the agent has been
+   * "thinking without acting". Used by stall-detect to distinguish a genuine
+   * stall (flat entropy AND no recent tool progress) from a confidently
+   * low-entropy agent that is actively making distinct tool calls (rw-9
+   * regression: gpt-4o-mini find→file-read was killed as "stuck"). When omitted,
+   * stall-detect preserves prior behavior (no tool-progress suppression).
+   */
+  readonly consecutiveThoughtsWithoutAction?: number;
+  /**
    * True when `state.output` is a non-empty user-facing string.
    *
    * Backstop for FM-A3 (Spurious Tool Engagement → empty-run termination):

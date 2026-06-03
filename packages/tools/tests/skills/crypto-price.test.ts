@@ -88,6 +88,32 @@ describe("cryptoPriceHandler", () => {
     expect(result.prices[0]?.symbol).toBe("BTC");
   });
 
+  it("resolves BONK (reported coverage gap) and other added coins", async () => {
+    mockCoinGecko({ bonk: { usd: 0.0000234 }, dogwifcoin: { usd: 1.8 }, binancecoin: { usd: 600 } });
+
+    const result = await Effect.runPromise(
+      cryptoPriceHandler({ coins: ["BONK", "WIF", "BNB"] }),
+    );
+
+    const bonk = result.prices.find((p) => p.symbol === "BONK");
+    expect(bonk?.price).toBe(0.0000234);
+    expect(bonk?.notFound).toBeUndefined();
+    expect(bonk?.name).toBe("Bonk");
+    expect(result.prices.find((p) => p.symbol === "WIF")?.price).toBe(1.8);
+    expect(result.prices.find((p) => p.symbol === "BNB")?.price).toBe(600);
+  });
+
+  it("normalizes lowercase/whitespace symbols (bonk, ' BTC ')", async () => {
+    mockCoinGecko({ bonk: { usd: 0.0000234 }, bitcoin: { usd: 77000 } });
+
+    const result = await Effect.runPromise(
+      cryptoPriceHandler({ coins: ["bonk", " BTC "] }),
+    );
+
+    expect(result.prices.find((p) => p.symbol === "BONK")?.price).toBe(0.0000234);
+    expect(result.prices.find((p) => p.symbol === "BTC")?.price).toBe(77000);
+  });
+
   it("marks unknown coins as not_found rather than throwing", async () => {
     mockCoinGecko({ bitcoin: { usd: 77000 } });
 

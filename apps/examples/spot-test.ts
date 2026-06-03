@@ -6,7 +6,9 @@ const MODEL = process.env.SPOT_MODEL ?? 'gemma4:e4b'
 const TASK =
     process.env.SPOT_TASK ??
     'Fetch the last 10 commits to tylerjrbuell/reactive-agents-ts then write a local markdown file (./commits.md) with all 10 commit messages.'
-const TOOLS = (process.env.SPOT_TOOLS ?? 'file-write,github/list_commits').split(',')
+const TOOLS = (
+    process.env.SPOT_TOOLS ?? 'file-write,github/list_commits'
+).split(',')
 // Pin the strategy so the RA_ASSEMBLY A/B isolates context-assembly on a single
 // think path. adaptive may pick plan-execute/ToT (separate assembly) → the seam
 // wouldn't fire on both arms. 'reactive' routes through kernel think.ts where the
@@ -25,8 +27,10 @@ let builder = ReactiveAgents.create()
         instructions: 'Use github provided tools to solve your task',
         tone: 'friendly, concise',
     })
-    .withProvider(PROVIDER as 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'litellm')
-    .withModel(MODEL)
+    .withProvider(
+        PROVIDER as 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'litellm'
+    )
+    .withModel({ model: MODEL, numCtx: 12000 })
     .withCortex()
     .withMemory()
     .withReasoning({
@@ -42,7 +46,9 @@ let builder = ReactiveAgents.create()
 // reproducing the pre-#5 32768 tier-placeholder window). Unset → the builder
 // resolves the model's real window (e.g. haiku 200k).
 if (process.env.SPOT_MAXTOKENS) {
-    builder = builder.withContextProfile({ maxTokens: Number(process.env.SPOT_MAXTOKENS) })
+    builder = builder.withContextProfile({
+        maxTokens: Number(process.env.SPOT_MAXTOKENS),
+    })
 }
 
 // Only wire the github MCP (docker) when a github/* tool is actually requested —
@@ -68,7 +74,11 @@ if (TOOLS.some((t) => t.startsWith('github/'))) {
 }
 
 const agent = await builder
-    .withObservability({ verbosity: 'debug', live: true, logModelIO: process.env.SPOT_LOG_IO === '1' })
+    .withObservability({
+        verbosity: 'debug',
+        live: true,
+        logModelIO: process.env.SPOT_LOG_IO === '1',
+    })
     .build()
 
 const result = await agent.run(TASK)
@@ -94,6 +104,6 @@ console.log(
             durationMs: result.metadata.duration,
             outputLen: result.output.length,
             toolCalls: (result.metadata.toolCalls ?? []).map((t) => t.name),
-        }),
+        })
 )
 await agent.dispose()

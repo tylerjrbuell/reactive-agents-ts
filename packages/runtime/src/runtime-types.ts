@@ -145,6 +145,19 @@ export interface RuntimeOptions {
   maxTokens?: number;
 
   /**
+   * Context window size (in tokens) for local providers (Ollama `options.num_ctx`).
+   *
+   * Provider-agnostic: only Ollama/local maps this to its request; hosted
+   * providers (Anthropic/OpenAI/Gemini) have a fixed model context and ignore
+   * it. Ranks above the capability-resolved default (32K for known local
+   * models), so set this to widen the window when you have GPU headroom, or
+   * narrow it on a constrained machine.
+   *
+   * Default: undefined (capability-driven resolution wins)
+   */
+  numCtx?: number;
+
+  /**
    * Memory system tier:
    * - `"1"` — Lightweight (working memory only)
    * - `"2"` — Full system (working, episodic, procedural, semantic with embeddings)
@@ -759,6 +772,8 @@ export interface LightRuntimeOptions {
   thinking?: boolean;
   temperature?: number;
   maxTokens?: number;
+  /** Context window size for local providers (Ollama `options.num_ctx`). */
+  numCtx?: number;
   maxIterations?: number;
   systemPrompt?: string;
   environmentContext?: Record<string, string>;

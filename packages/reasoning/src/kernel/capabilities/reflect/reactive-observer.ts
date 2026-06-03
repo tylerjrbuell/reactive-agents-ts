@@ -218,6 +218,22 @@ export function runReactiveObserver(
           consecutiveToolFailures++;
         }
 
+        // Tool-progress signal for stall-detect (rw-9 fix): consecutive THOUGHT
+        // steps at the ledger tail with no intervening tool action/observation.
+        // A confidently low-entropy agent still calling distinct tools (find→
+        // file-read) has a LOW count → not a stall; a circling agent has a high
+        // count. Action OR observation steps reset the streak (mirrors the
+        // loop-detector's "only ACTION steps reset the streak" philosophy).
+        let consecutiveThoughtsWithoutAction = 0;
+        for (let i = s.steps.length - 1; i >= 0; i--) {
+          const st = s.steps[i]!;
+          if (st.type === "thought") {
+            consecutiveThoughtsWithoutAction++;
+          } else if (st.type === "action" || st.type === "observation") {
+            break;
+          }
+        }
+
         const decisions = yield* services.reactiveController.value.evaluate({
           entropyHistory,
           iteration: s.iteration,
@@ -236,6 +252,7 @@ export function runReactiveObserver(
           priorDecisionsThisRun: priorDecisionsThisRun.length > 0 ? priorDecisionsThisRun : undefined,
           consecutiveToolFailures: consecutiveToolFailures > 0 ? consecutiveToolFailures : undefined,
           failingToolName,
+          consecutiveThoughtsWithoutAction,
           // FM-A3 backstop — empty-output invariant for RI early-stop.
           hasUserOutput: typeof s.output === "string" && s.output.trim().length > 0,
           // DEFECT 1 fix — thread the real model tier so stall-detect uses the

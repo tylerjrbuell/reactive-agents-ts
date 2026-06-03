@@ -71,6 +71,7 @@ export interface BuilderState {
   _thinking?: boolean;
   _temperature?: number;
   _maxTokens?: number;
+  _numCtx?: number;
   _persona?: AgentPersona;
   _systemPrompt?: string;
   _environmentContext?: Record<string, string>;
