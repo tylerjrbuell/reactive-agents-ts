@@ -691,9 +691,11 @@ export const createRuntime = (options: RuntimeOptions) => {
     : Layer.empty;
 
   // ── Session persistence layer (requires MemoryDatabase from memoryLayer) ──
-  // Only wired when sessionPersist is true. Without memory, SessionStoreService will not be
-  // in the runtime and agent.session({ persist: true }) will silently no-op via Effect.serviceOption.
-  const sessionStoreOptLayer = options.sessionPersist
+  // Policy: wire-when-memory-enabled (mirrors SkillStoreLive). When memory is on,
+  // SessionStoreService is available so agent.session({ persist: true }) saves/restores
+  // history. Without memory, service is absent and session() silently no-ops via
+  // Effect.serviceOption.
+  const sessionStoreOptLayer = options.enableMemory
     ? SessionStoreLive.pipe(Layer.provide(memoryLayer))
     : Layer.empty;
 

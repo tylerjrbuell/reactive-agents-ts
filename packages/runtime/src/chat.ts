@@ -272,20 +272,29 @@ export async function publishChatTurnEvents(params: {
 
 export class AgentSession {
   private _history: ChatMessage[] = [];
+  private _historyLoader?: () => Promise<ChatMessage[]>;
+  private _historyLoaded = false;
 
   constructor(
     private readonly chatFn: (message: string, history: ChatMessage[], options?: ChatOptions) => Promise<ChatReply>,
     private readonly onEnd?: (history: ChatMessage[]) => Promise<void>,
     private readonly onSave?: (history: ChatMessage[]) => Promise<void>,
     initialHistory?: ChatMessage[],
+    historyLoader?: () => Promise<ChatMessage[]>,
   ) {
     if (initialHistory) this._history = [...initialHistory];
+    if (historyLoader) this._historyLoader = historyLoader;
   }
 
   async chat(message: string, options?: ChatOptions): Promise<ChatReply> {
+    if (this._historyLoader && !this._historyLoaded) {
+      this._history = await this._historyLoader();
+      this._historyLoaded = true;
+    }
     const reply = await this.chatFn(message, this._history, options);
     this._history.push({ role: "user", content: message, timestamp: Date.now() });
     this._history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
+    if (this.onSave) await this.onSave(this._history);
     return reply;
   }
 

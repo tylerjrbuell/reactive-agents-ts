@@ -4,6 +4,11 @@ dist/
 bun.lockb
 .env
 .env.local
+
+# SQLite databases (local dev scratch files)
+*.db
+*.db-shm
+*.db-wal
 .reactive-agents/
 *.tsbuildinfo
 

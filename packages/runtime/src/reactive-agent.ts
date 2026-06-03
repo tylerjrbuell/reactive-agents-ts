@@ -1128,10 +1128,30 @@ export class ReactiveAgent {
               }
             : undefined
 
+        const historyLoader = persist
+            ? async (): Promise<ChatMessage[]> => {
+                  return self.runtime.runPromise(
+                      Effect.gen(function* () {
+                          const memMod = yield* Effect.promise(
+                              () => import('@reactive-agents/memory')
+                          )
+                          const storeOpt = yield* Effect.serviceOption(
+                              memMod.SessionStoreService
+                          )
+                          if (storeOpt._tag !== 'Some') return [] as ChatMessage[]
+                          const record = yield* storeOpt.value.findById(sessionId)
+                          return (record?.messages ?? []) as ChatMessage[]
+                      }).pipe(Effect.catchAll((_err) => Effect.succeed([] as ChatMessage[])))
+                  )
+              }
+            : undefined
+
         return new AgentSession(
             (msg, history, opts) => this.chat(msg, opts, history, sessionId),
             undefined,
-            onSave
+            onSave,
+            undefined,
+            historyLoader
         )
     }
 
