@@ -1,0 +1,9 @@
+# Bun configuration (repo root).
+#
+# [test].preload runs once before any test file is imported. We use it to pin
+# REACTIVE_AGENTS_DISABLE_STATUS_MODE=true so the suite is deterministic whether
+# `bun test` is launched from a TTY, a pipe, or `--watch`. Without this, status
+# mode auto-activates under a TTY and breaks ~16 behavioral tests that pass in
+# CI (non-TTY). See scripts/test-preload.ts for the full rationale.
+[test]
+preload = ["./scripts/test-preload.ts"]
