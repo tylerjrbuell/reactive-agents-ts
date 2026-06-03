@@ -39,11 +39,11 @@
 
 ## ✅ Resolved 2026-06-03 (branch `refactor/arch-cleanup-2026-06-03`)
 
-- ~~**S5/S6/S10/D5** — deliverable provenance~~ → **CLOSED by P1** (commits b3aef454, 0e80b82a, e4abf43e, 2bb06cf8). One 4-source `Deliverable` type; `commitDeliverable` is the single `state.output` writer (`terminate()` composes through it); structural guard test (`single-output-writer.guard.test.ts`) locks it + fails-when-violated; `raw_artifacts`/`NO_SYNTHESIS_CALL` deleted. Full reasoning suite 1559/0; cross-package typecheck 68/68. **Raw-leak constructively prevented at the single writer** (the structural guarantee). ⚠️ Two honest caveats: (a) **provenance-TAG accuracy has one known gap — see S11**; (b) the **N=3 behavioral gate is UNRUN** — suite-green proves structure, not the §7.1 cross-tier no-regression gate. P1 is implementation-complete + suite-green, NOT yet N=3-validated. Do not merge to main until N=3 on cs-overflow + comfort tasks is clean.
-- ~~**D1/D2/D3** + §6.5 admonition~~ → **CLOSED by P5 partial** (commit 1d33f9b9). Skill kernel-paths fixed, FRAMEWORK_INDEX ref repointed, North Star §4.3/§5.2 corrected, §6.5 admonition added.
-- **D5** North Star §6.5: the admonition now correctly marks the OLD claim aspirational; the *mechanism* it described is now real (S5 closed) — the admonition can be retired when this branch merges.
+- ~~**S5/S6/S10/D5** — deliverable provenance~~ → **CLOSED by P1** (commits b3aef454, 0e80b82a, e4abf43e, 2bb06cf8). One 4-source `Deliverable` type; `commitDeliverable` is the single `state.output` writer (`terminate()` composes through it); structural guard test (`single-output-writer.guard.test.ts`) locks it + fails-when-violated; `raw_artifacts`/`NO_SYNTHESIS_CALL` deleted. Full reasoning suite 1559/0; cross-package typecheck 68/68. **Raw-leak constructively prevented at the single writer** (structural guarantee). ✅ **N=3 behavioral gate PASSED** (cross-tier local+mid+frontier; zero regressions; sonnet-summarize 0→67%; aggregate 75→81%) — evidence [[2026-06-03-p1-deliverable-provenance-n3]]. **Mergeable.** One non-blocking caveat: provenance-TAG accuracy gap **S11** (still open). 
+- ~~**D1/D2/D3** + §6.5 admonition~~ → **CLOSED by P5** (commits 1d33f9b9 + a12f37b9). All ~12 skill files' kernel-paths fixed (2 legitimate historical "moved-from" notes left), FRAMEWORK_INDEX ref repointed, North Star §4.3/§5.2 corrected, §6.5 admonition added.
+- **D5** North Star §6.5: the admonition correctly marks the OLD claim aspirational; the *mechanism* is now real (S5 closed) — admonition can be retired on merge.
 
-**Still open:** P5 remainder (7 more skill files with `strategies/kernel` drift), D6 (compose read-vs-mutate audit), S7 (TaskContract→runtime, P2), S9 (calibration consumers, P3), compose coverage expansion (P4).
+**Still open:** D6 (compose read-vs-mutate audit), S7 (TaskContract→runtime, **P2 next**), S9 (calibration consumers, P3), compose coverage expansion (P4), **S11** (synthesis-gate provenance tag).
 
 ## Open question (escalate)
 

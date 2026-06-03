@@ -6,7 +6,7 @@
 
 ## Ranking summary
 
-> **Progress 2026-06-03** (branch `refactor/arch-cleanup-2026-06-03`): **P1 implementation-complete + suite-green** (commits b3aef454/0e80b82a/e4abf43e/2bb06cf8 — single-writer + 4-source type + guard; 1559/0 reasoning, 68/68 typecheck). ⚠️ **N=3 behavioral gate UNRUN** — do not merge or claim "done" until cross-tier N=3 (cs-overflow + comfort) is clean (§7.1: single/unit runs are not evidence). Known follow-up debt: **S11** (synthesis-gate provenance-tag mislabel). **P5 partial** (1d33f9b9 — 3 of ~10 drift files). **Next step before P2/P3/P4: run N=3 on P1** (don't stack waves into the same hot-loop blast radius until P1's behavioral gate passes).
+> **Progress 2026-06-03** (branch `refactor/arch-cleanup-2026-06-03`): **P1 ✅ COMPLETE — structurally AND behaviorally validated.** Commits b3aef454/0e80b82a/e4abf43e/2bb06cf8: single-writer + 4-source type + guard; 1559/0 reasoning, 68/68 typecheck. **Cross-tier N=3 PASSED** (local qwen3.5 + mid haiku + frontier sonnet): zero regressions, all 9 main-passing cells green, sonnet-summarize improved 0→67%, aggregate 75→81%. Evidence: [[2026-06-03-p1-deliverable-provenance-n3]]. **Mergeable.** Follow-up debt (non-blocking): **S11** (synthesis-gate provenance-tag). **P5 ✅ complete** (1d33f9b9 + a12f37b9). **Next: P2 (TaskContract→runtime), then P3/P4** — P1's gate passed, hot-loop blast radius cleared for stacking.
 
 | P | Title | Lever | Effort | Gate metric |
 |---|-------|-------|--------|-------------|
