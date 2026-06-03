@@ -25,7 +25,7 @@ import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
 import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs } from "./session.js"
-import { checkCapabilitySourcePreflight, formatPreflightViolations } from "./preflight.js"
+import { checkCapabilitySourcePreflight } from "./preflight.js"
 
 /**
  * Apply env vars for the duration of a variant's run, return a restore fn.
@@ -902,21 +902,13 @@ export async function runSession(
   }
   // ──────────────────────────────────────────────────────────────────────────
 
-  // ── Capability-source preflight (Sprint-2 measurement honesty) ────────────
-  // Refuse to score any cell whose model capability resolved from
-  // `source === "fallback"`. Fallback means the resolver had no probe/cache/
-  // static-table entry and silently used a conservative 2048-ctx default,
-  // under-sizing every downstream budget — the score would be a misconfigured-
-  // budget artifact, not a model result (root cause of the 2026-06-02
-  // claude-haiku-4-5 baseline regression). Override with RA_BENCH_ALLOW_FALLBACK=1.
-  // See `core/contracts/capability.ts` + `src/preflight.ts`.
-  const fallbackViolations = checkCapabilitySourcePreflight(
-    session.models.map((m) => ({ provider: m.provider, model: m.model })),
-    { allowFallback: process.env.RA_BENCH_ALLOW_FALLBACK === "1" },
-  );
-  if (fallbackViolations.length > 0) {
-    throw new Error(formatPreflightViolations(fallbackViolations));
-  }
+  // ── Capability-source preflight is now PER-CELL (canonical-contracts §6) ──
+  // A model whose capability resolves from source="fallback" produces
+  // INCONCLUSIVE cells (not a misconfigured-budget score, not a whole-session
+  // abort). Resolved once per model below, inside the loop, so a mixed-tier
+  // session measures its trusted cells and flags only the untrusted ones.
+  // Override with RA_BENCH_ALLOW_FALLBACK=1. See `src/preflight.ts`.
+  const allowFallback = process.env.RA_BENCH_ALLOW_FALLBACK === "1";
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Reproducibility metadata (Phase 0 Task 10) ────────────────────────────
@@ -966,7 +958,31 @@ export async function runSession(
 
   for (const task of tasks) {
     for (const model of session.models) {
+      // Per-cell capability-source preflight: resolve once per model. A fallback
+      // source makes every cell for this model inconclusive (skip dispatch).
+      const modelViolation = allowFallback
+        ? undefined
+        : checkCapabilitySourcePreflight([{ provider: model.provider, model: model.model }])[0]
+
       for (const variant of session.harnessVariants) {
+        if (modelViolation) {
+          allVariantReports.push({
+            taskId: task.id,
+            modelVariantId: model.id,
+            variantId: variant.id,
+            variantLabel: variant.label,
+            runs: [],
+            meanScores: [],
+            variance: 0,
+            meanTokens: 0,
+            meanDurationMs: 0,
+            passRate: 0,
+            inconclusive: modelViolation,
+          })
+          if (logLevel !== "silent") process.stdout.write("?")
+          continue
+        }
+
         const runScores: RunScore[] = []
 
         for (let i = 0; i < runCount; i++) {
@@ -1023,8 +1039,20 @@ export async function runSession(
 
   log("\n")
 
-  const ablation = computeAllAblation(allVariantReports)
-  const dimensionSummary = summarizeDimensions(allVariantReports)
+  // Inconclusive cells are excluded from aggregation/ablation/verdicts — a
+  // misconfigured-budget cell must never feed an equal-or-better comparison.
+  const measuredReports = allVariantReports.filter((r) => !r.inconclusive)
+  const inconclusiveCells = allVariantReports
+    .filter((r) => r.inconclusive)
+    .map((r) => ({
+      taskId: r.taskId,
+      modelVariantId: r.modelVariantId,
+      variantId: r.variantId,
+      reason: r.inconclusive!,
+    }))
+
+  const ablation = computeAllAblation(measuredReports)
+  const dimensionSummary = summarizeDimensions(measuredReports)
 
   const sessionReport: SessionReport = {
     generatedAt: new Date().toISOString(),
@@ -1036,6 +1064,8 @@ export async function runSession(
     taskReports: allVariantReports,
     dimensionSummary,
     reproducibility,
+    inconclusiveCells,
+    partialMeasurement: inconclusiveCells.length > 0,
   }
 
   if (outputPath) {

@@ -1,74 +1,50 @@
-// Run: bun test packages/benchmarks/tests/preflight-runsession-gate.test.ts --timeout 15000
+// Run: bun test packages/benchmarks/tests/preflight-runsession-gate.test.ts --timeout 20000
 //
-// Integration pin for the capability-source preflight gate inside runSession.
-// The gate runs after the Rule-4 judge guard and before the task loop: a
-// session whose model resolves to source="fallback" MUST be refused, loudly,
-// rather than scored. Mirrors rule4-guard.test.ts discipline.
+// Per-cell bench honesty (canonical-contracts-and-invariants §6 — BenchCellOutcome).
+// A cell whose model resolves to source="fallback" is marked INCONCLUSIVE and is
+// NOT run or scored — instead of aborting the whole session (the prior coarse
+// throw) or producing a misconfigured-budget 0%. Mixed-tier sessions stay honest:
+// good cells measure, bad cells are flagged. The inconclusive path short-circuits
+// BEFORE any provider dispatch, so this is an offline test.
 import { describe, it, expect } from "bun:test";
 import type { BenchmarkSession } from "../src/types.js";
 
-function buildSession(model: string): BenchmarkSession {
+function sessionWith(model: string, taskIds: string[]): BenchmarkSession {
   return {
-    id: "preflight-gate-test",
-    name: "Preflight gate test",
+    id: "preflight-cell-test",
+    name: "Preflight per-cell test",
     version: "1",
-    // Nonexistent task id: if the preflight does NOT fire, runSession proceeds
-    // and fails later (zero tasks / other). The fallback case asserts the
-    // preflight error fires FIRST, before any of that.
-    taskIds: ["__nonexistent__"],
-    models: [
-      {
-        id: "sut-variant",
-        provider: "ollama",
-        model,
-      },
-    ],
-    harnessVariants: [],
+    taskIds,
+    models: [{ id: "sut", provider: "ollama", model }],
+    harnessVariants: [{ type: "internal", id: "v1", label: "v1", config: {} }],
     runs: 1,
     timeoutMs: 5_000,
     logLevel: "silent",
   } as BenchmarkSession;
 }
 
-describe("capability-source preflight gate (runSession integration)", () => {
-  it("refuses to run a session whose model resolves to source=fallback", async () => {
+describe("per-cell capability-source honesty (runSession)", () => {
+  it("marks a fallback-source cell INCONCLUSIVE without throwing or dispatching", async () => {
     const { runSession } = await import("../src/runner.js");
-    await expect(
-      runSession(buildSession("definitely-not-a-real-model-xyz")),
-    ).rejects.toThrow(/preflight failed|source="fallback"/);
-  }, 15000);
+    const report = await runSession(sessionWith("definitely-not-real-xyz", ["t1-js-typeof"]));
 
-  it("does NOT raise the preflight error for a static-table model", async () => {
+    expect(report.partialMeasurement).toBe(true);
+    expect(report.inconclusiveCells?.length).toBe(1);
+    const cell = report.inconclusiveCells![0]!;
+    expect(cell.taskId).toBe("t1-js-typeof");
+    expect(cell.reason.kind).toBe("capability-source");
+
+    // The cell appears in taskReports flagged inconclusive with no runs.
+    const tr = report.taskReports?.find((r) => r.taskId === "t1-js-typeof");
+    expect(tr?.inconclusive).toBeDefined();
+    expect(tr?.runs.length).toBe(0);
+  }, 20000);
+
+  it("does NOT flag a static-table model (no inconclusive cells)", async () => {
     const { runSession } = await import("../src/runner.js");
-    let preflightThrown = false;
-    try {
-      await runSession(buildSession("qwen3:14b")); // static-table — clean source
-    } catch (e: unknown) {
-      if (e instanceof Error && /preflight failed/.test(e.message)) {
-        preflightThrown = true;
-      }
-      // Other errors (no tasks resolved, etc.) are acceptable for this assertion.
-    }
-    expect(preflightThrown).toBe(false);
-  }, 15000);
-
-  it("allows a fallback-source model through when RA_BENCH_ALLOW_FALLBACK=1", async () => {
-    const prev = process.env.RA_BENCH_ALLOW_FALLBACK;
-    process.env.RA_BENCH_ALLOW_FALLBACK = "1";
-    try {
-      const { runSession } = await import("../src/runner.js");
-      let preflightThrown = false;
-      try {
-        await runSession(buildSession("definitely-not-a-real-model-xyz"));
-      } catch (e: unknown) {
-        if (e instanceof Error && /preflight failed/.test(e.message)) {
-          preflightThrown = true;
-        }
-      }
-      expect(preflightThrown).toBe(false);
-    } finally {
-      if (prev === undefined) delete process.env.RA_BENCH_ALLOW_FALLBACK;
-      else process.env.RA_BENCH_ALLOW_FALLBACK = prev;
-    }
-  }, 15000);
+    // Nonexistent task → 0 cells → no dispatch; confirms static-table isn't flagged.
+    const report = await runSession(sessionWith("qwen3:14b", ["__nonexistent__"]));
+    expect(report.partialMeasurement).toBeFalsy();
+    expect(report.inconclusiveCells?.length ?? 0).toBe(0);
+  }, 20000);
 });

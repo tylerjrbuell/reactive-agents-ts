@@ -17,7 +17,6 @@
  */
 import {
   capabilitySourcePreflight,
-  formatViolations,
   type PreFlightViolation,
 } from "@reactive-agents/core";
 import { resolveCanonical } from "@reactive-agents/llm-provider";
@@ -57,19 +56,4 @@ export function checkCapabilitySourcePreflight(
     if (v) violations.push(v);
   }
   return violations;
-}
-
-/**
- * Format a set of violations into a single throwable error message for the
- * `runSession` preflight gate. Wraps the shared core formatter with the
- * bench-specific "refusing to score" header.
- */
-export function formatPreflightViolations(
-  violations: readonly PreFlightViolation[],
-): string {
-  return (
-    `Capability-source preflight failed: ${violations.length} model(s) resolved to ` +
-    `source="fallback". Refusing to score (Sprint-2 measurement-honesty gate).\n` +
-    formatViolations(violations)
-  );
 }
