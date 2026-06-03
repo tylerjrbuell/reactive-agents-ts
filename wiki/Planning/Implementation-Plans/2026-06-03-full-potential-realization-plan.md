@@ -6,9 +6,11 @@
 
 ## Ranking summary
 
+> **Progress 2026-06-03** (branch `refactor/arch-cleanup-2026-06-03`): **P1 ✅ COMPLETE** (commits b3aef454/0e80b82a/e4abf43e/2bb06cf8 — single-writer + 4-source type + guard test; 1559/0 reasoning, 68/68 typecheck). **P5 partial** (1d33f9b9 — 3 of ~10 drift files). Remaining: P5 tail, P2, P3, P4.
+
 | P | Title | Lever | Effort | Gate metric |
 |---|-------|-------|--------|-------------|
-| **P1** | Wire deliverable provenance (collapse 2 Deliverable types) | Trust pillar — *the* headline gap | M (3–5d) | 0 raw `state.output` writes; all outputs provenance-tagged |
+| **P1 ✅** | ~~Wire deliverable provenance (collapse 2 Deliverable types)~~ **DONE** | Trust pillar — *the* headline gap | M (3–5d) | ✅ 0 raw `state.output` writes (guard-locked); all outputs provenance-typed |
 | **P2** | Thread `TaskContract` into runtime `agent.build()` | Reliability — bench-only contract → real enforcement | M (3–5d) | preflight refuses contract-violating cells in *runtime*, not just bench |
 | **P3** | Activate dormant calibration consumers (5→≥8) | Model-adaptive — defined-not-consumed | M (4–6d) | ≥8 fields with documented cross-tier lift |
 | **P4** | M14 self-evolution via compose hooks | Reliability — most-positive research module, unbuilt | M (4–6d) | ≥3pp lift on looping gate scenarios |

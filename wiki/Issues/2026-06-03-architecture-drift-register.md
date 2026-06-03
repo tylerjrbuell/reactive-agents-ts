@@ -36,6 +36,14 @@
 - ✅ Decomposition continued past docs: runner 771 / engine 1,418 / builder 2,087 LOC.
 - ✅ overhaul branch fully merged (`main...origin/overhaul/agentic-core-2026-05-31` = `38 0`).
 
+## ✅ Resolved 2026-06-03 (branch `refactor/arch-cleanup-2026-06-03`)
+
+- ~~**S5/S6/S10/D5** — deliverable provenance~~ → **CLOSED by P1** (commits b3aef454, 0e80b82a, e4abf43e, 2bb06cf8). One 4-source `Deliverable` type; `commitDeliverable` is the single `state.output` writer (`terminate()` composes through it); structural guard test (`single-output-writer.guard.test.ts`) locks it + fails-when-violated; `raw_artifacts`/`NO_SYNTHESIS_CALL` deleted. Full reasoning suite 1559/0; cross-package typecheck 68/68. **Errors-leaked-as-output now constructively prevented at the single writer.**
+- ~~**D1/D2/D3** + §6.5 admonition~~ → **CLOSED by P5 partial** (commit 1d33f9b9). Skill kernel-paths fixed, FRAMEWORK_INDEX ref repointed, North Star §4.3/§5.2 corrected, §6.5 admonition added.
+- **D5** North Star §6.5: the admonition now correctly marks the OLD claim aspirational; the *mechanism* it described is now real (S5 closed) — the admonition can be retired when this branch merges.
+
+**Still open:** P5 remainder (7 more skill files with `strategies/kernel` drift), D6 (compose read-vs-mutate audit), S7 (TaskContract→runtime, P2), S9 (calibration consumers, P3), compose coverage expansion (P4).
+
 ## Open question (escalate)
 
 - **Q1:** For P1, is `core/contracts/deliverable.ts` the intended source of truth (runner consumes it) or should the wired `runner-helpers/deliverable.ts` model be promoted into core? The spec wanted core as sole writer; the runner shipped its own. Decide before P1 collapse.
