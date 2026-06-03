@@ -112,3 +112,43 @@ describe("evaluateStallDetect — tier-gated stall window", () => {
     expect(r).toBeNull();
   });
 });
+
+// rw-9 regression (2026-06-02): gpt-4o-mini ran find→file-read (real, distinct
+// tool PROGRESS) but with confidently flat entropy ~0.15. stall-detect read
+// "flat entropy" as "stuck" and hard-killed the run at iter 3 (dispatcher-early-
+// stop → failure) BEFORE it wrote the deliverable. The detector's own comment
+// promised a "no new tool calls" check it never implemented. Flat entropy +
+// recent tool ACTION = confident progress, not a stall. Knob experiment
+// (stall-detect off): gpt-4o-mini wrote prices.md + succeeded 3/3.
+describe("evaluateStallDetect — tool-progress gate (rw-9 regression)", () => {
+  it("does NOT fire when the agent took a tool action within the window (flat entropy = confidence, not stall)", () => {
+    const r = evaluateStallDetect(makeParams({
+      tier: "mid",
+      iteration: 3,
+      entropyHistory: [flat(), flat(), flat()],
+      consecutiveThoughtsWithoutAction: 1, // acted 1 step ago (find→file-read)
+    }));
+    expect(r).toBeNull();
+  });
+
+  it("STILL fires when the agent has only thought (no action) for the whole window", () => {
+    const r = evaluateStallDetect(makeParams({
+      tier: "mid",
+      iteration: 3,
+      entropyHistory: [flat(), flat(), flat()],
+      consecutiveThoughtsWithoutAction: 3, // circling: no action in the window
+    }));
+    expect(r).not.toBeNull();
+    expect(r!.decision).toBe("stall-detect");
+  });
+
+  it("fires when no progress signal is supplied (undefined → prior behavior preserved)", () => {
+    const r = evaluateStallDetect(makeParams({
+      tier: "mid",
+      iteration: 3,
+      entropyHistory: [flat(), flat(), flat()],
+      // consecutiveThoughtsWithoutAction omitted
+    }));
+    expect(r).not.toBeNull();
+  });
+});

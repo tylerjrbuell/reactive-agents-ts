@@ -19,7 +19,7 @@ const STALL_WINDOW_BY_TIER: Record<string, number> = {
 export function evaluateStallDetect(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "stall-detect" }) | null {
-  const { entropyHistory, iteration, priorDecisionsThisRun = [], consecutiveToolFailures, tier } = params;
+  const { entropyHistory, iteration, priorDecisionsThisRun = [], consecutiveToolFailures, consecutiveThoughtsWithoutAction, tier } = params;
 
   // Don't overlap with tool-failure-streak — that handler covers repeated tool errors
   if (consecutiveToolFailures && consecutiveToolFailures >= 2) return null;
@@ -37,6 +37,19 @@ export function evaluateStallDetect(
   if (recent.length < window) return null;
   const allFlat = recent.every((e) => e.composite <= FLAT_ENTROPY_THRESHOLD);
   if (!allFlat) return null;
+
+  // Tool-progress gate (rw-9 fix) — flat entropy is only a STALL if the agent
+  // is NOT making tool progress. The detector's contract is "flat entropy AS A
+  // PROXY for no new tool calls"; honor the real signal when supplied. If the
+  // agent took a tool ACTION within the stall window (consecutiveThoughtsWithout-
+  // Action < window), it is confidently advancing (e.g. find→file-read at low
+  // entropy), not stuck — do not fire. Omitted signal preserves prior behavior.
+  if (
+    consecutiveThoughtsWithoutAction !== undefined &&
+    consecutiveThoughtsWithoutAction < window
+  ) {
+    return null;
+  }
 
   // Don't fire twice in quick succession — let the nudge have a chance to work
   const priorStalls = priorDecisionsThisRun.filter((d) => d.startsWith("stall-detect")).length;
