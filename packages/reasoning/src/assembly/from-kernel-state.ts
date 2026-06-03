@@ -12,6 +12,11 @@ import { EventLog } from "./event-log.js";
 import { ResultStore } from "./result-store.js";
 import { resolveCapability, type Tier } from "./capability.js";
 import type { AssemblyInput } from "./project.js";
+import {
+  verify as verifyPostConditions,
+  describeConditions,
+  type PostCondition,
+} from "../kernel/capabilities/verify/post-conditions.js";
 
 // ── fromKernelState ───────────────────────────────────────────────────────────
 
@@ -118,6 +123,33 @@ export function fromKernelState(
         ref,
         shape: "result",
       });
+    }
+  }
+
+  // ── 2b. Progress recitation (WS-4) ───────────────────────────────────────
+  //
+  // Emit a `goal_state` event carrying the STILL-UNMET post-conditions, computed
+  // FRESH from the run's derived-once conditions (state.meta.postConditions, set
+  // by runner.ts) verified against the current ledger. This is the live PRODUCER
+  // for the `goal_state` event the systemPromptStage already consumes — it makes
+  // the model re-orient each turn on what still has to happen (Manus recitation:
+  // keep the goal in attention so a long tool transcript can't drift it).
+  //
+  // Proactive, NOT a duplicate of the Arbitrator's `applyPostConditionGate`
+  // (which only steers REACTIVELY when the model already tried to terminate).
+  // Shares the `describeConditions` vocabulary so the two surfaces never drift.
+  //
+  // Additive: when no conditions are derived OR all are met, NO event is emitted
+  // and the projection is byte-identical to prior behavior. OutputContains reads
+  // the assembled deliverable (state.output) which is null mid-loop, so an
+  // unmet OutputContains correctly recites until the final answer carries it.
+  const postConditions: readonly PostCondition[] = state.meta.postConditions ?? [];
+  if (postConditions.length > 0) {
+    const { unmet } = verifyPostConditions(postConditions, state.steps, {
+      output: state.output ?? "",
+    });
+    if (unmet.length > 0) {
+      log = log.append({ kind: "goal_state", remaining: describeConditions(unmet) });
     }
   }
 

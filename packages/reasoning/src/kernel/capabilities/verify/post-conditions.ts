@@ -297,10 +297,16 @@ export function verify(
   return { met, unmet };
 }
 
-/** Human-readable steering text naming the unmet conditions. */
-export function describeUnmet(unmet: readonly PostCondition[]): string {
-  if (unmet.length === 0) return "";
-  const parts = unmet.map((c) => {
+/**
+ * Render each condition as a one-phrase imperative ("call the `x` tool", …).
+ * The shared steering vocabulary for BOTH the terminal/reactive `describeUnmet`
+ * frame AND the proactive per-turn recitation (`goal_state.remaining`, WS-4) —
+ * so the two surfaces never drift into parallel wordings.
+ */
+export function describeConditions(
+  conditions: readonly PostCondition[],
+): readonly string[] {
+  return conditions.map((c) => {
     switch (c.kind) {
       case "ToolCalled":
         return `call the \`${c.tool}\` tool`;
@@ -310,13 +316,16 @@ export function describeUnmet(unmet: readonly PostCondition[]): string {
         return `include "${c.pattern}" in your answer`;
       default: {
         // Exhaustiveness: a future PostCondition kind must be handled here.
-        // Without this, the switch would yield `undefined` -> "You still
-        // must: undefined" steering text.
         const _exhaust: never = c;
         void _exhaust;
         return "";
       }
     }
   });
-  return `You still must: ${parts.join("; ")}.`;
+}
+
+/** Human-readable steering text naming the unmet conditions. */
+export function describeUnmet(unmet: readonly PostCondition[]): string {
+  if (unmet.length === 0) return "";
+  return `You still must: ${describeConditions(unmet).join("; ")}.`;
 }
