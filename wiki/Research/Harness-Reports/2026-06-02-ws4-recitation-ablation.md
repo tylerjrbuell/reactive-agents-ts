@@ -2,7 +2,7 @@
 title: WS-4 Progress-Recitation Ablation — cross-tier pass^k gate
 date: 2026-06-02
 status: complete
-verdict: INCONCLUSIVE (grading-channel confound) — recitation stays opt-in; surfaced a real bench gap
+verdict: NEUTRAL on fixed grader (confound closed) — recitation stays opt-in, not harmful, viable lever
 tags: [ablation, recitation, post-conditions, pass-k, measurement-spine]
 ---
 
@@ -51,6 +51,25 @@ The project lift rule for default-on is **≥3pp first-attempt lift AND ≤15% t
 
 - **Small N.** 8 cells, N=3, 2 tasks. The aggregate is dominated by **qwen3.5 rw-9 100%→0%** — a single cell. Three of four cells show only a mild −3..−14 drift; one collapses. This is enough to **fail the +3pp bar** but NOT enough to claim recitation is universally *harmful* vs noisy.
 - The collapse cell (qwen3.5 rw-9) is the one task where ra-full already scored 100% — i.e. recitation broke a task the harness was already solving. That direction (regressing a solved task) is the concerning signal worth a trace diagnosis before any recency-placement retry.
+
+## Re-run on the FIXED grader (judge now sees produced files) — verdict: NEUTRAL, confound confirmed
+
+After `f4e1fcbe` (judge grades text + produced files) the ablation was re-run identically.
+
+| Cell | broken-grader (full→recite) | FIXED-grader (full→recite) |
+|---|---|---|
+| qwen3.5 rw-3 | 88 → 85 | 87 → 88 |
+| **qwen3.5 rw-9** | **100 → 0** ⚠️ | **98 → 100** ✓ |
+| gpt-4o-mini rw-3 | 52 → 38 | 62 → 62 |
+| gpt-4o-mini rw-9 | 0 → 0 | 0 → 0 |
+
+Aggregate dimensions (fixed grader): accuracy ra-full **62%** vs ra-recite **63%** (+1); scope +2; reasoning +1; reliability 0; resilience +2; tool-mastery −3.
+
+**The smoking gun:** qwen3.5 rw-9 went from a `100→0` collapse to `98→100`. The −29pp was **100% a grading-channel artifact** — the model wrote the file (now graded → ~100), the broken grader saw only thin text (→0). Confound CONFIRMED and CLOSED.
+
+**Recitation's true effect: NEUTRAL** (marginally positive on the local tier, within N=3/2-task noise). It does **not** clear the +3pp default-on bar → **stays opt-in** — but it is **not harmful**, so it remains a viable lever (unlike the broken-grader read which would have wrongly killed it).
+
+**Separate finding (not recitation):** gpt-4o-mini scores **0/0 on rw-9 both arms** — the mid-tier model fails the resilience task (503 + fallback-file discovery) regardless of recitation. A real harness gap worth its own probe; it is NOT a recitation signal.
 
 ## Decision
 
