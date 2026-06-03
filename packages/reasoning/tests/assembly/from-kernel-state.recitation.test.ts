@@ -7,8 +7,8 @@
 // what still has to happen every turn (Manus recitation pattern). When all
 // conditions are met (or none derived) NO goal_state is emitted — additive,
 // byte-identical to prior behavior on satisfied/no-condition runs.
-import { describe, it, expect } from "bun:test";
-import { fromKernelState } from "../../src/assembly/from-kernel-state.js";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { fromKernelState, recitationEnabled } from "../../src/assembly/from-kernel-state.js";
 import { project } from "../../src/assembly/project.js";
 import type { KernelState } from "../../src/kernel/state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../src/context/context-profile.js";
@@ -68,7 +68,43 @@ const persona = { system: "You are a helpful assistant." };
 const tools = { schemas: [] as readonly unknown[] };
 const profile = CONTEXT_PROFILES.mid;
 
+// Recitation is OPT-IN (RA_RECITE=1) until the cross-tier ablation proves lift.
+// These behavior tests run with the gate forced ON; a separate block asserts
+// the default-off gate.
+const ORIGINAL_RECITE = process.env.RA_RECITE;
+beforeAll(() => {
+  process.env.RA_RECITE = "1";
+});
+afterAll(() => {
+  if (ORIGINAL_RECITE === undefined) delete process.env.RA_RECITE;
+  else process.env.RA_RECITE = ORIGINAL_RECITE;
+});
+
+describe("recitationEnabled — gate", () => {
+  it("is OFF by default (opt-in until ablation-proven)", () => {
+    expect(recitationEnabled({} as NodeJS.ProcessEnv)).toBe(false);
+  }, 15000);
+  it("is ON only with RA_RECITE=1", () => {
+    expect(recitationEnabled({ RA_RECITE: "1" } as NodeJS.ProcessEnv)).toBe(true);
+    expect(recitationEnabled({ RA_RECITE: "0" } as NodeJS.ProcessEnv)).toBe(false);
+  }, 15000);
+});
+
 describe("fromKernelState — WS-4 goal_state recitation producer", () => {
+  it("emits NO goal_state when the gate is OFF, even with unmet conditions", () => {
+    const prev = process.env.RA_RECITE;
+    delete process.env.RA_RECITE;
+    try {
+      const state = makeState({
+        meta: { postConditions: [toolCalled("file-write")] },
+        steps: [],
+      });
+      expect(fromKernelState(state, profile, persona, tools).log.byKind("goal_state").length).toBe(0);
+    } finally {
+      if (prev !== undefined) process.env.RA_RECITE = prev;
+    }
+  }, 15000);
+
   it("emits a goal_state event listing UNMET conditions when none are satisfied", () => {
     const state = makeState({
       meta: { postConditions: [toolCalled("file-write"), artifactProduced("./commits.md")] },

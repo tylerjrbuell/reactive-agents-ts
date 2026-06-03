@@ -18,6 +18,18 @@ import {
   type PostCondition,
 } from "../kernel/capabilities/verify/post-conditions.js";
 
+/**
+ * Whether WS-4 progress recitation is active. OPT-IN (`RA_RECITE=1`) until a
+ * cross-tier pass^k ablation against the live judge proves the project lift rule
+ * (≥3pp first-attempt lift AND ≤15% token overhead). Mirrors RA_RECALL_GATE's
+ * history (built opt-in, flipped default-on only after cross-tier proof).
+ * Named seam so the gate is directly testable and the eventual default flip is
+ * a one-line change with the report cited.
+ */
+export const recitationEnabled = (
+  env: NodeJS.ProcessEnv = process.env,
+): boolean => env.RA_RECITE === "1";
+
 // ── fromKernelState ───────────────────────────────────────────────────────────
 
 /**
@@ -144,7 +156,7 @@ export function fromKernelState(
   // the assembled deliverable (state.output) which is null mid-loop, so an
   // unmet OutputContains correctly recites until the final answer carries it.
   const postConditions: readonly PostCondition[] = state.meta.postConditions ?? [];
-  if (postConditions.length > 0) {
+  if (recitationEnabled() && postConditions.length > 0) {
     const { unmet } = verifyPostConditions(postConditions, state.steps, {
       output: state.output ?? "",
     });
