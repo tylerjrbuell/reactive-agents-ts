@@ -3,6 +3,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { runKernel, assembleDeliverable } from "../../../src/kernel/loop/runner.js";
+import { deliverableToContent } from "@reactive-agents/core";
 import {
   initialKernelState,
   transitionState,
@@ -361,8 +362,11 @@ describe("output quality gate", () => {
       toolsUsed: new Set(["shell-execute"]),
       scratchpad: new Map([[key, fullText]]),
     });
-    expect(assembleDeliverable(st).content).toContain("Usage: rax agent create");
-    expect(assembleDeliverable(st).content).toContain("--name string");
+    const d = assembleDeliverable(st);
+    // Single validated observation → tool_artifact (4-source contract).
+    expect(d.source).toBe("tool_artifact");
+    expect(deliverableToContent(d)).toContain("Usage: rax agent create");
+    expect(deliverableToContent(d)).toContain("--name string");
   });
 
   it("assembleDeliverable resolves compressed previews via metadata.storedKey", () => {
@@ -400,7 +404,9 @@ describe("output quality gate", () => {
       scratchpad: new Map([[key, fullText]]),
     });
 
-    const assembled = assembleDeliverable(st).content;
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("tool_artifact");
+    const assembled = deliverableToContent(d);
     expect(assembled).toContain('"find-xrp-price"');
     expect(assembled).toContain('"succeeded":4');
   });
@@ -433,7 +439,9 @@ describe("output quality gate", () => {
       scratchpad: new Map([[key, fullText]]),
     });
 
-    const assembled = assembleDeliverable(st).content;
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("tool_artifact");
+    const assembled = deliverableToContent(d);
     expect(assembled).toContain("Bitcoin: 70836.96");
     expect(assembled).toContain("XLM: 0.1508");
   });
@@ -463,8 +471,76 @@ describe("output quality gate", () => {
       steps: [realObs, dispatchReject],
       toolsUsed: new Set(["file-read"]),
     });
-    const assembled = assembleDeliverable(st).content;
+    const d = assembleDeliverable(st);
+    // Exactly one validated observation survives the metadata gate → tool_artifact.
+    expect(d.source).toBe("tool_artifact");
+    const assembled = deliverableToContent(d);
     expect(assembled).toContain("ZEBRA-CODA");
     expect(assembled).not.toContain("unavailable name(s)");
+  });
+
+  it("assembleDeliverable returns harness_synthesis for multiple validated observations", () => {
+    const obsA = makeStep("observation", "Result A: BTC $50,000", {
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "a",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const obsB = makeStep("observation", "Result B: ETH $3,000", {
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "b",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-multi" });
+    const st = transitionState(base, {
+      steps: [obsA, obsB],
+      toolsUsed: new Set(["web-search"]),
+    });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("harness_synthesis");
+    const assembled = deliverableToContent(d);
+    expect(assembled).toContain("Result A: BTC $50,000");
+    expect(assembled).toContain("Result B: ETH $3,000");
+  });
+
+  it("assembleDeliverable returns model_synthesis for a substantive trailing thought", () => {
+    const thought =
+      "Synthesizing the findings: BTC is at $50,000 and ETH is at $3,000. " +
+      "These reflect current market conditions across the major exchanges surveyed.";
+    const obs = makeStep("observation", "raw data dump", {
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "raw",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-model" });
+    const st = transitionState(base, {
+      steps: [makeStep("action", "web-search"), obs, makeStep("thought", thought)],
+      toolsUsed: new Set(["web-search"]),
+    });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("model_synthesis");
+    expect(deliverableToContent(d)).toContain("Synthesizing the findings");
+  });
+
+  it("assembleDeliverable returns sentinel when no validated artifacts or thought exist", () => {
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-empty" });
+    const st = transitionState(base, { steps: [] });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("sentinel");
+    expect(deliverableToContent(d)).toBe("Task complete.");
   });
 });

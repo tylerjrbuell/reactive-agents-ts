@@ -43,6 +43,7 @@ import {
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
 import { missingRequiredToolsForInput } from "./state-queries.js";
+import { deliverableToContent } from "@reactive-agents/core";
 import {
   assembleDeliverable,
   deliverableTerminationReason,
@@ -152,7 +153,7 @@ export function resolveDetectedLoop(
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
-            output: d.content,
+            output: deliverableToContent(d),
           });
           return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
         }
@@ -188,7 +189,7 @@ export function resolveDetectedLoop(
       });
       state = terminate(state, {
         reason: deliverableTerminationReason(loopDeliverable),
-        output: loopDeliverable.content,
+        output: deliverableToContent(loopDeliverable),
       });
       return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
     }

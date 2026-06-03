@@ -16,7 +16,7 @@ import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
-import { deliverableToContent, modelSynthesisDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -63,6 +63,7 @@ import {
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
   assembleDeliverable,
+  commitDeliverable,
   deliverableTerminationReason,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
@@ -79,8 +80,11 @@ import {
 
 // Re-export the public helper surface so external imports of
 // `kernel/loop/runner.js` remain unchanged.
-export { assembleDeliverable } from "./runner-helpers/deliverable.js";
-export type { Deliverable } from "./runner-helpers/deliverable.js";
+export { assembleDeliverable, commitDeliverable } from "./runner-helpers/deliverable.js";
+// P1 mission 2A: the Deliverable TYPE is now the canonical 4-source contract
+// owned by @reactive-agents/core. Re-exported here so external callers that
+// import it from `kernel/loop/runner.js` keep working.
+export type { Deliverable } from "@reactive-agents/core";
 export {
   TIER_GUARD_THRESHOLDS,
   shouldExitOnLowDelta,
@@ -499,13 +503,11 @@ export function runKernel(
       if (artifactCount > 0) {
         const previousTerminatedBy = state.meta.terminatedBy;
         const deliverable = assembleDeliverable(state);
-        state = transitionState(state, {
-          output: deliverable.content,
-          meta: {
-            ...state.meta,
-            terminatedBy: deliverableTerminationReason(deliverable),
-            previousTerminatedBy,
-          },
+        // Single-writer: commitDeliverable owns state.output; we hand it the
+        // terminatedBy promotion to stamp alongside (Sprint-1 P1 mission 2A).
+        state = commitDeliverable(state, deliverable, {
+          terminatedBy: deliverableTerminationReason(deliverable),
+          previousTerminatedBy,
         });
       }
     }
@@ -526,16 +528,17 @@ export function runKernel(
         .filter((s) => s.type === "thought")
         .pop();
       if (lastThought?.content && lastThought.content.trim().length > 0) {
-        // Sprint-1 B2: typed DeliverableProvenance channel. Construct a
-        // model_synthesis Deliverable and pass its content to transitionState.
-        // The contract type makes provenance explicit; raw-string mutations of
-        // state.output are an anti-pattern that the migration is collapsing.
+        // Sprint-1 B2 / P1 mission 2A: typed DeliverableProvenance channel.
+        // Construct a model_synthesis Deliverable and route it through the
+        // single writer commitDeliverable (no extraMeta — this path does not
+        // own terminatedBy, so the existing reason is preserved). Raw-string
+        // mutations of state.output are the anti-pattern this collapses.
         const deliverable = modelSynthesisDeliverable({
           type: "thought",
           content: lastThought.content,
           iteration: state.iteration,
         });
-        state = transitionState(state, { output: deliverableToContent(deliverable) });
+        state = commitDeliverable(state, deliverable);
       }
     }
 

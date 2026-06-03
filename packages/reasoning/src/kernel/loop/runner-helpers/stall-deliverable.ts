@@ -42,6 +42,7 @@ import {
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
 import { verifyAndEmit, type Verifier } from "../../../kernel/capabilities/verify/verifier.js";
+import { deliverableToContent } from "@reactive-agents/core";
 import {
   assembleDeliverable,
   deliverableTerminationReason,
@@ -134,7 +135,7 @@ export function runStallDeliverableStep(
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
-            output: d.content,
+            output: deliverableToContent(d),
           });
           return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
         }
@@ -222,7 +223,7 @@ export function runStallDeliverableStep(
       // is exhausted (or verifier passes — should be impossible with
       // the new check), fall through to the original terminate path.
       const candidateDeliverable = assembleDeliverable(state);
-      const candidateOutput = candidateDeliverable.content;
+      const candidateOutput = deliverableToContent(candidateDeliverable);
       const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
       const availableUserToolsForFallback =
         (currentInput.availableToolSchemas ?? []).map((t) => t.name);
