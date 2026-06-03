@@ -74,7 +74,14 @@ import {
  * `builder/build-effect/runtime-construction.ts:180`. Both boundaries
  * agreed on this widening in W25 — `unknown` here keeps them in lockstep.
  */
-type ComposableLayer = Layer.Layer<unknown, unknown, unknown>;
+// RIn is `never`: a fully-composed runtime layer is self-contained — every
+// optional sub-layer provides its own deps before reaching the terminal
+// `Layer.mergeAll(...)`. The erasure is on the OUTPUT (ROut) + error (E)
+// channels only, where the ~25-layer union explodes. Keeping RIn=`never`
+// lets consumers `Effect.provide(runtime)` and `runPromise` without the
+// requirements channel widening to `unknown` (which would make every
+// downstream `runPromise` un-typecheckable). See runtime/tests/*.
+type ComposableLayer = Layer.Layer<unknown, unknown, never>;
 
 /**
  * Single widening boundary for runtime composition (WS-5d / §8.1).

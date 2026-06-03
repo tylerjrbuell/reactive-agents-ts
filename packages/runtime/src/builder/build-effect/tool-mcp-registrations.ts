@@ -32,8 +32,7 @@ import {
   createDynamicSpawnRegistrations,
 } from "./local-agent-tools.js";
 import { buildToolInitLayer } from "./tool-init-layer.js";
-
-type ProviderName = string;
+import type { ProviderName } from "../types.js";
 
 export interface ToolMcpRegistrationsDeps {
   readonly runtimeWithCortex: Layer.Layer<unknown, unknown, unknown>;
