@@ -24,7 +24,7 @@ import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { fromKernelState } from "../../../assembly/from-kernel-state.js";
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
-import { StreamingTextCallback, EventBus } from "@reactive-agents/core";
+import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,
   shouldShowFinalAnswer,
@@ -354,7 +354,6 @@ export function handleThinking(
     );
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
-    const compressionApplied: undefined = undefined;
     if (process.env.RA_ASSEMBLY_DEBUG === "1") {
       console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }
@@ -395,31 +394,6 @@ export function handleThinking(
     const gatedToolSchemas = recallGateEnabled()
       ? filterRecallByOverflow(filteredToolSchemas, conversationMessages, recallForceOn)
       : filteredToolSchemas;
-
-    // ── Issue #119 closure (WS-4 Phase 7) — typed CompressionApplied emit ──
-    // When the curator consumed a fresh CompressionRecommendation, publish
-    // the typed `CompressionApplied` event variant (declared in
-    // @reactive-agents/core event-bus.ts AgentEvent union). This is the
-    // sole audit surface for "recommendation → application" closure;
-    // observers see a recommendation→applied pair correlated by taskId +
-    // recommendedAtIteration. EventBus is resolved via serviceOption so the
-    // emit is a no-op when the observability layer is absent.
-    if (compressionApplied) {
-      const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
-        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-      );
-      if (ebOpt._tag === "Some") {
-        yield* ebOpt.value.publish({
-          _tag: "CompressionApplied",
-          taskId: state.taskId,
-          iteration: compressionApplied.iteration,
-          recommendedAtIteration: compressionApplied.recommendedAtIteration,
-          targetTokens: compressionApplied.targetTokens,
-          actualMessageCount: compressionApplied.actualMessageCount,
-          reason: compressionApplied.reason,
-        }).pipe(Effect.catchAll(() => Effect.void));
-      }
-    }
 
     // ── TextParseDriver: inject format instructions into system prompt ────────
     // When the driver is in text-parse mode (local models that can't reliably emit
