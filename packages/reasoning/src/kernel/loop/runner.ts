@@ -64,6 +64,7 @@ import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js"
 import {
   assembleDeliverable,
   commitDeliverable,
+  passthroughOutputDeliverable,
   deliverableTerminationReason,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
@@ -343,14 +344,22 @@ export function runKernel(
         runPhaseHooks(harnessPipeline, 'before', 'bootstrap', 0, state)
       );
       if (bootstrapAbort) {
+        // P1 mission 2B: killswitch abort carries a DYNAMIC terminatedBy (not a
+        // TerminateReason). Set status + terminatedBy via transitionState (NO
+        // output key), then — only on the "done" branch — route the output
+        // through the single writer commitDeliverable. The "failed" branch
+        // drops the key so the invariant nulls the output.
+        const aborted = bootstrapAbort.abort === 'terminate';
         state = transitionState(state, {
-          status: bootstrapAbort.abort === 'terminate' ? 'failed' : 'done',
-          output: state.output ?? '',
+          status: aborted ? 'failed' : 'done',
           meta: {
             ...state.meta,
             terminatedBy: killswitchTerminatedBy(bootstrapAbort),
           },
         });
+        if (!aborted) {
+          state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
+        }
       }
     }
 
@@ -716,16 +725,22 @@ export function runKernel(
             const contentOk = validateContentCompleteness(synthContent, taskIntent).complete;
 
             if (formatOk && contentOk) {
-              state = transitionState(state, {
-                output: synthContent,
-                meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: true },
-              });
+              // P1 mission 2B: synthContent is freshly LLM-authored prose — route
+              // it through the single writer as model_synthesis. extraMeta carries
+              // ONLY the output-quality flags; terminatedBy is already set and must
+              // be preserved (commitDeliverable merges, never clobbers it).
+              state = commitDeliverable(
+                state,
+                modelSynthesisDeliverable({ type: "thought", content: synthContent, iteration: state.iteration }),
+                { outputSynthesized: true, outputFormatValidated: true },
+              );
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesized output to match requested format: ${synthesisFormat}`, timestamp: new Date() });
             } else if (terminationSource === "harness" || terminationSource === "oracle") {
-              state = transitionState(state, {
-                output: synthContent,
-                meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
-              });
+              state = commitDeliverable(
+                state,
+                modelSynthesisDeliverable({ type: "thought", content: synthContent, iteration: state.iteration }),
+                { outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
+              );
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
             } else {
               state = transitionState(state, {

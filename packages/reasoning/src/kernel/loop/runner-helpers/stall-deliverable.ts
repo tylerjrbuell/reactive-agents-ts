@@ -135,7 +135,7 @@ export function runStallDeliverableStep(
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
-            output: deliverableToContent(d),
+            deliverable: d,
           });
           return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
         }
@@ -225,6 +225,9 @@ export function runStallDeliverableStep(
       const candidateDeliverable = assembleDeliverable(state);
       const candidateOutput = deliverableToContent(candidateDeliverable);
       const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
+      // candidateOutput is consumed by the verifier emit below (the trace the
+      // §9.0 post-loop gate reads); the terminate() output write itself routes
+      // the typed Deliverable through commitDeliverable.
       const availableUserToolsForFallback =
         (currentInput.availableToolSchemas ?? []).map((t) => t.name);
       // M3 REWORK (2026-05-12): the retry path was removed, so the
@@ -265,7 +268,7 @@ export function runStallDeliverableStep(
       });
       state = terminate(state, {
         reason: candidateTerminationReason,
-        output: candidateOutput,
+        deliverable: candidateDeliverable,
       });
       return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
     }

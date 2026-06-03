@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { initialKernelState } from "../src/kernel/state/kernel-state.js";
 import { terminate } from "../src/kernel/loop/terminate.js";
 import type { Rationale } from "@reactive-agents/core";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 
 describe("terminate() rationale support (v0.11.x)", () => {
   const baseInput = {
@@ -13,7 +14,7 @@ describe("terminate() rationale support (v0.11.x)", () => {
   const baseState = initialKernelState(baseInput, baseCtx);
 
   it("omits terminationRationale from state.meta when no rationale provided", () => {
-    const next = terminate(baseState, { reason: "max_iterations", output: "" });
+    const next = terminate(baseState, { reason: "max_iterations", deliverable: modelSynthesisDeliverable({ type: "thought", content: "", iteration: 0 }) });
     expect(next.meta.terminatedBy).toBe("max_iterations");
     expect(next.meta.terminationRationale).toBeUndefined();
   });
@@ -22,7 +23,7 @@ describe("terminate() rationale support (v0.11.x)", () => {
     const rationale: Rationale = { why: "quality 0.92 ≥ threshold 0.90" };
     const next = terminate(baseState, {
       reason: "quality_threshold",
-      output: "final",
+      deliverable: modelSynthesisDeliverable({ type: "thought", content: "final", iteration: 0 }),
       rationale,
     });
     expect(next.meta.terminationRationale?.why).toMatch(/quality.*0\.92.*threshold/);
@@ -31,7 +32,7 @@ describe("terminate() rationale support (v0.11.x)", () => {
   it("preserves rationale alongside extraMeta", () => {
     const next = terminate(baseState, {
       reason: "harness_deliverable",
-      output: "x",
+      deliverable: modelSynthesisDeliverable({ type: "thought", content: "x", iteration: 0 }),
       rationale: { why: "post-loop promote", confidence: 0.7 },
       extraMeta: { previousTerminatedBy: "max_iterations" },
     });
@@ -43,7 +44,7 @@ describe("terminate() rationale support (v0.11.x)", () => {
   it("sets status: done", () => {
     const next = terminate(baseState, {
       reason: "max_iterations",
-      output: "",
+      deliverable: modelSynthesisDeliverable({ type: "thought", content: "", iteration: 0 }),
       rationale: { why: "iteration cap reached" },
     });
     expect(next.status).toBe("done");

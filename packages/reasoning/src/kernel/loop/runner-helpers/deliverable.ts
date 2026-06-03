@@ -40,16 +40,6 @@ import { resolveStoredToolObservation } from "./state-queries.js";
 export const MIN_MODEL_SYNTHESIS_LENGTH = 100;
 
 /**
- * Sentinel `synthesisCall` ref for the harness-concat path. This assembly does
- * NO LLM call (M3 REWORK forbids parent-side re-synthesis) — it concatenates
- * already-validated observation bodies. `harnessSynthesisDeliverable` requires
- * an `LLMRoundTripRef`, so we stamp an explicit no-synthesis marker rather than
- * fabricate a real call id. `deliverableToContent` never reads this field; it
- * exists only as provenance. See P1 mission 2A UpwardReport (flagged wart).
- */
-const NO_SYNTHESIS_CALL = { callId: "harness-concat-no-synthesis" } as const;
-
-/**
  * Build a {@link ValidatedObservation} from a resolved artifact body.
  *
  * Eligibility was already enforced by {@link getDeliverableObservationContent}
@@ -78,7 +68,7 @@ function toValidatedObservation(toolName: string, content: string): ValidatedObs
  *      answer; raw observations are evidence, not output.
  *   2. Exactly one validated non-meta tool observation → `tool_artifact`.
  *   3. Multiple validated observations → `harness_synthesis` (their bodies
- *      concatenated; no LLM synthesis call — see NO_SYNTHESIS_CALL).
+ *      concatenated; no LLM synthesis call — synthesisCall is omitted).
  *   4. No usable thought or artifact → `sentinel` ("no_substantive_output").
  *
  * Filters out guard-blocked observations (success=true but warning markers)
@@ -106,10 +96,47 @@ export function assembleDeliverable(state: KernelState): Deliverable {
     return toolArtifactDeliverable(observations[0]!);
   }
   if (observations.length > 1) {
-    return harnessSynthesisDeliverable(observations, NO_SYNTHESIS_CALL);
+    // No LLM synthesis call (M3 REWORK forbids parent-side re-synthesis) — the
+    // harness concatenates already-validated observation bodies. As of core
+    // e4abf43e the `synthesisCall` ref is OPTIONAL, so we pass none rather than
+    // fabricate a marker. `deliverableToContent` joins the bodies directly.
+    return harnessSynthesisDeliverable(observations);
   }
 
   return sentinelDeliverable("no_substantive_output");
+}
+
+/**
+ * Wrap an already-resolved output string (or null) as a {@link Deliverable} for
+ * the passthrough termination paths (low_delta_guard, switching_exhausted,
+ * stop-checkpoint, bootstrap/before-think abort-with-done). At these sites
+ * `state.output` holds whatever a PRIOR committed path produced — model text,
+ * an assembled artifact body, or nothing.
+ *
+ * Mapping (P1 mission 2B):
+ *   - any string (incl. empty) / null → `model_synthesis` passthrough whose
+ *     content is `output ?? ""`. `deliverableToContent` then returns the string
+ *     verbatim — for an empty/null input it returns `""` (FALSY), exactly
+ *     reproducing the legacy `output: state.output ?? ""` write.
+ *
+ * ⚠️ Do NOT map empty → `sentinelDeliverable`: `deliverableToContent(sentinel)`
+ * returns the TRUTHY phrase "Task complete.", which would (a) skip the
+ * `status==="done" && !state.output` lastThought fallback at runner.ts:535 and
+ * (b) trip the truthy-output verifier/quality gates at runner.ts:591/680 on a
+ * parrot phrase — flipping a previously-successful low_delta/switching_exhausted
+ * termination to failed/empty. The empty model_synthesis preserves the falsy
+ * sentinel-free behavior the downstream gates depend on. (Surfaced in the 2B
+ * UpwardReport: the brief's "sentinel for empty" did not account for these
+ * truthiness gates; `sentinel` is correct only at genuinely-terminal sites with
+ * NO downstream lastThought fallback — which the runner already uses directly,
+ * e.g. the stop-checkpoint path before this routing.)
+ */
+export function passthroughOutputDeliverable(output: string | null): Deliverable {
+  return modelSynthesisDeliverable({
+    type: "thought",
+    content: output ?? "",
+    iteration: 0,
+  });
 }
 
 /**

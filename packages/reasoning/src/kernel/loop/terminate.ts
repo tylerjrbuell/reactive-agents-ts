@@ -17,9 +17,11 @@
 // CI lint at `scripts/check-termination-paths.sh` fails if a new direct
 // `status: "done"` transition appears outside this helper or the Arbitrator.
 
-import type { Rationale } from "@reactive-agents/core";
+import type { Deliverable, Rationale } from "@reactive-agents/core";
+import { deliverableToContent } from "@reactive-agents/core";
 import type { KernelMeta, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
+import { commitDeliverable } from "./runner-helpers/deliverable.js";
 import {
   verify as verifyPostConditions,
   describeUnmet,
@@ -41,7 +43,11 @@ export type TerminateReason =
   | "kernel_error" | "controller_signal_veto" | "loop_detected_with_veto"
   | "end_turn" | "final_answer_tool" | "final_answer" | "llm_end_turn"
   | "content_stable" | "final_answer_regex" | "entropy_converged"
-  | "dispatcher-early-stop" | "dispatcher-strategy-switch";
+  | "dispatcher-early-stop" | "dispatcher-strategy-switch"
+  // User-initiated stop via the RunController checkpoint (P1 mission 2B —
+  // routed through terminate() so the stop-checkpoint path stops bypassing the
+  // single-owner termination + output-writer invariants).
+  | "stop_requested";
 
 export type TerminateOptions = {
   /**
@@ -54,11 +60,16 @@ export type TerminateOptions = {
    */
   readonly reason: TerminateReason;
   /**
-   * The user-visible output. Empty string is valid (e.g. "deliver what we
-   * have" exits before any synthesis). Callers should pass the assembled
-   * deliverable, the last substantive thought, or `state.output ?? ""`.
+   * The user-visible output, as a typed {@link Deliverable} (P1 mission 2B).
+   *
+   * `terminate()` does NOT write `state.output` from a raw string — that would
+   * make it a string→output launderer and defeat the typed-provenance contract.
+   * Callers construct the Deliverable that proves provenance (model_synthesis
+   * for model-authored text, tool_artifact/harness_synthesis for assembled
+   * observations, sentinel for empty/abort). `terminate()` finalizes status and
+   * delegates the output string to the single writer `commitDeliverable`.
    */
-  readonly output: string;
+  readonly deliverable: Deliverable;
   /**
    * Additional KernelMeta fields to merge alongside `terminatedBy`. Common use:
    * `previousTerminatedBy`, `escalateTo`, etc. Do NOT pass `terminatedBy` here
@@ -116,7 +127,7 @@ function applyTerminalPostConditionGate(
   if (!conditions || conditions.length === 0) return null;
 
   const result = verifyPostConditions(conditions, state.steps, {
-    output: opts.output,
+    output: deliverableToContent(opts.deliverable),
   });
   if (result.unmet.length === 0) return null; // state-grounded success — proceed
 
@@ -152,9 +163,13 @@ function applyTerminalPostConditionGate(
 export const terminate = (state: KernelState, opts: TerminateOptions): KernelState => {
   const failed = applyTerminalPostConditionGate(state, opts);
   if (failed) return failed;
-  return transitionState(state, {
+  // Compose the two single-owner concepts (P1 mission 2B): `terminate` owns the
+  // status/terminatedBy finalize; `commitDeliverable` owns the output string.
+  // Set status:"done" + meta FIRST (no `output` key — an output-only patch on a
+  // `done` state sticks per the transitionState invariant), THEN funnel the
+  // output through the single writer. NO parallel output-writing path is opened.
+  const done = transitionState(state, {
     status: "done" as const,
-    output: opts.output,
     meta: {
       ...state.meta,
       terminatedBy: opts.reason,
@@ -162,4 +177,5 @@ export const terminate = (state: KernelState, opts: TerminateOptions): KernelSta
       ...(opts.extraMeta ?? {}),
     },
   });
+  return commitDeliverable(done, opts.deliverable);
 };
