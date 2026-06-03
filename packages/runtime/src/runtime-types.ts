@@ -534,6 +534,16 @@ export interface RuntimeOptions {
   allowedTools?: readonly string[];
 
   /**
+   * Soft-focus list of tool names. When set, only these tools are shown in the
+   * LLM-facing prompt schema — but execution of other tools is NOT blocked
+   * (unlike `allowedTools`, which is a hard restriction). Priority:
+   * focusedTools (soft guidance) → allowedTools (hard restriction) → all tools.
+   *
+   * Default: undefined (no soft focus)
+   */
+  focusedTools?: readonly string[];
+
+  /**
    * Enable adaptive tool filtering. When true, only task-relevant tools are shown
    * to the agent at reasoning time — reducing context noise for small models.
    * All tools remain callable by exact name even if not shown.
