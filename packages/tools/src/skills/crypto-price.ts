@@ -92,6 +92,36 @@ const COIN_MAP: Record<string, { id: string; name: string }> = {
   VET: { id: "vechain", name: "VeChain" },
   ALGO: { id: "algorand", name: "Algorand" },
   HBAR: { id: "hedera-hashgraph", name: "Hedera" },
+  // Majors / stablecoins
+  BNB: { id: "binancecoin", name: "BNB" },
+  USDT: { id: "tether", name: "Tether" },
+  USDC: { id: "usd-coin", name: "USD Coin" },
+  XMR: { id: "monero", name: "Monero" },
+  ETC: { id: "ethereum-classic", name: "Ethereum Classic" },
+  AAVE: { id: "aave", name: "Aave" },
+  MKR: { id: "maker", name: "Maker" },
+  CRO: { id: "crypto-com-chain", name: "Cronos" },
+  // Meme / long-tail (the reported BONK gap + frequently-asked peers)
+  BONK: { id: "bonk", name: "Bonk" },
+  WIF: { id: "dogwifcoin", name: "dogwifhat" },
+  FLOKI: { id: "floki", name: "FLOKI" },
+  // Newer L1/L2 + ecosystem coins
+  INJ: { id: "injective-protocol", name: "Injective" },
+  SEI: { id: "sei-network", name: "Sei" },
+  TIA: { id: "celestia", name: "Celestia" },
+  WLD: { id: "worldcoin-wld", name: "Worldcoin" },
+  FET: { id: "fetch-ai", name: "Fetch.ai" },
+  JUP: { id: "jupiter-exchange-solana", name: "Jupiter" },
+  ONDO: { id: "ondo-finance", name: "Ondo" },
+  // Gaming / metaverse
+  SAND: { id: "the-sandbox", name: "The Sandbox" },
+  MANA: { id: "decentraland", name: "Decentraland" },
+  AXS: { id: "axie-infinity", name: "Axie Infinity" },
+  GALA: { id: "gala", name: "Gala" },
+  // Infra
+  GRT: { id: "the-graph", name: "The Graph" },
+  IMX: { id: "immutable-x", name: "Immutable" },
+  STX: { id: "blockstack", name: "Stacks" },
 };
 
 export type CryptoPriceRow = {
@@ -114,7 +144,9 @@ export const cryptoPriceTool: ToolDefinition = {
     "Get current cryptocurrency prices from CoinGecko's free public API. No API key required. " +
     "IMPORTANT: Pass ALL coins you need in ONE call — do not call this tool multiple times for different coins. " +
     "Supported symbols: BTC, ETH, XRP, XLM, SOL, ADA, DOGE, DOT, AVAX, MATIC, LINK, LTC, " +
-    "BCH, UNI, ATOM, NEAR, ARB, OP, SUI, APT, TRX, TON, SHIB, FIL, ICP, VET, ALGO, HBAR. " +
+    "BCH, UNI, ATOM, NEAR, ARB, OP, SUI, APT, TRX, TON, SHIB, PEPE, FIL, ICP, VET, ALGO, HBAR, " +
+    "BNB, USDT, USDC, XMR, ETC, AAVE, MKR, CRO, BONK, WIF, FLOKI, INJ, SEI, TIA, WLD, FET, JUP, " +
+    "ONDO, SAND, MANA, AXS, GALA, GRT, IMX, STX. Symbols are case-insensitive. " +
     "Use this instead of web-search when you need crypto prices.",
   parameters: [
     {
