@@ -19,6 +19,8 @@ export type {
 export {
   deliverableToContent,
   modelSynthesisDeliverable,
+  toolArtifactDeliverable,
+  harnessSynthesisDeliverable,
   sentinelDeliverable,
 } from "./contracts/deliverable.js";
 

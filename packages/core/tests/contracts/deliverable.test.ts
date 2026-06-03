@@ -3,6 +3,8 @@ import { describe, it, expect } from "bun:test";
 import {
   deliverableToContent,
   modelSynthesisDeliverable,
+  toolArtifactDeliverable,
+  harnessSynthesisDeliverable,
   sentinelDeliverable,
 } from "../../src/contracts/deliverable.js";
 import type {
@@ -52,6 +54,42 @@ describe("Deliverable — typed channel into state.output", () => {
       synthesisCall: { callId: "synth-1" },
     };
     expect(deliverableToContent(d)).toBe("chunk 1\n\nchunk 2\n\nchunk 3");
+  });
+
+  it("toolArtifactDeliverable constructs a tool_artifact from a validated observation", () => {
+    const obs: ValidatedObservation = {
+      _validated: "tool-success",
+      toolName: "file-read",
+      callId: "c1",
+      content: "report content",
+      invariant: { success: true, toolInState: true },
+    };
+    const d: Deliverable = toolArtifactDeliverable(obs);
+    expect(d.source).toBe("tool_artifact");
+    if (d.source === "tool_artifact") {
+      expect(d.observation).toBe(obs);
+    }
+    expect(deliverableToContent(d)).toBe("report content");
+  });
+
+  it("harnessSynthesisDeliverable joins assembled observations + records synthesis call", () => {
+    const obs = (i: number): ValidatedObservation => ({
+      _validated: "tool-success",
+      toolName: "file-read",
+      callId: `c${i}`,
+      content: `chunk ${i}`,
+      invariant: { success: true, toolInState: true },
+    });
+    const d: Deliverable = harnessSynthesisDeliverable(
+      [obs(1), obs(2)],
+      { callId: "synth-1" },
+    );
+    expect(d.source).toBe("harness_synthesis");
+    if (d.source === "harness_synthesis") {
+      expect(d.synthesisCall.callId).toBe("synth-1");
+      expect(d.assembled).toHaveLength(2);
+    }
+    expect(deliverableToContent(d)).toBe("chunk 1\n\nchunk 2");
   });
 
   it("sentinel deliverables render structured markers", () => {

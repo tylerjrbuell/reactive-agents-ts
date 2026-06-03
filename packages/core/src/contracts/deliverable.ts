@@ -16,15 +16,19 @@
  * `_validated: "tool-success"` cannot be widened to a `Deliverable`, so the
  * leak class becomes impossible to construct.
  *
- * @example
- *   import { commitDeliverable, type Deliverable } from "@reactive-agents/core";
+ * This module owns the PURE side of the contract: the `Deliverable` type, its
+ * constructors, and `deliverableToContent`. It deliberately does NOT own the
+ * state-writing step. `core` is layer 0 and cannot import `transitionState`
+ * (which lives in `@reactive-agents/reasoning`'s kernel-state), so the
+ * single-writer that sets `state.output` from a `Deliverable` lives in the
+ * kernel (`packages/reasoning/src/kernel/loop/runner-helpers/deliverable.ts`).
+ * That kernel helper is the sole place `state.output` may be written.
  *
- *   const d: Deliverable = {
- *     source: "model_synthesis",
- *     thought: lastThoughtStep,
- *     chars: lastThoughtStep.content.length,
- *   };
- *   const next = commitDeliverable(state, d);
+ * @example
+ *   import { modelSynthesisDeliverable, deliverableToContent } from "@reactive-agents/core";
+ *
+ *   const d = modelSynthesisDeliverable(lastThoughtStep);
+ *   const text = deliverableToContent(d); // kernel writes this via the single-writer
  */
 
 /**
@@ -125,6 +129,26 @@ export function deliverableToContent(d: Deliverable): string {
  */
 export function modelSynthesisDeliverable(thought: ThoughtStepRef): Deliverable {
   return { source: "model_synthesis", thought, chars: thought.content.length };
+}
+
+/**
+ * Construct a `tool_artifact` deliverable from a single validated observation.
+ * Used when one successful tool result IS the answer (e.g., a `final-answer`
+ * tool call, or a read whose body is the deliverable).
+ */
+export function toolArtifactDeliverable(observation: ValidatedObservation): Deliverable {
+  return { source: "tool_artifact", observation };
+}
+
+/**
+ * Construct a `harness_synthesis` deliverable: the harness assembled the answer
+ * from multiple validated observations plus a synthesizing LLM call.
+ */
+export function harnessSynthesisDeliverable(
+  assembled: readonly ValidatedObservation[],
+  synthesisCall: LLMRoundTripRef,
+): Deliverable {
+  return { source: "harness_synthesis", assembled, synthesisCall };
 }
 
 /**
