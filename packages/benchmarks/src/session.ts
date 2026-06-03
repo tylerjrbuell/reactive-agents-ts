@@ -38,18 +38,11 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
   // (Sprint-1 A2, 2026-06-02) The `ra-full-assembly-off` ablation variant
   // was removed when RA_ASSEMBLY flag + legacy curate() were deleted. The
   // env passthrough (config.env) remains for future env-gated arms.
-
-  // Tier 3 (ablation): RA Full + WS-4 progress recitation ON (RA_RECITE=1).
-  // Paired against `ra-full` (recitation off) to measure the goal_state
-  // recitation's pass^k lift on condition-bearing tasks. Identical config —
-  // the ONLY difference is the env-gated recitation emission in fromKernelState.
-  {
-    type: "internal", id: "ra-recite", label: "RA Full (+Recitation)",
-    config: {
-      tools: true, reasoning: true, reactiveIntelligence: true, memory: true,
-      env: { RA_RECITE: "1" },
-    },
-  },
+  //
+  // NOTE: env-gated ablation arms (e.g. WS-4 `ra-recite` = ra-full + RA_RECITE=1)
+  // are defined INLINE in their own session, NOT added here — adding to this
+  // ladder bloats every full sweep (realWorldFull / competitorComparison spread
+  // [...ABLATION_VARIANTS]) with an arm only one ablation needs.
 ]
 
 // ── Session utilities ─────────────────────────────────────────────────────────

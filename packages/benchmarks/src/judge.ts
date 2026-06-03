@@ -1,5 +1,82 @@
 import { spawnSync } from "node:child_process"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import type { BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
+
+// ── Deliverable collection (grading-channel fix) ─────────────────────────────
+//
+// Per-component budgets: the final text and each produced file get their OWN
+// budget so a long preamble can never truncate the file off the end (which
+// would re-create the very text-only confound this fixes). Total stays bounded
+// so the judge prompt can't explode.
+const TEXT_CAP = 1500
+const PER_FILE_CAP = 3000
+const MAX_FILES = 6
+const TOTAL_CAP = 8000
+
+// Extensions we never utf8-dump (binary → garbage in the judge prompt).
+const BINARY_EXTENSIONS = new Set<string>([
+  "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "pdf",
+  "zip", "gz", "tar", "wasm", "exe", "bin", "so", "dylib", "woff", "woff2",
+])
+
+function isBinaryName(name: string): boolean {
+  const ext = name.split(".").pop()?.toLowerCase() ?? ""
+  return BINARY_EXTENSIONS.has(ext)
+}
+
+/**
+ * Build the blob the LLM judge actually grades: the agent's final text answer
+ * PLUS the contents of every PRODUCED working-dir file (i.e. files present in
+ * tmpDir that were NOT declared input fixtures), each clearly labeled so the
+ * judge can attribute "report.md is written". This is what a real user
+ * receives — text + artifacts — so it is the honest grading target.
+ *
+ * Pure beyond the shallow tmpDir read. Input fixtures are excluded (they are
+ * inputs, not deliverables). Binary files are skipped. Each component is
+ * independently budgeted (see caps above). When no produced files exist this
+ * returns just the capped final text — byte-identical intent to the prior
+ * text-only behavior for pure-synthesis tasks.
+ */
+export function collectJudgeDeliverable(
+  finalText: string,
+  tmpDir: string,
+  fixturePaths: readonly string[],
+): string {
+  const text = finalText.slice(0, TEXT_CAP)
+
+  const fixtures = new Set(fixturePaths.map((p) => p.split("/").pop() ?? p))
+  let entries: string[]
+  try {
+    entries = readdirSync(tmpDir, { withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+      .filter((name) => !name.startsWith(".") && !fixtures.has(name) && !isBinaryName(name))
+      .sort()
+  } catch {
+    return text // tmpDir unreadable — fall back to text only
+  }
+
+  const blocks: string[] = []
+  let budget = TOTAL_CAP - text.length
+  for (const name of entries) {
+    if (blocks.length >= MAX_FILES || budget <= 0) break
+    let raw: string
+    try {
+      raw = readFileSync(join(tmpDir, name), "utf8")
+    } catch {
+      continue
+    }
+    if (raw.includes("\u0000")) continue // binary content guard (NUL byte)
+    const body = raw.slice(0, Math.min(PER_FILE_CAP, budget))
+    const block = `\n\n--- Produced file: ${name} ---\n${body}`
+    blocks.push(block)
+    budget -= block.length
+  }
+
+  if (blocks.length === 0) return text
+  return `${text}${blocks.join("")}`.slice(0, TOTAL_CAP)
+}
 // Local mirror of `@reactive-agents/judge-server`'s wire contract. We re-declare
 // rather than import because the judge-server package's `exports` map only
 // surfaces `.` (no `./src/contract.js`), and Task 8 must not modify files outside
@@ -159,7 +236,11 @@ async function scoreWithJudge(
   // traceable in judge-server logs.
   const req: JudgeRequest = {
     taskId,
-    sutResponse: output.slice(0, 1500),
+    // `output` here is the pre-budgeted judgeDeliverable (text + produced files,
+    // each independently capped). Defensive total cap only — must NOT re-cut to
+    // 1500 or it would truncate the produced-file content off the end and
+    // re-create the text-only confound this fix closes.
+    sutResponse: output.slice(0, TOTAL_CAP),
     taskInput: { prompt: taskPrompt.slice(0, 800), dimension },
     sutModel: process.env["BENCH_SUT_MODEL"] ?? "unknown",
     runId: `bench-${taskId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -194,6 +275,17 @@ export async function scoreTask(
 ): Promise<ReadonlyArray<DimensionScore>> {
   const scores: DimensionScore[] = []
 
+  // The blob the LLM judge grades: final text + produced working-dir files.
+  // Used ONLY for llm-judge dimensions (accuracy llm-judge + dimensionRubrics).
+  // The deterministic branches (verifiable runs a command; schema does
+  // JSON.parse; regex/expected match) must read the RAW `output` — dumping file
+  // contents into those would break JSON.parse and cause false regex matches.
+  const judgeDeliverable = collectJudgeDeliverable(
+    output,
+    tmpDir,
+    (task.fixtures ?? []).map((f) => f.path),
+  )
+
   // ── Accuracy ────────────────────────────────────────────────────────────────
   if (task.successCriteria) {
     switch (task.successCriteria.type) {
@@ -209,7 +301,7 @@ export async function scoreTask(
         break
       case "llm-judge":
         scores.push(await scoreWithJudge(
-          task.id, task.prompt, output, "accuracy", task.successCriteria.rubric, opts,
+          task.id, task.prompt, judgeDeliverable, "accuracy", task.successCriteria.rubric, opts,
         ))
         break
       case "schema":
@@ -248,7 +340,7 @@ export async function scoreTask(
       if (rubric.dimension === "accuracy") continue  // already scored above
       if (rubric.dimension === "efficiency") continue  // computed above
       if (rubric.dimension === "reliability") continue  // session-level aggregation
-      scores.push(await scoreWithJudge(task.id, task.prompt, output, rubric.dimension, rubric.rubric, opts))
+      scores.push(await scoreWithJudge(task.id, task.prompt, judgeDeliverable, rubric.dimension, rubric.rubric, opts))
     }
   }
 

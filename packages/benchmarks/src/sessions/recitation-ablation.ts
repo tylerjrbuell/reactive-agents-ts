@@ -24,8 +24,21 @@
 //
 // Fan-out: 2 tiers × 2 variants × 2 tasks × 3 runs = 24 dispatches.
 
-import type { BenchmarkSession } from "../types.js"
+import type { BenchmarkSession, HarnessVariant } from "../types.js"
 import { getVariant } from "../session.js"
+
+// Recite arm = ra-full config + RA_RECITE=1 (the ONLY difference is the
+// env-gated goal_state emission in fromKernelState). Defined inline — not added
+// to the global ABLATION_VARIANTS ladder, which would bloat every full sweep.
+const raReciteVariant: HarnessVariant = {
+  type: "internal",
+  id: "ra-recite",
+  label: "RA Full (+Recitation)",
+  config: {
+    tools: true, reasoning: true, reactiveIntelligence: true, memory: true,
+    env: { RA_RECITE: "1" },
+  },
+}
 
 export const recitationAblationSession: BenchmarkSession = {
   id: "recitation-ablation",
@@ -38,7 +51,7 @@ export const recitationAblationSession: BenchmarkSession = {
   ],
   harnessVariants: [
     getVariant("ra-full"),
-    getVariant("ra-recite"),
+    raReciteVariant,
   ],
   runs: 3, // pass^k, N≥3
   traceDir: "benchmark-traces/recitation-ablation",
