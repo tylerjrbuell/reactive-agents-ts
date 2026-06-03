@@ -77,11 +77,15 @@ function makeCtx(taskComplexity: "trivial" | "moderate" | "complex" | undefined)
     tokensUsed: 100,
     cost: 0,
     startedAt: new Date(),
-    agentState: "executing",
+    agentState: "running",
     selectedStrategy: "reactive",
     metadata: {
       taskComplexity,
-      reasoningResult: { output: "done", status: "completed", metadata: { terminatedBy: "end_turn" } },
+      reasoningResult: {
+        output: "done",
+        status: "completed",
+        metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, terminatedBy: "end_turn" },
+      },
       reasoningSteps: [],
     } as ExecutionContext["metadata"],
   };
@@ -92,7 +96,7 @@ function makeDeps(
   ctx: ExecutionContext,
   enableMemory: boolean,
 ): DebriefSynthesisDeps {
-  const config = defaultReactiveAgentsConfig("a-1", { _enableMemory: enableMemory });
+  const config = defaultReactiveAgentsConfig("a-1", { enableMemory });
   const task = {
     id: "t-1" as never,
     agentId: "a-1" as never,
@@ -119,7 +123,7 @@ function makeDeps(
 }
 
 describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)", () => {
-  it("trivial task with memory enabled → debrief undefined, zero LLM calls", async () => {
+  it("trivial task with memory enabled → fallback debrief built, zero LLM calls", async () => {
     const { layer, getCalls } = makeCountingLLM();
     const deps = makeDeps(makeCtx("trivial"), true);
 
@@ -127,7 +131,11 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
       synthesizeAndStoreDebrief(deps).pipe(Effect.provide(layer)),
     );
 
-    expect(result.debrief).toBeUndefined();
+    // GH#143 trivial gate: short output + no errors → the fallback synthesizer
+    // reconstructs an equivalent record WITHOUT an LLM call. The debrief is
+    // DEFINED (a cheap fallback), but zero LLM calls were made.
+    expect(result.debrief).toBeDefined();
+    expect(result.debriefTokensUsed).toBe(0);
     expect(getCalls()).toBe(0);
   });
 
@@ -180,15 +188,16 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
     expect(deps.ctx.metadata.taskComplexity).toBeUndefined();
   });
 
-  // GH #69 follow-up (warden recommendation) — verify cross-session
-  // prior-debrief-injection path at `reasoning-think.ts:130-147` produces
-  // clean output after a trivial predecessor (no phantom Prior Session
-  // block on the successor's reasoning prompt). The injection logic gates
-  // on `DebriefStoreService.listByAgent(agentId, 1)` returning ≥1 row;
-  // skipped debrief → no `.save()` call → no row persisted → next task's
-  // `listByAgent` returns empty → no injection. This pins the
-  // by-construction guarantee.
-  it("trivial task with DebriefStore present → store.save() NOT called (closes GH #69 warden follow-up)", async () => {
+  // GH #143 trivial-gate persistence — on the trivial path the gate builds a
+  // cheap fallback debrief (no LLM call) and, because `debrief !== undefined`,
+  // STILL persists it via DebriefStoreService.save() and emits DebriefCompleted
+  // (debrief-synthesis.ts:226-271 — single emit/persist site across all paths).
+  // NOTE: this supersedes the earlier GH #69 follow-up assumption that trivial
+  // tasks skip persistence entirely. GH #143's fallback IS a real record, so it
+  // is persisted; the cross-session "Prior Session" injection therefore CAN see
+  // a trivial predecessor. The cost saved by the gate is the LLM call, not the
+  // DB write.
+  it("trivial task with DebriefStore present → store.save() called with fallback (GH #143 persist)", async () => {
     const { layer: llmLayer } = makeCountingLLM();
     const saveCalls: unknown[] = [];
 
@@ -213,10 +222,9 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
       ),
     );
 
-    // No row persisted on trivial path → next session's `listByAgent`
-    // returns empty → no "Prior Session" injection. Warden concern
-    // resolved by construction; this test is the pin.
-    expect(saveCalls.length).toBe(0);
+    // GH #143: the fallback debrief is a real record → it IS persisted on the
+    // trivial path (one save). The gate's saving is the LLM call, not the write.
+    expect(saveCalls.length).toBe(1);
   });
 
   // GH #143 honesty fix — verify debrief LLM call's tokens are NOT
@@ -267,11 +275,12 @@ describe("debrief-synthesis honest trivial-skip gate (MOVE-3 Phase 1 / GH #143)"
       synthesizeAndStoreDebrief(deps).pipe(Effect.provide(layer)),
     );
 
-    // Trivial gate short-circuits → no LLM call → debriefTokensUsed === 0.
+    // Trivial gate short-circuits the LLM call → debriefTokensUsed === 0.
     // Caller's accumulation step is a no-op on this path. After #144 merge
     // the wrapper's API surfaces `debriefTokensUsed` (number) instead of
-    // the prior `synthesisTokens` object.
-    expect(result.debrief).toBeUndefined();
+    // the prior `synthesisTokens` object. GH#143: the debrief itself is a
+    // DEFINED fallback record (only the LLM call is skipped).
+    expect(result.debrief).toBeDefined();
     expect(result.debriefTokensUsed).toBe(0);
   });
 

@@ -37,7 +37,7 @@ describe("think-context boundary helpers (HS-08 / #73)", () => {
   describe("asThinkContext", () => {
     it("returns the same reference (no runtime copy)", () => {
       const c = ctx();
-      expect(asThinkContext(c)).toBe(c);
+      expect(asThinkContext(c) as unknown).toBe(c);
     });
 
     it("narrows memoryContext.semanticContext access", () => {

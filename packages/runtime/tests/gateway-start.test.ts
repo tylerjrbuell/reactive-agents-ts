@@ -119,14 +119,19 @@ describe("ReactiveAgent.start() — gateway loop", () => {
       .build();
 
     const handle = agent.start();
-    // Wait until both a heartbeat fires AND totalRuns advances (test asserts run > 0).
-    // Generous timeout — under heavy suite load `agent.gatewayStatus()` queues
-    // behind in-flight Effect fibers, and the gateway tick competes for runtime
-    // budget. 15s ≫ the ~50ms typical first-heartbeat latency.
+    // Wait until a run has actually EXECUTED, not merely ticked. GatewayStats has
+    // no per-run counter (run totals live only on the post-stop summary, asserted
+    // below), so we use `totalTokensUsed > 0` as the live proxy — it increments
+    // via `updateTokensUsed` only after a heartbeat run completes and reports
+    // tokens (gateway-service.ts:242-252). Breaking on `heartbeatsFired` alone is
+    // too early: the tick fires before the async run finishes, so stop() could
+    // observe zero completed runs. Generous timeout — under heavy suite load
+    // `agent.gatewayStatus()` queues behind in-flight Effect fibers and the
+    // gateway tick competes for runtime budget. 15s ≫ the ~50ms typical latency.
     const startedAt = Date.now();
     while (Date.now() - startedAt < 15000) {
       const status = await agent.gatewayStatus();
-      if (status && status.stats.heartbeatsFired >= 1 && status.stats.totalRuns >= 1) break;
+      if (status && status.stats.heartbeatsFired >= 1 && status.stats.totalTokensUsed > 0) break;
       await new Promise((r) => setTimeout(r, 25));
     }
     const summary = await handle.stop();
