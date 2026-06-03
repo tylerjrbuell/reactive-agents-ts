@@ -267,6 +267,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     thinking: options.thinking,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
+    numCtx: options.numCtx,
     memoryTier: options.memoryTier ?? "1",
     maxIterations: options.maxIterations ?? 10,
     enableGuardrails: options.enableGuardrails ?? false,
@@ -281,7 +282,19 @@ export const createRuntime = (options: RuntimeOptions) => {
     observabilityVerbosity: options.observabilityOptions?.verbosity,
     logModelIO: options.observabilityOptions?.logModelIO,
     logPrefix: options.observabilityOptions?.logPrefix,
-    contextProfile: options.contextProfile,
+    // When a user sets `numCtx` (provider context window), keep the
+    // reasoning-side window in lockstep: seed `contextProfile.maxTokens` so the
+    // kernel packs/sends within the SAME budget the provider will accept.
+    // Otherwise narrowing numCtx silently truncates (kernel still packs to the
+    // 32K capability default) and widening underdelivers. An explicit
+    // contextProfile.maxTokens from the caller still wins.
+    contextProfile:
+      options.numCtx !== undefined
+        ? {
+            ...options.contextProfile,
+            maxTokens: options.contextProfile?.maxTokens ?? options.numCtx,
+          }
+        : options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,
     requiredTools: options.requiredTools
@@ -351,6 +364,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       thinking: options.thinking,
       temperature: options.temperature,
       maxTokens: options.maxTokens,
+      numCtx: options.numCtx,
     },
     options.circuitBreakerConfig,
     options.pricingRegistry,
@@ -375,6 +389,7 @@ export const createRuntime = (options: RuntimeOptions) => {
                     createLLMProviderLayer(fp as Parameters<typeof createLLMProviderLayer>[0], undefined, undefined, {
                         temperature: options.temperature,
                         maxTokens: options.maxTokens,
+                        numCtx: options.numCtx,
                       }) as Layer.Layer<LLMService, never, never>,
                   ),
                 ),
@@ -1061,6 +1076,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     thinking: options.thinking,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
+    numCtx: options.numCtx,
     memoryTier: "1",
     maxIterations: options.maxIterations ?? 4,
     enableGuardrails: options.enableGuardrails ?? false,
@@ -1075,7 +1091,19 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     observabilityVerbosity: options.observabilityOptions?.verbosity,
     logModelIO: options.observabilityOptions?.logModelIO,
     logPrefix: options.observabilityOptions?.logPrefix,
-    contextProfile: options.contextProfile,
+    // When a user sets `numCtx` (provider context window), keep the
+    // reasoning-side window in lockstep: seed `contextProfile.maxTokens` so the
+    // kernel packs/sends within the SAME budget the provider will accept.
+    // Otherwise narrowing numCtx silently truncates (kernel still packs to the
+    // 32K capability default) and widening underdelivers. An explicit
+    // contextProfile.maxTokens from the caller still wins.
+    contextProfile:
+      options.numCtx !== undefined
+        ? {
+            ...options.contextProfile,
+            maxTokens: options.contextProfile?.maxTokens ?? options.numCtx,
+          }
+        : options.contextProfile,
     defaultStrategy: options.reasoningOptions?.defaultStrategy,
     resultCompression: options.resultCompression,
     requiredTools: options.requiredTools
@@ -1104,6 +1132,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       thinking: options.thinking,
       temperature: options.temperature,
       maxTokens: options.maxTokens,
+      numCtx: options.numCtx,
     },
   ) as Layer.Layer<LLMService>;
 

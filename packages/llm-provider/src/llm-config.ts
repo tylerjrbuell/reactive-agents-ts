@@ -165,6 +165,27 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly defaultNumCtx?: number;
 
     /**
+     * User-explicit context window size (in tokens) for local providers.
+     *
+     * Unlike {@link defaultNumCtx} (a backwards-compat *floor* for unknown
+     * models), this is a deliberate override supplied by the caller via
+     * `.withModel({ numCtx })` or `agent.run(task, { numCtx })`. It ranks
+     * ABOVE `capability.recommendedNumCtx` so a user who knows their GPU has
+     * headroom can widen the window past the conservative 32K cap, or narrow
+     * it to fit a constrained machine.
+     *
+     * Precedence (see `providers/local.ts`):
+     * `request.numCtx` → `explicitNumCtx` → `capability.recommendedNumCtx` → `defaultNumCtx`.
+     *
+     * Provider-agnostic: only Ollama/local maps this to `options.num_ctx`;
+     * hosted providers (Anthropic/OpenAI/Gemini) have no request-level context
+     * knob and ignore it, exactly as they ignore an unsupported field.
+     *
+     * @default undefined (capability-driven resolution wins)
+     */
+    readonly explicitNumCtx?: number;
+
+    /**
      * LLM request/response observability verbosity.
      * Determines what data is captured in LLMRequestEvent for observability.
      *

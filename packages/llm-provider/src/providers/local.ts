@@ -385,9 +385,12 @@ export const LocalProviderLive = Layer.effect(
                             )
 
                             // Precedence on num_ctx: request.numCtx →
-                            // capability.recommendedNumCtx → config.defaultNumCtx.
+                            // config.explicitNumCtx (user override via
+                            // .withModel/run) → capability.recommendedNumCtx →
+                            // config.defaultNumCtx (unknown-model floor).
                             const numCtx =
                                 request.numCtx ??
+                                config.explicitNumCtx ??
                                 capability.recommendedNumCtx ??
                                 config.defaultNumCtx
 
@@ -567,6 +570,7 @@ export const LocalProviderLive = Layer.effect(
                                     )
                                 const numCtx =
                                     request.numCtx ??
+                                    config.explicitNumCtx ??
                                     capability.recommendedNumCtx ??
                                     config.defaultNumCtx
 
@@ -838,6 +842,7 @@ export const LocalProviderLive = Layer.effect(
                         )
                         const numCtx =
                             request.numCtx ??
+                            config.explicitNumCtx ??
                             capability.recommendedNumCtx ??
                             config.defaultNumCtx
 

@@ -29,6 +29,8 @@ export const applyWithModel = (
     s._temperature = modelOrParams.temperature;
   if (modelOrParams.maxTokens !== undefined)
     s._maxTokens = modelOrParams.maxTokens;
+  if (modelOrParams.numCtx !== undefined)
+    s._numCtx = modelOrParams.numCtx;
 };
 
 /**

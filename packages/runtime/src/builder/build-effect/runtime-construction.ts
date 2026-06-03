@@ -57,6 +57,7 @@ export interface BuilderRuntimeStateView {
   readonly _thinking?: boolean;
   readonly _temperature?: number;
   readonly _maxTokens?: number;
+  readonly _numCtx?: number;
   readonly _memoryTier: "1" | "2";
   readonly _maxIterations: number | undefined;
   readonly _enableGuardrails: boolean;
@@ -297,6 +298,7 @@ export const buildBaseRuntimeAndEngine = (
       thinking: state._thinking,
       temperature: state._temperature,
       maxTokens: state._maxTokens,
+      numCtx: state._numCtx,
       memoryTier: state._memoryTier,
       maxIterations: state._maxIterations,
       enableGuardrails: state._enableGuardrails,

@@ -39,10 +39,12 @@ mock.module("ollama", () => ({
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const providerModule = await import("../src/providers/local.js");
 const { LocalProviderLive } = providerModule;
+const runtimeModule = await import("../src/runtime.js");
+const { createLLMProviderLayer } = runtimeModule;
 import { LLMService } from "../src/llm-service.js";
 import { LLMConfig } from "../src/llm-config.js";
 
-const makeTestConfigLayer = (overrides: Partial<{ defaultNumCtx: number }> = {}) =>
+const makeTestConfigLayer = (overrides: Partial<{ defaultNumCtx: number; explicitNumCtx: number }> = {}) =>
   Layer.succeed(LLMConfig, {
     defaultModel: "cogito:14b",
     baseUrl: "http://localhost:11434",
@@ -172,5 +174,83 @@ describe("Ollama provider — num_ctx wiring (G-1)", () => {
       options?: { num_ctx?: number };
     };
     expect(chatArgs.options?.num_ctx).toBe(16384);
+  }, 15000);
+
+  // ── explicitNumCtx: user override via .withModel({ numCtx }) / agent.run({ numCtx }) ──
+  // Ranks ABOVE capability.recommendedNumCtx so a user can widen past the
+  // conservative 32K cap (e.g. they have GPU headroom) or narrow it.
+
+  it("explicitNumCtx wins over capability.recommendedNumCtx (user widens past the 32K cap)", async () => {
+    mockChat.mockClear();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "Say hi" }],
+        });
+      }).pipe(
+        // cogito:14b capability=32768; user-explicit 65536 must win.
+        Effect.provide(LocalProviderLive.pipe(Layer.provide(makeTestConfigLayer({ explicitNumCtx: 65536 })))),
+      ),
+    );
+
+    const chatArgs = mockChat.mock.calls[0]![0] as {
+      options?: { num_ctx?: number };
+    };
+    expect(chatArgs.options?.num_ctx).toBe(65536);
+  }, 15000);
+
+  it("request.numCtx still wins over explicitNumCtx (per-call beats per-agent)", async () => {
+    mockChat.mockClear();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "Say hi" }],
+          numCtx: 4096,
+        });
+      }).pipe(
+        Effect.provide(LocalProviderLive.pipe(Layer.provide(makeTestConfigLayer({ explicitNumCtx: 65536 })))),
+      ),
+    );
+
+    const chatArgs = mockChat.mock.calls[0]![0] as {
+      options?: { num_ctx?: number };
+    };
+    expect(chatArgs.options?.num_ctx).toBe(4096);
+  }, 15000);
+
+  // Pipe test — goes THROUGH createLLMProviderLayer({ numCtx }) rather than a
+  // hand-built LLMConfig. `configOverrides` is Record<string, unknown>, so a
+  // typo in the "explicitNumCtx" key would compile clean and silently no-op.
+  // This is the only test that catches that.
+  it("createLLMProviderLayer({ numCtx }) reaches Ollama as num_ctx (pipe end-to-end)", async () => {
+    mockChat.mockClear();
+
+    const layer = createLLMProviderLayer(
+      "ollama",
+      undefined,
+      "cogito:14b",
+      { numCtx: 49152 },
+      false,
+    ) as Layer.Layer<LLMService>;
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "Say hi" }],
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    const chatArgs = mockChat.mock.calls[0]![0] as {
+      options?: { num_ctx?: number };
+    };
+    // 49152 > capability 32768 — proves modelParams.numCtx flowed into
+    // config.explicitNumCtx and won over the capability default.
+    expect(chatArgs.options?.num_ctx).toBe(49152);
   }, 15000);
 });

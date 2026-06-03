@@ -39,6 +39,7 @@ export interface BuilderStateForSerialization {
   _thinking?: boolean;
   _temperature?: number;
   _maxTokens?: number;
+  _numCtx?: number;
   _systemPrompt?: string;
   _persona?: unknown;
   _enableReasoning: boolean;
@@ -98,6 +99,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   if (state._thinking !== undefined) config["thinking"] = state._thinking;
   if (state._temperature !== undefined) config["temperature"] = state._temperature;
   if (state._maxTokens !== undefined) config["maxTokens"] = state._maxTokens;
+  if (state._numCtx !== undefined) config["numCtx"] = state._numCtx;
   if (state._systemPrompt) config["systemPrompt"] = state._systemPrompt;
   if (state._persona) config["persona"] = state._persona;
 
