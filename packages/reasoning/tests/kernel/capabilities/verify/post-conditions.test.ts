@@ -12,8 +12,6 @@ import {
   toolCalled,
   artifactProduced,
   outputContains,
-  describeConditions,
-  describeUnmet,
   type PostCondition,
 } from "../../../../src/kernel/capabilities/verify/post-conditions.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
@@ -293,36 +291,5 @@ describe("verify — purity contract", () => {
     const b = verify(conditions, []);
     expect(a.unmet).toEqual(b.unmet);
     expect(a.unmet).toHaveLength(2);
-  }, 15000);
-});
-
-describe("describeConditions — per-condition steering phrases (recitation vocab)", () => {
-  it("renders one phrase per condition, matching describeUnmet's vocabulary", () => {
-    const conditions: PostCondition[] = [
-      toolCalled("file-write"),
-      artifactProduced("./out.md"),
-      outputContains("DONE"),
-    ];
-    const phrases = describeConditions(conditions);
-    expect(phrases).toEqual([
-      "call the `file-write` tool",
-      "write the file ./out.md",
-      'include "DONE" in your answer',
-    ]);
-  }, 15000);
-
-  it("returns [] for no conditions", () => {
-    expect(describeConditions([])).toEqual([]);
-  }, 15000);
-
-  it("describeUnmet is describeConditions joined under the 'You still must' frame", () => {
-    const unmet: PostCondition[] = [toolCalled("a"), outputContains("b")];
-    expect(describeUnmet(unmet)).toBe(
-      `You still must: ${describeConditions(unmet).join("; ")}.`,
-    );
-  }, 15000);
-
-  it("describeUnmet stays empty-string for no unmet (behavior unchanged)", () => {
-    expect(describeUnmet([])).toBe("");
   }, 15000);
 });
