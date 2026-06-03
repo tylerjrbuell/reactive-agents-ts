@@ -101,7 +101,7 @@ Phase 10: COMPLETE         EventBus.publish("AgentCompleted") + DebriefSynthesiz
 
 ## Kernel Architecture (Reasoning)
 
-All 6 strategies delegate to `runKernel(reactKernel, input, options)` in `packages/reasoning/src/strategies/kernel/`.
+All 6 strategies delegate to `runKernel(reactKernel, input, options)` in `packages/reasoning/src/kernel/`.
 
 ### Composable Phase Pipeline
 
@@ -119,7 +119,7 @@ kernel-runner.ts: runKernel() loop
 ### Key Files
 
 ```
-packages/reasoning/src/strategies/kernel/
+packages/reasoning/src/kernel/
   kernel-state.ts      — KernelState, Phase type, KernelContext, ThoughtKernel
   kernel-runner.ts     — the loop: runKernel() — DO NOT add per-turn logic here directly
   kernel-hooks.ts      — KernelHooks lifecycle hooks
@@ -201,7 +201,7 @@ See `.agents/skills/mcp-integration/SKILL.md` for full patterns.
 
 | What you need | Where to look |
 |--------------|---------------|
-| Full file-level system map | `FRAMEWORK_INDEX.md` |
+| Full file-level system map | `wiki/Architecture/Framework-Architecture-Index.md` |
 | Coding standards | `CODING_STANDARDS.md` |
 | Effect-TS patterns | `.agents/skills/effect-ts-patterns/SKILL.md` |
 | LLM API signatures | `.agents/skills/llm-api-contract/SKILL.md` |

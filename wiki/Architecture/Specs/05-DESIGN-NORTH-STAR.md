@@ -244,7 +244,7 @@ Established cognitive architectures (ACT-R, SOAR, ~30–40 years of research) co
 | EffectorPool | Act | `kernel/capabilities/act/` |
 | Verifier | Verify | `kernel/capabilities/verify/` |
 | ReflectionEngine | Reflect | `kernel/capabilities/reflect/` |
-| LearningPipeline | Learn | `kernel/capabilities/learn/` ⚠️ *currently missing — Phase 2 of convergence spec creates it; M6/M7/M10 wired but scattered* |
+| LearningPipeline | Learn | `kernel/capabilities/learn/learning-pipeline.ts` — wired; dispatched per-iter at `kernel/loop/iterate-pass.ts:939` as optional Effect layer (`Effect.serviceOption(LearningPipeline)`). (verified 2026-06-03 — see [[Framework-Architecture-Index]] §2) |
 
 | Cross-cutting concern | Where |
 |---|---|
@@ -277,7 +277,7 @@ Today: 27 packages. ~~The chaos is inside `packages/runtime/src/` (builder.ts 6,
 ```
 packages/reasoning/src/kernel/
 ├── state/                    ← kernel-state.ts, kernel-hooks.ts, kernel-constants.ts
-├── loop/                     ← runner.ts (1,706 LOC), react-kernel.ts, terminate.ts
+├── loop/                     ← runner.ts (771 LOC) (loop body extracted to iterate-pass.ts), react-kernel.ts, terminate.ts
 ├── capabilities/
 │   ├── act/                  ← act.ts, guard.ts, tool-execution.ts, tool-gating.ts, tool-parsing.ts, tool-capabilities.ts
 │   ├── attend/               ← context-utils.ts, tool-formatting.ts
@@ -681,6 +681,8 @@ Per canonical-harness-core P1 strangler-fig discipline: deletion authorized only
 - **Cost** — recency-aware projection + effective-window budgets deliver measured token efficiency without accuracy regression (proven 2026-06-02: −3% tokens / +8pp acc / +24pp reliability on qwen3.5 local).
 - **Model-adaptive intelligence** — capability source-tagging surfaces "fallback" loudly; tier-aware projection adapts to actual model behavior, not claimed window.
 - **Anti-black-box** — every termination path through arbitrator; every output through `commitDeliverable`; every tool through one dispatch; every prompt through one `project()`.
+
+> ⚠️ ASPIRATIONAL as of 2026-06-03: commitDeliverable was never implemented (JSDoc-only); state.output still has ~6 mixed-provenance writers. Tracked as Drift S5/D5 → realization plan P1. See [[2026-06-03-architecture-drift-register]].
 - **Anti-hallucination** — preview+ref with `ResultStore` makes full data recoverable system-side; honesty rubric in bench catches dishonest-success.
 - **Observability** — single trace event taxonomy; bench cells labeled measured/inconclusive; capability/deliverable/projection events typed.
 - **Self-improvement** — bench is honest substrate for measuring every future change; classifier signals are typed (can learn from honesty over time).
