@@ -69,6 +69,10 @@ type ReactiveControllerInstance = {
     readonly priorDecisionsThisRun?: readonly string[];
     readonly consecutiveToolFailures?: number;
     readonly failingToolName?: string;
+    /** Stall-detect input — consecutive thought steps with no intervening action/
+     *  observation. Mirrors reactive-intelligence/src/types.ts ControllerEvalParams.
+     *  Consumed by stall-detect evaluator's tier-scaled window. */
+    readonly consecutiveThoughtsWithoutAction?: number;
     /** FM-A3 backstop — see reactive-intelligence/src/types.ts ControllerEvalParams.hasUserOutput. */
     readonly hasUserOutput?: boolean;
     /** Operational model tier — mirrors reactive-intelligence/src/types.ts
