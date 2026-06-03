@@ -61,7 +61,7 @@ rtk grep -r "_riHooks" packages/runtime/src/builder.ts -n
 rtk bash "wc -l packages/reasoning/src/context/context-engine.ts"
 
 # Feature wiring — follow the call chain
-rtk grep "terminatedBy.*dispatcher-early-stop" packages/reasoning/src/strategies/kernel -n
+rtk grep "terminatedBy.*dispatcher-early-stop" packages/reasoning/src/kernel -n
 # Read the handler registry to count wired handlers:
 cat packages/reactive-intelligence/src/controller/handlers/index.ts
 

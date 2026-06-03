@@ -53,15 +53,15 @@ grep -rn "Ref.make\|Ref.get\|Ref.update" packages/$ARGUMENTS/src/ && echo "✅ U
 
 ## 4. Kernel Extension Compliance (if package touches reasoning/kernel)
 
-If changes are in `packages/reasoning/src/strategies/kernel/`, run:
+If changes are in `packages/reasoning/src/kernel/`, run:
 
 ```bash
 # Phases must follow the exact type signature — no extra arguments
-grep -n "export const.*Phase" packages/reasoning/src/strategies/kernel/phases/ -r
+grep -n "export const.*Phase" packages/reasoning/src/kernel/capabilities/ -r
 # Guards must return GuardOutcome — not boolean, not void
-grep -n "export const.*Guard\b" packages/reasoning/src/strategies/kernel/phases/guard.ts
+grep -n "export const.*Guard\b" packages/reasoning/src/kernel/capabilities/act/guard.ts
 # MetaTool registry entries must be in act.ts only
-grep -n "metaToolRegistry" packages/reasoning/src/strategies/kernel/ -r
+grep -n "metaToolRegistry" packages/reasoning/src/kernel/ -r
 ```
 
 **FAIL if:**
