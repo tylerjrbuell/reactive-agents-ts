@@ -8,6 +8,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import { ReactiveAgents } from "../src/builder.js";
+import type { AgentStreamEvent } from "../src/stream-types.js";
 
 function makeToolDef(name: string) {
   return {
@@ -192,5 +193,65 @@ describe("tool loop behavioral tests", () => {
     }
 
     expect(result.success).toBe(true);
+  });
+
+  // Invariant: the streaming code path must be tool-equivalent to the complete()
+  // path. `run()` (no streaming consumer) takes complete(); `runStream()` installs
+  // a StreamingTextCallback and takes the streaming branch. Both must execute the
+  // SAME tool with the SAME args. This pins the fix for the production bug where
+  // the inline streaming branch only read tool calls from `content_complete` and
+  // silently dropped native-FC `tool_use_start`/`tool_use_delta` events — which
+  // meant any tool-using agent run under a TTY (status mode → streaming branch)
+  // executed no tools. Regressing the streaming accumulator fails this test.
+  it("streaming path executes tools identically to the complete path (run vs runStream)", async () => {
+    const scenario = [
+      { toolCall: { name: "echo-tool", args: { input: "hello" } } },
+      { text: "The tool returned the value." },
+    ] as const;
+
+    const makeAgent = (calls: string[]) =>
+      ReactiveAgents.create()
+        .withName("tool-equivalence-test")
+        .withTestScenario([...scenario])
+        .withTools({
+          tools: [
+            {
+              definition: makeToolDef("echo-tool"),
+              handler: (args) => {
+                calls.push(args.input as string);
+                return Effect.succeed(`echoed: ${args.input}`);
+              },
+            },
+          ],
+        })
+        .build();
+
+    // complete() path
+    const runCalls: string[] = [];
+    const runAgent = await makeAgent(runCalls);
+    let runResult;
+    try {
+      runResult = await runAgent.run("echo hello");
+    } finally {
+      await runAgent.dispose();
+    }
+
+    // streaming path — runStream() forces the streaming branch in inline-think
+    const streamCalls: string[] = [];
+    const streamAgent = await makeAgent(streamCalls);
+    const events: AgentStreamEvent[] = [];
+    try {
+      for await (const ev of streamAgent.runStream("echo hello")) {
+        events.push(ev);
+      }
+    } finally {
+      await streamAgent.dispose();
+    }
+
+    // Both paths executed the tool with identical args.
+    expect(runCalls).toEqual(["hello"]);
+    expect(streamCalls).toEqual(runCalls);
+    expect(runResult.success).toBe(true);
+    expect(events.map((e) => e._tag)).toContain("StreamCompleted");
   });
 });

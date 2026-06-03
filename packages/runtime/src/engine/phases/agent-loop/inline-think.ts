@@ -184,28 +184,98 @@ export const runInlineThink = (
 
     const llmCallStart = performance.now();
     const streamCb = yield* FiberRef.get(StreamingTextCallback);
+    // Defense-in-depth: only take the streaming branch when the provider
+    // actually implements `stream()`. The streaming callback is a process-
+    // global FiberRef; if it ever leaks into a run() execution whose provider
+    // is complete()-only, fall back to complete() rather than crashing on
+    // `llm.stream is not a function`. (The FiberRef leak itself is fixed at the
+    // source via Effect.locally in engine/execute-stream.ts.)
+    const canStream = typeof (llm as { stream?: unknown }).stream === "function";
     let response: { content: string; toolCalls?: unknown[]; stopReason: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCost?: number } };
-    if (streamCb) {
-      // Streaming path: emit TextDelta events as tokens arrive
+    if (streamCb && canStream) {
+      // Streaming path: emit TextDelta events as tokens arrive.
+      //
+      // INVARIANT: the `response` assembled here MUST be shape-identical to what
+      // `llm.complete()` returns for the same request — the only addition is the
+      // per-token `streamCb` side-emit. Taking the streaming branch must never
+      // change WHAT the model decided, only surface it incrementally. Status mode
+      // (interactive TTY renderer) installs a streamCb on every execute, so a
+      // plain `run()` silently takes this branch; if it dropped tool calls, every
+      // tool-using agent in a terminal would break. Native FC tool calls arrive as
+      // `tool_use_start` (id+name) + `tool_use_delta` (incremental JSON input)
+      // events — they must be accumulated, mirroring the kernel's stream consumer
+      // in reasoning/.../reason/think.ts. (Prior bug: this branch only read
+      // `content_complete.toolCalls`, which native-FC providers never populate.)
       const llmStream = yield* llm.stream(llmRequest);
       let content = "";
-      let toolCalls: unknown[] | undefined;
+      const accToolCalls: { id: string; name: string; input: string }[] = [];
       let stopReason = "end_turn";
       let usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number; estimatedCost?: number } | undefined;
+      let streamError: string | undefined;
       yield* EStream.runForEach(llmStream, (event: any) =>
         Effect.gen(function* () {
-          if (event.type === "text_delta" && event.text) {
+          if (event.type === "error") {
+            // Provider surfaced an error mid-stream. `llm.complete()` throws on the
+            // same condition (the response is a failure, not partial content), so
+            // capture it and re-throw below to keep the streaming branch
+            // behaviorally identical — agent.run() must reject either way.
+            streamError = typeof event.error === "string" ? event.error : String(event.error);
+          } else if (event.type === "text_delta" && event.text) {
             content += event.text;
             yield* streamCb(event.text).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:stream-text-callback", tag: errorTag(err) })));
+          } else if (event.type === "tool_use_start") {
+            // Native FC: begin a new tool call; input JSON accumulates via deltas.
+            accToolCalls.push({ id: event.id, name: event.name, input: "" });
+            stopReason = "tool_use";
+          } else if (event.type === "tool_use_delta") {
+            const current = accToolCalls[accToolCalls.length - 1];
+            if (current) current.input += event.input ?? "";
           } else if (event.type === "content_complete") {
             if (event.content) content = event.content;
             if (event.stopReason) stopReason = event.stopReason;
-            if (event.toolCalls?.length) toolCalls = event.toolCalls;
+            // Some providers deliver fully-formed toolCalls on content_complete
+            // instead of via start/delta. Only honor that when start/delta did
+            // not already produce calls, to avoid double-counting.
+            if (event.toolCalls?.length && accToolCalls.length === 0) {
+              for (const tc of event.toolCalls as Array<{ id: string; name: string; input: unknown }>) {
+                accToolCalls.push({
+                  id: tc.id,
+                  name: tc.name,
+                  input: typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input ?? {}),
+                });
+              }
+              stopReason = "tool_use";
+            }
           } else if (event.type === "usage") {
             usage = { inputTokens: event.usage?.inputTokens, outputTokens: event.usage?.outputTokens, totalTokens: event.usage?.totalTokens, estimatedCost: event.usage?.estimatedCost };
           }
         }),
       ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-think.ts:stream-runforeach", tag: errorTag(err) })));
+      if (streamError !== undefined) {
+        // Mirror `llm.complete()`'s throw-on-error exactly (it throws inside its
+        // Effect.gen → a defect). Throwing here produces the identical failure
+        // path so run()/withErrorHandler behave the same on the streaming branch.
+        throw new Error(streamError);
+      }
+      // Normalize accumulated JSON-string inputs to parsed objects so the
+      // streamed `response.toolCalls` matches `llm.complete()`'s shape exactly
+      // (its tool-call `input` is an object, not a JSON string). Empty/invalid
+      // input degrades to `{}` rather than throwing.
+      const toolCalls: Array<{ id: string; name: string; input: unknown }> | undefined =
+        accToolCalls.length > 0
+          ? accToolCalls.map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              input: (() => {
+                if (!tc.input) return {};
+                try {
+                  return JSON.parse(tc.input);
+                } catch {
+                  return {};
+                }
+              })(),
+            }))
+          : undefined;
       response = { content, stopReason, ...(toolCalls ? { toolCalls } : {}), ...(usage ? { usage } : {}) };
     } else {
       response = yield* llm.complete(llmRequest);

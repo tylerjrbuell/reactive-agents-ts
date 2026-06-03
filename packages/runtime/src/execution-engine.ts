@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Stream as EStream, Duration, Logger } from "effect";
+import { Effect, Context, Layer, Ref, Stream as EStream, Duration, Logger, FiberRef } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -1324,13 +1324,27 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               Effect.provide(Logger.replace(Logger.defaultLogger, Logger.none)),
             );
 
-            // In status mode: additionally pipe think-stream chunks into the renderer
+            // In status mode: additionally pipe think-stream chunks into the
+            // renderer — but DEFER to any callback an outer caller already
+            // installed. `runStream()` sets its own StreamingTextCallback (to feed
+            // TextDelta events to the consumer's queue) before execute() runs; that
+            // callback is in scope here. If status mode overwrote it, runStream's
+            // deltas would be rerouted to the terminal renderer and the consumer's
+            // stream would go silent. So we only install the renderer callback when
+            // none exists (a plain `run()` under a TTY) — there, streaming the
+            // think text to the renderer is exactly the desired behavior, and the
+            // streaming branch is shape-equivalent to complete() (see inline-think
+            // / kernel think), so run() output is unaffected.
             const executeCoreWithLogger = isStatusMode && renderer
-              ? Effect.locally(
-                  executeCoreQuiet,
-                  StreamingTextCallback,
-                  (text: string) => Effect.sync(() => renderer.pushThinkChunk(text)),
-                )
+              ? Effect.gen(function* () {
+                  const existingCb = yield* FiberRef.get(StreamingTextCallback);
+                  if (existingCb) return yield* executeCoreQuiet;
+                  return yield* Effect.locally(
+                    executeCoreQuiet,
+                    StreamingTextCallback,
+                    (text: string) => Effect.sync(() => renderer.pushThinkChunk(text)),
+                  );
+                })
               : executeCoreQuiet;
             if (obs) {
               const taskResult = yield* obs.withSpan(

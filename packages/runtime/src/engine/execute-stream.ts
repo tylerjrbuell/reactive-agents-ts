@@ -9,7 +9,7 @@
  * the only structural change is that `config` and `execute` are now factory parameters
  * instead of closure-captured.
  */
-import { Effect, FiberRef, Option, Queue, Stream as EStream } from "effect";
+import { Effect, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import {
@@ -20,6 +20,7 @@ import {
   errorTag,
 } from "@reactive-agents/core";
 import type { ReactiveAgentsConfig } from "../types.js";
+import type { AgentResultMetadata } from "../builder/types.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
@@ -141,16 +142,21 @@ export const makeExecuteStream =
           );
       }
 
-      // Set the streaming callback inside the daemon so the FiberRef is
-      // available to the reasoning kernel. forkDaemon creates a root fiber
-      // that does NOT inherit FiberRef values from Effect.locally — the only
-      // reliable way is FiberRef.set as the first step inside the fork.
+      // Bind the streaming callback + run-controller as FiberRef values for the
+      // reasoning kernel. We use `Effect.locally` *wrapping execute(task)* (not a
+      // bare FiberRef.set) so the values are scoped to this run and RESTORED when
+      // execute completes. StreamingTextCallback is a process-global FiberRef
+      // (FiberRef.unsafeMake); a bare `set` inside this forkDaemon could leak the
+      // callback to unrelated executions, making complete()-only run() paths take
+      // the streaming branch and crash on `llm.stream is not a function`.
+      // `Effect.locally` around execute is fiber-correct here (it sets+restores
+      // within the same daemon fiber that runs execute) and plugs the leak at the
+      // source. (The earlier "set as first step inside the fork" pattern only
+      // covered inheritance INTO the fork, not restoration after it.)
       const streamCallback = (text: string) =>
         Queue.offer(queue, { _tag: "TextDelta", text }).pipe(Effect.map(() => {}));
 
-      yield* FiberRef.set(StreamingTextCallback, streamCallback).pipe(
-        Effect.andThen(FiberRef.set(RunControllerRef, options?.runController ?? null)),
-        Effect.andThen(execute(task)),
+      yield* execute(task).pipe(
         Effect.tap((taskResult) => {
           const debriefToolsUsed = (taskResult as { debrief?: { toolsUsed?: Array<{ name: string; calls: number; successRate: number }> } })
             .debrief?.toolsUsed;
@@ -162,7 +168,12 @@ export const makeExecuteStream =
             _tag: "StreamCompleted",
             output: String((taskResult as { output?: unknown }).output ?? ""),
             metadata:
-              (taskResult as { metadata?: Record<string, unknown> }).metadata ?? {},
+              ((taskResult as { metadata?: AgentResultMetadata }).metadata) ?? {
+                duration: Date.now() - startMs,
+                cost: 0,
+                tokensUsed: 0,
+                stepsCount: 0,
+              },
             taskId: String(task.id),
             agentId: String(task.agentId),
             ...(toolSummary.length > 0 ? { toolSummary } : {}),
@@ -219,6 +230,8 @@ export const makeExecuteStream =
             ),
           );
         }),
+        Effect.locally(StreamingTextCallback, streamCallback),
+        Effect.locally(RunControllerRef, options?.runController ?? null),
         Effect.forkDaemon,
       );
 
