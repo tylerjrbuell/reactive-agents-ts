@@ -93,7 +93,14 @@ export type Deliverable =
   | {
       readonly source: "harness_synthesis";
       readonly assembled: readonly ValidatedObservation[];
-      readonly synthesisCall: LLMRoundTripRef;
+      /**
+       * The synthesizing LLM round-trip, when one occurred. OPTIONAL: the
+       * harness may assemble a deliverable by concatenating already-validated
+       * observation bodies with NO LLM call (the §9 M3-REWORK-compliant path).
+       * When absent, the provenance is "raw concatenation, no synthesis" —
+       * never fabricate a call ref to satisfy this field.
+       */
+      readonly synthesisCall?: LLMRoundTripRef;
     }
   | {
       readonly source: "sentinel";
@@ -146,9 +153,11 @@ export function toolArtifactDeliverable(observation: ValidatedObservation): Deli
  */
 export function harnessSynthesisDeliverable(
   assembled: readonly ValidatedObservation[],
-  synthesisCall: LLMRoundTripRef,
+  synthesisCall?: LLMRoundTripRef,
 ): Deliverable {
-  return { source: "harness_synthesis", assembled, synthesisCall };
+  return synthesisCall
+    ? { source: "harness_synthesis", assembled, synthesisCall }
+    : { source: "harness_synthesis", assembled };
 }
 
 /**

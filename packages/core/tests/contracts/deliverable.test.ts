@@ -92,6 +92,23 @@ describe("Deliverable — typed channel into state.output", () => {
     expect(deliverableToContent(d)).toBe("chunk 1\n\nchunk 2");
   });
 
+  it("harnessSynthesisDeliverable omits synthesisCall for the raw-concat (no-LLM) path", () => {
+    const obs = (i: number): ValidatedObservation => ({
+      _validated: "tool-success",
+      toolName: "file-read",
+      callId: `c${i}`,
+      content: `chunk ${i}`,
+      invariant: { success: true, toolInState: true },
+    });
+    const d: Deliverable = harnessSynthesisDeliverable([obs(1), obs(2)]);
+    expect(d.source).toBe("harness_synthesis");
+    if (d.source === "harness_synthesis") {
+      expect(d.synthesisCall).toBeUndefined();
+      expect(d.assembled).toHaveLength(2);
+    }
+    expect(deliverableToContent(d)).toBe("chunk 1\n\nchunk 2");
+  });
+
   it("sentinel deliverables render structured markers", () => {
     expect(deliverableToContent(sentinelDeliverable("no_substantive_output"))).toBe("Task complete.");
     expect(
