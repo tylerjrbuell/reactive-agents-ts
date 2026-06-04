@@ -19,6 +19,62 @@ tags: [design-spec, tool-calling, calibration, adapters, cross-tier, self-improv
 > model-specific way to extract (or elicit) actions** otherwise. "If we nail tools
 > and tool-calling this is a huge win for the framework."
 
+## ⚠️ SCOPE CORRECTION (2026-06-04, post code-audit) — the loop ALREADY EXISTS
+
+Code audit after this spec was drafted found the per-model adaptation loop is
+**built and running in production**, not to-be-built. Do not re-implement it:
+
+- **Preflight (consume):** `community-profile-client.fetchCommunityProfile()` GETs
+  `https://api.reactiveagents.dev/v1/profiles/<model>` → `Partial<ModelCalibration>`,
+  24h-cached, offline-tolerant. `resolveCalibration` merges {community profile +
+  local prior + observations}; runs **preflight** at `execution-engine.ts:608`.
+- **Observe:** `RunObservation` (`observations-types.ts`) already captures
+  `dialect: native-fc|fenced-json|pseudo-code|nameless-shape|none`,
+  `classifierRequired` vs `classifierActuallyCalled` (= drift), `argValidityRate`.
+  Built + persisted every run: `telemetry-emit.ts:261-275` →
+  `persistRunObservation` → `appendObservation` (50-run window).
+- **Refine:** `onRunCompleted` (`local-learning.ts`) folds observations back into
+  the profile; `observations-merge.ts`.
+- **Confidence:** `conformal.ts` (conformal prediction) — the PT2 abstain concern
+  is already addressed.
+- **Contribute:** `telemetry-client` → `/v1/reports`.
+
+**The resolved `toolCallDialect` even reaches the kernel** (`tool-schemas.ts:123`).
+The ONE severed link: **the router ignores it.** Stage A (`11996c5a`) made
+`selectToolCallingDriver` capability-first (`_dialect` unused) to kill the
+regression — correct then, but it means the calibrated/observed dialect is now
+**inert at the routing decision**.
+
+**Revised gap (this is the actual work — small; priorities corrected post-audit):**
+
+- **G3 (route on calibrated dialect) is INERT — DROP it.** `NativeFCStrategy`
+  (`native-fc-strategy.ts`) is calibration-blind and already tries ALL dialect
+  tiers unconditionally every turn (native → fenced-json/nameless-shape →
+  pseudo-code). Routing the extractor on the calibrated dialect adds nothing; the
+  only dialect that *would* change routing (→ text-parse) is the 482c11e4
+  regression. Stage A was right to ignore `_dialect`. Do not rewire.
+- **▶ KEYSTONE — capture + consume `namespaceTolerance`.** The most dramatic
+  measured failure (qwen3 0/15 namespaced, flips 14→0 on flat names) is a
+  **name-string** problem, NOT a dialect problem. Capture freeze-on-namespaced in
+  `RunObservation`; consume it by presenting **flat tool names** to freeze-prone
+  models (de-sanitize on return — the roundtrip at `think.ts:627-633` already
+  exists). This is **safe** (orthogonal to the driver/resolver divergence that
+  caused 482c11e4 — it changes the name shown, not the routing) and
+  **evidence-backed**. ~surgical change. This is the real win on the table.
+- **Capture `no-emission`** — `RunObservation` has dialect + drift but not
+  "emitted zero calls" (cogito's ~20% failure mode). Add it so the loop can SEE
+  that failure (prerequisite for any input-forcing lever later).
+
+**Probe priors are untrustworthy (spike `bhu9jhu52`, 2026-06-04).** A fixed
+probe task ANTI-predicts: qwen2.5 (real 20/20) scored 3/15 on an explicit
+"call X with these args" probe (over-specifying suppressed emission); cogito
+probe 11/15 vs bench 15/15. So the offline dialect probe (G1) is NOT worth
+completing — **real-run observations (already wired) are the trustworthy signal.**
+Completing G1 would cache a misleading prior.
+
+§§4–9 below still describe the target shape correctly, but most components in §7
+**already exist** — re-scope each "build" to "wire/extend" against the audit above.
+
 ## 1. Why this, why now
 
 The measurement in [[2026-06-03-weak-model-toolcall-gap]] is unambiguous: tool-call
