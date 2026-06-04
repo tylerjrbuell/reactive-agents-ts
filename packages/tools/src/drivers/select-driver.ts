@@ -3,24 +3,40 @@ import { NativeFCDriver } from "./native-fc-driver.js"
 import { TextParseDriver } from "./text-parse-driver.js"
 
 /**
- * Choose the tool-calling driver from a model's calibrated `toolCallDialect`.
+ * Choose the tool-calling driver. **Capability is the master signal.**
  *
- * Native function-calling is selected ONLY when calibration explicitly confirms
- * the provider supports it (`"native-fc"`). Every other value resolves to the
- * text-parse driver, which works for any model that can follow prompt
- * instructions:
- *   - `"text-parse"` — calibration says use the text format.
- *   - `"none"` — the probe found no native tool-calling capability (e.g. an
- *      ollama model whose `/api/show` did not advertise `tools`). Handing such a
- *      model native `tools` is silently ignored by the provider, so it can never
- *      emit a call — it stalls. Text-parse gives it a `<tool_call>` text format
- *      it CAN produce.
- *   - `undefined` / unknown — uncalibrated. Default to the universally-safe
- *      text-parse path rather than assuming native FC that may not exist.
+ * The driver, the `ToolCallResolver` injection (`runner.ts`, keyed on
+ * `capabilities.supportsToolCalling`), and the native-`tools` attachment
+ * (`think.ts`, keyed on `mode !== "text-parse"`) MUST all derive from one signal
+ * or they diverge. They diverged in `482c11e4`: the driver was keyed on
+ * calibration (`toolCallDialect`) while the resolver stayed keyed on capability,
+ * so a capable-but-uncalibrated model (every uncalibrated Ollama model —
+ * `local.ts` claims `supportsToolCalling: true` unconditionally) got a
+ * `NativeFCStrategy` resolver AND a text-parse driver. No native tools were sent,
+ * the model emitted `<tool_call>` text, and the resolver — which only parses
+ * native FC events / fenced-JSON / pseudo-code — could not read it, so the call
+ * was never extracted and the agent looped to max-iterations.
  *
- * A model that genuinely supports native FC will be calibrated `"native-fc"`
- * and keep the native path; only unconfirmed models fall back to text-parse.
+ * Rule: a provider that supports native FC (or whose support is unknown — the
+ * default) gets the native driver. The text-parse driver is reserved for
+ * providers that EXPLICITLY report no native tool-calling
+ * (`supportsToolCalling === false`).
+ *
+ * NOTE (Stage A): text-parse is a not-yet-completed path — `think.ts` has no
+ * transition that turns `<tool_call>` markup into `status: "acting"`, so
+ * `act.ts`'s text-parse `extractCalls` is unreachable. Routing a capable model
+ * there strands it. Stage B builds the text-parse think→acting transition AND
+ * narrows the Ollama capability claim (per-model `/api/show` probe) so
+ * genuinely-incapable ("none") models route here honestly. `_dialect` is
+ * retained for that stage (it will gate which completed text dialect is used);
+ * it is intentionally unused in Stage A.
+ *
+ * See wiki/Architecture/Design-Specs/2026-06-03-tool-calling-driver-redesign.md.
  */
-export function selectToolCallingDriver(dialect: string | undefined): ToolCallingDriver {
-  return dialect === "native-fc" ? new NativeFCDriver() : new TextParseDriver()
+export function selectToolCallingDriver(
+  _dialect: string | undefined,
+  supportsToolCalling = true,
+): ToolCallingDriver {
+  if (supportsToolCalling === false) return new TextParseDriver()
+  return new NativeFCDriver()
 }
