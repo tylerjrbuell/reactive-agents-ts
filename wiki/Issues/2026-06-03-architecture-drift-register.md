@@ -43,7 +43,9 @@
 - ~~**D1/D2/D3** + §6.5 admonition~~ → **CLOSED by P5** (commits 1d33f9b9 + a12f37b9). All ~12 skill files' kernel-paths fixed (2 legitimate historical "moved-from" notes left), FRAMEWORK_INDEX ref repointed, North Star §4.3/§5.2 corrected, §6.5 admonition added.
 - **D5** North Star §6.5: the admonition correctly marks the OLD claim aspirational; the *mechanism* is now real (S5 closed) — admonition can be retired on merge.
 
-**Still open:** D6 (compose read-vs-mutate audit), S7 (TaskContract→runtime, **P2 next**), S9 (calibration consumers, P3), compose coverage expansion (P4), **S11** (synthesis-gate provenance tag).
+- ~~**S7** — TaskContract bench-only~~ → **CLOSED by P2** (commit fd36ac4f). `.withContract()` on the builder; `build()` enforces required/forbidden tools + modelFloor vs resolved Capability via the existing strict-throw path. Build-time scope (execute-time KernelInput threading = P2b). Runtime suite 892/0; typecheck 68/68; 16 TDD tests.
+
+**Still open:** D6 (compose read-vs-mutate audit), S9 (calibration consumers, P3), compose coverage expansion (P4), **S11** (synthesis-gate provenance tag), **P2b** (execute-time TaskContract enforcement).
 
 ## Open question (escalate)
 

@@ -11,7 +11,7 @@
 | P | Title | Lever | Effort | Gate metric |
 |---|-------|-------|--------|-------------|
 | **P1 ✅** | ~~Wire deliverable provenance (collapse 2 Deliverable types)~~ **DONE** | Trust pillar — *the* headline gap | M (3–5d) | ✅ 0 raw `state.output` writes (guard-locked); all outputs provenance-typed |
-| **P2** | Thread `TaskContract` into runtime `agent.build()` | Reliability — bench-only contract → real enforcement | M (3–5d) | preflight refuses contract-violating cells in *runtime*, not just bench |
+| **P2 ✅** | ~~Thread `TaskContract` into runtime `agent.build()`~~ **DONE (build-time)** | Reliability — bench-only contract → real enforcement | M (3–5d) | ✅ `.withContract()` strict-throws on tool/modelFloor violation; 892/0. Execute-time = P2b |
 | **P3** | Activate dormant calibration consumers (5→≥8) | Model-adaptive — defined-not-consumed | M (4–6d) | ≥8 fields with documented cross-tier lift |
 | **P4** | M14 self-evolution via compose hooks | Reliability — most-positive research module, unbuilt | M (4–6d) | ≥3pp lift on looping gate scenarios |
 | **P5** | Doc-drift cleanup + package consolidation (35→~22) | DX/Control — cheap, compounding | S→L | skills/specs match code; net pkg count down |
