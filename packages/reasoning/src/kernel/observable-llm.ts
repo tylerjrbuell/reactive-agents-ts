@@ -39,9 +39,12 @@ import {
 import { emitLLMExchange } from "./utils/diagnostics.js";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
-// layer so it cannot see taskId/iteration directly. Callers that need
-// correlation can extend the request type in a follow-up; visibility wins
-// for v1.
+// layer so it cannot see taskId/iteration directly. Callers that CAN correlate
+// (the kernel think-loop) snapshot taskId/iteration into the request via the
+// optional `request.traceContext` field at build time — emitForRequest reads
+// it when present (FiberRef-free, immune to stream-context inheritance issues).
+// Calls outside the kernel loop (reflexion/ToT/plan-execute sub-calls) leave
+// traceContext unset and correctly fall back to these placeholders.
 const PLACEHOLDER_TASK_ID = "llm-direct";
 const PLACEHOLDER_ITERATION = 0;
 
@@ -106,8 +109,8 @@ function emitForRequest(
   fullResponse?: PartialCompletion,
 ): Effect.Effect<void, never> {
   return emitLLMExchange({
-    taskId: PLACEHOLDER_TASK_ID,
-    iteration: PLACEHOLDER_ITERATION,
+    taskId: request.traceContext?.taskId ?? PLACEHOLDER_TASK_ID,
+    iteration: request.traceContext?.iteration ?? PLACEHOLDER_ITERATION,
     provider: request.model?.provider ?? fullResponse?.model ?? "unknown",
     model: request.model?.model ?? fullResponse?.model ?? "unknown",
     requestKind: kind,

@@ -775,6 +775,21 @@ export type CompletionRequest = {
    * context size from the model ID.
    */
   readonly numCtx?: number;
+  /**
+   * OBSERVABILITY-ONLY run correlation. Carries the kernel's taskId/iteration
+   * so the observable-LLM wrapper can key LLMExchange trace events to the real
+   * run instead of a global `llm-direct` placeholder.
+   *
+   * Providers MUST NOT read this field or send it to any API — it is a pure
+   * no-op for every adapter (anthropic/openai/gemini/ollama/litellm/test),
+   * which construct their API payloads from explicit fields and ignore it.
+   * It is snapshotted at request-build time (not read at stream finalization),
+   * so it is immune to FiberRef-inheritance streaming regressions.
+   */
+  readonly traceContext?: {
+    readonly taskId?: string;
+    readonly iteration?: number;
+  };
 };
 
 // ─── Completion Response ───
