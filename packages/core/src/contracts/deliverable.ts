@@ -16,15 +16,19 @@
  * `_validated: "tool-success"` cannot be widened to a `Deliverable`, so the
  * leak class becomes impossible to construct.
  *
- * @example
- *   import { commitDeliverable, type Deliverable } from "@reactive-agents/core";
+ * This module owns the PURE side of the contract: the `Deliverable` type, its
+ * constructors, and `deliverableToContent`. It deliberately does NOT own the
+ * state-writing step. `core` is layer 0 and cannot import `transitionState`
+ * (which lives in `@reactive-agents/reasoning`'s kernel-state), so the
+ * single-writer that sets `state.output` from a `Deliverable` lives in the
+ * kernel (`packages/reasoning/src/kernel/loop/runner-helpers/deliverable.ts`).
+ * That kernel helper is the sole place `state.output` may be written.
  *
- *   const d: Deliverable = {
- *     source: "model_synthesis",
- *     thought: lastThoughtStep,
- *     chars: lastThoughtStep.content.length,
- *   };
- *   const next = commitDeliverable(state, d);
+ * @example
+ *   import { modelSynthesisDeliverable, deliverableToContent } from "@reactive-agents/core";
+ *
+ *   const d = modelSynthesisDeliverable(lastThoughtStep);
+ *   const text = deliverableToContent(d); // kernel writes this via the single-writer
  */
 
 /**
@@ -89,7 +93,24 @@ export type Deliverable =
   | {
       readonly source: "harness_synthesis";
       readonly assembled: readonly ValidatedObservation[];
-      readonly synthesisCall: LLMRoundTripRef;
+      /**
+       * The synthesizing LLM round-trip, when one occurred. OPTIONAL: the
+       * harness may assemble a deliverable by concatenating already-validated
+       * observation bodies with NO LLM call (the §9 M3-REWORK-compliant path).
+       * When absent, the provenance is "raw concatenation, no synthesis" —
+       * never fabricate a call ref to satisfy this field.
+       */
+      readonly synthesisCall?: LLMRoundTripRef;
+      /**
+       * The LLM-cleaned prose the synthesis call produced. OPTIONAL: present
+       * when the harness ran a synthesizing LLM call (paired with
+       * `synthesisCall`) whose output is the deliverable. When present,
+       * `deliverableToContent` returns THIS, not the joined raw bodies — so a
+       * harness-orchestrated synthesis is tagged truthfully as
+       * `harness_synthesis` (NOT mislabeled `model_synthesis`). When absent,
+       * the content is the joined `assembled` observation bodies.
+       */
+      readonly synthesized?: string;
     }
   | {
       readonly source: "sentinel";
@@ -110,7 +131,7 @@ export function deliverableToContent(d: Deliverable): string {
     case "tool_artifact":
       return d.observation.content;
     case "harness_synthesis":
-      return d.assembled.map((o) => o.content).join("\n\n");
+      return d.synthesized ?? d.assembled.map((o) => o.content).join("\n\n");
     case "sentinel":
       return d.reason === "max_iterations_no_artifacts"
         ? "Task did not converge within the iteration budget."
@@ -125,6 +146,38 @@ export function deliverableToContent(d: Deliverable): string {
  */
 export function modelSynthesisDeliverable(thought: ThoughtStepRef): Deliverable {
   return { source: "model_synthesis", thought, chars: thought.content.length };
+}
+
+/**
+ * Construct a `tool_artifact` deliverable from a single validated observation.
+ * Used when one successful tool result IS the answer (e.g., a `final-answer`
+ * tool call, or a read whose body is the deliverable).
+ */
+export function toolArtifactDeliverable(observation: ValidatedObservation): Deliverable {
+  return { source: "tool_artifact", observation };
+}
+
+/**
+ * Construct a `harness_synthesis` deliverable: the harness assembled the answer
+ * from validated observations, optionally via a synthesizing LLM call.
+ *
+ * Pass `synthesized` (the LLM-cleaned prose) + `synthesisCall` when an LLM
+ * synthesis ran — `deliverableToContent` then returns the cleaned prose and the
+ * source is truthfully `harness_synthesis` (the S11 fix: harness-orchestrated
+ * synthesis must NOT be mislabeled `model_synthesis`). Omit both for the
+ * raw-concatenation (no-LLM) path.
+ */
+export function harnessSynthesisDeliverable(
+  assembled: readonly ValidatedObservation[],
+  synthesisCall?: LLMRoundTripRef,
+  synthesized?: string,
+): Deliverable {
+  return {
+    source: "harness_synthesis",
+    assembled,
+    ...(synthesisCall ? { synthesisCall } : {}),
+    ...(synthesized !== undefined ? { synthesized } : {}),
+  };
 }
 
 /**

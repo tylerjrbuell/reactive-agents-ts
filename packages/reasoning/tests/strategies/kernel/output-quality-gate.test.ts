@@ -3,6 +3,15 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { runKernel, assembleDeliverable } from "../../../src/kernel/loop/runner.js";
+import { deliverableTerminationReason } from "../../../src/kernel/loop/runner-helpers/deliverable.js";
+import {
+  deliverableToContent,
+  harnessSynthesisDeliverable,
+  modelSynthesisDeliverable,
+  toolArtifactDeliverable,
+  sentinelDeliverable,
+  type ValidatedObservation,
+} from "@reactive-agents/core";
 import {
   initialKernelState,
   transitionState,
@@ -361,8 +370,11 @@ describe("output quality gate", () => {
       toolsUsed: new Set(["shell-execute"]),
       scratchpad: new Map([[key, fullText]]),
     });
-    expect(assembleDeliverable(st).content).toContain("Usage: rax agent create");
-    expect(assembleDeliverable(st).content).toContain("--name string");
+    const d = assembleDeliverable(st);
+    // Single validated observation → tool_artifact (4-source contract).
+    expect(d.source).toBe("tool_artifact");
+    expect(deliverableToContent(d)).toContain("Usage: rax agent create");
+    expect(deliverableToContent(d)).toContain("--name string");
   });
 
   it("assembleDeliverable resolves compressed previews via metadata.storedKey", () => {
@@ -400,7 +412,9 @@ describe("output quality gate", () => {
       scratchpad: new Map([[key, fullText]]),
     });
 
-    const assembled = assembleDeliverable(st).content;
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("tool_artifact");
+    const assembled = deliverableToContent(d);
     expect(assembled).toContain('"find-xrp-price"');
     expect(assembled).toContain('"succeeded":4');
   });
@@ -433,7 +447,9 @@ describe("output quality gate", () => {
       scratchpad: new Map([[key, fullText]]),
     });
 
-    const assembled = assembleDeliverable(st).content;
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("tool_artifact");
+    const assembled = deliverableToContent(d);
     expect(assembled).toContain("Bitcoin: 70836.96");
     expect(assembled).toContain("XLM: 0.1508");
   });
@@ -463,8 +479,155 @@ describe("output quality gate", () => {
       steps: [realObs, dispatchReject],
       toolsUsed: new Set(["file-read"]),
     });
-    const assembled = assembleDeliverable(st).content;
+    const d = assembleDeliverable(st);
+    // Exactly one validated observation survives the metadata gate → tool_artifact.
+    expect(d.source).toBe("tool_artifact");
+    const assembled = deliverableToContent(d);
     expect(assembled).toContain("ZEBRA-CODA");
     expect(assembled).not.toContain("unavailable name(s)");
+  });
+
+  it("assembleDeliverable returns harness_synthesis for multiple validated observations", () => {
+    const obsA = makeStep("observation", "Result A: BTC $50,000", {
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "a",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const obsB = makeStep("observation", "Result B: ETH $3,000", {
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "b",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-multi" });
+    const st = transitionState(base, {
+      steps: [obsA, obsB],
+      toolsUsed: new Set(["web-search"]),
+    });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("harness_synthesis");
+    const assembled = deliverableToContent(d);
+    expect(assembled).toContain("Result A: BTC $50,000");
+    expect(assembled).toContain("Result B: ETH $3,000");
+  });
+
+  it("assembleDeliverable returns model_synthesis for a substantive trailing thought", () => {
+    const thought =
+      "Synthesizing the findings: BTC is at $50,000 and ETH is at $3,000. " +
+      "These reflect current market conditions across the major exchanges surveyed.";
+    const obs = makeStep("observation", "raw data dump", {
+      observationResult: {
+        success: true,
+        toolName: "web-search",
+        displayText: "raw",
+        category: "web-search" as const,
+        resultKind: "data" as const,
+        preserveOnCompaction: false,
+      },
+    });
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-model" });
+    const st = transitionState(base, {
+      steps: [makeStep("action", "web-search"), obs, makeStep("thought", thought)],
+      toolsUsed: new Set(["web-search"]),
+    });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("model_synthesis");
+    expect(deliverableToContent(d)).toContain("Synthesizing the findings");
+  });
+
+  it("assembleDeliverable returns sentinel when no validated artifacts or thought exist", () => {
+    const base = initialKernelState({ ...defaultOptions, taskId: "t-empty" });
+    const st = transitionState(base, { steps: [] });
+    const d = assembleDeliverable(st);
+    expect(d.source).toBe("sentinel");
+    expect(deliverableToContent(d)).toBe("Task complete.");
+  });
+});
+
+// ── Drift S11: synthesis-gate provenance honesty ────────────────────────────
+// The synthesis-gate (runner.ts) runs an LLM synthesis to clean prose and now
+// tags it `harness_synthesis` WITH a `synthesized` field (the harness, not the
+// model, orchestrated the call). These tests lock the load-bearing invariants:
+// (1) the new constructor variant resolves to the cleaned prose verbatim, and
+// (2) `deliverableTerminationReason` routes a synthesized harness_synthesis to
+// the don't-re-synthesize terminatedBy — same as the legacy model_synthesis at
+// that gate — while the raw-concat harness_synthesis keeps the attempt path.
+describe("Drift S11 — synthesis-gate provenance", () => {
+  const obs = (content: string): ValidatedObservation => ({
+    _validated: "tool-success",
+    toolName: "web-search",
+    callId: `harness-obs:${content}`,
+    content,
+    invariant: { success: true, toolInState: true },
+  });
+
+  it("harnessSynthesisDeliverable carries synthesized prose verbatim", () => {
+    const synthContent = "BTC is $50,000 and ETH is $3,000 as of today.";
+    const d = harnessSynthesisDeliverable([], undefined, synthContent);
+    expect(d.source).toBe("harness_synthesis");
+    if (d.source === "harness_synthesis") {
+      expect(d.synthesized).toBe(synthContent);
+      expect(d.synthesisCall).toBeUndefined();
+    }
+    // deliverableToContent returns the cleaned prose, NOT joined raw bodies.
+    expect(deliverableToContent(d)).toBe(synthContent);
+  });
+
+  it("deliverableTerminationReason: synthesized harness_synthesis → harness_synthesis (no forced re-synthesis)", () => {
+    const synthesized = harnessSynthesisDeliverable([obs("raw")], undefined, "cleaned prose");
+    // WITH synthesized: already synthesized at the gate — must map to the
+    // don't-re-synthesize terminatedBy, identical to the legacy model_synthesis
+    // routing at this gate.
+    expect(deliverableTerminationReason(synthesized)).toBe("harness_synthesis");
+  });
+
+  it("deliverableTerminationReason: raw-concat harness_synthesis → harness_deliverable (unchanged)", () => {
+    const rawConcat = harnessSynthesisDeliverable([obs("a"), obs("b")]);
+    expect(deliverableTerminationReason(rawConcat)).toBe("harness_deliverable");
+  });
+
+  it("deliverableTerminationReason: model_synthesis → harness_synthesis (unchanged)", () => {
+    const model = modelSynthesisDeliverable({ type: "thought", content: "x".repeat(120), iteration: 1 });
+    expect(deliverableTerminationReason(model)).toBe("harness_synthesis");
+  });
+
+  it("deliverableTerminationReason: tool_artifact / sentinel → harness_deliverable (unchanged)", () => {
+    expect(deliverableTerminationReason(toolArtifactDeliverable(obs("body")))).toBe("harness_deliverable");
+    expect(deliverableTerminationReason(sentinelDeliverable("no_substantive_output"))).toBe("harness_deliverable");
+  });
+
+  it("synthesis-gate writes the LLM-cleaned prose verbatim and preserves terminatedBy", async () => {
+    // Drive the gate: harness-deliverable termination (terminationSource="harness")
+    // + format-requested task whose raw artifact won't validate → needsSynthesis.
+    // The custom LLM layer returns a valid markdown table for the synthesis call,
+    // landing the formatOk&&contentOk branch (runner.ts:740). Asserts the wiring:
+    // output === the synthesis content (byte-identical to the old model_synthesis
+    // write — `synthesized` wins in deliverableToContent) AND terminatedBy is the
+    // exact pre-gate value (the gate must NOT force re-synthesis).
+    const synthTable = "| Coin | Price |\n|------|-------|\n| BTC | 50000 |\n| ETH | 3000 |";
+    const synthLayer = TestLLMServiceLayer([{ text: synthTable }]);
+    const kernel = makeStallAfterToolKernel("BTC price: $50,000. ETH price: $3,000.");
+    const state = await Effect.runPromise(
+      runKernel(
+        kernel,
+        { task: "generate a markdown table with crypto prices" },
+        { ...defaultOptions, maxIterations: 5 },
+      ).pipe(Effect.provide(synthLayer)),
+    );
+    expect(state.status).toBe("done");
+    // Pre-gate terminatedBy for this stall→assemble path is harness_deliverable;
+    // the synthesis gate must leave it untouched (no forced re-synthesis).
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    expect(state.meta.outputSynthesized).toBe(true);
+    expect(state.output).toBe(synthTable);
   });
 });

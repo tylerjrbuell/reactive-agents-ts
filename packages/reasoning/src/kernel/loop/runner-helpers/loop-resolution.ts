@@ -43,6 +43,7 @@ import {
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
 import { missingRequiredToolsForInput } from "./state-queries.js";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import {
   assembleDeliverable,
   deliverableTerminationReason,
@@ -152,7 +153,7 @@ export function resolveDetectedLoop(
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
-            output: d.content,
+            deliverable: d,
           });
           return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
         }
@@ -188,7 +189,7 @@ export function resolveDetectedLoop(
       });
       state = terminate(state, {
         reason: deliverableTerminationReason(loopDeliverable),
-        output: loopDeliverable.content,
+        deliverable: loopDeliverable,
       });
       return { outcome: "break", state, failureRecoveryRedirects, requiredToolNudgeCount };
     }
@@ -224,7 +225,12 @@ export function resolveDetectedLoop(
         });
         state = terminate(state, {
           reason: "loop_graceful",
-          output: lastThoughtContent,
+          // Model-authored trailing thought → model_synthesis provenance.
+          deliverable: modelSynthesisDeliverable({
+            type: "thought",
+            content: lastThoughtContent,
+            iteration: state.iteration,
+          }),
         });
       } else {
         state = transitionState(state, {

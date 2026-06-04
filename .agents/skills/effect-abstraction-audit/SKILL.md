@@ -147,17 +147,17 @@ type KernelError =
 
 Re-verify counts and wiring before each audit (`wc -l`, `rg`); the bullets below were last aligned with the tree in **2026-04**.
 
-1. **`KernelState.meta` is an open bag** — `meta: Readonly<Record<string, unknown>>` in `packages/reasoning/src/strategies/kernel/kernel-state.ts` forces `(state.meta as any).entropy` and related casts across `think.ts`, `act.ts`, `kernel-runner.ts`, `reactive-observer.ts`. High ROI: introduce a structured `KernelMeta` (or typed slices) and migrate call sites incrementally.
+1. **`KernelState.meta` is an open bag** — `meta: Readonly<Record<string, unknown>>` in `packages/reasoning/src/kernel/state/kernel-state.ts` forces `(state.meta as any).entropy` and related casts across `think.ts`, `act.ts`, `runner.ts`, `reactive-observer.ts`. High ROI: introduce a structured `KernelMeta` (or typed slices) and migrate call sites incrementally.
 
 2. **`buildDynamicContext` is dead in the live kernel path** — Implemented and exported from `packages/reasoning/src/context/context-engine.ts`, but the think phase uses **`buildStaticContext` only**. Tests (`packages/reasoning/tests/strategies/kernel/phases/think-system-prompt.test.ts`) assert `think.ts` does not reference `buildDynamicContext`. **`buildStaticContext` is active**, not legacy. Decide: wire dynamic context into FC messages, or deprecate/remove the export and shrink the public surface.
 
 3. **`context-engine.ts` size** — On the order of **~500 LOC** (not ~690). It holds scoring, environment/rules/tool-reference builders, **both** static and dynamic context builders, and helpers. The maintenance issue is the **unused dynamic path**, not “mostly dead file.”
 
 4. **Provider adapter hooks — all seven wired** — `ProviderAdapter` in `packages/llm-provider/src/adapter.ts` is consumed in the kernel as follows (confirm with `rg` if paths move):
-   - `systemPromptPatch`, `toolGuidance` → `packages/reasoning/src/strategies/kernel/phases/think.ts`
-   - `taskFraming` → `packages/reasoning/src/strategies/kernel/phases/context-builder.ts`
+   - `systemPromptPatch`, `toolGuidance` → `packages/reasoning/src/kernel/capabilities/reason/think.ts`
+   - `taskFraming` → `packages/reasoning/src/kernel/capabilities/attend/context-utils.ts`
    - `continuationHint`, `qualityCheck` → `think.ts`
-   - `errorRecovery`, `synthesisPrompt` → `packages/reasoning/src/strategies/kernel/phases/act.ts`  
+   - `errorRecovery`, `synthesisPrompt` → `packages/reasoning/src/kernel/capabilities/act/act.ts`
    Do not file issues for “unwired hooks” without checking these files first.
 
 5. **Adaptive meta-strategy defaults off** — Routing exists (`packages/reasoning/src/strategies/adaptive.ts`, selected when `config.adaptive.enabled` in `packages/reasoning/src/services/reasoning-service.ts`). **`defaultReasoningConfig` sets `adaptive.enabled: false`** in `packages/reasoning/src/types/config.ts`. That is a product/default choice, not absent multi-step routing code.
@@ -171,9 +171,9 @@ Re-verify counts and wiring before each audit (`wc -l`, `rg`); the bullets below
 After large kernel or adapter changes, refresh the **Known Architecture Debt** section and the **Quick ROI** table so audits do not chase fixed problems.
 
 ### Kernel Extension Points (prefer these over new files)
-- **New phase** → `strategies/kernel/phases/<name>.ts`, insert via `makeKernel({ phases: [...] })`
-- **New guard** → add `Guard` fn to `guard.ts`, add to `defaultGuards[]`
-- **New meta-tool** → one entry in `metaToolRegistry` in `act.ts`
+- **New phase** → `packages/reasoning/src/kernel/capabilities/<cap>/<name>.ts`, insert via `makeKernel({ phases: [...] })`
+- **New guard** → add `Guard` fn to `kernel/capabilities/act/guard.ts`, add to `defaultGuards[]`
+- **New meta-tool** → one entry in `metaToolRegistry` in `kernel/capabilities/act/act.ts`
 
 ### Bun Constraints
 - Fast startup → avoid over-layering at runtime initialization boundaries

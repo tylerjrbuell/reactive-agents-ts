@@ -1091,6 +1091,8 @@ import type {
   KernelState as _KernelState,
 } from "../../state/kernel-state.js";
 import { transitionState } from "../../state/kernel-state.js";
+import { commitDeliverable } from "../../loop/runner-helpers/deliverable.js";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 
 /**
  * Apply a Verdict to KernelState. The single helper every termination
@@ -1108,27 +1110,48 @@ export function applyTermination(
   switch (verdict.action) {
     case "continue":
       return state;
-    case "exit-success":
-      return transitionState(state, {
+    case "exit-success": {
+      // P1 mission 2B: the verdict's `output` is the model's final answer
+      // (authored text). Set status + terminatedBy first (NO output key — an
+      // output-only patch on a `done` state sticks per the transitionState
+      // invariant), then funnel the output string through the single writer
+      // commitDeliverable so the Arbitrator stops being a raw output writer.
+      const done = transitionState(state, {
         status: "done" as const,
-        output: verdict.output,
         meta: {
           ...state.meta,
           terminatedBy: verdict.terminatedBy,
           ...(extraMeta ?? {}),
         },
       });
-    case "exit-failure":
-      return transitionState(state, {
+      return commitDeliverable(
+        done,
+        modelSynthesisDeliverable({ type: "thought", content: verdict.output, iteration: done.iteration }),
+      );
+    }
+    case "exit-failure": {
+      // Failure escape (transitionState JSDoc §803): the Arbitrator is the
+      // sanctioned site that forwards `verdict.output` alongside a failure.
+      // Set status:"failed" + meta with NO output key first (so an absent
+      // verdict.output is nulled by the invariant), then — only when a payload
+      // exists — route it through the single writer. `transitionToFailed` is
+      // false on the already-failed state, so commitDeliverable's output sticks.
+      const failed = transitionState(state, {
         status: "failed" as const,
         error: verdict.error,
-        output: verdict.output ?? null,
         meta: {
           ...state.meta,
           terminatedBy: verdict.terminatedBy,
           ...(extraMeta ?? {}),
         },
       });
+      return verdict.output !== undefined
+        ? commitDeliverable(
+            failed,
+            modelSynthesisDeliverable({ type: "thought", content: verdict.output, iteration: failed.iteration }),
+          )
+        : failed;
+    }
     case "escalate": {
       // Escalation is signaled in meta. State.status stays "thinking".
       // Sprint 3.4 Scaffold 3 — when nextStrategy === "retry-with-feedback",

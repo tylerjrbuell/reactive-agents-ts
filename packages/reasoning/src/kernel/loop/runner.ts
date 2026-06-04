@@ -16,7 +16,7 @@ import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
-import { deliverableToContent, modelSynthesisDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable, harnessSynthesisDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -63,6 +63,8 @@ import {
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import {
   assembleDeliverable,
+  commitDeliverable,
+  passthroughOutputDeliverable,
   deliverableTerminationReason,
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
@@ -79,8 +81,11 @@ import {
 
 // Re-export the public helper surface so external imports of
 // `kernel/loop/runner.js` remain unchanged.
-export { assembleDeliverable } from "./runner-helpers/deliverable.js";
-export type { Deliverable } from "./runner-helpers/deliverable.js";
+export { assembleDeliverable, commitDeliverable } from "./runner-helpers/deliverable.js";
+// P1 mission 2A: the Deliverable TYPE is now the canonical 4-source contract
+// owned by @reactive-agents/core. Re-exported here so external callers that
+// import it from `kernel/loop/runner.js` keep working.
+export type { Deliverable } from "@reactive-agents/core";
 export {
   TIER_GUARD_THRESHOLDS,
   shouldExitOnLowDelta,
@@ -339,14 +344,22 @@ export function runKernel(
         runPhaseHooks(harnessPipeline, 'before', 'bootstrap', 0, state)
       );
       if (bootstrapAbort) {
+        // P1 mission 2B: killswitch abort carries a DYNAMIC terminatedBy (not a
+        // TerminateReason). Set status + terminatedBy via transitionState (NO
+        // output key), then — only on the "done" branch — route the output
+        // through the single writer commitDeliverable. The "failed" branch
+        // drops the key so the invariant nulls the output.
+        const aborted = bootstrapAbort.abort === 'terminate';
         state = transitionState(state, {
-          status: bootstrapAbort.abort === 'terminate' ? 'failed' : 'done',
-          output: state.output ?? '',
+          status: aborted ? 'failed' : 'done',
           meta: {
             ...state.meta,
             terminatedBy: killswitchTerminatedBy(bootstrapAbort),
           },
         });
+        if (!aborted) {
+          state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
+        }
       }
     }
 
@@ -499,13 +512,11 @@ export function runKernel(
       if (artifactCount > 0) {
         const previousTerminatedBy = state.meta.terminatedBy;
         const deliverable = assembleDeliverable(state);
-        state = transitionState(state, {
-          output: deliverable.content,
-          meta: {
-            ...state.meta,
-            terminatedBy: deliverableTerminationReason(deliverable),
-            previousTerminatedBy,
-          },
+        // Single-writer: commitDeliverable owns state.output; we hand it the
+        // terminatedBy promotion to stamp alongside (Sprint-1 P1 mission 2A).
+        state = commitDeliverable(state, deliverable, {
+          terminatedBy: deliverableTerminationReason(deliverable),
+          previousTerminatedBy,
         });
       }
     }
@@ -526,16 +537,17 @@ export function runKernel(
         .filter((s) => s.type === "thought")
         .pop();
       if (lastThought?.content && lastThought.content.trim().length > 0) {
-        // Sprint-1 B2: typed DeliverableProvenance channel. Construct a
-        // model_synthesis Deliverable and pass its content to transitionState.
-        // The contract type makes provenance explicit; raw-string mutations of
-        // state.output are an anti-pattern that the migration is collapsing.
+        // Sprint-1 B2 / P1 mission 2A: typed DeliverableProvenance channel.
+        // Construct a model_synthesis Deliverable and route it through the
+        // single writer commitDeliverable (no extraMeta — this path does not
+        // own terminatedBy, so the existing reason is preserved). Raw-string
+        // mutations of state.output are the anti-pattern this collapses.
         const deliverable = modelSynthesisDeliverable({
           type: "thought",
           content: lastThought.content,
           iteration: state.iteration,
         });
-        state = transitionState(state, { output: deliverableToContent(deliverable) });
+        state = commitDeliverable(state, deliverable);
       }
     }
 
@@ -713,16 +725,32 @@ export function runKernel(
             const contentOk = validateContentCompleteness(synthContent, taskIntent).complete;
 
             if (formatOk && contentOk) {
-              state = transitionState(state, {
-                output: synthContent,
-                meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: true },
-              });
+              // Drift S11: synthContent is prose the HARNESS produced by running
+              // the LLM synthesis call above — NOT a model-authored trailing
+              // thought. Tag it `harness_synthesis` WITH `synthesized` so the
+              // provenance is truthful; `deliverableToContent` returns
+              // synthContent unchanged (synthesized wins over the empty
+              // `assembled`), so the output string is byte-identical to the old
+              // model_synthesis write. No `synthesisCall` ref: `complete()`
+              // exposes no callId here, and the contract forbids fabricating one.
+              // extraMeta carries ONLY the output-quality flags; terminatedBy is
+              // already set and preserved (commitDeliverable merges, never clobbers).
+              state = commitDeliverable(
+                state,
+                harnessSynthesisDeliverable([], undefined, synthContent),
+                { outputSynthesized: true, outputFormatValidated: true },
+              );
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesized output to match requested format: ${synthesisFormat}`, timestamp: new Date() });
             } else if (terminationSource === "harness" || terminationSource === "oracle") {
-              state = transitionState(state, {
-                output: synthContent,
-                meta: { ...state.meta, outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
-              });
+              // Drift S11 (imperfect-but-better-than-raw branch): same provenance
+              // truth as the formatOk&&contentOk branch — harness-orchestrated
+              // synthesis → harness_synthesis WITH synthesized. Output string and
+              // terminatedBy unchanged from the prior model_synthesis write.
+              state = commitDeliverable(
+                state,
+                harnessSynthesisDeliverable([], undefined, synthContent),
+                { outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
+              );
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
             } else {
               state = transitionState(state, {

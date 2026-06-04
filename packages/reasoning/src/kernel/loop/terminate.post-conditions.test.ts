@@ -19,11 +19,19 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { initialKernelState } from "../state/kernel-state.js";
 import type { KernelState } from "../state/kernel-state.js";
 import { terminate } from "./terminate.js";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import {
   artifactProduced,
   toolCalled,
 } from "../capabilities/verify/post-conditions.js";
 import type { ReasoningStep } from "../../types/index.js";
+
+/** P1 mission 2B: terminate() now takes a typed Deliverable, not a raw string.
+ *  Wrap a plain answer string as model_synthesis so deliverableToContent
+ *  reproduces it byte-for-byte. */
+function answer(text: string) {
+  return modelSynthesisDeliverable({ type: "thought", content: text, iteration: 0 });
+}
 
 const ORIGINAL = process.env.RA_POST_CONDITIONS;
 
@@ -75,7 +83,7 @@ describe("terminate() terminal PostCondition gate — default-on (#7 seed flip)"
     const state = stateWith({ postConditions: [toolCalled("file-write")] }); // never called
     const result = terminate(state, {
       reason: "harness_deliverable",
-      output: "Here is the finished work.",
+      deliverable: answer("Here is the finished work."),
     });
 
     expect(result.status).toBe("failed");
@@ -92,7 +100,7 @@ describe("terminate() terminal PostCondition gate — default-on (#7 seed flip)"
     );
     const result = terminate(state, {
       reason: "harness_deliverable",
-      output: "Wrote ./out.md.",
+      deliverable: answer("Wrote ./out.md."),
     });
 
     expect(result.status).toBe("done");
@@ -107,7 +115,7 @@ describe("terminate() terminal PostCondition gate — default-on (#7 seed flip)"
     const state = stateWith({}); // no postConditions seeded at all
     const result = terminate(state, {
       reason: "loop_graceful",
-      output: "Nothing to verify.",
+      deliverable: answer("Nothing to verify."),
     });
 
     expect(result.status).toBe("done");

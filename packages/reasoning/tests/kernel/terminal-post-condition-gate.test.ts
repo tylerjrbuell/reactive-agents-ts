@@ -15,6 +15,7 @@
 // absent because the stall path force-delivered around the gated verdict.
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { terminate } from "../../src/kernel/loop/terminate.js";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import { runStallDeliverableStep } from "../../src/kernel/loop/runner-helpers/stall-deliverable.js";
 import { defaultVerifier } from "../../src/kernel/capabilities/verify/verifier.js";
 import {
@@ -115,7 +116,7 @@ describe("terminate() terminal PostCondition gate — flag ON", () => {
     });
     const next = terminate(state, {
       reason: "harness_deliverable",
-      output: "Here is a summary of the commits.",
+      deliverable: modelSynthesisDeliverable({ type: "thought", content: "Here is a summary of the commits.", iteration: 0 }),
     });
     // Honest failure: NOT a delivered success.
     expect(next.status).toBe("failed");
@@ -156,14 +157,14 @@ describe("terminate() terminal PostCondition gate — flag ON", () => {
       steps: writeLedger,
       meta: { postConditions: [...unmetConditions] },
     });
-    const next = terminate(state, { reason: "harness_deliverable", output: "Done." });
+    const next = terminate(state, { reason: "harness_deliverable", deliverable: modelSynthesisDeliverable({ type: "thought", content: "Done.", iteration: 0 }) });
     expect(next.status).toBe("done");
     expect(next.output).toBe("Done.");
   }, 15000);
 
   it("no stored conditions -> done transition stands (conservative fallback)", () => {
     const state = baseState({ steps: ledgerWithArtifactButNoWrite(), meta: {} });
-    const next = terminate(state, { reason: "harness_deliverable", output: "Summary." });
+    const next = terminate(state, { reason: "harness_deliverable", deliverable: modelSynthesisDeliverable({ type: "thought", content: "Summary.", iteration: 0 }) });
     expect(next.status).toBe("done");
     expect(next.output).toBe("Summary.");
   }, 15000);

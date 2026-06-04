@@ -544,6 +544,18 @@ export interface RuntimeOptions {
   focusedTools?: readonly string[];
 
   /**
+   * Tool names a `.withContract({ tools: [{ kind: "forbidden", name }] })`
+   * declares MUST NOT be visible to the LLM (TaskContract definition,
+   * task-contract.ts:33-34). EXCLUDED from the execute-time exposed tool
+   * schema in `prepareReasoningToolSchemas`, applied AFTER MCP/discover-tools
+   * discovery so discovered forbidden tools are also removed. Derived at
+   * construction via `contractForbiddenTools` (realization-plan P2b).
+   *
+   * Default: undefined (no contract-forbidden tools)
+   */
+  forbiddenTools?: readonly string[];
+
+  /**
    * Enable adaptive tool filtering. When true, only task-relevant tools are shown
    * to the agent at reasoning time — reducing context noise for small models.
    * All tools remain callable by exact name even if not shown.

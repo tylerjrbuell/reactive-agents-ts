@@ -147,9 +147,9 @@ These sections exist in the codebase but are disabled. Do not modify, re-enable,
 
 | Area | Location | Size |
 |------|---------|------|
-| `buildDynamicContext` | `packages/reasoning/src/strategies/kernel/phases/context-builder.ts` | ~280 LOC |
-| `buildStaticContext` | same file | ~280 LOC |
-| Dead text-assembly functions | `packages/reasoning/src/strategies/kernel/utils/context-utils.ts` | ~690 LOC total |
+| `buildDynamicContext` | `packages/reasoning/src/context/context-engine.ts` | ~280 LOC |
+| `buildStaticContext` | same file (LIVE — active static prompt builder) | ~280 LOC |
+| Dead text-assembly functions | `packages/reasoning/src/kernel/capabilities/attend/context-utils.ts` | ~690 LOC total |
 
 These are preserved as reference. Any PR that modifies them will be rejected.
 

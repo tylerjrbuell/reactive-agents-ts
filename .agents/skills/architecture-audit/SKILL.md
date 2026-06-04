@@ -27,6 +27,8 @@ System-level health check for Reactive Agents. Like `/simplify` but scoped to ar
 
 ## Phase 1: Architecture Snapshot
 
+> Authoritative current-state map: [[wiki/Architecture/Framework-Architecture-Index]] (file:line-anchored).
+
 Before launching agents, orient to current state. **Always start with the wiki** — see [[wiki/Development/Wiki-Workflow|Wiki Workflow]].
 
 ```
@@ -57,7 +59,7 @@ wiki/Failure-Modes/00 FM Catalog.md              # observed failure modes
 **Kernel internals (highest-churn area):**
 
 ```
-packages/reasoning/src/strategies/kernel/
+packages/reasoning/src/kernel/
   kernel-state.ts        # KernelState, Phase type, KernelContext
   kernel-runner.ts       # runKernel() loop
   react-kernel.ts        # makeKernel() factory

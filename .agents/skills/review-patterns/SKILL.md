@@ -148,34 +148,34 @@ Search for type definitions in the target files:
 
 ### Category 9: Kernel Extension Compliance (if applicable)
 
-Only applies if changes touch `packages/reasoning/src/strategies/kernel/`.
+Only applies if changes touch `packages/reasoning/src/kernel/`.
 
 **PASS if:**
 
 - New phases have the exact signature: `(state: KernelState, context: KernelContext) => Effect.Effect<KernelState, never, LLMService>`
 - New guards return `GuardOutcome`: either `{ allow: true }` or `{ block: true; reason: string }` — nothing else
 - New MetaTools are registered in `metaToolRegistry` in `act.ts` — not handled inline in kernel-runner
-- `kernel-runner.ts` main loop was not modified to add per-turn logic
+- `kernel/loop/runner.ts` main loop was not modified to add per-turn logic
 - Dead code areas (`buildDynamicContext`, `buildStaticContext`, dead context-engine sections) were not touched
 
 **FAIL if:**
 
 - Phase function has extra parameters beyond `(state, context)`
 - Guard returns a boolean, void, or throws instead of `GuardOutcome`
-- Phase or guard logic was added directly inside `kernel-runner.ts` (bypassing the phase pipeline)
+- Phase or guard logic was added directly inside `kernel/loop/runner.ts` (bypassing the phase pipeline)
 - `buildDynamicContext` or `buildStaticContext` were re-enabled or modified
 
 **Check commands:**
 
 ```bash
 # Phase signatures
-grep -n "^export const.*= (" packages/reasoning/src/strategies/kernel/phases/ -r
+grep -n "^export const.*= (" packages/reasoning/src/kernel/capabilities/ -r
 
 # Guard return types — must see GuardOutcome
-grep -n "GuardOutcome" packages/reasoning/src/strategies/kernel/phases/guard.ts
+grep -n "GuardOutcome" packages/reasoning/src/kernel/capabilities/act/guard.ts
 
-# Ensure kernel-runner was not touched for per-turn logic
-git diff HEAD packages/reasoning/src/strategies/kernel/kernel-runner.ts | head -50
+# Ensure runner.ts main loop was not touched for per-turn logic
+git diff HEAD packages/reasoning/src/kernel/loop/runner.ts | head -50
 ```
 
 ## Output Format

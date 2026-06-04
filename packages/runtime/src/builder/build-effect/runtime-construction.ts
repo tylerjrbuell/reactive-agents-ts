@@ -22,6 +22,7 @@ import type { MCPServerConfig } from "../../runtime.js";
 import { RegistrationHarness, HarnessPipeline } from "@reactive-agents/core";
 import { defaultUserMemoryPath } from "@reactive-agents/memory";
 import { ExecutionEngine } from "../../execution-engine.js";
+import { contractForbiddenTools, mergeContractRequiredTools } from "../contract-tool-set.js";
 import type {
   ContextProfile,
   KernelMetaToolsConfig,
@@ -99,6 +100,13 @@ export interface BuilderRuntimeStateView {
     adaptive?: boolean;
     maxRetries?: number;
   };
+  /**
+   * Optional TaskContract from {@link ReactiveAgentBuilder.withContract}. Its
+   * `kind === "required"` tool names are unioned into the resolved
+   * `requiredTools` config at construction (P2b execute-time enforcement) so
+   * they reach `KernelInput.requiredTools`.
+   */
+  readonly _taskContract?: import("@reactive-agents/core").TaskContract;
   readonly _toolsOptions?: ToolsOptions;
   readonly _enableMemory: boolean;
   readonly _enableExperienceLearning: boolean;
@@ -368,13 +376,22 @@ export const buildBaseRuntimeAndEngine = (
       // Auto-enable adaptive required tools when reasoning + tools are both active
       // and the user hasn't explicitly configured required tools. This ensures the
       // kernel's completion guard can enforce that task-critical tools are called.
-      requiredTools:
-        state._requiredToolsConfig ??
-        (state._enableReasoning && state._enableTools
-          ? { adaptive: true }
-          : undefined),
+      // A `.withContract()` declaring `kind: "required"` tools unions those names
+      // into this config (P2b execute-time enforcement) so they reach
+      // KernelInput.requiredTools via classifier.ts:73-74 → pre-loop-dispatch.ts:149.
+      requiredTools: mergeContractRequiredTools(
+        state._requiredToolsConfig,
+        state._taskContract,
+        state._enableReasoning,
+        state._enableTools,
+      ),
       allowedTools: state._toolsOptions?.allowedTools,
       focusedTools: state._toolsOptions?.focusedTools,
+      // A `.withContract()` declaring `kind: "forbidden"` tools excludes those
+      // names from the execute-time exposed schema (P2b forbidden-half). Per
+      // task-contract.ts:33-34 forbidden = "MUST NOT be visible to the LLM";
+      // tool-schemas.ts reads this and drops the names AFTER MCP discovery.
+      forbiddenTools: contractForbiddenTools(state._taskContract),
       adaptiveToolFiltering: state._toolsOptions?.adaptive,
       builtins: state._toolsOptions?.builtins,
       enableMemory: state._enableMemory,

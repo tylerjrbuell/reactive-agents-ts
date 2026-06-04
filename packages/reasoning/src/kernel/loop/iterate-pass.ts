@@ -74,7 +74,7 @@ import { Effect, FiberRef } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { checkpointStoreRef } from "@reactive-agents/tools";
-import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
@@ -132,6 +132,8 @@ import {
 import {
   countDeliverableCandidates,
   buildEffectiveToolsUsed,
+  commitDeliverable,
+  passthroughOutputDeliverable,
 } from "./runner-helpers/deliverable.js";
 
 /**
@@ -348,13 +350,16 @@ export function runIterationPass(
       if (_runCtl) {
         const ctl = yield* Effect.promise(() => _runCtl.checkpoint());
         if (ctl?.stop) {
-          // Sprint-1 B2: typed DeliverableProvenance channel. Stop-checkpoint
-          // is a sentinel termination — preserve any existing committed output,
-          // else emit a structured sentinel (NOT a raw empty string).
-          const sentinelText = deliverableToContent(
-            sentinelDeliverable("no_substantive_output"),
-          );
-          state = transitionState(state, { status: "done", output: state.output ?? sentinelText });
+          // Sprint-1 B2 / P1 mission 2B: typed DeliverableProvenance channel.
+          // Stop-checkpoint is a user-initiated termination — route through the
+          // single-owner terminate() (status/terminatedBy) which delegates the
+          // output string to commitDeliverable. Preserve any prior committed
+          // output as a passthrough; an empty output becomes a structured
+          // sentinel (NOT a raw empty string).
+          state = terminate(state, {
+            reason: "stop_requested",
+            deliverable: passthroughOutputDeliverable(state.output),
+          });
           sync(); return "break";
         }
       }
@@ -427,14 +432,23 @@ export function runIterationPass(
         runPhaseHooks(effectiveInput.harnessPipeline, 'before', 'think', state.iteration, state)
       );
       if (beforeThinkAbort) {
+        // P1 mission 2B: killswitch abort carries a DYNAMIC terminatedBy (not a
+        // TerminateReason), so it can't route through terminate(). Set
+        // status + terminatedBy via transitionState (NO output key), then —
+        // only on the successful "done" branch — route the output string
+        // through the single writer commitDeliverable. The "failed" branch
+        // drops the key so the transitionState invariant nulls the output.
+        const aborted = beforeThinkAbort.abort === 'terminate';
         state = transitionState(state, {
-          status: beforeThinkAbort.abort === 'terminate' ? 'failed' : 'done',
-          output: state.output ?? '',
+          status: aborted ? 'failed' : 'done',
           meta: {
             ...state.meta,
             terminatedBy: killswitchTerminatedBy(beforeThinkAbort),
           },
         });
+        if (!aborted) {
+          state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
+        }
         sync(); return "break";
       }
 
@@ -490,7 +504,7 @@ export function runIterationPass(
           });
           state = terminate(state, {
             reason: "low_delta_guard",
-            output: state.output ?? "",
+            deliverable: passthroughOutputDeliverable(state.output),
           });
           sync(); return "break";
         }
@@ -595,7 +609,7 @@ export function runIterationPass(
         // Switching not enabled or exhausted — deliver what we have
         state = terminate(state, {
           reason: "switching_exhausted",
-          output: state.output ?? "",
+          deliverable: passthroughOutputDeliverable(state.output),
         });
         sync(); return "break";
       }
@@ -738,7 +752,13 @@ export function runIterationPass(
           if (oracleForcedOutput && oracleForcedOutput.trim().length > 0) {
             state = terminate(state, {
               reason: "oracle_forced",
-              output: oracleForcedOutput,
+              // oracleForcedOutput is state.output (already committed model text)
+              // or the last substantive thought — model-authored → model_synthesis.
+              deliverable: modelSynthesisDeliverable({
+                type: "thought",
+                content: oracleForcedOutput,
+                iteration: state.iteration,
+              }),
             });
           } else {
             state = transitionState(state, {

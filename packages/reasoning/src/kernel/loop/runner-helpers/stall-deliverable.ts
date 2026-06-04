@@ -42,6 +42,7 @@ import {
   emitGuardFired,
 } from "../../../kernel/utils/diagnostics.js";
 import { verifyAndEmit, type Verifier } from "../../../kernel/capabilities/verify/verifier.js";
+import { deliverableToContent } from "@reactive-agents/core";
 import {
   assembleDeliverable,
   deliverableTerminationReason,
@@ -134,7 +135,7 @@ export function runStallDeliverableStep(
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
-            output: d.content,
+            deliverable: d,
           });
           return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
         }
@@ -222,8 +223,11 @@ export function runStallDeliverableStep(
       // is exhausted (or verifier passes — should be impossible with
       // the new check), fall through to the original terminate path.
       const candidateDeliverable = assembleDeliverable(state);
-      const candidateOutput = candidateDeliverable.content;
+      const candidateOutput = deliverableToContent(candidateDeliverable);
       const candidateTerminationReason = deliverableTerminationReason(candidateDeliverable);
+      // candidateOutput is consumed by the verifier emit below (the trace the
+      // §9.0 post-loop gate reads); the terminate() output write itself routes
+      // the typed Deliverable through commitDeliverable.
       const availableUserToolsForFallback =
         (currentInput.availableToolSchemas ?? []).map((t) => t.name);
       // M3 REWORK (2026-05-12): the retry path was removed, so the
@@ -264,7 +268,7 @@ export function runStallDeliverableStep(
       });
       state = terminate(state, {
         reason: candidateTerminationReason,
-        output: candidateOutput,
+        deliverable: candidateDeliverable,
       });
       return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
     }

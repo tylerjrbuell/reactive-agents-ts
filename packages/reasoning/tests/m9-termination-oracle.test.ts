@@ -16,6 +16,7 @@ import type { KernelState, KernelInput, KernelContext } from "../src/kernel/stat
 import { initialKernelState, transitionState } from "../src/kernel/state/kernel-state.js";
 import { terminate } from "../src/kernel/loop/terminate.js";
 import { makeStep } from "../src/kernel/capabilities/sense/step-utils.js";
+import { modelSynthesisDeliverable } from "@reactive-agents/core";
 
 /**
  * Instrumentation layer: track all state transitions to verify termination
@@ -68,7 +69,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(state, {
         reason: "low_delta_guard",
-        output: "Task complete.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Task complete.", iteration: 0 }),
       });
 
       expect(terminated.status).toBe("done");
@@ -81,7 +82,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(state, {
         reason: "oracle_forced",
-        output: "Forced exit.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Forced exit.", iteration: 0 }),
         extraMeta: { nudgeCount: 2, escalateTo: "user_review" } as any,
       });
 
@@ -95,7 +96,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(state, {
         reason: "harness_deliverable",
-        output: "Assembled from artifacts.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Assembled from artifacts.", iteration: 0 }),
         extraMeta: { previousTerminatedBy: "some_prior_reason" } as any,
       });
 
@@ -108,7 +109,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(state, {
         reason: "fallback_deliver",
-        output: "",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "", iteration: 0 }),
       });
 
       expect(terminated.output).toBe("");
@@ -140,7 +141,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
         const terminated = terminate(state, {
           reason,
-          output: `Terminated by ${reason}`,
+          deliverable: modelSynthesisDeliverable({ type: "thought", content: `Terminated by ${reason}`, iteration: 0 }),
         });
 
         expect(terminated.status).toBe("done");
@@ -165,7 +166,7 @@ describe("M9 — Termination Oracle Validation", () => {
       // First termination
       state = terminate(state, {
         reason: "low_delta_guard",
-        output: "First termination.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "First termination.", iteration: 0 }),
       });
 
       expect(state.status).toBe("done");
@@ -174,7 +175,7 @@ describe("M9 — Termination Oracle Validation", () => {
       // Attempt second termination (simulate buggy code trying to re-terminate)
       state = terminate(state, {
         reason: "oracle_forced",
-        output: "Second termination.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Second termination.", iteration: 0 }),
       });
 
       // Should transition but preserving immutability
@@ -198,7 +199,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       state = terminate(state, {
         reason: "low_delta_guard",
-        output: "Done.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Done.", iteration: 0 }),
       });
 
       expect(state.status).toBe("done");
@@ -270,7 +271,7 @@ describe("M9 — Termination Oracle Validation", () => {
       // Now can terminate
       state = terminate(state, {
         reason: "oracle_forced",
-        output: "Task complete with required tool called.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Task complete with required tool called.", iteration: 0 }),
       });
 
       expect(state.status).toBe("done");
@@ -299,7 +300,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
         const terminated = terminate(state, {
           reason: "low_delta_guard",
-          output,
+          deliverable: modelSynthesisDeliverable({ type: "thought", content: output, iteration: 0 }),
         });
 
         expect(terminated.output).toBe(output);
@@ -314,7 +315,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(iterState, {
         reason: "low_delta_guard",
-        output: "Done after 5 iterations.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Done after 5 iterations.", iteration: 0 }),
       });
 
       expect(terminated.iteration).toBe(5);
@@ -339,7 +340,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(state, {
         reason: "oracle_forced",
-        output: "Done.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Done.", iteration: 0 }),
       });
 
       expect(terminated.steps.length).toBe(3);
@@ -363,7 +364,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(state, {
         reason: "harness_deliverable",
-        output: "Assembled result.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Assembled result.", iteration: 0 }),
       });
 
       expect(terminated.toolsUsed.has("search_web")).toBe(true);
@@ -455,7 +456,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const _terminated = terminate(state, {
         reason: "low_delta_guard",
-        output: "Done.",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Done.", iteration: 0 }),
       });
 
       // Original should be unchanged
@@ -472,7 +473,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const opts = {
         reason: "oracle_forced" as const,
-        output: "Deterministic output",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Deterministic output", iteration: 0 }),
         extraMeta: {} as any,
       };
 
@@ -502,7 +503,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
       const terminated = terminate(state, {
         reason: "harness_deliverable",
-        output: "Assembled result",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "Assembled result", iteration: 0 }),
       });
 
       expect(terminated.meta.terminatedBy).toBeTruthy();
@@ -529,7 +530,7 @@ describe("M9 — Termination Oracle Validation", () => {
 
         const terminated = terminate(state, {
           reason,
-          output: "Done",
+          deliverable: modelSynthesisDeliverable({ type: "thought", content: "Done", iteration: 0 }),
         });
 
         expect(terminated.meta.terminatedBy).toBe(reason);

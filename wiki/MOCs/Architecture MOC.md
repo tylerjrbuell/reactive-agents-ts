@@ -7,6 +7,8 @@ tags: [MOC]
 
 **Purpose:** Central hub for understanding the system design, kernel phases, package relationships, and architectural decisions.
 
+> 🟢 **START HERE — [[Framework-Architecture-Index]]** (verified against `main` @ 2026-06-03, every claim file:line-anchored). It is the authoritative, re-verifiable spine. The links below are older notes and may be stale — trust the Index where they conflict. Companions: [[2026-06-03-full-potential-realization-plan]] · [[2026-06-03-architecture-drift-register]].
+
 ---
 
 ## Core Architecture
