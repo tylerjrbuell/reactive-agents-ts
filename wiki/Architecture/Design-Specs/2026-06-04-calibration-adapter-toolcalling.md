@@ -53,14 +53,20 @@ regression — correct then, but it means the calibrated/observed dialect is now
   pseudo-code). Routing the extractor on the calibrated dialect adds nothing; the
   only dialect that *would* change routing (→ text-parse) is the 482c11e4
   regression. Stage A was right to ignore `_dialect`. Do not rewire.
-- **▶ KEYSTONE — capture + consume `namespaceTolerance`.** The most dramatic
-  measured failure (qwen3 0/15 namespaced, flips 14→0 on flat names) is a
-  **name-string** problem, NOT a dialect problem. Capture freeze-on-namespaced in
-  `RunObservation`; consume it by presenting **flat tool names** to freeze-prone
-  models (de-sanitize on return — the roundtrip at `think.ts:627-633` already
-  exists). This is **safe** (orthogonal to the driver/resolver divergence that
-  caused 482c11e4 — it changes the name shown, not the routing) and
-  **evidence-backed**. ~surgical change. This is the real win on the table.
+- **`namespaceTolerance` — DEMOTED (raw control overturned it, 2026-06-04).** See
+  [[2026-06-04-raw-vs-harness-toolcall]]. qwen3 calls the namespaced tool **10/10
+  raw** — it has NO namespace problem; the harness 0/15 is **harness-induced**.
+  The model that DOES freeze raw on namespaced names (cogito 0/10 raw) is already
+  **rescued** by the harness sanitize roundtrip (→15/15). So namespace handling is
+  already working where needed; not a keystone.
+- **▶ NEW KEYSTONE — harness-simplification for regress-under-scaffold models.**
+  The raw-vs-harness control proved the biggest lever is not extraction but
+  **removing whatever harness layer suppresses a natively-perfect model** (qwen3:
+  10/10 raw → 0/15 harness, across 6 ruled-out isolations). Calibration's role:
+  detect "this model regresses under full scaffolding" → serve a **leaner harness
+  path**. Locus TBD by exact-payload replay (multi-iter thread / classifier /
+  think.ts thinking+toolcall handling / full assembled prompt / sampling params).
+  This lifts a fully-capable model 0→10, a bigger win than per-dialect extraction.
 - **Capture `no-emission`** — `RunObservation` has dialect + drift but not
   "emitted zero calls" (cogito's ~20% failure mode). Add it so the loop can SEE
   that failure (prerequisite for any input-forcing lever later).
