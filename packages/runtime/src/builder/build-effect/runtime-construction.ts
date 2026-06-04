@@ -22,7 +22,7 @@ import type { MCPServerConfig } from "../../runtime.js";
 import { RegistrationHarness, HarnessPipeline } from "@reactive-agents/core";
 import { defaultUserMemoryPath } from "@reactive-agents/memory";
 import { ExecutionEngine } from "../../execution-engine.js";
-import { mergeContractRequiredTools } from "../contract-tool-set.js";
+import { contractForbiddenTools, mergeContractRequiredTools } from "../contract-tool-set.js";
 import type {
   ContextProfile,
   KernelMetaToolsConfig,
@@ -387,6 +387,11 @@ export const buildBaseRuntimeAndEngine = (
       ),
       allowedTools: state._toolsOptions?.allowedTools,
       focusedTools: state._toolsOptions?.focusedTools,
+      // A `.withContract()` declaring `kind: "forbidden"` tools excludes those
+      // names from the execute-time exposed schema (P2b forbidden-half). Per
+      // task-contract.ts:33-34 forbidden = "MUST NOT be visible to the LLM";
+      // tool-schemas.ts reads this and drops the names AFTER MCP discovery.
+      forbiddenTools: contractForbiddenTools(state._taskContract),
       adaptiveToolFiltering: state._toolsOptions?.adaptive,
       builtins: state._toolsOptions?.builtins,
       enableMemory: state._enableMemory,

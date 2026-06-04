@@ -108,11 +108,11 @@ export interface RequiredToolsConfig {
  * caller has declared their requirements, matching the existing static-list
  * semantic).
  *
- * NOTE — forbidden tools are intentionally NOT handled here. The contract's
- * forbidden tools cannot reach `KernelInput.blockedTools` from the runtime:
- * `blockedTools` is not a field on `ReasoningExecuteRequest` and is not mapped
- * from request → KernelInput in any non-reflexion strategy. Closing that hole
- * is a packages/reasoning change (out of runtime authority).
+ * NOTE — forbidden tools are handled by the sibling {@link contractForbiddenTools}
+ * helper + the schema-exclusion filter in `tool-schemas.ts`, NOT here. They are
+ * deliberately not routed through `KernelInput.blockedTools` (not fed
+ * runtime → kernel; would mean visible-but-blocked, contradicting the
+ * contract's "not visible" definition).
  */
 export function mergeContractRequiredTools(
   priorConfig: RequiredToolsConfig | undefined,
@@ -137,4 +137,36 @@ export function mergeContractRequiredTools(
   const merged = new Set<string>(priorConfig?.tools ?? []);
   for (const name of contractRequired) merged.add(name);
   return { ...priorConfig, tools: [...merged] };
+}
+
+/**
+ * Sibling to {@link mergeContractRequiredTools} for the forbidden-half
+ * (realization-plan P2b part 2). Derives the contract's `kind === "forbidden"`
+ * tool names.
+ *
+ * `task-contract.ts:33-34` (core) DEFINES forbidden tools as those that "MUST
+ * NOT be visible to the LLM". The runtime enforces this literal semantic by
+ * EXCLUDING these names from the execute-time exposed tool schema in
+ * `engine/phases/agent-loop/setup/tool-schemas.ts` (`prepareReasoningToolSchemas`),
+ * which runs AFTER MCP/discover-tools discovery — closing the
+ * static-approximation hole P2's build-time check could not see (the exclusion
+ * applies to discovered/MCP tools too, since the schema-prep input is the
+ * post-discovery registry snapshot).
+ *
+ * `runtime-construction.ts` stores the result on `config.forbiddenTools`; the
+ * schema-prep exclusion filter is its sole live consumer (§4.4 — no dead
+ * field). Returns `[]` when there is no contract or no forbidden tools so the
+ * caller can pass the result straight through without further guarding.
+ *
+ * Deliberately NOT routed through `KernelInput.blockedTools`: that field is not
+ * fed runtime → kernel and would mean visible-but-blocked, contradicting the
+ * contract's "not visible" definition. Schema-exclusion is runtime-only AND
+ * matches the spec.
+ */
+export function contractForbiddenTools(
+  contract: TaskContract | undefined,
+): string[] {
+  return (contract?.tools ?? [])
+    .filter((t) => t.kind === "forbidden")
+    .map((t) => t.name);
 }

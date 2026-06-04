@@ -659,6 +659,16 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
    */
   readonly focusedTools?: readonly string[];
   /**
+   * Tool names a `.withContract({ tools: [{ kind: "forbidden", name }] })`
+   * declares MUST NOT be visible to the LLM (TaskContract definition,
+   * task-contract.ts:33-34). These names are EXCLUDED from the execute-time
+   * exposed tool schema in `prepareReasoningToolSchemas` — applied AFTER
+   * MCP/discover-tools discovery, so discovered forbidden tools are also
+   * removed (closing the build-time static-approximation hole). Derived via
+   * `contractForbiddenTools` at construction (realization-plan P2b).
+   */
+  readonly forbiddenTools?: readonly string[];
+  /**
    * Opt-in for built-in tools in the base schema. See `ToolsOptions.builtins`
    * for full semantics. Default `undefined`/`false`: built-ins are excluded
    * from the LLM-facing schema (still registered + discoverable via

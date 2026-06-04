@@ -193,6 +193,22 @@ export const prepareReasoningToolSchemas = (
       }
     }
 
+    // ── Forbidden-tool exclusion (TaskContract, realization-plan P2b) ──
+    // A `.withContract({ tools: [{ kind: "forbidden", name }] })` declares
+    // names that "MUST NOT be visible to the LLM" (task-contract.ts:33-34).
+    // Applied LAST so it wins over the adaptive block's required/ALWAYS_INCLUDE
+    // re-additions above, and runs AFTER MCP/discover-tools discovery (the
+    // input schemas are the post-discovery registry snapshot) — so discovered
+    // forbidden tools are excluded too. Filters BOTH the prompt-visible schemas
+    // and the surfaced name set. This is the live consumer of the contract's
+    // forbidden list (§4.4 — no dead field).
+    const forbidden = config.forbiddenTools;
+    if (forbidden && forbidden.length > 0) {
+      const forbiddenSet = new Set(forbidden);
+      availableToolSchemas = availableToolSchemas.filter((ts) => !forbiddenSet.has(ts.name));
+      availableToolNames = availableToolNames.filter((n) => !forbiddenSet.has(n));
+    }
+
     return { availableToolSchemas, availableToolNames };
   });
 };
