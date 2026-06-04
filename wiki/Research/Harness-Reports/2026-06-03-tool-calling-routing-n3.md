@@ -47,6 +47,25 @@ gemma4:e4b, identical task, 3 consecutive runs:
 
 3/3 success, tight variance (4593–4605 tok). Stable.
 
+## Gate 1c — namespaced (MCP/gateway-style) tool roundtrip (PASS)
+
+482c11e4's *motivating* case was a namespaced tool (`signal/send_message_to_user`)
+in a chat turn, and the regression report said "*all* agents." The flat-named
+`file-write` repro doesn't exercise the sanitize→de-sanitize native-FC roundtrip
+(`think.ts:627-633`: `myns/do_thing` → provider-safe `myns_do_thing` outbound →
+canonical name inbound) that MCP/gateway tools hit. Verified with a custom
+slash-named tool on gemma4:e4b (no docker/token needed):
+
+```
+NS_RESULT_JSON={"handlerCalled":true,"success":true,"terminatedBy":"end_turn",
+                "toolCalls":["myns/do_thing"],"steps":4}
+```
+
+`handlerCalled:true` — the namespaced tool's handler actually executed; the call
+name de-sanitized back to `myns/do_thing` correctly. The MCP/namespaced path
+inherits native behavior under capability-first, as expected (the roundtrip is
+unchanged by the fix; the fix merely restores the native mode that exercises it).
+
 ## Cross-model characterization (the Ollama-capability-lie boundary)
 
 Ollama's `capabilities()` returns `supportsToolCalling: true` for **every** model
@@ -99,7 +118,11 @@ to close the gate formally.
 
 ## Verdict
 
-**Stage A regression killed for tool-capable models; net-positive for
-tool-incapable models (fail-fast).** Local gate fully green. Cloud-tier gate
-deferred to a keyed run. Stage B (capability honesty + text-parse completion)
+**Stage A: implemented + locally verified — NOT yet merge-ready.** Regression
+killed for tool-capable models (flat-named + namespaced/MCP-style); net-positive
+for tool-incapable models (fail-fast vs silent loop). Local gates (1, 1b, 1c, 2)
+green. **Gate 3 (cross-tier N=3) is a *merge* gate and is UNMET** — no cloud keys
+in this environment; cloud risk is low-by-construction (native-calibrated cloud
+models never hit the flipped branch) but unverified. Recommend one cloud
+`reactive` run before merge. Stage B (capability honesty + text-parse completion)
 remains the path to make tool-*incapable* Ollama models work.
