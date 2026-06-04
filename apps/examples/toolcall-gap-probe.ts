@@ -88,10 +88,14 @@ function classify(taskTool: string, success: boolean, calls: readonly string[]):
 async function runCell(model: string, cell: Cell): Promise<Record<Outcome, number>> {
   const tally: Record<Outcome, number> = { SUCCESS: 0, NO_EMISSION: 0, DRIFT: 0, OTHER: 0, ERROR: 0 };
   for (let i = 0; i < N; i++) {
+    const provider = (process.env.PROVIDER ?? "ollama") as
+      | "ollama" | "anthropic" | "openai" | "gemini" | "litellm";
+    // numCtx is ollama-only; cloud providers reject/ignore it.
+    const modelCfg = provider === "ollama" ? { model, numCtx: 12000 } : { model };
     const b = ReactiveAgents.create()
       .withPersona({ role: "Agent", background: "", instructions: "Use the provided tools to solve your task.", tone: "concise" })
-      .withProvider("ollama")
-      .withModel({ model, numCtx: 12000 })
+      .withProvider(provider)
+      .withModel(modelCfg)
       .withReasoning({ defaultStrategy: "reactive", enableStrategySwitching: false })
       .withTools({ tools: [githubTool], allowedTools: [cell.taskTool], metaTools: cell.metaTools ? undefined : false, ...(process.env.NO_CLASSIFIER === "1" ? { adaptive: false } : {}) });
     try {
