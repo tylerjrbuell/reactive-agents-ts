@@ -42,6 +42,37 @@ never called:
 only — not the tools array, not native tool_calls, not the prune diff — and it's
 verbose debug stdout, not queryable.
 
+## ⚠️ SCOPE CORRECTION (2026-06-04, post code-audit) — the data is ALREADY captured, just mis-keyed
+
+Code audit found the §2 "three new events" largely **duplicate existing capture**.
+`LLMExchangeEvent` (`trace/events.ts`) ALREADY carries the signals I claimed missing:
+`toolSchemaNames` (= tools **offered**), `response.toolCalls` (native calls emitted),
+`systemPrompt`, `temperature`, `stopReason`, tokens/cost. It's emitted on
+`complete`/`stream`/`completeStructured` via `observable-llm.ts` and replayed by
+`rax-diagnose --only=llm-exchange`.
+
+**Why I couldn't use it (the true blind spot):** `observable-llm.ts:45-46,109-110`
+emits with `taskId: PLACEHOLDER_TASK_ID ("llm-direct")` + `iteration: 0`. The trace
+layer keys `runId = raw.taskId` (`trace/layer.ts`), so every LLM exchange lands in a
+**global `llm-direct.jsonl`, not the run's ULID** — `rax-diagnose replay <realRunId>`
+never shows them. The data exists; it's **detached from the run**.
+
+**Corrected (minimal) scope — re-key + provenance + view, NOT new capture:**
+- **G-a (keystone): thread the real `taskId`/`iteration` into LLMExchange.** Replace
+  the placeholders so the already-captured `toolSchemaNames`/`toolCalls` become
+  per-run/iteration joinable. observable-llm is a generic provider wrapper → needs a
+  run-context FiberRef (or request metadata) carrying taskId/iter from the kernel.
+- **G-b: tool-prune provenance + floor invariant** (genuinely new). LLMExchange has
+  `offered` (toolSchemaNames) but not `registered`, `prunedBy`, or the
+  `requiredFloor` violation. Add these (extend LLMExchange or a sibling
+  `tools-pruned` event at the curator/classifier seam).
+- **G-c: `rax-diagnose decision` view** — the per-iteration table joining (now-keyed)
+  llm-exchange + prune provenance + outcome, with the `⚠FLOOR` flag.
+
+The original §2/§3 below describe the *target table* correctly; treat the event
+schemas as "fields to ensure present on LLMExchange + a small prune event," not three
+brand-new events. **Do not duplicate `toolSchemaNames`/`toolCalls` — they exist.**
+
 ## 2. Design — three new trace events (extend, don't reinvent)
 
 Add to the `TraceEvent` union + emit at existing seams. All carry

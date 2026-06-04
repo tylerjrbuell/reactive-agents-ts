@@ -111,6 +111,83 @@ export function shouldNarrowToFinalAnswerOnly(opts: {
  * keep the loop going, costing one extra iteration. False positives (treat
  * planning as answer) are caught by the arbitrator's grounding check.
  */
+/**
+ * Pure prune-set computation for the think-phase tool disclosure.
+ *
+ * Extracted so the RA_LAZY_TOOLS pruning is unit-testable without mocking the
+ * full LLM effect. Determines which tools the model actually sees this step.
+ *
+ * Two load-bearing guarantees (P0 fix 2026-06-04, classifier-prunes-task-tool):
+ *  - FLOOR: the caller's explicit `allowedTools` whitelist always survives the
+ *    prune in BOTH the lazy and the non-lazy (RA_LAZY_TOOLS=0) arm. The floor
+ *    only ADDS to the visible set — it never turns allowedTools into a hard
+ *    restriction (that gate lives in act.ts).
+ *  - NEVER-PRUNE-TO-META-ONLY: if the pre-prune set had ≥1 non-META domain tool
+ *    but the post-prune set has 0, the classifier stranded the model — fall back
+ *    to the unpruned set. Does NOT fire for legitimately pure-META tasks.
+ */
+export function computePromptSchemas(opts: {
+  effectiveSchemas: readonly ToolSchema[];
+  lazyMode: boolean;
+  pressureCritical: boolean;
+  hasClassification: boolean;
+  classifiedRequired: readonly string[];
+  classifiedRelevant: readonly string[];
+  allowedTools: readonly string[];
+  toolsUsed: Iterable<string>;
+  discovered: Iterable<string>;
+  pruneMinTools: number;
+}): readonly ToolSchema[] {
+  const {
+    effectiveSchemas,
+    lazyMode,
+    pressureCritical,
+    hasClassification,
+    classifiedRequired,
+    classifiedRelevant,
+    allowedTools,
+    toolsUsed,
+    discovered,
+    pruneMinTools,
+  } = opts;
+
+  let promptSchemas: readonly ToolSchema[];
+  if (lazyMode) {
+    const allowed = new Set<string>([
+      ...classifiedRequired,
+      ...classifiedRelevant,
+      ...toolsUsed,
+      ...discovered,
+      ...allowedTools,
+    ]);
+    promptSchemas = effectiveSchemas.filter(
+      (ts) => allowed.has(ts.name) || META_TOOL_SET.has(ts.name),
+    );
+  } else {
+    promptSchemas =
+      hasClassification && !pressureCritical && effectiveSchemas.length > pruneMinTools
+        ? effectiveSchemas.filter(
+            (ts) =>
+              classifiedRequired.includes(ts.name) ||
+              classifiedRelevant.includes(ts.name) ||
+              allowedTools.includes(ts.name) ||
+              META_TOOL_SET.has(ts.name),
+          )
+        : effectiveSchemas;
+  }
+
+  // Never-prune-to-meta-only guard: when domain tools existed pre-prune but the
+  // prune left only META tools, the classifier stranded the model. Restore the
+  // unpruned set so the model can still act. Pure-META tasks (0 domain tools
+  // pre-prune) are legitimate and do not trip this.
+  const preNonMeta = effectiveSchemas.some((ts) => !META_TOOL_SET.has(ts.name));
+  const postNonMeta = promptSchemas.some((ts) => !META_TOOL_SET.has(ts.name));
+  if (preNonMeta && !postNonMeta) {
+    return effectiveSchemas;
+  }
+  return promptSchemas;
+}
+
 export function looksLikeFinalAnswer(content: string): boolean {
   const trimmed = content.trim();
   if (trimmed.length < 100) return false;
@@ -232,28 +309,19 @@ export function handleThinking(
     // wiki/Research/Harness-Reports/oss-prompt-curation-research-2026-04-26.md.
     // Default-on as of 2026-04-26 (curator empirical validation). Opt out
     // via RA_LAZY_TOOLS=0.
-    let promptSchemas: readonly ToolSchema[];
-    if (process.env.RA_LAZY_TOOLS !== "0") {
-      const discovered = yield* Ref.get(discoveredToolsStoreRef);
-      const allowed = new Set<string>([
-        ...classifiedRequired,
-        ...classifiedRelevant,
-        ...state.toolsUsed,
-        ...discovered,
-      ]);
-      promptSchemas = effectiveSchemas.filter(
-        (ts) => allowed.has(ts.name) || META_TOOL_SET.has(ts.name),
-      );
-    } else {
-      promptSchemas =
-        hasClassification && !pressureCritical && effectiveSchemas.length > PRUNE_MIN_TOOLS
-          ? effectiveSchemas.filter((ts) =>
-              classifiedRequired.includes(ts.name) ||
-              classifiedRelevant.includes(ts.name) ||
-              META_TOOL_SET.has(ts.name),
-            )
-          : effectiveSchemas;
-    }
+    const discovered = yield* Ref.get(discoveredToolsStoreRef);
+    const promptSchemas = computePromptSchemas({
+      effectiveSchemas,
+      lazyMode,
+      pressureCritical,
+      hasClassification,
+      classifiedRequired,
+      classifiedRelevant,
+      allowedTools: input.allowedTools ?? [],
+      toolsUsed: state.toolsUsed,
+      discovered,
+      pruneMinTools: PRUNE_MIN_TOOLS,
+    });
 
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;
