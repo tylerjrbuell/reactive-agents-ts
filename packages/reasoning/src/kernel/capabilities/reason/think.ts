@@ -607,6 +607,10 @@ export function handleThinking(
       systemPrompt: systemPromptWithDriver,
       maxTokens: state.maxOutputTokensOverride ?? outputMaxTokens,
       temperature: temp,
+      // Snapshot run correlation into the request so the observable-LLM wrapper
+      // (below the kernel) can key the LLMExchange trace to the real run instead
+      // of the 'llm-direct'/0 placeholder. Build-time snapshot, FiberRef-free.
+      traceContext: { taskId: state.taskId, iteration: state.iteration },
       // TextParseDriver: pass empty tools array — constrained providers (Anthropic/OpenAI)
       // enforce FC when tools are present, which breaks text-parse mode for local models.
       ...(llmTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: llmTools } : {}),
