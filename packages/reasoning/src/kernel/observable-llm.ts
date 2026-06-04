@@ -207,6 +207,15 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                           inputTokens: event.usage.inputTokens,
                           outputTokens: event.usage.outputTokens,
                           estimatedCost: event.usage.estimatedCost,
+                          // Lever 1: carry Anthropic prompt-cache stats off the
+                          // usage event so emitForRequest can surface them on the
+                          // streamed exchange (the complete() path already does).
+                          ...(typeof event.usage.cacheCreationInputTokens === "number"
+                            ? { cacheCreationInputTokens: event.usage.cacheCreationInputTokens }
+                            : {}),
+                          ...(typeof event.usage.cacheReadInputTokens === "number"
+                            ? { cacheReadInputTokens: event.usage.cacheReadInputTokens }
+                            : {}),
                         },
                       };
                     default:
