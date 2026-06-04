@@ -9,7 +9,7 @@
  */
 import type { KernelState, KernelInput } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
-import { isParallelBatchSafeTool } from "../decide/tool-gating.js";
+import { isParallelBatchSafeTool, isConversationalReplyTool } from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
   getMissingRequiredToolsByCount,
@@ -147,6 +147,12 @@ export const duplicateGuard: Guard = (tc, state, input) => {
 
 /** Blocks side-effect tools (send*, create*, delete*, etc.) from running twice. */
 export const sideEffectGuard: Guard = (tc, state, _input) => {
+  // Conversational reply tools are repeatable output channels, not once-only
+  // mutations — the gateway contract requires calling them more than once
+  // (ack, then answer). Exempt them here; `duplicateGuard` (which runs first)
+  // still blocks an *identical* re-send, and `repetitionGuard` caps the count.
+  if (isConversationalReplyTool(tc.name)) return { pass: true };
+
   const SIDE_EFFECT_PREFIXES = ["send", "create", "delete", "push", "merge", "fork", "update", "assign", "remove"];
   const isSideEffectTool = SIDE_EFFECT_PREFIXES.some(
     (p) => tc.name.toLowerCase().includes(p),

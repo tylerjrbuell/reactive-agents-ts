@@ -124,6 +124,30 @@ describe("sideEffectGuard", () => {
       expect(result.observation).toContain("Side-effect tools must NOT be called twice");
     }
   });
+
+  it("does NOT block a conversational reply tool called again with a different message", () => {
+    // Regression for the gateway chat-mode silent-drop bug: the gateway guidance
+    // explicitly instructs the model to call the reply tool more than once
+    // (ack, then answer). sideEffectGuard must not block the second call, or the
+    // real answer never reaches the user.
+    const ackAction = {
+      id: "step-1", type: "action" as const, content: "signal/send_message_to_user({})",
+      metadata: { toolCall: { name: "signal/send_message_to_user", arguments: { message: "On it…" } } },
+      timestamp: new Date(),
+    };
+    const ackObs = {
+      id: "step-2", type: "observation" as const, content: "Message sent",
+      metadata: { observationResult: { toolName: "signal/send_message_to_user", success: true, content: "Message sent" } },
+      timestamp: new Date(),
+    };
+    const state = makeState({ steps: [ackAction, ackObs] as any });
+    const result = sideEffectGuard(
+      makeTc("signal/send_message_to_user", { message: "XRP is $1.20" }),
+      state,
+      baseInput,
+    );
+    expect(result.pass).toBe(true);
+  });
 });
 
 // ── repetitionGuard ───────────────────────────────────────────────────────────
@@ -202,6 +226,24 @@ describe("repetitionGuard", () => {
     const result = repetitionGuard(makeTc("agent-researcher", { task: "find ETH price" }), state, baseInput);
     expect(result.pass).toBe(true);
   });
+
+  it("caps a conversational reply tool at 2 calls — ack + answer pass, the 3rd is nudged", () => {
+    // A reply tool is exempt from the once-only sideEffectGuard, so repetitionGuard
+    // is the remaining backstop. The default sequential ceiling (2) is the right
+    // bound: it lets the documented ack + answer through but nudges further sends,
+    // keeping post-answer spam tight. (No widening to maxBatchSize — no observed
+    // multi-part reply justifies it.)
+    const makeAction = (id: string) => ({
+      id, type: "action" as const, content: "signal/send_message_to_user({})",
+      metadata: { toolCall: { name: "signal/send_message_to_user", arguments: {} } }, timestamp: new Date(),
+    });
+    // 1 prior call (ack sent) → answer passes.
+    const oneCall = makeState({ steps: [makeAction("s1")] as any });
+    expect(repetitionGuard(makeTc("signal/send_message_to_user"), oneCall, baseInput).pass).toBe(true);
+    // 2 prior calls (ack + answer sent) → the 3rd is nudged.
+    const twoCalls = makeState({ steps: [makeAction("s1"), makeAction("s2")] as any });
+    expect(repetitionGuard(makeTc("signal/send_message_to_user"), twoCalls, baseInput).pass).toBe(false);
+  });
 });
 
 // ── checkToolCall (pipeline) ──────────────────────────────────────────────────
@@ -233,6 +275,45 @@ describe("checkToolCall", () => {
     const check = checkToolCall([customGuard]);
     expect(check(makeTc("web-search"), makeState(), baseInput).pass).toBe(true);
     expect(check(makeTc("forbidden"), makeState(), baseInput).pass).toBe(false);
+  });
+
+  // ── Gateway chat-mode end-to-end (full default pipeline) ────────────────────
+  // Reproduces the live silent-drop sequence: the model sends an ack, then sends
+  // the real answer. The full guard chain must let the answer through, while an
+  // identical re-send is still blocked by duplicateGuard.
+  const sentReply = (msg: string) => [
+    {
+      id: `a-${msg}`, type: "action" as const, content: "signal/send_message_to_user({})",
+      metadata: { toolCall: { name: "signal/send_message_to_user", arguments: { recipient: "+1", message: msg } } },
+      timestamp: new Date(),
+    },
+    {
+      id: `o-${msg}`, type: "observation" as const, content: "Message sent",
+      metadata: { observationResult: { toolName: "signal/send_message_to_user", success: true, content: "Message sent" } },
+      timestamp: new Date(),
+    },
+  ];
+
+  it("lets the real answer through after an acknowledgement was already sent", () => {
+    const check = checkToolCall(defaultGuards);
+    const state = makeState({ steps: sentReply("On it — fetching XRP now…") as any });
+    const result = check(
+      makeTc("signal/send_message_to_user", { recipient: "+1", message: "XRP is $1.20" }),
+      state,
+      { ...baseInput, availableToolSchemas: [{ name: "signal/send_message_to_user" }] },
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  it("still blocks an identical re-send of the same reply (duplicateGuard)", () => {
+    const check = checkToolCall(defaultGuards);
+    const state = makeState({ steps: sentReply("XRP is $1.20") as any });
+    const result = check(
+      makeTc("signal/send_message_to_user", { recipient: "+1", message: "XRP is $1.20" }),
+      state,
+      { ...baseInput, availableToolSchemas: [{ name: "signal/send_message_to_user" }] },
+    );
+    expect(result.pass).toBe(false);
   });
 });
 

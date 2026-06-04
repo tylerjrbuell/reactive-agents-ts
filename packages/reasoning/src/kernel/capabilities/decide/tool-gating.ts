@@ -107,6 +107,38 @@ export function isParallelBatchSafeTool(name: string): boolean {
   );
 }
 
+/**
+ * Conversational reply tools — the channel's outbound messaging surface
+ * (Signal/Telegram/Slack/Discord send/reply/DM tools, typically MCP-namespaced
+ * as `server/send_message_to_user`).
+ *
+ * These are *repeatable output channels*, not once-only mutations. The gateway
+ * guidance (gateway-context-formatting.ts:channelOutboundToolGuidance) explicitly
+ * instructs the model to call them more than once — "call it first with a brief
+ * acknowledgement, then again with your final answer." Treating them as once-only
+ * side effects (the `sideEffectGuard` default) blocks the second call and silently
+ * drops the real answer.
+ *
+ * Matching is anchored to chat-messaging name patterns, NOT the bare verb "send",
+ * so once-only mutations like `send-email`, `create-issue`, `file-write` are
+ * deliberately excluded — sending those twice is a genuine bug.
+ */
+const CONVERSATIONAL_REPLY_PATTERNS = [
+  "send_message",
+  "sendmessage",
+  "send_msg",
+  "message_to",
+  "post_message",
+  "send_dm",
+  "direct_message",
+  "reply", // reply_to_last_sender, reply_to_message, reply
+] as const;
+
+export function isConversationalReplyTool(name: string): boolean {
+  const lowered = name.toLowerCase();
+  return CONVERSATIONAL_REPLY_PATTERNS.some((p) => lowered.includes(p));
+}
+
 export function buildToolElaborationInjection(
   toolSchemas: readonly { readonly name: string; readonly parameters?: readonly { readonly name: string }[] }[],
   config?: ToolElaborationInjectionConfig,
