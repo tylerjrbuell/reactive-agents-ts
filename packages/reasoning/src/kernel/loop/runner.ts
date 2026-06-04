@@ -17,7 +17,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable } from "@reactive-agents/core";
-import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
+import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -168,13 +168,15 @@ export function runKernel(
     const hooks = buildKernelHooks(eventBus);
 
     // ── 4. Build KernelContext ────────────────────────────────────────────────
-    // Select tool calling driver from calibration. Default to NativeFCDriver
-    // for uncalibrated ("none") or unknown models — tools must reach the LLM.
-    // Only use TextParseDriver when calibration explicitly says "text-parse".
-    const toolCallingDriver =
-      effectiveInput.calibration?.toolCallDialect === "text-parse"
-        ? new TextParseDriver()
-        : new NativeFCDriver();
+    // Select tool-calling driver from calibration. Native FC is used ONLY when
+    // calibration confirms it ("native-fc"); "none" (provider advertised no
+    // native tool support, e.g. ollama models without a `tools` capability),
+    // "text-parse", and uncalibrated all fall back to the text-parse driver,
+    // which works for any model. Routing "none" to native FC silently strands
+    // the model — it gets `tools` the provider ignores and can never emit a call.
+    const toolCallingDriver = selectToolCallingDriver(
+      effectiveInput.calibration?.toolCallDialect,
+    );
 
     const context: KernelContext = {
       input: effectiveInput,

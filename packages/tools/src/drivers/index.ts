@@ -10,3 +10,4 @@ export type {
 } from "./tool-calling-driver.js"
 export { NativeFCDriver } from "./native-fc-driver.js"
 export { TextParseDriver } from "./text-parse-driver.js"
+export { selectToolCallingDriver } from "./select-driver.js"

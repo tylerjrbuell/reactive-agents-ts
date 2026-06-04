@@ -139,6 +139,29 @@ export function isConversationalReplyTool(name: string): boolean {
   return CONVERSATIONAL_REPLY_PATTERNS.some((p) => lowered.includes(p));
 }
 
+/**
+ * Whether the tool-calling driver's prompt instructions should be injected into
+ * the system prompt for this turn.
+ *
+ * In `text-parse` mode the driver's instructions (the `<tool_call>` text format)
+ * ARE the model's only mechanism to emit a call — they must ALWAYS be injected,
+ * even on compact local profiles ("names-only" / "names-and-types"). Suppressing
+ * them strands the model: it sees tool names and "you must call a tool" but has
+ * no format to express one, so it emits prose and stalls.
+ *
+ * In `native-fc` mode the driver carries tools natively and its instruction
+ * string is empty, so the compact-profile suppression (which exists to avoid
+ * leaking full tool descriptions the profile chose to hide) is harmless and
+ * preserved.
+ */
+export function shouldInjectDriverInstructions(
+  mode: "native-fc" | "text-parse",
+  toolSchemaDetail: string | undefined,
+): boolean {
+  if (mode === "text-parse") return true;
+  return toolSchemaDetail !== "names-only" && toolSchemaDetail !== "names-and-types";
+}
+
 export function buildToolElaborationInjection(
   toolSchemas: readonly { readonly name: string; readonly parameters?: readonly { readonly name: string }[] }[],
   config?: ToolElaborationInjectionConfig,
