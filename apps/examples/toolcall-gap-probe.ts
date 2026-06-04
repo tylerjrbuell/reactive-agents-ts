@@ -52,11 +52,20 @@ type Cell = {
   metaTools: boolean; // are the generic meta-tools (find/pulse/brief/recall) available?
 };
 
-const FETCH = "Fetch the 15 most recent commits to tylerjrbuell/reactive-agents-ts and list each commit message.";
-const CELLS: readonly Cell[] = [
-  { id: "fetch/meta-ON", task: FETCH, taskTool: COMMITS_TOOL, metaTools: true },
-  { id: "fetch/meta-OFF", task: FETCH, taskTool: COMMITS_TOOL, metaTools: false },
+// PROBE task: explicit, forcing, NAMES the tool + args (what an offline calibration
+// probe would use). BENCH task: realistic, does NOT name the calling mechanism.
+// Spike question (PT1): does the probe rate PREDICT the bench rate per model? If
+// probe >> bench, a fixed-task probe is an over-optimistic predictor → the
+// probe-prior approach is unsound and must lean on realtime correction.
+const PROBE = `Call the ${COMMITS_TOOL} tool with owner="tylerjrbuell", repo="reactive-agents-ts", perPage=15. You must call the tool to complete this task.`;
+const BENCH = "Fetch the 15 most recent commits to tylerjrbuell/reactive-agents-ts and list each commit message.";
+const ALL_CELLS: readonly Cell[] = [
+  { id: "PROBE", task: PROBE, taskTool: COMMITS_TOOL, metaTools: false },
+  { id: "BENCH", task: BENCH, taskTool: COMMITS_TOOL, metaTools: false },
 ];
+const CELLS: readonly Cell[] = process.env.CELL
+  ? ALL_CELLS.filter((c) => c.id === process.env.CELL)
+  : ALL_CELLS;
 
 const META = new Set(["find", "pulse", "brief", "recall", "discover-tools", "checkpoint", "context-status"]);
 
@@ -80,7 +89,7 @@ async function runCell(model: string, cell: Cell): Promise<Record<Outcome, numbe
       .withProvider("ollama")
       .withModel({ model, numCtx: 12000 })
       .withReasoning({ defaultStrategy: "reactive", enableStrategySwitching: false })
-      .withTools({ tools: [githubTool], allowedTools: [cell.taskTool], metaTools: cell.metaTools ? undefined : false });
+      .withTools({ tools: [githubTool], allowedTools: [cell.taskTool], metaTools: cell.metaTools ? undefined : false, ...(process.env.NO_CLASSIFIER === "1" ? { adaptive: false } : {}) });
     try {
       const agent = await b.withObservability({ verbosity: "warn", live: false }).build();
       try {
