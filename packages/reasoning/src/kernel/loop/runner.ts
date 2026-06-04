@@ -113,17 +113,25 @@ export function runKernel(
     const services = yield* resolveStrategyServices;
     const { toolService, eventBus, memoryService } = services;
 
-    // ── Auto-inject ToolCallResolver ─────────────────────────────────────────
-    // When the provider supports native FC, create a resolver and inject it
-    // into the kernel input so handleThinking uses native function calling.
+    // ── Resolve provider capabilities ONCE ───────────────────────────────────
+    // Both the ToolCallResolver injection (below) and the tool-calling driver
+    // selection (step 4) key on `supportsToolCalling` so they cannot diverge.
+    // 482c11e4 keyed the driver on calibration (`toolCallDialect`) while the
+    // resolver stayed keyed on capability — a capable-but-uncalibrated model then
+    // got a NativeFCStrategy resolver AND a text-parse driver, no native tools
+    // were sent, and its `<tool_call>` text was never extracted (loop to
+    // max-iterations). Capability is the single master signal.
+    // See wiki/Architecture/Design-Specs/2026-06-03-tool-calling-driver-redesign.md.
     let effectiveInput = input;
-    if (!input.toolCallResolver) {
+    let providerSupportsToolCalling = true; // unknown ⇒ assume capable (native + think.ts no-resolver fallback handles it; pre-482c11e4 default)
+    {
       const llmOpt = yield* Effect.serviceOption(LLMService);
       if (llmOpt._tag === "Some" && typeof llmOpt.value.capabilities === "function") {
         const caps = yield* llmOpt.value.capabilities().pipe(
           Effect.catchAll(() => Effect.succeed(DEFAULT_CAPABILITIES)),
         );
-        if (caps.supportsToolCalling) {
+        providerSupportsToolCalling = caps.supportsToolCalling;
+        if (caps.supportsToolCalling && !input.toolCallResolver) {
           const resolver = createToolCallResolver(caps);
           effectiveInput = { ...input, toolCallResolver: resolver };
         }
@@ -168,14 +176,13 @@ export function runKernel(
     const hooks = buildKernelHooks(eventBus);
 
     // ── 4. Build KernelContext ────────────────────────────────────────────────
-    // Select tool-calling driver from calibration. Native FC is used ONLY when
-    // calibration confirms it ("native-fc"); "none" (provider advertised no
-    // native tool support, e.g. ollama models without a `tools` capability),
-    // "text-parse", and uncalibrated all fall back to the text-parse driver,
-    // which works for any model. Routing "none" to native FC silently strands
-    // the model — it gets `tools` the provider ignores and can never emit a call.
+    // Select tool-calling driver from the SAME capability signal as the resolver
+    // injection above. Capable (or unknown) ⇒ native driver (resolver present,
+    // tools attached — the coherent triple). Only a provider that explicitly
+    // reports `supportsToolCalling === false` gets the text-parse driver.
     const toolCallingDriver = selectToolCallingDriver(
       effectiveInput.calibration?.toolCallDialect,
+      providerSupportsToolCalling,
     );
 
     const context: KernelContext = {

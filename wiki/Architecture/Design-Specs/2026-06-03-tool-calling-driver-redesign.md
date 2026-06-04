@@ -81,16 +81,37 @@ divergent state. That is why *all* agents regressed, not one.
      → `think.ts:965` assembles the **XML as the answer** → *wrong-answer face*.
    - `thinking` otherwise → `think.ts:1014→1148` returns with a nudge, the loop
      repeats, the model re-emits the same XML → *loop face*.
-5. `act.ts:162-164` — the **correct** parser for this format
-   (`TextParseDriver.extractCalls`, whose Tier-1 regex matches `<tool_call>`
-   exactly) is wired and waiting, but **unreachable**: think.ts already returned
-   in the resolver branch, so the act phase never runs the text-parse extraction.
+5. `act.ts:162-164` — the format's correct parser (`TextParseDriver.extractCalls`,
+   Tier-1 regex matches `<tool_call>` exactly) is wired but **unreachable**, for
+   **two** compounding reasons (see the deeper finding below).
 
-> **Note on the prior framing.** An earlier hypothesis held that
-> `extractCalls` was *orphaned* (never called). That is false: it is wired at
-> `act.ts:164`. The defect is **reachability**, not wiring — the resolver branch
-> shadows the text-parse path whenever a resolver is present. This distinction
-> changes the Stage-A fix (see §4).
+> **Deeper finding (verified 2026-06-03) — text-parse was never a live path.**
+> The kernel runs `handleActing` ONLY when `state.status === "acting"`
+> (`react-kernel.ts:70`). But think.ts sets `status: "acting"` in only **two**
+> places — `think.ts:952` and `think.ts:1198` — **both native-FC**. There is
+> **no** think.ts transition that detects text-parse `<tool_call>` markup and
+> moves to "acting". Independently: **no calibration path ever produces the
+> `"text-parse"` dialect** — `calibration-runner.ts:313` emits `"none"`,
+> `capability.ts` emits `"native-fc"`; `"text-parse"` is only a schema literal
+> (`calibration.ts:70`). So before `482c11e4`, *every* model
+> (uncalibrated / `"none"` / `"native-fc"`) routed to `NativeFCDriver`, and
+> `TextParseDriver` + the `act.ts:162` branch were **dead code that never ran in
+> production**.
+>
+> `482c11e4` routed uncalibrated/`"none"` models into text-parse mode **for the
+> first time**, activating a half-built path: it suppresses native tools
+> (`think.ts:503`) and injects `<tool_call>` instructions, but think.ts has no
+> transition to consume that markup. The resolver-shadow (steps 3-4) and the
+> missing think→acting transition are *both* present; even removing the resolver
+> would not make text-parse work without completing the think.ts wiring.
+>
+> **This reframes the §4 decision.** Direction A (capability→native) *restores
+> the only path that was ever wired end-to-end* — minimal, low-risk. Direction B
+> (uncalibrated→text-parse) is **not** a flag-flip: it requires *completing the
+> abandoned text-parse migration* (a new think.ts markup-detection → acting
+> transition). The "orphaned extractCalls" framing was wrong about the
+> mechanism, but right about the conclusion: the driver migration was never
+> finished.
 
 ### What `482c11e4` actually changed
 
@@ -160,21 +181,42 @@ the answer to be written; Stage A produces it.
 **Goal:** the divergent state cannot occur. resolver-presence, driver-mode, and
 tools-attach derive from one signal.
 
-The unifying invariant, regardless of §4 direction:
+The unifying invariant:
 **`injectResolver ⟺ driverMode === "native-fc" ⟺ attachTools`** — the three move
-together. The only open question is *what flips them*: capability (A) or
-calibration (B). The change set:
+together, keyed on **one** signal.
 
-- One selection function, **policy-switchable**, taking *both*
-  `caps.supportsToolCalling` and `calibration?.toolCallDialect`, returning a
-  **coherent triple** `{ injectResolver, driverMode, attachTools }`. Policy
-  selected by `RA_TOOLCALL_ROUTE_POLICY` (`capability-first` | `calibration-first`)
-  for the duration of the experiment; the winning policy is hardcoded and the
-  flag removed before Stage A merges. Today three call sites (`runner.ts:126`,
-  `runner.ts:177`, `think.ts:503`) decide independently.
-- `think.ts:852` must not run the resolver branch when the active route is
-  text-parse — guaranteed by the invariant (resolver is only injected when
-  `driverMode === native-fc`).
+**The §4 bake-off collapsed (advisor reconcile, 2026-06-03).** Because Ollama's
+capability claim is always `true` (`local.ts:951`), "calibration-first as a
+locked rule" = undefined→text-parse + "none"→text-parse = **exactly 482c11e4 =
+the regression**. It is *provably* the bug, not a candidate. And text-parse is a
+half-built path (no think→acting transition). So there is no two-finished-option
+experiment: **capability-first-today is the only non-regressing Stage A.** The
+env policy-switch is dropped — shipping a flag whose other position is the known
+regression earns nothing.
+
+**The one open empirical question** is narrow: *does native mode actually work
+for an uncalibrated model like gemma4:e4b?* The baseline only showed gemma's
+**forced-text-parse** behavior. Route uncalibrated→native (tools attached,
+resolver present, **no** text-parse instructions) and run gemma4:e4b:
+- **Passes** (native FC events, or the resolver's fenced-JSON/pseudo-code
+  fallback catches it) → capability-first is Stage A. Done.
+- gemma emits `<tool_call>` XML *even under native* → native insufficient →
+  Stage A must also complete the text-parse think→acting transition. Escalate.
+
+The change set:
+
+- `selectToolCallingDriver` keys on `caps.supportsToolCalling` (capability is
+  master): native unless the provider genuinely reports `false`. Calibration
+  `"native-fc"` *confirms*; its absence does **not** downgrade a capable model to
+  the never-completed text-parse path. This makes the driver coherent with the
+  resolver (already keyed on `supportsToolCalling`, `runner.ts:126`) and the
+  tools-attach (`think.ts:503`). Three call sites, now one signal.
+- `think.ts:852`'s resolver branch is reached only in native mode — guaranteed by
+  the invariant (resolver present ⟺ native).
+- **`"none"`-class models** (genuinely no native FC) regress to their *original*
+  pre-482c11e4 stall — **net-neutral**, since 482c11e4's text-parse "fix" never
+  executed (text-parse was dead). Documented broken-until-Stage-B; not a Stage-A
+  blocker.
 
 **Gates (all must hold before Stage A merges):**
 1. Spot-test repro flips: gemma4:e4b 0-call loop → tool call executed → success.
@@ -208,13 +250,19 @@ different format vocabularies.
   coupling we are removing.
 - Surface `parseMode` / `confidence` on `state.meta` (like `lastDialectObserved`)
   so the chosen tier is observable.
-- **Capability honesty (DECIDED 2026-06-03: yes, Stage B).** Narrow Ollama's
-  blanket `supportsToolCalling: true` (`local.ts:951`) to a per-model probe of
-  `/api/show` `tools` capability. When capability stops lying, a `"none"`-class
-  model routes to text-parse **by capability**, collapsing the two signals into
-  one at the source — the truest form of "single source of truth." Stage A's
-  routing-layer fix and this capability fix are complementary: A makes the two
-  signals *cohere*; B makes them *one*.
+- **Capability honesty (DECIDED 2026-06-03: yes, Stage B) — COUPLED with
+  text-parse completion.** Narrow Ollama's blanket `supportsToolCalling: true`
+  (`local.ts:951`) to a per-model probe of `/api/show` `tools` capability. When
+  capability stops lying, a `"none"`-class model reports `false` → routes to
+  text-parse **by capability**, collapsing the two signals into one at the source
+  — the truest "single source of truth." **CRITICAL coupling:** capability-honesty
+  MUST land *together with* building the **text-parse think→acting transition**
+  (a new path in think.ts that detects `<tool_call>` markup → sets
+  `pendingNativeToolCalls` + `status:"acting"`, mirroring the native-FC path so
+  `act.ts:164` finally executes). Without it, capability-honesty would route
+  `"none"`-class models (e.g. cogito) into the *still-dead* text-parse path —
+  trading one cogito break for another. The driver stays pure extraction;
+  think.ts owns the classification (advisor directive 3).
 
 **Gate:** Stage B is behavior-preserving over Stage A's passing gate set. No new
 orphan surface (§4.4). The pseudo-code/fenced-JSON fallbacks that cogito relies
