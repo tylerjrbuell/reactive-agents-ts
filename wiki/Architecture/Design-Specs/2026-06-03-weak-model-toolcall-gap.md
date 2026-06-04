@@ -203,6 +203,52 @@ Small-N is void (§2). Build a proper probe matrix and run N≥20/cell:
   capture design pays off big; if failures are empty/no-intent, forcing/re-prompt
   is the lever instead.
 
+## 5b. MEASURED FINDINGS (2026-06-04) — the gap is HETEROGENEOUS, no single root
+
+Harness `apps/examples/toolcall-gap-probe.ts` (committed): local Ollama,
+deterministic custom tools (no docker/keys), per-model single runs (avoids
+model-swap artifacts), ERROR counted separately from NO_EMISSION, meta-tool
+availability + flat/namespaced tool-name controlled. N=15–20/cell.
+
+| model | trivial (flat) | fetch (namespaced) | fetch (flat) |
+|---|---|---|---|
+| **qwen2.5:14b** | 20/20 ✅ | **20/20 ✅** | — (perfect) |
+| cogito:14b | 20/20 ✅ | ~16/20 (rest NO_EMISSION) | — |
+| **qwen3:14b** | 20/20 ✅ | **0/15** (freeze/drift) | 3–4/15 (drift) |
+| llama3.1 | works (capture) | drift | — |
+
+**Conclusions (evidence-grade):**
+1. **One shared, recoverable pattern + model-specific extras.** A large share of
+   failures is the SAME thing: the model forms the intent but does not emit a
+   native call — it surfaces as no-emission (freeze) or, when a generic tool is
+   present, as drift; mode is interchangeable by condition (meta-ON 6 no-emit/9
+   drift → meta-OFF 14 no-emit/1 drift, still 0 success). That shared pattern is
+   what the structured-carrier targets. On TOP of it sit model-specific extras
+   (qwen3 reasoning-mode, namespaced-name freeze) that the carrier does not cover.
+2. **qwen2.5:14b was the only zero-gap model ON THIS PROBE (60/60 incl. namespaced
+   fetch)** — one task-family (fetch-commits), stub tools, N≤20. Not a blanket
+   procurement directive; it shows the bar is *achievable* and serves as the
+   **regression control** (any harness change must not degrade it). Generalize
+   only after broader tasks.
+3. **qwen3:14b: namespaced/slash names → NO-EMISSION freeze.** Flat name flips
+   NO_EMISSION 14→0 — proven by the flat/namespaced A/B. qwen3 is a `<think>`
+   reasoning model; freeze runs log `[think]×2` with no content. The harness DOES
+   wire a thinking-rescue (`rescueFromThinking`, think.ts:747) — but it fires only
+   when content <50 chars AND routes the rescued text through prose-incapable
+   extraction (fenced-JSON/pseudo-code only). So qwen3's intent, if it lands as
+   reasoning prose, is **attempted-but-not-recovered** — a fixable seam, not a
+   fully-unwired channel, and not purely model-quality. qwen3 also drifts even
+   flat (3–4/15) → a second, selection fragility.
+4. **The generic `find` meta-tool is an attractor but NOT the root** — disabling
+   it did not restore qwen3 (drift just converted to no-emission, still 0 success).
+
+**Retractions (measurement bugs, do not cite the v1 N=20 matrix):**
+- v1 conflated hard ERRORs with NO_EMISSION → llama3.1's "0/20 trivial" was an
+  artifact (single capture succeeds); v2 separates ERROR.
+- v1 did not control meta-tool availability (`find` on by default via
+  `.withTools()`), so its mode-a/mode-b split was invalid.
+- Small-N variance remains high; treat single-cell N<15 as directional only.
+
 ## 6. Relationship to shipped work
 
 - **Stage A (`11996c5a`, shipped):** capability-first routing — capable models get
