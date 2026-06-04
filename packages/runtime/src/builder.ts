@@ -61,6 +61,7 @@ import {
     type BuilderRuntimeStateView,
 } from './builder/build-effect/runtime-construction.js'
 import type { TestTurn } from '@reactive-agents/llm-provider'
+import type { TaskContract } from '@reactive-agents/core'
 import type {
     LifecycleHook,
     ExecutionContext,
@@ -274,6 +275,14 @@ export class ReactiveAgentBuilder {
     private _enableKillSwitch: boolean = false
     private _enableBehavioralContracts: boolean = false
     private _strictValidation: boolean = false
+    /**
+     * Optional TaskContract declared via {@link withContract}. Enforced at
+     * `build()` (build-time): required tools must be exposed, forbidden tools
+     * absent, and the resolved model capability must meet `modelFloor`.
+     * Violations merge into the existing build-validation errors/warnings path
+     * (strict → throw, non-strict → warn). Realization-plan P2 / Drift S7.
+     */
+    private _taskContract?: TaskContract
     private _executionTimeoutMs?: number
     private _retryPolicy?: { maxRetries: number; backoffMs: number }
     private _cacheTimeoutMs?: number
@@ -1460,6 +1469,33 @@ export class ReactiveAgentBuilder {
     }
 
     /**
+     * Declare a {@link TaskContract} the agent must satisfy at build time.
+     *
+     * `build()` validates the contract against the statically-knowable
+     * exposed-tool set and the resolved model capability:
+     *   - every `required` tool must be exposed to the agent;
+     *   - every `forbidden` tool must be absent;
+     *   - the resolved capability must meet `modelFloor` (window / thinking /
+     *     nativeFC).
+     *
+     * Violations route through the SAME build-validation errors/warnings path
+     * as missing-API-key and capability-source checks: with
+     * `.withStrictValidation()` they are hard errors (build throws); otherwise
+     * they are warnings. When MCP servers are configured, a missing `required`
+     * tool is downgraded to a warning (MCP tools are discovered at connect
+     * time and cannot be verified statically).
+     *
+     * Build-time enforcement only — threading the contract into the kernel at
+     * execute-time is a separate slice.
+     *
+     * @returns `this` for chaining
+     */
+    withContract(contract: TaskContract): this {
+        this._taskContract = contract
+        return this
+    }
+
+    /**
      * Set a timeout for agent execution. If the agent doesn't complete within
      * this duration, execution is aborted and an error is thrown.
      * @param ms - Timeout in milliseconds
@@ -1841,11 +1877,28 @@ export class ReactiveAgentBuilder {
         } catch {
             // ignore — provider defaults unavailable
         }
+        let taskContractInput:
+            | import('./build-validation.js').TaskContractValidationInput
+            | undefined
+        if (this._taskContract) {
+            const { computeExposedToolNames } = await import(
+                './builder/contract-tool-set.js'
+            )
+            taskContractInput = {
+                contract: this._taskContract,
+                exposedToolNames: computeExposedToolNames(
+                    this._toolsOptions,
+                    this._requiredToolsConfig?.tools
+                ),
+                hasMcpServers: this._mcpServers.length > 0,
+            }
+        }
         const validation = validateBuild(
             this._provider,
             this._model,
             defaultModel,
-            this._strictValidation
+            this._strictValidation,
+            taskContractInput
         )
         for (const warning of validation.warnings) {
             console.warn(`⚠ ${warning}`)

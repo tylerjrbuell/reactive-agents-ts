@@ -1,5 +1,9 @@
 import { resolveCanonical } from "@reactive-agents/llm-provider";
 import { capabilitySourcePreflight } from "@reactive-agents/core";
+import type {
+  ContractCapability as Capability,
+  TaskContract,
+} from "@reactive-agents/core";
 
 type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" | "custom";
 
@@ -28,15 +32,135 @@ export interface BuildValidationResult {
   resolvedModel: string;
 }
 
+/**
+ * Optional task-contract inputs for `validateBuild`. When `contract` is set,
+ * the build is also validated against the task's tool + capability floor
+ * requirements (realization-plan P2 / Drift S7). The results merge into the
+ * SAME `errors[]`/`warnings[]` arrays `validateBuild` already returns, so the
+ * existing strict-throw path in `build()` enforces the contract — no parallel
+ * enforcement path.
+ */
+export interface TaskContractValidationInput {
+  /** The TaskContract declared via `ReactiveAgentBuilder.withContract()`. */
+  readonly contract: TaskContract;
+  /**
+   * The statically-knowable set of tool names the agent will expose: custom
+   * `tools[].definition.name` ∪ resolved builtins ∪ (`shell-execute` if
+   * terminal enabled), already narrowed by `allowedTools` if set. Computed by
+   * the builder (`builder/contract-tool-set.ts`).
+   */
+  readonly exposedToolNames: readonly string[];
+  /**
+   * Whether MCP servers are configured. When true, the exposed-tool set is
+   * INCOMPLETE at build time (MCP tools are discovered at buildEffect connect
+   * time), so a missing `required` tool is downgraded to a warning even under
+   * strict — it cannot be verified statically (avoids false-positive throws on
+   * valid MCP-backed production agents).
+   */
+  readonly hasMcpServers?: boolean;
+}
+
+/**
+ * Validate a TaskContract against the agent's statically-knowable exposed-tool
+ * set and the resolved model capability. Pushes into the provided
+ * `errors[]`/`warnings[]` arrays — strict → error, non-strict → warning,
+ * mirroring the existing capability-source honesty pattern.
+ *
+ *  - every `required` tool must be in the exposed set (downgraded to warning
+ *    when MCP is configured — see {@link TaskContractValidationInput.hasMcpServers});
+ *  - any `forbidden` tool present in the exposed set is an error/warning;
+ *  - `modelFloor` (window / thinking / nativeFC) is checked against the
+ *    already-resolved Capability (no re-resolution). When the capability is
+ *    unavailable (test/custom provider, or no model), the floor cannot be
+ *    enforced and is skipped — it does not crash.
+ */
+export function validateTaskContract(
+  contract: TaskContract,
+  exposedToolNames: readonly string[],
+  resolvedCapability: Capability | undefined,
+  hasMcpServers: boolean,
+  strict: boolean,
+  warnings: string[],
+  errors: string[],
+): void {
+  const exposed = new Set(exposedToolNames);
+  const push = (msg: string, demoteToWarning = false) => {
+    if (strict && !demoteToWarning) errors.push(msg);
+    else warnings.push(msg);
+  };
+
+  for (const req of contract.tools) {
+    // `required` and `available` both demand the tool be EXPOSED to the LLM
+    // (available's contract: "MUST be visible"). `toolsToExpose()` bundles both
+    // for the same reason, so the build-time exposure check is identical.
+    if (req.kind === "required" || req.kind === "available") {
+      if (!exposed.has(req.name)) {
+        if (hasMcpServers) {
+          push(
+            `Task contract ${req.kind === "required" ? "requires" : "expects available"} ` +
+              `tool "${req.name}" but it is not in the statically-known ` +
+              `exposed-tool set. MCP servers are configured, so it may be ` +
+              `provided at connect time — cannot verify statically.`,
+            /* demoteToWarning */ true,
+          );
+        } else {
+          push(
+            `Task contract ${req.kind === "required" ? "requires" : "expects available"} ` +
+              `tool "${req.name}" but it is not exposed to the agent. Register it ` +
+              `(e.g. withTools({ builtins: ["${req.name}"] }) or a custom tool) or ` +
+              `remove the requirement.`,
+          );
+        }
+      }
+    } else if (req.kind === "forbidden") {
+      if (exposed.has(req.name)) {
+        push(
+          `Task contract forbids tool "${req.name}" but it is exposed to the ` +
+            `agent. Remove it from the agent's tool set or the contract.`,
+        );
+      }
+    }
+  }
+
+  const floor = contract.modelFloor;
+  if (floor && resolvedCapability) {
+    if (
+      typeof floor.window === "number" &&
+      resolvedCapability.effectiveWindowChars < floor.window
+    ) {
+      push(
+        `Task contract modelFloor.window (${floor.window} chars) exceeds the ` +
+          `resolved model's effective window (${resolvedCapability.effectiveWindowChars} chars) ` +
+          `for ${resolvedCapability.provider}/${resolvedCapability.model}.`,
+      );
+    }
+    if (floor.thinking === true && !resolvedCapability.supports.thinking) {
+      push(
+        `Task contract modelFloor.thinking requires native thinking-mode, but ` +
+          `${resolvedCapability.provider}/${resolvedCapability.model} does not support it.`,
+      );
+    }
+    if (floor.nativeFC === true && resolvedCapability.dialect !== "native-fc") {
+      push(
+        `Task contract modelFloor.nativeFC requires native function-calling, but ` +
+          `${resolvedCapability.provider}/${resolvedCapability.model} uses dialect ` +
+          `"${resolvedCapability.dialect}".`,
+      );
+    }
+  }
+}
+
 export function validateBuild(
   provider: ProviderName,
   model: string | undefined,
   defaultModel: string,
   strict: boolean,
+  taskContract?: TaskContractValidationInput,
 ): BuildValidationResult {
   const warnings: string[] = [];
   const errors: string[] = [];
   const resolvedModel = model ?? defaultModel;
+  let resolvedCapability: Capability | undefined;
 
   if (!NO_KEY_PROVIDERS.has(provider)) {
     const keyName = PROVIDER_API_KEY_MAP[provider];
@@ -75,6 +199,7 @@ export function validateBuild(
   // `provider: "test"`/"custom" are exempt (no real capability to resolve).
   if (model && provider !== "test" && provider !== "custom") {
     const cap = resolveCanonical(provider, model);
+    resolvedCapability = cap;
     const violation = capabilitySourcePreflight({
       provider,
       model,
@@ -89,6 +214,21 @@ export function validateBuild(
         warnings.push(msg);
       }
     }
+  }
+
+  // Task-contract enforcement (realization-plan P2 / Drift S7). Reuses the
+  // capability resolved above — no second resolution. Merges into the same
+  // errors[]/warnings[] arrays so build()'s existing strict-throw enforces it.
+  if (taskContract) {
+    validateTaskContract(
+      taskContract.contract,
+      taskContract.exposedToolNames,
+      resolvedCapability,
+      taskContract.hasMcpServers ?? false,
+      strict,
+      warnings,
+      errors,
+    );
   }
 
   return { warnings, errors, resolvedModel };
