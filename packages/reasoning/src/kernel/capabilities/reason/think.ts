@@ -52,6 +52,7 @@ import {
 } from "../../utils/tool-parsing.js";
 import {
   gateNativeToolCallsForRequiredTools,
+  shouldInjectDriverInstructions,
 } from "../decide/tool-gating.js";
 import {
   buildSuccessfulToolCallCounts,
@@ -401,14 +402,26 @@ export function handleThinking(
     // tool calls as structured text. For native-fc mode, buildPromptInstructions
     // returns "" so this is a no-op.
     //
-    // Skip when toolSchemaDetail is "names-only" or "names-and-types" — the profile
-    // has already decided to suppress full descriptions; injecting them via driver
-    // instructions would contradict the profile's intent and expose descriptions the
-    // model shouldn't see.
-    const canInjectDriverInstructions =
-      profile.toolSchemaDetail !== "names-only" && profile.toolSchemaDetail !== "names-and-types";
+    // In native-fc mode, skip when toolSchemaDetail is "names-only"/"names-and-types"
+    // (the profile suppressed full descriptions; native FC carries tools natively and
+    // buildPromptInstructions returns "" anyway). In text-parse mode the instructions
+    // ARE the calling mechanism and must always be injected — otherwise the model has
+    // tool names but no format to express a call, and stalls.
+    const canInjectDriverInstructions = shouldInjectDriverInstructions(
+      context.toolCallingDriver.mode,
+      profile.toolSchemaDetail,
+    );
+    // Compact profiles ("names-only"/"names-and-types") deliberately hide full
+    // tool descriptions. The text-parse FORMAT must still be injected (it's the
+    // calling mechanism), but strip descriptions from the schemas so the driver's
+    // tool listing honors the profile rather than re-exposing what it suppressed.
+    const compactProfile =
+      profile.toolSchemaDetail === "names-only" || profile.toolSchemaDetail === "names-and-types";
+    const driverSchemas = compactProfile
+      ? gatedToolSchemas.map((s) => ({ ...s, description: "" }))
+      : gatedToolSchemas;
     const driverInstructions = canInjectDriverInstructions
-      ? context.toolCallingDriver.buildPromptInstructions(gatedToolSchemas)
+      ? context.toolCallingDriver.buildPromptInstructions(driverSchemas)
       : "";
 
     // ── Decision Rationale (gated on tool availability) ──────────────────────
