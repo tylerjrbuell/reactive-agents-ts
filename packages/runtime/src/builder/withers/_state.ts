@@ -132,6 +132,7 @@ export interface BuilderState {
     adaptive?: boolean;
     maxRetries?: number;
   };
+  _taskContract?: import("@reactive-agents/core").TaskContract;
   _enableIdentity: boolean;
   _enableObservability: boolean;
   _observabilityOptions: ObservabilityOptions;

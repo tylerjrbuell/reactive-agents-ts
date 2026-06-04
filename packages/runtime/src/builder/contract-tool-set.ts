@@ -31,6 +31,7 @@
  */
 
 import { BUILTIN_TOOL_NAMES, shellExecuteTool } from "@reactive-agents/tools";
+import type { TaskContract } from "@reactive-agents/core";
 import type { ToolsOptions } from "./types.js";
 
 export function computeExposedToolNames(
@@ -74,4 +75,66 @@ export function computeExposedToolNames(
   }
 
   return [...names];
+}
+
+/** The runtime's requiredTools config shape (mirrors `_requiredToolsConfig`). */
+export interface RequiredToolsConfig {
+  tools?: readonly string[];
+  adaptive?: boolean;
+  maxRetries?: number;
+}
+
+/**
+ * Execute-time complement to the build-time TaskContract validation
+ * (realization-plan P2b). Derives the contract's `kind === "required"` tool
+ * names and UNIONS them into the runtime's existing `requiredTools` config so
+ * they reach `KernelInput.requiredTools` and the kernel's required-tools
+ * success gate enforces them at run time.
+ *
+ * The runtime path: `config.requiredTools.tools`
+ *   → classifier.ts:73-74 `effectiveRequiredTools`
+ *   → pre-loop-dispatch.ts:149 / reasoning-harness-hooks.ts:99 `requiredTools`
+ *   → ReasoningExecuteRequest → KernelInput.requiredTools.
+ *
+ * This is the single seam at which `runtime-construction.ts` assembles the
+ * `requiredTools` config; calling this here keeps the union in one place rather
+ * than duplicating it at every downstream KernelInput construction site.
+ *
+ * Semantics mirror the prior inline expression exactly when there is no
+ * contract:
+ *   `priorConfig ?? (reasoningEnabled && toolsEnabled ? { adaptive: true } : undefined)`
+ * A contract with required tools always produces an explicit `tools` list
+ * (which, per classifier.ts:95-103, also suppresses adaptive inference — the
+ * caller has declared their requirements, matching the existing static-list
+ * semantic).
+ *
+ * NOTE — forbidden tools are intentionally NOT handled here. The contract's
+ * forbidden tools cannot reach `KernelInput.blockedTools` from the runtime:
+ * `blockedTools` is not a field on `ReasoningExecuteRequest` and is not mapped
+ * from request → KernelInput in any non-reflexion strategy. Closing that hole
+ * is a packages/reasoning change (out of runtime authority).
+ */
+export function mergeContractRequiredTools(
+  priorConfig: RequiredToolsConfig | undefined,
+  contract: TaskContract | undefined,
+  reasoningEnabled: boolean,
+  toolsEnabled: boolean,
+): RequiredToolsConfig | undefined {
+  const contractRequired = (contract?.tools ?? [])
+    .filter((t) => t.kind === "required")
+    .map((t) => t.name);
+
+  // No contract-required tools → preserve the prior inline default semantics.
+  if (contractRequired.length === 0) {
+    return (
+      priorConfig ??
+      (reasoningEnabled && toolsEnabled ? { adaptive: true } : undefined)
+    );
+  }
+
+  // Union contract-required names into the existing static list, deduped,
+  // preserving any other config fields (adaptive / maxRetries).
+  const merged = new Set<string>(priorConfig?.tools ?? []);
+  for (const name of contractRequired) merged.add(name);
+  return { ...priorConfig, tools: [...merged] };
 }
