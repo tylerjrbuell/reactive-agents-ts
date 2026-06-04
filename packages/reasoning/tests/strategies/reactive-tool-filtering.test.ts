@@ -143,9 +143,12 @@ describe("Instruction-aware tool filtering", () => {
     );
 
     const content = getCaptured();
-    // names-only profile with required tools: required tool names appear in ref
-    expect(content).toContain("github/list_commits");
-    expect(content).toContain("signal/send_message_to_user");
+    // names-only profile with required tools: required tool names appear in ref.
+    // Prompt renders the SANITIZED name (matching the native-FC tools array) so a
+    // model can't read a slash name in prose it then can't emit as a native call —
+    // the prompt↔FC name-mismatch fix. Registry lookup de-sanitizes inbound.
+    expect(content).toContain("github_list_commits");
+    expect(content).toContain("signal_send_message_to_user");
     // Descriptions should NOT appear in names-only mode
     expect(content).not.toContain("Tool 0 description");
   });

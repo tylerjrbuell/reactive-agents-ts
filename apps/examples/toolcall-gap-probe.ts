@@ -30,7 +30,11 @@ const FAKE_COMMITS = Array.from({ length: 15 }, (_, i) => `commit ${i + 1}: mess
 
 // FLAT=1 → flat tool name "list_commits"; else namespaced "github/list_commits"
 // (isolates whether the slash-name is what a model can't emit).
-const COMMITS_TOOL = process.env.FLAT === "1" ? "list_commits" : "github/list_commits";
+// TOOLNAME overrides FLAT — lets a probe isolate name-shape variables directly
+// (e.g. TOOLNAME=github_list_commits = compound + underscore, sanitize no-op →
+// prompt and FC names MATCH, so it discriminates name-mismatch from prefix-shape).
+const COMMITS_TOOL =
+  process.env.TOOLNAME ?? (process.env.FLAT === "1" ? "list_commits" : "github/list_commits");
 
 const githubTool = {
   definition: {

@@ -81,8 +81,9 @@ describe("strategy relevantTools forwarding (lazy disclosure)", () => {
       } as any).pipe(Effect.provide(layer)),
     );
     // Regression guard: without relevantTools forwarding, the tool is pruned
-    // (not a meta-tool) and never reaches the model.
-    expect(getCaptured()).toContain("github/list_commits");
+    // (not a meta-tool) and never reaches the model. Prompt shows the SANITIZED
+    // name (prompt↔FC name-mismatch fix) — surfacing intent unchanged.
+    expect(getCaptured()).toContain("github_list_commits");
   }, 20000);
 
   it("tree-of-thought surfaces a classifier-relevant non-meta tool to the model", async () => {
@@ -98,7 +99,7 @@ describe("strategy relevantTools forwarding (lazy disclosure)", () => {
         config: defaultReasoningConfig,
       } as any).pipe(Effect.provide(layer)),
     );
-    expect(getCaptured()).toContain("github/list_commits");
+    expect(getCaptured()).toContain("github_list_commits");
   }, 20000);
 
   // NOTE: plan-execute shares the identical fix (relevantTools threaded through
