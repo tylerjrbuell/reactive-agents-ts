@@ -221,6 +221,7 @@ export const runReasoningThink = (
         config.synthesisConfig,
       ),
       observationSummary: config.reasoningOptions?.observationSummary,
+      auditRationale: config.reasoningOptions?.auditRationale,
       calibration: resolvedCalibration,
       verifier: config.verifier,
       harnessPipeline: config.harnessPipeline,

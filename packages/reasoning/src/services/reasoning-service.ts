@@ -86,6 +86,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly synthesisConfig?: SynthesisConfig;
       /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
       readonly observationSummary?: boolean | "auto";
+      /** Opt-in rationale auditing — emit a per-tool-call rationale block for debrief logging. Default off (pure decode/token cost, no quality benefit per ablation). */
+      readonly auditRationale?: boolean;
       /** Pre-resolved model calibration — drives steering channel and context tuning in the kernel. */
       readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
       /**

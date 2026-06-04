@@ -92,6 +92,8 @@ interface ReactiveInput {
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
   readonly observationSummary?: boolean | "auto";
+  /** Opt-in rationale auditing — per-tool-call rationale block for debrief. Default off. */
+  readonly auditRationale?: boolean;
   /** Pre-resolved model calibration — drives steering channel selection in ContextManager. */
   readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
   /**
@@ -200,6 +202,7 @@ export const executeReactive = (
       initialMessages: input.initialMessages,
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
+      auditRationale: input.auditRationale,
       modelId: input.modelId,
       calibration: input.calibration,
       // M3 ablation hook: `REACTIVE_AGENTS_NOOP_VERIFIER=1` short-circuits the

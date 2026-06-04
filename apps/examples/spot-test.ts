@@ -31,18 +31,37 @@ let builder = ReactiveAgents.create()
         PROVIDER as 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'litellm'
     )
     .withModel({ model: MODEL, numCtx: 12000 })
-    .withCortex()
-    .withMemory()
     .withReasoning({
         defaultStrategy: STRATEGY,
         enableStrategySwitching: false,
+        // SPOT_OBS_SUMMARY=off → disable per-tool-result LLM fact-extraction
+        // (extractObservationFacts, default-on local+mid). A/B lever for the
+        // local-tier token-economy measurement.
+        ...(process.env.SPOT_OBS_SUMMARY === 'off'
+            ? { observationSummary: false as const }
+            : process.env.SPOT_OBS_SUMMARY === 'on'
+              ? { observationSummary: true as const }
+              : {}),
+        // SPOT_AUDIT=1 → opt into rationale auditing via config (validates the
+        // reasoningOptions.auditRationale → KernelInput config path end-to-end).
+        ...(process.env.SPOT_AUDIT === '1' ? { auditRationale: true } : {}),
     })
     // SPOT_NO_ALLOWED=1 → omit allowedTools so the full MCP toolset (30+ tools)
     // reaches the harness and the classifier + lazy-prune floor must select the
     // task tool with no allowlist safety net (the common real-world default).
-    .withTools(
-        process.env.SPOT_NO_ALLOWED === '1' ? {} : { allowedTools: TOOLS }
-    )
+    .withTools({
+        ...(process.env.SPOT_NO_ALLOWED === '1' ? {} : { allowedTools: TOOLS }),
+        // SPOT_NO_META=1 → drop the always-on meta tools (brief/pulse/recall/
+        // find/discover-tools) so their FC schemas don't ship each turn. Lever
+        // for the local-tier speed/token measurement (decode-bound vs prefill).
+        ...(process.env.SPOT_NO_META === '1' ? { metaTools: false } : {}),
+    })
+
+// Memory ON by default; SPOT_NO_MEMORY=1 disables cortex+memory so ablations
+// (e.g. rationale-gate) aren't contaminated by cross-run memory carryover.
+if (process.env.SPOT_NO_MEMORY !== '1') {
+    builder = builder.withCortex().withMemory()
+}
 
 // Window A/B knob (#5 MEASURED gate): SPOT_MAXTOKENS forces an explicit
 // contextProfile.maxTokens (caller-provided → defeats model-window resolution,

@@ -489,6 +489,17 @@ export interface KernelInput {
    *   import { type Verifier, defaultVerifier } from "@reactive-agents/reasoning";
    */
   readonly verifier?: import("../capabilities/verify/verifier.js").Verifier;
+  /**
+   * Opt-in rationale audit. When `true`, the reactive think phase instructs the
+   * model to emit a `<rationale>` block before every tool call (captured into the
+   * rationaleLog → debrief synthesis). Default off — the block forces extra OUTPUT
+   * tokens per tool call and local-tier latency is decode-bound, so it is a pure
+   * speed tax on the dominant local cost with no intended quality benefit. The env
+   * override `RA_RATIONALE_AUDIT=1` enables it independently of this field (used
+   * for cross-tier ablation). When off, the rationaleLog is simply sparse and the
+   * debrief gracefully lacks the why.
+   */
+  readonly auditRationale?: boolean;
   /** Custom environment context key-value pairs injected into the system prompt */
   readonly environmentContext?: Readonly<Record<string, string>>;
   /**
