@@ -545,8 +545,14 @@ export function handleThinking(
     // capital): RA 485 tok vs Mastra 50 tok for "Paris". Rationale block
     // accounted for ~250 of the 435-tok gap. Gating restores parity on
     // tasks where rationale was never going to be emitted anyway.
+    // Opt-in audit gate (owner decision 2026-06-04) — see KernelInput.auditRationale.
+    // Off by default: the rationale block is decode-tax-only (audit, not quality).
+    // When ON, this reduces to the prior `hasReachableTools ? [...] : ""`, so the
+    // emitted prompt is byte-identical to the old default.
+    const auditRationaleOn =
+      input.auditRationale === true || process.env.RA_RATIONALE_AUDIT === "1";
     const hasReachableTools = gatedToolSchemas.length > 0;
-    const rationaleInstructions = hasReachableTools
+    const rationaleInstructions = hasReachableTools && auditRationaleOn
       ? [
           "## Decision Rationale (MANDATORY — every tool call)",
           "Every tool call you issue MUST be preceded by a rationale block in your text content. Tool calls without a matching rationale block are considered malformed and you will be asked to retry.",

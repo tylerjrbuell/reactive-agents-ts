@@ -114,6 +114,7 @@ export const runReasoningHarnessHooks = (
         config.synthesisConfig,
       ),
       observationSummary: config.reasoningOptions?.observationSummary,
+      auditRationale: config.reasoningOptions?.auditRationale,
       calibration: resolvedCalibration,
       harnessPipeline: config.harnessPipeline,
       };

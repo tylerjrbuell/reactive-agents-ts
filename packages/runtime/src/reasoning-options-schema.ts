@@ -54,6 +54,15 @@ export const ReasoningOptionsJsonSchema = Schema.Struct({
    * - `"auto"`: extract only for local/mid tiers when results exceed budget
    */
   observationSummary: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("auto"))),
+  /**
+   * Opt-in — emit a per-tool-call rationale block (the model's "why") for
+   * debrief audit. Default OFF: a cross-tier ablation showed the mandatory
+   * rationale instruction is a pure speed/token tax with zero quality benefit
+   * (qwen3:14b −27% latency / −20% output tokens; flat success). This is an
+   * AUDIT feature, not a performance one. Threads to `KernelInput.auditRationale`,
+   * read by the reactive think gate (env override: `RA_RATIONALE_AUDIT=1`).
+   */
+  auditRationale: Schema.optional(Schema.Boolean),
   synthesis: Schema.optional(Schema.Literal("auto", "fast", "deep", "custom", "off")),
   synthesisModel: Schema.optional(Schema.String),
   synthesisProvider: Schema.optional(Schema.String),
