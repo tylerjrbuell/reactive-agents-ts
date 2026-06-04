@@ -1,9 +1,10 @@
 # Framework Architecture Index
 
 > **Status:** 🟢 LIVING SPINE — the canonical, navigable map of how Reactive Agents actually works, grounded in code.
-> **Verified against:** `main` @ 2026-06-03 (commit `aed8a8a2`). Every claim carries a `file:line` anchor and a one-line **verify** command.
-> **Claim tags:** `[verified]` = read in code this session · `[from-spec]` = asserted by a spec, not re-verified here · `[aspirational]` = designed, not yet on `main`.
-> **Companions:** [[2026-06-03-full-potential-realization-plan]] (impact-ranked plan) · [[2026-06-03-architecture-drift-register]] (debt/drift) · [[05-DESIGN-NORTH-STAR]] (vision).
+> **Verified against:** branch `refactor/arch-cleanup-2026-06-03` @ 2026-06-03 (base `main` `aed8a8a2`). Every claim carries a `file:line` anchor and a one-line **verify** command.
+> **2026-06-03 update:** this branch landed **P1** (deliverable-provenance migration — single-writer, cross-tier N=3 validated), **P2/P2b** (`TaskContract` enforced at build + execute time), **S11** (truthful synthesis-gate provenance), **P5** (doc-drift). §3/§4/§7/§8 below reflect post-migration state; the original "migration in progress" findings are now **closed** (see [[2026-06-03-architecture-drift-register]] Resolved block).
+> **Claim tags:** `[verified]` = read in code this session · `[from-spec]` = asserted by a spec, not re-verified here · `[aspirational]` = designed, not yet shipped.
+> **Companions:** [[2026-06-03-full-potential-realization-plan]] (impact-ranked plan) · [[2026-06-03-architecture-drift-register]] (debt/drift) · [[2026-06-03-p1-deliverable-provenance-n3]] (P1 N=3 evidence) · [[05-DESIGN-NORTH-STAR]] (vision).
 
 This index is the answer to "how does this framework function?" for both AI agents and humans. It is intentionally anchored so it can be **re-verified, not just re-read** — that is the discipline that keeps it from becoming the next stale doc (drift has shipped 4× per the project's own count; see Drift Register).
 
@@ -34,13 +35,13 @@ ExecutionEngine (outer, runtime)            ReAct Kernel (inner, reasoning)
 - **Inner loop** = the reasoning kernel. Each strategy delegates to the kernel; the kernel iterates think→guard→act with per-iter recall/learn/reflect until `terminate.ts` + arbitrator decide.
   - **verify:** `ls packages/reasoning/src/kernel/loop/`
 
-> ⚠️ The skills `architecture-reference` and `architecture-audit` still describe the kernel at `packages/reasoning/src/strategies/kernel/` — **that path no longer exists** (Stage-5 move). Canonical path is `packages/reasoning/src/kernel/`. See Drift Register D1.
+> ℹ️ Canonical kernel path is `packages/reasoning/src/kernel/` (the old `strategies/kernel/` was a Stage-5 move). P5 fixed the stale `strategies/kernel/` refs across all skill files (D1 closed); two legitimate "moved-from" historical notes remain in kernel-debug/kernel-extension.
 
 ---
 
 ## 2. The Cognitive Spine — 10 Capabilities → Owner Files
 
-The North Star's agent model (Sense→Attend→Comprehend→Recall→Reason→Decide→Act→Verify→Reflect→Learn) is implemented as one owner directory per capability under `packages/reasoning/src/kernel/capabilities/`. **All 10 dirs exist and have owner files `[verified]`** — including `learn/` and `recall/`, which North Star §4.3 still calls "currently missing."
+The North Star's agent model (Sense→Attend→Comprehend→Recall→Reason→Decide→Act→Verify→Reflect→Learn) is implemented as one owner directory per capability under `packages/reasoning/src/kernel/capabilities/`. **All 10 dirs exist and have owner files `[verified]`** — including `learn/` and `recall/` (North Star §4.3 was corrected by P5 to reflect this).
 
 | # | Capability | Owner | Wired? |
 |---|-----------|-------|--------|
@@ -88,10 +89,10 @@ packages/reasoning/src/kernel/
 4. **act** (`capabilities/act/act.ts`) — meta-tool registry + tool dispatch + final-answer gate.
 5. per-iter **recall** write/read, **learn** write, **reflect** (loop-detector streak rule: only ACTION steps reset the streak, observations do not — `maxConsecutiveThoughts: 3`).
 
-**Deliverable assembly — TWO coexisting systems** `[verified]` (active migration, see §4):
-- *Older, 2-source:* `loop/runner-helpers/deliverable.ts` `assembleDeliverable` → `Deliverable { content, source: "model_synthesis" | "raw_artifacts" }`. Used in `runner.ts:65`, `loop-resolution.ts:144,179`, `stall-deliverable.ts:126,224`.
-- *Newer, 4-source (canonical):* `core/contracts/deliverable.ts` `modelSynthesisDeliverable`/`sentinelDeliverable`/`deliverableToContent` (`model_synthesis | tool_artifact | harness_synthesis | sentinel`). Used in `runner.ts:529,538`, `iterate-pass.ts:351,357`.
-- **⚠️ `runner.ts` imports BOTH.** The intended single-writer `commitDeliverable` was never built; `state.output` has ~6 writers. → Drift Register S5/S6 / Plan P1.
+**Deliverable assembly — ONE system + single writer** `[verified]` (P1, was two coexisting types):
+- *Single 4-source type:* `core/contracts/deliverable.ts` `Deliverable` (`model_synthesis | tool_artifact | harness_synthesis | sentinel`) + constructors + `deliverableToContent`. The 2-source `raw_artifacts` type is **deleted**. **verify:** `grep -rn raw_artifacts packages/reasoning/src` → 0.
+- *Single writer:* `loop/runner-helpers/deliverable.ts` `commitDeliverable(state, d)` is the ONLY function that writes `state.output`; `terminate.ts` *composes* through it (owns status; delegates output). `assembleDeliverable(state)` now returns a core `Deliverable` (preserving STORED/recall resolution).
+- *Structurally locked:* `tests/strategies/kernel/single-output-writer.guard.test.ts` fails-when-violated. **Errors-leaked-as-output is constructively prevented at the writer.** → Drift Register S5/S6/S10/D5 **CLOSED**; cross-tier N=3 validated ([[2026-06-03-p1-deliverable-provenance-n3]]).
 
 **6 strategies + adaptive** delegate to the kernel `[verified]`: `direct, reactive, reflexion, tree-of-thought, plan-execute, code-action` + `adaptive` (router).
 - **verify:** `ls packages/reasoning/src/strategies/*.ts`
@@ -102,20 +103,18 @@ packages/reasoning/src/kernel/
 
 The `overhaul/agentic-core-2026-05-31` branch (the 4-sprint canonical-contracts arc, North Star §6.5) is **fully merged into main** (main is 38 commits past it). **verify:** `git rev-list --left-right --count main...origin/overhaul/agentic-core-2026-05-31` → `38 0`.
 
-It landed **unevenly** — the *infrastructure + types* are wired, but the *saturation* (making each contract the sole/complete path) is incomplete across the board:
+Originally landed **unevenly** (infra + types wired, saturation incomplete). The 2026-06-03 branch closed the trust/contract gaps; current state:
 
 | Contract | Location | State |
 |----------|----------|-------|
 | `Capability` (source-tagged) + `effectiveWindowChars` | `core/contracts/capability.ts` | `[verified]` **WIRED** — consumed by `llm-provider/src/canonical-resolver.ts:43` (~65%×4 effective-window rule). |
-| `PreFlight.validate` | `core/contracts/preflight.ts` → `runtime/src/build-validation.ts` | type + validator exist `[verified]`; runs-at-`build()` `[from-spec]` (not re-traced). |
-| `TaskContract` | `core/contracts/task-contract.ts` | `[verified]` **BENCH-ONLY** — referenced only in `benchmarks/*`; never threaded into the runtime agent build (Sprint-1 C1.3 incomplete). |
-| `Deliverable` provenance (4-source) | `core/contracts/deliverable.ts` | `[verified]` **PARTIALLY WIRED** — `modelSynthesisDeliverable`/`sentinelDeliverable`/`deliverableToContent` are called at `runner.ts:529,538` + `iterate-pass.ts:351,357` ("Sprint-1 B2: typed DeliverableProvenance channel"). |
-| `commitDeliverable` (intended sole writer) | `core/contracts/deliverable.ts` | `[verified]` **NEVER IMPLEMENTED** — appears only in the file's own `@example` JSDoc (`:20,:27`); no `export function`. The §6.5 "every output through `commitDeliverable`" claim is **literally false** (no such function exists). |
-| `projectResultForPrompt` | (context-assembly spec) | `[verified]` **DEAD** — 0 callers; built then reverted. |
+| `PreFlight.validate` | `core/contracts/preflight.ts` → `runtime/src/build-validation.ts` | `[verified]` **WIRED** — capability-source fallback warns/errors at build (`build-validation.ts:76-92`). |
+| `TaskContract` | `core/contracts/task-contract.ts` | `[verified]` **WIRED (P2/P2b)** — `.withContract()` on the builder; **build-time** strict-throws on required/forbidden/modelFloor violation (`build-validation.ts`); **execute-time** required→`KernelInput.requiredTools` gate, forbidden→excluded from the exposed schema post-MCP (`engine/phases/agent-loop/setup/tool-schemas.ts`). **verify:** `grep -rn "withContract\|_taskContract\|forbiddenTools" packages/runtime/src`. |
+| `Deliverable` (4-source) + `commitDeliverable` single-writer | `core/contracts/deliverable.ts` (type) + `reasoning/.../runner-helpers/deliverable.ts` (writer) | `[verified]` **WIRED (P1)** — one 4-source type; `commitDeliverable` is the sole `state.output` writer (kernel, not core — core is L0, can't import `transitionState`); guard-test locked. **verify:** `grep -rn "commitDeliverable" packages/reasoning/src/kernel` (real `export function`, ≥1 caller). |
+| synthesis-gate provenance | `reasoning/.../runner.ts:740,751` | `[verified]` **TRUTHFUL (S11)** — harness-orchestrated synthesis tagged `harness_synthesis(synthesized=…)`, not mislabeled `model_synthesis`. |
+| `projectResultForPrompt` | (context-assembly spec) | `[verified]` **DEAD** — 0 callers; built then reverted (spec ref only). |
 
-**verify (commitDeliverable unbuilt):** `grep -rn "commitDeliverable" packages/*/src` → only `core/contracts/deliverable.ts` JSDoc `@example` lines; no `export function commitDeliverable`.
-
-> **The single highest-leverage finding:** the provenance migration is **in progress, not complete**. Core's 4-source `Deliverable` is partially adopted but **coexists** with the older 2-source `assembleDeliverable` (`runner-helpers/deliverable.ts`) — `runner.ts` imports *both* (`:65` and `:529`). And `state.output` still has **~6 writers** (`runner.ts:344,463,503,538,717,723`) mixing typed deliverables with raw strings (`synthContent`, `state.output ?? ''`). The intended single-writer (`commitDeliverable`) was never built, so "errors-leaked-as-output constructively impossible" is **not yet true**. Completing this migration is [[2026-06-03-full-potential-realization-plan]] P1. **verify:** `grep -rn "output:" packages/reasoning/src/kernel/loop/runner.ts`
+> **The trust spine is now constructively closed.** Core's 4-source `Deliverable` is the single type (2-source `raw_artifacts` deleted); `state.output` flows through one writer (`commitDeliverable`; `terminate()` composes through it); raw-leak is structurally prevented and **cross-tier N=3 validated** (zero regression, [[2026-06-03-p1-deliverable-provenance-n3]]). `TaskContract` is enforced at both build and execute time. Remaining contract-adjacent work is ablation-gated (P3 calibration, P4 compose/M14), not structural.
 
 ---
 
@@ -167,7 +166,7 @@ Build/dependency order (lower builds first). One-line purpose each.
 | **Telemetry** | `core/services/event-bus.ts` + `packages/trace` | `grep -n "publish" packages/core/src/services/event-bus.ts \| head` |
 | **Safety** | `guardrails` + `cost` (budgets) + `identity` | `ls packages/guardrails/src` |
 | **Time** | mockable clock in `core` | `grep -rn "Clock" packages/core/src \| head` |
-| **Provenance** | `Capability.source` (wired) + `Deliverable` (4-source, partially wired; single-writer unbuilt) | §4 above |
+| **Provenance** | `Capability.source` (wired) + `Deliverable` (4-source, single-writer `commitDeliverable` — P1) | §4 above |
 
 ---
 
@@ -175,11 +174,11 @@ Build/dependency order (lower builds first). One-line purpose each.
 
 This is the user-requested lens — declared surfaces lacking a live emit+consumer (North Star §4.4 principle). Full ranking in the Plan.
 
-1. **Output path: incomplete provenance migration.** Two `Deliverable` models coexist (2-source `assembleDeliverable` + 4-source core contract), both live in `runner.ts`; the intended single-writer `commitDeliverable` was never built; `state.output` has ~6 mixed-provenance writers. The trust guarantee is *partially* wired, not complete. → **Plan P1.**
-2. **Runtime agent build ↛ `TaskContract`.** Contract exists but only bench consumes it; the runtime never enforces a task contract at `agent.build()`. → **Plan P2.**
-3. **Calibration fields ↛ consumers.** ~5 of 14 calibration fields have live consumers (`[from-spec]` G-7); `parallelCallCapability`, `interventionResponseRate`, `tokenEfficiency`, `reasoningDepth`, `knownToolAliases` defined but dormant. → **Plan P3.** **verify:** `grep -rn "parallelCallCapability" packages/*/src | grep -v calibrations`
-4. **Compose chokepoint coverage ~4/24.** Only `lifecycle.failure`, `nudge.healing-failure`, `observation.tool-result`, `prompt.system` emit; `control.strategy-evaluated` (M14 prereq) does **not** emit yet. → **Plan P4.**
-5. **Self-evolution (M14) not implemented.** Acceptance-gated attempt-narrowing has no `composeNarrowRetry` on main (and lacks its `control.strategy-evaluated` emit prereq). → **Plan P4.**
+1. ~~**Output path: incomplete provenance migration.**~~ ✅ **CLOSED (P1)** — one `Deliverable` type, single writer `commitDeliverable`, guard-locked, N=3-validated.
+2. ~~**Runtime agent build ↛ `TaskContract`.**~~ ✅ **CLOSED (P2/P2b)** — `.withContract()` enforced at build (strict-throw) + execute (required-gate / forbidden schema-exclusion).
+3. **Calibration fields ↛ consumers** (STILL OPEN). ~5 of 14 calibration fields have live consumers (`[from-spec]` G-7); `parallelCallCapability`, `interventionResponseRate`, `tokenEfficiency`, `reasoningDepth`, `knownToolAliases` dormant. → **Plan P3** (ablation-gated). **verify:** `grep -rn "parallelCallCapability" packages/*/src | grep -v calibrations`
+4. **Compose chokepoint coverage ~4/24** (STILL OPEN). Only `lifecycle.failure`, `nudge.healing-failure`, `observation.tool-result`, `prompt.system` emit; `control.strategy-evaluated` (M14 prereq) does **not** emit yet. → **Plan P4** (ablation-gated).
+5. **Self-evolution (M14) not implemented** (STILL OPEN). Acceptance-gated attempt-narrowing has no `composeNarrowRetry` (and lacks its `control.strategy-evaluated` emit prereq). → **Plan P4.**
 
 ---
 
@@ -194,7 +193,7 @@ This is the user-requested lens — declared surfaces lacking a live emit+consum
 ## 10. Reading Order for New Contributors
 
 1. This index (§1 two-loop shape → §2 cognitive spine).
-2. [[05-DESIGN-NORTH-STAR]] §3–§4 (the model + contracts) — **but trust this index over §4.3/§5.2 where they conflict; those are stale.**
+2. [[05-DESIGN-NORTH-STAR]] §3–§4 (the model + contracts) — §4.3/§5.2 corrected by P5; §6.5 carries an aspirational admonition for the now-shipped provenance work.
 3. [[2026-06-02-canonical-contracts-and-invariants]] (the contract intent).
 4. [[2026-06-03-architecture-drift-register]] (what's stale/dead/parallel — so you don't build on it).
 5. [[2026-06-03-full-potential-realization-plan]] (where to put effort next).
