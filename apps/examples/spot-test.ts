@@ -37,9 +37,12 @@ let builder = ReactiveAgents.create()
         defaultStrategy: STRATEGY,
         enableStrategySwitching: false,
     })
-    .withTools({
-        allowedTools: TOOLS,
-    })
+    // SPOT_NO_ALLOWED=1 → omit allowedTools so the full MCP toolset (30+ tools)
+    // reaches the harness and the classifier + lazy-prune floor must select the
+    // task tool with no allowlist safety net (the common real-world default).
+    .withTools(
+        process.env.SPOT_NO_ALLOWED === '1' ? {} : { allowedTools: TOOLS }
+    )
 
 // Window A/B knob (#5 MEASURED gate): SPOT_MAXTOKENS forces an explicit
 // contextProfile.maxTokens (caller-provided → defeats model-window resolution,
