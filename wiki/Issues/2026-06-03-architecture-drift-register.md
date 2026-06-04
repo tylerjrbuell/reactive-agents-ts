@@ -48,6 +48,13 @@
 
 **Still open:** D6 (compose read-vs-mutate audit), S9 (calibration consumers, **P3** — ablation-gated), compose coverage expansion (**P4** — ablation-gated).
 
+## Tool-calling routing regression (branch `fix/text-parse-bare-toolcall`)
+
+| ID | Sev | Issue | State | Anchor |
+|----|-----|-------|-------|--------|
+| **R1** | 🔴 | **REGRESSION** — all uncalibrated Ollama agents loop to max-iterations, never call a tool. `482c11e4` keyed the tool-call DRIVER on calibration but left the RESOLVER keyed on capability; Ollama claims `supportsToolCalling:true` for every model (`local.ts:951`) → capable-but-uncalibrated models got NativeFCStrategy resolver + text-parse driver. `<tool_call>` XML the driver instructs is unparseable by the resolver → 0 calls. **Two faces, one root** (loop + XML-as-answer). | ✅ **CLOSED by Stage A** (commit `11996c5a`) — `selectToolCallingDriver` keys on `supportsToolCalling`; `runner.ts` resolves caps once for both resolver+driver (coherent triple). gemma4:e4b 0-call→success (N=3 3/3); cogito:14b fixed. tools 819 / reasoning 1576 / runtime 907 green. Evidence [[2026-06-03-tool-calling-routing-n3]]. Spec [[2026-06-03-tool-calling-driver-redesign]]. | `runner.ts:116-194`, `tools/drivers/select-driver.ts` |
+| **R2** | 🟡 | text-parse mode is a **half-built path** — no calibration produces `"text-parse"` dialect; `think.ts` has no `<tool_call>`-markup→`status:"acting"` transition, so `act.ts:164` extractCalls is unreachable. Tool-*incapable* Ollama models (e.g. gemma3:12b, `"does not support tools"`) now fail-fast-loud (`llm_error`) instead of silent-loop — net-positive, but still can't use tools. | ⏳ **Stage B** — narrow `local.ts:951` (per-model `/api/show` probe) **coupled with** building the text-parse think→acting transition. | `local.ts:951`, `think.ts:952,1198`, `act.ts:162` |
+
 ## Open question (escalate)
 
 - **Q1:** For P1, is `core/contracts/deliverable.ts` the intended source of truth (runner consumes it) or should the wired `runner-helpers/deliverable.ts` model be promoted into core? The spec wanted core as sole writer; the runner shipped its own. Decide before P1 collapse.
