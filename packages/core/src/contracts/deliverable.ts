@@ -101,6 +101,16 @@ export type Deliverable =
        * never fabricate a call ref to satisfy this field.
        */
       readonly synthesisCall?: LLMRoundTripRef;
+      /**
+       * The LLM-cleaned prose the synthesis call produced. OPTIONAL: present
+       * when the harness ran a synthesizing LLM call (paired with
+       * `synthesisCall`) whose output is the deliverable. When present,
+       * `deliverableToContent` returns THIS, not the joined raw bodies — so a
+       * harness-orchestrated synthesis is tagged truthfully as
+       * `harness_synthesis` (NOT mislabeled `model_synthesis`). When absent,
+       * the content is the joined `assembled` observation bodies.
+       */
+      readonly synthesized?: string;
     }
   | {
       readonly source: "sentinel";
@@ -121,7 +131,7 @@ export function deliverableToContent(d: Deliverable): string {
     case "tool_artifact":
       return d.observation.content;
     case "harness_synthesis":
-      return d.assembled.map((o) => o.content).join("\n\n");
+      return d.synthesized ?? d.assembled.map((o) => o.content).join("\n\n");
     case "sentinel":
       return d.reason === "max_iterations_no_artifacts"
         ? "Task did not converge within the iteration budget."
@@ -149,15 +159,25 @@ export function toolArtifactDeliverable(observation: ValidatedObservation): Deli
 
 /**
  * Construct a `harness_synthesis` deliverable: the harness assembled the answer
- * from multiple validated observations plus a synthesizing LLM call.
+ * from validated observations, optionally via a synthesizing LLM call.
+ *
+ * Pass `synthesized` (the LLM-cleaned prose) + `synthesisCall` when an LLM
+ * synthesis ran — `deliverableToContent` then returns the cleaned prose and the
+ * source is truthfully `harness_synthesis` (the S11 fix: harness-orchestrated
+ * synthesis must NOT be mislabeled `model_synthesis`). Omit both for the
+ * raw-concatenation (no-LLM) path.
  */
 export function harnessSynthesisDeliverable(
   assembled: readonly ValidatedObservation[],
   synthesisCall?: LLMRoundTripRef,
+  synthesized?: string,
 ): Deliverable {
-  return synthesisCall
-    ? { source: "harness_synthesis", assembled, synthesisCall }
-    : { source: "harness_synthesis", assembled };
+  return {
+    source: "harness_synthesis",
+    assembled,
+    ...(synthesisCall ? { synthesisCall } : {}),
+    ...(synthesized !== undefined ? { synthesized } : {}),
+  };
 }
 
 /**

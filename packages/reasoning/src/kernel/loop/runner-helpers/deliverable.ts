@@ -174,22 +174,39 @@ export function commitDeliverable(
  * Map a {@link Deliverable} to the `terminatedBy` reason that preserves its
  * source semantics across the downstream gate.
  *
- * Only `model_synthesis` maps to `harness_synthesis` (the model authored it —
- * it must NOT trigger forced LLM re-synthesis in §9). Everything that was the
- * single evidence-source in the legacy 2-source type — now split into
- * `tool_artifact`, `harness_synthesis`, and `sentinel` SOURCES — maps to
- * `harness_deliverable`.
+ * A deliverable whose content was ALREADY authored as final prose must NOT
+ * trigger forced LLM re-synthesis at the §9 output gate. Two sources qualify:
+ *   - `model_synthesis` — the MODEL authored the trailing thought; the text IS
+ *     the answer.
+ *   - `harness_synthesis` carrying a `synthesized` field — the HARNESS ran a
+ *     synthesizing LLM call whose cleaned prose is the answer (Drift S11). At
+ *     the synthesis-gate this preserves the exact terminatedBy the legacy
+ *     `model_synthesis` write produced — re-synthesizing already-clean prose is
+ *     a regression.
+ * Both map to terminatedBy `harness_synthesis` ("already final, do not
+ * re-synthesize").
  *
- * ⚠️ NAMING COLLISION: the SOURCE `harness_synthesis` maps to the terminatedBy
- * `harness_deliverable`, NOT to terminatedBy `harness_synthesis`. The SOURCE
- * means "harness concatenated multiple observations"; the terminatedBy
- * `harness_synthesis` means "model authored the answer". Do not "fix" this into
- * a bug. (P1 mission 2A; preserves test 235/285/310/339 + not-235 at 254.)
+ * Everything else maps to `harness_deliverable` (the attempt-synthesis path):
+ *   - `harness_synthesis` WITHOUT `synthesized` — raw concatenation of
+ *     validated observation bodies (no LLM call); raw artifacts still warrant a
+ *     formatting pass.
+ *   - `tool_artifact`, `sentinel`.
+ *
+ * ⚠️ NAMING COLLISION: a `harness_synthesis` SOURCE may map to EITHER
+ * terminatedBy depending on whether `synthesized` is set — the terminatedBy
+ * `harness_synthesis` means "already final prose, do not re-synthesize" (model
+ * thought OR harness-cleaned prose), NOT "the harness concatenated
+ * observations". Do not "fix" this into a single-branch mapping. (P1 mission 2A
+ * + Drift S11; preserves output-quality-gate tests 236/286/311/340 + not-255.)
  */
 export function deliverableTerminationReason(
   d: Deliverable,
 ): Extract<TerminateReason, "harness_deliverable" | "harness_synthesis"> {
-  return d.source === "model_synthesis" ? "harness_synthesis" : "harness_deliverable";
+  if (d.source === "model_synthesis") return "harness_synthesis";
+  if (d.source === "harness_synthesis" && d.synthesized !== undefined) {
+    return "harness_synthesis";
+  }
+  return "harness_deliverable";
 }
 
 export function collectDeliverableArtifacts(state: KernelState): string[] {

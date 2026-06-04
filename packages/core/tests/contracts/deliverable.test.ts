@@ -109,6 +109,28 @@ describe("Deliverable — typed channel into state.output", () => {
     expect(deliverableToContent(d)).toBe("chunk 1\n\nchunk 2");
   });
 
+  it("harness_synthesis returns LLM-synthesized prose when present (S11 — truthful tag, not model_synthesis)", () => {
+    const obs = (i: number): ValidatedObservation => ({
+      _validated: "tool-success",
+      toolName: "file-read",
+      callId: `c${i}`,
+      content: `raw chunk ${i}`,
+      invariant: { success: true, toolInState: true },
+    });
+    const d: Deliverable = harnessSynthesisDeliverable(
+      [obs(1), obs(2)],
+      { callId: "synth-1" },
+      "Cleaned synthesized prose.",
+    );
+    expect(d.source).toBe("harness_synthesis");
+    if (d.source === "harness_synthesis") {
+      expect(d.synthesized).toBe("Cleaned synthesized prose.");
+      expect(d.synthesisCall?.callId).toBe("synth-1");
+    }
+    // Returns the synthesized prose, NOT the joined raw bodies.
+    expect(deliverableToContent(d)).toBe("Cleaned synthesized prose.");
+  });
+
   it("sentinel deliverables render structured markers", () => {
     expect(deliverableToContent(sentinelDeliverable("no_substantive_output"))).toBe("Task complete.");
     expect(

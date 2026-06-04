@@ -16,7 +16,7 @@ import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
-import { modelSynthesisDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable, harnessSynthesisDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, NativeFCDriver, TextParseDriver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -725,20 +725,30 @@ export function runKernel(
             const contentOk = validateContentCompleteness(synthContent, taskIntent).complete;
 
             if (formatOk && contentOk) {
-              // P1 mission 2B: synthContent is freshly LLM-authored prose — route
-              // it through the single writer as model_synthesis. extraMeta carries
-              // ONLY the output-quality flags; terminatedBy is already set and must
-              // be preserved (commitDeliverable merges, never clobbers it).
+              // Drift S11: synthContent is prose the HARNESS produced by running
+              // the LLM synthesis call above — NOT a model-authored trailing
+              // thought. Tag it `harness_synthesis` WITH `synthesized` so the
+              // provenance is truthful; `deliverableToContent` returns
+              // synthContent unchanged (synthesized wins over the empty
+              // `assembled`), so the output string is byte-identical to the old
+              // model_synthesis write. No `synthesisCall` ref: `complete()`
+              // exposes no callId here, and the contract forbids fabricating one.
+              // extraMeta carries ONLY the output-quality flags; terminatedBy is
+              // already set and preserved (commitDeliverable merges, never clobbers).
               state = commitDeliverable(
                 state,
-                modelSynthesisDeliverable({ type: "thought", content: synthContent, iteration: state.iteration }),
+                harnessSynthesisDeliverable([], undefined, synthContent),
                 { outputSynthesized: true, outputFormatValidated: true },
               );
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesized output to match requested format: ${synthesisFormat}`, timestamp: new Date() });
             } else if (terminationSource === "harness" || terminationSource === "oracle") {
+              // Drift S11 (imperfect-but-better-than-raw branch): same provenance
+              // truth as the formatOk&&contentOk branch — harness-orchestrated
+              // synthesis → harness_synthesis WITH synthesized. Output string and
+              // terminatedBy unchanged from the prior model_synthesis write.
               state = commitDeliverable(
                 state,
-                modelSynthesisDeliverable({ type: "thought", content: synthContent, iteration: state.iteration }),
+                harnessSynthesisDeliverable([], undefined, synthContent),
                 { outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
               );
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });

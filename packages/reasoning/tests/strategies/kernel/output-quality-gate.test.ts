@@ -3,7 +3,15 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { runKernel, assembleDeliverable } from "../../../src/kernel/loop/runner.js";
-import { deliverableToContent } from "@reactive-agents/core";
+import { deliverableTerminationReason } from "../../../src/kernel/loop/runner-helpers/deliverable.js";
+import {
+  deliverableToContent,
+  harnessSynthesisDeliverable,
+  modelSynthesisDeliverable,
+  toolArtifactDeliverable,
+  sentinelDeliverable,
+  type ValidatedObservation,
+} from "@reactive-agents/core";
 import {
   initialKernelState,
   transitionState,
@@ -542,5 +550,84 @@ describe("output quality gate", () => {
     const d = assembleDeliverable(st);
     expect(d.source).toBe("sentinel");
     expect(deliverableToContent(d)).toBe("Task complete.");
+  });
+});
+
+// ── Drift S11: synthesis-gate provenance honesty ────────────────────────────
+// The synthesis-gate (runner.ts) runs an LLM synthesis to clean prose and now
+// tags it `harness_synthesis` WITH a `synthesized` field (the harness, not the
+// model, orchestrated the call). These tests lock the load-bearing invariants:
+// (1) the new constructor variant resolves to the cleaned prose verbatim, and
+// (2) `deliverableTerminationReason` routes a synthesized harness_synthesis to
+// the don't-re-synthesize terminatedBy — same as the legacy model_synthesis at
+// that gate — while the raw-concat harness_synthesis keeps the attempt path.
+describe("Drift S11 — synthesis-gate provenance", () => {
+  const obs = (content: string): ValidatedObservation => ({
+    _validated: "tool-success",
+    toolName: "web-search",
+    callId: `harness-obs:${content}`,
+    content,
+    invariant: { success: true, toolInState: true },
+  });
+
+  it("harnessSynthesisDeliverable carries synthesized prose verbatim", () => {
+    const synthContent = "BTC is $50,000 and ETH is $3,000 as of today.";
+    const d = harnessSynthesisDeliverable([], undefined, synthContent);
+    expect(d.source).toBe("harness_synthesis");
+    if (d.source === "harness_synthesis") {
+      expect(d.synthesized).toBe(synthContent);
+      expect(d.synthesisCall).toBeUndefined();
+    }
+    // deliverableToContent returns the cleaned prose, NOT joined raw bodies.
+    expect(deliverableToContent(d)).toBe(synthContent);
+  });
+
+  it("deliverableTerminationReason: synthesized harness_synthesis → harness_synthesis (no forced re-synthesis)", () => {
+    const synthesized = harnessSynthesisDeliverable([obs("raw")], undefined, "cleaned prose");
+    // WITH synthesized: already synthesized at the gate — must map to the
+    // don't-re-synthesize terminatedBy, identical to the legacy model_synthesis
+    // routing at this gate.
+    expect(deliverableTerminationReason(synthesized)).toBe("harness_synthesis");
+  });
+
+  it("deliverableTerminationReason: raw-concat harness_synthesis → harness_deliverable (unchanged)", () => {
+    const rawConcat = harnessSynthesisDeliverable([obs("a"), obs("b")]);
+    expect(deliverableTerminationReason(rawConcat)).toBe("harness_deliverable");
+  });
+
+  it("deliverableTerminationReason: model_synthesis → harness_synthesis (unchanged)", () => {
+    const model = modelSynthesisDeliverable({ type: "thought", content: "x".repeat(120), iteration: 1 });
+    expect(deliverableTerminationReason(model)).toBe("harness_synthesis");
+  });
+
+  it("deliverableTerminationReason: tool_artifact / sentinel → harness_deliverable (unchanged)", () => {
+    expect(deliverableTerminationReason(toolArtifactDeliverable(obs("body")))).toBe("harness_deliverable");
+    expect(deliverableTerminationReason(sentinelDeliverable("no_substantive_output"))).toBe("harness_deliverable");
+  });
+
+  it("synthesis-gate writes the LLM-cleaned prose verbatim and preserves terminatedBy", async () => {
+    // Drive the gate: harness-deliverable termination (terminationSource="harness")
+    // + format-requested task whose raw artifact won't validate → needsSynthesis.
+    // The custom LLM layer returns a valid markdown table for the synthesis call,
+    // landing the formatOk&&contentOk branch (runner.ts:740). Asserts the wiring:
+    // output === the synthesis content (byte-identical to the old model_synthesis
+    // write — `synthesized` wins in deliverableToContent) AND terminatedBy is the
+    // exact pre-gate value (the gate must NOT force re-synthesis).
+    const synthTable = "| Coin | Price |\n|------|-------|\n| BTC | 50000 |\n| ETH | 3000 |";
+    const synthLayer = TestLLMServiceLayer([{ text: synthTable }]);
+    const kernel = makeStallAfterToolKernel("BTC price: $50,000. ETH price: $3,000.");
+    const state = await Effect.runPromise(
+      runKernel(
+        kernel,
+        { task: "generate a markdown table with crypto prices" },
+        { ...defaultOptions, maxIterations: 5 },
+      ).pipe(Effect.provide(synthLayer)),
+    );
+    expect(state.status).toBe("done");
+    // Pre-gate terminatedBy for this stall→assemble path is harness_deliverable;
+    // the synthesis gate must leave it untouched (no forced re-synthesis).
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    expect(state.meta.outputSynthesized).toBe(true);
+    expect(state.output).toBe(synthTable);
   });
 });
