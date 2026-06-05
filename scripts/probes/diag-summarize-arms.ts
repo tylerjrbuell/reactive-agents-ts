@@ -11,7 +11,7 @@
  *   /tmp/raphase-a/diag-summarize-legacy.json
  *
  * Run from repo root:
- *   bun run apps/examples/diag-summarize-arms.ts
+ *   bun run scripts/probes/diag-summarize-arms.ts
  */
 import { mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";

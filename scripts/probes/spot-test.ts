@@ -34,14 +34,15 @@ let builder = ReactiveAgents.create()
     .withReasoning({
         defaultStrategy: STRATEGY,
         enableStrategySwitching: false,
+        auditRationale: process.env.SPOT_AUDIT === '1',
         // SPOT_OBS_SUMMARY=off → disable per-tool-result LLM fact-extraction
         // (extractObservationFacts, default-on local+mid). A/B lever for the
         // local-tier token-economy measurement.
         ...(process.env.SPOT_OBS_SUMMARY === 'off'
             ? { observationSummary: false as const }
             : process.env.SPOT_OBS_SUMMARY === 'on'
-              ? { observationSummary: true as const }
-              : {}),
+            ? { observationSummary: true as const }
+            : {}),
         // SPOT_AUDIT=1 → opt into rationale auditing via config (validates the
         // reasoningOptions.auditRationale → KernelInput config path end-to-end).
         ...(process.env.SPOT_AUDIT === '1' ? { auditRationale: true } : {}),
@@ -105,6 +106,10 @@ const agent = await builder
 
 const result = await agent.run(TASK)
 console.log(result.output)
+console.log(
+    'DEBRIEF_RATIONALE_JSON=' +
+        JSON.stringify(result.debrief?.rationale ?? null)
+)
 // Structured metrics line for the baseline/grid runner (single greppable line).
 console.log(
     'SPOT_RESULT_JSON=' +

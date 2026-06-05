@@ -10,7 +10,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 # Load repo-root .env (API keys + GITHUB token) into env for the MCP subprocess.
-# Values never printed. bun only auto-loads .env from its own cwd (apps/examples),
+# Values never printed. bun only auto-loads .env from its own cwd (scripts/probes),
 # which has none, so source the root file explicitly.
 if [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi
 

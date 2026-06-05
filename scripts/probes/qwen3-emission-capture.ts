@@ -9,7 +9,7 @@
  *   - UNPARSEABLE (<tool_call> XML the resolver drops)
  *
  * Env: MODEL (default qwen3:14b), FLAT=1 → flat tool name.
- * Run: MODEL=qwen3:14b bun apps/examples/qwen3-emission-capture.ts
+ * Run: MODEL=qwen3:14b bun scripts/probes/qwen3-emission-capture.ts
  */
 import { ReactiveAgents } from "reactive-agents";
 import { Effect } from "effect";

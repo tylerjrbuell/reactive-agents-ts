@@ -16,7 +16,7 @@
  *   ERROR     — build/run hard failure
  *
  * Env: MODELS (comma-list), N (default 5), PROVIDER (default ollama).
- * Run: PROVIDER=ollama MODELS=qwen3:14b,cogito:14b bun apps/examples/multicall-probe.ts
+ * Run: PROVIDER=ollama MODELS=qwen3:14b,cogito:14b bun scripts/probes/multicall-probe.ts
  */
 import { ReactiveAgents } from "reactive-agents";
 import { Effect } from "effect";

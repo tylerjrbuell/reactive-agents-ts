@@ -3,7 +3,7 @@ import { analyzeInterventions, renderInterventionReport } from "../src/analyze.j
 import type { Trace } from "../src/replay.js";
 import type { TraceEvent } from "../src/events.js";
 
-// Fixture mirrors the real JSONL shape proven by apps/examples/trace-guard-synthetic.ts:
+// Fixture mirrors the real JSONL shape proven by scripts/probes/trace-guard-synthetic.ts:
 // an overlap-storm iter (3 deciders) + a terminal max_iterations decision, plus
 // snapshots (token growth) and a recall-loop, so every detector has a target.
 function fixture(): Trace {
