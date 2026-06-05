@@ -1,69 +1,92 @@
 // apps/meta-agent/src/tools/community-monitor.ts
 import { Effect } from "effect";
+import { join } from "node:path";
 import type { ToolDefinition } from "reactive-agents/tools";
+import { gatherThreads } from "../ingest/gather.js";
+import { makeFileSeenStore } from "../ingest/seen-store.js";
 
 /**
- * Custom tool: configure search scope for TypeScript AI agent community monitoring.
- * Returns search terms, target platforms, and instructions for the web-search tool.
+ * Custom tool: actively fetch recent TypeScript-AI-agent discussions from
+ * Hacker News (Algolia), Reddit, and dev.to — normalized, deduped against
+ * previously-seen threads, and ranked by relevance. Replaces the old static
+ * search-term stub: the agent now receives real candidate threads to evaluate.
  */
 export const communityMonitorTool: ToolDefinition = {
   name: "community-monitor",
   description:
-    "Configure the search scope for TypeScript AI agent framework discussions on Hacker News, " +
-    "Reddit, and dev.to. Returns search terms, target platforms, and instructions for the " +
-    "web-search tool to follow. Use this during heartbeat to find new opportunities.",
+    "Fetch recent TypeScript AI agent framework discussions from Hacker News, Reddit, and dev.to. " +
+    "Returns real candidate threads (title, url, source, engagement, snippet), already deduped " +
+    "against threads handled in previous runs and ranked by relevance. Use this during heartbeat " +
+    "to find new opportunities, then evaluate each for genuine value-add before drafting.",
   parameters: [
     {
       name: "topics",
       type: "array",
       description:
-        "Topics to search for. Default covers TypeScript agent frameworks, competitors, and related discussions.",
+        "Search terms to monitor. Defaults to TypeScript agent frameworks, competitors, and related topics.",
+      required: false,
+    },
+    {
+      name: "limit",
+      type: "number",
+      description: "Max threads to return (default 12).",
       required: false,
     },
   ],
-  returnType: "{ searchTerms: string[], platforms: string[], instruction: string }",
+  returnType:
+    "{ found: number, threads: Array<{ id, source, title, url, author?, points?, numComments?, createdAt, snippet? }>, instruction: string }",
   category: "search",
   riskLevel: "low",
-  timeoutMs: 5_000,
+  timeoutMs: 20_000,
   requiresApproval: false,
   source: "function",
 };
 
+const DEFAULT_TERMS = [
+  "TypeScript AI agent framework",
+  "LangChain TypeScript alternative",
+  "LangChain.js vs LangChain Python",
+  "LangGraph.js",
+  "OpenAI agents SDK TypeScript",
+  "CrewAI framework",
+  "Mastra framework",
+  "VoltAgent framework",
+  "Effect-TS agents",
+  "autonomous agents TypeScript",
+  "local LLM agent TypeScript",
+  "AI agent observability TypeScript",
+];
+const DEFAULT_SUBREDDITS = ["typescript", "MachineLearning", "LocalLLaMA", "node"];
+const DEFAULT_DEVTO_TAGS = ["typescript", "ai", "node", "llm"];
+
+// File-backed dedup so the agent never re-surfaces the same thread across restarts.
+const SEEN_PATH = join(import.meta.dirname, "../../data/seen-threads.json");
+const seenStore = makeFileSeenStore(SEEN_PATH);
+
 export const communityMonitorHandler = (
   args: Record<string, unknown>,
 ): Effect.Effect<unknown> => {
-  const topics = (args.topics as string[] | undefined) ?? [
-    "TypeScript AI agent framework",
-    "LangChain TypeScript alternative",
-    "LangChain.js vs LangChain Python",
-    "LangGraph.js updates",
-    "OpenAI agents SDK TypeScript",
-    "Microsoft AutoGen Python",
-    "CrewAI framework",
-    "SuperAGI framework",
-    "Mastra framework",
-    "Portkey AI gateway",
-    "VoltAgent framework",
-    "Agentic.js tools",
-    "Effect-TS agents",
-    "autonomous agents TypeScript",
-    "AI agent observability TypeScript",
-  ];
+  const topics = (args.topics as string[] | undefined) ?? DEFAULT_TERMS;
+  const limit = (args.limit as number | undefined) ?? 12;
 
-  return Effect.succeed({
-    searchTerms: topics,
-    platforms: [
-      "Hacker News",
-      "Reddit r/typescript",
-      "Reddit r/MachineLearning",
-      "Reddit r/LocalLLaMA",
-      "dev.to",
-    ],
-    instruction:
-      "Use the web-search tool with each term to find recent discussions. " +
-      "For each relevant thread found, evaluate: Is this a genuine opportunity to add value? " +
-      "Would mentioning reactive-agents be helpful (not spammy)? " +
-      "Track recurring competitor names and summarize notable releases or positioning shifts. " +
-      "Draft a response only if you can lead with value, not with promotion.",
-  });
+  return gatherThreads(
+    {
+      searchTerms: topics,
+      subreddits: DEFAULT_SUBREDDITS,
+      devtoTags: DEFAULT_DEVTO_TAGS,
+      sinceHours: 168, // last week
+      limit,
+    },
+    { fetchImpl: globalThis.fetch, isSeen: seenStore.isSeen, markSeen: seenStore.markSeen },
+  ).pipe(
+    Effect.map((threads) => ({
+      found: threads.length,
+      threads,
+      instruction:
+        "These threads are fresh, deduped (already-handled ones excluded), and relevance-ranked. " +
+        "For each: decide if reactive-agents genuinely helps the person. Draft a response ONLY if " +
+        "you can lead with real value, not promotion. Save worthwhile drafts with draft-writer, " +
+        "including the thread url. Skip anything where mentioning the framework would be spammy.",
+    })),
+  );
 };
