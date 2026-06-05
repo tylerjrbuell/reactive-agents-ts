@@ -3,8 +3,51 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+
+/**
+ * Wrap TestLLMService and record every request's stringified content so a test
+ * can assert which prompts were (not) issued — e.g. the planner rationale
+ * strict-retry ("[STRICT RETRY]").
+ */
+function makeRecordingLLM(scenario: TestTurn[]) {
+  const base = TestLLMService(scenario);
+  const prompts: string[] = [];
+  const rec = {
+    ...base,
+    complete: (req: Parameters<typeof base.complete>[0]) => {
+      prompts.push(JSON.stringify(req));
+      return base.complete(req);
+    },
+    completeStructured: (req: Parameters<typeof base.completeStructured>[0]) => {
+      prompts.push(JSON.stringify(req));
+      return base.completeStructured(req);
+    },
+  };
+  return { layer: Layer.succeed(LLMService, LLMService.of(rec)), prompts };
+}
+
+/** Mock ToolService so tool_call steps can dispatch without a real tool layer. */
+const RATIONALE_TOOL_LAYER = Layer.succeed(
+  ToolService,
+  ToolService.of({
+    execute: () => Effect.succeed({ success: true, result: "tool ok" }),
+    getTool: (name: string) =>
+      Effect.succeed({ name, description: "test", parameters: [] }),
+    register: () => Effect.void,
+    listTools: () => Effect.succeed([]),
+    deregister: () => Effect.void,
+  } as unknown as Parameters<typeof ToolService.of>[0]),
+);
+
+/** A tool_call+analysis plan with NO rationale on the tool_call step. */
+const NO_RATIONALE_TOOL_PLAN = JSON.stringify({
+  steps: [
+    { title: "Fetch", instruction: "fetch data", type: "tool_call", toolName: "web-search", toolArgs: { query: "x" } },
+    { title: "Summarize", instruction: "summarize", type: "analysis" },
+  ],
+});
 
 // ── Helpers ──
 
@@ -234,6 +277,55 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(execSteps.length).toBe(0);
     expect(reflectSteps.length).toBe(0);
     expect(synthSteps.length).toBe(1);
+  }, 30000);
+
+  it("skips the planner rationale strict-retry by default (audit off)", async () => {
+    // rationale.why is audit-only (debrief), not execution — so when auditing is
+    // off (default) a plan missing rationale on tool_call steps must NOT trigger
+    // a full re-plan. Saves a planner LLM call on models that omit rationale.
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      { match: "planning agent", text: NO_RATIONALE_TOOL_PLAN },
+      { match: "GOAL:", text: "SATISFIED: done." },
+      { match: "Synthesize", text: "Final answer." },
+    ]);
+
+    await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Fetch and summarize",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["web-search"],
+        config: defaultReasoningConfig,
+        // auditRationale omitted → default OFF
+      }).pipe(Effect.provide(Layer.merge(llmLayer, RATIONALE_TOOL_LAYER))),
+    );
+
+    const issuedRetry = prompts.some((p) => p.includes("STRICT RETRY"));
+    expect(issuedRetry).toBe(false);
+  }, 30000);
+
+  it("issues the planner rationale strict-retry when auditRationale is on", async () => {
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      { match: "planning agent", text: NO_RATIONALE_TOOL_PLAN },
+      { match: "GOAL:", text: "SATISFIED: done." },
+      { match: "Synthesize", text: "Final answer." },
+    ]);
+
+    await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Fetch and summarize",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["web-search"],
+        config: defaultReasoningConfig,
+        auditRationale: true,
+      }).pipe(
+        Effect.provide(Layer.merge(llmLayer, RATIONALE_TOOL_LAYER)),
+      ),
+    );
+
+    const issuedRetry = prompts.some((p) => p.includes("STRICT RETRY"));
+    expect(issuedRetry).toBe(true);
   }, 30000);
 
   it("should track token usage and cost across plan-execute-reflect cycle", async () => {

@@ -77,6 +77,15 @@ interface PlanExecuteInput {
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  /**
+   * Opt-in audit gate (mirrors reactive / KernelInput.auditRationale, owner
+   * decision 2026-06-04). When off (default), the planner rationale strict-retry
+   * is skipped: tool_call-step `rationale.why` feeds ONLY the debrief audit log
+   * (step-executor publishes it on ToolCallStarted), it never drives execution —
+   * so re-planning the whole plan to recover it is a pure audit tax on models
+   * that omit it. Also honored via env `RA_RATIONALE_AUDIT=1`.
+   */
+  readonly auditRationale?: boolean;
   /** Full tool schemas passed from execution engine for kernel tool awareness */
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
@@ -237,7 +246,13 @@ export const executePlanExecute = (
     const stepsMissingRationale = (p: Plan): readonly PlanStep[] =>
       p.steps.filter((s) => s.type === "tool_call" && (!s.rationale || typeof s.rationale.why !== "string" || s.rationale.why.trim().length === 0));
 
-    let missing = stepsMissingRationale(plan);
+    // Opt-in audit gate: rationale.why is audit-only (debrief), not execution —
+    // skip the full re-plan retry unless auditing is on. Saves a planner LLM
+    // call on models that omit rationale (parallels the reactive rationale gate).
+    const auditRationaleOn =
+      input.auditRationale === true || process.env.RA_RATIONALE_AUDIT === "1";
+
+    let missing = auditRationaleOn ? stepsMissingRationale(plan) : [];
     if (missing.length > 0) {
       const reminderPrompt = `${planPrompt}\n\n[STRICT RETRY] Your previous plan omitted "rationale" on one or more tool_call steps. EVERY tool_call step MUST include a "rationale": { "why": "<≤280 chars, specific to this call>" } object. Plans without rationale on tool_call steps are rejected. Regenerate the entire plan now, including rationale on every tool_call step.`;
       const retryResult = yield* extractStructuredOutput({
