@@ -286,6 +286,42 @@ describe("ReflexionStrategy", () => {
     expect(result.output).toContain("Improved explanation");
   });
 
+  it("backfills a synthesized answer when the generate pass yields empty output", async () => {
+    // Repro of the gpt-4o-mini empty-output bug (trace 01KTAV0MVG): the generate
+    // sub-pass burned its iteration budget on meta-tools and terminated with NO
+    // answer text → genPass.output empty → cascaded to a 0-char failed result.
+    // The fix forces a synthesis fallback so an empty generate never ships empty.
+    const layer = TestLLMServiceLayer([
+      // Generate sub-pass: model emits no answer text → genPass.output empty.
+      { match: "offside rule", text: "" },
+      // Forced synthesis fallback (NEW behavior): produces the real answer.
+      // Matches the distinctive synthesis-prompt phrase the fix introduces.
+      { match: "complete, final answer", text: "A player is in an offside position if nearer to the opponents' goal line than both the ball and the second-last defender." },
+      // Critique: satisfied so the loop stops after one pass.
+      { match: "Evaluate whether", text: "SATISFIED: complete and accurate." },
+    ]);
+
+    const result = await Effect.runPromise(
+      executeReflexion({
+        taskDescription: "Explain the offside rule in football.",
+        taskType: "explanation",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            reflexion: { maxRetries: 1, selfCritiqueDepth: "shallow", kernelMaxIterations: 1 },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    // Bug: result.output is "" (0 chars). Fix: synthesized fallback is non-empty.
+    expect(result.output.trim().length).toBeGreaterThan(0);
+    expect(result.output.toLowerCase()).toContain("offside");
+  }, 30000);
+
   it("uses thinking content as critique when clean content is empty", async () => {
     // Simulate Ollama think:true where entire critique is in <think> block
     const layer = TestLLMServiceLayer([

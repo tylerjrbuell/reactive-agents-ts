@@ -46,6 +46,7 @@ import {
   decideSynthesisInput,
 } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
+import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -172,9 +173,68 @@ export const executeReflexion = (
       temperature: 0.7,
     });
 
-    const initialResponse = genPass.output ?? "";
+    let initialResponse = genPass.output ?? "";
+    let backfillTokens = 0;
+    let backfillCost = 0;
 
-    yield* emitPhaseEnd({ emitLog, phase: "reflexion:generate", startedAt: start, totalTokens: genPass.tokens });
+    // ── Empty-generate backfill (gpt-4o-mini bug, trace 01KTAV0MVG) ──
+    // The generate sub-pass can terminate with NO model-authored answer: when the
+    // model spends its (capped) iteration budget on meta-tools (brief/find) the
+    // dispatcher early-stops before any synthesis, and the kernel honestly commits
+    // an empty/sentinel deliverable. An empty initialResponse then poisons the
+    // entire reflect→improve loop (critique critiques nothing, improve has no base)
+    // and ships a 0-char final result — the cell fails despite a capable model.
+    // Force one direct synthesis from the accumulated generate context so the loop
+    // is always seeded with a real answer. If synthesis also yields nothing, the
+    // M7 empty-output→failed invariant still holds downstream (no false success).
+    if (initialResponse.trim() === "") {
+      // Build a CLEAN single-turn synthesis prompt. Do NOT reuse genPass.messages:
+      // the empty generate is typically caused by meta-tool (brief/find) churn, and
+      // that raw provider thread (assistant tool_calls + tool results) is exactly
+      // what trips native-FC providers like OpenAI into rejecting a fresh completion
+      // (the original improve-phase llm_error came from the same malformed thread).
+      // Instead, digest any gathered observation text so tool-grounded tasks keep
+      // their evidence, then ask for the final answer in one self-contained turn.
+      const observationDigest = genPass.steps
+        .filter((st) => st.type === "observation" && st.content.trim().length > 0)
+        .map((st) => st.content)
+        .join("\n")
+        .slice(0, 4000);
+      const synthPrompt = observationDigest
+        ? `Task: ${input.taskDescription}\n\nInformation gathered so far:\n${observationDigest}\n\nUsing the information above, write your complete, final answer to the task now. Output only the answer.`
+        : `Task: ${input.taskDescription}\n\nWrite your complete, final answer to the task now. Output only the answer.`;
+      const synthResponse = yield* llm
+        .complete({
+          messages: [{ role: "user", content: synthPrompt }],
+          systemPrompt:
+            input.systemPrompt ??
+            "You are completing a task. Produce the complete, final answer directly — no preamble, no offers.",
+          temperature: 0.7,
+        })
+        .pipe(
+          Effect.mapError(
+            (err) =>
+              new ExecutionError({
+                strategy: "reflexion",
+                message: "Generate produced empty output and the synthesis fallback failed",
+                step: 0,
+                cause: err,
+              }),
+          ),
+        );
+      const synthText = extractThinkingSafeContent(synthResponse.content).content || synthResponse.content || "";
+      initialResponse = synthText;
+      backfillTokens = synthResponse.usage.totalTokens;
+      backfillCost = synthResponse.usage.estimatedCost;
+      yield* emitLog({
+        _tag: "warning",
+        message: "Generate pass produced empty output — used synthesis fallback to seed the reflect loop",
+        context: "reflexion",
+        timestamp: new Date(),
+      });
+    }
+
+    yield* emitPhaseEnd({ emitLog, phase: "reflexion:generate", startedAt: start, totalTokens: genPass.tokens + backfillTokens });
 
     steps.push(makeStep("thought", `[ATTEMPT 1] ${initialResponse}`));
 
@@ -210,8 +270,8 @@ export const executeReflexion = (
         allSideEffectSteps: genPass.steps,
         runningMessages: genPass.messages,
         previousCritiques: seedCritiques,
-        totalTokens: genPass.tokens,
-        totalCost: genPass.cost,
+        totalTokens: genPass.tokens + backfillTokens,
+        totalCost: genPass.cost + backfillCost,
       },
       maxIters: maxRetries,
       step: (s, attempt) =>
