@@ -22,6 +22,7 @@ import type { CacheUsage } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
+import { deepClone } from "../schema-utils.js";
 
 // ─── OpenAI Message Conversion ───
 
@@ -135,7 +136,8 @@ export const isStrictToolCallingSupported = (model: string): boolean => {
 /** @internal Exported for testing only */
 export const toStrictToolSchema = (schema: any): any => {
   if (!schema || typeof schema !== "object") return schema;
-  const newSchema = JSON.parse(JSON.stringify(schema));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- toStrictToolSchema is a pre-existing `(schema: any): any` mutator; the clone keeps that local shape.
+  const newSchema = deepClone<any>(schema);
 
   if (newSchema.type === "object" && newSchema.properties) {
     const originalRequired = new Set<string>(newSchema.required ?? []);
@@ -484,7 +486,7 @@ export const OpenAIProviderLive = Layer.effect(
       completeStructured: (request) =>
         Effect.gen(function* () {
           const jsonSchema = Schema.encodedSchema(request.outputSchema);
-          const schemaObj = JSON.parse(JSON.stringify(jsonSchema));
+          const schemaObj = deepClone<Record<string, unknown>>(jsonSchema);
           const schemaStr = JSON.stringify(schemaObj, null, 2);
           const model = typeof request.model === 'string'
             ? request.model
