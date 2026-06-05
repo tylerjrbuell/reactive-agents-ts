@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "reactive-agents": "workspace:*",
+    "@reactive-agents/compose": "workspace:*",
     "@reactive-agents/health": "workspace:*",
     "effect": "^3.10.0"
   },
