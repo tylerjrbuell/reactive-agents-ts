@@ -109,11 +109,11 @@ describe("rationale extraction (v0.11.x)", () => {
     expect(calls[0]?.rationale).toBeUndefined()
   })
 
-  it("tier-3: drops rationale with why over 280 chars", () => {
+  it("tier-3: truncates rationale with why over 280 chars to 280", () => {
     const long = "x".repeat(281)
     const text = `[{"name": "web-search", "arguments": {"query": "x"}, "rationale": {"why": ${JSON.stringify(long)}}}]`
     const calls = driver.extractCalls(text, tools)
-    expect(calls[0]?.rationale).toBeUndefined()
+    expect(calls[0]?.rationale?.why).toHaveLength(280)
   })
 })
 

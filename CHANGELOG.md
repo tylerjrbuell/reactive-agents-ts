@@ -17,6 +17,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - **Docs:** `features/snapshot-replay.mdx` (full API + diff shape + determinism guarantee) + index card + stability marker.
 - **Public ROADMAP.md alignment to North Star v5.0** — Phase A/B shipped, Phase C in flight, accurate v0.11 line-up.
 - **`rax diagnose` unified subcommand** — folds the standalone `rax-diagnose` binary into the main `rax` CLI as `rax diagnose <sub>` (list, replay, replay-run, grep, diff, debrief). Standalone `rax-diagnose` bin retained for backwards compatibility. New programmatic exports from `@reactive-agents/diagnose`: `debriefCommand`, `replayRunCommand`, `ReplayRunOpts`.
+- **`.withTools({ focusedTools })` documented** — soft tool-focus guidance (full set stays callable; focused names prioritized), distinct from the hard `allowedTools` allowlist. Resolution order: `focusedTools` → `allowedTools` → all tools.
+
+### Changed
+
+- **Tool-call rationale is now opt-in.** Previously the kernel unconditionally injected a MANDATORY `<rationale>` instruction on every tool-using run. It is now gated by `auditRationale` (`.withReasoning({ auditRationale: true })` or env `RA_RATIONALE_AUDIT=1`), **off by default**. Rationale is an audit feature, not a performance one — enabling it added ~20–27% output tokens/latency on rationale-emitting local models with no quality change (cross-tier ablation). The `plan-execute-reflect` plan-step rationale is unchanged (always-on schema field). `result.debrief.rationale[]` shape is unchanged.
+
+### Fixed
+
+- **Rationale parser hardened for small-model output** (`@reactive-agents/tools` `parseRationaleBlocks` / `extractRationale`). Opt-in rationale was silently dropped for some local models: strict `JSON.parse` rejected markdown-fenced/prose-wrapped bodies, `why` over 280 chars rejected the whole block, and models that tag every block `call="1"` (e.g. gemma) collided into one map entry (later calls dropped). Now: fenced/prose bodies are tolerated, over-length `why` is truncated, and colliding `call="N"` attributes fall back to sequential positional keys — so opt-in capture is reliable cross-tier.
 
 ### Notes
 
