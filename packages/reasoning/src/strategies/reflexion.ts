@@ -222,7 +222,7 @@ export const executeReflexion = (
               }),
           ),
         );
-      const synthText = extractThinkingSafeContent(synthResponse.content).content || synthResponse.content || "";
+      const synthText = extractThinkingSafeContent(synthResponse).content || synthResponse.content || "";
       initialResponse = synthText;
       backfillTokens = synthResponse.usage.totalTokens;
       backfillCost = synthResponse.usage.estimatedCost;
