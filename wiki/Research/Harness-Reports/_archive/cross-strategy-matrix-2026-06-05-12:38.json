@@ -1,0 +1,30 @@
+[
+  {
+    "task": "t4-multistep",
+    "complexity": "multi-step",
+    "strategy": "reflexion",
+    "model": "gpt-4o-mini",
+    "success": false,
+    "outputLength": 239,
+    "tokens": 532,
+    "durationMs": 10332,
+    "iterationsUsed": 0,
+    "costUsd": 0,
+    "outputPreview": "Strategy execution failed: ExecutionError: Generate produced empty output and the synthesis fallback failed\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/reflexion.ts:208:19)",
+    "output": "Strategy execution failed: ExecutionError: Generate produced empty output and the synthesis fallback failed\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/reflexion.ts:208:19)"
+  },
+  {
+    "task": "t5-critique",
+    "complexity": "critique-amenable",
+    "strategy": "reflexion",
+    "model": "gpt-4o-mini",
+    "success": false,
+    "outputLength": 239,
+    "tokens": 531,
+    "durationMs": 8109,
+    "iterationsUsed": 0,
+    "costUsd": 0,
+    "outputPreview": "Strategy execution failed: ExecutionError: Generate produced empty output and the synthesis fallback failed\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/reflexion.ts:208:19)",
+    "output": "Strategy execution failed: ExecutionError: Generate produced empty output and the synthesis fallback failed\n    at <anonymous> (/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/reasoning/src/strategies/reflexion.ts:208:19)"
+  }
+]

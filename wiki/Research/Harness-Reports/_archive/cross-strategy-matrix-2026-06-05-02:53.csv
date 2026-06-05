@@ -1,0 +1,17 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t4-multistep,multi-step,reactive,qwen3.5_latest,1,5385,4724,1,34225,0.000000
+t5-critique,critique-amenable,reactive,qwen3.5_latest,1,6720,5137,1,69516,0.000000
+t4-multistep,multi-step,plan-execute-reflect,qwen3.5_latest,1,4280,20623,8,153207,0.000000
+t5-critique,critique-amenable,plan-execute-reflect,qwen3.5_latest,1,4119,15996,6,141413,0.000000
+t4-multistep,multi-step,reflexion,qwen3.5_latest,1,2181,19654,6,121450,0.000000
+t5-critique,critique-amenable,reflexion,qwen3.5_latest,1,3563,5717,2,50401,0.000000
+t4-multistep,multi-step,tree-of-thought,qwen3.5_latest,1,6784,69498,25,629037,0.000000
+t5-critique,critique-amenable,tree-of-thought,qwen3.5_latest,1,5395,69065,32,619241,0.000000
+t4-multistep,multi-step,reactive,gpt-4o-mini,1,4491,26388,38,34859,0.002973
+t5-critique,critique-amenable,reactive,gpt-4o-mini,1,2632,16668,20,41144,0.002509
+t4-multistep,multi-step,plan-execute-reflect,gpt-4o-mini,1,3216,9948,7,33951,0.002129
+t5-critique,critique-amenable,plan-execute-reflect,gpt-4o-mini,1,2295,12893,8,41004,0.002650
+t4-multistep,multi-step,reflexion,gpt-4o-mini,0,0,4403,4,8268,0.000756
+t5-critique,critique-amenable,reflexion,gpt-4o-mini,0,0,3558,2,3373,0.000564
+t4-multistep,multi-step,tree-of-thought,gpt-4o-mini,1,4206,30653,50,79256,0.005534
+t5-critique,critique-amenable,tree-of-thought,gpt-4o-mini,1,2840,28840,44,81751,0.005213

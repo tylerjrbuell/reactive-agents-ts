@@ -1,0 +1,2 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t4-multistep,multi-step,plan-execute-reflect,qwen3.5_latest,1,4638,5134,2,75993,0.000000

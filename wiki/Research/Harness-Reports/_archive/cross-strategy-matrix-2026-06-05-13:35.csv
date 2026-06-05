@@ -1,0 +1,2 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t3-tool,tool-required,plan-execute-reflect,gpt-4o-mini,1,281,3455,5,16464,0.000328
