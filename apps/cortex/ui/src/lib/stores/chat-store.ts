@@ -1,19 +1,57 @@
 import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 
+/**
+ * Faithful mirror of the `AgentStreamEvent` SSE wire union emitted by
+ * `agent.runStream()` (canonical source: `@reactive-agents/runtime`
+ * `stream-types.ts`). This is a true discriminated union on `_tag` with
+ * every variant's fields declared — narrowing on `event._tag` gives typed
+ * field access with no casts.
+ *
+ * NOTE (divergence, GH #163): three copies of this union exist —
+ * runtime/stream-types.ts (canonical), packages/svelte/src/types.ts (lossy
+ * mirror), and this one. cortex-ui depends only on `@reactive-agents/svelte`,
+ * which has no built dist and itself carries a lossy mirror, so this file
+ * keeps its own complete copy rather than importing cross-package. A
+ * follow-up should dedup these (svelte + chat-store re-export runtime).
+ * `metadata` is kept as `Record<string, unknown>` to avoid importing
+ * `AgentResultMetadata` across packages.
+ */
 export type AgentStreamEvent =
-  | { _tag: "TextDelta"; text: string }
-  | { _tag: "StreamCompleted"; output: string; metadata: Record<string, unknown>; toolSummary?: Array<{ name: string; calls: number; avgMs: number }> }
-  | { _tag: "StreamError"; cause: string }
-  | { _tag: "IterationProgress"; iteration: number; maxIterations: number; status: string }
-  | { _tag: "ThoughtEmitted"; content: string; iteration: number }
-  | { _tag: "StreamCancelled"; reason: string; iterationsCompleted: number }
-  | Record<string, unknown>; // for other event types
+  | { readonly _tag: "TextDelta"; readonly text: string }
+  | {
+      readonly _tag: "StreamCompleted";
+      readonly output: string;
+      readonly metadata: Record<string, unknown>;
+      readonly taskId?: string;
+      readonly agentId?: string;
+      readonly toolSummary?: ReadonlyArray<{ readonly name: string; readonly calls: number; readonly avgMs: number }>;
+    }
+  | { readonly _tag: "StreamError"; readonly cause: string }
+  | {
+      readonly _tag: "IterationProgress";
+      readonly iteration: number;
+      readonly maxIterations: number;
+      readonly toolsCalledThisStep?: readonly string[];
+      readonly status: string;
+    }
+  | { readonly _tag: "StreamCancelled"; readonly reason: string; readonly iterationsCompleted: number }
+  | { readonly _tag: "PhaseStarted"; readonly phase: string; readonly timestamp: number }
+  | { readonly _tag: "PhaseCompleted"; readonly phase: string; readonly durationMs: number }
+  | { readonly _tag: "ThoughtEmitted"; readonly content: string; readonly iteration: number }
+  | { readonly _tag: "ToolCallStarted"; readonly toolName: string; readonly callId: string }
+  | {
+      readonly _tag: "ToolCallCompleted";
+      readonly toolName: string;
+      readonly callId: string;
+      readonly durationMs: number;
+      readonly success: boolean;
+    };
 
 export type ReasoningStep = {
   iteration: number;
   maxIterations: number;
-  toolsCalledThisStep?: string[];
+  toolsCalledThisStep?: readonly string[];
   thought?: string;
 };
 
@@ -404,9 +442,9 @@ function createChatStore() {
                     ),
                   }));
                 } else if (event._tag === "IterationProgress") {
-                  const iter = (event as any).iteration as number;
-                  const max = (event as any).maxIterations as number;
-                  const tools = (event as any).toolsCalledThisStep as string[] | undefined;
+                  const iter = event.iteration;
+                  const max = event.maxIterations;
+                  const tools = event.toolsCalledThisStep;
                   const step: ReasoningStep = {
                     iteration: iter,
                     maxIterations: max,
@@ -432,8 +470,8 @@ function createChatStore() {
                     }),
                   }));
                 } else if (event._tag === "ThoughtEmitted") {
-                  const iter = (event as any).iteration as number;
-                  const thought = (event as any).content as string;
+                  const iter = event.iteration;
+                  const thought = event.content;
                   update((s) => ({
                     ...s,
                     activeTurns: s.activeTurns.map((t) => {
@@ -467,7 +505,7 @@ function createChatStore() {
                     toolsUsed = event.toolSummary.map((t) => t.name);
                   }
                   // StreamCompleted.output is authoritative final output after verification/retries.
-                  const output = (event as any).output as string | undefined;
+                  const output: string | undefined = event.output;
                   if (output?.trim()) {
                     update((s) => {
                       return {
@@ -480,10 +518,10 @@ function createChatStore() {
                   }
                 } else if (event._tag === "StreamError") {
                   // Handle stream errors
-                  console.error("[Chat Stream] Stream error:", (event as any).cause);
+                  console.error("[Chat Stream] Stream error:", event.cause);
                   update((s) => ({
                     ...s,
-                    error: (event as any).cause ?? "Stream error",
+                    error: event.cause ?? "Stream error",
                   }));
                 }
               } catch (e) {
