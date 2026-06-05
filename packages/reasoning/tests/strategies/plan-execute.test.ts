@@ -176,6 +176,83 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(synthSteps.length).toBe(1);
   });
 
+  it("should feed the FULL tool result (not the compressed preview) to synthesis", async () => {
+    // Regression: plan-execute compressed tool_call results to an N-item preview,
+    // stored ONLY the preview on step.result, and synthesis read step.result —
+    // so a 15-item fetch shipped a 3-item answer with fabricated tails. Reactive
+    // survives the same case because it keeps the full result recallable in-loop.
+    // Fix: thread the full sanitized result through to the synthesis prompt while
+    // intermediate analysis/reflection prompts keep the compressed preview.
+    const items = Array.from({ length: 15 }, (_, i) => ({
+      id: i + 1,
+      title: `HN-POST-${String(i + 1).padStart(2, "0")}`,
+      score: 100 + i,
+    }));
+
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of({
+        execute: () => Effect.succeed({ success: true, result: items }),
+        getTool: (name: string) =>
+          Effect.succeed({ name, description: "test", parameters: [] }),
+        register: () => Effect.void,
+        listTools: () => Effect.succeed([]),
+        deregister: () => Effect.void,
+      } as unknown as Parameters<typeof ToolService.of>[0]),
+    );
+
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      { match: "planning agent", text: makePlanJson([
+        {
+          title: "Fetch posts",
+          instruction: "fetch the top 15 posts",
+          type: "tool_call",
+          toolName: "get-hn-posts",
+          toolArgs: { count: 15 },
+        },
+        {
+          title: "Summarize",
+          instruction: "summarize the posts",
+          type: "analysis",
+        },
+      ]) },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Summarized the posts." },
+      { match: "GOAL:", text: "SATISFIED: All 15 posts fetched and summarized." },
+      { match: "Synthesize", text: "Synthesized report covering all posts." },
+    ]);
+
+    const program = executePlanExecute({
+      taskDescription: "Fetch the top 15 HN posts and summarize",
+      taskType: "research",
+      memoryContext: "",
+      availableTools: ["get-hn-posts"],
+      availableToolSchemas: [
+        {
+          name: "get-hn-posts",
+          description: "Fetch HN posts",
+          parameters: [
+            { name: "count", type: "number", description: "How many", required: true },
+          ],
+        },
+      ],
+      // Force compression: 15 items >> 100 chars, preview only 3 items.
+      resultCompression: { budget: 100, previewItems: 3 },
+      config: defaultReasoningConfig,
+    });
+
+    await Effect.runPromise(
+      program.pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    );
+
+    // The synthesis prompt is the one instructing the model to "Synthesize".
+    const synthPrompt = prompts.find((p) => p.includes("Synthesize a clear"));
+    expect(synthPrompt).toBeDefined();
+    // The full result must reach synthesis — every post 1..15, not just the
+    // 3-item compressed preview.
+    expect(synthPrompt).toContain("HN-POST-15");
+    expect(synthPrompt).toContain("HN-POST-08");
+  });
+
   it("should return partial result when max refinements reached without satisfaction", async () => {
     // NOTE: uses a TWO-step plan on purpose. A single analysis-step plan now
     // takes the streamline short-circuit (one structured generation, no

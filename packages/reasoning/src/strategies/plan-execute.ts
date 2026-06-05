@@ -643,6 +643,9 @@ export const executePlanExecute = (
                   tokens: exit.value.tokens,
                   cost: exit.value.cost,
                   error: undefined,
+                  ...(exit.value.fullResult !== undefined
+                    ? { fullResult: exit.value.fullResult }
+                    : {}),
                   ...(exit.value.rawTerminatedBy !== undefined
                     ? { rawTerminatedBy: exit.value.rawTerminatedBy }
                     : {}),
@@ -679,6 +682,12 @@ export const executePlanExecute = (
           if (result.success) {
             step.status = "completed";
             step.result = result.output;
+            // Preserve the full uncompressed tool result (tool_call steps only)
+            // so synthesis can render every item past the preview cutoff.
+            const stepFullResult = (result as { fullResult?: string }).fullResult;
+            if (stepFullResult !== undefined) {
+              step.fullResult = stepFullResult;
+            }
             step.completedAt = new Date().toISOString();
             completedSteps.push(step);
 
@@ -1015,9 +1024,14 @@ export const executePlanExecute = (
 
       if (satisfied) {
         // ── SYNTHESIZE: Produce a clean final answer from step results ──
+        // Synthesis is the final render — feed it the FULL tool result
+        // (fullResult) rather than the compressed preview (result) so it can
+        // emit every item. Intermediate analysis/reflection prompts kept the
+        // preview to protect local-tier context; synthesis needs the whole
+        // payload, mirroring reactive's in-loop recall of the stored result.
         const synthResultTexts = plan.steps
-          .filter((s) => s.result)
-          .map((s, idx) => `Step ${idx + 1}: ${s.result}`);
+          .filter((s) => s.result || s.fullResult)
+          .map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
 
         const synthLlmResponse = yield* llm
           .complete({
