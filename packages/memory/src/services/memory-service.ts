@@ -110,17 +110,17 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
             // Generate semantic context from live SQLite (not stale memory.md)
             const semanticContext = yield* semantic
               .generateMarkdown(agentId, config.semantic.maxMarkdownLines)
-              .pipe(Effect.catchAll(() => Effect.succeed("")));
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:112", tag: errorTag(err) }).pipe(Effect.as(""))));
 
             // Get recent episodic entries (last 20)
             const recentEpisodes = yield* episodic
               .getRecent(agentId, 20)
-              .pipe(Effect.catchAll(() => Effect.succeed([] as DailyLogEntry[])));
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:117", tag: errorTag(err) }).pipe(Effect.as([] as DailyLogEntry[]))));
 
             // Get active workflows
             const activeWorkflows = yield* _procedural
               .listActive(agentId)
-              .pipe(Effect.catchAll(() => Effect.succeed([] as never[])));
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:122", tag: errorTag(err) }).pipe(Effect.as([] as never[]))));
 
             // Get current working memory
             const workingMemory = yield* working.get();
@@ -191,7 +191,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
                   entry.agentId,
                   config.zettelkasten.linkingThreshold,
                 )
-                .pipe(Effect.catchAll(() => Effect.succeed([])));
+                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:188", tag: errorTag(err) }).pipe(Effect.as([]))));
             }
             return id;
           }),
