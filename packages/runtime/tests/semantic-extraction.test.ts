@@ -196,6 +196,13 @@ describe("Semantic memory extraction during memory-flush", () => {
     expect(extractor.calls.length).toBeGreaterThanOrEqual(1);
     expect(extractor.calls[0]!.agentId).toBe("test-agent");
 
+    // Bug guard: task.input is an object ({ question }). The user message must
+    // carry the real task text (via extractTaskText), NOT String(obj) which
+    // serializes to "[object Object]" and poisons the extraction prompt.
+    const userMsg = extractor.calls[0]!.messages.find((m) => m.role === "user");
+    expect(userMsg?.content).not.toContain("[object Object]");
+    expect(userMsg?.content).toContain("2+2");
+
     // Extracted entries should have been stored via MemoryService.storeSemantic
     expect(memService.storedEntries.length).toBe(1);
     expect((memService.storedEntries[0] as any).content).toBe(
