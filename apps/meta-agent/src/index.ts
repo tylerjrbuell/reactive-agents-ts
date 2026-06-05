@@ -34,7 +34,7 @@ const isPlaceholderAnthropicKey =
 const hasOllamaConfigured = (process.env.OLLAMA_ENDPOINT?.trim() ?? "").length > 0;
 
 const provider = hasOllamaConfigured ? "ollama" : hasAnthropicKey && !isPlaceholderAnthropicKey ? "anthropic" : "test";
-const model = provider === "anthropic" ? "claude-sonnet-4-6" : provider === "ollama" ? "qwen3:14b" : "test-model";
+const model = provider === "anthropic" ? "claude-sonnet-4-6" : provider === "ollama" ? "gemma4:latest" : "test-model";
 const runtimeMode = isDryRun ? "DRY RUN" : provider === "anthropic" || provider === "ollama" ? "LIVE" : "TEST";
 const gatewayTimezone = process.env.GATEWAY_TIMEZONE ?? "UTC";
 const cortexUrl = process.env.CORTEX_URL?.trim();
