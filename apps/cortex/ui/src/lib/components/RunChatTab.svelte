@@ -237,7 +237,7 @@
             try {
               const event = JSON.parse(jsonStr) as AgentStreamEvent;
               if (event._tag === "TextDelta") {
-                const delta = (event as any).text as string;
+                const delta = event.text;
                 turns = turns.map((t) => {
                   if (t.id !== assistantTurnId) return t;
 
@@ -274,9 +274,9 @@
                   };
                 });
               } else if (event._tag === "IterationProgress") {
-                const iter = (event as any).iteration as number;
-                const max = (event as any).maxIterations as number;
-                const tools = (event as any).toolsCalledThisStep as string[] | undefined;
+                const iter = event.iteration;
+                const max = event.maxIterations;
+                const tools = event.toolsCalledThisStep;
                 const step: ReasoningStep = { iteration: iter, maxIterations: max, ...(tools?.length ? { toolsCalledThisStep: tools } : {}) };
                 turns = turns.map((t) => {
                   if (t.id !== assistantTurnId) return t;
@@ -295,9 +295,8 @@
                   return { ...t, streamProgress: { iteration: iter, maxIterations: max }, reasoningSteps: steps };
                 });
               } else if (event._tag === "ThoughtEmitted") {
-                const thoughtEvent = event as { _tag: "ThoughtEmitted"; content: string; iteration: number };
-                const iter = thoughtEvent.iteration;
-                const thought = thoughtEvent.content;
+                const iter = event.iteration;
+                const thought = event.content;
                 turns = turns.map((t) => {
                   if (t.id !== assistantTurnId) return t;
                   const existing = t.reasoningSteps ?? [];
@@ -313,24 +312,24 @@
                   return { ...t, reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }] };
                 });
               } else if (event._tag === "StreamCompleted") {
-                const done = event as {
-                    metadata?: { tokensUsed?: number; iterations?: number; stepsCount?: number };
-                  toolSummary?: Array<{ name: string }>;
-                  output?: string;
+                const metadata = event.metadata as {
+                  tokensUsed?: number;
+                  iterations?: number;
+                  stepsCount?: number;
                 };
-                tokensUsed = done.metadata?.tokensUsed ?? 0;
-                  steps = done.metadata?.iterations ?? done.metadata?.stepsCount ?? 0;
-                if (done.toolSummary && done.toolSummary.length > 0) {
-                  toolsUsed = done.toolSummary.map((t: { name: string }) => t.name);
+                tokensUsed = metadata.tokensUsed ?? 0;
+                steps = metadata.iterations ?? metadata.stepsCount ?? 0;
+                if (event.toolSummary && event.toolSummary.length > 0) {
+                  toolsUsed = event.toolSummary.map((t) => t.name);
                 }
-                const output = done.output;
+                const output = event.output;
                 if (output?.trim()) {
                   turns = turns.map((t) =>
                     t.id === assistantTurnId ? { ...t, content: output } : t,
                   );
                 }
               } else if (event._tag === "StreamError") {
-                error = (event as any).cause ?? "Stream error";
+                error = event.cause ?? "Stream error";
               }
             } catch { /* ignore parse errors */ }
           }
