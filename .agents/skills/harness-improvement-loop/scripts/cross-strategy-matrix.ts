@@ -85,6 +85,8 @@ interface Cell {
   iterationsUsed: number | null;
   costUsd: number;
   outputPreview: string;
+  /** Full output — needed to judge QUALITY on unverifiable/open-ended tasks where binary success is blind. */
+  output: string;
   error?: string;
 }
 
@@ -149,6 +151,7 @@ async function runCell(task: TaskSpec, strategy: string, model: string, traceDir
       iterationsUsed: result.metadata?.stepsCount ?? null,
       costUsd: result.metadata?.cost ?? 0,
       outputPreview: result.output.slice(0, 300),
+      output: result.output,
     };
   } catch (err) {
     return {
@@ -163,6 +166,7 @@ async function runCell(task: TaskSpec, strategy: string, model: string, traceDir
       iterationsUsed: null,
       costUsd: 0,
       outputPreview: "",
+      output: "",
       error: err instanceof Error ? err.message : String(err),
     };
   }
