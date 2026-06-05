@@ -88,11 +88,11 @@ Learned `SkillRecord` objects now survive process restarts. The skill system use
 
 ### Decision tracing
 
-Every tool call now carries the model's stated *why*. Rationale capture went from an optional nudge to a coaxed contract across all three execution paths:
+Agents can capture the model's stated *why* for every tool call. Tool-call rationale on the reactive/adaptive paths is **opt-in** (audit feature, not performance — pure token/latency cost):
 
-- **Kernel-injected system prompt** — Unconditionally appends a MANDATORY rationale instruction regardless of `toolSchemaDetail`. Model must precede each tool call with `<rationale call="N">{"why":"…","confidence":0-1}</rationale>`.
-- **Native function-calling capture** — `parseRationaleBlocks()` reads side-channel blocks from `thought` + `thinking` content and attaches each rationale to the matching `ToolCallSpec` by 1-indexed position.
-- **plan-execute-reflect enforcement** — `LLMPlanStepSchema` now carries a `rationale: { why, confidence? }` field; planner marks it MANDATORY for every `tool_call` step. Failures after retry emit `plan_rationale_missing` metric — no synthetic fallback invented.
+- **`auditRationale` opt-in** — `.withReasoning({ auditRationale: true })` (or env `RA_RATIONALE_AUDIT=1`). When on, the kernel coaxes one `<rationale call="N">{"why":"…","confidence":0-1}</rationale>` block per tool call. Off by default.
+- **Native function-calling capture** — `parseRationaleBlocks()` reads side-channel blocks from `thought` + `thinking` content and attaches each rationale to the matching `ToolCallSpec` by position. The parser tolerates fenced/prose-wrapped JSON, over-length `why`, and repeated `call="N"` attributes, so capture is reliable on small local models.
+- **plan-execute-reflect enforcement (always on)** — `LLMPlanStepSchema` carries a `rationale: { why, confidence? }` field, MANDATORY for every `tool_call` step (independent of `auditRationale`). Failures after retry emit a `plan_rationale_missing` metric — no synthetic fallback invented.
 - **`AgentDebrief.rationale[]`** — Unified milestone-decision log: tool selections, curator decisions, strategy switches, reactive interventions, and terminations. All render in `debrief.markdown` under `## Decision Rationale`.
 
 See [Decision Tracing](/concepts/decision-tracing/) for the full pipeline and [Debrief & Chat](/features/debrief-chat/) for the result shape.

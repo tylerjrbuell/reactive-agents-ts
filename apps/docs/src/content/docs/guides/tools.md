@@ -206,6 +206,21 @@ When **`.withTools()`** is enabled, **`.withMetaTools()`** defaults to **on** (p
 
 All of the above are invoked via the provider’s **native function calling** path (`tool_use` / `tool_calls` → executed → `tool_result` in the thread).
 
+## Scoping the Tool Set
+
+Two `.withTools()` options control which tools the agent can reach, with different strictness:
+
+```typescript
+// Hard restriction — the agent can ONLY see/call these tools.
+agent.withTools({ allowedTools: ["github/list_commits", "file-write"] })
+
+// Soft focus — all tools remain callable, but these are surfaced/prioritized.
+agent.withTools({ focusedTools: ["crypto-price"] })
+```
+
+- **`allowedTools`** is a hard allowlist. Anything outside it is pruned before the model sees it — use it to lock an agent to a known surface (and to give local-model tool selection a safety net).
+- **`focusedTools`** is soft guidance. The full toolset stays available, but the focused names are highlighted so the model gravitates to them without being blocked from others. Resolution order: `focusedTools` (soft guidance) → `allowedTools` (hard restriction) → all tools.
+
 ## Parallel and Chain Tool Execution
 
 Agents can issue multiple tool calls from a single thought step via native function calling.

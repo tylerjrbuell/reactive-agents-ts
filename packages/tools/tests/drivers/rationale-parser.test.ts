@@ -15,8 +15,9 @@ describe("extractRationale", () => {
     expect(extractRationale({ rationale: "nope" })).toBeUndefined()
   })
 
-  it("rejects why over 280 chars", () => {
-    expect(extractRationale({ rationale: { why: "x".repeat(281) } })).toBeUndefined()
+  it("truncates why over 280 chars to 280", () => {
+    const r = extractRationale({ rationale: { why: "x".repeat(281) } })
+    expect(r?.why).toHaveLength(280)
   })
 
   it("drops out-of-range confidence", () => {
@@ -64,5 +65,31 @@ describe("parseRationaleBlocks", () => {
   it("ignores blocks without a valid why", () => {
     const text = `<rationale call="1">{"confidence":0.9}</rationale>`
     expect(parseRationaleBlocks(text).size).toBe(0)
+  })
+
+  it("parses a fenced JSON body with trailing prose", () => {
+    const text =
+      "<rationale call=\"1\">```json\n{\"why\":\"fetch commits\",\"confidence\":0.9}\n```\nThis is my reasoning.</rationale>"
+    const out = parseRationaleBlocks(text)
+    expect(out.get(1)).toEqual({ why: "fetch commits", confidence: 0.9 })
+  })
+
+  it("truncates a why over 280 chars instead of dropping the block", () => {
+    const text = `<rationale call="1">{"why":"${"x".repeat(400)}"}</rationale>`
+    const out = parseRationaleBlocks(text)
+    expect(out.get(1)?.why).toHaveLength(280)
+  })
+
+  it("maps three colliding call=1 blocks to distinct sequential keys", () => {
+    const text = `
+      <rationale call="1">{"why":"first"}</rationale>
+      <rationale call="1">{"why":"second"}</rationale>
+      <rationale call="1">{"why":"third"}</rationale>
+    `
+    const out = parseRationaleBlocks(text)
+    expect(out.size).toBe(3)
+    expect(out.get(1)?.why).toBe("first")
+    expect(out.get(2)?.why).toBe("second")
+    expect(out.get(3)?.why).toBe("third")
   })
 })

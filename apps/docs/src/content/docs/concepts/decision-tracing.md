@@ -36,15 +36,33 @@ The type lives in `@reactive-agents/core` so the trace, tools, reasoning, and ru
 | Strategy switch                 | `strategy-switched`        | `rationale`               |
 | Reactive decision               | `decision-evaluated`       | `rationale`               |
 
-Tool-call rationale is **coaxed** from the model by a kernel-injected system prompt and (for plan-execute) a schema-enforced planner field. When the model complies, rationale is captured; when it doesn't, the field is absent and a metric fires — never synthesized.
+Tool-call rationale is **coaxed** from the model by a kernel-injected system prompt (opt-in — see below) and (for plan-execute) a schema-enforced planner field. When the model complies, rationale is captured; when it doesn't, the field is absent and a metric fires — never synthesized.
+
+## Opt-in: `auditRationale`
+
+Tool-call rationale on the **reactive / adaptive** paths is **off by default** and enabled per-agent:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({ auditRationale: true })   // or env RA_RATIONALE_AUDIT=1
+  .build();
+```
+
+Rationale is an **audit feature, not a performance one** — the per-tool-call `<rationale>` block is pure decode/token cost with no quality benefit (ablation: enabling it added ~20–27% output tokens / latency on rationale-emitting local models, flat quality). Turn it on when you need an auditable "why" trail in the debrief; leave it off for lowest cost/latency.
+
+Two things the flag does **not** change:
+
+- **plan-execute-reflect** always carries rationale — it's a structural field of the plan JSON (generated once per plan, not per turn), independent of `auditRationale`.
+- **Capture is opportunistic.** The flag controls whether the kernel *asks* for rationale. If a rationale block appears in model output for any other reason (e.g. recalled from memory), it is still parsed and logged.
 
 ## Capturing rationale at tool-call time
 
-Rationale capture is **mandatory** and coaxed from the model on three paths:
+Rationale is coaxed from the model on three paths. Paths 1–2 fire only when `auditRationale` is enabled; path 3 (plan-execute) is always on:
 
 ### 1. Native function-calling (Ollama, Anthropic, OpenAI, Gemini)
 
-The kernel injects a hard requirement into the system prompt — independent of `toolSchemaDetail` — instructing the model to emit one `<rationale>` block per tool call, in order:
+When `auditRationale` is enabled, the kernel injects a requirement into the system prompt — independent of `toolSchemaDetail` — instructing the model to emit one `<rationale>` block per tool call, in order:
 
 ```text
 ## Decision Rationale (MANDATORY — every tool call)
@@ -194,7 +212,7 @@ The rendered `debrief.markdown` includes a `## Decision Rationale` section autom
 
 ## Authoring rationale-bearing tools
 
-Tool authors don't need to do anything: the rationale lives on the model side and is coaxed by the kernel-injected system prompt. There is no opt-in flag — every tool call is expected to carry rationale, and the `plan-execute` strategy retries plan generation if the model forgets.
+Tool authors don't need to do anything: the rationale lives on the model side. On the reactive/adaptive paths it's coaxed by the kernel-injected system prompt **when `auditRationale` is enabled**; the `plan-execute` strategy always requires it as a plan-step field and retries plan generation if the model forgets. The parser tolerates messy small-model output (markdown-fenced JSON bodies, over-length `why`, repeated `call="N"` attributes) so opt-in capture is reliable cross-tier.
 
 ## What this isn't
 
