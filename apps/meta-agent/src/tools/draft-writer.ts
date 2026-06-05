@@ -3,6 +3,7 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Effect } from "effect";
 import type { ToolDefinition } from "reactive-agents/tools";
+import { gradeDraft } from "../grounding/grade.js";
 
 const DRAFTS_DIR = join(import.meta.dirname, "../../drafts");
 
@@ -62,59 +63,53 @@ export const draftWriterTool: ToolDefinition = {
 export const draftWriterHandler = (
   args: Record<string, unknown>,
 ): Effect.Effect<unknown> =>
-  Effect.try({
-    try: () => {
-      const type = args.type as string;
-      const title = args.title as string;
-      const content = args.content as string;
-      const platform = args.platform as string | undefined;
-      const threadUrl = args.threadUrl as string | undefined;
-      const context = args.context as string | undefined;
+  Effect.gen(function* () {
+    const type = args.type as string;
+    const title = args.title as string;
+    const content = args.content as string;
+    const platform = args.platform as string | undefined;
+    const threadUrl = args.threadUrl as string | undefined;
+    const context = args.context as string | undefined;
 
-      mkdirSync(DRAFTS_DIR, { recursive: true });
-
-      const timestamp = new Date().toISOString().split("T")[0];
-      const slug = title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .slice(0, 50);
-      const filename = `${timestamp}-${type}-${slug}.md`;
-      const filepath = join(DRAFTS_DIR, filename);
-
-      const frontmatter = [
-        "---",
-        `type: ${type}`,
-        `title: "${title.replace(/"/g, '\\"')}"`,
-        platform ? `platform: ${platform}` : null,
-        threadUrl ? `thread_url: ${threadUrl}` : null,
-        `created: ${new Date().toISOString()}`,
-        `status: draft`,
-        "---",
-        "",
-      ]
-        .filter((line): line is string => line !== null)
-        .join("\n");
-
-      const body = [
-        context ? `> **Context:** ${context}\n` : null,
-        threadUrl ? `> **Thread:** ${threadUrl}\n` : null,
-        content,
-      ]
-        .filter((line): line is string => line !== null)
-        .join("\n");
-
-      writeFileSync(filepath, frontmatter + body, "utf-8");
-
+    const grade = yield* gradeDraft(content, { fetchImpl: globalThis.fetch });
+    if (!grade.pass) {
       return {
-        saved: true,
-        path: filepath,
-        filename,
-        message: `Draft saved to drafts/${filename}. Review and post manually.`,
+        saved: false,
+        issues: grade.issues,
+        deadLinks: grade.deadLinks,
+        message:
+          "Draft NOT saved — quality gate failed. Revise to fix these issues (lead with value, " +
+          "remove dead links / promo) and call draft-writer again.",
       };
-    },
-    catch: (e) => new Error(String(e)),
-  }).pipe(
-    Effect.catchAll((e) =>
-      Effect.succeed({ saved: false, error: e.message }),
-    ),
-  );
+    }
+
+    return yield* Effect.try({
+      try: () => {
+        mkdirSync(DRAFTS_DIR, { recursive: true });
+        const timestamp = new Date().toISOString().split("T")[0];
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50);
+        const filename = `${timestamp}-${type}-${slug}.md`;
+        const filepath = join(DRAFTS_DIR, filename);
+        const frontmatter = [
+          "---",
+          `type: ${type}`,
+          `title: "${title.replace(/"/g, '\\"')}"`,
+          platform ? `platform: ${platform}` : null,
+          threadUrl ? `thread_url: ${threadUrl}` : null,
+          `created: ${new Date().toISOString()}`,
+          `quality: pass`,
+          `status: draft`,
+          "---",
+          "",
+        ].filter((l): l is string => l !== null).join("\n");
+        const body = [
+          context ? `> **Context:** ${context}\n` : null,
+          threadUrl ? `> **Thread:** ${threadUrl}\n` : null,
+          content,
+        ].filter((l): l is string => l !== null).join("\n");
+        writeFileSync(filepath, frontmatter + body, "utf-8");
+        return { saved: true, path: filepath, filename, message: `Draft saved to drafts/${filename}. Review and post manually.` };
+      },
+      catch: (e) => new Error(String(e)),
+    }).pipe(Effect.catchAll((e) => Effect.succeed({ saved: false, error: e.message })));
+  });
