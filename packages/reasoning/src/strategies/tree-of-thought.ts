@@ -358,35 +358,36 @@ export const executeTreeOfThought = (
           breadth,
         );
 
-        // Score each candidate
-        for (const candidate of candidates) {
-          // Budget guard: abort scoring if cost exceeds limit
-          if (maxCost !== undefined && totalCost >= maxCost) {
-            steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping scoring.`, { frameworkInstrumentation: "tot-marker" }));
-            break;
-          }
+        // ── Batch scoring ──
+        // Score ALL candidates of this parent in ONE call. They share the same
+        // ancestor path, so per-candidate calls re-sent the task + path + rubric
+        // B times (the dominant ToT token cost — local tiers have no prompt
+        // caching). Budget guard runs once before the single call.
+        let scores: number[] = candidates.map(() => 0.5);
+        if (maxCost !== undefined && totalCost >= maxCost) {
+          steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping scoring.`, { frameworkInstrumentation: "tot-marker" }));
+        } else if (candidates.length > 0) {
+          const scoringSystemPrompt = yield* compilePromptOrFallback(
+            promptService,
+            "reasoning.tree-of-thought-score",
+            {},
+            input.systemPrompt
+              ? `${input.systemPrompt}\n\nYou are evaluating reasoning paths. Rate each candidate's promise on a scale of 0.0 to 1.0.`
+              : "You are evaluating reasoning paths. Rate each candidate's promise on a scale of 0.0 to 1.0.",
+          );
+          const ancestorPath = getAncestorPath(allNodes, parent);
 
+          // One score-evaluation call for the whole parent. Budget must cover a
+          // thinking model's single reasoning pass + N score lines — too tight a
+          // budget truncates `<think>` before any score is emitted, collapsing
+          // every candidate to the 0.5 default. Scale headroom with breadth.
           const scoreResponse = yield* llm
             .complete({
               messages: [
-                {
-                  role: "user",
-                  content: buildScoringPrompt(
-                    input.taskDescription,
-                    candidate,
-                    getAncestorPath(allNodes, parent),
-                  ),
-                },
+                { role: "user", content: buildBatchScoringPrompt(input.taskDescription, candidates, ancestorPath) },
               ],
-              systemPrompt: yield* compilePromptOrFallback(
-                promptService,
-                "reasoning.tree-of-thought-score",
-                {},
-                input.systemPrompt
-                  ? `${input.systemPrompt}\n\nYou are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.`
-                  : "You are evaluating a reasoning path. Rate its promise on a scale of 0.0 to 1.0. Respond with ONLY a number.",
-              ),
-              maxTokens: THINKING_SAFE_MIN_TOKENS,
+              systemPrompt: scoringSystemPrompt,
+              maxTokens: THINKING_SAFE_MIN_TOKENS + 512 * candidates.length,
               temperature: 0.2,
             })
             .pipe(
@@ -404,9 +405,48 @@ export const executeTreeOfThought = (
           totalTokens += scoreResponse.usage.totalTokens;
           totalCost += scoreResponse.usage.estimatedCost;
 
-          const score = parseScore(
-            extractThinkingSafeContent(scoreResponse).content,
-          );
+          const batchRaw = extractThinkingSafeContent(scoreResponse).content;
+          const batch = parseBatchScoresDetailed(batchRaw, candidates.length);
+          scores = batch.scores;
+
+          // Fallback: the batch response carried no usable scores (e.g. a
+          // thinking model truncated mid-`<think>`). Re-score each candidate
+          // alone — one candidate fits the budget, so it parses reliably. Costs
+          // the batching savings on that parent but never ships an all-0.5
+          // collapse that makes pruning blind.
+          if (!batch.ok) {
+            for (let ci = 0; ci < candidates.length; ci++) {
+              const single = yield* llm
+                .complete({
+                  messages: [
+                    { role: "user", content: buildBatchScoringPrompt(input.taskDescription, [candidates[ci]!], ancestorPath) },
+                  ],
+                  systemPrompt: scoringSystemPrompt,
+                  maxTokens: THINKING_SAFE_MIN_TOKENS,
+                  temperature: 0.2,
+                })
+                .pipe(
+                  Effect.mapError(
+                    (err) =>
+                      new ExecutionError({
+                        strategy: "tree-of-thought",
+                        message: `Scoring failed at depth ${d}`,
+                        step: d,
+                        cause: err,
+                      }),
+                  ),
+                );
+              totalTokens += single.usage.totalTokens;
+              totalCost += single.usage.estimatedCost;
+              scores[ci] = parseScore(extractThinkingSafeContent(single).content);
+            }
+          }
+        }
+
+        // Materialize nodes from the batched scores.
+        for (let ci = 0; ci < candidates.length; ci++) {
+          const candidate = candidates[ci]!;
+          const score = scores[ci] ?? 0.5;
 
           const node: ThoughtNode = {
             id: ulid(),
@@ -690,27 +730,111 @@ Format each as a numbered item (1., 2., etc.).
 Each should explore a meaningfully different direction${toolHint}.`;
 }
 
-function buildScoringPrompt(
+/**
+ * Batch scoring prompt: score every candidate of one parent in a SINGLE call.
+ * Per-candidate scoring re-sent the task + ancestor path + rubric once per
+ * candidate (B× token bloat — the dominant ToT cost on local tiers with no
+ * prompt caching). Candidates share the same parent, so the ancestor path is
+ * identical for all of them: send it ONCE here.
+ */
+function buildBatchScoringPrompt(
   taskDescription: string,
-  candidate: string,
+  candidates: string[],
   ancestorPath: string[],
 ): string {
   const pathStr = ancestorPath.length > 0
     ? `\nPrevious reasoning:\n${ancestorPath.join("\n→ ")}`
     : "";
 
+  const numbered = candidates
+    .map((c, i) => `${i + 1}. ${c}`)
+    .join("\n");
+
   return `Task: ${taskDescription}${pathStr}
 
-Candidate thought: ${candidate}
+Candidate thoughts:
+${numbered}
 
-Rate this thought on a scale from 0.0 to 1.0:
+Rate each candidate thought on a scale from 0.0 to 1.0:
 - 1.0 = Directly leads to a correct, complete solution
 - 0.7 = Promising direction, needs more development
 - 0.5 = Plausible but uncertain
 - 0.3 = Unlikely to lead to a good solution
 - 0.0 = Clearly wrong or irrelevant
 
-Respond with ONLY a decimal number between 0.0 and 1.0.`;
+Respond with one line per candidate in the form \`N: SCORE\` (e.g. \`1: 0.8\`), using the candidate numbers above. Output only those lines.`;
+}
+
+/** A bare score token a model emits as the WHOLE answer for one candidate:
+ *  `0.8`, `1`, `.7`, `75%`, `4/5`. Deliberately strict — prose like
+ *  `**Analyze the request**` or `Approach via caching` must NOT qualify, so a
+ *  truncated chain-of-thought is detected as a parse failure (→ fallback)
+ *  rather than silently scored 0.5. */
+const SCORE_TOKEN_RE = /^(?:[01](?:\.\d+)?|\.\d+|\d{1,3}\s*%|\d+\s*\/\s*\d+)$/;
+
+/**
+ * Parse batched scores into `{ scores, ok }`. `ok=false` signals the response
+ * carried no usable per-candidate scores (e.g. a thinking model spent its whole
+ * budget on `<think>` and got truncated before emitting any) — the caller then
+ * falls back to reliable per-candidate scoring instead of shipping a silent
+ * all-0.5 collapse that makes BFS pruning non-discriminating.
+ *
+ * Accepts two formats, both requiring genuinely numeric score bodies:
+ *   1. Indexed `N: SCORE` lines (the prompt's requested format).
+ *   2. Every non-empty line is a bare score token (handles `0.8\n0.7\n0.6`
+ *      and a single `0.8` broadcast to all candidates).
+ */
+function parseBatchScoresDetailed(
+  text: string,
+  count: number,
+): { scores: number[]; ok: boolean } {
+  const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const source = stripped.length > 0 ? stripped : text.trim();
+  const lines = source.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  const fail = { scores: Array.from({ length: count }, () => 0.5), ok: false };
+  if (lines.length === 0) return fail;
+
+  // (1) Indexed `N: <score-token>` — body must START with a score token, so
+  // numbered thinking lists (`1. **Analyze**`) are rejected, not mis-scored.
+  const byIndex = new Map<number, number>();
+  for (const line of lines) {
+    const m = line.match(/^(\d+)\s*[:.\)\-]\s*(.+)$/);
+    if (m) {
+      const idx = Number(m[1]);
+      const body = m[2]!.trim();
+      const tok = body.match(/^([01](?:\.\d+)?|\.\d+|\d{1,3}\s*%|\d+\s*\/\s*\d+)\b/);
+      if (idx >= 1 && idx <= count && tok) {
+        byIndex.set(idx, parseScore(tok[1]!));
+      }
+    }
+  }
+  if (byIndex.size > 0) {
+    return {
+      scores: Array.from({ length: count }, (_, i) => byIndex.get(i + 1) ?? 0.5),
+      ok: true,
+    };
+  }
+
+  // (2) Every line is a bare score token.
+  if (lines.every((l) => SCORE_TOKEN_RE.test(l))) {
+    if (lines.length === 1) {
+      const s = parseScore(lines[0]!);
+      return { scores: Array.from({ length: count }, () => s), ok: true };
+    }
+    return {
+      scores: Array.from({ length: count }, (_, i) =>
+        lines[i] !== undefined ? parseScore(lines[i]!) : 0.5,
+      ),
+      ok: true,
+    };
+  }
+
+  return fail;
+}
+
+/** Thin wrapper returning just the score array (the `ok` flag is internal). */
+export function parseBatchScores(text: string, count: number): number[] {
+  return parseBatchScoresDetailed(text, count).scores;
 }
 
 function parseCandidates(text: string, expectedCount: number): string[] {

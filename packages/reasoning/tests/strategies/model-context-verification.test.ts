@@ -418,7 +418,7 @@ describe("Model context verification", () => {
     it("sends clean task text to expansion and scoring phases", async () => {
       const { calls, layer } = createCapturingLLM({
         "Generate exactly": "1. Historical analysis approach\n2. Geographic lookup approach",
-        "Rate this thought": "0.8",
+        "Rate each": "0.8",
         "Selected Approach": "FINAL ANSWER: Paris is the capital of France.",
       });
 
@@ -448,7 +448,7 @@ describe("Model context verification", () => {
     it("strips <think> from expansion responses before parsing candidates", async () => {
       const { calls, layer } = createCapturingLLM({
         "Generate exactly": "<think>Let me brainstorm...</think>\n1. Approach A\n2. Approach B",
-        "Rate this thought": "0.7",
+        "Rate each": "0.7",
         "Selected Approach": "FINAL ANSWER: Result via Approach A.",
       });
 
