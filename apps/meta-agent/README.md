@@ -27,6 +27,7 @@
 ```bash
 cp .env.production.example .env.production
 # Add ANTHROPIC_API_KEY and TAVILY_API_KEY
+# Optional: CORTEX_URL=ws://localhost:4000 streams live telemetry to a running Cortex studio
 bun install
 bun run build    # build reactive-agents packages first
 bun run start

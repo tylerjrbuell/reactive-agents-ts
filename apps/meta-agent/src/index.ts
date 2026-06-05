@@ -20,6 +20,9 @@ import {
   communityMonitorHandler,
 } from "./tools/community-monitor.js";
 import { draftWriterTool, draftWriterHandler } from "./tools/draft-writer.js";
+import { competitiveIntelTool, competitiveIntelHandler } from "./tools/competitive-intel.js";
+import { budgetLimit, timeoutAfter, maxIterations, watchdog } from "@reactive-agents/compose";
+import { growthInvariants, growthObservability } from "./harness/growth-harness.js";
 
 const isDryRun = process.argv.includes("--dry-run");
 const rawAnthropicKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
@@ -31,9 +34,10 @@ const isPlaceholderAnthropicKey =
 const hasOllamaConfigured = (process.env.OLLAMA_ENDPOINT?.trim() ?? "").length > 0;
 
 const provider = hasOllamaConfigured ? "ollama" : hasAnthropicKey && !isPlaceholderAnthropicKey ? "anthropic" : "test";
-const model = provider === "anthropic" ? "claude-sonnet-4-20250514" : provider === "ollama" ? "qwen3.5" : "test-model";
+const model = provider === "anthropic" ? "claude-sonnet-4-6" : provider === "ollama" ? "qwen3:14b" : "test-model";
 const runtimeMode = isDryRun ? "DRY RUN" : provider === "anthropic" || provider === "ollama" ? "LIVE" : "TEST";
 const gatewayTimezone = process.env.GATEWAY_TIMEZONE ?? "UTC";
+const cortexUrl = process.env.CORTEX_URL?.trim();
 
 if (!isDryRun && hasAnthropicKey && isPlaceholderAnthropicKey) {
   console.warn(
@@ -53,7 +57,7 @@ console.log(`Gateway Timezone: ${gatewayTimezone}\n`);
 const agentBuilder = ReactiveAgents.create()
   .withName("community-growth-agent")
   .withProvider(provider)
-  .withModel(model)
+  .withModel(provider === "ollama" ? { model, numCtx: 12_000 } : model)
   // Persona: developer advocate, adds value first
   .withPersona({
     role: "Developer Advocate for reactive-agents",
@@ -73,27 +77,41 @@ const agentBuilder = ReactiveAgents.create()
     tools: [
       { definition: communityMonitorTool, handler: communityMonitorHandler },
       { definition: draftWriterTool, handler: draftWriterHandler },
+      { definition: competitiveIntelTool, handler: competitiveIntelHandler },
     ],
   })
+  // Observability: surfaces gateway decision logs (cron execute/skip/queue reasons).
+  // logModelIO: true → full prompts and responses in logs (can be very verbose).
   .withObservability({
     verbosity: "debug",
     live: true,
-    logModelIO: false, // set to true to see full prompts and responses in logs (can be very verbose)
+    logModelIO: false,
   })
   // Memory: remember what we've seen to avoid duplicate drafts
-  .withMemory("1")
+  .withMemory()
 
   // Reasoning: adaptive — decides how complex each task needs to be
   .withReasoning({ defaultStrategy: "adaptive" })
 
-  // Observability: required to surface gateway decision logs (cron execute/skip/queue reasons)
-  .withObservability({ verbosity: "debug", live: true })
+  // ─── Compose API: robust custom control ─────────────────────────────────────
+  // Hard invariants injected into the system prompt every iteration (persona-independent)
+  // + observability taps at live harness chokepoints.
+  .withHarness(growthInvariants)
+  .withHarness(growthObservability())
+  // Safety killswitches for unattended 24/7 operation.
+  .compose(maxIterations({ max: 20, onTrigger: "stop" }))
+  .compose(budgetLimit({ maxTokens: 60_000, onTrigger: "stop" }))
+  .compose(timeoutAfter({ wallClock: "5m", onTrigger: "stop" }))
+  .compose(watchdog({ noProgressFor: "90s", onTrigger: "stop" }))
+  // Runtime hardening.
+  .withTimeout(120_000)
+  .withRetryPolicy({ maxRetries: 2, backoffMs: 1000 })
 
   // Gateway: persistent autonomous loop
   .withGateway({
     timezone: gatewayTimezone,
     heartbeat: {
-      intervalMs: isDryRun ? 100 : 60000, // 1 minute for testing, but should be 1 hour in production
+      intervalMs: isDryRun ? 100 : 3_600_000, // hourly community sweep (100ms in dry-run for fast config validation)
       policy: "adaptive",
       instruction:
         "Check developer communities for TypeScript AI agent framework discussions. " +
@@ -114,7 +132,8 @@ const agentBuilder = ReactiveAgents.create()
           "Output two sections: (1) Where reactive-agents is excelling now, (2) Where reactive-agents is behind now. " +
           "For each point, include concrete evidence links and a confidence level (high/medium/low). " +
           "End with a short 'next 24h actions' list for product/docs/devrel. " +
-          "Save with draft-writer as type: blog-post, platform: markdown, title prefix 'Hourly Competitive Scorecard', and context 'hourly-competitive-scorecard'.",
+          "Save with draft-writer as type: blog-post, platform: markdown, title prefix 'Hourly Competitive Scorecard', and context 'hourly-competitive-scorecard'. " +
+          "Use the competitive-intel tool to fetch cited release evidence; cite ONLY those urls with their confidence levels, and mark any claim without an evidence item as 'unverified'. ",
         priority: "high",
       },
       {
@@ -127,7 +146,8 @@ const agentBuilder = ReactiveAgents.create()
           "Mastra, Portkey, VoltAgent, Agentic.js, LangChain.js, and LangGraph.js. " +
           "Produce a concise comparison draft with: (1) what shipped recently, (2) positioning claims, " +
           "(3) where reactive-agents is meaningfully differentiated, and (4) evidence links. " +
-          "Save output with draft-writer as type: blog-post, platform: markdown, and include 'competition-sweep-ts' in context.",
+          "Save output with draft-writer as type: blog-post, platform: markdown, and include 'competition-sweep-ts' in context. " +
+          "Use the competitive-intel tool to fetch cited release evidence; cite ONLY those urls with their confidence levels, and mark any claim without an evidence item as 'unverified'. ",
         priority: "high",
       },
       {
@@ -143,8 +163,8 @@ const agentBuilder = ReactiveAgents.create()
         priority: "high",
       },
       {
-        // Weekly blog post draft — every 5 minutes for testing, but should be every Monday at 10am in production
-        schedule: "*/5 * * * *",
+        // Weekly blog post draft — Mondays at 10:00
+        schedule: "0 10 * * 1",
         instruction:
           "Generate a draft blog post for dev.to or Hashnode based on recent reactive-agents " +
           "activity. Topics to consider: new features shipped, interesting usage patterns, " +
@@ -171,16 +191,18 @@ const agentBuilder = ReactiveAgents.create()
     },
   });
 
+const builderWithCortex = cortexUrl ? agentBuilder.withCortex(cortexUrl) : agentBuilder;
+
 // Add test responses only in test mode (no real API key)
 const agent = await (provider === "test"
-  ? agentBuilder
+  ? builderWithCortex
       .withTestScenario([
         { match: "Check developer", text: "FINAL ANSWER: Monitored communities. Found 2 relevant threads. Saved drafts." },
         { text: "FINAL ANSWER: Community check complete. No new opportunities found." },
       ])
       .withMaxIterations(10)
       .build()
-  : agentBuilder.build());
+  : builderWithCortex.build());
 
 console.log(`Agent ID: ${agent.agentId}`);
 
