@@ -19,6 +19,7 @@ import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
+import { deepClone } from "../schema-utils.js";
 
 // ─── Gemini Message Conversion Helpers ───
 
@@ -589,7 +590,7 @@ export const GeminiProviderLive = Layer.effect(
       completeStructured: (request) =>
         Effect.gen(function* () {
           const jsonSchema = Schema.encodedSchema(request.outputSchema);
-          const schemaObj = JSON.parse(JSON.stringify(jsonSchema));
+          const schemaObj = deepClone<Record<string, unknown>>(jsonSchema);
           const schemaStr = JSON.stringify(schemaObj, null, 2);
 
           const client = yield* Effect.promise(() => getClient());

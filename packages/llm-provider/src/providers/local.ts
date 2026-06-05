@@ -21,6 +21,7 @@ import { warnCapabilityFallback } from '../capability-resolver.js'
 import type { Capability } from '../capability.js'
 import { emitToolCallComplete } from '../streaming-helpers.js'
 import { selectAdapter } from '../adapter.js'
+import { deepClone } from '../schema-utils.js'
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
 // per process. CalibrationStore write-through (cross-process) lands in S2.4.
@@ -769,7 +770,7 @@ export const LocalProviderLive = Layer.effect(
                     const encodedSchema = Schema.encodedSchema(
                         request.outputSchema
                     )
-                    const schemaObj = JSON.parse(JSON.stringify(encodedSchema))
+                    const schemaObj = deepClone<Record<string, unknown>>(encodedSchema)
                     const schemaStr = JSON.stringify(schemaObj, null, 2)
 
                     // Build Ollama-native format constraint.
