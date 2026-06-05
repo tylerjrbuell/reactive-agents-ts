@@ -134,11 +134,20 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   });
 
   it("should return partial result when max refinements reached without satisfaction", async () => {
+    // NOTE: uses a TWO-step plan on purpose. A single analysis-step plan now
+    // takes the streamline short-circuit (one structured generation, no
+    // refinement loop), so it can no longer exercise refinement-exhaustion.
+    // Two steps keep the full plan→execute→reflect→refine path under test.
     const layer = TestLLMServiceLayer([
       { match: "planning agent", text: makePlanJson([
         {
           title: "Investigate",
           instruction: "Investigate the problem",
+          type: "analysis",
+        },
+        {
+          title: "Analyze",
+          instruction: "Analyze the investigation",
           type: "analysis",
         },
       ]) },
@@ -184,6 +193,48 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(execSteps.length).toBeGreaterThanOrEqual(1);
     expect(reflectSteps.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("short-circuits a single-analysis-step plan to ONE structured generation (no double-generate, no reflect)", async () => {
+    // Streamline: when the planner emits exactly one analysis step (task did not
+    // decompose), plan-execute previously generated the answer twice — once in
+    // step execution, once in synthesis — plus a no-value reflect pass. The
+    // short-circuit collapses this to a single structured generation so a
+    // non-decomposable task degrades gracefully to ~reactive cost.
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: makePlanJson([
+        {
+          title: "Explain indexing trade-offs",
+          instruction: "Explain B-tree, hash, and full-text indexing across three sections",
+          type: "analysis",
+        },
+      ]) },
+      // The short-circuit's single generation prompt carries this phrase.
+      { match: "well-structured final answer", text: "## B-tree\nRange queries.\n## Hash\nExact match.\n## Full-text\nSearch." },
+    ]);
+
+    const program = executePlanExecute({
+      taskDescription: "Explain database indexing trade-offs",
+      taskType: "explanation",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+
+    expect(result.status).toBe("completed");
+    expect(result.output.length).toBeGreaterThan(0);
+    expect(result.output).toContain("B-tree");
+
+    const execSteps = result.steps.filter((s) => s.content.startsWith("[EXEC"));
+    const reflectSteps = result.steps.filter((s) => s.content.startsWith("[REFLECT"));
+    const synthSteps = result.steps.filter((s) => s.content.startsWith("[SYNTHESIS"));
+
+    // Short-circuit path: no per-step EXEC, no REFLECT — just one SYNTHESIS.
+    expect(execSteps.length).toBe(0);
+    expect(reflectSteps.length).toBe(0);
+    expect(synthSteps.length).toBe(1);
+  }, 30000);
 
   it("should track token usage and cost across plan-execute-reflect cycle", async () => {
     const layer = TestLLMServiceLayer([
@@ -289,11 +340,19 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   });
 
   it("should use ReAct kernel for analysis steps", async () => {
+    // TWO analysis steps: a single-analysis plan now short-circuits (no per-step
+    // kernel execution), so the kernel-execution path for analysis steps is
+    // exercised with a multi-step plan.
     const layer = TestLLMServiceLayer([
       { match: "planning agent", text: makePlanJson([
         {
           title: "Analyze data",
           instruction: "Perform deep analysis of the data",
+          type: "analysis",
+        },
+        {
+          title: "Summarize analysis",
+          instruction: "Summarize the deep analysis",
           type: "analysis",
         },
       ]) },
@@ -315,11 +374,11 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     );
 
     expect(result.status).toBe("completed");
-    // Should have executed the analysis step via kernel
+    // Should have executed the analysis steps via kernel
     const execSteps = result.steps.filter((s) =>
       s.content.startsWith("[EXEC"),
     );
-    expect(execSteps.length).toBe(1);
+    expect(execSteps.length).toBe(2);
     expect(execSteps[0]!.content).toContain("Deep analysis");
   });
 

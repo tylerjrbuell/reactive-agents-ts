@@ -367,6 +367,119 @@ export const executePlanExecute = (
     // Track completed step results across refinements to avoid re-execution
     let completedSteps: PlanStep[] = [];
 
+    // ── Single-analysis-step short-circuit (streamline) ──────────────────────
+    // When the planner produces exactly ONE analysis step (and no tool_call
+    // steps), the task did not decompose — plan-execute degenerates to "reactive
+    // + overhead". Trace evidence (pe-diag 2026-06-05, qwen3.5 long-form): the
+    // per-step execution generates the full prose answer (~2422 out) AND the
+    // final synthesis pass RE-generates it restructured (~1542 out) — the same
+    // answer produced twice, plus a reflect pass that the niche probe showed adds
+    // no quality on non-decomposable tasks. Collapse all of that into ONE
+    // structured generation so a non-decomposable task degrades gracefully to
+    // ~reactive cost. Tool/multi-step plans skip this branch entirely and keep
+    // the full plan→execute→reflect→synthesize pipeline (where synthesis
+    // legitimately COMBINES distinct step results rather than duplicating one).
+    //
+    // SCOPE DECISION: this drops reflect+refine for single-analysis plans. The
+    // evidence (niche probe t4/t5 — expository "explain/compare" generation, no
+    // verifiable right answer) shows reflection adds no quality there. It is NOT
+    // validated for single-step tasks with a VERIFIABLE correctness property (a
+    // derivation/calculation/proof) where a first pass can be wrong and a critique
+    // would catch it — but routing such a task to a one-pass generation is exactly
+    // what reactive would do, so this is not a regression vs the cheap default.
+    // CONSERVATIVE FALLBACK if a regression ever surfaces: keep ONE reflect+refine
+    // pass here (generate → reflect → refine-once) — preserves the safety net while
+    // still killing the duplicate generation.
+    if (plan.steps.length === 1 && plan.steps[0]!.type === "analysis") {
+      const only = plan.steps[0]!;
+      steps.push(makeStep("thought", `[PLAN 1] ${only.id}: ${only.title} (analysis)`));
+      yield* publishReasoningStep(eventBus, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute-reflect",
+        step: steps.length,
+        totalSteps: 1,
+        thought: `[PLAN 1] ${only.id}: ${only.title} (analysis)`,
+        kernelPass: `plan-execute:plan-1`,
+      });
+
+      const genResponse = yield* llm
+        .complete({
+          messages: [
+            {
+              role: "user",
+              content: `Task: ${goal}\n\n${only.instruction}\n\nWrite the complete, well-structured final answer to the task now. Use clear sections/headings where the task calls for them. Output only the answer — no preamble, no offers, no internal metadata.`,
+            },
+          ],
+          systemPrompt: withEnvContext(
+            input.systemPrompt ??
+              "You are a precise task executor. Produce the complete, well-structured final answer directly. Never ask questions or offer to do something — just output the finished result.",
+          ),
+          maxTokens: 4096,
+          temperature: 0.5,
+        })
+        .pipe(
+          Effect.mapError(
+            (err) =>
+              new ExecutionError({
+                strategy: "plan-execute-reflect",
+                message: `Single-analysis-step generation failed: ${err instanceof Error ? err.message : String(err)}`,
+                step: 0,
+                cause: err,
+              }),
+          ),
+        );
+
+      totalTokens += genResponse.usage.totalTokens;
+      totalCost += genResponse.usage.estimatedCost;
+      only.status = "completed";
+      only.result = extractThinkingSafeContent(genResponse).content;
+      completedSteps.push(only);
+
+      let scOutput = only.result;
+      steps.push(makeStep("thought", `[SYNTHESIS] ${scOutput}`));
+
+      if (scOutput) {
+        const gated = yield* enforceQualityGate({
+          llm,
+          taskDescription: input.taskDescription,
+          output: scOutput,
+        });
+        scOutput = gated.output;
+        totalTokens += gated.tokens;
+        totalCost += gated.cost;
+      }
+
+      yield* publishReasoningStep(eventBus, {
+        _tag: "FinalAnswerProduced",
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute-reflect",
+        answer: scOutput ?? "",
+        iteration: 0,
+        totalTokens,
+        kernelPass: `plan-execute:synthesize`,
+      });
+
+      yield* emitLog({
+        _tag: "completion",
+        success: !!scOutput,
+        summary: scOutput
+          ? "Plan execution completed (single-analysis-step short-circuit)"
+          : "Plan execution failed to produce output",
+        timestamp: new Date(),
+      });
+
+      return buildStrategyResult({
+        strategy: "plan-execute-reflect",
+        steps,
+        output: scOutput,
+        status: scOutput ? "completed" : "partial",
+        start,
+        totalTokens,
+        totalCost,
+      });
+    }
+
     // Entropy history for the PER main loop (plan + reflect iterations)
     type PEREntropyEntry = {
       readonly composite: number;
