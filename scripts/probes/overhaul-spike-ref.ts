@@ -15,7 +15,7 @@
  *     file_write(path, content) [the inline path].
  * We read which tool it calls and whether result_ref is the correct id.
  *
- * Usage: SPOT_MODEL=cogito:14b bun apps/examples/overhaul-spike-ref.ts
+ * Usage: SPOT_MODEL=cogito:14b bun scripts/probes/overhaul-spike-ref.ts
  */
 import { Ollama } from 'ollama'
 

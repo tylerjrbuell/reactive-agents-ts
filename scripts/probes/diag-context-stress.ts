@@ -5,7 +5,7 @@
  * arm and dumps the raw output text so we can read what the model produced.
  *
  * Run from repo root:
- *   bun run apps/examples/diag-context-stress.ts
+ *   bun run scripts/probes/diag-context-stress.ts
  *
  * Outputs:
  *   /tmp/raphase-a/diag-project-recall.txt

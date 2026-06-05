@@ -18,7 +18,7 @@
  *
  * Env: MODELS (comma-list, default cogito:14b), N (default 20).
  *
- * Run: MODELS=cogito:14b,qwen3:14b,qwen2.5:14b,llama3.1:latest bun apps/examples/toolcall-gap-probe.ts
+ * Run: MODELS=cogito:14b,qwen3:14b,qwen2.5:14b,llama3.1:latest bun scripts/probes/toolcall-gap-probe.ts
  */
 import { ReactiveAgents } from "reactive-agents";
 import { Effect } from "effect";
