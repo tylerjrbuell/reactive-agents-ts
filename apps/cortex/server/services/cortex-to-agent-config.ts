@@ -26,12 +26,8 @@ export function cortexParamsToAgentConfig(
   if (params.maxTokens) draft.maxTokens = params.maxTokens;
   if (typeof params.numCtx === "number" && params.numCtx > 0) draft.numCtx = params.numCtx;
 
-  if (
-    (params.temperature != null || (params.maxTokens != null && params.maxTokens > 0)) &&
-    !modelStr
-  ) {
-    draft.model = "";
-  }
+  // No model sentinel needed: agentConfigToBuilder applies temperature/maxTokens/
+  // numCtx/thinking independently of `model` (framework fix, audit C1/C2).
 
   if (params.systemPrompt?.trim()) draft.systemPrompt = params.systemPrompt.trim();
 
