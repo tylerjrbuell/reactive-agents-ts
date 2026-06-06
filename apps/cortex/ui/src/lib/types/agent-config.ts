@@ -30,6 +30,8 @@ export interface AgentConfig {
   model: string;
   temperature: number;
   maxTokens: number;
+  /** Provider context window override. Honored by local providers (Ollama `num_ctx`); cloud providers without a context knob ignore it. `0` = provider default. */
+  numCtx: number;
   /** `reactive` = ReAct loop (registry name; UI label "ReAct"). */
   strategy: "reactive" | "plan-execute-reflect" | "tree-of-thought" | "reflexion" | "adaptive";
   maxIterations: number;
@@ -110,6 +112,7 @@ export function defaultConfig(): AgentConfig {
     model: "claude-sonnet-4-20250514",
     temperature: 0.7,
     maxTokens: 0,
+    numCtx: 0,
     strategy: "reactive",
     maxIterations: 10,
     minIterations: 0,

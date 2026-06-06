@@ -38,6 +38,7 @@ export interface LaunchParams {
   readonly systemPrompt?: string;
   readonly agentName?: string;
   readonly maxTokens?: number;
+  readonly numCtx?: number;
   readonly timeout?: number;
   readonly retryPolicy?: { enabled?: boolean; maxRetries: number; backoffMs?: number };
   readonly cacheTimeout?: number;
@@ -125,6 +126,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.model ? { model: params.model } : {}),
                 ...(params.temperature != null ? { temperature: params.temperature } : {}),
                 ...(params.maxTokens != null ? { maxTokens: params.maxTokens } : {}),
+                ...(typeof params.numCtx === "number" && params.numCtx > 0 ? { numCtx: params.numCtx } : {}),
                 ...(params.strategy ? { strategy: params.strategy } : {}),
                 ...(params.maxIterations != null ? { maxIterations: params.maxIterations } : {}),
                 ...(params.minIterations != null ? { minIterations: params.minIterations } : {}),

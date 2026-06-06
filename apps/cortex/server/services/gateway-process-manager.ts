@@ -224,6 +224,7 @@ export class GatewayProcessManager {
 
       const _temperature = typeof config.temperature === "number" ? config.temperature : undefined;
       const _maxTokens = typeof config.maxTokens === "number" && config.maxTokens > 0 ? config.maxTokens : undefined;
+      const _numCtx = typeof config.numCtx === "number" && config.numCtx > 0 ? config.numCtx : undefined;
       const _strategy = config.strategy as string | undefined;
       const _maxIterations = typeof config.maxIterations === "number" && config.maxIterations > 0 ? config.maxIterations : undefined;
       const _minIterations = typeof config.minIterations === "number" && config.minIterations > 0 ? config.minIterations : undefined;
@@ -259,6 +260,7 @@ export class GatewayProcessManager {
         ...(modelRaw ? { model: modelRaw } : {}),
         ...(_temperature != null ? { temperature: _temperature } : {}),
         ...(_maxTokens != null ? { maxTokens: _maxTokens } : {}),
+        ...(_numCtx != null ? { numCtx: _numCtx } : {}),
         ...(_strategy ? { strategy: _strategy } : {}),
         ...(_maxIterations != null ? { maxIterations: _maxIterations } : {}),
         ...(_minIterations != null ? { minIterations: _minIterations } : {}),

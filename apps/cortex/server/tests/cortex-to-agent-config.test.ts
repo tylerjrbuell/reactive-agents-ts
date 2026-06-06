@@ -272,3 +272,23 @@ describe("cortexParamsToAgentConfig schema validation", () => {
     expect(() => Schema.decodeUnknownSync(AgentConfigSchema)(config)).not.toThrow();
   });
 });
+
+describe("numCtx mapping", () => {
+  it("maps positive numCtx onto the AgentConfig", () => {
+    const cfg = cortexParamsToAgentConfig({
+      provider: "ollama",
+      model: "qwen3.5:latest",
+      numCtx: 32768,
+    });
+    expect((cfg as { numCtx?: number }).numCtx).toBe(32768);
+  });
+
+  it("omits numCtx when 0/unset", () => {
+    const cfg = cortexParamsToAgentConfig({
+      provider: "ollama",
+      model: "qwen3.5:latest",
+      numCtx: 0,
+    });
+    expect((cfg as { numCtx?: number }).numCtx).toBeUndefined();
+  });
+});

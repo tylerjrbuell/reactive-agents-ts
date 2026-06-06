@@ -595,6 +595,15 @@
               bind:value={config.maxTokens}
               class="config-input" />
           </div>
+          <div class="col-span-2">
+            <label for="num-ctx" class="config-label">Context length (numCtx) <span class="text-outline/30 normal-case font-normal">(0 = provider default)</span></label>
+            <input id="num-ctx" type="number" min="0" max="1048576" step="1024"
+              bind:value={config.numCtx}
+              class="config-input" />
+            <div class="text-[8px] font-mono text-outline/30 mt-0.5">
+              Overrides the provider context window. Honored by local providers (Ollama num_ctx); cloud providers that don't expose a context knob ignore it.
+            </div>
+          </div>
         </div>
         <!-- System prompt -->
         <div>

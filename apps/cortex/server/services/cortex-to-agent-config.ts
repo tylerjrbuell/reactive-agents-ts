@@ -24,6 +24,7 @@ export function cortexParamsToAgentConfig(
 
   if (params.temperature != null) draft.temperature = params.temperature;
   if (params.maxTokens) draft.maxTokens = params.maxTokens;
+  if (typeof params.numCtx === "number" && params.numCtx > 0) draft.numCtx = params.numCtx;
 
   if (
     (params.temperature != null || (params.maxTokens != null && params.maxTokens > 0)) &&

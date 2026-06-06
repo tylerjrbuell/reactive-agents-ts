@@ -22,6 +22,7 @@ export function cortexRunsPostBody(prompt: string, cfg: AgentConfig): Record<str
     systemPrompt: cfg.systemPrompt || undefined,
     agentName: cfg.agentName || undefined,
     maxTokens: cfg.maxTokens || undefined,
+    numCtx: typeof cfg.numCtx === "number" && cfg.numCtx > 0 ? cfg.numCtx : undefined,
     timeout: cfg.timeout || undefined,
     retryPolicy: cfg.retryPolicy.enabled ? cfg.retryPolicy : undefined,
     cacheTimeout: cfg.cacheTimeout || undefined,

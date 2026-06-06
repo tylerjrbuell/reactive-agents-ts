@@ -41,6 +41,8 @@ export interface BuildCortexAgentParams {
   readonly model?: string;
   readonly temperature?: number;
   readonly maxTokens?: number;
+  /** Provider context window size. Honored by local providers (Ollama `num_ctx`); cloud providers without a context knob ignore it. */
+  readonly numCtx?: number;
   readonly strategy?: string;
   readonly maxIterations?: number;
   readonly minIterations?: number;

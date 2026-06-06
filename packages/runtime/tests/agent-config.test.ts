@@ -366,3 +366,15 @@ describe("builder.toConfig() / ReactiveAgents.fromConfig() / fromJSON()", () => 
     expect((rebuilt as any)._memoryTier).toBe("2");
   });
 });
+
+describe("agentConfigToBuilder numCtx", () => {
+  test("threads numCtx onto the builder model params", async () => {
+    const b = await agentConfigToBuilder({
+      name: "t",
+      provider: "ollama",
+      model: "qwen3.5:latest",
+      numCtx: 32768,
+    });
+    expect(b.toConfig().numCtx).toBe(32768);
+  });
+});

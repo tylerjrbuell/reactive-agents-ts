@@ -421,6 +421,9 @@ export class ChatSessionService {
       ...(typeof agentConfig.maxTokens === "number" && agentConfig.maxTokens > 0
         ? { maxTokens: agentConfig.maxTokens }
         : {}),
+      ...(typeof agentConfig.numCtx === "number" && agentConfig.numCtx > 0
+        ? { numCtx: agentConfig.numCtx }
+        : {}),
       ...(enableTools
         ? {
             tools: mergedTools,

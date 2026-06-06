@@ -101,6 +101,7 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
 
   n("temperature");
   n("maxTokens");
+  n("numCtx");
   n("maxIterations");
   n("minIterations");
   n("timeout");

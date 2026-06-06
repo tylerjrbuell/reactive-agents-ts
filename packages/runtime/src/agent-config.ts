@@ -237,6 +237,8 @@ export const AgentConfigSchema = Schema.Struct({
   thinking: Schema.optional(Schema.Boolean),
   temperature: Schema.optional(Schema.Number),
   maxTokens: Schema.optional(Schema.Number),
+  /** Context window size for local providers (Ollama `options.num_ctx`); ignored by hosted providers. */
+  numCtx: Schema.optional(Schema.Number),
   /** Feature flags. */
   features: Schema.optional(
     Schema.Struct({
@@ -328,7 +330,12 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
 
   // Model / model params
   if (config.model) {
-    if (config.thinking === undefined && config.temperature === undefined && config.maxTokens === undefined) {
+    if (
+      config.thinking === undefined &&
+      config.temperature === undefined &&
+      config.maxTokens === undefined &&
+      config.numCtx === undefined
+    ) {
       builder = builder.withModel(config.model);
     } else {
       builder = builder.withModel({
@@ -336,6 +343,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
         thinking: config.thinking,
         temperature: config.temperature,
         maxTokens: config.maxTokens,
+        numCtx: config.numCtx,
       });
     }
   }

@@ -48,6 +48,14 @@ describe("cortexRunsPostBody", () => {
     expect(body.additionalToolNames).toBeUndefined();
   });
 
+  it("includes numCtx when positive, omits when 0", () => {
+    const on = cortexRunsPostBody("x", { ...defaultConfig(), numCtx: 32768 }) as { numCtx?: number };
+    expect(on.numCtx).toBe(32768);
+
+    const off = cortexRunsPostBody("x", { ...defaultConfig(), numCtx: 0 }) as { numCtx?: number };
+    expect(off.numCtx).toBeUndefined();
+  });
+
   it("includes shell command fields only when shell is active and non-empty", () => {
     const off = cortexRunsPostBody("x", {
       ...defaultConfig(),
