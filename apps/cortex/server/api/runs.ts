@@ -57,6 +57,10 @@ export const runsRouter = (
               : {}),
             ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
             ...(b.skills?.paths?.length ? { skills: b.skills } : {}),
+            ...(Array.isArray(b.variables) && b.variables.length ? { variables: b.variables as import("../services/resolve-template.js").VariableDef[] } : {}),
+            ...(b.variableValues && typeof b.variableValues === "object" && !Array.isArray(b.variableValues)
+              ? { variableValues: b.variableValues as Record<string, string | number> }
+              : {}),
             ...(b.strategySwitching != null ? { strategySwitching: b.strategySwitching } : {}),
             ...(b.memory ? { memory: b.memory } : {}),
             ...(b.contextSynthesis ? { contextSynthesis: b.contextSynthesis } : {}),
@@ -67,8 +71,9 @@ export const runsRouter = (
         try {
           return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
         } catch (e) {
-          set.status = 500;
-          return { error: e instanceof Error ? e.message : String(e) };
+          const msg = e instanceof Error ? e.message : String(e);
+          set.status = msg.includes("Unresolved template variable") ? 400 : 500;
+          return { error: msg };
         }
       },
       {
@@ -125,6 +130,8 @@ export const runsRouter = (
               ),
             }),
           ),
+          variables: t.Optional(t.Array(t.Unknown())),
+          variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
         }),
       },
     )
