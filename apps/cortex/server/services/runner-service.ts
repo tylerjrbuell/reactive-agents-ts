@@ -18,6 +18,7 @@ import type {
 } from "./cortex-agent-config.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { resolveLaunchPayload } from "./resolve-template.js";
+import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -63,7 +64,7 @@ export interface LaunchParams {
   /** Living skills directories (framework `withSkills`). */
   readonly skills?: CortexSkillsConfig;
   /** Variable definitions for `{{token}}` substitution in this payload. */
-  readonly variables?: import("./resolve-template.js").VariableDef[];
+  readonly variables?: VariableDef[];
   /** Caller-supplied values for `{{token}}` substitution. */
   readonly variableValues?: Record<string, string | number>;
   /** When true, enables automatic strategy switching on loop detection. */
