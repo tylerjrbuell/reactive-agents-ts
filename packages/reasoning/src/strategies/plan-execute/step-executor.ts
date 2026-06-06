@@ -51,6 +51,18 @@ export interface StepExecResult {
   cost: number;
   success: boolean;
   /**
+   * Full, sanitized (but UNcompressed) tool result for tool_call steps.
+   * `output` carries the compressed preview that feeds intermediate
+   * analysis/reflection/refinement prompts (protects local-tier context from
+   * raw 50KB MCP arrays — see compression note below). `fullResult` preserves
+   * the complete data so the final SYNTHESIS step can render every item
+   * instead of fabricating tails past the preview cutoff. Reactive achieves
+   * the same via in-loop `recall()`; plan-execute's synthesis is tool-less, so
+   * the full data must be threaded explicitly. Undefined for analysis/composite
+   * steps (their `output` already IS the synthesis-worthy content).
+   */
+  fullResult?: string;
+  /**
    * Raw termination reason from a composite step's sub-kernel.
    * Tool-dispatch + analysis steps do not produce one and leave this
    * undefined. Aggregated by the outer loop so dynamic killswitch reasons
@@ -228,6 +240,9 @@ export function executeStep(
       // evidence-grounding HARD-fails). Persisting + a resolving ref is #4.
       return {
         output: stripDeadStorageHints(compressed.content, step.toolName!),
+        // Preserve the full sanitized data for synthesis (the final render).
+        // Intermediate prompts still consume the compressed `output`.
+        fullResult: sanitized,
         tokens: 0,
         cost: 0,
         success: toolResult.success !== false,

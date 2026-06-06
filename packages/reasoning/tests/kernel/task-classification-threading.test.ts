@@ -45,7 +45,7 @@ describe("ToT honors threaded TaskClassification (HS-cleanup-2)", () => {
     // the upstream snapshot.
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Direct calculation\n2. Long multiplication" },
-      { match: "Rate this thought", text: "0.7" },
+      { match: "Rate each", text: "0.7" },
       { match: "Selected Approach", text: "FINAL ANSWER: 391." },
     ]);
 

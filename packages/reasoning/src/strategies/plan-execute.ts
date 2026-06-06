@@ -77,6 +77,15 @@ interface PlanExecuteInput {
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  /**
+   * Opt-in audit gate (mirrors reactive / KernelInput.auditRationale, owner
+   * decision 2026-06-04). When off (default), the planner rationale strict-retry
+   * is skipped: tool_call-step `rationale.why` feeds ONLY the debrief audit log
+   * (step-executor publishes it on ToolCallStarted), it never drives execution —
+   * so re-planning the whole plan to recover it is a pure audit tax on models
+   * that omit it. Also honored via env `RA_RATIONALE_AUDIT=1`.
+   */
+  readonly auditRationale?: boolean;
   /** Full tool schemas passed from execution engine for kernel tool awareness */
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
@@ -238,7 +247,13 @@ export const executePlanExecute = (
     const stepsMissingRationale = (p: Plan): readonly PlanStep[] =>
       p.steps.filter((s) => s.type === "tool_call" && (!s.rationale || typeof s.rationale.why !== "string" || s.rationale.why.trim().length === 0));
 
-    let missing = stepsMissingRationale(plan);
+    // Opt-in audit gate: rationale.why is audit-only (debrief), not execution —
+    // skip the full re-plan retry unless auditing is on. Saves a planner LLM
+    // call on models that omit rationale (parallels the reactive rationale gate).
+    const auditRationaleOn =
+      input.auditRationale === true || process.env.RA_RATIONALE_AUDIT === "1";
+
+    let missing = auditRationaleOn ? stepsMissingRationale(plan) : [];
     if (missing.length > 0) {
       const reminderPrompt = `${planPrompt}\n\n[STRICT RETRY] Your previous plan omitted "rationale" on one or more tool_call steps. EVERY tool_call step MUST include a "rationale": { "why": "<≤280 chars, specific to this call>" } object. Plans without rationale on tool_call steps are rejected. Regenerate the entire plan now, including rationale on every tool_call step.`;
       const retryResult = yield* extractStructuredOutput({
@@ -368,6 +383,119 @@ export const executePlanExecute = (
 
     // Track completed step results across refinements to avoid re-execution
     let completedSteps: PlanStep[] = [];
+
+    // ── Single-analysis-step short-circuit (streamline) ──────────────────────
+    // When the planner produces exactly ONE analysis step (and no tool_call
+    // steps), the task did not decompose — plan-execute degenerates to "reactive
+    // + overhead". Trace evidence (pe-diag 2026-06-05, qwen3.5 long-form): the
+    // per-step execution generates the full prose answer (~2422 out) AND the
+    // final synthesis pass RE-generates it restructured (~1542 out) — the same
+    // answer produced twice, plus a reflect pass that the niche probe showed adds
+    // no quality on non-decomposable tasks. Collapse all of that into ONE
+    // structured generation so a non-decomposable task degrades gracefully to
+    // ~reactive cost. Tool/multi-step plans skip this branch entirely and keep
+    // the full plan→execute→reflect→synthesize pipeline (where synthesis
+    // legitimately COMBINES distinct step results rather than duplicating one).
+    //
+    // SCOPE DECISION: this drops reflect+refine for single-analysis plans. The
+    // evidence (niche probe t4/t5 — expository "explain/compare" generation, no
+    // verifiable right answer) shows reflection adds no quality there. It is NOT
+    // validated for single-step tasks with a VERIFIABLE correctness property (a
+    // derivation/calculation/proof) where a first pass can be wrong and a critique
+    // would catch it — but routing such a task to a one-pass generation is exactly
+    // what reactive would do, so this is not a regression vs the cheap default.
+    // CONSERVATIVE FALLBACK if a regression ever surfaces: keep ONE reflect+refine
+    // pass here (generate → reflect → refine-once) — preserves the safety net while
+    // still killing the duplicate generation.
+    if (plan.steps.length === 1 && plan.steps[0]!.type === "analysis") {
+      const only = plan.steps[0]!;
+      steps.push(makeStep("thought", `[PLAN 1] ${only.id}: ${only.title} (analysis)`));
+      yield* publishReasoningStep(eventBus, {
+        _tag: "ReasoningStepCompleted",
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute-reflect",
+        step: steps.length,
+        totalSteps: 1,
+        thought: `[PLAN 1] ${only.id}: ${only.title} (analysis)`,
+        kernelPass: `plan-execute:plan-1`,
+      });
+
+      const genResponse = yield* llm
+        .complete({
+          messages: [
+            {
+              role: "user",
+              content: `Task: ${goal}\n\n${only.instruction}\n\nWrite the complete, well-structured final answer to the task now. Use clear sections/headings where the task calls for them. Output only the answer — no preamble, no offers, no internal metadata.`,
+            },
+          ],
+          systemPrompt: withEnvContext(
+            input.systemPrompt ??
+              "You are a precise task executor. Produce the complete, well-structured final answer directly. Never ask questions or offer to do something — just output the finished result.",
+          ),
+          maxTokens: 4096,
+          temperature: 0.5,
+        })
+        .pipe(
+          Effect.mapError(
+            (err) =>
+              new ExecutionError({
+                strategy: "plan-execute-reflect",
+                message: `Single-analysis-step generation failed: ${err instanceof Error ? err.message : String(err)}`,
+                step: 0,
+                cause: err,
+              }),
+          ),
+        );
+
+      totalTokens += genResponse.usage.totalTokens;
+      totalCost += genResponse.usage.estimatedCost;
+      only.status = "completed";
+      only.result = extractThinkingSafeContent(genResponse).content;
+      completedSteps.push(only);
+
+      let scOutput = only.result;
+      steps.push(makeStep("thought", `[SYNTHESIS] ${scOutput}`));
+
+      if (scOutput) {
+        const gated = yield* enforceQualityGate({
+          llm,
+          taskDescription: input.taskDescription,
+          output: scOutput,
+        });
+        scOutput = gated.output;
+        totalTokens += gated.tokens;
+        totalCost += gated.cost;
+      }
+
+      yield* publishReasoningStep(eventBus, {
+        _tag: "FinalAnswerProduced",
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute-reflect",
+        answer: scOutput ?? "",
+        iteration: 0,
+        totalTokens,
+        kernelPass: `plan-execute:synthesize`,
+      });
+
+      yield* emitLog({
+        _tag: "completion",
+        success: !!scOutput,
+        summary: scOutput
+          ? "Plan execution completed (single-analysis-step short-circuit)"
+          : "Plan execution failed to produce output",
+        timestamp: new Date(),
+      });
+
+      return buildStrategyResult({
+        strategy: "plan-execute-reflect",
+        steps,
+        output: scOutput,
+        status: scOutput ? "completed" : "partial",
+        start,
+        totalTokens,
+        totalCost,
+      });
+    }
 
     // Entropy history for the PER main loop (plan + reflect iterations)
     type PEREntropyEntry = {
@@ -517,6 +645,9 @@ export const executePlanExecute = (
                   tokens: exit.value.tokens,
                   cost: exit.value.cost,
                   error: undefined,
+                  ...(exit.value.fullResult !== undefined
+                    ? { fullResult: exit.value.fullResult }
+                    : {}),
                   ...(exit.value.rawTerminatedBy !== undefined
                     ? { rawTerminatedBy: exit.value.rawTerminatedBy }
                     : {}),
@@ -553,6 +684,12 @@ export const executePlanExecute = (
           if (result.success) {
             step.status = "completed";
             step.result = result.output;
+            // Preserve the full uncompressed tool result (tool_call steps only)
+            // so synthesis can render every item past the preview cutoff.
+            const stepFullResult = (result as { fullResult?: string }).fullResult;
+            if (stepFullResult !== undefined) {
+              step.fullResult = stepFullResult;
+            }
             step.completedAt = new Date().toISOString();
             completedSteps.push(step);
 
@@ -890,9 +1027,14 @@ export const executePlanExecute = (
 
       if (satisfied) {
         // ── SYNTHESIZE: Produce a clean final answer from step results ──
+        // Synthesis is the final render — feed it the FULL tool result
+        // (fullResult) rather than the compressed preview (result) so it can
+        // emit every item. Intermediate analysis/reflection prompts kept the
+        // preview to protect local-tier context; synthesis needs the whole
+        // payload, mirroring reactive's in-loop recall of the stored result.
         const synthResultTexts = plan.steps
-          .filter((s) => s.result)
-          .map((s, idx) => `Step ${idx + 1}: ${s.result}`);
+          .filter((s) => s.result || s.fullResult)
+          .map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
 
         const synthLlmResponse = yield* llm
           .complete({

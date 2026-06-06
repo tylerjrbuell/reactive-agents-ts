@@ -1,0 +1,3 @@
+task,complexity,strategy,model,success,outputLength,tokens,iter,durationMs,costUsd
+t4-multistep,multi-step,reflexion,gpt-4o-mini,1,2523,6087,2,21812,0.000836
+t5-critique,critique-amenable,reflexion,gpt-4o-mini,1,4215,6725,2,17065,0.001091

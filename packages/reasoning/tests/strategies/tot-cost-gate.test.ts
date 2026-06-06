@@ -59,7 +59,7 @@ describe("HS-110 — ToT cost gate skips BFS for trivial tasks", () => {
   it("runs full BFS when skipBfsForTrivial: false even on a trivial task", async () => {
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Geographical lookup\n2. Cultural knowledge" },
-      { match: "Rate this thought", text: "0.8" },
+      { match: "Rate each", text: "0.8" },
       { match: "Selected Approach", text: "FINAL ANSWER: Paris." },
     ]);
 
@@ -97,7 +97,7 @@ describe("HS-110 — ToT cost gate skips BFS for trivial tasks", () => {
   it("runs full BFS on a complex-classified task even with default config", async () => {
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Consistency model trade-offs\n2. Latency-vs-availability trade-offs" },
-      { match: "Rate this thought", text: "0.8" },
+      { match: "Rate each", text: "0.8" },
       { match: "Selected Approach", text: "FINAL ANSWER: Strong vs eventual consistency analysis." },
     ]);
 

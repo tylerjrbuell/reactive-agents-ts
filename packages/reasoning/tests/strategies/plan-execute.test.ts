@@ -3,8 +3,51 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
+
+/**
+ * Wrap TestLLMService and record every request's stringified content so a test
+ * can assert which prompts were (not) issued — e.g. the planner rationale
+ * strict-retry ("[STRICT RETRY]").
+ */
+function makeRecordingLLM(scenario: TestTurn[]) {
+  const base = TestLLMService(scenario);
+  const prompts: string[] = [];
+  const rec = {
+    ...base,
+    complete: (req: Parameters<typeof base.complete>[0]) => {
+      prompts.push(JSON.stringify(req));
+      return base.complete(req);
+    },
+    completeStructured: (req: Parameters<typeof base.completeStructured>[0]) => {
+      prompts.push(JSON.stringify(req));
+      return base.completeStructured(req);
+    },
+  };
+  return { layer: Layer.succeed(LLMService, LLMService.of(rec)), prompts };
+}
+
+/** Mock ToolService so tool_call steps can dispatch without a real tool layer. */
+const RATIONALE_TOOL_LAYER = Layer.succeed(
+  ToolService,
+  ToolService.of({
+    execute: () => Effect.succeed({ success: true, result: "tool ok" }),
+    getTool: (name: string) =>
+      Effect.succeed({ name, description: "test", parameters: [] }),
+    register: () => Effect.void,
+    listTools: () => Effect.succeed([]),
+    deregister: () => Effect.void,
+  } as unknown as Parameters<typeof ToolService.of>[0]),
+);
+
+/** A tool_call+analysis plan with NO rationale on the tool_call step. */
+const NO_RATIONALE_TOOL_PLAN = JSON.stringify({
+  steps: [
+    { title: "Fetch", instruction: "fetch data", type: "tool_call", toolName: "web-search", toolArgs: { query: "x" } },
+    { title: "Summarize", instruction: "summarize", type: "analysis" },
+  ],
+});
 
 // ── Helpers ──
 
@@ -133,12 +176,98 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(synthSteps.length).toBe(1);
   });
 
+  it("should feed the FULL tool result (not the compressed preview) to synthesis", async () => {
+    // Regression: plan-execute compressed tool_call results to an N-item preview,
+    // stored ONLY the preview on step.result, and synthesis read step.result —
+    // so a 15-item fetch shipped a 3-item answer with fabricated tails. Reactive
+    // survives the same case because it keeps the full result recallable in-loop.
+    // Fix: thread the full sanitized result through to the synthesis prompt while
+    // intermediate analysis/reflection prompts keep the compressed preview.
+    const items = Array.from({ length: 15 }, (_, i) => ({
+      id: i + 1,
+      title: `HN-POST-${String(i + 1).padStart(2, "0")}`,
+      score: 100 + i,
+    }));
+
+    const toolLayer = Layer.succeed(
+      ToolService,
+      ToolService.of({
+        execute: () => Effect.succeed({ success: true, result: items }),
+        getTool: (name: string) =>
+          Effect.succeed({ name, description: "test", parameters: [] }),
+        register: () => Effect.void,
+        listTools: () => Effect.succeed([]),
+        deregister: () => Effect.void,
+      } as unknown as Parameters<typeof ToolService.of>[0]),
+    );
+
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      { match: "planning agent", text: makePlanJson([
+        {
+          title: "Fetch posts",
+          instruction: "fetch the top 15 posts",
+          type: "tool_call",
+          toolName: "get-hn-posts",
+          toolArgs: { count: 15 },
+        },
+        {
+          title: "Summarize",
+          instruction: "summarize the posts",
+          type: "analysis",
+        },
+      ]) },
+      { match: "OVERALL GOAL", text: "FINAL ANSWER: Summarized the posts." },
+      { match: "GOAL:", text: "SATISFIED: All 15 posts fetched and summarized." },
+      { match: "Synthesize", text: "Synthesized report covering all posts." },
+    ]);
+
+    const program = executePlanExecute({
+      taskDescription: "Fetch the top 15 HN posts and summarize",
+      taskType: "research",
+      memoryContext: "",
+      availableTools: ["get-hn-posts"],
+      availableToolSchemas: [
+        {
+          name: "get-hn-posts",
+          description: "Fetch HN posts",
+          parameters: [
+            { name: "count", type: "number", description: "How many", required: true },
+          ],
+        },
+      ],
+      // Force compression: 15 items >> 100 chars, preview only 3 items.
+      resultCompression: { budget: 100, previewItems: 3 },
+      config: defaultReasoningConfig,
+    });
+
+    await Effect.runPromise(
+      program.pipe(Effect.provide(Layer.merge(llmLayer, toolLayer))),
+    );
+
+    // The synthesis prompt is the one instructing the model to "Synthesize".
+    const synthPrompt = prompts.find((p) => p.includes("Synthesize a clear"));
+    expect(synthPrompt).toBeDefined();
+    // The full result must reach synthesis — every post 1..15, not just the
+    // 3-item compressed preview.
+    expect(synthPrompt).toContain("HN-POST-15");
+    expect(synthPrompt).toContain("HN-POST-08");
+  });
+
   it("should return partial result when max refinements reached without satisfaction", async () => {
+    // NOTE: uses a TWO-step plan on purpose. A single analysis-step plan now
+    // takes the streamline short-circuit (one structured generation, no
+    // refinement loop), so it can no longer exercise refinement-exhaustion.
+    // Two steps keep the full plan→execute→reflect→refine path under test.
     const layer = TestLLMServiceLayer([
       { match: "planning agent", text: makePlanJson([
         {
           title: "Investigate",
           instruction: "Investigate the problem",
+          type: "analysis",
+        },
+        {
+          title: "Analyze",
+          instruction: "Analyze the investigation",
           type: "analysis",
         },
       ]) },
@@ -184,6 +313,97 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(execSteps.length).toBeGreaterThanOrEqual(1);
     expect(reflectSteps.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("short-circuits a single-analysis-step plan to ONE structured generation (no double-generate, no reflect)", async () => {
+    // Streamline: when the planner emits exactly one analysis step (task did not
+    // decompose), plan-execute previously generated the answer twice — once in
+    // step execution, once in synthesis — plus a no-value reflect pass. The
+    // short-circuit collapses this to a single structured generation so a
+    // non-decomposable task degrades gracefully to ~reactive cost.
+    const layer = TestLLMServiceLayer([
+      { match: "planning agent", text: makePlanJson([
+        {
+          title: "Explain indexing trade-offs",
+          instruction: "Explain B-tree, hash, and full-text indexing across three sections",
+          type: "analysis",
+        },
+      ]) },
+      // The short-circuit's single generation prompt carries this phrase.
+      { match: "well-structured final answer", text: "## B-tree\nRange queries.\n## Hash\nExact match.\n## Full-text\nSearch." },
+    ]);
+
+    const program = executePlanExecute({
+      taskDescription: "Explain database indexing trade-offs",
+      taskType: "explanation",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(layer)));
+
+    expect(result.status).toBe("completed");
+    expect(result.output.length).toBeGreaterThan(0);
+    expect(result.output).toContain("B-tree");
+
+    const execSteps = result.steps.filter((s) => s.content.startsWith("[EXEC"));
+    const reflectSteps = result.steps.filter((s) => s.content.startsWith("[REFLECT"));
+    const synthSteps = result.steps.filter((s) => s.content.startsWith("[SYNTHESIS"));
+
+    // Short-circuit path: no per-step EXEC, no REFLECT — just one SYNTHESIS.
+    expect(execSteps.length).toBe(0);
+    expect(reflectSteps.length).toBe(0);
+    expect(synthSteps.length).toBe(1);
+  }, 30000);
+
+  it("skips the planner rationale strict-retry by default (audit off)", async () => {
+    // rationale.why is audit-only (debrief), not execution — so when auditing is
+    // off (default) a plan missing rationale on tool_call steps must NOT trigger
+    // a full re-plan. Saves a planner LLM call on models that omit rationale.
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      { match: "planning agent", text: NO_RATIONALE_TOOL_PLAN },
+      { match: "GOAL:", text: "SATISFIED: done." },
+      { match: "Synthesize", text: "Final answer." },
+    ]);
+
+    await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Fetch and summarize",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["web-search"],
+        config: defaultReasoningConfig,
+        // auditRationale omitted → default OFF
+      }).pipe(Effect.provide(Layer.merge(llmLayer, RATIONALE_TOOL_LAYER))),
+    );
+
+    const issuedRetry = prompts.some((p) => p.includes("STRICT RETRY"));
+    expect(issuedRetry).toBe(false);
+  }, 30000);
+
+  it("issues the planner rationale strict-retry when auditRationale is on", async () => {
+    const { layer: llmLayer, prompts } = makeRecordingLLM([
+      { match: "planning agent", text: NO_RATIONALE_TOOL_PLAN },
+      { match: "GOAL:", text: "SATISFIED: done." },
+      { match: "Synthesize", text: "Final answer." },
+    ]);
+
+    await Effect.runPromise(
+      executePlanExecute({
+        taskDescription: "Fetch and summarize",
+        taskType: "research",
+        memoryContext: "",
+        availableTools: ["web-search"],
+        config: defaultReasoningConfig,
+        auditRationale: true,
+      }).pipe(
+        Effect.provide(Layer.merge(llmLayer, RATIONALE_TOOL_LAYER)),
+      ),
+    );
+
+    const issuedRetry = prompts.some((p) => p.includes("STRICT RETRY"));
+    expect(issuedRetry).toBe(true);
+  }, 30000);
 
   it("should track token usage and cost across plan-execute-reflect cycle", async () => {
     const layer = TestLLMServiceLayer([
@@ -289,11 +509,19 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
   });
 
   it("should use ReAct kernel for analysis steps", async () => {
+    // TWO analysis steps: a single-analysis plan now short-circuits (no per-step
+    // kernel execution), so the kernel-execution path for analysis steps is
+    // exercised with a multi-step plan.
     const layer = TestLLMServiceLayer([
       { match: "planning agent", text: makePlanJson([
         {
           title: "Analyze data",
           instruction: "Perform deep analysis of the data",
+          type: "analysis",
+        },
+        {
+          title: "Summarize analysis",
+          instruction: "Summarize the deep analysis",
           type: "analysis",
         },
       ]) },
@@ -315,11 +543,11 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     );
 
     expect(result.status).toBe("completed");
-    // Should have executed the analysis step via kernel
+    // Should have executed the analysis steps via kernel
     const execSteps = result.steps.filter((s) =>
       s.content.startsWith("[EXEC"),
     );
-    expect(execSteps.length).toBe(1);
+    expect(execSteps.length).toBe(2);
     expect(execSteps[0]!.content).toContain("Deep analysis");
   });
 

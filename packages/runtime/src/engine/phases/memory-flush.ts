@@ -19,6 +19,7 @@
 import { Effect, Context } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Phase } from "../phase.js";
+import { extractTaskText } from "../util.js";
 
 type MemoryServiceLike = {
   snapshot: (s: unknown) => Effect.Effect<void>;
@@ -152,7 +153,10 @@ export const memoryFlush: Phase = {
 
             // Build messages from execution context
             const messages: { role: string; content: string }[] = [];
-            messages.push({ role: "user", content: String(deps.task.input).slice(0, 1000) });
+            // Use extractTaskText (not String(...)) — task.input is often an
+            // object (e.g. { question }); String(obj) → "[object Object]", which
+            // poisoned the memory-extraction prompt (seq13 bug, 2026-06-05).
+            messages.push({ role: "user", content: extractTaskText(deps.task.input).slice(0, 1000) });
             for (const tr of ctx.toolResults) {
               const toolResult = tr as { toolName?: string; result?: unknown };
               messages.push({

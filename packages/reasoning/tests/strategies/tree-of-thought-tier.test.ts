@@ -67,7 +67,7 @@ describe("ToT BFS convergence check", () => {
     // The convergence check should exit after 3 stagnant rounds (before round 4)
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Static approach A\n2. Static approach B" },
-      { match: "Rate this thought", text: "0.6" },
+      { match: "Rate each", text: "0.6" },
       { match: "Selected Approach", text: "FINAL ANSWER: Answer from stagnant tree." },
     ]);
 
@@ -102,7 +102,7 @@ describe("ToT BFS convergence check", () => {
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Good approach\n2. Better approach" },
       {
-        match: "Rate this thought",
+        match: "Rate each",
         text: "0.7",
       },
       { match: "Selected Approach", text: "FINAL ANSWER: Full depth answer." },
@@ -140,7 +140,7 @@ describe("ToT tier-constrained Phase 2 iteration", () => {
   it("respects tier-specific Phase 2 iteration limit", async () => {
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Approach A\n2. Approach B" },
-      { match: "Rate this thought", text: "0.8" },
+      { match: "Rate each", text: "0.8" },
       { match: "Selected Approach", text: "FINAL ANSWER: Tier constrained answer." },
     ]);
 

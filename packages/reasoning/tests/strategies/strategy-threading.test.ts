@@ -57,8 +57,12 @@ const baseInput = {
  */
 const makePlanExecuteLLM = () => TestLLMServiceLayer([
   { match: "planning agent", text: JSON.stringify({
+    // Two steps: a single analysis-step plan now takes the streamline
+    // short-circuit (no per-step kernel execution), so threading/kernelPass
+    // tests need a multi-step plan to exercise the step-execution path.
     steps: [
       { title: "Do the task", instruction: "Complete the task", type: "analysis" },
+      { title: "Refine the result", instruction: "Refine the completed task", type: "analysis" },
     ],
   }) },
   { match: "OVERALL GOAL", text: "FINAL ANSWER: test result" },

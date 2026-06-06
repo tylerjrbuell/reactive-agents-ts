@@ -70,6 +70,13 @@ export interface PlanStep {
   rationale?: { why: string; confidence?: number };
   status: PlanStepStatus;
   result?: string;
+  /**
+   * Full sanitized (uncompressed) tool result for tool_call steps. `result`
+   * holds the compressed preview consumed by intermediate prompts; `fullResult`
+   * preserves the complete data so synthesis can render every item. Undefined
+   * for analysis/composite steps (their `result` already IS full content).
+   */
+  fullResult?: string;
   error?: string;
   retries: number;
   tokensUsed: number;

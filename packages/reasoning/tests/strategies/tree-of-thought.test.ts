@@ -1,16 +1,94 @@
 // File: tests/strategies/tree-of-thought.test.ts
 import { describe, it, expect } from "bun:test";
 import { Context, Effect, Layer } from "effect";
-import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
+import { executeTreeOfThought, parseBatchScores } from "../../src/strategies/tree-of-thought.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn } from "@reactive-agents/llm-provider";
 import { EntropySensorService } from "@reactive-agents/core";
 
+/** Wrap TestLLMService and record every request's stringified messages so a
+ *  test can assert how many scoring calls were issued (batch vs per-candidate). */
+function makeRecordingLLM(scenario: TestTurn[]) {
+  const base = TestLLMService(scenario);
+  const prompts: string[] = [];
+  const rec = {
+    ...base,
+    complete: (req: Parameters<typeof base.complete>[0]) => {
+      prompts.push(JSON.stringify(req.messages));
+      return base.complete(req);
+    },
+  };
+  return { layer: Layer.succeed(LLMService, LLMService.of(rec)), prompts };
+}
+
+describe("parseBatchScores", () => {
+  it("maps indexed `N: SCORE` lines to discriminating per-candidate scores", () => {
+    expect(parseBatchScores("1: 0.8\n2: 0.7\n3: 0.6", 3)).toEqual([0.8, 0.7, 0.6]);
+  });
+
+  it("maps bare per-line scores in order", () => {
+    expect(parseBatchScores("0.9\n0.4", 2)).toEqual([0.9, 0.4]);
+  });
+
+  it("broadcasts a single bare score to every candidate", () => {
+    expect(parseBatchScores("0.8", 3)).toEqual([0.8, 0.8, 0.8]);
+    expect(parseBatchScores("75%", 2)).toEqual([0.75, 0.75]);
+  });
+
+  it("REJECTS numbered prose (truncated thinking) instead of mis-scoring it", () => {
+    // Regression guard: a thinking model that burns its budget on `<think>` and
+    // gets truncated emits a numbered LIST, not scores. The old loose parser
+    // read `1. **Analyze**` as index-1 → 0.5 and silently collapsed every
+    // candidate to 0.5 (BFS pruning goes blind). Strict numeric-body parsing
+    // must reject it → all 0.5 here signals "no usable scores" so the caller
+    // falls back to per-candidate scoring.
+    const thinking = "Thinking Process:\n1. **Analyze the Request:**\n2. **Design the approach**\n3. **Evaluate tradeoffs**";
+    expect(parseBatchScores(thinking, 3)).toEqual([0.5, 0.5, 0.5]);
+  });
+});
+
 describe("TreeOfThoughtStrategy", () => {
+  it("batches candidate scoring into ONE call per parent (not one per candidate)", async () => {
+    // Token lever: per-candidate scoring re-sent task + ancestor path + rubric
+    // B times per parent (15× token bloat on qwen3.5 niche probe). Batching
+    // scores all B candidates in one call → ancestor/rubric sent once.
+    const { layer, prompts } = makeRecordingLLM([
+      { match: "Generate exactly", text: "1. Approach alpha\n2. Approach beta\n3. Approach gamma" },
+      { match: "Rate each", text: "1: 0.8\n2: 0.7\n3: 0.6" },
+      { match: "Selected Approach", text: "FINAL ANSWER: done." },
+    ]);
+
+    await Effect.runPromise(
+      executeTreeOfThought({
+        taskDescription: "Pick the best approach",
+        taskType: "query",
+        memoryContext: "",
+        availableTools: [],
+        config: {
+          ...defaultReasoningConfig,
+          strategies: {
+            ...defaultReasoningConfig.strategies,
+            // depth 1 → single BFS level, one parent (root) expands to 3.
+            treeOfThought: { breadth: 3, depth: 1, pruningThreshold: 0.3, skipBfsForTrivial: false },
+          },
+        },
+      }).pipe(Effect.provide(layer)),
+    );
+
+    // Scoring prompts carry the 0.0–1.0 rubric. Exactly ONE should fire for the
+    // 3 candidates of the single parent — not three.
+    const scoringPrompts = prompts.filter((p) => p.includes("0.0 to 1.0"));
+    expect(scoringPrompts.length).toBe(1);
+    // That single batch prompt must list all three candidates.
+    expect(scoringPrompts[0]).toContain("Approach alpha");
+    expect(scoringPrompts[0]).toContain("Approach beta");
+    expect(scoringPrompts[0]).toContain("Approach gamma");
+  });
+
   it("should execute tree exploration and return completed result", async () => {
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Approach via historical analysis\n2. Approach via geographical lookup" },
-      { match: "Rate this thought", text: "0.8" },
+      { match: "Rate each", text: "0.8" },
       { match: "Selected Approach", text: "FINAL ANSWER: Paris is the capital of France." },
     ]);
 
@@ -44,7 +122,7 @@ describe("TreeOfThoughtStrategy", () => {
     // All scores below pruning threshold will cause early termination
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. A weak approach\n2. Another weak approach" },
-      { match: "Rate this thought", text: "0.1" },
+      { match: "Rate each", text: "0.1" },
       { match: "Selected Approach", text: "FINAL ANSWER: Best effort answer despite low scores." },
     ]);
 
@@ -82,7 +160,7 @@ describe("TreeOfThoughtStrategy", () => {
   it("should track token usage across expansion, scoring, and synthesis", async () => {
     const layer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. First thought\n2. Second thought" },
-      { match: "Rate this thought", text: "0.7" },
+      { match: "Rate each", text: "0.7" },
       { match: "Selected Approach", text: "FINAL ANSWER: Final synthesized answer." },
     ]);
 
@@ -116,7 +194,7 @@ describe("TreeOfThoughtStrategy", () => {
     // so rescue fails — but the adaptive step is still emitted in the failure branch
     const layer = TestLLMServiceLayer([
       { match: "explore solution", text: "1. Approach one\n2. Approach two" },
-      { match: "Rate this thought", text: "0.2" },
+      { match: "Rate each", text: "0.2" },
       { match: "Think step-by-step", text: "FINAL ANSWER: Recovered despite low scores." },
     ]);
 
@@ -150,7 +228,7 @@ describe("TreeOfThoughtStrategy", () => {
     // → frontier = rescued nodes; loop continues
     const layer = TestLLMServiceLayer([
       { match: "explore solution", text: "1. A feasible approach\n2. Another approach" },
-      { match: "Rate this thought", text: "0.4" },
+      { match: "Rate each", text: "0.4" },
       { match: "Think step-by-step", text: "FINAL ANSWER: Completed via rescued path." },
     ]);
 
@@ -185,7 +263,7 @@ describe("TreeOfThoughtStrategy", () => {
     // Score returned as "75%" — should parse to 0.75, above 0.5 threshold → tree proceeds
     const layer = TestLLMServiceLayer([
       { match: "explore solution", text: "1. Approach A\n2. Approach B" },
-      { match: "Rate this thought", text: "75%" },
+      { match: "Rate each", text: "75%" },
       { match: "Think step-by-step", text: "FINAL ANSWER: Answer from percentage-scored path." },
     ]);
 
@@ -217,7 +295,7 @@ describe("TreeOfThoughtStrategy", () => {
   it("dispatcher early-stop terminates BFS outer loop at depth 1 (T4 / FIX-5)", async () => {
     const llmLayer = TestLLMServiceLayer([
       { match: "Generate exactly", text: "1. Approach A\n2. Approach B" },
-      { match: "Rate this thought", text: "0.9" },
+      { match: "Rate each", text: "0.9" },
       { match: "Selected Approach", text: "FINAL ANSWER: stopped early." },
     ]);
 
@@ -336,7 +414,7 @@ describe("TreeOfThoughtStrategy", () => {
   it("Phase 2 execution produces a structured final answer via kernel", async () => {
     const layer = TestLLMServiceLayer([
       { match: "explore solution", text: "1. Approach A with recursion\n2. Approach B with iteration" },
-      { match: "Rate this thought", text: "0.8" },
+      { match: "Rate each", text: "0.8" },
       // Phase 2 kernel call — matches "Selected Approach" in the priorContext
       { match: "Selected Approach", text: "FINAL ANSWER: The best approach uses iteration for O(n) complexity." },
     ]);
