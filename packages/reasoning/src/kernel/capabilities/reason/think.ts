@@ -13,7 +13,7 @@
 import { Effect, Stream, FiberRef, Either, Ref } from "effect";
 import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
-import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
+import { LLMService, selectAdapter, resolveCapability } from "@reactive-agents/llm-provider";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   toProviderMessage,
@@ -849,8 +849,22 @@ export function handleThinking(
     if (thoughtResponse.usage?.totalTokens) {
       const priorWindow = state.meta.lastIterationTokens ?? [];
       const nextWindow = [...priorWindow, thoughtResponse.usage.totalTokens].slice(-5);
+      // Live context-window occupancy = prompt (input) tokens of this call, i.e.
+      // the size of the conversation thread just sent to the model. Some providers
+      // (e.g. Ollama) omit input tokens — fall back to total so the gauge still
+      // moves. Consumed by the ContextPressure event emitted in kernel-hooks.
+      const lastContextTokens =
+        (thoughtResponse.usage.inputTokens ?? 0) > 0
+          ? thoughtResponse.usage.inputTokens!
+          : thoughtResponse.usage.totalTokens;
+      // Resolve the window here (post-call): the Ollama probe has already run, so
+      // recommendedNumCtx reflects the model's real numCtx, not the 2048 fallback.
+      const lastContextWindow = resolveCapability(
+        input.providerName ?? "unknown",
+        input.modelId ?? "unknown",
+      ).recommendedNumCtx;
       state = transitionState(state, {
-        meta: { ...state.meta, lastIterationTokens: nextWindow },
+        meta: { ...state.meta, lastIterationTokens: nextWindow, lastContextTokens, lastContextWindow },
       });
     }
 

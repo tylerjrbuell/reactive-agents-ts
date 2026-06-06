@@ -37,6 +37,37 @@ function getKernelPass(state: KernelState): string {
   return (state.meta.kernelPass as string | undefined) ?? `${state.strategy}:main`;
 }
 
+type ContextPressureEvent = Extract<AgentEvent, { _tag: "ContextPressure" }>;
+
+/**
+ * Build a ContextPressure event from current kernel state, or null when there's
+ * nothing meaningful to report yet (no LLM call has recorded context tokens).
+ *
+ * The denominator is the model's context window from `resolveCapability` — which,
+ * once the Ollama probe has run, reflects the model's real numCtx rather than the
+ * conservative fallback. The numerator is the prompt-token occupancy of the most
+ * recent call (`state.meta.lastContextTokens`). This is the kernel-path analogue
+ * of the emission the execution-engine inline loop already does, so Cortex's
+ * context-window gauge works for real (kernel-driven) agent runs.
+ */
+function contextPressureEvent(state: KernelState): ContextPressureEvent | null {
+  const used = state.meta.lastContextTokens;
+  const window = state.meta.lastContextWindow;
+  if (used === undefined || used <= 0 || window === undefined || window <= 0) return null;
+  const tokensAvailable = Math.max(0, window - used);
+  const utilizationPct = Math.min(100, Math.max(0, (used / window) * 100));
+  const level: ContextPressureEvent["level"] =
+    utilizationPct >= 90 ? "critical" : utilizationPct >= 75 ? "high" : utilizationPct >= 45 ? "medium" : "low";
+  return {
+    _tag: "ContextPressure",
+    taskId: state.taskId,
+    utilizationPct,
+    tokensUsed: used,
+    tokensAvailable,
+    level,
+  };
+}
+
 /**
  * Build KernelHooks wired to an EventBus instance (or no-op if EventBus is None).
  *
@@ -170,13 +201,20 @@ export function buildKernelHooks(eventBus: MaybeService<EventBusInstance>): Kern
       }),
 
     onIterationProgress: (state: KernelState, toolsThisStep: readonly string[]): Effect.Effect<void, never> =>
-      publishReasoningStep(eventBus, {
-        _tag: "ReasoningIterationProgress",
-        taskId: state.taskId,
-        iteration: state.iteration,
-        maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
-        strategy: state.strategy,
-        toolsThisStep,
+      Effect.gen(function* () {
+        yield* publishReasoningStep(eventBus, {
+          _tag: "ReasoningIterationProgress",
+          taskId: state.taskId,
+          iteration: state.iteration,
+          maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
+          strategy: state.strategy,
+          toolsThisStep,
+        });
+        // Kernel-path ContextPressure — execution-engine's inline loop emits this
+        // for its path; real (kernel-driven) runs need it too or Cortex's
+        // context-window gauge has no denominator and falls back to iteration %.
+        const cp = contextPressureEvent(state);
+        if (cp) yield* publishReasoningStep(eventBus, cp);
       }),
 
     onStrategySwitched: (state: KernelState, from: string, to: string, reason: string): Effect.Effect<void, never> =>

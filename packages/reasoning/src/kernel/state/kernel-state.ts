@@ -263,6 +263,24 @@ export interface KernelMeta {
    */
   readonly lastIterationTokens?: readonly number[];
 
+  /**
+   * Live context-window occupancy after the most recent LLM call: the input
+   * (prompt) tokens of that call — i.e. how much of the model's context window
+   * the current conversation thread is using right now. Drives the
+   * `ContextPressure` event the kernel emits each iteration (consumed by
+   * Cortex's context-window gauge). Falls back to the call's total tokens when
+   * the provider doesn't report input tokens (e.g. some Ollama responses).
+   */
+  readonly lastContextTokens?: number;
+
+  /**
+   * The model's context window (numCtx) resolved at the most recent LLM call —
+   * the denominator for {@link lastContextTokens}. Resolved in think.ts where the
+   * provider/model are in scope and the capability probe has already run, so it
+   * reflects the real numCtx rather than the conservative fallback.
+   */
+  readonly lastContextWindow?: number;
+
   // ── Issue #128 — Arbitrator BudgetSignal limits (North Star v5.0 Pillar 6) ─
   /**
    * Declarative budget limits consulted by the Arbitrator's pre-intent guard.
