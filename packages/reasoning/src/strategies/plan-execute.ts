@@ -204,6 +204,7 @@ export const executePlanExecute = (
       maxRetries: 2,
       temperature: 0.5,
       maxTokens: 4096,
+      ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
     }).pipe(
       Effect.mapError(
         (err) =>
@@ -249,6 +250,7 @@ export const executePlanExecute = (
         maxRetries: 1,
         temperature: 0.3,
         maxTokens: 4096,
+        ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       }).pipe(
         Effect.map((r) => hydratePlan(r.data, {
           taskId: input.taskId ?? "plan-execute",
@@ -698,6 +700,7 @@ export const executePlanExecute = (
         depth: reflectionDepth,
         strategyName: "plan-execute-reflect",
         step: refinement,
+        ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       });
 
       totalTokens += reflectResult.tokens;

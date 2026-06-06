@@ -36,7 +36,7 @@ import {
   type StreamEvent,
   type StopReason,
 } from "@reactive-agents/llm-provider";
-import { emitLLMExchange } from "./utils/diagnostics.js";
+import { emitLLMExchange, emitContextPressure } from "./utils/diagnostics.js";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
 // layer so it cannot see taskId/iteration directly. Callers that CAN correlate
@@ -99,6 +99,14 @@ type PartialCompletion = {
     /** Anthropic prompt-caching: tokens served from cache hits. */
     readonly cacheReadInputTokens?: number;
   };
+  /**
+   * Effective parameters the provider resolved for this call (transparency).
+   * `contextWindow` is the EXACT num_ctx the provider received (honors user
+   * numCtx overrides) — the denominator for the ContextPressure gauge.
+   */
+  readonly resolvedParams?: {
+    readonly contextWindow?: number;
+  };
 };
 
 function emitForRequest(
@@ -108,6 +116,21 @@ function emitForRequest(
   kind: "complete" | "stream" | "completeStructured",
   fullResponse?: PartialCompletion,
 ): Effect.Effect<void, never> {
+  // Uniform ContextPressure: emit from this single chokepoint (all strategy
+  // paths flow through here, including eventBus-less plan-execute/reflexion
+  // sub-kernels) when the call is correlated to a real run (traceContext.taskId
+  // present — filters out aux calls like the intent classifier), the provider
+  // reported prompt tokens, AND surfaced the exact resolved context window.
+  // Gated strictly on resolvedParams.contextWindow > 0 (no capability fallback):
+  // the gauge must reflect the real provider window, not the model's assumed max.
+  const taskId = request.traceContext?.taskId;
+  const tokensUsed = fullResponse?.usage?.inputTokens ?? 0;
+  const contextWindow = fullResponse?.resolvedParams?.contextWindow ?? 0;
+  const contextPressure =
+    taskId !== undefined && taskId.length > 0 && tokensUsed > 0 && contextWindow > 0
+      ? emitContextPressure({ taskId, tokensUsed, contextWindow })
+      : Effect.void;
+
   return emitLLMExchange({
     taskId: request.traceContext?.taskId ?? PLACEHOLDER_TASK_ID,
     iteration: request.traceContext?.iteration ?? PLACEHOLDER_ITERATION,
@@ -139,7 +162,7 @@ function emitForRequest(
       costUsd: fullResponse?.usage?.estimatedCost,
       durationMs,
     },
-  });
+  }).pipe(Effect.zipRight(contextPressure));
 }
 
 /**
@@ -180,6 +203,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               content: string;
               toolCalls: { name: string; id: string }[];
               usage?: PartialCompletion["usage"];
+              resolvedParams?: PartialCompletion["resolvedParams"];
               stopReason?: StopReason;
             }>({ content: "", toolCalls: [] });
             const innerStream = yield* inner.stream(request);
@@ -203,6 +227,12 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                     case "usage":
                       return {
                         ...s,
+                        // Capture the exact provider-resolved context window
+                        // (transparency) so the chokepoint can drive the
+                        // ContextPressure gauge off the real num_ctx.
+                        ...(typeof event.resolvedParams?.contextWindow === "number"
+                          ? { resolvedParams: { contextWindow: event.resolvedParams.contextWindow } }
+                          : {}),
                         usage: {
                           inputTokens: event.usage.inputTokens,
                           outputTokens: event.usage.outputTokens,
@@ -235,6 +265,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                       stopReason: s.stopReason ?? ("end_turn" as StopReason),
                       toolCalls: s.toolCalls.length > 0 ? s.toolCalls : undefined,
                       usage: s.usage,
+                      ...(s.resolvedParams ? { resolvedParams: s.resolvedParams } : {}),
                     },
                   );
                 }),

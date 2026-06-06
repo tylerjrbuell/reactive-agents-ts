@@ -266,6 +266,7 @@ export const executeReflexion = (
             depth: selfCritiqueDepth,
             strategyName: "reflexion",
             step: attempt,
+            ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
           });
 
           const critique = critiqueResult.content || critiqueResult.thinking || "";

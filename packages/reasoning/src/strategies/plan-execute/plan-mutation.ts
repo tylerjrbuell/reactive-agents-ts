@@ -74,6 +74,7 @@ export function patchPlan(
     maxRetries: 1,
     temperature: 0.3,
     maxTokens: 4096,
+    ...(plan.taskId ? { traceContext: { taskId: plan.taskId } } : {}),
   }).pipe(
     Effect.map((result) => {
       const patchedPlan = hydratePlan(result.data, {
@@ -146,6 +147,7 @@ export function augmentPlan(
     maxRetries: 1,
     temperature: 0.3,
     maxTokens: 4096,
+    ...(plan.taskId ? { traceContext: { taskId: plan.taskId } } : {}),
   }).pipe(
     Effect.map((result) => {
       const augmentedPlan = hydratePlan(result.data, {

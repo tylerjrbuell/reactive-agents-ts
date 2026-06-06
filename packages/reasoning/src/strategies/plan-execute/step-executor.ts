@@ -278,6 +278,11 @@ export function executeStep(
         ),
         maxTokens: 4096,
         temperature: 0.5,
+        // Correlate this direct (non-kernel) analysis call so the observable-LLM
+        // chokepoint emits a ContextPressure keyed to the real run — analysis
+        // steps bypass the kernel hooks, so without this the Cortex gauge stays
+        // dark during analysis-only plan-execute runs.
+        ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       })
       .pipe(
         Effect.flatMap((response) => {
