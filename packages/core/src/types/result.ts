@@ -67,6 +67,10 @@ export const ResultMetadataSchema = Schema.Struct({
   strategyUsed: Schema.optional(Schema.String),
   stepsCount: Schema.optional(Schema.Number),
   iterations: Schema.optional(Schema.Number),
+  /** Derived task-complexity bucket ("trivial" | "moderate" | "complex" | "expert"). */
+  complexity: Schema.optional(Schema.String),
+  /** Total LLM calls made across this execution. */
+  llmCalls: Schema.optional(Schema.Number),
 });
 export type ResultMetadata = typeof ResultMetadataSchema.Type;
 
