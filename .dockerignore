@@ -1,6 +1,10 @@
 node_modules
 **/node_modules
 **/dist
+# Runtime-generated agent memory/state — these accumulate to GBs of SQLite +
+# memory.md from dev/test runs and must never enter the image build context.
+**/.reactive-agents
+**/data/*.db
 .git
 **/.env
 **/.env.production
@@ -13,11 +17,11 @@ docker
 docs
 scripts
 assets
-apps/cli
-apps/docs
-apps/examples
-# Re-allow package.json from excluded apps so bun --frozen-lockfile can
-# satisfy the root workspaces array.
-!apps/cli/package.json
-!apps/docs/package.json
-!apps/examples/package.json
+# Do NOT exclude whole app dirs here. `bun install --frozen-lockfile` validates
+# the entire workspace graph against bun.lock, so every member's package.json
+# must be present — excluding an app dir and re-including its package.json does
+# NOT work in BuildKit (a file cannot be re-included once its parent dir is
+# excluded), which drifts the resolved workspace set and fails the frozen check.
+# App source is cheap once node_modules/dist/tests are globally excluded above,
+# and it only lands in the discarded build stage — the final image copies just
+# apps/advocate/ (see apps/advocate/Dockerfile).

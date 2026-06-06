@@ -155,7 +155,7 @@ reactive-agents-ts/
 │   ├── cli/ ............................. rax CLI (entry point: main.ts)
 │   ├── cortex/ .......................... SvelteKit admin UI (Bun + SQLite)
 │   ├── examples/ ........................ 34 usage examples
-│   └── meta-agent/ ...................... internal meta-agent for framework testing
+│   └── advocate/ ........................ community growth agent (flagship dogfood)
 │
 ├── scripts/ ............................. utility scripts
 ├── docker/ .............................. container configs
