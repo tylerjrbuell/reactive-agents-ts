@@ -43,6 +43,21 @@ Use an explicit model in builder config:
 .withModel("qwen3.5")
 ```
 
+### Capability-source fallback warning at build time
+
+<small>v0.12+</small>
+
+**Symptom**
+- A warning at `build()` that the model's capability profile resolved to a `fallback` source (assumed 2048-token context), or — under `.withStrictValidation()` — a hard build error.
+
+**Root cause**
+- No probe result, cache entry, or static-table entry exists for this `(provider, model)` pair, so the framework fell back to a conservative default context window instead of the model's real one. Running this way silently caps context on a misconfigured budget.
+
+**Fix**
+- Use a known model id (check the provider's capability table), or pin the real context window explicitly: `.withModel({ model, numCtx })`.
+- For local models, ensure the model is pulled so it can be probed on first run (`ollama pull ...`).
+- The agent still **runs** with a warning by default; it only **errors** under `.withStrictValidation()`. Remove strict validation if you intentionally want fallback behavior.
+
 ### Noisy FiberFailure error output
 
 **Symptom**
