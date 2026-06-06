@@ -5,7 +5,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsup --config ../../tsup.config.base.ts",
+    "build": "tsup --config ../../tsup.config.base.ts && tsup src/normalize.ts --format esm --dts --sourcemap --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots"
   },
@@ -24,6 +24,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./normalize": {
+      "bun": "./dist/normalize.js",
+      "types": "./dist/normalize.d.ts",
+      "import": "./dist/normalize.js",
+      "default": "./dist/normalize.js"
     }
   },
   "files": [
