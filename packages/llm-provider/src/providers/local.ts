@@ -15,7 +15,7 @@ import type {
 import { estimateTokenCount } from '../token-counter.js'
 import { retryPolicy } from '../retry.js'
 import { getProviderDefaultModel } from '../provider-defaults.js'
-import { resolveCapability } from '../capability-resolver.js'
+import { resolveCapability, registerProbedCapability } from '../capability-resolver.js'
 import { probeOllamaCapability } from './local-probe.js'
 import { warnCapabilityFallback } from '../capability-resolver.js'
 import type { Capability } from '../capability.js'
@@ -59,6 +59,11 @@ async function resolveOllamaCapability(
     const probed = await probeOllamaCapability(model, baseUrl, apiKey)
     if (probed) {
         inlineProbeCache.set(key, probed)
+        // Write through to the process-wide registry so the synchronous,
+        // cache-less `resolveCapability` calls elsewhere (ContextPressure
+        // denominator, context budget, snapshot) see the real probed numCtx
+        // instead of the 2048 fallback.
+        registerProbedCapability(probed)
         return probed
     }
 

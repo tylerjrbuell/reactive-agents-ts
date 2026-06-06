@@ -3,9 +3,11 @@
 // Phase 1 Sprint 1 S1.3 — Capability resolver.
 // Three-tier lookup: probed cache → static table → fallback.
 
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect, mock, afterEach } from "bun:test";
 import {
   resolveCapability,
+  registerProbedCapability,
+  _resetProbedRegistryForTesting,
   type CapabilityCache,
 } from "../src/capability-resolver.js";
 import {
@@ -62,6 +64,44 @@ describe("resolveCapability — Tier 1 (cached probe)", () => {
       "anthropic",
       "claude-haiku-4-5-20251001",
     );
+  });
+});
+
+// ─── Tier 1: process-wide probed registry (write-through) ─────────────────────
+
+describe("resolveCapability — Tier 1 (probed registry write-through)", () => {
+  afterEach(() => _resetProbedRegistryForTesting());
+
+  it("a registered probe wins over the static table for cache-less callers", () => {
+    // gemma4:e4b is NOT in the static table — before this, cache-less callers got
+    // the 2048 fallback. After the probe registers the real numCtx, they get it.
+    const probed: Capability = { ...probedCap, model: "gemma4:e4b", recommendedNumCtx: 32_768, maxContextTokens: 131_072 };
+    registerProbedCapability(probed);
+    const result = resolveCapability("ollama", "gemma4:e4b");
+    expect(result.source).toBe("probe");
+    expect(result.recommendedNumCtx).toBe(32_768); // real probed value, not 2048 fallback
+  });
+
+  it("overrides a static-table entry too", () => {
+    registerProbedCapability(probedCap); // cogito:14b, recommendedNumCtx 16_384
+    const result = resolveCapability("ollama", "cogito:14b"); // static table = 8192
+    expect(result.recommendedNumCtx).toBe(16_384);
+    expect(result.source).toBe("probe");
+  });
+
+  it("an explicit cache still takes precedence over the registry", () => {
+    registerProbedCapability(probedCap);
+    const overrideCap: Capability = { ...probedCap, recommendedNumCtx: 99_999 };
+    const cache = makeCache(new Map([["ollama/cogito:14b", overrideCap]]));
+    const result = resolveCapability("ollama", "cogito:14b", { cache });
+    expect(result.recommendedNumCtx).toBe(99_999);
+  });
+
+  it("after reset, falls back to the static/fallback tiers again", () => {
+    registerProbedCapability(probedCap);
+    _resetProbedRegistryForTesting();
+    const result = resolveCapability("ollama", "cogito:14b");
+    expect(result.source).toBe("static-table");
   });
 });
 

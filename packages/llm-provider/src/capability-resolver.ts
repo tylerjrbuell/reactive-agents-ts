@@ -40,6 +40,35 @@ import {
  */
 const warnedFallbacks = new Set<string>();
 
+/**
+ * Process-wide registry of capabilities resolved by a live probe (e.g. the
+ * Ollama `/api/show` probe in `providers/local.ts`). The probe is async and
+ * provider-specific, so it can't run inside the synchronous `resolveCapability`.
+ * Instead the probe writes through here once it succeeds, and every subsequent
+ * synchronous `resolveCapability(provider, model)` — including the cache-less
+ * calls in the execution engine that compute the ContextPressure denominator and
+ * the context budget — picks up the real numCtx instead of the 2048 fallback.
+ *
+ * Keyed by `provider/model`: a model's context window is intrinsic to the model,
+ * independent of which base URL served it. Without this, the value the actual
+ * LLM call used (probed) and the value the rest of the engine saw (fallback)
+ * silently disagreed.
+ */
+const probedRegistry = new Map<string, Capability>();
+
+/**
+ * Write through a probed capability so synchronous resolvers can read it.
+ * Called by provider probe code after a successful live probe.
+ */
+export function registerProbedCapability(cap: Capability): void {
+  probedRegistry.set(`${cap.provider}/${cap.model}`, cap);
+}
+
+/** Test seam — clears the probed-capability registry between tests. */
+export function _resetProbedRegistryForTesting(): void {
+  probedRegistry.clear();
+}
+
 function warnFallbackOnce(provider: string, model: string): void {
   const key = `${provider}/${model}`;
   if (warnedFallbacks.has(key)) return;
@@ -111,11 +140,16 @@ export function resolveCapability(
   model: string,
   opts: ResolveCapabilityOptions = {},
 ): Capability {
-  // Tier 1 — cached probe
+  // Tier 0 — explicit cache (e.g. a CalibrationStore passed by the caller).
   if (opts.cache) {
     const cached = opts.cache.loadCapability(provider, model);
     if (cached !== null) return cached;
   }
+
+  // Tier 1 — process-wide probed registry. Populated by provider probe code
+  // (write-through) so cache-less callers still see the real, live-probed numCtx.
+  const probed = probedRegistry.get(`${provider}/${model}`);
+  if (probed !== undefined) return probed;
 
   // Tier 2 — static table
   const key = `${provider}/${model}`;
