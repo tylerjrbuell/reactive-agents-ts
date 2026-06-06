@@ -36,6 +36,19 @@ const cachedStreamEvents: readonly StreamEvent[] = [
   },
 ];
 
+// A stream whose usage event carries the provider-resolved context window —
+// what local.ts emits so the chokepoint can drive the ContextPressure gauge off
+// the exact num_ctx the provider received (honors user numCtx overrides).
+const windowedStreamEvents: readonly StreamEvent[] = [
+  { type: "text_delta", text: "hi" },
+  { type: "content_complete", content: "hi" },
+  {
+    type: "usage",
+    usage: { inputTokens: 2304, outputTokens: 12, totalTokens: 2316, estimatedCost: 0 },
+    resolvedParams: { contextWindow: 32_768 },
+  },
+];
+
 const makeInnerLLM = (events: readonly StreamEvent[]) =>
   Layer.succeed(LLMService, {
     complete: () =>
@@ -117,6 +130,122 @@ describe("makeObservableLLM — trace correlation via request.traceContext", () 
     const ev = captured[0]! as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
     expect(ev.taskId).toBe("llm-direct");
     expect(ev.iteration).toBe(0);
+  }, 15000);
+});
+
+// Capture ContextPressure events off the bus for a given inner LLM + request.
+const captureContextPressureWith =
+  (inner: ReturnType<typeof makeInnerLLM>) => (request: CompletionRequest) =>
+    Effect.gen(function* () {
+      const sink = yield* Ref.make<AgentEvent[]>([]);
+      const bus = yield* EventBus;
+      yield* bus.on("ContextPressure", (ev) => Ref.update(sink, (xs) => [...xs, ev]));
+      const llm = yield* LLMService;
+      const stream = yield* llm.stream(request);
+      yield* Stream.runCollect(stream);
+      return yield* Ref.get(sink);
+    }).pipe(
+      Effect.provide(Layer.merge(makeObservableLLM().pipe(Layer.provide(inner)), EventBusLive)),
+    );
+
+describe("makeObservableLLM — uniform ContextPressure chokepoint", () => {
+  it("emits ContextPressure when traceContext + inputTokens + resolvedParams.contextWindow are present", async () => {
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(makeInnerLLM(windowedStreamEvents))({
+        messages: [{ role: "user", content: "say hi" } as any],
+        systemPrompt: "You are a test agent.",
+        maxTokens: 64,
+        temperature: 0.1,
+        traceContext: { taskId: "run-CP", iteration: 1 },
+      } satisfies CompletionRequest),
+    );
+
+    expect(captured.length).toBe(1);
+    const cp = captured[0]! as Extract<AgentEvent, { _tag: "ContextPressure" }>;
+    expect(cp._tag).toBe("ContextPressure");
+    expect(cp.taskId).toBe("run-CP");
+    expect(cp.tokensUsed).toBe(2304);
+    expect(cp.tokensAvailable).toBe(30_464); // 32768 - 2304
+    expect(cp.utilizationPct).toBeCloseTo(7.03, 1);
+    expect(cp.level).toBe("low");
+  }, 15000);
+
+  it("emits NO ContextPressure when traceContext is absent (filters aux/non-correlated calls)", async () => {
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(makeInnerLLM(windowedStreamEvents))({
+        messages: [{ role: "user", content: "say hi" } as any],
+        systemPrompt: "You are a test agent.",
+        maxTokens: 64,
+        temperature: 0.1,
+      } satisfies CompletionRequest),
+    );
+
+    expect(captured.length).toBe(0);
+  }, 15000);
+
+  it("emits NO ContextPressure when resolvedParams.contextWindow is absent (no assumed-max fallback)", async () => {
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(makeInnerLLM(cannedStreamEvents))({
+        messages: [{ role: "user", content: "say hi" } as any],
+        systemPrompt: "You are a test agent.",
+        maxTokens: 64,
+        temperature: 0.1,
+        traceContext: { taskId: "run-NOWIN", iteration: 1 },
+      } satisfies CompletionRequest),
+    );
+
+    expect(captured.length).toBe(0);
+  }, 15000);
+});
+
+// Inner LLM whose complete() returns a CompletionResponse carrying resolvedParams
+// — mirrors the plan-execute reflect/analysis path (runCritiquePass → complete()).
+const windowedCompleteLLM = Layer.succeed(LLMService, {
+  complete: () =>
+    Effect.succeed({
+      content: "ok",
+      stopReason: "end_turn",
+      usage: { inputTokens: 2304, outputTokens: 12, totalTokens: 2316, estimatedCost: 0 },
+      model: "test-model",
+      resolvedParams: { contextWindow: 32_768 },
+    } as CompletionResponse),
+  stream: () => Effect.succeed(Stream.fromIterable(cannedStreamEvents) as any),
+  completeStructured: () => Effect.succeed({ ok: true }) as any,
+  embed: () => Effect.succeed([]),
+  countTokens: () => Effect.succeed(0),
+  getModelConfig: () => Effect.succeed({} as any),
+  getStructuredOutputCapabilities: () => Effect.succeed({} as any),
+  capabilities: () => Effect.succeed({} as any),
+} as any);
+
+describe("makeObservableLLM — ContextPressure on the complete() path (plan-execute reflect/analysis)", () => {
+  it("emits ContextPressure from complete() when traceContext + resolvedParams.contextWindow present", async () => {
+    const captured = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sink = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.on("ContextPressure", (ev) => Ref.update(sink, (xs) => [...xs, ev]));
+        const llm = yield* LLMService;
+        yield* llm.complete({
+          messages: [{ role: "user", content: "critique this" } as any],
+          systemPrompt: "judge",
+          maxTokens: 256,
+          temperature: 0.3,
+          traceContext: { taskId: "run-REFLECT", iteration: 2 },
+        } satisfies CompletionRequest);
+        return yield* Ref.get(sink);
+      }).pipe(
+        Effect.provide(Layer.merge(makeObservableLLM().pipe(Layer.provide(windowedCompleteLLM)), EventBusLive)),
+      ),
+    );
+
+    expect(captured.length).toBe(1);
+    const cp = captured[0]! as Extract<AgentEvent, { _tag: "ContextPressure" }>;
+    expect(cp._tag).toBe("ContextPressure");
+    expect(cp.taskId).toBe("run-REFLECT");
+    expect(cp.tokensUsed).toBe(2304);
+    expect(cp.tokensAvailable).toBe(30_464);
+    expect(cp.level).toBe("low");
   }, 15000);
 });
 

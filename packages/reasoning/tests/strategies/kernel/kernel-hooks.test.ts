@@ -300,51 +300,31 @@ describe("buildKernelHooks", () => {
       expect(event.strategy).toBe("test");
     });
 
-    // ── onIterationProgress + ContextPressure ──────────────────────────────
-    // The kernel path must emit ContextPressure (Cortex's context-window gauge
-    // denominator) — without it the gauge falls back to "no ctx window data".
+    // ── onIterationProgress ─────────────────────────────────────────────────
+    // ContextPressure is no longer emitted from kernel-hooks — it rides the
+    // observable-llm chokepoint now (see observable-llm.test.ts). Hooks emit
+    // ONLY ReasoningIterationProgress here.
 
-    it("onIterationProgress emits ReasoningIterationProgress only when no context tokens recorded", async () => {
+    it("onIterationProgress emits ReasoningIterationProgress (and no ContextPressure)", async () => {
       const { events, eb } = makeMockEventBus();
       const hooks = buildKernelHooks(eb);
-      // Fresh state: meta has no lastContextTokens/lastContextWindow yet.
       await Effect.runPromise(hooks.onIterationProgress(baseState(), ["calculator"]));
       expect(events).toHaveLength(1);
       expect((events[0] as Record<string, unknown>)._tag).toBe("ReasoningIterationProgress");
+      expect(
+        events.some((e) => (e as Record<string, unknown>)._tag === "ContextPressure"),
+      ).toBe(false);
     });
 
-    it("onIterationProgress also emits ContextPressure once context tokens + window are known", async () => {
+    it("onThought no longer emits ContextPressure (chokepoint owns it now)", async () => {
       const { events, eb } = makeMockEventBus();
       const hooks = buildKernelHooks(eb);
-      const state = transitionState(baseState(), {
-        meta: { ...baseState().meta, lastContextTokens: 2304, lastContextWindow: 32_768 },
-      });
-
-      await Effect.runPromise(hooks.onIterationProgress(state, ["calculator"]));
-
-      expect(events).toHaveLength(2);
-      const cp = events.find(
-        (e) => (e as Record<string, unknown>)._tag === "ContextPressure",
-      ) as Record<string, unknown> | undefined;
-      expect(cp).toBeDefined();
-      expect(cp!.taskId).toBe("task-1");
-      expect(cp!.tokensUsed).toBe(2304);
-      expect(cp!.tokensAvailable).toBe(30_464); // 32768 - 2304
-      expect(cp!.utilizationPct).toBeCloseTo(7.03, 1);
-      expect(cp!.level).toBe("low");
-    });
-
-    it("ContextPressure level escalates with utilization", async () => {
-      const { events, eb } = makeMockEventBus();
-      const hooks = buildKernelHooks(eb);
-      const state = transitionState(baseState(), {
-        meta: { ...baseState().meta, lastContextTokens: 7800, lastContextWindow: 8192 },
-      });
-      await Effect.runPromise(hooks.onIterationProgress(state, []));
-      const cp = events.find(
-        (e) => (e as Record<string, unknown>)._tag === "ContextPressure",
-      ) as Record<string, unknown>;
-      expect(cp.level).toBe("critical"); // ~95%
+      await Effect.runPromise(hooks.onThought(baseState(), "thinking"));
+      expect(events).toHaveLength(1);
+      expect((events[0] as Record<string, unknown>)._tag).toBe("ReasoningStepCompleted");
+      expect(
+        events.some((e) => (e as Record<string, unknown>)._tag === "ContextPressure"),
+      ).toBe(false);
     });
   });
 });

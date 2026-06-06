@@ -382,6 +382,60 @@ export function emitLLMExchange(args: {
   });
 }
 
+// ── ContextPressure (uniform chokepoint emission) ──────────────────────────
+//
+// Emitted from the observable-llm chokepoint after every correlated LLM call so
+// Cortex's context-window gauge updates in realtime for EVERY strategy path —
+// including plan-execute/reflexion sub-kernel calls that run with no per-strategy
+// EventBus hooks. The denominator is the EXACT provider-resolved context window
+// (resolvedParams.contextWindow — honors user numCtx overrides), the numerator is
+// the prompt (input) tokens of that call. Same Effect.serviceOption(EventBus)
+// no-op-when-absent pattern as emitLLMExchange — keeps the Layer R = never.
+
+export function emitContextPressure(args: {
+  readonly taskId: string;
+  readonly tokensUsed: number;
+  readonly contextWindow: number;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+
+    const used = args.tokensUsed;
+    const window = args.contextWindow;
+    if (used <= 0 || window <= 0) return;
+
+    const tokensAvailable = Math.max(0, window - used);
+    const utilizationPct = Math.min(100, Math.max(0, (used / window) * 100));
+    const level: "low" | "medium" | "high" | "critical" =
+      utilizationPct >= 90
+        ? "critical"
+        : utilizationPct >= 75
+          ? "high"
+          : utilizationPct >= 45
+            ? "medium"
+            : "low";
+
+    yield* busOpt.value
+      .publish({
+        _tag: "ContextPressure",
+        taskId: args.taskId,
+        utilizationPct,
+        tokensUsed: used,
+        tokensAvailable,
+        level,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitContextPressure",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── BudgetSignalCollected (Issue #128 — North Star v5.0 Pillar 6) ───────────
 //
 // Marker emit for the Arbitrator's BudgetSignal input. Surfaces tokensUsed /

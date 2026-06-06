@@ -60,6 +60,14 @@ export interface RunCritiquePassInput {
   readonly strategyName: string;
   /** Step / iteration counter for ExecutionError attribution. */
   readonly step: number;
+  /**
+   * Run correlation snapshot threaded into the LLM request so the observable-llm
+   * chokepoint can key its trace + ContextPressure emission to the real run
+   * instead of the 'llm-direct' placeholder. Callers (plan-execute, reflexion)
+   * pass their parent taskId/iteration. Optional — back-compat for any caller
+   * that doesn't correlate.
+   */
+  readonly traceContext?: { readonly taskId?: string; readonly iteration?: number };
 }
 
 /** Token cap derivation: matches the cap previously hard-coded in both consumers. */
@@ -87,6 +95,7 @@ export function runCritiquePass(
       systemPrompt: withEnvContext(input.systemPrompt),
       maxTokens: critiqueMaxTokens(input.depth),
       temperature: 0.3,
+      ...(input.traceContext ? { traceContext: input.traceContext } : {}),
     })
     .pipe(
       Effect.mapError(

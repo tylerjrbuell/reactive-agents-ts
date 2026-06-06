@@ -1,8 +1,10 @@
 import { describe, test, expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { TestLLMServiceLayer, LLMService } from "@reactive-agents/llm-provider";
+import type { StreamEvent } from "@reactive-agents/llm-provider";
+import { makeObservableLLM } from "../../src/index.js";
 import { EventBusLive, EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 
@@ -173,20 +175,56 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
   });
 });
 
-// ─── ContextPressure (kernel-path) integration guard ──────────────────────────
-// Guards the think → iterate-pass meta-spread invariant end-to-end through the
-// REAL kernel: think.ts stashes lastContextTokens/lastContextWindow on meta, and
-// kernel-hooks onIterationProgress emits ContextPressure. If a future edit drops
-// a `...state.meta` spread on the think→progress path, the unit test on
-// contextPressureEvent() still passes but THIS test fails — catching the silent
-// death the kernel-warden flagged.
+// ─── ContextPressure (chokepoint) integration guard ───────────────────────────
+// ContextPressure now rides the observable-llm chokepoint (makeObservableLLM →
+// emitContextPressure), NOT kernel-hooks. This guard routes a REAL reactive
+// (kernel) run through that chokepoint and asserts ≥1 ContextPressure reaches the
+// bus with a real taskId — proving the end-to-end mechanism the user requested
+// (uniform CP across all strategy paths, exact provider window).
+//
+// Why the wiring is non-trivial: `executeReactive` does NOT apply makeObservableLLM
+// (it's wired at runtime.ts:528, in the runtime package). And TestLLMServiceLayer
+// (out of kernel authority) emits a `usage` StreamEvent with no resolvedParams, so
+// the strict `resolvedParams.contextWindow > 0` chokepoint gate would never fire.
+// So we (1) wrap the test LLMService stream to inject resolvedParams.contextWindow
+// onto the usage event (what local.ts does in prod), then (2) wrap THAT with
+// makeObservableLLM. think.ts seeds request.traceContext.taskId on the reactive
+// stream request, so correlation flows automatically.
 
 type ContextPressureEvent = Extract<AgentEvent, { _tag: "ContextPressure" }>;
 
-describe("kernel emits ContextPressure for the context-window gauge", () => {
-  test("ContextPressure is published from a real reactive (kernel) run", async () => {
+// Layer that wraps an upstream LLMService, injecting resolvedParams.contextWindow
+// onto every `usage` StreamEvent (mirrors the provider transparency local.ts adds).
+const injectResolvedWindow = (window: number): Layer.Layer<LLMService, never, LLMService> =>
+  Layer.effect(
+    LLMService,
+    Effect.gen(function* () {
+      const inner = yield* LLMService;
+      return {
+        ...inner,
+        stream: (request) =>
+          inner.stream(request).pipe(
+            Effect.map((s) =>
+              s.pipe(
+                Stream.map((ev: StreamEvent): StreamEvent =>
+                  ev.type === "usage"
+                    ? { ...ev, resolvedParams: { ...ev.resolvedParams, contextWindow: window } }
+                    : ev,
+                ),
+              ),
+            ),
+          ),
+      };
+    }),
+  );
+
+describe("chokepoint emits ContextPressure for the context-window gauge", () => {
+  test("ContextPressure is published from a real reactive (kernel) run through makeObservableLLM", async () => {
     const captured: ContextPressureEvent[] = [];
-    const llmLayer = TestLLMServiceLayer([{ text: "FINAL ANSWER: 42." }]);
+    // provider → window-injecting wrapper → observable chokepoint
+    const llmLayer = makeObservableLLM().pipe(
+      Layer.provide(injectResolvedWindow(32_768).pipe(Layer.provide(TestLLMServiceLayer([{ text: "FINAL ANSWER: 42." }])))),
+    );
 
     await Effect.runPromise(
       Effect.gen(function* () {
@@ -210,13 +248,16 @@ describe("kernel emits ContextPressure for the context-window gauge", () => {
       }).pipe(Effect.provide(Layer.merge(llmLayer, EventBusLive))),
     );
 
-    // The load-bearing assertion: ≥1 ContextPressure reached the bus, proving the
-    // meta-stash survives the think→iterate-pass transitions.
+    // Load-bearing: ≥1 ContextPressure reached the bus from the chokepoint.
     expect(captured.length).toBeGreaterThan(0);
     const cp = captured[0]!;
+    // Real run correlation, not the 'llm-direct' placeholder — proves think.ts
+    // threaded traceContext.taskId through to the chokepoint.
+    expect(cp.taskId).not.toBe("llm-direct");
+    expect(cp.taskId.length).toBeGreaterThan(0);
     expect(cp.tokensUsed).toBeGreaterThan(0);
     expect(cp.tokensAvailable).toBeGreaterThanOrEqual(0);
-    // Window (used + available) must exceed usage — a real denominator, not 0.
+    // Window (used + available) is the real denominator, not 0.
     expect(cp.tokensUsed + cp.tokensAvailable).toBeGreaterThan(0);
     expect(cp.utilizationPct).toBeGreaterThanOrEqual(0);
     expect(cp.utilizationPct).toBeLessThanOrEqual(100);

@@ -809,6 +809,30 @@ export type CompletionRequest = {
  * };
  * ```
  */
+/**
+ * Effective parameters the PROVIDER actually resolved and applied for a call —
+ * the provider-transparency mechanism. Downstream consumers (Cortex's
+ * context-window gauge, the trace/diagnose layers) read these as ground truth
+ * instead of re-deriving assumptions (e.g. recomputing num_ctx precedence, which
+ * would drift from the provider). Each provider populates what it can; every
+ * field is optional. Extend this struct rather than adding ad-hoc response fields.
+ */
+export const ResolvedParamsSchema = Schema.Struct({
+  /**
+   * The exact context window (in tokens) the provider used for this call. For
+   * Ollama this is the resolved `options.num_ctx` (request override → explicit
+   * config override → capability recommendation); for fixed-window providers it
+   * is the model's context window. This — not the model's assumed max — is the
+   * correct denominator for context-occupancy reporting.
+   */
+  contextWindow: Schema.optional(Schema.Number),
+  /** The effective max-output-tokens cap the provider applied this call. */
+  maxOutputTokens: Schema.optional(Schema.Number),
+});
+
+/** @see ResolvedParamsSchema */
+export type ResolvedParams = Schema.Schema.Type<typeof ResolvedParamsSchema>;
+
 export const CompletionResponseSchema = Schema.Struct({
   /** Generated response content (text only, no content blocks) */
   content: Schema.String,
@@ -818,6 +842,11 @@ export const CompletionResponseSchema = Schema.Struct({
   usage: TokenUsageSchema,
   /** Actual model identifier used (may differ from request) */
   model: Schema.String,
+  /**
+   * Effective parameters the provider actually resolved for this call
+   * (transparency). Optional — providers populate what they can.
+   */
+  resolvedParams: Schema.optional(ResolvedParamsSchema),
   /** Tool calls emitted by the model (if any) */
   toolCalls: Schema.optional(Schema.Array(ToolCallSchema)),
   /** Internal reasoning from thinking models (e.g. <think> blocks from qwen3, DeepSeek-R1) */
@@ -904,6 +933,12 @@ export type StreamEvent =
       readonly type: "usage";
       /** Final token usage for the request */
       readonly usage: TokenUsage;
+      /**
+       * Effective parameters the provider resolved for this call (transparency).
+       * Streamed alongside usage so streaming callers get the same ground-truth
+       * the non-streaming `complete()` path exposes via `CompletionResponse.resolvedParams`.
+       */
+      readonly resolvedParams?: ResolvedParams;
     }
   | {
       /** Token-level log probabilities (accumulated over the full response) */

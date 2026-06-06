@@ -32,6 +32,14 @@ export interface StructuredOutputConfig<T> {
   readonly maxTokens?: number;
   /** Skip completeStructured() and use prompt engineering only (default: false) */
   readonly forcePromptMode?: boolean;
+  /**
+   * Run correlation snapshot forwarded to the provider so the observable-LLM
+   * chokepoint can key its LLMExchange + ContextPressure events to the real
+   * run instead of the `"llm-direct"` placeholder. Only the `complete()`
+   * fallback path carries usage; native `completeStructured()` returns parsed
+   * data only, so its context-window cannot be reported (known gap).
+   */
+  readonly traceContext?: { readonly taskId?: string; readonly iteration?: number };
 }
 
 export interface StructuredOutputResult<T> {
@@ -64,6 +72,7 @@ const tryNativeStructuredOutput = <T>(
       maxTokens,
       temperature: temp,
       maxParseRetries: 1,
+      ...(config.traceContext ? { traceContext: config.traceContext } : {}),
     }).pipe(
       Effect.map((data): StructuredOutputResult<T> => ({
         data,
@@ -138,6 +147,7 @@ export const extractStructuredOutput = <T>(
         systemPrompt,
         maxTokens,
         temperature: attempt === 0 ? temp : 0.1,
+        ...(config.traceContext ? { traceContext: config.traceContext } : {}),
       }).pipe(
         Effect.mapError((e) => new Error(`LLM call failed: ${e instanceof Error ? e.message : String(e)}`)),
       );

@@ -77,6 +77,26 @@ async function resolveOllamaCapability(
     return staticOrFallback
 }
 
+/**
+ * Resolve the exact `num_ctx` Ollama will use for a call, by precedence:
+ * per-request override → explicit config override (.withModel/run) → capability
+ * recommendation → config default floor. Single source of truth — used both to
+ * set `options.num_ctx` on the wire AND to surface `resolvedParams.contextWindow`
+ * back to callers (provider-transparency), so the two never drift.
+ */
+function resolveOllamaNumCtx(
+    request: { readonly numCtx?: number },
+    config: { readonly explicitNumCtx?: number; readonly defaultNumCtx?: number },
+    capability: { readonly recommendedNumCtx?: number },
+): number | undefined {
+    return (
+        request.numCtx ??
+        config.explicitNumCtx ??
+        capability.recommendedNumCtx ??
+        config.defaultNumCtx
+    )
+}
+
 // ─── Ollama SDK types (from the `ollama` npm package) ───
 
 type OllamaTool = {
@@ -394,11 +414,7 @@ export const LocalProviderLive = Layer.effect(
                             // config.explicitNumCtx (user override via
                             // .withModel/run) → capability.recommendedNumCtx →
                             // config.defaultNumCtx (unknown-model floor).
-                            const numCtx =
-                                request.numCtx ??
-                                config.explicitNumCtx ??
-                                capability.recommendedNumCtx ??
-                                config.defaultNumCtx
+                            const numCtx = resolveOllamaNumCtx(request, config, capability)
 
                             return client.chat({
                                 model,
@@ -525,6 +541,10 @@ export const LocalProviderLive = Layer.effect(
                             ? { thinking: thinkingContent }
                             : {}),
                         ...(logprobs ? { logprobs } : {}),
+                        // Provider transparency: surface the exact context window used.
+                        ...(resolveOllamaNumCtx(request, config, capability) !== undefined
+                            ? { resolvedParams: { contextWindow: resolveOllamaNumCtx(request, config, capability)! } }
+                            : {}),
                     } satisfies CompletionResponse
                 }).pipe(
                     Effect.retry(retryPolicy),
@@ -574,11 +594,7 @@ export const LocalProviderLive = Layer.effect(
                                         endpoint,
                                         config.ollamaApiKey
                                     )
-                                const numCtx =
-                                    request.numCtx ??
-                                    config.explicitNumCtx ??
-                                    capability.recommendedNumCtx ??
-                                    config.defaultNumCtx
+                                const numCtx = resolveOllamaNumCtx(request, config, capability)
 
                                 // M12 Hook 1/7 — adapter selection for the
                                 // streaming tool-call normalization site.
@@ -758,6 +774,10 @@ export const LocalProviderLive = Layer.effect(
                                                     (chunk.eval_count ?? 0),
                                                 estimatedCost: 0,
                                             },
+                                            // Provider transparency: exact context window used this call.
+                                            ...(resolveOllamaNumCtx(request, config, capability) !== undefined
+                                                ? { resolvedParams: { contextWindow: resolveOllamaNumCtx(request, config, capability)! } }
+                                                : {}),
                                         })
                                         emit.end()
                                     }
@@ -846,11 +866,7 @@ export const LocalProviderLive = Layer.effect(
                                 )
                             )
                         )
-                        const numCtx =
-                            request.numCtx ??
-                            config.explicitNumCtx ??
-                            capability.recommendedNumCtx ??
-                            config.defaultNumCtx
+                        const numCtx = resolveOllamaNumCtx(request, config, capability)
 
                         const response = yield* Effect.tryPromise({
                             try: async () => {
