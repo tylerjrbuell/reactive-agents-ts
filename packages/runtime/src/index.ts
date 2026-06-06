@@ -9,6 +9,7 @@ export type {
   ReactiveAgentsConfig,
   ReasoningOptions,
   ModelParams,
+  ModelParamsInput,
   MetaToolsConfig,
   HarnessSkillConfig,
   RecallConfig,

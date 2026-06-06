@@ -328,18 +328,21 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
     .withName(config.name)
     .withProvider(config.provider);
 
-  // Model / model params
-  if (config.model) {
-    if (
-      config.thinking === undefined &&
-      config.temperature === undefined &&
-      config.maxTokens === undefined &&
-      config.numCtx === undefined
-    ) {
+  // Model / model params — params apply independently of `model` so a config
+  // that sets temperature/maxTokens/thinking/numCtx without an explicit model
+  // (or with the legacy `model: ""` sentinel) still threads them through; the
+  // provider supplies the default model. (Fixes silent param-drop, audit C1.)
+  {
+    const hasParams =
+      config.thinking !== undefined ||
+      config.temperature !== undefined ||
+      config.maxTokens !== undefined ||
+      config.numCtx !== undefined;
+    if (config.model && !hasParams) {
       builder = builder.withModel(config.model);
-    } else {
+    } else if (config.model || hasParams) {
       builder = builder.withModel({
-        model: config.model,
+        ...(config.model ? { model: config.model } : {}),
         thinking: config.thinking,
         temperature: config.temperature,
         maxTokens: config.maxTokens,

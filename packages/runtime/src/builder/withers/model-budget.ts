@@ -6,24 +6,26 @@
  * pre-intent guard — Issue #128 / North Star v5.0 Pillar 6).
  */
 import type { ReactiveAgentBuilder, BudgetLimits } from "../../builder.js";
-import type { ModelParams } from "../../types.js";
+import type { ModelParamsInput } from "../../types.js";
 import { asBuilderState } from "./_state.js";
 
 /**
  * Apply `.withModel(modelOrParams)` — set model id and optionally
- * `thinking` / `temperature` / `maxTokens` overrides from a `ModelParams`
- * object. String form sets only the model id.
+ * `thinking` / `temperature` / `maxTokens` / `numCtx` overrides from a
+ * `ModelParams` object. String form sets only the model id. The object form
+ * may omit `model` (only a falsy/absent model leaves the provider default in
+ * place) so params can be applied without pinning a model.
  */
 export const applyWithModel = (
   builder: ReactiveAgentBuilder,
-  modelOrParams: string | ModelParams,
+  modelOrParams: string | ModelParamsInput,
 ): void => {
   const s = asBuilderState(builder);
   if (typeof modelOrParams === "string") {
     s._model = modelOrParams;
     return;
   }
-  s._model = modelOrParams.model;
+  if (modelOrParams.model) s._model = modelOrParams.model;
   if (modelOrParams.thinking !== undefined) s._thinking = modelOrParams.thinking;
   if (modelOrParams.temperature !== undefined)
     s._temperature = modelOrParams.temperature;

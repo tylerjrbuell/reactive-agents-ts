@@ -378,3 +378,57 @@ describe("agentConfigToBuilder numCtx", () => {
     expect(b.toConfig().numCtx).toBe(32768);
   });
 });
+
+describe("agentConfigToBuilder — model-independent params (C1)", () => {
+  test("applies temperature:0 with no model (provider default)", async () => {
+    const b = await agentConfigToBuilder({
+      name: "t",
+      provider: "anthropic",
+      temperature: 0,
+    });
+    const c = b.toConfig();
+    expect(c.temperature).toBe(0);
+    expect(c.model).toBeUndefined();
+  });
+
+  test("applies maxTokens/thinking/numCtx with no model", async () => {
+    const b = await agentConfigToBuilder({
+      name: "t",
+      provider: "ollama",
+      maxTokens: 512,
+      thinking: true,
+      numCtx: 8192,
+    });
+    const c = b.toConfig();
+    expect(c.maxTokens).toBe(512);
+    expect(c.thinking).toBe(true);
+    expect(c.numCtx).toBe(8192);
+    expect(c.model).toBeUndefined();
+  });
+
+  test("legacy empty-string model sentinel still applies params and leaves model unset", async () => {
+    const b = await agentConfigToBuilder({
+      name: "t",
+      provider: "openai",
+      model: "",
+      temperature: 0,
+      maxTokens: 256,
+    });
+    const c = b.toConfig();
+    expect(c.temperature).toBe(0);
+    expect(c.maxTokens).toBe(256);
+    expect(c.model).toBeUndefined();
+  });
+
+  test("real model + params still works (regression)", async () => {
+    const b = await agentConfigToBuilder({
+      name: "t",
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      temperature: 0.7,
+    });
+    const c = b.toConfig();
+    expect(c.model).toBe("claude-opus-4-8");
+    expect(c.temperature).toBe(0.7);
+  });
+});

@@ -65,7 +65,7 @@ import type { TaskContract } from '@reactive-agents/core'
 import type {
     LifecycleHook,
     ExecutionContext,
-    ModelParams,
+    ModelParamsInput,
     ReasoningOptions,
 } from './types.js'
 import type { RuntimeErrors } from './errors.js'
@@ -633,8 +633,8 @@ export class ReactiveAgentBuilder {
      * @returns `this` for chaining
      */
     withModel(model: string): this
-    withModel(params: ModelParams): this
-    withModel(modelOrParams: string | ModelParams): this {
+    withModel(params: ModelParamsInput): this
+    withModel(modelOrParams: string | ModelParamsInput): this {
         applyWithModel(this, modelOrParams)
         return this
     }

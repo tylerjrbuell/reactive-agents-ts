@@ -403,6 +403,13 @@ export const ModelParamsSchema = Schema.Struct({
 export type ModelParams = typeof ModelParamsSchema.Type;
 
 /**
+ * Looser `withModel()` input that allows omitting `model` — used to apply
+ * `thinking`/`temperature`/`maxTokens`/`numCtx` while letting the provider
+ * default the model. `ModelParams` is assignable to this type.
+ */
+export type ModelParamsInput = Omit<ModelParams, "model"> & { model?: string };
+
+/**
  * Internal configuration for the Reactive Agents runtime.
  *
  * This is produced from RuntimeOptions and passed to ExecutionEngine and other core services.
