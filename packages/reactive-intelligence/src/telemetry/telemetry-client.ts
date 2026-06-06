@@ -21,6 +21,8 @@ export function resolveDefaultReportsEndpoint(): string {
 export class TelemetryClient {
   private noticePrinted = false;
   private readonly installId: string;
+  private sinkAttempts = 0;
+  private sinkFailures = 0;
 
   constructor(private readonly endpoint: string = resolveDefaultReportsEndpoint()) {
     this.installId = getOrCreateInstallId();
@@ -29,6 +31,17 @@ export class TelemetryClient {
   /** Get the install ID (useful for building RunReports). */
   getInstallId(): string {
     return this.installId;
+  }
+
+  /**
+   * Sink-health snapshot for the otherwise-silent fire-and-forget reporter.
+   * `failures` counts real (non-test) sends dropped by a network or
+   * serialization error; the sink still never throws or blocks. Lets callers
+   * and tests observe a degraded telemetry sink instead of it failing
+   * invisibly (HS-B-03, #152).
+   */
+  getSinkHealth(): { readonly attempts: number; readonly failures: number } {
+    return { attempts: this.sinkAttempts, failures: this.sinkFailures };
   }
 
   /** Check if this is a test run — never send telemetry for test runs. */
@@ -51,6 +64,7 @@ export class TelemetryClient {
       // See execution-engine.ts for the NoticesManager integration.
       this.noticePrinted = true;
     }
+    this.sinkAttempts++;
     try {
       const body = JSON.stringify(report);
       const signature = signPayload(body);
@@ -62,9 +76,13 @@ export class TelemetryClient {
           "X-RA-Client-Signature": signature,
         },
         body,
-      }).catch(() => {}); // fire-and-forget
+      }).catch(() => {
+        // fire-and-forget — never rethrow, but count the dropped send
+        this.sinkFailures++;
+      });
     } catch {
-      // silent — telemetry must never affect agent
+      // silent — telemetry must never affect agent, but count the drop
+      this.sinkFailures++;
     }
   }
 }
