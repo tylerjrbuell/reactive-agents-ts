@@ -92,7 +92,7 @@ All chain methods return `this` unless noted.
 | Method         | Signature                                                                                    | Description                                                                |
 | -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-20250514"`)             |
-| `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens` |
+| `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens`, `numCtx` |
 | `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
 
 #### ModelParams
@@ -103,6 +103,7 @@ interface ModelParams {
     thinking?: boolean // Enable thinking/reasoning mode (auto-detected if omitted)
     temperature?: number // Sampling temperature 0.0–1.0
     maxTokens?: number // Maximum output tokens
+    numCtx?: number // Exact provider context window (Ollama num_ctx); ignored by providers without a context knob
 }
 ```
 
@@ -115,7 +116,16 @@ interface ModelParams {
 
 // ModelParams form — cap token budget
 .withModel({ model: "gpt-4o", maxTokens: 2048 })
+
+// ModelParams form — pin the exact context window sent to the provider
+.withModel({ model: "qwen3:14b", numCtx: 32768 })
 ```
+
+`numCtx` overrides the assumed/maximum context length with the exact window the
+provider receives. Honored by providers that expose a context-window knob
+(Ollama maps it to `num_ctx`); cloud providers that don't expose one ignore it.
+It is also a first-class [`AgentConfig`](/reference/configuration/) field, so it
+round-trips through `toConfig()` / `fromJSON()` and the config-driven path.
 
 ### Memory
 

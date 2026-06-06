@@ -107,13 +107,21 @@ A D3-powered chart tracking the composite entropy score across all iterations. E
 
 #### Trace Panel
 
-Step-by-step breakdown of the agent's reasoning loop, rendered as collapsible iteration frames:
+A step-debugger for the agent's reasoning, with two views (toggle at the top):
 
--   **Thought** — what the agent decided to do and why
--   **Action** — the tool call issued (name + arguments)
--   **Observation** — the tool result returned
+-   **Timeline** (default) — a fine-grained, chronological event stream grouped by
+    kernel iteration. Every discrete event is its own inspectable, expandable row:
+    reasoning steps (thought / action / observation), **LLM exchanges** (system
+    prompt, full message thread, native tool calls, token counts, and Anthropic
+    prompt-cache hit %), tool calls, **strategy switches**, **verifier verdicts**,
+    and guard firings. Filter chips (`Reasoning`, `LLM calls`, `Tools`, `Control`,
+    `Aux/internal`) mute or reveal categories — aux/internal calls (intent
+    classifier, structured plan-gen) are hidden by default and one click away.
+    The timeline reuses the same `TraceEvent` model as the `rax diagnose` CLI.
+-   **Frames** — the classic per-iteration view: collapsible **Thought / Action /
+    Observation** frames, each time-stamped and indexed.
 
-Each frame is time-stamped and indexed so you can trace exactly which tool call led to which reasoning step, and how long each took.
+Both views replay from the SQLite event log; the timeline also follows replay scrub.
 
 #### Bottom Tabs
 
@@ -150,7 +158,7 @@ The Lab view is the **workshop** for configuring and launching agents directly f
 
 | Tab         | Purpose                                                                                                                            |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Builder** | Visual agent configurator — choose provider, model, capabilities, and submit a prompt. Runs are immediately tracked in Beacon.     |
+| **Builder** | Visual agent configurator — choose provider, model, capabilities, and submit a prompt. The **Inference** section includes a **Context length (`numCtx`)** field to pin the exact provider context window (Ollama `num_ctx`); it also drives the context-usage gauge. Runs are immediately tracked in Beacon. |
 | **Gateway** | Manage persistent gateway agents: list all saved agents, see their status, last run time, and schedule. Start/stop on demand.      |
 | **Skills**  | Browse all `SKILL.md` files discovered in the workspace and stored in SQLite. View skill content, metadata, and evolution history. |
 | **Tools**   | Workshop for testing individual tools — invoke any registered tool with custom parameters and inspect the result.                  |

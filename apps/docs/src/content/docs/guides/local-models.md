@@ -96,6 +96,29 @@ Always set the context profile to match your model:
 
 **Important:** If you skip `.withContextProfile()`, the framework uses `"large"` tier defaults — which wastes tokens and confuses smaller models with verbose prompts.
 
+### Pinning the context window (`numCtx`)
+
+The context **profile** tunes prompt construction and compaction; `numCtx` sets
+the **actual context window** the provider is given. By default the framework
+uses the model's probed/assumed window — override it to the exact value you want
+Ollama to allocate:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("ollama")
+  .withModel({ model: "qwen3:14b", numCtx: 32768 }) // exact num_ctx sent to Ollama
+  .withReasoning()
+  .withContextProfile({ tier: "local" })
+  .build();
+```
+
+Raising `numCtx` lets the agent hold more history (at the cost of VRAM);
+lowering it caps allocation on memory-constrained machines. It maps directly to
+Ollama's `num_ctx`. Cloud providers that don't expose a context-window knob
+ignore the field. `numCtx` is also a first-class `AgentConfig` field, so it
+survives `toConfig()` / `fromJSON()` and is settable from the Cortex Studio
+agent builder.
+
 ## Strategy Recommendations for Local Models
 
 Not all reasoning strategies work well on small models:

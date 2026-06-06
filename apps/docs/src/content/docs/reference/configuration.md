@@ -15,7 +15,7 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 |--------|---------|-------------|
 | `.withName(name)` | `"agent"` | Agent identifier used in logs and metrics |
 | `.withProvider(provider)` | `"test"` | LLM provider: `"anthropic"` \| `"openai"` \| `"gemini"` \| `"ollama"` \| `"litellm"` \| `"test"` |
-| `.withModel(model)` | Provider default | Model string or `ModelParams` (`model`, `thinking?`, `temperature?`, `maxTokens?`) |
+| `.withModel(model)` | Provider default | Model string or `ModelParams` (`model`, `thinking?`, `temperature?`, `maxTokens?`, `numCtx?`). `numCtx` pins the exact provider context window (Ollama `num_ctx`); also a top-level `AgentConfig` field |
 | `.withSystemPrompt(prompt)` | none | Custom system prompt prepended to all LLM calls |
 | `.withPersona(persona)` | none | Structured persona: `{ name?, role?, background?, instructions?, tone? }` |
 | `.withEnvironment(context)` | none | Extra `Record<string, string>` merged into system prompt (beyond built-in date/tz/platform) |

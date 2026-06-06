@@ -97,6 +97,17 @@ Agents can capture the model's stated *why* for every tool call. Tool-call ratio
 
 See [Decision Tracing](/concepts/decision-tracing/) for the full pipeline and [Debrief & Chat](/features/debrief-chat/) for the result shape.
 
+### Context-window override (`numCtx`)
+
+Pin the exact context window the provider receives instead of relying on the model's assumed maximum:
+
+- **`.withModel({ model, numCtx })`** — `numCtx` maps to Ollama's `num_ctx`; cloud providers without a context-window knob ignore it. Now a first-class `AgentConfig` field, so it round-trips through `toConfig()` / `fromJSON()` and the config-driven path. See [Builder API](/reference/builder-api/) and [Local Models](/guides/local-models/).
+- **Cortex Studio** — exposed as a **Context length (`numCtx`)** field in the Lab Builder's Inference section, and used as the authoritative denominator for the context-usage gauge.
+
+### Cortex rich-trace debugger
+
+The Cortex Run View's Trace Panel adds a **Timeline** view: a fine-grained, filterable, chronological event stream (LLM exchanges with prompt-cache %, tool calls, strategy switches, verifier verdicts, guards) grouped by iteration, reusing the same `TraceEvent` model as `rax diagnose`. The classic per-iteration **Frames** view remains a click away. See [Cortex](/features/cortex/).
+
 ---
 
 ## v0.10.x — Local models match frontier (May 2026)
