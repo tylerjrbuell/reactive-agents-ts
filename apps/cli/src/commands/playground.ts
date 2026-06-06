@@ -400,7 +400,7 @@ export async function runPlayground(args: string[]): Promise<void> {
           }
 
           case "/debrief": {
-            showDebrief((agent as any)._lastDebrief as AgentDebrief | undefined);
+            showDebrief(agent.getLastDebrief());
             console.log();
             continue;
           }

@@ -2,7 +2,8 @@ import { describe, test, expect, mock } from "bun:test";
 import { Effect, Layer } from "effect";
 import { makeConsoleExporter, formatMetricsDashboard, formatDuration, type DashboardData } from "../src/exporters/console-exporter.js";
 import { makeFileExporter } from "../src/exporters/file-exporter.js";
-import { ObservabilityService, ObservabilityServiceLive } from "../src/observability-service.js";
+import { ObservabilityService } from "../src/observability-service.js";
+import { makeObservabilityTestLayer } from "./_observability-test-layer.js";
 import type { LogEntry, Span, Metric } from "../src/types.js";
 import { readFileSync, existsSync, unlinkSync } from "fs";
 
@@ -231,7 +232,7 @@ describe("ObservabilityService flush() (Phase 0.3)", () => {
     let spansCalled = false;
     let metricsCalled = false;
 
-    const TestLayer = ObservabilityServiceLive({
+    const TestLayer = makeObservabilityTestLayer({
       console: false,
       file: false,
     });
@@ -269,7 +270,7 @@ describe("ObservabilityService flush() (Phase 0.3)", () => {
     console.log = (...args: any[]) => lines.push(args.join(" "));
 
     try {
-      const TestLayer = ObservabilityServiceLive({
+      const TestLayer = makeObservabilityTestLayer({
         console: { showSpans: true, showLogs: true, showMetrics: true },
         file: false,
       });
@@ -294,7 +295,7 @@ describe("ObservabilityService flush() (Phase 0.3)", () => {
   });
 
   test("getLogs() returns filtered logs", async () => {
-    const TestLayer = ObservabilityServiceLive();
+    const TestLayer = makeObservabilityTestLayer();
     const logs = await Effect.runPromise(
       Effect.provide(
         Effect.gen(function* () {
@@ -313,7 +314,7 @@ describe("ObservabilityService flush() (Phase 0.3)", () => {
   });
 
   test("getSpans() returns recorded spans", async () => {
-    const TestLayer = ObservabilityServiceLive();
+    const TestLayer = makeObservabilityTestLayer();
     const spans = await Effect.runPromise(
       Effect.provide(
         Effect.gen(function* () {

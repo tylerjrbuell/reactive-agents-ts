@@ -965,6 +965,15 @@ export class ReactiveAgent {
     }
 
     /**
+     * The debrief from this agent's most recent completed run, if any.
+     * Populated after each `run()` / `runStream()` and reused as chat context.
+     * @returns The last `AgentDebrief`, or `undefined` if no run has completed.
+     */
+    getLastDebrief(): AgentDebrief | undefined {
+        return this._lastDebrief
+    }
+
+    /**
      * Send a conversational message to the agent.
      *
      * Automatically routes between two paths based on message intent:

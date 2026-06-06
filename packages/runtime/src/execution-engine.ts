@@ -1130,15 +1130,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     } : {}),
                     ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
                     ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
-                    // TODO(T11-followup): TaskResult.metadata type is missing 'complexity' — add it to the schema
-                    ...({ complexity: ctx.metadata.taskComplexity ?? classifyComplexity(
+                    complexity: ctx.metadata.taskComplexity ?? classifyComplexity(
                       ctx.iteration,
                       entropyLog.length > 0 ? entropyLog[entropyLog.length - 1] : undefined,
                       toolCallLog.length,
                       terminatedByRaw,
-                    ) } as Record<string, unknown>),
-                    // TODO(T11-followup): TaskResult.metadata type is missing 'llmCalls' — add it to the schema
-                    ...({ llmCalls: rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0 } as Record<string, unknown>),
+                    ),
+                    llmCalls: rr?.metadata?.llmCalls ?? ctx.metadata.llmCalls ?? 0,
                   },
                   completedAt: new Date(),
                   format: "text",
