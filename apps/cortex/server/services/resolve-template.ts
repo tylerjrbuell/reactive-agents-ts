@@ -113,3 +113,22 @@ export function resolveTemplate<T>(
   const value = walk(input, byName, values, unresolved) as T;
   return { value, unresolved: [...unresolved] };
 }
+
+/**
+ * Resolve a Cortex launch payload: pull `variables`/`variableValues` out, resolve
+ * `{{tokens}}` in everything else from the values (defaults applied), and return
+ * the cleaned payload (no variables/variableValues keys) + unresolved tokens.
+ */
+export function resolveLaunchPayload<
+  T extends {
+    variables?: VariableDef[];
+    variableValues?: Record<string, string | number>;
+  },
+>(payload: T): ResolveResult<Omit<T, "variables" | "variableValues">> {
+  const { variables, variableValues, ...rest } = payload;
+  return resolveTemplate(
+    rest as Omit<T, "variables" | "variableValues">,
+    variables ?? [],
+    variableValues ?? {},
+  );
+}

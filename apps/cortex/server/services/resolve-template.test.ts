@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { resolveTemplate, scanTokens, type VariableDef } from "./resolve-template.js";
+import { resolveTemplate, scanTokens, resolveLaunchPayload, type VariableDef } from "./resolve-template.js";
 
 const v = (over: Partial<VariableDef> & { name: string }): VariableDef => ({
   type: "string",
@@ -120,5 +120,34 @@ describe("resolveTemplate", () => {
 describe("scanTokens", () => {
   test("extracts and dedupes var tokens, excludes secret namespace", () => {
     expect(scanTokens("{{a}} {{a}} {{b}} {{secret.K}}")).toEqual(["a", "b"]);
+  });
+});
+
+describe("resolveLaunchPayload", () => {
+  test("resolves prompt + string fields, returns unresolved", () => {
+    const r = resolveLaunchPayload(
+      {
+        prompt: "Do {{task}}",
+        systemPrompt: "You are {{role}}",
+        variables: [
+          { name: "task", type: "string", required: true },
+          { name: "role", type: "string", required: true, default: "helper" },
+        ],
+        variableValues: { task: "research" },
+      },
+    );
+    expect(r.value.prompt).toBe("Do research");
+    expect(r.value.systemPrompt).toBe("You are helper");
+    expect(r.unresolved).toEqual([]);
+  });
+
+  test("strips variables/variableValues from the resolved output", () => {
+    const r = resolveLaunchPayload({
+      prompt: "{{x}}",
+      variables: [{ name: "x", type: "string", required: true }],
+      variableValues: { x: "ok" },
+    });
+    expect("variables" in r.value).toBe(false);
+    expect("variableValues" in r.value).toBe(false);
   });
 });

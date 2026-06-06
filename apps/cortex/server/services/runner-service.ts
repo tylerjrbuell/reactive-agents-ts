@@ -17,6 +17,7 @@ import type {
   CortexSkillsConfig,
 } from "./cortex-agent-config.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { resolveLaunchPayload } from "./resolve-template.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -61,6 +62,10 @@ export interface LaunchParams {
   readonly healthCheck?: boolean;
   /** Living skills directories (framework `withSkills`). */
   readonly skills?: CortexSkillsConfig;
+  /** Variable definitions for `{{token}}` substitution in this payload. */
+  readonly variables?: import("./resolve-template.js").VariableDef[];
+  /** Caller-supplied values for `{{token}}` substitution. */
+  readonly variableValues?: Record<string, string | number>;
   /** When true, enables automatic strategy switching on loop detection. */
   readonly strategySwitching?: boolean;
   /** Memory tier selection. episodic or semantic presence → enhanced tier. */
@@ -109,8 +114,16 @@ export const CortexRunnerServiceLive = Layer.effect(
     const activeRef = yield* Ref.make(new Map<string, ActiveEntry>());
 
     return {
-      start: (params) =>
+      start: (rawParams) =>
         Effect.gen(function* () {
+          const { value: params, unresolved } = resolveLaunchPayload(rawParams);
+          if (unresolved.length > 0) {
+            return yield* Effect.fail(
+              new CortexError({
+                message: `Unresolved template variable(s): ${unresolved.join(", ")}`,
+              }),
+            );
+          }
           const providerRaw = params.provider ?? process.env.CORTEX_RUNNER_PROVIDER ?? "test";
 
           const mcpConfigs =
