@@ -381,9 +381,14 @@
       >
         {#if replayActive && replayLoopIndex !== null}
           {replayLoopIndex}<span class="text-amber-800/90 dark:text-amber-600/90">/{replayMaxLoops}</span>
-        {:else if vitals.maxIterations > 0}
+        {:else if vitals.maxIterations > 0 && vitals.loopIteration <= vitals.maxIterations}
           {vitals.loopIteration}<span class="text-primary/70">/{vitals.maxIterations}</span>
         {:else if vitals.loopIteration > 0}
+          <!-- Overrun (loopIteration > maxIterations) or unknown max: drop the
+               misleading denominator. Plan-execute folds nested loop counters
+               (outer steps + reflect + sub-kernels) into one loopIteration, so
+               it can legitimately exceed the last-latched per-loop max — showing
+               e.g. "18/10" is invalid. Matches the guard at the compact site. -->
           {vitals.loopIteration}<span class="text-primary/50">/—</span>
         {:else}
           <span class="text-outline/50">—</span>
