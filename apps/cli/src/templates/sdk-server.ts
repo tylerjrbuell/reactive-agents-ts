@@ -35,11 +35,15 @@ let requestCount = 0;
 
 import { ReactiveAgents, registerShutdownHandlers } from "reactive-agents";
 
+// Validate LLM_PROVIDER against supported providers — no unsafe cast.
+const LLM_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm"] as const;
+const provider = LLM_PROVIDERS.find((p) => p === process.env.LLM_PROVIDER) ?? "anthropic";
+
 async function buildAgent() {
   // TODO: Customize your agent builder here
   const a = await ReactiveAgents.create()
     .withName("${agentName}")
-    .withProvider(process.env.LLM_PROVIDER as any ?? "anthropic")
+    .withProvider(provider)
     .withModel(process.env.LLM_MODEL ?? "claude-sonnet-4-20250514")
     .withReasoning()
     .withTools()

@@ -118,22 +118,18 @@ export async function run(_opts?: { provider?: string; model?: string }): Promis
       .withMaxIterations(3)
       .build();
 
-    let approvalInvoked = false;
-    // The minimum witness: the handler must reach the approval gate. The exact
-    // approval surface (callback, queue, event) is part of the design — accept
-    // any signal. Until the design lands, this will not be observed.
-    (agent as any).onApprovalRequest?.((_req: unknown) => {
-      approvalInvoked = true;
-      return { approved: true };
-    });
-
+    // The minimum witness would be the handler reaching the approval gate. The
+    // approval-observation surface (callback, queue, event) is UNDESIGNED — there
+    // is no public API to subscribe to yet (`onApprovalRequest` was never shipped
+    // and HITL is not on the roadmap), so this probe cannot observe an approval
+    // and therefore cannot pass until that surface is designed.
     const r = await agent.run("Please review this risky action and approve.");
-    const passed = approvalInvoked === true;
+    const passed = false;
     return {
       passed,
-      output: passed
-        ? "human-escalate controller decision routed through interaction-manager.approvalGate."
-        : "Wiring exists but approval gate was not invoked for a task that should escalate.",
+      output:
+        "Wiring exists but the approval-observation surface is undesigned; " +
+        "the approval gate could not be witnessed.",
       steps: r?.metadata?.stepsCount ?? 0,
       tokens: r?.metadata?.tokensUsed ?? 0,
       durationMs: Date.now() - start,

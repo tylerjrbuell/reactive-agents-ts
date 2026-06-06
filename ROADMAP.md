@@ -17,7 +17,7 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
   - Harness pipeline registry + tag catalog (7 tags) + `.compose()` builder method
   - 7 live chokepoints: `prompt.system`, `nudge.loop-detected`, `nudge.healing-failure`, `message.tool-result`, `observation.tool-result`, `lifecycle.failure`, `control.strategy-evaluated`
   - `RunHandle` / `RunController` with pause/resume/stop/terminate
-  - `packages/compose` with 6 killswitches: `maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`, `confidenceFloor`
+  - `packages/compose` with 5 killswitches: `maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`
   - `.withX()` sugar desugars through harness; backward compatible
   - Docs: `compose-api.mdx`, `harness-tags.mdx`, `composition-recipes.mdx`
 - **Phase 1.5 mechanism improvements** in flight (M3 REWORK shipped; M6 skill persistence shipped; M7/M8/M10/M14 ongoing).
