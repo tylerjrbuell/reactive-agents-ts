@@ -328,6 +328,17 @@ export class GatewayProcessManager {
         .finally(() => {
           try { unsubscribe(); } catch { /* ok */ }
           if (proc) proc.running = false;
+          // Release the agent's resources — MCP transports and their docker
+          // containers — now that the run is done. Without this the container
+          // leaks and a later run with the same name hits
+          // "container name already in use".
+          void agent.dispose().catch((err) => {
+            cortexLog("warn", "gateway", `agent.dispose() failed for "${name}"`, {
+              agentId,
+              runId,
+              ...formatErrorDetails(err),
+            });
+          });
           // Update run_count in DB
           try {
             this.db.prepare(

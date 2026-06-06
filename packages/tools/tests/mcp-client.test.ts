@@ -1,7 +1,12 @@
 import { Effect } from "effect";
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 
-import { makeMCPClient, cleanupMcpTransport } from "../src/mcp/mcp-client.js";
+import {
+  makeMCPClient,
+  cleanupMcpTransport,
+  addDockerPortMapping,
+  buildDockerProbeArgs,
+} from "../src/mcp/mcp-client.js";
 
 const createMockMcpServer = (port: number) => {
   return Bun.serve({
@@ -187,5 +192,55 @@ describe("MCPClient", () => {
   it("cleanupMcpTransport is a no-op for unknown server names", () => {
     // Should not throw
     expect(() => cleanupMcpTransport("never-connected")).not.toThrow();
+  });
+});
+
+describe("docker arg shaping", () => {
+  it("maps a distinct host port to the container's internal port", () => {
+    // Reusing the container port as the host port collides with foreign
+    // services on that host port; host and container ports must stay distinct.
+    const out = addDockerPortMapping(
+      ["run", "--rm", "-i", "mcp/context7"],
+      54321, // free host port
+      8080, // container's reported port
+    );
+    expect(out).toContain("-p");
+    const pIdx = out.indexOf("-p");
+    expect(out[pIdx + 1]).toBe("54321:8080");
+    // mapping inserted before the image name
+    expect(out.indexOf("-p")).toBeLessThan(out.indexOf("mcp/context7"));
+  });
+
+  it("inserts the port mapping before the image, after flags that consume a value", () => {
+    const out = addDockerPortMapping(
+      ["run", "--rm", "-e", "FOO=bar", "ghcr.io/example/server"],
+      40000,
+      3000,
+    );
+    expect(out).toEqual([
+      "run", "--rm", "-e", "FOO=bar", "-p", "40000:3000", "ghcr.io/example/server",
+    ]);
+  });
+
+  it("is a no-op when the command is not `docker run`", () => {
+    const args = ["--port", "3000"];
+    expect(addDockerPortMapping(args, 1, 2)).toEqual(args);
+  });
+
+  it("adds --rm and a deterministic --name to a docker probe", () => {
+    const out = buildDockerProbeArgs(["run", "-i", "mcp/some-server"], "rax-probe-x-123");
+    expect(out).toEqual(["run", "--name", "rax-probe-x-123", "--rm", "-i", "mcp/some-server"]);
+  });
+
+  it("does not duplicate --rm when already present", () => {
+    const out = buildDockerProbeArgs(["run", "--rm", "-i", "img"], "rax-probe-y-9");
+    expect(out.filter((a) => a === "--rm")).toHaveLength(1);
+    expect(out).toContain("--name");
+    expect(out[out.indexOf("--name") + 1]).toBe("rax-probe-y-9");
+  });
+
+  it("leaves non-`docker run` args untouched for probe shaping", () => {
+    const args = ["serve", "--stdio"];
+    expect(buildDockerProbeArgs(args, "n")).toEqual(args);
   });
 });

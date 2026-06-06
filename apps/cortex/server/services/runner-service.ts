@@ -284,6 +284,17 @@ export const CortexRunnerServiceLive = Layer.effect(
               } catch {
                 // ignore unsubscribe errors in fire-and-forget path
               }
+              // Release the agent's resources — MCP transports and their docker
+              // containers — now that the run is done. Without this the container
+              // leaks and a later run with the same name hits
+              // "container name already in use".
+              void agent.dispose().catch((err) => {
+                cortexLog("warn", "runner", "agent.dispose() failed on run finish", {
+                  agentId,
+                  runId,
+                  ...formatErrorDetails(err),
+                });
+              });
               void Effect.runPromise(
                 Ref.update(activeRef, (m) => {
                   const copy = new Map(m);

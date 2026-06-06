@@ -24,6 +24,7 @@
  * message never appears, so the race resolves on the stdio path immediately.
  */
 import { spawn as nodeSpawn } from "node:child_process";
+import { createServer } from "node:net";
 import { Effect, Ref } from "effect";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -110,6 +111,48 @@ function dockerRmForce(containerName: string): void {
   } catch { /* ignore */ }
 }
 
+/**
+ * Stop and remove a named docker container, resolving once the `docker rm -f`
+ * process has actually exited. Use this (not the fire-and-forget `dockerRmForce`)
+ * when a stale container with a deterministic name must be gone *before* the next
+ * `docker run` reuses that name — otherwise the run races the removal and hits
+ * "container name already in use". Never rejects: a missing container is success.
+ */
+function dockerRmForceAwait(containerName: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    try {
+      const rm = nodeSpawn("docker", ["rm", "-f", containerName], { stdio: "ignore" });
+      rm.on("exit", () => resolve());
+      rm.on("error", () => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
+ * Allocate a free TCP port on the host by binding to port 0 and reading back the
+ * OS-assigned port. Used to map a unique host port to a docker container's
+ * internal HTTP port — reusing the container's own port as the host port collides
+ * with any foreign service already bound to it (e.g. a stray uvicorn on :8080),
+ * which silently routes MCP traffic to the wrong server.
+ */
+function getFreeHostPort(): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address();
+      if (addr && typeof addr === "object") {
+        const { port } = addr;
+        srv.close(() => resolve(port));
+      } else {
+        srv.close(() => reject(new Error("could not determine a free host port")));
+      }
+    });
+  });
+}
+
 // ─── Public Cleanup ───────────────────────────────────────────────────────────
 
 /**
@@ -156,9 +199,11 @@ function detectHttpStartupUrl(line: string): string | undefined {
 }
 
 /**
- * Insert `-p PORT:PORT` into `docker run` args immediately before the image name.
+ * Insert `-p hostPort:containerPort` into `docker run` args immediately before the
+ * image name. Host and container ports are kept distinct so a unique, free host
+ * port can front a container whose internal port might already be taken on the host.
  */
-function addDockerPortMapping(args: readonly string[], port: number): string[] {
+export function addDockerPortMapping(args: readonly string[], hostPort: number, containerPort: number): string[] {
   if (args[0] !== "run") return [...args];
 
   const consumesNext = new Set([
@@ -181,7 +226,7 @@ function addDockerPortMapping(args: readonly string[], port: number): string[] {
     const arg = result[i]!;
     if (arg === "--") break;
     if (!arg.startsWith("-")) {
-      result.splice(i, 0, "-p", `${port}:${port}`);
+      result.splice(i, 0, "-p", `${hostPort}:${containerPort}`);
       return result;
     }
     if (arg.startsWith("--") && arg.includes("=")) { i++; continue; }
@@ -196,6 +241,19 @@ function addDockerPortMapping(args: readonly string[], port: number): string[] {
 function insertDockerFlag(args: readonly string[], flag: string, value: string): string[] {
   if (args[0] !== "run") return [...args];
   return ["run", flag, value, ...args.slice(1)];
+}
+
+/**
+ * Shape the args for a docker-backed stdio probe container: ensure `--rm` (clean
+ * self-removal on exit) and a deterministic `--name` (so cleanup can `docker rm -f`
+ * it reliably — closing the stdio transport kills the docker run process but the
+ * daemon keeps the container alive). Returns the original args unchanged when this
+ * isn't a `docker run` invocation.
+ */
+export function buildDockerProbeArgs(args: readonly string[], containerName: string): string[] {
+  if (args[0] !== "run") return [...args];
+  const withRm = args.includes("--rm") ? [...args] : ["run", "--rm", ...args.slice(1)];
+  return insertDockerFlag(withRm, "--name", containerName);
 }
 
 /**
@@ -277,47 +335,53 @@ async function reconnectViaHttp(
   probeContainerName?: string,
 ): Promise<ActiveConnection> {
   const resolvedUrl = detectedUrl.replace(/\/\/0\.0\.0\.0:/, "//localhost:");
-  let port: number;
+  let containerPort: number;
   try {
-    port = parseInt(new URL(resolvedUrl).port, 10) || 80;
+    containerPort = parseInt(new URL(resolvedUrl).port, 10) || 80;
   } catch {
     throw new Error(`MCP server "${config.name}": cannot parse URL "${resolvedUrl}"`);
   }
 
-  // Stop the probe container before checking/spawning the port-mapped one.
+  // Stop the probe container before spawning the port-mapped one.
   // This is the only reliable way — killing the docker run process does not stop the container.
   if (probeContainerName) {
     mcpDebug(`[MCP http-mode] "${config.name}" — stopping probe container "${probeContainerName}"`);
-    dockerRmForce(probeContainerName);
-    // Brief settle for docker networking to release the container's internal resources
-    await new Promise<void>((r) => setTimeout(r, 800));
+    await dockerRmForceAwait(probeContainerName);
   }
 
-  // Check if the endpoint is already accessible (e.g. same agent re-connecting, named container still up)
-  const alreadyUp = await waitForHttpEndpoint(resolvedUrl, 1_500).then(() => true).catch(() => false);
+  const isDocker = config.command === "docker" && (config.args ?? []).includes("run");
 
+  // The URL we actually connect the SDK to. For docker we remap to a free host
+  // port; for non-docker HTTP subprocesses the process binds the host port itself.
+  let connectUrl = resolvedUrl;
   let dockerContainerName: string | undefined;
 
-  if (alreadyUp) {
-    mcpDebug(`[MCP http-mode] "${config.name}" — endpoint already up at ${resolvedUrl}; reusing`);
-  } else {
-    // Spawn a port-mapped container with a unique name: rax-mcp-<server>-<pid>
-    // The name includes the process PID so multiple agents running the same server don't conflict.
+  if (isDocker) {
+    // Map a *free host port* → the container's internal port. The container
+    // reports its own port (e.g. :8080); blindly reusing that as the host port
+    // collides with any foreign service already bound to it and routes MCP
+    // traffic to the wrong server (observed: a stray uvicorn on :8080 answering
+    // 405 / wrong content-type). A unique host port eliminates the collision.
+    const hostPort = await getFreeHostPort();
+    const u = new URL(resolvedUrl);
+    u.port = String(hostPort);
+    connectUrl = u.toString();
+
+    // Unique name: rax-mcp-<server>-<pid>. Pre-remove any stale container with
+    // this deterministic name so the run doesn't hit "name already in use".
     dockerContainerName = `rax-mcp-${config.name.replace(/[^a-zA-Z0-9]/g, "-")}-${process.pid}`;
+    await dockerRmForceAwait(dockerContainerName);
 
     // Ensure --rm is present so the container auto-removes when docker rm -f is called
     const baseArgs = config.args ?? [];
-    const argsWithRm = (
-      config.command === "docker" && baseArgs.includes("run") && !baseArgs.includes("--rm")
-    ) ? ["run", "--rm", ...baseArgs.slice(1)] : baseArgs;
+    const argsWithRm = baseArgs.includes("run") && !baseArgs.includes("--rm")
+      ? ["run", "--rm", ...baseArgs.slice(1)]
+      : baseArgs;
 
-    // Add --name then -p PORT:PORT
-    const namedArgs = (config.command === "docker" && argsWithRm.includes("run"))
-      ? insertDockerFlag(argsWithRm, "--name", dockerContainerName)
-      : argsWithRm;
-    const portMappedArgs = addDockerPortMapping(namedArgs, port);
+    const namedArgs = insertDockerFlag(argsWithRm, "--name", dockerContainerName);
+    const portMappedArgs = addDockerPortMapping(namedArgs, hostPort, containerPort);
 
-    mcpDebug(`[MCP http-mode] "${config.name}" — spawning "${dockerContainerName}" with -p ${port}:${port}`);
+    mcpDebug(`[MCP http-mode] "${config.name}" — spawning "${dockerContainerName}" with -p ${hostPort}:${containerPort}`);
 
     const spawnEnv = config.env ? { ...process.env, ...config.env } : { ...process.env };
     const subprocess = nodeSpawn(config.command!, portMappedArgs, {
@@ -332,19 +396,43 @@ async function reconnectViaHttp(
       if (trimmed) process.stderr.write(`[MCP ${config.name}] ${trimmed}\n`);
     });
 
-    mcpDebug(`[MCP http-mode] "${config.name}" — waiting for ${resolvedUrl} to be healthy…`);
-    await waitForHttpEndpoint(resolvedUrl, 60_000).catch((e) => {
+    mcpDebug(`[MCP http-mode] "${config.name}" — waiting for ${connectUrl} to be healthy…`);
+    await waitForHttpEndpoint(connectUrl, 60_000).catch((e) => {
       dockerRmForce(dockerContainerName!);
       throw e;
     });
     mcpDebug(`[MCP http-mode] "${config.name}" — endpoint healthy`);
+  } else {
+    // Non-docker HTTP subprocess (e.g. `npx some-http-mcp`). It binds the host
+    // port itself, so connect to the reported URL. Reuse if already up; otherwise
+    // re-spawn the command (the stdio probe transport that started it was closed).
+    const alreadyUp = await waitForHttpEndpoint(resolvedUrl, 1_500).then(() => true).catch(() => false);
+    if (alreadyUp) {
+      mcpDebug(`[MCP http-mode] "${config.name}" — endpoint already up at ${resolvedUrl}; reusing`);
+    } else {
+      mcpDebug(`[MCP http-mode] "${config.name}" — re-spawning "${config.command}" for HTTP mode`);
+      const spawnEnv = config.env ? { ...process.env, ...config.env } : { ...process.env };
+      const subprocess = nodeSpawn(config.command!, [...(config.args ?? [])], {
+        stdio: ["ignore", "ignore", "pipe"],
+        cwd: config.cwd,
+        env: spawnEnv as NodeJS.ProcessEnv,
+        detached: false,
+      });
+      subprocess.unref();
+      subprocess.stderr?.on("data", (chunk: Buffer) => {
+        const trimmed = chunk.toString().trimEnd();
+        if (trimmed) process.stderr.write(`[MCP ${config.name}] ${trimmed}\n`);
+      });
+      await waitForHttpEndpoint(resolvedUrl, 60_000);
+      mcpDebug(`[MCP http-mode] "${config.name}" — endpoint healthy`);
+    }
   }
 
   // Try streamable-http first, fall back to SSE
-  const baseUrl = new URL(resolvedUrl);
+  const baseUrl = new URL(connectUrl);
   const sseUrl = new URL("/sse", baseUrl).toString();
   const candidates: Array<{ type: "streamable-http" | "sse"; url: string }> = [
-    { type: "streamable-http", url: resolvedUrl },
+    { type: "streamable-http", url: connectUrl },
     { type: "sse", url: sseUrl },
   ];
 
@@ -433,9 +521,19 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
       ? `rax-probe-${config.name.replace(/[^a-zA-Z0-9]/g, "-")}-${process.pid}`
       : undefined;
 
+    // Ensure --rm + a stable --name on the probe container. --name lets us stop
+    // it reliably via `docker rm -f` on cleanup (killing the docker run process
+    // leaves the container alive); --rm is belt-and-suspenders so a clean exit
+    // self-removes. The name is pid-deterministic, so pre-remove any stale
+    // container left by a prior connect that didn't clean up — otherwise the new
+    // `docker run` hits "container name already in use".
     const probeArgs = (isDocker && probeContainerName && config.args)
-      ? insertDockerFlag(config.args, "--name", probeContainerName)
+      ? buildDockerProbeArgs(config.args, probeContainerName)
       : undefined;
+
+    if (isDocker && probeContainerName) {
+      await dockerRmForceAwait(probeContainerName);
+    }
 
     const transport = createTransport(config, probeArgs) as StdioClientTransport;
     const sdkClient = new Client({ name: "reactive-agents", version: "1.0.0" }, { capabilities: {} });
@@ -506,7 +604,13 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
     // stdio MCP server — connected normally
     mcpDebug(`[MCP init] "${config.name}" — connected via stdio`);
     const server = await buildMCPServer(config.name, "stdio", undefined, config, sdkClient);
-    return { client: sdkClient, transport, server };
+    // Track the probe container so disconnect()/cleanup `docker rm -f`s it — for a
+    // pure stdio docker server the probe container IS the running server, and
+    // closing the stdio transport kills the docker run process but NOT the
+    // container (the daemon keeps it alive), leaking it across runs.
+    return probeContainerName
+      ? { client: sdkClient, transport, server, dockerContainerName: probeContainerName }
+      : { client: sdkClient, transport, server };
   }
 
   // ── HTTP / SSE ──
