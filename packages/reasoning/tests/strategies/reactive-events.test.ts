@@ -172,3 +172,54 @@ describe("reactive strategy ReasoningStepCompleted events", () => {
     expect(actionEvents.length).toBeGreaterThanOrEqual(0);
   });
 });
+
+// ─── ContextPressure (kernel-path) integration guard ──────────────────────────
+// Guards the think → iterate-pass meta-spread invariant end-to-end through the
+// REAL kernel: think.ts stashes lastContextTokens/lastContextWindow on meta, and
+// kernel-hooks onIterationProgress emits ContextPressure. If a future edit drops
+// a `...state.meta` spread on the think→progress path, the unit test on
+// contextPressureEvent() still passes but THIS test fails — catching the silent
+// death the kernel-warden flagged.
+
+type ContextPressureEvent = Extract<AgentEvent, { _tag: "ContextPressure" }>;
+
+describe("kernel emits ContextPressure for the context-window gauge", () => {
+  test("ContextPressure is published from a real reactive (kernel) run", async () => {
+    const captured: ContextPressureEvent[] = [];
+    const llmLayer = TestLLMServiceLayer([{ text: "FINAL ANSWER: 42." }]);
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const eb = yield* EventBus;
+        yield* eb.on("ContextPressure", (event) =>
+          Effect.sync(() => { captured.push(event); }),
+        );
+        yield* executeReactive({
+          taskDescription: "What is 2+2?",
+          taskType: "query",
+          memoryContext: "",
+          availableTools: [],
+          config: {
+            ...defaultReasoningConfig,
+            strategies: {
+              ...defaultReasoningConfig.strategies,
+              reactive: { ...defaultReasoningConfig.strategies.reactive, maxIterations: 3 },
+            },
+          },
+        });
+      }).pipe(Effect.provide(Layer.merge(llmLayer, EventBusLive))),
+    );
+
+    // The load-bearing assertion: ≥1 ContextPressure reached the bus, proving the
+    // meta-stash survives the think→iterate-pass transitions.
+    expect(captured.length).toBeGreaterThan(0);
+    const cp = captured[0]!;
+    expect(cp.tokensUsed).toBeGreaterThan(0);
+    expect(cp.tokensAvailable).toBeGreaterThanOrEqual(0);
+    // Window (used + available) must exceed usage — a real denominator, not 0.
+    expect(cp.tokensUsed + cp.tokensAvailable).toBeGreaterThan(0);
+    expect(cp.utilizationPct).toBeGreaterThanOrEqual(0);
+    expect(cp.utilizationPct).toBeLessThanOrEqual(100);
+    expect(["low", "medium", "high", "critical"]).toContain(cp.level);
+  });
+});
