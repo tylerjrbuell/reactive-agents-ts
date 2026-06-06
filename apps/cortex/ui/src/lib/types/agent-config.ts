@@ -25,6 +25,20 @@ export interface AgentPersona {
   responseStyle: "prose" | "bullet-points" | "structured";
 }
 
+export type VariableType = "string" | "number" | "enum" | "multiline";
+
+/** A template variable. `{{name}}` tokens in any string config field resolve against these. */
+export interface VariableDef {
+  name: string;
+  type: VariableType;
+  description?: string;
+  default?: string | number;
+  required: boolean;
+  enumValues?: string[];
+  /** Reserved for the future secret store; Phase 1 leaves `{{secret.X}}` unresolved. */
+  secret?: boolean;
+}
+
 export interface AgentConfig {
   provider: string;
   model: string;
@@ -104,6 +118,8 @@ export interface AgentConfig {
     paths: string[];
     evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean };
   };
+  /** Template variables for parameterized runs. `{{name}}` in any string field resolves against these. */
+  variables: VariableDef[];
 }
 
 export function defaultConfig(): AgentConfig {
@@ -144,5 +160,6 @@ export function defaultConfig(): AgentConfig {
     taskContext: {},
     healthCheck: false,
     skills: { paths: [] },
+    variables: [],
   };
 }
