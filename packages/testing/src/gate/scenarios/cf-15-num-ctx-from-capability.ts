@@ -14,7 +14,11 @@
 // capability values for cogito:14b + qwen3:14b and verifies the fallback
 // shape for an unknown model.
 
-import { resolveCapability, STATIC_CAPABILITIES } from "@reactive-agents/llm-provider";
+import {
+  resolveCapability,
+  STATIC_CAPABILITIES,
+  _resetProbedRegistryForTesting,
+} from "@reactive-agents/llm-provider";
 import type { ScenarioModule } from "../types.js";
 
 export const scenario: ScenarioModule = {
@@ -30,6 +34,13 @@ export const scenario: ScenarioModule = {
     maxIterations: 2,
   },
   customAssertions: () => {
+    // Test isolation: the probed-capability registry is process-wide, so a
+    // prior test that registered a live `qwen3:14b`/`cogito:14b` probe (e.g. an
+    // ollama integration test on a machine with the model pulled) would make
+    // this scenario read source:"probe" instead of the static-table value it
+    // pins. Reset it so we deterministically exercise STATIC/fallback resolution
+    // — the behaviour this scenario is meant to guard, order-independent.
+    _resetProbedRegistryForTesting();
     // Static table hit — the value the Ollama provider will use.
     const cogito = resolveCapability("ollama", "cogito:14b");
     const qwen3 = resolveCapability("ollama", "qwen3:14b");

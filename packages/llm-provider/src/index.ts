@@ -52,7 +52,7 @@ export type {
  *
  * @unstable See note above on Capability port.
  */
-export { resolveCapability } from "./capability-resolver.js";
+export { resolveCapability, _resetProbedRegistryForTesting } from "./capability-resolver.js";
 export type { CapabilityCache, ResolveCapabilityOptions } from "./capability-resolver.js";
 
 // Canonical capability resolver (Sprint-1 B3β). The single function consumers
