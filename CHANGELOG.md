@@ -18,6 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 - **Public ROADMAP.md alignment to North Star v5.0** — Phase A/B shipped, Phase C in flight, accurate v0.11 line-up.
 - **`rax diagnose` unified subcommand** — folds the standalone `rax-diagnose` binary into the main `rax` CLI as `rax diagnose <sub>` (list, replay, replay-run, grep, diff, debrief). Standalone `rax-diagnose` bin retained for backwards compatibility. New programmatic exports from `@reactive-agents/diagnose`: `debriefCommand`, `replayRunCommand`, `ReplayRunOpts`.
 - **`.withTools({ focusedTools })` documented** — soft tool-focus guidance (full set stays callable; focused names prioritized), distinct from the hard `allowedTools` allowlist. Resolution order: `focusedTools` → `allowedTools` → all tools.
+- **`numCtx` is now a first-class `AgentConfig` field** — previously only reachable via the `.withModel({ numCtx })` builder param, it is now in `AgentConfigSchema` and applied by `agentConfigToBuilder`, so it round-trips through `toConfig()` / `fromJSON()` and the config-driven path. Exposed in the Cortex Studio agent builder as a "Context length (numCtx)" field. Honored by providers with a context-window knob (Ollama `num_ctx`); ignored by cloud providers that don't expose one. Becomes the authoritative denominator for Cortex's context-usage gauge.
 
 ### Changed
 

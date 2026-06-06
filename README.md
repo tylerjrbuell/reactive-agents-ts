@@ -499,6 +499,31 @@ const agent = await ReactiveAgents.create()
 | `"large"`    | Anthropic, OpenAI, Gemini   | Full context, standard compaction                                      |
 | `"frontier"` | Flagship models             | Maximum context, minimal compaction                                    |
 
+### Context Window Override (`numCtx`)
+
+Pin the exact context window the provider is given, instead of relying on the
+model's assumed maximum. Pass it via the `.withModel()` object form:
+
+```typescript
+const agent = await ReactiveAgents.create()
+    .withProvider('ollama')
+    .withModel({ model: 'qwen3:4b', numCtx: 32768 }) // exact num_ctx sent to Ollama
+    .withReasoning()
+    .build()
+```
+
+`numCtx` is also a first-class **`AgentConfig`** field, so it round-trips through
+`toConfig()` / `fromJSON()` and the Cortex Studio agent builder:
+
+```jsonc
+{ "provider": "ollama", "model": "qwen3:4b", "numCtx": 32768 }
+```
+
+Provider applicability: honored by providers that expose a context-window knob
+(Ollama maps it to `num_ctx`). Cloud providers that don't expose one ignore the
+field. When set, it becomes the authoritative denominator for the context-usage
+gauge in Cortex Studio.
+
 ## Packages
 
 | Package                                                                    | Description                                                                                                                                                                               |
