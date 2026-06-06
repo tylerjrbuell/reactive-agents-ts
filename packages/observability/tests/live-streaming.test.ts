@@ -2,7 +2,8 @@ import { describe, test, expect, mock } from "bun:test";
 import { Effect } from "effect";
 import { makeStructuredLogger } from "../src/logging/structured-logger.js";
 import { formatLogEntryLive, makeLiveLogWriter } from "../src/exporters/console-exporter.js";
-import { ObservabilityService, ObservabilityServiceLive } from "../src/observability-service.js";
+import { ObservabilityService } from "../src/observability-service.js";
+import { makeObservabilityTestLayer } from "./_observability-test-layer.js";
 import type { LogEntry } from "../src/types.js";
 
 // ─── makeStructuredLogger liveWriter tests ───
@@ -128,7 +129,7 @@ describe("makeLiveLogWriter", () => {
 
 describe("ObservabilityServiceLive with live: true", () => {
   test("verbosity getter returns configured value", async () => {
-    const layer = ObservabilityServiceLive({ verbosity: "verbose", live: false });
+    const layer = makeObservabilityTestLayer({ verbosity: "verbose", live: false });
     const verbosity = await Effect.runPromise(
       Effect.gen(function* () {
         const obs = yield* ObservabilityService;
@@ -139,7 +140,7 @@ describe("ObservabilityServiceLive with live: true", () => {
   });
 
   test("verbosity defaults to normal when not specified", async () => {
-    const layer = ObservabilityServiceLive();
+    const layer = makeObservabilityTestLayer();
     const verbosity = await Effect.runPromise(
       Effect.gen(function* () {
         const obs = yield* ObservabilityService;
@@ -150,7 +151,7 @@ describe("ObservabilityServiceLive with live: true", () => {
   });
 
   test("logs are buffered even in live mode (getLogs returns them)", async () => {
-    const layer = ObservabilityServiceLive({ live: false });
+    const layer = makeObservabilityTestLayer({ live: false });
     const logs = await Effect.runPromise(
       Effect.gen(function* () {
         const obs = yield* ObservabilityService;
