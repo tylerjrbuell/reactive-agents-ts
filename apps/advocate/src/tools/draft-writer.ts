@@ -82,12 +82,17 @@ export function normalizeDraftArgs(
         "Nothing saved — draft-writer needs the draft text. Call it again with the markdown in the `content` field (a title and type are optional and will be inferred).",
     };
   }
+  // Only accept a threadUrl that is an actual http(s) URL — weak models emit
+  // literal placeholders like "URL_OF_FIRST_THREAD"; don't write those to disk.
+  const rawThreadUrl = pick(args, "threadUrl", "thread_url", "url", "link", "thread", "source");
+  const threadUrl = rawThreadUrl && /^https?:\/\//i.test(rawThreadUrl) ? rawThreadUrl : undefined;
+
   const draft: NormalizedDraft = {
     type: coerceType(pick(args, "type", "kind", "category", "format")),
     title: pick(args, "title", "subject", "heading", "name") ?? deriveTitle(content),
     content,
     platform: pick(args, "platform", "target", "site", "channel"),
-    threadUrl: pick(args, "threadUrl", "thread_url", "url", "link", "thread", "source"),
+    threadUrl,
     context: pick(args, "context", "reason", "why", "rationale", "notes"),
   };
   return { ok: true, draft };
@@ -105,8 +110,13 @@ export const draftWriterTool: ToolDefinition = {
     {
       name: "content",
       type: "string",
-      description: "The full draft content in markdown. This is the only field you must provide.",
-      required: true,
+      description:
+        "The full draft content in markdown — put the COMPLETE response here. " +
+        "If you omit it the tool replies telling you exactly what to send, rather than erroring.",
+      // Intentionally NOT required: a hard param-validation error makes weak models
+      // loop. Leaving it optional routes every call to the handler, which recovers
+      // the text from aliases or returns an actionable retry message.
+      required: false,
     },
     {
       name: "type",

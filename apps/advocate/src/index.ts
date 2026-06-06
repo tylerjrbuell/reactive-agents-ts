@@ -1,18 +1,23 @@
 // apps/advocate/src/index.ts
 /**
- * Reactive Agents — Community Growth Agent
+ * Reactive Agents — Community Growth Agent (the "advocate")
  *
- * A persistent autonomous agent built on reactive-agents that monitors
- * developer communities and drafts value-add responses for human review.
+ * A persistent, self-improving autonomous agent built on reactive-agents that
+ * monitors developer communities, drafts genuinely useful value-first responses,
+ * and produces competitive intelligence — all saved for human review, never
+ * auto-posted.
  *
- * This is the meta demo: the framework proving itself.
+ * This is the flagship dogfood: the framework proving itself by running a real
+ * 24/7 agent on its own advanced features. The reusable foundation lives in
+ * `agent-base.ts` (createMetaAgentBase) — the template for a future suite of
+ * internal meta-agents.
  *
  * Usage:
  *   ANTHROPIC_API_KEY=sk-ant-... TAVILY_API_KEY=tvly-... bun run src/index.ts
  *   bun run src/index.ts --dry-run   # validate config without starting loop
  */
 
-import { ReactiveAgents, registerShutdownHandlers } from "reactive-agents";
+import { registerShutdownHandlers } from "reactive-agents";
 import { makeHealthService } from "@reactive-agents/health";
 import { Effect } from "effect";
 import {
@@ -21,8 +26,8 @@ import {
 } from "./tools/community-monitor.js";
 import { draftWriterTool, draftWriterHandler } from "./tools/draft-writer.js";
 import { competitiveIntelTool, competitiveIntelHandler } from "./tools/competitive-intel.js";
-import { budgetLimit, timeoutAfter, maxIterations, watchdog } from "@reactive-agents/compose";
 import { growthInvariants, growthObservability } from "./harness/growth-harness.js";
+import { createMetaAgentBase } from "./agent-base.js";
 
 const isDryRun = process.argv.includes("--dry-run");
 const rawAnthropicKey = process.env.ANTHROPIC_API_KEY?.trim() ?? "";
@@ -52,24 +57,47 @@ console.log(`Provider: ${provider}`);
 console.log(`Model: ${model}`);
 console.log(`Gateway Timezone: ${gatewayTimezone}\n`);
 
-// ─── Build the agent ──────────────────────────────────────────────────────────
+// ─── Drafting standard ─────────────────────────────────────────────────────────
+// The single biggest lever on "robust, not toy" output. These rules are aligned
+// to the grounding grade-gate (lead with value, mention sparingly + never in the
+// opening, no hype words) and to the foolproof draft-writer (full draft text goes
+// in `content`). Vague personas produce drafts the gate rejects; concrete
+// standards produce drafts a human would actually post.
+const DRAFTING_STANDARD = [
+  "DRAFTING STANDARD — every draft you save MUST:",
+  "1. Open with concrete value — directly answer the person's question or solve their problem in the first 2-3 sentences. Do NOT mention reactive-agents in the opening.",
+  "2. Be substantive — several well-developed paragraphs (aim for 150+ words) with specifics: code patterns, trade-offs, concrete examples. No platitudes, no filler.",
+  "3. Reference reactive-agents only when it genuinely fits, at most once or twice, framed as 'one approach' with a real technical reason — never as a pitch, never first.",
+  "4. Use zero hype words. Banned: 'game-changer', 'revolutionary', 'best framework', 'must-try', 'you should use X'. Write like a peer, not a marketer.",
+  "5. Put the COMPLETE draft (full markdown) in draft-writer's `content` field — never a summary or a placeholder.",
+  "You NEVER post anything yourself — every draft is saved for human review.",
+].join("\n");
 
-const agentBuilder = ReactiveAgents.create()
-  .withName("community-growth-agent")
-  .withProvider(provider)
-  .withModel(provider === "ollama" ? { model, numCtx: 12_000 } : model)
-  // Persona: developer advocate, adds value first
+// ─── Build the agent on the shared advanced baseline ───────────────────────────
+
+const agentBuilder = createMetaAgentBase({
+  name: "community-growth-agent",
+  provider,
+  model: provider === "ollama" ? { model, numCtx: 12_000 } : model,
+  // Same-provider fallback for the local fleet — if gemma4 errors, degrade to
+  // models that have proven reliable on this harness rather than dropping the loop.
+  fallbackModels: provider === "ollama" ? ["qwen3:14b", "cogito:14b"] : [],
+})
+  // Persona: a practitioner-advocate who leads with value. The drafting standard
+  // is appended so the quality bar travels with the persona.
   .withPersona({
-    role: "Developer Advocate for reactive-agents",
+    role: "Senior developer advocate for the reactive-agents TypeScript agent framework",
     background:
-      "Deep expertise in TypeScript AI agent frameworks, Effect-TS, and developer tooling. " +
-      "Knowledgeable about LangChain, Mastra, Vercel AI SDK, and where reactive-agents differs.",
+      "Years building production AI agents in TypeScript with Effect-TS. Hands-on knowledge of " +
+      "LangChain/LangGraph, Mastra, Vercel AI SDK, CrewAI and AutoGen — what each does well and where " +
+      "reactive-agents genuinely differs (composable reasoning kernel, native Effect-TS, reactive gateway). " +
+      "You write like a practitioner helping a peer, never like marketing.\n\n" +
+      DRAFTING_STANDARD,
     instructions:
-      "ALWAYS lead with genuine value in responses. Only mention reactive-agents when it is " +
-      "directly relevant and would genuinely help the person asking. Never spam or self-promote. " +
-      "Think like a helpful developer first, advocate second. " +
-      "Save ALL drafts for human review — never claim to have posted anything.",
-    tone: "friendly, technical, developer-to-developer",
+      "Think like a helpful senior engineer first, advocate second. Lead with genuine value in every " +
+      "response and follow the DRAFTING STANDARD in your background exactly. Only mention reactive-agents " +
+      "when it truly helps the person asking. Save ALL drafts for human review — never claim to have posted.",
+    tone: "friendly, technical, peer-to-peer — a helpful senior engineer, not a marketer",
   })
 
   // Tools: built-ins (web-search, http-get, file-write, scratchpad) + custom community tools
@@ -81,35 +109,17 @@ const agentBuilder = ReactiveAgents.create()
     ],
   })
   // Observability: surfaces gateway decision logs (cron execute/skip/queue reasons).
-  // logModelIO: true → full prompts and responses in logs (can be very verbose).
   .withObservability({
     verbosity: "debug",
     live: true,
     logModelIO: false,
   })
-  // Memory: remember what we've seen to avoid duplicate drafts
-  .withMemory()
 
-  // Reasoning: adaptive — decides how complex each task needs to be
-  .withReasoning({ defaultStrategy: "adaptive" })
-
-  // ─── Compose API: robust custom control ─────────────────────────────────────
-  // Hard invariants injected into the system prompt every iteration (persona-independent)
-  // + observability taps at live harness chokepoints.
+  // ─── Compose API: domain guardrails + observability taps ────────────────────
+  // Hard invariants injected into the system prompt every iteration (persona-
+  // independent) + observability taps at live harness chokepoints.
   .withHarness(growthInvariants)
   .withHarness(growthObservability())
-  // Safety killswitches for unattended 24/7 operation.
-  .compose(maxIterations({ max: 20, onTrigger: "stop" }))
-  .compose(budgetLimit({ maxTokens: 60_000, onTrigger: "stop" }))
-  .compose(timeoutAfter({ wallClock: "5m", onTrigger: "stop" }))
-  .compose(watchdog({ noProgressFor: "90s", onTrigger: "stop" }))
-  // Runtime hardening. Keep the per-execution timeout at/above the 5m
-  // `timeoutAfter` killswitch above — a tighter value pre-empts the killswitch
-  // and makes a heartbeat report "timed out" during the reflect phase even
-  // after a draft was already saved (local models like gemma4 routinely take
-  // >2m for a full plan-execute-reflect pass).
-  .withTimeout(300_000)
-  .withRetryPolicy({ maxRetries: 2, backoffMs: 1000 })
 
   // Gateway: persistent autonomous loop
   .withGateway({
@@ -118,12 +128,14 @@ const agentBuilder = ReactiveAgents.create()
       intervalMs: isDryRun ? 100 : 3_600_000, // hourly community sweep (100ms in dry-run for fast config validation)
       policy: "adaptive",
       instruction:
-        "Check developer communities for TypeScript AI agent framework discussions. " +
-        "Use the community-monitor tool to find relevant threads on Hacker News, Reddit " +
-        "(r/typescript, r/MachineLearning, r/LocalLLaMA, r/node), and dev.to. " +
-        "For each genuinely relevant thread where reactive-agents could help: " +
-        "draft a value-first response and save it with draft-writer. " +
-        "Record thread URLs in scratchpad to avoid revisiting the same threads.",
+        "Find and respond to ONE genuinely valuable community thread this heartbeat. Quality over volume. Steps:\n" +
+        "1. Call community-monitor to get fresh candidate threads (title, url, snippet).\n" +
+        "2. Pick the SINGLE best opportunity where you can add real, specific value — skip the rest.\n" +
+        "3. Use http-get on that thread's url to READ THE ACTUAL DISCUSSION. Never fabricate or assume what the thread says; your response must address what people actually wrote.\n" +
+        "4. Write ONE substantive response following the DRAFTING STANDARD, grounded in the real thread content.\n" +
+        "5. Save it with a SINGLE draft-writer call: put the complete response markdown in `content` and the thread url in `threadUrl`. Never call draft-writer without `content`.\n" +
+        "6. Record the thread url in scratchpad so you don't revisit it.\n" +
+        "If no thread is genuinely worth a value-add response, save nothing — that is a valid outcome.",
     },
     crons: [
       {
