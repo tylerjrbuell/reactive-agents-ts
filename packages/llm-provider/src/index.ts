@@ -60,6 +60,13 @@ export type { CapabilityCache, ResolveCapabilityOptions } from "./capability-res
 // `Capability` shape from `@reactive-agents/core/contracts/capability`.
 export { resolveCanonical, warnCapabilityFallback } from "./canonical-resolver.js";
 
+// Eager capability prime — runs the provider's live discovery probe (Ollama
+// /api/show) and writes through to the process-wide probed registry BEFORE the
+// synchronous resolvers at build-validation + every reasoning iteration, so any
+// pulled model resolves at its real window/dialect instead of the 2048 fallback.
+export { primeCapability } from "./capability-prime.js";
+export type { PrimeCapabilityOptions } from "./capability-prime.js";
+
 // ─── Types ───
 export type {
   LLMProvider,

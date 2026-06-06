@@ -103,8 +103,12 @@ const agentBuilder = ReactiveAgents.create()
   .compose(budgetLimit({ maxTokens: 60_000, onTrigger: "stop" }))
   .compose(timeoutAfter({ wallClock: "5m", onTrigger: "stop" }))
   .compose(watchdog({ noProgressFor: "90s", onTrigger: "stop" }))
-  // Runtime hardening.
-  .withTimeout(120_000)
+  // Runtime hardening. Keep the per-execution timeout at/above the 5m
+  // `timeoutAfter` killswitch above — a tighter value pre-empts the killswitch
+  // and makes a heartbeat report "timed out" during the reflect phase even
+  // after a draft was already saved (local models like gemma4 routinely take
+  // >2m for a full plan-execute-reflect pass).
+  .withTimeout(300_000)
   .withRetryPolicy({ maxRetries: 2, backoffMs: 1000 })
 
   // Gateway: persistent autonomous loop

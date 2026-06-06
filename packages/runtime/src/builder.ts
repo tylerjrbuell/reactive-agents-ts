@@ -1893,6 +1893,16 @@ export class ReactiveAgentBuilder {
                 hasMcpServers: this._mcpServers.length > 0,
             }
         }
+        // Eager capability prime — run the provider's live discovery probe
+        // (Ollama /api/show) and write through to the process-wide registry
+        // BEFORE validateBuild's synchronous PreFlight resolve. Without this any
+        // pulled model not in the static table resolves at the 2048-ctx
+        // `source: "fallback"`, tripping the honesty gate AND under-sizing the
+        // first reasoning iteration. Best-effort: never throws, no-op for
+        // providers without a probe (anthropic/openai/…).
+        const { primeCapability } = await import('@reactive-agents/llm-provider')
+        await primeCapability(this._provider, this._model)
+
         const validation = validateBuild(
             this._provider,
             this._model,
