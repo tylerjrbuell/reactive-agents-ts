@@ -6,6 +6,7 @@ import { Effect } from "effect";
 import { createCortexRuntime } from "../runtime.js";
 import { CortexIngestService } from "../services/ingest-service.js";
 import { CortexStoreService } from "../services/store-service.js";
+import { CortexRunnerService } from "../services/runner-service.js";
 
 describe("createCortexRuntime", () => {
   let dir: string | undefined;
@@ -53,5 +54,29 @@ describe("createCortexRuntime", () => {
     );
 
     expect(runs.some((r) => r.runId === "rt-run")).toBe(true);
+  });
+
+  it("runnerLayer is a shared singleton so runtime controls reach the running agent's registry", async () => {
+    dir = mkdtempSync(join(tmpdir(), "cortex-rt-"));
+    const rt = createCortexRuntime({
+      port: 0,
+      dbPath: join(dir, "cortex.db"),
+      openBrowser: false,
+    });
+    closeDb = () => rt.db.close();
+
+    const getSvc = Effect.gen(function* () {
+      return yield* CortexRunnerService;
+    });
+
+    // Each HTTP handler resolves the runner via `Effect.provide(rt.runnerLayer)`.
+    // The desk-run registry (`activeRef`) is in-memory state that lives INSIDE the
+    // service instance. POST /api/runs registers the agent; POST /:runId/pause must
+    // find it. If the layer rebuilds a fresh instance per request, the two have
+    // separate (empty) registries and controls silently no-op. Same instance across
+    // independent resolutions ⇒ shared registry ⇒ controls reach the running agent.
+    const a = await Effect.runPromise(getSvc.pipe(Effect.provide(rt.runnerLayer)));
+    const b = await Effect.runPromise(getSvc.pipe(Effect.provide(rt.runnerLayer)));
+    expect(a).toBe(b);
   });
 });

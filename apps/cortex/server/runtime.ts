@@ -32,9 +32,21 @@ export function createCortexRuntime(config: CortexConfig): CortexRuntime {
     Layer.provide(bridgeLayer),
   ) as Layer.Layer<CortexIngestService>;
   const storeLayer = CortexStoreServiceLive(db);
-  const runnerLayer = CortexRunnerServiceLive.pipe(
-    Layer.provide(Layer.merge(storeLayer, ingestLayer)),
+  // Materialize ONE shared runner instance and re-provide it everywhere (same
+  // pattern as the bridge above). The runner's `activeRef` registry — the map of
+  // in-flight desk runs — is in-memory state. If `runnerLayer` were a plain
+  // un-materialized Layer, every `Effect.provide(runnerLayer)` (one per HTTP
+  // request) would rebuild the service with a fresh empty registry, so
+  // POST /:runId/pause|stop|resume could never find the agent that POST /api/runs
+  // started in a different instance — controls would silently no-op.
+  const runnerService = Effect.runSync(
+    CortexRunnerService.pipe(
+      Effect.provide(
+        CortexRunnerServiceLive.pipe(Layer.provide(Layer.merge(storeLayer, ingestLayer))),
+      ),
+    ),
   );
+  const runnerLayer = Layer.succeed(CortexRunnerService, runnerService);
 
   const gateway = new GatewayProcessManager(db, ingestLayer);
 
