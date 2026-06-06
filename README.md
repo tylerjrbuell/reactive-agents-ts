@@ -8,21 +8,20 @@
 
 Run your first agent in 60 seconds. Scale up by composing layers — add reasoning loops, persistent 4-tier memory, production guardrails, cost routing, and reactive intelligence one `.with()` call at a time.
 
-Works on local Ollama models (4B+) through frontier APIs — **same code, same features**. Type safety at every service boundary. No `any`.
+Works on local Ollama models (4B+) through frontier APIs — **same code, same features**. Strict TypeScript with schema-validated service boundaries and explicit tagged errors.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
 | **35 total**                 | 30 packages + 5 apps — exactly what you need, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
 | **6 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
-| **5,320 tests · 603 files**  | Production-grade confidence (verified `bun test` on every PR)    |
+| **5,300+ tests · 600+ files** | Production-grade confidence (verified `bun test` on every PR)    |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
-| **Effect-TS end to end**     | Compile-time type safety, zero `any`, explicit tagged errors     |
+| **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/badge/npm-%40reactive--agents-CB3837?logo=npm)](https://www.npmjs.com/org/reactive-agents)
-[![npm downloads](https://img.shields.io/npm/dm/reactive-agents?logo=npm)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED)](https://effect.website)
@@ -123,8 +122,8 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **5,320 tests** across 603 files — verified `bun test` on every PR
-- **Zero `any`** in framework code — Effect-TS schemas validate every service boundary
+- **5,300+ tests** across 600+ files — verified `bun test` on every PR
+- **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
 
@@ -148,7 +147,7 @@ import { ReactiveAgents } from 'reactive-agents'
 const agent = await ReactiveAgents.create()
     .withName('assistant')
     .withProvider('anthropic')
-    .withModel('claude-sonnet-4-20250514')
+    .withModel('claude-sonnet-4-6')
     .build()
 
 const result = await agent.run('Explain quantum entanglement')
@@ -185,10 +184,9 @@ Pick the preset that matches the workload:
   for cross-session compounding learning.
 
 Override specific capabilities after the preset — order matters; later
-calls win. Most individual `.withX()` methods still ship for backward
-compatibility, but are `@deprecated` aliases for either a preset or a
-`.compose(...)` chokepoint. Check the JSDoc on each method to see
-which preset / compose primitive it routes to.
+calls win. The individual `.withX()` methods are fully supported and
+compose cleanly with presets; reach for a preset when you want the whole
+default-on set in one line, or `.compose(...)` for a precise chokepoint.
 
 ```typescript
 const agent = await ReactiveAgents.create()
@@ -358,11 +356,11 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | ----------------------------- | :-------------: | :----------: | :-----------: | :-----: |
 | Full type safety (Effect-TS)  |       Yes       |      --      |    Partial    | Partial |
 | Composable layer architecture |    13 layers    |      --      |      --       |   --    |
-| Reasoning strategies          | 6 (+ @exp code-action) |  1 (ReAct)   |      --       |    1    |
+| Reasoning strategies          | 6 (+ @exp code-action) |  Multiple    |    Partial    |    1    |
 | Model-adaptive context        |     4 tiers     |      --      |      --       |   --    |
 | Local model optimization      |       Yes       |      --      |      --       |   --    |
 | Execution lifecycle hooks     |    12 phases    |  Callbacks   |  Middleware   |   --    |
-| Multi-agent orchestration     | A2A + workflows |     Yes      |      --       |   Yes   |
+| Multi-agent orchestration     | A2A + workflows |     Yes      |    Partial    |   Yes   |
 | Token streaming               |       Yes       |     Yes      |      Yes      |   Yes   |
 | Production guardrails         |       Yes       |      --      |      --       |   --    |
 | Cost tracking + budgets       |       Yes       |      --      |      --       |   --    |
@@ -372,7 +370,9 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   5,320 tests   |      --      |      --       |   --    |
+| Test suite                    |   5,300+ tests  |      --      |      --       |   --    |
+
+<sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-06. `--` means we found no first-party equivalent, not that none exists. Corrections welcome — [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
 ## Use Cases
 
@@ -814,7 +814,7 @@ OPENAI_API_KEY=sk-...                 # OpenAI GPT-4o
 GOOGLE_API_KEY=...                    # Google Gemini
 EMBEDDING_PROVIDER=openai             # For vector memory
 EMBEDDING_MODEL=text-embedding-3-small
-LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
+LLM_DEFAULT_MODEL=claude-sonnet-4-6
 ```
 
 ## Documentation
@@ -851,10 +851,6 @@ Live board: [GitHub Projects — Reactive Agents Roadmap](https://github.com/use
 <a href="https://github.com/tylerjrbuell/reactive-agents-ts/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=tylerjrbuell/reactive-agents-ts" alt="Contributors" />
 </a>
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=tylerjrbuell/reactive-agents-ts&type=Date)](https://star-history.com/#tylerjrbuell/reactive-agents-ts&Date)
 
 ## License
 

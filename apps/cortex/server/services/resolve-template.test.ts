@@ -96,6 +96,25 @@ describe("resolveTemplate", () => {
     const r = resolveTemplate({ p: "{{  topic  }}" }, [v({ name: "topic" })], { topic: "z" });
     expect(r.value.p).toBe("z");
   });
+
+  test("falsy supplied value (0) is honored over default", () => {
+    const r = resolveTemplate(
+      { p: "n={{count}}" },
+      [v({ name: "count", type: "number", default: 99 })],
+      { count: 0 },
+    );
+    expect(r.value.p).toBe("n=0");
+  });
+
+  test("supplied empty string is honored (not treated as missing)", () => {
+    const r = resolveTemplate(
+      { p: "[{{x}}]" },
+      [v({ name: "x" })],
+      { x: "" },
+    );
+    expect(r.value.p).toBe("[]");
+    expect(r.unresolved).toEqual([]);
+  });
 });
 
 describe("scanTokens", () => {
