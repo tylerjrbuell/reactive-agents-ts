@@ -63,7 +63,7 @@ scratch-*.ts
 # Messaging secrets
 signal-data/
 .env.telegram
-apps/meta-agent/.env.production
+apps/advocate/.env.production
 .claude/scheduled_tasks.lock
 
 # Obsidian vault — track shared config; ignore per-user UI state and caches

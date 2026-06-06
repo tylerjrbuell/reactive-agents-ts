@@ -52,7 +52,7 @@ apps/
   cortex/                  # Bun/Elysia desk server + SvelteKit UI (Stage/Run)
   docs/                    # Starlight documentation site
   examples/                # Example agent scripts
-  meta-agent/              # Meta-agent app
+  advocate/                # Community growth agent (flagship dogfood)
 ```
 
 ## Development Workflow

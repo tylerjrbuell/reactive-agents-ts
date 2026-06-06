@@ -1,0 +1,9 @@
+# Runtime state — not source
+data/
+.reactive-agents/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+!.env.production.example

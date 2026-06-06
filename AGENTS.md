@@ -671,7 +671,7 @@ Canonical project skills live in `.agents/skills/`:
 
 ## Current Framework Snapshot (v0.11.0)
 
-- Monorepo scale: **35 packages + 6 apps** (cli, cortex, docs, examples, meta-agent, stackblitz)
+- Monorepo scale: **35 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz)
 - Verified quality: **5,317 tests, 26 skip, 0 fail** (2026-05-20 health-sweep baseline) — run `bun test` for the authoritative count before release
 - Public facade: `reactive-agents` built on Effect-TS layered runtime
 - Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **9 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint, discover-tools) — *shell-execute is gated via `.withTerminalTools()`, not auto-registered*
