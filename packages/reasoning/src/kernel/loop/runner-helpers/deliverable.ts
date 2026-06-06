@@ -33,7 +33,7 @@ import {
   harnessSynthesisDeliverable,
   sentinelDeliverable,
 } from "@reactive-agents/core";
-import type { TerminateReason } from "../terminate.js";
+import type { TerminateReason } from "../terminate-reason.js";
 import { resolveStoredToolObservation } from "./state-queries.js";
 
 /** Minimum thought length to be treated as a model-authored final synthesis. */

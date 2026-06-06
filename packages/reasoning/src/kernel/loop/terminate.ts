@@ -27,27 +27,12 @@ import {
   describeUnmet,
 } from "../capabilities/verify/post-conditions.js";
 
-/**
- * Enumerable union of kernel-emitted termination reason codes (R23 surface).
- * Sources: runner.ts `terminate()` callers, arbitrator.ts `applyTermination()`
- * literal `terminatedBy` values, oracle-decision passthrough reasons, and
- * dispatcher intermediates observed on `state.meta.terminatedBy`. Templated
- * reasons (`controller_early_stop:<reason>`, `loop_detected:<reason>`) are
- * omitted — callers should prefix-match. Enforces only `TerminateOptions.reason`;
- * `Verdict.terminatedBy` in arbitrator.ts is still `string` (followup).
- */
-export type TerminateReason =
-  | "low_delta_guard" | "switching_exhausted" | "harness_deliverable"
-  | "harness_synthesis"
-  | "oracle_forced" | "loop_graceful" | "budget_exceeded" | "max_iterations"
-  | "kernel_error" | "controller_signal_veto" | "loop_detected_with_veto"
-  | "end_turn" | "final_answer_tool" | "final_answer" | "llm_end_turn"
-  | "content_stable" | "final_answer_regex" | "entropy_converged"
-  | "dispatcher-early-stop" | "dispatcher-strategy-switch"
-  // User-initiated stop via the RunController checkpoint (P1 mission 2B —
-  // routed through terminate() so the stop-checkpoint path stops bypassing the
-  // single-owner termination + output-writer invariants).
-  | "stop_requested";
+// `TerminateReason` lives in the dependency-free leaf `terminate-reason.ts`
+// (GH #184) so `runner-helpers/deliverable.ts` can import the type without the
+// `deliverable.ts` ↔ `terminate.ts` cycle. Re-exported here so existing
+// `from "../terminate.js"` type importers keep resolving.
+export type { TerminateReason } from "./terminate-reason.js";
+import type { TerminateReason } from "./terminate-reason.js";
 
 export type TerminateOptions = {
   /**
