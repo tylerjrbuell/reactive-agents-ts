@@ -19,6 +19,7 @@
   import { createRunStore } from "$lib/stores/run-store.js";
   import { createSignalStore } from "$lib/stores/signal-store.js";
   import { createTraceStore } from "$lib/stores/trace-store.js";
+  import { createTimelineStore } from "$lib/stores/timeline-store.js";
   import type { CortexLiveMsg, RunState } from "$lib/stores/run-store.js";
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
@@ -70,6 +71,7 @@
 
   const signalStore = createSignalStore(activeState);
   const traceStore = createTraceStore(activeState);
+  const timelineStore = createTimelineStore(activeState);
 
   // Derived: max kernel loops available for replay (= trace step rows from RIP, before final-only rows)
   const replayMaxLoops = $derived(
@@ -481,6 +483,7 @@
       <div class="flex-1 min-h-0 overflow-hidden">
         <TracePanel
           frames={$traceStore}
+          timeline={$timelineStore}
           status={$runStore.status}
           streamText={$runStore.streamText}
           frame={selectedIteration === null

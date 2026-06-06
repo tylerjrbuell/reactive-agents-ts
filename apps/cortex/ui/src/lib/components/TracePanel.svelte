@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { CortexTraceFrame } from "../stores/trace-store.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import TimelineRow from "./TimelineRow.svelte";
+  import TimelineFilterChips from "./TimelineFilterChips.svelte";
+  import { DEFAULT_VISIBLE, filterRows, countByCategory, type TimelineCategory } from "../stores/timeline-filter.js";
+  import type { TimelineGroup } from "../stores/timeline-store.js";
 
   const TRACE_ROWS_TOOLTIP =
     "Rows follow kernel loops (ReasoningIterationProgress). Inner reasoning steps are counted separately as STEPS in the vitals strip.";
@@ -11,6 +15,8 @@
     status?: string;
     /** Live streaming text from TextDeltaReceived events — shown above trace when live */
     streamText?: string;
+    /** Rich event-timeline groups (one per kernel iteration). Default body; frames behind toggle. */
+    timeline?: TimelineGroup[];
   }
 
   // Default `[]` alone is inferred as `never[]` and breaks element typing in `{#each}`.
@@ -20,7 +26,20 @@
     frames: traceRows = [] as CortexTraceFrame[],
     status = "live",
     streamText = "",
+    timeline = [] as TimelineGroup[],
   }: Props = $props();
+
+  // ── Rich timeline state ──────────────────────────────────────────────────
+  let active = $state<Set<TimelineCategory>>(new Set(DEFAULT_VISIBLE));
+  let expandedTimeline = $state<string[]>([]);
+  let showFrames = $state(false); // false = rich timeline (default), true = legacy frame list
+  const allRows = $derived(timeline.flatMap((g) => g.rows));
+  const counts = $derived(countByCategory(allRows));
+  const visibleGroups = $derived(
+    timeline.map((g) => ({ iteration: g.iteration, rows: filterRows(g.rows, active) })).filter((g) => g.rows.length > 0),
+  );
+  function toggleCat(c: TimelineCategory) { const next = new Set(active); next.has(c) ? next.delete(c) : next.add(c); active = next; }
+  function toggleTimelineRow(id: string) { expandedTimeline = expandedTimeline.includes(id) ? expandedTimeline.filter((x) => x !== id) : [...expandedTimeline, id]; }
 
   // Svelte 5: use array reassignment for reactivity (Set mutation doesn't trigger)
   let expandedRows = $state<number[]>([]);
@@ -164,8 +183,34 @@
     </div>
   {/if}
 
+  <!-- ── VIEW TOGGLE (Timeline default · Frames legacy) ──────────────────── -->
+  <div class="flex flex-shrink-0 items-center justify-between px-2 py-1 border-b border-[var(--cortex-border)]">
+    <div class="flex gap-1">
+      <button type="button" class="text-[10px] px-2 py-0.5 rounded {showFrames ? 'text-outline/60' : 'text-primary'}" onclick={() => (showFrames = false)}>Timeline</button>
+      <button type="button" class="text-[10px] px-2 py-0.5 rounded {showFrames ? 'text-primary' : 'text-outline/60'}" onclick={() => (showFrames = true)}>Frames</button>
+    </div>
+  </div>
+
+  {#if !showFrames}
+    <TimelineFilterChips {active} {counts} onToggle={toggleCat} />
+  {/if}
+
   <!-- ── ITERATION LOG ────────────────────────────────────────────────────── -->
   <div class="flex-1 overflow-y-auto min-h-0 py-2">
+   {#if !showFrames}
+    <!-- ── RICH EVENT TIMELINE (default) ──────────────────────────────────── -->
+    <div class="flex flex-col px-1">
+      {#each visibleGroups as g (g.iteration)}
+        <div class="px-2 py-1 text-[10px] font-mono text-amber-700 dark:text-amber-600 sticky top-0 bg-surface-container-lowest/90">iteration {g.iteration}</div>
+        {#each g.rows as r (r.id)}
+          <TimelineRow row={r} expanded={expandedTimeline.includes(r.id)} onToggle={() => toggleTimelineRow(r.id)} />
+        {/each}
+      {/each}
+      {#if visibleGroups.length === 0}
+        <div class="px-3 py-6 text-center text-[11px] text-outline/50">No events match the active filters.</div>
+      {/if}
+    </div>
+   {:else}
     {#if traceRows.length === 0}
       <p class="font-mono text-[10px] text-outline text-center mt-8 px-4">
         Trace will appear here as the agent runs…
@@ -465,5 +510,6 @@
         </div>
       {/each}
     {/if}
+   {/if}
   </div>
 </div>
