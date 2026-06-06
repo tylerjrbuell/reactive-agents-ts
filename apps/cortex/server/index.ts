@@ -10,6 +10,7 @@ import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
 import { chatRouter } from "./api/chat.js";
 import { memoryRouter } from "./api/memory.js";
+import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
 import { ChatSessionService } from "./services/chat-session-service.js";
 import { handleIngestMessage } from "./ws/ingest.js";
@@ -77,6 +78,7 @@ export async function startCortexServer(
     .use(modelsRouter)
     .use(chatRouter(chatSessionService))
     .use(memoryRouter())
+    .use(templateResolveRouter())
     .ws("/ws/ingest", {
       open() {
         cortexLog("info", "ingest-ws", "ingest client connected");
