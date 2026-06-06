@@ -78,7 +78,7 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/judge-server  — LLM-as-judge HTTP server backing @reactive-agents/eval
 │   └── depends on: core, eval, llm-provider, runtime-shim
 │
-├── @reactive-agents/compose       — Harness composition + 6 killswitches (maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor, confidenceFloor)
+├── @reactive-agents/compose       — Harness composition + 5 killswitches (maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor)
 │   └── depends on: core, runtime
 │
 ├── @reactive-agents/replay        — Deterministic trace replay: loadRecordedRun, makeReplayController, makeReplayToolLayer, diffTraces
@@ -131,7 +131,7 @@ Foundation (no reactive-agents deps)
 | `gateway`       | `src/services/gateway-service.ts`       | `GatewayService`, `PolicyEngine`, `WebhookService`          |
 | `eval`          | `src/services/eval-service.ts`          | `EvalService`, `EvalStore`, `EvalSuite`                     |
 | `runtime-shim`  | `src/index.ts`                          | `Database`, `spawn`, `serve`, `glob`, `hash`, `isMain`, `isBun`, `isNode` |
-| `compose`       | `src/killswitches/index.ts`             | `maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`, `confidenceFloor`, `killswitches` |
+| `compose`       | `src/killswitches/index.ts`             | `maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`, `killswitches` |
 | `replay`        | `src/index.ts`                          | `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces` |
 | `observe`       | `src/index.ts`                          | `OpenInferenceTracerLayer`, `setupOpenInferenceExporter`, `autoConfigureExporter` |
 | `runtime`       | `src/builder.ts`                        | `ReactiveAgents`, `ReactiveAgentBuilder`, `createRuntime()` |
