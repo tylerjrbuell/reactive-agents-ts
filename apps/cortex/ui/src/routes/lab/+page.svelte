@@ -5,6 +5,7 @@
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
+  import ParamFillModal from "$lib/components/ParamFillModal.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { goto } from "$app/navigation";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
@@ -53,6 +54,7 @@
   let builderPersistentSchedule = $state("");
   let builderRunning = $state(false);
   let builderSaving = $state(false);
+  let showParamModal = $state(false);
 
   type BuilderAdHocAction = "run" | "save" | "save-run";
   let builderAdHocAction = $state<BuilderAdHocAction>("save-run");
@@ -89,7 +91,7 @@
     builderActionMenuOpen = false;
     switch (builderAdHocAction) {
       case "run":
-        await runFromBuilder();
+        onRunClick();
         break;
       case "save":
         await createAgentFromBuilder(false);
@@ -118,14 +120,14 @@
     };
   });
 
-  async function runFromBuilder() {
+  async function launchRun(variableValues?: Record<string, string | number>) {
     if (!builderConfig.prompt.trim()) return;
     builderRunning = true;
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cortexRunsPostBody(builderConfig.prompt.trim(), builderConfig)),
+        body: JSON.stringify(cortexRunsPostBody(builderConfig.prompt.trim(), builderConfig, variableValues)),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json() as { runId?: string };
@@ -134,6 +136,14 @@
     } catch (e) {
       toast.error("Run failed", String(e));
     } finally { builderRunning = false; }
+  }
+
+  function onRunClick() {
+    if ((builderConfig.variables ?? []).length > 0) {
+      showParamModal = true;
+    } else {
+      void launchRun();
+    }
   }
 
   async function createAgentFromBuilder(runNow: boolean) {
@@ -1565,3 +1575,15 @@
     onCancel={() => (deleteConfirmSkill = null)}
   />
 {/if}
+
+<ParamFillModal
+  open={showParamModal}
+  variables={builderConfig.variables ?? []}
+  previewPayload={{
+    prompt: builderConfig.prompt,
+    systemPrompt: builderConfig.systemPrompt,
+    taskContext: builderConfig.taskContext,
+  }}
+  onConfirm={(values) => { showParamModal = false; void launchRun(values); }}
+  onCancel={() => (showParamModal = false)}
+/>
