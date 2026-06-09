@@ -106,10 +106,14 @@ The drift-guard test shipped here is the interim safety net.
 
 - P0 parity: chat now accepts + persists + forwards all 12 dropped fields (server-only).
 - Drift-guard test: chat config body ⊇ runs config body.
+- **P1 Rec 1 (local numCtx default):** `cortexParamsToAgentConfig` now defaults
+  `numCtx` to **8192** for local providers (`ollama`, `litellm`) when unset/0 —
+  eliminates the 2048 tool-calling trap for both chat and Lab runs. Cloud providers
+  unaffected (ignore num_ctx). Tests pin local-default / explicit-override / cloud-noop.
 - This report.
 
 ## Deferred (filed as recommendations)
 
-- P1 best-practice defaults (numCtx-local, grounding preset) — behavior/cost change,
-  needs user sign-off.
+- P1 Rec 2 & 3 (grounding/verification preset, system-prompt reconciliation hint) —
+  behavior/cost change; user opted to defer (2026-06-09).
 - P2 shared config→params mapper refactor — separate plan.

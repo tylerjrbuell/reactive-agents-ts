@@ -16,6 +16,20 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.model).toBe("claude-sonnet-4-6");
   });
 
+  it("defaults numCtx to 8192 on local providers when unset (2048 trap)", () => {
+    expect(cortexParamsToAgentConfig({ provider: "ollama" }).numCtx).toBe(8192);
+    expect(cortexParamsToAgentConfig({ provider: "litellm" }).numCtx).toBe(8192);
+  });
+
+  it("honors an explicit numCtx over the local default", () => {
+    expect(cortexParamsToAgentConfig({ provider: "ollama", numCtx: 16384 }).numCtx).toBe(16384);
+  });
+
+  it("does not set numCtx on cloud providers", () => {
+    expect(cortexParamsToAgentConfig({ provider: "anthropic" }).numCtx).toBeUndefined();
+    expect(cortexParamsToAgentConfig({ provider: "openai" }).numCtx).toBeUndefined();
+  });
+
   it("maps model params", () => {
     const config = cortexParamsToAgentConfig({
       provider: "anthropic",
@@ -283,12 +297,14 @@ describe("numCtx mapping", () => {
     expect((cfg as { numCtx?: number }).numCtx).toBe(32768);
   });
 
-  it("omits numCtx when 0/unset", () => {
+  it("defaults numCtx to 8192 on local providers when 0/unset (was: omitted)", () => {
+    // Best-practice default (audit 2026-06-09): local providers otherwise fall
+    // back to Ollama's 2048, which breaks tool-calling. Cloud providers ignore it.
     const cfg = cortexParamsToAgentConfig({
       provider: "ollama",
       model: "qwen3.5:latest",
       numCtx: 0,
     });
-    expect((cfg as { numCtx?: number }).numCtx).toBeUndefined();
+    expect((cfg as { numCtx?: number }).numCtx).toBe(8192);
   });
 });
