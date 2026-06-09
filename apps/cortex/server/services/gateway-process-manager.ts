@@ -188,9 +188,8 @@ export class GatewayProcessManager {
     // DEFAULT (no values) before reading `prompt`/building the agent. A required
     // variable with no default stays unresolved → fail this scheduled run with a
     // clear message recorded to cortex_runs.error_message; do NOT build with literal tokens.
-    const _vars = Array.isArray((config as { variables?: VariableDef[] }).variables)
-      ? ((config as { variables?: VariableDef[] }).variables as VariableDef[])
-      : [];
+    const _configVars = (config as { variables?: VariableDef[] }).variables;
+    const _vars = Array.isArray(_configVars) ? _configVars : [];
     const _resolved = resolveTemplate(config, _vars, {});
     if (_resolved.unresolved.length > 0) {
       const msg = `Unresolved template variable(s): ${_resolved.unresolved.join(", ")}`;
