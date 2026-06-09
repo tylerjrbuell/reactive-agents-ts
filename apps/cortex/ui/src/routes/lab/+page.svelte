@@ -121,6 +121,9 @@
   });
 
   async function launchRun(variableValues?: Record<string, string | number>) {
+    // Re-entrancy guard: the modal's Run button is not bound to builderRunning,
+    // so a fast double-confirm could otherwise POST /api/runs twice.
+    if (builderRunning) return;
     if (!builderConfig.prompt.trim()) return;
     builderRunning = true;
     try {
