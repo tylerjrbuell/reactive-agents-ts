@@ -40,6 +40,12 @@ const ChatSessionConfigBody = t.Object({
   ),
   terminalShellAdditionalCommands: t.Optional(t.String()),
   terminalShellAllowedCommands: t.Optional(t.String()),
+  mcpServerIds: t.Optional(t.Array(t.String())),
+  agentTools: t.Optional(t.Array(t.Unknown())),
+  dynamicSubAgents: t.Optional(t.Object({ enabled: t.Boolean(), maxIterations: t.Optional(t.Number()) })),
+  additionalToolNames: t.Optional(t.String()),
+  terminalTools: t.Optional(t.Boolean()),
+  skills: t.Optional(t.Object({ paths: t.Array(t.String()) })),
 });
 
 export const chatRouter = (svc: ChatSessionService) =>
@@ -81,6 +87,12 @@ export const chatRouter = (svc: ChatSessionService) =>
               body.terminalShellAllowedCommands.trim() !== ""
                 ? { terminalShellAllowedCommands: body.terminalShellAllowedCommands.trim() }
                 : {}),
+              ...(body.mcpServerIds?.length ? { mcpServerIds: body.mcpServerIds } : {}),
+              ...(body.agentTools?.length ? { agentTools: body.agentTools } : {}),
+              ...(body.dynamicSubAgents ? { dynamicSubAgents: body.dynamicSubAgents } : {}),
+              ...(body.additionalToolNames ? { additionalToolNames: body.additionalToolNames } : {}),
+              ...(body.terminalTools === true ? { terminalTools: true } : {}),
+              ...(body.skills?.paths.length ? { skills: body.skills } : {}),
             },
           });
           return { sessionId };
@@ -155,6 +167,14 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.terminalShellAllowedCommands !== undefined
               ? { terminalShellAllowedCommands: body.terminalShellAllowedCommands }
               : {}),
+            ...(body.mcpServerIds !== undefined ? { mcpServerIds: body.mcpServerIds } : {}),
+            ...(body.agentTools !== undefined ? { agentTools: body.agentTools } : {}),
+            ...(body.dynamicSubAgents !== undefined ? { dynamicSubAgents: body.dynamicSubAgents } : {}),
+            ...(body.additionalToolNames !== undefined
+              ? { additionalToolNames: body.additionalToolNames }
+              : {}),
+            ...(body.terminalTools !== undefined ? { terminalTools: body.terminalTools } : {}),
+            ...(body.skills !== undefined ? { skills: body.skills } : {}),
           });
           return { ok: true };
         } catch (e) {
