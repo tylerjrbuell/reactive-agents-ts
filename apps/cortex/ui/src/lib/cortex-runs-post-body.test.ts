@@ -74,4 +74,21 @@ describe("cortexRunsPostBody", () => {
     expect(on.terminalShellAdditionalCommands).toBe("bun");
     expect(on.terminalShellAllowedCommands).toBe("git");
   });
+
+  it("emits variables + variableValues when present", () => {
+    const cfg = {
+      ...defaultConfig(),
+      prompt: "Do {{task}}",
+      variables: [{ name: "task", type: "string" as const, required: true }],
+    };
+    const body = cortexRunsPostBody("Do {{task}}", cfg, { task: "research" });
+    expect(body.variables).toEqual(cfg.variables);
+    expect(body.variableValues).toEqual({ task: "research" });
+  });
+
+  it("omits variable fields when no variables", () => {
+    const body = cortexRunsPostBody("hi", defaultConfig());
+    expect("variables" in body).toBe(false);
+    expect("variableValues" in body).toBe(false);
+  });
 });
