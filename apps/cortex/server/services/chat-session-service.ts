@@ -59,10 +59,24 @@ export type CortexChatResult = {
   cost?: number;
 };
 
+export interface CachedChatSession {
+  readonly session: AgentSession;
+  readonly agent: { dispose: () => Promise<void> };
+}
+
+/** Dispose a cached chat agent (tears down MCP containers); never throws. */
+export async function disposeCachedSession(entry: CachedChatSession): Promise<void> {
+  try {
+    await entry.agent.dispose();
+  } catch {
+    /* best-effort: a dispose failure must not block config update / delete */
+  }
+}
+
 export class ChatSessionService {
   private readonly db: Database;
   /** In-memory cache of live agent sessions keyed by Cortex session ID. */
-  private readonly sessions = new Map<string, AgentSession>();
+  private readonly sessions = new Map<string, CachedChatSession>();
 
   constructor(db: Database) {
     this.db = db;
@@ -85,8 +99,12 @@ export class ChatSessionService {
     return { ...session, turns };
   }
 
-  deleteSession(sessionId: string): boolean {
-    this.sessions.delete(sessionId);
+  async deleteSession(sessionId: string): Promise<boolean> {
+    const evicted = this.sessions.get(sessionId);
+    if (evicted) {
+      await disposeCachedSession(evicted);
+      this.sessions.delete(sessionId);
+    }
     return deleteChatSession(this.db, sessionId);
   }
 
@@ -94,7 +112,7 @@ export class ChatSessionService {
     renameChatSessionInDb(this.db, sessionId, name);
   }
 
-  updateSessionConfig(sessionId: string, configPatch: Record<string, unknown>): void {
+  async updateSessionConfig(sessionId: string, configPatch: Record<string, unknown>): Promise<void> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
@@ -104,7 +122,12 @@ export class ChatSessionService {
     if (!updated) throw new Error(`Chat session ${sessionId} not found`);
 
     // Force next turn to rebuild AgentSession with updated config.
-    this.sessions.delete(sessionId);
+    // Dispose the evicted agent first so its MCP docker containers are torn down.
+    const evicted = this.sessions.get(sessionId);
+    if (evicted) {
+      await disposeCachedSession(evicted);
+      this.sessions.delete(sessionId);
+    }
   }
 
   async chat(sessionId: string, message: string): Promise<CortexChatResult> {
@@ -114,10 +137,10 @@ export class ChatSessionService {
     const cfg = normalizeCortexAgentConfig(row.agentConfig);
     const enableTools = cfg.enableTools === true;
 
-    let agentSession = this.sessions.get(sessionId);
-    if (!agentSession) {
-      agentSession = await this.buildSession(sessionId, cfg, row.stableAgentId);
-      this.sessions.set(sessionId, agentSession);
+    let entry = this.sessions.get(sessionId);
+    if (!entry) {
+      entry = await this.buildSession(sessionId, cfg, row.stableAgentId);
+      this.sessions.set(sessionId, entry);
     }
 
     appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
@@ -125,7 +148,7 @@ export class ChatSessionService {
     /** Playground-style explicit routing — avoids accidental tool runs when tools are off. */
     const chatOpts: ChatOptions = enableTools ? { useTools: true } : { useTools: false };
 
-    const chatReply = await agentSession.chat(message, chatOpts);
+    const chatReply = await entry.session.chat(message, chatOpts);
     const reply = chatReply.message;
     const tokensUsed = chatReply.tokens ?? 0;
     const toolsUsed = chatReply.toolsUsed;
@@ -160,10 +183,10 @@ export class ChatSessionService {
     // Direct conversational path: preserve full session history + run grounding even when tools are off.
     // We still expose SSE shape so Run Chat and main Chat panel behave consistently.
     if (!enableTools && !streamReasoningSteps) {
-      let agentSession = this.sessions.get(sessionId);
-      if (!agentSession) {
-        agentSession = await this.buildSession(sessionId, cfg, stableAgentId);
-        this.sessions.set(sessionId, agentSession);
+      let entry = this.sessions.get(sessionId);
+      if (!entry) {
+        entry = await this.buildSession(sessionId, cfg, stableAgentId);
+        this.sessions.set(sessionId, entry);
       }
 
       appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
@@ -175,7 +198,7 @@ export class ChatSessionService {
       let cost = 0;
 
       try {
-        const chatReply = await agentSession.chat(message, { useTools: false });
+        const chatReply = await entry.session.chat(message, { useTools: false });
         replyText = chatReply.message;
         tokensUsed = chatReply.tokens ?? 0;
         steps = chatReply.steps ?? 0;
@@ -266,17 +289,18 @@ export class ChatSessionService {
     sessionId: string,
     agentConfig: Record<string, unknown>,
     stableAgentId?: string,
-  ): Promise<AgentSession> {
+  ): Promise<CachedChatSession> {
     const params = this.buildChatAgentParams(sessionId, agentConfig, stableAgentId, { streaming: false });
     const agent = await buildCortexAgent(params);
     const turns = getChatTurns(this.db, sessionId);
     const initialHistory = turnsToChatMessages(turns);
-    return new AgentSession(
+    const session = new AgentSession(
       (msg, hist, opts) => agent.chat(msg, opts, hist, sessionId),
       undefined,
       undefined,
       initialHistory.length > 0 ? initialHistory : undefined,
     );
+    return { session, agent };
   }
 
   /**

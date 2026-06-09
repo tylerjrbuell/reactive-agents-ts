@@ -113,8 +113,8 @@ export const chatRouter = (svc: ChatSessionService) =>
       }
       return session;
     })
-    .delete("/sessions/:sessionId", ({ params, set }) => {
-      const ok = svc.deleteSession(params.sessionId);
+    .delete("/sessions/:sessionId", async ({ params, set }) => {
+      const ok = await svc.deleteSession(params.sessionId);
       if (!ok) {
         set.status = 404;
         return { error: "Session not found" };
@@ -135,9 +135,9 @@ export const chatRouter = (svc: ChatSessionService) =>
     )
     .patch(
       "/sessions/:sessionId/config",
-      ({ params, body, set }) => {
+      async ({ params, body, set }) => {
         try {
-          svc.updateSessionConfig(params.sessionId, {
+          await svc.updateSessionConfig(params.sessionId, {
             ...(body.provider !== undefined ? { provider: body.provider } : {}),
             ...(body.model !== undefined ? { model: body.model } : {}),
             ...(body.systemPrompt !== undefined ? { systemPrompt: body.systemPrompt } : {}),
