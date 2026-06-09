@@ -568,7 +568,7 @@ export class ReactiveAgent {
      */
     async run(
         input: string,
-        options?: { readonly taskId?: string }
+        options?: { readonly taskId?: string; readonly history?: readonly ChatMessage[] }
     ): Promise<AgentResult> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
@@ -629,7 +629,7 @@ export class ReactiveAgent {
      */
     private buildRunTaskEffect(
         input: string,
-        options?: { readonly taskId?: string }
+        options?: { readonly taskId?: string; readonly history?: readonly ChatMessage[] }
     ): Effect.Effect<AgentResult, Error> {
         // Pre-set the task description so sub-agents spawned on the first iteration
         // have access to the full user prompt (including phone numbers, URLs, etc.)
@@ -639,6 +639,13 @@ export class ReactiveAgent {
             ? Schema.decodeSync(TaskId)(options.taskId)
             : generateTaskId()
 
+        // Carry prior conversation turns so the tool-capable path (which runs a
+        // full kernel) seeds `state.messages` with the chat history instead of
+        // just the current message. Threaded via the free-form metadata.context
+        // bag → reasoning-think → kernel `initialMessages` (the existing
+        // "chat history injection" seam at kernel/loop/runner.ts).
+        const conversationHistory = (options?.history ?? [])
+            .map((m) => ({ role: m.role, content: m.content }))
         const task: Task = {
             id: taskId,
             agentId: Schema.decodeSync(AgentId)(this.agentId),
@@ -646,7 +653,10 @@ export class ReactiveAgent {
             input: { question: input },
             priority: 'medium' as const,
             status: 'pending' as const,
-            metadata: { tags: [] },
+            metadata:
+                conversationHistory.length > 0
+                    ? { tags: [], context: { conversationHistory } }
+                    : { tags: [] },
             createdAt: new Date(),
         }
 
@@ -1069,7 +1079,13 @@ export class ReactiveAgent {
         const enrichedMessage = contextSummary
             ? `Context from prior run:\n${contextSummary}\n\nNew request: ${message}`
             : message
-        const result = await this.run(enrichedMessage)
+        // Seed the kernel with prior conversation turns (session or agent-level)
+        // so tool-capable chat stays history-aware, mirroring the direct path.
+        const priorTurns = _history ?? this._chatHistory
+        const result = await this.run(
+            enrichedMessage,
+            priorTurns.length > 0 ? { history: priorTurns } : undefined
+        )
         await publishChatTurns(
             'react-loop',
             result.output,
