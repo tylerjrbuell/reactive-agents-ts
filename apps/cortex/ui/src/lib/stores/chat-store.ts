@@ -119,6 +119,12 @@ type ChatSessionConfigInput = {
   terminalShellAdditionalCommands?: string;
   /** Replaces default shell allowlist when non-empty (advanced). */
   terminalShellAllowedCommands?: string;
+  mcpServerIds?: string[];
+  agentTools?: unknown[];
+  dynamicSubAgents?: { enabled: boolean; maxIterations?: number };
+  additionalToolNames?: string;
+  terminalTools?: boolean;
+  skills?: { paths: string[] };
 };
 
 function mergeThoughtText(previous: string | undefined, incoming: string): string {
