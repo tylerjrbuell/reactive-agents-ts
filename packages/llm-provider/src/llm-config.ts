@@ -32,7 +32,7 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
      * Default LLM model identifier.
      * Used as fallback when a request does not specify a model.
      *
-     * @default From LLM_DEFAULT_MODEL env var, falls back to "claude-sonnet-4-20250514"
+     * @default From LLM_DEFAULT_MODEL env var, falls back to "claude-sonnet-4-6"
      */
     readonly defaultModel: string;
 
@@ -224,7 +224,7 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
  * Exported so callers can spread overrides (e.g. change model) on top.
  *
  * Environment variables:
- * - LLM_DEFAULT_MODEL: Model identifier (default: claude-sonnet-4-20250514)
+ * - LLM_DEFAULT_MODEL: Model identifier (default: claude-sonnet-4-6)
  * - ANTHROPIC_API_KEY: Anthropic API key
  * - OPENAI_API_KEY: OpenAI API key
  * - GOOGLE_API_KEY: Google API key
@@ -253,7 +253,7 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
 export const llmConfigFromEnv = LLMConfig.of({
   defaultProvider: "anthropic",
   defaultModel:
-    process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-20250514",
+    process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-6",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   openaiApiKey: process.env.OPENAI_API_KEY,
   googleApiKey: process.env.GOOGLE_API_KEY,
@@ -268,7 +268,7 @@ export const llmConfigFromEnv = LLMConfig.of({
     batchSize: 100,
   },
   supportsPromptCaching: (() => {
-    const m = process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-20250514";
+    const m = process.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-6";
     // Anthropic: explicit cache_control on system prompts + tools (manual)
     // Gemini: automatic implicit caching (server-side, 75% discount on cached tokens)
     // OpenAI: automatic caching (server-side, 50% discount on cached tokens)
