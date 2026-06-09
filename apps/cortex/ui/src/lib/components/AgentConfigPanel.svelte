@@ -11,7 +11,7 @@
   import { settings } from "$lib/stores/settings.js";
   import type { AgentConfig, CortexAgentToolConfig, VariableDef } from "$lib/types/agent-config.js";
   import { defaultConfig } from "$lib/types/agent-config.js";
-  import { scanTemplateVars } from "$lib/template/scan-template-vars.js";
+  import { syncVariables, sameVariableNames } from "$lib/template/sync-variables.js";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
 
@@ -431,19 +431,16 @@
   }
 
   // ── Template variables ───────────────────────────────────────────────────
-  /**
-   * Seed `config.variables` from every `{{token}}` found across the config.
-   * Existing variable enrichment (type/default/required/enum/description) is
-   * preserved by name; tokens no longer present are dropped.
-   */
-  function rescanVariables() {
-    const found = scanTemplateVars(config);
-    const existing = new Map((config.variables ?? []).map((v) => [v.name, v]));
-    const variables: VariableDef[] = found.map(
-      (name) => existing.get(name) ?? { name, type: "string", required: true },
-    );
-    config = { ...config, variables };
-  }
+  // Keep `config.variables` in sync with the `{{tokens}}` present across the
+  // config automatically — no manual "Rescan". New tokens are added, removed
+  // tokens drop, and existing enrichment is preserved by name. Guarded on the
+  // name-set so editing a variable's type/default (same names) never re-syncs.
+  $effect(() => {
+    const next = syncVariables(config);
+    if (!sameVariableNames(config.variables ?? [], next)) {
+      config = { ...config, variables: next };
+    }
+  });
 
   function patchVariable(index: number, next: VariableDef) {
     const variables = [...(config.variables ?? [])];
@@ -835,20 +832,16 @@
       onclick={() => toggle("variables")}>
       <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">data_object</span>
       <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Variables</span>
-      <span class="ml-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">{(config.variables ?? []).length} declared</span>
+      <span class="ml-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">{(config.variables ?? []).length} detected</span>
       <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('variables') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
     </button>
     {#if openSections.has("variables")}
       <div id="acp-panel-variables" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-variables">
-        <div class="flex items-center justify-between gap-2">
-          <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
-            Use <code class="text-[7px]">{'{{name}}'}</code> in any field, then rescan to seed parameters. Values are filled per run.
-          </p>
-          <button type="button" onclick={rescanVariables}
-            class="text-[9px] font-mono px-2 py-1 rounded border border-tertiary/30 text-tertiary hover:bg-tertiary/10 cursor-pointer bg-transparent shrink-0">↻ Rescan template</button>
-        </div>
+        <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
+          Use <code class="text-[7px]">{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
+        </p>
         {#if (config.variables ?? []).length === 0}
-          <p class="font-mono text-[9px] text-outline/45">No variables found. Add a <code class="text-[8px]">{'{{name}}'}</code> token to a field above, then rescan.</p>
+          <p class="font-mono text-[9px] text-outline/45">No variables yet. Add a <code class="text-[8px]">{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
         {:else}
           {#each config.variables ?? [] as v, i (v.name)}
             <div class="rounded-lg border border-outline-variant/15 p-2.5 space-y-2 bg-surface-container-low/25">
