@@ -8,7 +8,7 @@
  * ```typescript
  * const config: FallbackConfig = {
  *   providers: ["anthropic", "openai", "gemini"],
- *   models: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
+ *   models: ["claude-sonnet-4-6", "claude-haiku-4-5"],
  *   errorThreshold: 3,
  * };
  * ```
@@ -45,7 +45,7 @@ export type FallbackCallback = (
  * ```typescript
  * const chain = new FallbackChain({
  *   providers: ["anthropic", "openai"],
- *   models: ["claude-sonnet-4-20250514", "claude-haiku-3-20250520"],
+ *   models: ["claude-sonnet-4-6", "claude-haiku-4-5"],
  *   errorThreshold: 3,
  * });
  *
@@ -58,7 +58,7 @@ export type FallbackCallback = (
  *
  * // Record rate limit, fall back to cheaper model
  * chain.recordRateLimit("openai");
- * console.log(chain.currentModel()); // "claude-haiku-3-20250520"
+ * console.log(chain.currentModel()); // "claude-haiku-4-5"
  *
  * // Successful call resets error count
  * chain.recordSuccess("openai");

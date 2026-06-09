@@ -26,9 +26,9 @@ describe("applyCapabilityMaxTokens — S1.4 capability wiring", () => {
     expect(out.maxTokens).toBe(2048);
   });
 
-  it("cloud model gets its large capability window (anthropic claude-sonnet-4-6 → 200000)", () => {
+  it("cloud model gets its large capability window (anthropic claude-sonnet-4-6 → 1000000)", () => {
     const out = applyCapabilityMaxTokens(CONTEXT_PROFILES.frontier, "anthropic", "claude-sonnet-4-6", undefined);
-    expect(out.maxTokens).toBe(200_000);
+    expect(out.maxTokens).toBe(1_000_000);
   });
 
   it("returns profile unchanged when provider or model is missing", () => {
