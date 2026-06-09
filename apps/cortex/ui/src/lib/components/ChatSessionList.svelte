@@ -30,6 +30,27 @@
   let runs = $state<RunOption[]>([]);
   let selectedRunId = $state("");
 
+  type SavedAgent = { agentId: string; name: string; config: Record<string, unknown> };
+  let savedAgents = $state<SavedAgent[]>([]);
+  async function loadSavedAgents() {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents`);
+      if (res.ok) savedAgents = (await res.json()) as SavedAgent[];
+    } catch {
+      /* best-effort; picker just stays empty */
+    }
+  }
+
+  /** Snapshot a saved Lab agent's config into the session's own copy (session owns it thereafter). */
+  function snapshotFromAgent(agentId: string) {
+    if (!agentId) return;
+    const a = savedAgents.find((x) => x.agentId === agentId);
+    if (!a) return;
+    // Snapshot: session owns its own copy; later edits don't touch the saved agent.
+    sessionAgentConfig = { ...defaultConfig(), ...(a.config as Partial<AgentConfig>) };
+    enableTools = true; // a saved (likely tooled) agent implies tools on
+  }
+
   let renamingSessionId = $state<string | null>(null);
   let renameInputValue = $state("");
   let renamingInProgress = $state(false);
@@ -103,6 +124,7 @@
     editingSessionId = null;
     configMode = "create";
     showConfigModal = true;
+    void loadSavedAgents();
   }
 
   function closeConfigModal() {
@@ -327,6 +349,25 @@
         <h3 class="font-headline text-base font-semibold text-on-surface">
           {configMode === "create" ? "New chat session" : "Edit session config"}
         </h3>
+
+        {#if configMode === "create"}
+          <div>
+            <label class={label} for="chat-from-agent">Start from saved agent</label>
+            <select
+              id="chat-from-agent"
+              class={field}
+              onchange={(e) => snapshotFromAgent((e.currentTarget as HTMLSelectElement).value)}
+            >
+              <option value="">Blank (defaults)</option>
+              {#each savedAgents as a (a.agentId)}
+                <option value={a.agentId}>{a.name}</option>
+              {/each}
+            </select>
+            <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
+              Snapshots the agent's config into this session (a copy — edits won't touch the saved agent).
+            </p>
+          </div>
+        {/if}
 
         <div>
           <label class={label} for="chat-new-name">Name</label>
