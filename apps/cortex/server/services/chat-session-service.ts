@@ -244,6 +244,11 @@ export class ChatSessionService {
     const params = this.buildChatAgentParams(sessionId, cfg, stableAgentId, { streaming: true });
     const agent = await buildCortexAgent(params);
 
+    // Seed prior conversation turns so the ephemeral streaming agent stays
+    // history-aware. Captured from the DB (source of truth) BEFORE appending
+    // the current user turn below — the new message is the run input, not history.
+    const priorHistory = turnsToChatMessages(getChatTurns(this.db, sessionId));
+
     appendChatTurn(this.db, { sessionId, role: "user", content: message, tokensUsed: 0 });
 
     let tokensUsed = 0;
@@ -252,7 +257,10 @@ export class ChatSessionService {
     let replyText = "";
 
     try {
-      for await (const event of agent.runStream(message, { density: streamReasoningSteps ? "full" : "tokens" })) {
+      for await (const event of agent.runStream(message, {
+        density: streamReasoningSteps ? "full" : "tokens",
+        ...(priorHistory.length > 0 ? { history: priorHistory } : {}),
+      })) {
         if (event._tag === "TextDelta") {
           replyText += event.text;
         } else if (event._tag === "StreamCompleted") {

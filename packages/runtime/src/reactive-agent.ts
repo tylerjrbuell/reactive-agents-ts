@@ -800,7 +800,7 @@ export class ReactiveAgent {
      */
     runStream(
         input: string,
-        options?: { density?: StreamDensity; signal?: AbortSignal }
+        options?: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] }
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -824,7 +824,7 @@ export class ReactiveAgent {
 
     private async *_runStreamImpl(
         input: string,
-        options: { density?: StreamDensity; signal?: AbortSignal },
+        options: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] },
         controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
@@ -842,6 +842,11 @@ export class ReactiveAgent {
         // Pre-set the task description for parent context forwarding.
         this._setTaskDescription?.(input.slice(0, 500))
 
+        // Seed prior conversation turns so streaming tool-capable chat stays
+        // history-aware (same metadata.context carrier as run(); honored by
+        // reasoning-think → kernel initialMessages).
+        const conversationHistory = (options?.history ?? [])
+            .map((m) => ({ role: m.role, content: m.content }))
         const task: Task = {
             id: generateTaskId(),
             agentId: Schema.decodeSync(AgentId)(this.agentId),
@@ -849,7 +854,10 @@ export class ReactiveAgent {
             input: { question: input },
             priority: 'medium' as const,
             status: 'pending' as const,
-            metadata: { tags: [] },
+            metadata:
+                conversationHistory.length > 0
+                    ? { tags: [], context: { conversationHistory } }
+                    : { tags: [] },
             createdAt: new Date(),
         }
 

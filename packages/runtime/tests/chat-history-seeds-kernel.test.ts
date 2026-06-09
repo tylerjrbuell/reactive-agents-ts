@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Context } from "effect";
+import { Effect, Layer, Context, Stream } from "effect";
 import {
   ExecutionEngine,
   ExecutionEngineLive,
@@ -138,6 +138,67 @@ describe("Tool-capable chat seeds kernel with conversation history", () => {
 
     expect(capturedParams[0]!.initialMessages).toEqual([
       { role: "user", content: "Hello there" },
+    ]);
+  });
+
+  // Streaming path (UI main chat / runStream) must seed history too — it wraps
+  // the same execute(), so the metadata.context carrier and reasoning-think seam
+  // apply identically. Regression: chatStream built an ephemeral agent and
+  // streamed with no history.
+  it("forwards history-prepended initialMessages over the streaming path", async () => {
+    const capturedParams: Array<{
+      initialMessages?: readonly { readonly role: string; readonly content: string }[];
+    }> = [];
+    const stubReasoning = {
+      execute: (params: any) => {
+        capturedParams.push(params);
+        return Effect.succeed({
+          output: "Your favorite crypto is XRP.",
+          status: "completed",
+          steps: [],
+          metadata: { cost: 0, tokensUsed: 10, stepsCount: 0 },
+        });
+      },
+    };
+    const config = defaultReactiveAgentsConfig("agent-chs3", {});
+    const hookLayer = LifecycleHookRegistryLive;
+    const engineLayer = ExecutionEngineLive(config).pipe(Layer.provide(hookLayer));
+    const testLayer = Layer.mergeAll(
+      hookLayer,
+      engineLayer,
+      Layer.succeed(ReasoningServiceTag, stubReasoning),
+    );
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const engine = yield* ExecutionEngine;
+        const stream = yield* engine.executeStream({
+          id: "task-chs-003" as any,
+          agentId: "agent-chs3" as any,
+          type: "query" as const,
+          input: { question: "What is my favorite crypto?" },
+          priority: "medium" as const,
+          status: "pending" as const,
+          metadata: {
+            tags: [],
+            context: {
+              conversationHistory: [
+                { role: "user", content: "My favorite crypto is XRP." },
+                { role: "assistant", content: "Acknowledged." },
+              ],
+            },
+          },
+          createdAt: new Date(),
+        });
+        yield* Stream.runDrain(stream);
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(capturedParams.length).toBeGreaterThan(0);
+    expect(capturedParams[0]!.initialMessages).toEqual([
+      { role: "user", content: "My favorite crypto is XRP." },
+      { role: "assistant", content: "Acknowledged." },
+      { role: "user", content: "What is my favorite crypto?" },
     ]);
   });
 });
