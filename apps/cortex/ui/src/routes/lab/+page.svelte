@@ -6,7 +6,7 @@
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import ParamFillModal from "$lib/components/ParamFillModal.svelte";
-  import HighlightedTextarea from "$lib/components/HighlightedTextarea.svelte";
+  import HighlightedField from "$lib/components/HighlightedField.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { goto } from "$app/navigation";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
@@ -848,7 +848,8 @@
             <div class="space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-0.5">
               <div>
               <label for="builder-prompt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Prompt</label>
-              <HighlightedTextarea
+              <HighlightedField
+                multiline
                 id="builder-prompt"
                 bind:value={builderConfig.prompt}
                 placeholder="Describe what you want the agent to do…"

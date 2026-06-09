@@ -12,6 +12,7 @@
   import type { AgentConfig, CortexAgentToolConfig, VariableDef } from "$lib/types/agent-config.js";
   import { defaultConfig } from "$lib/types/agent-config.js";
   import { syncVariables, sameVariableNames } from "$lib/template/sync-variables.js";
+  import HighlightedField from "$lib/components/HighlightedField.svelte";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
 
@@ -558,8 +559,8 @@
         <!-- Agent name (optional) -->
         <div>
           <label for="agent-name" class="config-label">Agent Name <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
-          <input id="agent-name" bind:value={config.agentName} placeholder="e.g. research-assistant"
-            class="config-input" />
+          <HighlightedField id="agent-name" bind:value={config.agentName} placeholder="e.g. research-assistant"
+            frameClass="ci-frame" textClass="ci-text" />
         </div>
         <!-- Provider + Model -->
         <div class="grid grid-cols-2 gap-2">
@@ -632,10 +633,10 @@
         <!-- System prompt -->
         <div>
           <label for="system-prompt" class="config-label">System Prompt <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
-          <textarea id="system-prompt" bind:value={config.systemPrompt}
+          <HighlightedField multiline id="system-prompt" bind:value={config.systemPrompt}
             placeholder="Custom instructions prepended to every run…"
-            rows="3"
-            class="config-input resize-none leading-relaxed"></textarea>
+            rows={3}
+            frameClass="ci-frame" textClass="ci-text resize-none" />
         </div>
         <div>
           <label for="task-context-lines" class="config-label">Task context <span class="text-outline/30 normal-case font-normal">(`withTaskContext` — one key=value per line)</span></label>
@@ -1754,6 +1755,43 @@
     box-shadow:
       0 0 0 3px color-mix(in srgb, var(--ra-violet) 28%, transparent),
       inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+  }
+
+  /* config-input split into a frame (border, bg, focus) plus text (padding, font)
+     pair so HighlightedField can border the wrapper and align its backdrop to the
+     field. :global so the rules reach the elements rendered inside the child
+     component; the cortex and ra-violet and acp-radius vars cascade in via :root. */
+  :global(.ci-frame) {
+    background: color-mix(in srgb, var(--cortex-surface-mid) 55%, var(--cortex-surface) 45%);
+    border: 1px solid var(--cortex-border);
+    border-radius: var(--acp-radius);
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.2s ease;
+  }
+  :global(.ci-frame):focus-within {
+    border-color: color-mix(in srgb, var(--ra-violet) 55%, var(--cortex-border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ra-violet) 18%, transparent);
+  }
+  :global(html.dark .ci-frame) {
+    background: color-mix(in srgb, var(--cortex-surface-mid) 72%, var(--cortex-surface-low) 28%);
+    border-color: color-mix(in srgb, white 14%, var(--cortex-border));
+  }
+  :global(html.dark .ci-frame):focus-within {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ra-violet) 28%, transparent);
+  }
+  :global(.ci-text) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--cortex-text);
+    outline: none;
+  }
+  :global(.ci-text)::placeholder {
+    color: color-mix(in srgb, var(--cortex-text-muted) 55%, transparent);
   }
 
   :global(html.dark) .acp-chip {
