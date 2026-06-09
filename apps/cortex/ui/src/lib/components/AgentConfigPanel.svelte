@@ -182,7 +182,7 @@
     modelsLoading = true;
     modelsError = null;
     settings.init();
-    const { options, error } = await fetchModelsForProvider(
+    const { options, default: def, error } = await fetchModelsForProvider(
       p,
       p === "ollama" ? (settings.get().ollamaEndpoint ?? undefined) : undefined,
     );
@@ -191,7 +191,10 @@
     modelsError = error ?? null;
     modelsLoading = false;
     if (options.length > 0 && !snapshotModel.trim()) {
-      config = { ...config, model: options[0]!.value };
+      // Seed the framework's current default (not just options[0] — the default
+      // is not always first in the preset list).
+      const seed = def && options.some((o) => o.value === def) ? def : options[0]!.value;
+      config = { ...config, model: seed };
     }
   }
 

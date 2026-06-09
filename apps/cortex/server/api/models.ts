@@ -3,7 +3,7 @@
  * - /framework/:provider — from @reactive-agents/llm-provider (ModelPresets + defaults)
  * - /ollama — proxies to Ollama /api/tags
  */
-import { listFrameworkModelsForProvider } from "@reactive-agents/llm-provider";
+import { listFrameworkModelsForProvider, getProviderDefaultModel } from "@reactive-agents/llm-provider";
 import { Elysia } from "elysia";
 
 interface OllamaTag { name: string; modified_at: string; size: number }
@@ -15,7 +15,11 @@ export const modelsRouter = new Elysia({ prefix: "/api/models" })
   .get("/framework/:provider", ({ params }) => {
     const provider = decodeURIComponent(params.provider ?? "").trim();
     const models = listFrameworkModelsForProvider(provider);
-    return { models };
+    // `default` is the framework's current provider-default model id. Cortex no
+    // longer hardcodes a default — the UI seeds from this so it follows whatever
+    // the framework ships (e.g. when a model retires and the default is bumped).
+    const def = getProviderDefaultModel(provider);
+    return { models, default: def ?? null };
   })
   .get("/ollama", async ({ set, query }) => {
     const ollamaUrl = (query as Record<string, string | undefined>).endpoint?.trim() || OLLAMA_DEFAULT;

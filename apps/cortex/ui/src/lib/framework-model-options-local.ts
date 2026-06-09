@@ -7,22 +7,27 @@
  */
 export type LocalModelOption = { value: string; label: string };
 
-/** Subset of {@link ModelPresets}: provider + model id only. */
+/** Subset of {@link ModelPresets}: provider + model id only. Kept in sync with
+ * `packages/llm-provider/src/types.ts`. This is ONLY a last-resort fallback for
+ * when `/api/models/framework/*` is unreachable — the live API is authoritative. */
 const MODEL_PRESETS: Record<string, { provider: string; model: string }> = {
-  "claude-haiku": { provider: "anthropic", model: "claude-3-5-haiku-20241022" },
-  "claude-sonnet": { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+  "claude-haiku": { provider: "anthropic", model: "claude-haiku-4-5" },
+  "claude-sonnet": { provider: "anthropic", model: "claude-sonnet-4-6" },
   "claude-sonnet-4-5": { provider: "anthropic", model: "claude-sonnet-4-5-20250929" },
-  "claude-opus": { provider: "anthropic", model: "claude-opus-4-20250514" },
+  "claude-opus": { provider: "anthropic", model: "claude-opus-4-8" },
   "gpt-4o-mini": { provider: "openai", model: "gpt-4o-mini" },
+  "gpt-5.5": { provider: "openai", model: "gpt-5.5" },
+  "gpt-5.4": { provider: "openai", model: "gpt-5.4" },
   "gpt-4o": { provider: "openai", model: "gpt-4o" },
-  "gemini-2.0-flash": { provider: "gemini", model: "gemini-2.0-flash" },
-  "gemini-2.5-pro": { provider: "gemini", model: "gemini-2.5-pro-preview-03-25" },
+  "gemini-2.5-flash-lite": { provider: "gemini", model: "gemini-2.5-flash-lite" },
+  "gemini-2.5-pro": { provider: "gemini", model: "gemini-2.5-pro" },
 };
 
+/** Kept in sync with `packages/llm-provider/src/provider-defaults.ts`. */
 const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  anthropic: "claude-sonnet-4-20250514",
+  anthropic: "claude-sonnet-4-6",
   openai: "gpt-4o",
-  ollama: "cogito:14b",
+  ollama: "llama3.2",
   gemini: "gemini-2.5-flash",
   litellm: "gpt-4o",
   test: "test-model",
@@ -30,6 +35,13 @@ const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
 
 function getProviderDefaultModel(provider: string): string | undefined {
   return PROVIDER_DEFAULT_MODELS[provider];
+}
+
+/** The mirror's provider-default model id — used by the offline fallback so the
+ * model seed still prefers the default (not just `options[0]`) when the API is
+ * unreachable. Stale relative to the live framework; refresh with the presets. */
+export function localProviderDefaultModel(provider: string): string | undefined {
+  return getProviderDefaultModel(provider.trim());
 }
 
 function presetKeyToLabel(key: string): string {
