@@ -1100,10 +1100,16 @@
                   <label for="gateway-edit-prompt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">
                     Prompt <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/50">(default task — same as Builder tab)</span>
                   </label>
-                  <textarea id="gateway-edit-prompt" bind:value={formConfig.prompt}
-                    placeholder="Describe what this agent should do when triggered or on schedule…" rows="5"
-                    class="w-full resize-y rounded-lg border border-[var(--cortex-border)] bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20 min-h-[7.5rem] lg:min-h-[11rem]"
-                  ></textarea>
+                  <HighlightedField
+                    multiline
+                    id="gateway-edit-prompt"
+                    value={formConfig.prompt}
+                    oninput={(e) => (formConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
+                    placeholder="Describe what this agent should do when triggered or on schedule…"
+                    rows={5}
+                    frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
+                    textClass="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 min-h-[7.5rem] lg:min-h-[11rem]"
+                  />
                   <p class="mt-1 font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/65">
                     Model-level instructions live in <span class="text-slate-700 dark:text-on-surface/80">Inference → System Prompt</span> in the panel on the right.
                   </p>
