@@ -55,6 +55,11 @@
     return multiline ? marked + "\n" : marked;
   }
 
+  // Explicit derived so the backdrop re-renders on EVERY `value` change —
+  // including programmatic ones (e.g. loading a saved agent's config into the
+  // builder), not just keystrokes.
+  const rendered = $derived(highlight(value ?? ""));
+
   function syncScroll() {
     if (!field) return;
     scrollX = field.scrollLeft;
@@ -64,7 +69,7 @@
 
 <div class="hl-wrap {frameClass}">
   <div class="hl-backdrop {textClass}" class:hl-nowrap={!multiline} aria-hidden="true">
-    <div class="hl-content" style="transform: translate({-scrollX}px, {-scrollY}px)">{@html highlight(value)}</div>
+    <div class="hl-content" style="transform: translate({-scrollX}px, {-scrollY}px)">{@html rendered}</div>
   </div>
   {#if multiline}
     <textarea
