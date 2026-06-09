@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { Effect, Layer, Option } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
 import { CortexRunnerService } from "../services/runner-service.js";
+import type { VariableDef } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 
 export const runsRouter = (
@@ -57,7 +58,7 @@ export const runsRouter = (
               : {}),
             ...(b.healthCheck === true ? { healthCheck: true as const } : {}),
             ...(b.skills?.paths?.length ? { skills: b.skills } : {}),
-            ...(Array.isArray(b.variables) && b.variables.length ? { variables: b.variables as import("../services/resolve-template.js").VariableDef[] } : {}),
+            ...(Array.isArray(b.variables) && b.variables.length ? { variables: b.variables as VariableDef[] } : {}),
             ...(b.variableValues && typeof b.variableValues === "object" && !Array.isArray(b.variableValues)
               ? { variableValues: b.variableValues as Record<string, string | number> }
               : {}),
