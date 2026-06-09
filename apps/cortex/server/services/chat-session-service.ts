@@ -23,6 +23,8 @@ import {
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
+import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
+import { chatToolParams } from "./chat-tool-params.js";
 
 const VALID_REASONING_STRATEGIES = new Set([
   "reactive",
@@ -405,6 +407,15 @@ export class ChatSessionService {
     const customTestScenario =
       Array.isArray(rawScenario) && rawScenario.length > 0 ? (rawScenario as TestTurn[]) : undefined;
 
+    const mcpServerIds = Array.isArray(agentConfig.mcpServerIds)
+      ? (agentConfig.mcpServerIds as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
+      : [];
+    const mcpConfigs =
+      enableTools && mcpServerIds.length > 0
+        ? getMcpServersByIds(this.db, mcpServerIds).map(parseMcpConfig)
+        : [];
+    const toolParams = chatToolParams(agentConfig, enableTools, mcpConfigs);
+
     return {
       agentName: `chat-${sessionId.slice(0, 8)}`,
       provider,
@@ -434,6 +445,7 @@ export class ChatSessionService {
                 : 16,
           }
         : {}),
+      ...toolParams,
       ...(effectiveVerificationStep ? { verificationStep: effectiveVerificationStep } : {}),
       ...((enableTools ? strategySwitchingExplicit ?? true : strategySwitchingExplicit) === true
         ? { strategySwitching: true }
