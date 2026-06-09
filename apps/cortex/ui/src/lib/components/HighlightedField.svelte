@@ -20,6 +20,10 @@
     frameClass?: string;
     /** Font / padding / sizing — on BOTH the field and the backdrop (must match). */
     textClass?: string;
+    /** Forwarded to the field — for callers that commit via a setter (e.g. a parsed
+     * draft or an immutable nested patch) instead of relying on `bind:value`. */
+    oninput?: (e: Event) => void;
+    onblur?: (e: FocusEvent) => void;
   }
   let {
     value = $bindable(""),
@@ -29,6 +33,8 @@
     placeholder,
     frameClass = "",
     textClass = "",
+    oninput,
+    onblur,
   }: Props = $props();
 
   let field = $state<HTMLTextAreaElement | HTMLInputElement>();
@@ -69,6 +75,8 @@
       class="hl-field {textClass}"
       bind:value
       onscroll={syncScroll}
+      oninput={(e) => { syncScroll(); oninput?.(e); }}
+      {onblur}
     ></textarea>
   {:else}
     <input
@@ -78,9 +86,10 @@
       class="hl-field hl-nowrap {textClass}"
       bind:value
       onscroll={syncScroll}
-      oninput={syncScroll}
+      oninput={(e) => { syncScroll(); oninput?.(e); }}
       onkeyup={syncScroll}
       onclick={syncScroll}
+      {onblur}
     />
   {/if}
 </div>

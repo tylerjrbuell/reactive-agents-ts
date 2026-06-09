@@ -640,13 +640,13 @@
         </div>
         <div>
           <label for="task-context-lines" class="config-label">Task context <span class="text-outline/30 normal-case font-normal">(`withTaskContext` — one key=value per line)</span></label>
-          <textarea id="task-context-lines"
+          <HighlightedField multiline id="task-context-lines"
             bind:value={taskContextLinesDraft}
             oninput={commitTaskContextDraft}
             onblur={commitTaskContextDraft}
             placeholder={"project=my-app\nenvironment=staging"}
-            rows="3"
-            class="config-input resize-none leading-relaxed font-mono text-[10px]"></textarea>
+            rows={3}
+            frameClass="ci-frame" textClass="ci-text resize-none text-[10px]" />
         </div>
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" checked={config.healthCheck}
@@ -693,12 +693,12 @@
         {#if config.persona?.enabled}
           <div>
             <label for="persona-role" class="config-label">Role <span class="text-outline/30 normal-case font-normal">(e.g. research assistant, code reviewer)</span></label>
-            <input
+            <HighlightedField
               id="persona-role"
               value={config.persona.role}
               oninput={(e) => (config = { ...config, persona: { ...config.persona, role: (e.target as HTMLInputElement).value } })}
               placeholder="e.g. senior research analyst"
-              class="config-input" />
+              frameClass="ci-frame" textClass="ci-text" />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
@@ -729,13 +729,14 @@
           </div>
           <div>
             <label for="persona-traits" class="config-label">Traits <span class="text-outline/30 normal-case font-normal">(comma-separated, e.g. analytical, thorough, skeptical)</span></label>
-            <textarea
+            <HighlightedField
+              multiline
               id="persona-traits"
               value={config.persona.traits}
               oninput={(e) => (config = { ...config, persona: { ...config.persona, traits: (e.target as HTMLTextAreaElement).value } })}
               placeholder="e.g. analytical, methodical, skeptical of unverified claims"
-              rows="2"
-              class="config-input resize-none leading-relaxed"></textarea>
+              rows={2}
+              frameClass="ci-frame" textClass="ci-text resize-none" />
           </div>
         {/if}
       </div>
