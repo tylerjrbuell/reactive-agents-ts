@@ -23,8 +23,9 @@ export interface CortexSettings {
 
 export const DEFAULTS: CortexSettings = {
   defaultProvider: "anthropic",
-  /** Matches `@reactive-agents/llm-provider` PROVIDER_DEFAULT_MODELS.anthropic */
-  defaultModel: "claude-sonnet-4-20250514",
+  /** Empty → resolved live from the framework (`/api/models/framework/:provider`
+   * `default`) so it follows `PROVIDER_DEFAULT_MODELS` instead of drifting. */
+  defaultModel: "",
   notificationLevel: "completions",
   notificationsEnabled: false,
   runRetentionDays: 30,

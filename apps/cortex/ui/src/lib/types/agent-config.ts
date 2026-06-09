@@ -125,7 +125,11 @@ export interface AgentConfig {
 export function defaultConfig(): AgentConfig {
   return {
     provider: "anthropic",
-    model: "claude-sonnet-4-20250514",
+    // Empty → the builder seeds the framework's current default for the provider
+    // (AgentConfigPanel auto-selects it), and an empty model resolves to the
+    // framework provider default at run time. Never hardcode a model id here —
+    // it would drift when the framework bumps defaults (e.g. a model retiring).
+    model: "",
     temperature: 0.7,
     maxTokens: 0,
     numCtx: 0,

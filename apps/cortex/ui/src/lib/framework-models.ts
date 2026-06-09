@@ -9,7 +9,8 @@ import { settings } from "$lib/stores/settings.js";
 
 export type UiModelOption = { value: string; label: string };
 
-export type FetchModelsResult = { options: UiModelOption[]; error?: string };
+/** `default` is the framework's current provider-default model id (when known). */
+export type FetchModelsResult = { options: UiModelOption[]; default?: string; error?: string };
 
 function mapFrameworkBody(data: { models?: { name: string; label: string }[] }): UiModelOption[] {
   return (data.models ?? []).map((m) => ({ value: m.name, label: m.label }));
@@ -44,11 +45,15 @@ export async function fetchFrameworkModels(provider: string): Promise<FetchModel
       };
     }
 
-    const data = (await res.json()) as { models?: { name: string; label: string }[] };
+    const data = (await res.json()) as {
+      models?: { name: string; label: string }[];
+      default?: string | null;
+    };
     const fromApi = mapFrameworkBody(data);
-    if (fromApi.length > 0) return { options: fromApi };
-    if (local.length > 0) return { options: local };
-    return { options: [] };
+    const def = data.default ?? undefined;
+    if (fromApi.length > 0) return { options: fromApi, default: def };
+    if (local.length > 0) return { options: local, default: def };
+    return { options: [], default: def };
   } catch {
     if (local.length > 0) return { options: local };
     return { options: [], error: "Could not reach Cortex server" };
