@@ -104,8 +104,12 @@ export const checkFactDecompositionLLM = (
       `JSON array of claims:`,
     ].join("\n");
 
+    // No explicit model: run on the agent's own provider+model. A hardcoded
+    // Anthropic model id resolved to `<agent-provider>/claude-haiku-...` on
+    // non-Anthropic agents (e.g. ollama), tripping the conservative capability
+    // fallback (numCtx=2048). Provider-aware cheap-model selection is a
+    // separate enhancement (TODO: cheap-model resolver).
     const completionResult = yield* llm.complete({
-      model: "claude-haiku-4-20250514",
       messages: [{ role: "user", content: decompositionPrompt }],
       maxTokens: 2048,
     });

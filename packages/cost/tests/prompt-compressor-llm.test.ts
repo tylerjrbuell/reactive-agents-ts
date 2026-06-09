@@ -109,6 +109,29 @@ describe("PromptCompressor — Tier 2 (LLM-based)", () => {
     expect(result.compressed).toBe("LLM-compressed result.");
   });
 
+  it("does NOT pin a model on the LLM request (runs on agent's own provider)", async () => {
+    // Regression: a hardcoded Anthropic model id here resolved to
+    // `<agent-provider>/claude-haiku-...` on non-Anthropic agents (e.g. ollama),
+    // tripping the conservative capability fallback (numCtx=2048).
+    let capturedReq: any;
+    const mockLLM = {
+      complete: (req: any) => {
+        capturedReq = req;
+        return Effect.succeed({ content: "Compressed." });
+      },
+    };
+    const longPrompt = makeLongPrompt(4000);
+
+    await run(
+      Effect.gen(function* () {
+        const compressor = yield* makePromptCompressor(mockLLM as any);
+        return yield* compressor.compress(longPrompt, 50);
+      }),
+    );
+    expect(capturedReq).toBeDefined();
+    expect("model" in capturedReq).toBe(false);
+  });
+
   it("falls back to heuristic result when LLM fails", async () => {
     const failingLLM = {
       complete: (_req: any) => Effect.fail(new Error("LLM unavailable")),

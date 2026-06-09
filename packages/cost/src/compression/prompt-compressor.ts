@@ -57,8 +57,12 @@ export const makePromptCompressor = (llm?: CostLLM): Effect.Effect<PromptCompres
           heuristic,
         ].join("\n");
 
+        // No explicit model: compress on the agent's own provider+model. A
+        // hardcoded Anthropic model id resolved to `<agent-provider>/claude-
+        // haiku-...` on non-Anthropic agents (e.g. ollama), tripping the
+        // conservative capability fallback (numCtx=2048). Provider-aware
+        // cheap-model selection is a separate enhancement (TODO).
         return llm.complete({
-          model: "claude-haiku-4-20250514",
           messages: [{ role: "user", content: compressionPrompt }],
           maxTokens: maxTokens + 200, // Small buffer for LLM response
         }).pipe(
