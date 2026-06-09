@@ -9,8 +9,9 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { settings } from "$lib/stores/settings.js";
-  import type { AgentConfig, CortexAgentToolConfig } from "$lib/types/agent-config.js";
+  import type { AgentConfig, CortexAgentToolConfig, VariableDef } from "$lib/types/agent-config.js";
   import { defaultConfig } from "$lib/types/agent-config.js";
+  import { scanTemplateVars } from "$lib/template/scan-template-vars.js";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
 
@@ -52,6 +53,7 @@
     "inference",
     "persona",
     "strategy",
+    "variables",
     "tools",
     "subagents",
     "skills",
@@ -65,7 +67,7 @@
 
   function acpActiveSectionIds(): string[] {
     if (compact) {
-      return ACP_IDS_FULL.filter((id) => id !== "tools" && id !== "subagents" && id !== "skills");
+      return ACP_IDS_FULL.filter((id) => id !== "variables" && id !== "tools" && id !== "subagents" && id !== "skills");
     }
     return [...ACP_IDS_FULL];
   }
@@ -80,6 +82,10 @@
       strategy: {
         label: "Reasoning",
         keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality",
+      },
+      variables: {
+        label: "Variables",
+        keywords: "template variable parameter parameterized run placeholder token mustache enum default required rescan substitution",
       },
       tools: {
         label: "Tools",
@@ -422,6 +428,27 @@
     const agentTools = [...(config.agentTools ?? base.agentTools)];
     agentTools[index] = next;
     config = { ...config, agentTools };
+  }
+
+  // ── Template variables ───────────────────────────────────────────────────
+  /**
+   * Seed `config.variables` from every `{{token}}` found across the config.
+   * Existing variable enrichment (type/default/required/enum/description) is
+   * preserved by name; tokens no longer present are dropped.
+   */
+  function rescanVariables() {
+    const found = scanTemplateVars(config);
+    const existing = new Map((config.variables ?? []).map((v) => [v.name, v]));
+    const variables: VariableDef[] = found.map(
+      (name) => existing.get(name) ?? { name, type: "string", required: true },
+    );
+    config = { ...config, variables };
+  }
+
+  function patchVariable(index: number, next: VariableDef) {
+    const variables = [...(config.variables ?? [])];
+    variables[index] = next;
+    config = { ...config, variables };
   }
 </script>
 
@@ -792,6 +819,87 @@
             — enables the <code class="text-[8px]">@reactive-agents/verification</code> package (semantic entropy and related checks). Adds latency and provider calls; use when you want automated confidence signals, not only a reflect pass.
           </span>
         </label>
+      </div>
+    {/if}
+  </div>
+  {/if}
+
+  <!-- ── Section: Variables ───────────────────────────────────────────── -->
+  {#if acpSectionVisible("variables")}
+  <div id="acp-section-variables" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
+    <button type="button"
+      id="acp-head-variables"
+      class="acp-section-trigger w-full flex items-center gap-2 px-3 py-2.5 border-0 cursor-pointer text-left"
+      aria-expanded={openSections.has("variables")}
+      aria-controls="acp-panel-variables"
+      onclick={() => toggle("variables")}>
+      <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">data_object</span>
+      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Variables</span>
+      <span class="ml-2 font-mono text-[9px] text-[var(--cortex-text-muted)]">{(config.variables ?? []).length} declared</span>
+      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('variables') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
+    </button>
+    {#if openSections.has("variables")}
+      <div id="acp-panel-variables" class="acp-section-body px-3 py-3 space-y-3 border-t border-[var(--cortex-border)]" role="region" aria-labelledby="acp-head-variables">
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed">
+            Use <code class="text-[7px]">{'{{name}}'}</code> in any field, then rescan to seed parameters. Values are filled per run.
+          </p>
+          <button type="button" onclick={rescanVariables}
+            class="text-[9px] font-mono px-2 py-1 rounded border border-tertiary/30 text-tertiary hover:bg-tertiary/10 cursor-pointer bg-transparent shrink-0">↻ Rescan template</button>
+        </div>
+        {#if (config.variables ?? []).length === 0}
+          <p class="font-mono text-[9px] text-outline/45">No variables found. Add a <code class="text-[8px]">{'{{name}}'}</code> token to a field above, then rescan.</p>
+        {:else}
+          {#each config.variables ?? [] as v, i (v.name)}
+            <div class="rounded-lg border border-outline-variant/15 p-2.5 space-y-2 bg-surface-container-low/25">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-mono text-[10px] font-semibold text-tertiary">{v.name}</span>
+                <label class="flex items-center gap-1.5 cursor-pointer font-mono text-[9px] text-on-surface/70">
+                  <input type="checkbox" checked={v.required}
+                    onchange={(e) => patchVariable(i, { ...v, required: (e.currentTarget as HTMLInputElement).checked })}
+                    class="accent-tertiary w-3 h-3" />
+                  required
+                </label>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="config-label" for={`var-${i}-type`}>Type</label>
+                  <select id={`var-${i}-type`} class="config-input"
+                    value={v.type}
+                    onchange={(e) => patchVariable(i, { ...v, type: (e.currentTarget as HTMLSelectElement).value as VariableDef["type"] })}>
+                    <option value="string">string</option>
+                    <option value="number">number</option>
+                    <option value="enum">enum</option>
+                    <option value="multiline">multiline</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="config-label" for={`var-${i}-default`}>Default <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+                  <input id={`var-${i}-default`} class="config-input"
+                    placeholder="default value"
+                    value={v.default ?? ""}
+                    oninput={(e) => patchVariable(i, { ...v, default: (e.currentTarget as HTMLInputElement).value })} />
+                </div>
+                {#if v.type === "enum"}
+                  <div class="col-span-2">
+                    <label class="config-label" for={`var-${i}-enum`}>Allowed values <span class="text-outline/30 normal-case font-normal">(comma-separated)</span></label>
+                    <input id={`var-${i}-enum`} class="config-input font-mono text-[10px]"
+                      placeholder="comma,separated,values"
+                      value={(v.enumValues ?? []).join(",")}
+                      oninput={(e) => patchVariable(i, { ...v, enumValues: (e.currentTarget as HTMLInputElement).value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+                  </div>
+                {/if}
+                <div class="col-span-2">
+                  <label class="config-label" for={`var-${i}-desc`}>Description <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+                  <input id={`var-${i}-desc`} class="config-input"
+                    placeholder="What this variable controls…"
+                    value={v.description ?? ""}
+                    oninput={(e) => patchVariable(i, { ...v, description: (e.currentTarget as HTMLInputElement).value })} />
+                </div>
+              </div>
+            </div>
+          {/each}
+        {/if}
       </div>
     {/if}
   </div>
