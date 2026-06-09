@@ -6,6 +6,7 @@
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import ParamFillModal from "$lib/components/ParamFillModal.svelte";
+  import HighlightedTextarea from "$lib/components/HighlightedTextarea.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { goto } from "$app/navigation";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
@@ -847,10 +848,14 @@
             <div class="space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-0.5">
               <div>
               <label for="builder-prompt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Prompt</label>
-              <textarea id="builder-prompt" bind:value={builderConfig.prompt}
-                placeholder="Describe what you want the agent to do…" rows="5"
-                class="w-full resize-y rounded-lg border border-[var(--cortex-border)] bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20 min-h-[7.5rem] lg:min-h-[11rem]"
-              ></textarea>
+              <HighlightedTextarea
+                id="builder-prompt"
+                bind:value={builderConfig.prompt}
+                placeholder="Describe what you want the agent to do…"
+                rows={5}
+                frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
+                textClass="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 min-h-[7.5rem] lg:min-h-[11rem]"
+              />
               </div>
 
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
