@@ -12,6 +12,7 @@
   import ToolWorkshop from "$lib/components/ToolWorkshop.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
+  import { syncVariables } from "$lib/template/sync-variables.js";
 
   type SkillRow  = { id?: string; name?: string; description?: string; content?: string };
   type GatewayRow = {
@@ -217,10 +218,31 @@
     { label: "First of month",  cron: "0 9 1 * *"    },
   ];
 
-  async function triggerAgent(agent: GatewayRow) {
+  // Saved agent whose run is awaiting variable values in the fill-modal.
+  let triggerModalAgent = $state<GatewayRow | null>(null);
+
+  function triggerAgent(agent: GatewayRow) {
+    // Derive variables from the config's {{tokens}} (preserving any stored
+    // enrichment) rather than trusting the persisted array — agents saved before
+    // auto-detect carry tokens in their prompt but an empty `variables` list.
+    const vars = syncVariables(agent.config);
+    if (vars.length > 0) {
+      // Collect values in the fill-modal first so the gateway resolves with them
+      // instead of failing on an unresolved required token.
+      triggerModalAgent = { ...agent, config: { ...agent.config, variables: vars } };
+      return;
+    }
+    void doTrigger(agent);
+  }
+
+  async function doTrigger(agent: GatewayRow, variableValues?: Record<string, string | number>) {
     triggeringAgent = agent.agentId;
     try {
-      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents/${agent.agentId}/trigger`, { method: "POST" });
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents/${agent.agentId}/trigger`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(variableValues ? { variableValues } : {}),
+      });
       const data = await res.json() as { runId?: string; error?: string };
       if (res.ok) {
         toast.success(`${agent.name} triggered`, "Run started");
@@ -1589,4 +1611,20 @@
   }}
   onConfirm={(values) => { showParamModal = false; void launchRun(values); }}
   onCancel={() => (showParamModal = false)}
+/>
+
+<ParamFillModal
+  open={triggerModalAgent !== null}
+  variables={triggerModalAgent?.config.variables ?? []}
+  previewPayload={{
+    prompt: triggerModalAgent?.config.prompt,
+    systemPrompt: triggerModalAgent?.config.systemPrompt,
+    taskContext: triggerModalAgent?.config.taskContext,
+  }}
+  onConfirm={(values) => {
+    const agent = triggerModalAgent;
+    triggerModalAgent = null;
+    if (agent) void doTrigger(agent, values);
+  }}
+  onCancel={() => (triggerModalAgent = null)}
 />

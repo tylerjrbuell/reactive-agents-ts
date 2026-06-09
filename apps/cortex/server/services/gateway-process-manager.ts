@@ -102,7 +102,10 @@ export class GatewayProcessManager {
   }
 
   /** Immediately trigger a gateway agent run (ignores schedule). */
-  async triggerNow(agentId: string): Promise<{ runId: string; agentId: string } | { error: string }> {
+  async triggerNow(
+    agentId: string,
+    variableValues: Record<string, string | number> = {},
+  ): Promise<{ runId: string; agentId: string } | { error: string }> {
     const row = getGatewayAgent(this.db, agentId);
     if (!row) return { error: `Agent ${agentId} not found in DB` };
 
@@ -113,7 +116,7 @@ export class GatewayProcessManager {
 
     const config = JSON.parse(row.config) as Record<string, unknown>;
     try {
-      const result = await this.fireAgent(agentId, row.name, config);
+      const result = await this.fireAgent(agentId, row.name, config, variableValues);
       if (!result) return { error: `Failed to start agent "${row.name}" — check server logs` };
       return result;
     } catch (e) {
@@ -177,6 +180,7 @@ export class GatewayProcessManager {
     agentId: string,
     name: string,
     configRaw: Record<string, unknown>,
+    variableValues: Record<string, string | number> = {},
   ): Promise<{ runId: string; agentId: string } | null> {
     const proc = this.processes.get(agentId);
     if (proc) proc.running = true;
@@ -184,13 +188,15 @@ export class GatewayProcessManager {
     let config = normalizeCortexAgentConfig(configRaw);
     const runId = generateTaskId();
 
-    // Cron runs have no fill-modal, so resolve `{{tokens}}` from each variable's
-    // DEFAULT (no values) before reading `prompt`/building the agent. A required
-    // variable with no default stays unresolved → fail this scheduled run with a
-    // clear message recorded to cortex_runs.error_message; do NOT build with literal tokens.
+    // Resolve `{{tokens}}` before reading `prompt`/building the agent. Manual
+    // "trigger now" runs supply `variableValues` (from the fill-modal); scheduled
+    // cron runs pass none, so each token falls back to its variable's DEFAULT. A
+    // required variable with neither a value nor a default stays unresolved → fail
+    // this run with a clear message recorded to cortex_runs.error_message; do NOT
+    // build with literal tokens.
     const _configVars = (config as { variables?: VariableDef[] }).variables;
     const _vars = Array.isArray(_configVars) ? _configVars : [];
-    const _resolved = resolveTemplate(config, _vars, {});
+    const _resolved = resolveTemplate(config, _vars, variableValues);
     if (_resolved.unresolved.length > 0) {
       const msg = `Unresolved template variable(s): ${_resolved.unresolved.join(", ")}`;
       if (proc) proc.running = false;

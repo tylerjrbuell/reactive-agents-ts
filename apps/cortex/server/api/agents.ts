@@ -134,12 +134,23 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
     })
 
     // ── Trigger now (manual fire, ignores schedule) ─────────────────────────
-    .post("/:agentId/trigger", async ({ params, set }) => {
-      const result = await gateway.triggerNow(params.agentId);
+    .post("/:agentId/trigger", async ({ params, body, set }) => {
+      const b = body as { variableValues?: Record<string, string | number> } | undefined;
+      const result = await gateway.triggerNow(params.agentId, b?.variableValues ?? {});
       if ("error" in result) {
-        // Distinguish "not found" from "failed to start"
-        set.status = result.error.includes("not found in DB") ? 404 : 500;
+        // Distinguish "not found" from unresolved-variable (client error) from "failed to start".
+        set.status = result.error.includes("not found in DB")
+          ? 404
+          : result.error.includes("Unresolved template variable")
+            ? 400
+            : 500;
         return { error: result.error };
       }
       return { triggered: true, runId: result.runId, agentId: result.agentId };
+    }, {
+      body: t.Optional(
+        t.Object({
+          variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
+        }),
+      ),
     });
