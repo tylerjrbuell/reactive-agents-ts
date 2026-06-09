@@ -203,7 +203,7 @@ Configure global Cortex defaults:
 ```typescript
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
-    .withModel('claude-sonnet-4-20250514')
+    .withModel('claude-sonnet-4-6')
     .withReasoning({ strategy: 'plan-execute' })
     .withTools()
     .withCortex() // ← connects to http://localhost:4321

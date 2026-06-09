@@ -16,11 +16,10 @@ Per architecture model §11.1, the canonical composition order is:
    line that composes the registry's default-on capability set.
 2. **`.compose(harness => ...)`** — advanced. For users overriding
    specific tags / phases / hooks.
-3. **`.withX()` methods** — backward compatible. Many are now
-   `@deprecated` aliases for either a preset or a `.compose(...)`
-   chokepoint; check the JSDoc on each method to see which preset /
-   compose primitive it routes to. Deprecated methods remain fully
-   functional — no breaking changes.
+3. **`.withX()` methods** — backward compatible and fully supported.
+   Each composes cleanly with presets; reach for a preset when you want
+   the whole default-on set in one line, or `.compose(...)` for a
+   precise chokepoint. No breaking changes.
 
 ```typescript
 import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
@@ -91,7 +90,7 @@ All chain methods return `this` unless noted.
 
 | Method         | Signature                                                                                    | Description                                                                |
 | -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-20250514"`)             |
+| `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-6"`)             |
 | `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens`, `numCtx` |
 | `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
 
@@ -109,7 +108,7 @@ interface ModelParams {
 
 ```typescript
 // String form — simple model selection
-.withModel("claude-opus-4-20250514")
+.withModel("claude-opus-4-8")
 
 // ModelParams form — local model with thinking mode
 .withModel({ model: "qwen3:14b", thinking: true, temperature: 0.7 })
@@ -229,6 +228,13 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withReactiveIntelligence(options?)` | Entropy, controller, telemetry, hooks (`onEntropyScored`, `onControllerDecision`, …), `constraints`, `autonomy`. See [Reactive Intelligence](/features/reactive-intelligence/)                                                                                                                                                                                                                               |
 | `withSkills(config?)`                | `{ paths?, packages?, evolution?: { mode?, refinementThreshold?, rollbackOnRegression? }, overrides? }`                                                                                                                                                                                                                                                                                                      |
 | `withMetaTools(config?)`             | Conductor meta-tools; pass **`false`** to turn off defaults when using `.withTools()`. See [MetaToolsConfig](#metatoolsconfig)                                                                                                                                                                                                                                                                               |
+| `withHarness(fn)`                    | Alias for `.compose(fn)` — attach a harness transform over tagged chokepoints. See [Compose API](/reference/compose-api/).                                                                                                                                                                                                                                                                                    |
+| `withProfile(profile)`               | Apply a `HarnessProfile` preset (`lean()` / `balanced()` / `intelligent()`) — the canonical one-line capability composition. Later `.withX()` calls override the preset.                                                                                                                                                                                                                                       |
+| `withLeanHarness()`                  | Disable the default harness capabilities. **Superseded by `HarnessProfile.lean()`**, which additionally disables reactive intelligence (this method does not). Still functional.                                                                                                                                                                                                                              |
+| `withCalibration(mode)`              | Control per-model adaptive calibration: `CalibrationMode` (`"auto" \| "off" \| …`). Auto-enabled with `.withReasoning()`. See [LLM Providers](/features/llm-providers/).                                                                                                                                                                                                                                       |
+| `withTerminalTools(options?)`        | Register the built-in `git-cli` / `gh-cli` / `gws-cli` terminal tools (`ShellExecuteConfig`).                                                                                                                                                                                                                                                                                                                |
+| `withTracing(opts?)`                 | Write structured trace files (`{ dir? }`) for `rax diagnose`. Governed separately from the metrics dashboard; also toggled by `REACTIVE_AGENTS_TRACE`. Pair with `.withoutTracing()` to disable.                                                                                                                                                                                                              |
+| `withChannels(config)`               | Wire `@reactive-agents/channels` sender-policy access control (`ChannelsConfig`). See [Messaging Channels](/guides/messaging-channels/).                                                                                                                                                                                                                                                                      |
 
 #### ToolsOptions
 
@@ -893,7 +899,7 @@ import { Effect } from "effect";
 await using agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withPersona({
     role: "CRISPR Research Specialist",
     background: "Expert in gene editing and molecular biology",

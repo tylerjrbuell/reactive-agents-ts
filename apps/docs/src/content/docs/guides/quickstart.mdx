@@ -89,7 +89,7 @@ const result = await agent.run("What are the three laws of thermodynamics?");
 console.log(result.output);
 ```
 
-That's the minimum. `.withProvider()` picks the default model for the provider automatically (`claude-sonnet-4-20250514` for Anthropic). Set `ANTHROPIC_API_KEY` in your environment before running.
+That's the minimum. `.withProvider()` picks the default model for the provider automatically (`claude-sonnet-4-6` for Anthropic). Set `ANTHROPIC_API_KEY` in your environment before running.
 
 To pin a specific model or add a name:
 
@@ -97,7 +97,7 @@ To pin a specific model or add a name:
 const agent = await ReactiveAgents.create()
   .withName("my-first-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .build();
 
 const result = await agent.run("What are the three laws of thermodynamics?");
@@ -129,7 +129,7 @@ import { ReactiveAgents, HarnessProfile } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
   .build();
 ```
@@ -150,17 +150,17 @@ win:
 const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withProfile(HarnessProfile.balanced())
   .withMemory({ tier: "enhanced" })          // upgrade memory to vector embeddings
   .compose((h) => h.before("act", logFn))    // canonical chokepoint composition
   .build();
 ```
 
-Individual `.withX()` methods still work for backward compatibility,
-but most are now `@deprecated` aliases for either a `HarnessProfile`
-preset or a `.compose(...)` chokepoint. Check the JSDoc on a method
-to see which preset / compose primitive it routes to.
+Individual `.withX()` methods are fully supported and compose cleanly
+with presets. Reach for a `HarnessProfile` preset when you want the
+whole default-on capability set in one line, or `.compose(...)` for a
+precise chokepoint.
 
 ## What's Next?
 

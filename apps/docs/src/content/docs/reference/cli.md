@@ -87,7 +87,7 @@ rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
 **Example:**
 
 ```bash
-rax run "Explain quantum computing" --provider anthropic --model claude-sonnet-4-20250514
+rax run "Explain quantum computing" --provider anthropic --model claude-sonnet-4-6
 ```
 
 ### Cortex (companion studio)
@@ -152,7 +152,7 @@ rax serve [--port <number>] [--name <name>] [--provider <provider>] [--model <mo
 **Example:**
 
 ```bash
-rax serve --name researcher --provider anthropic --model claude-sonnet-4-20250514 --with-tools --port 4000
+rax serve --name researcher --provider anthropic --model claude-sonnet-4-6 --with-tools --port 4000
 ```
 
 ### `rax discover`
@@ -173,7 +173,7 @@ rax discover http://localhost:3000
 
 ```
 Agent Card: researcher
-  Provider: anthropic (claude-sonnet-4-20250514)
+  Provider: anthropic (claude-sonnet-4-6)
   Capabilities: streaming, tools
   Skills: web-search, file-write
   Endpoint: http://localhost:3000
