@@ -4,7 +4,10 @@
  * falls back to `localFrameworkModelOptions` (mirrors `@reactive-agents/llm-provider` catalog).
  */
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
-import { localFrameworkModelOptions } from "$lib/framework-model-options-local.js";
+import {
+  localFrameworkModelOptions,
+  localProviderDefaultModel,
+} from "$lib/framework-model-options-local.js";
 import { settings } from "$lib/stores/settings.js";
 
 export type UiModelOption = { value: string; label: string };
@@ -26,6 +29,7 @@ export async function fetchFrameworkModels(provider: string): Promise<FetchModel
   }
 
   const local = localFrameworkModelOptions(p);
+  const localDef = localProviderDefaultModel(p);
 
   try {
     const res = await fetch(`${CORTEX_SERVER_URL}/api/models/framework/${encodeURIComponent(p)}`);
@@ -33,12 +37,12 @@ export async function fetchFrameworkModels(provider: string): Promise<FetchModel
     const looksJson = ct.includes("json") || ct.includes("application/json");
 
     if (!res.ok) {
-      if (local.length > 0) return { options: local };
+      if (local.length > 0) return { options: local, default: localDef };
       return { options: [], error: `Server returned ${res.status}` };
     }
 
     if (!looksJson) {
-      if (local.length > 0) return { options: local };
+      if (local.length > 0) return { options: local, default: localDef };
       return {
         options: [],
         error: "Cortex API returned a non-JSON response. Use the Vite dev URL (proxied /api) or open the app from the Cortex server port.",
@@ -52,10 +56,10 @@ export async function fetchFrameworkModels(provider: string): Promise<FetchModel
     const fromApi = mapFrameworkBody(data);
     const def = data.default ?? undefined;
     if (fromApi.length > 0) return { options: fromApi, default: def };
-    if (local.length > 0) return { options: local, default: def };
-    return { options: [], default: def };
+    if (local.length > 0) return { options: local, default: def ?? localDef };
+    return { options: [], default: def ?? localDef };
   } catch {
-    if (local.length > 0) return { options: local };
+    if (local.length > 0) return { options: local, default: localDef };
     return { options: [], error: "Could not reach Cortex server" };
   }
 }
