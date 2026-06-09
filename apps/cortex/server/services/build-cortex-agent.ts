@@ -16,6 +16,8 @@ import {
   ReactiveAgents,
   type MCPServerConfig,
 } from "@reactive-agents/runtime";
+
+export type { MCPServerConfig } from "@reactive-agents/runtime";
 import type { ReasoningOptions } from "@reactive-agents/runtime";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
 import {

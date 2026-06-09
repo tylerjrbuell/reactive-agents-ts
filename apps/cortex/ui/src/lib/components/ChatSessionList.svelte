@@ -4,9 +4,9 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
-  import { CHAT_PROVIDERS, CHAT_TOOL_PRESETS, type ChatProviderId } from "$lib/inference-presets.js";
-  import ChatShellToolDisclaimer from "$lib/components/ChatShellToolDisclaimer.svelte";
+  import { CHAT_PROVIDERS, type ChatProviderId } from "$lib/inference-presets.js";
+  import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
+  import { defaultConfig, type AgentConfig } from "$lib/types/agent-config.js";
 
   interface Props {
     sessions: ChatSession[];
@@ -17,163 +17,64 @@
 
   type RunOption = { runId: string; label: string };
 
-  let showNewForm = $state(false);
+  let showConfigModal = $state(false);
+  let configMode = $state<"create" | "edit">("create");
+  let editingSessionId = $state<string | null>(null);
   let newName = $state("");
-  let newProvider = $state<string>("anthropic");
-  let newModel = $state("");
-  let newSystemPrompt = $state("");
   let creating = $state(false);
   let enableTools = $state(false);
   let streamReasoningSteps = $state(false);
-  let selectedTools = $state<string[]>([]);
-  let maxChatIterations = $state(12);
-  let reasoningStrategy = $state("plan-execute-reflect");
-  let strategySwitching = $state(true);
-  let runtimeVerification = $state(true);
-  let verificationStepReflect = $state(true);
-  let contextSynthesis = $state<"auto" | "template" | "llm" | "none">("auto");
-  let personaTraits = $state(
-    "Think step-by-step, then call tools immediately when needed. Avoid repeating the same thought without acting.",
-  );
-  let terminalShellAdditionalCommands = $state("");
-  let terminalShellAllowedCommands = $state("");
-
-  const shellExecuteSelected = $derived(enableTools && selectedTools.includes("shell-execute"));
-  const activeSession = $derived(
-    activeSessionId
-      ? sessions.find((s: ChatSession) => s.sessionId === activeSessionId) ?? null
-      : null,
-  );
+  /** Full builder tool config (provider/model/strategy/tools/MCP/sub-agents/…). */
+  let sessionAgentConfig = $state(defaultConfig());
 
   let runs = $state<RunOption[]>([]);
   let selectedRunId = $state("");
 
-  let providerModelOptions = $state<UiModelOption[]>([]);
-  let modelsListLoading = $state(false);
-  let modelsListError = $state<string | null>(null);
+  type SavedAgent = { agentId: string; name: string; config: Record<string, unknown> };
+  let savedAgents = $state<SavedAgent[]>([]);
+  async function loadSavedAgents() {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents`);
+      if (res.ok) savedAgents = (await res.json()) as SavedAgent[];
+    } catch {
+      /* best-effort; picker just stays empty */
+    }
+  }
+
+  /** Snapshot a saved Lab agent's config into the session's own copy (session owns it thereafter). */
+  function snapshotFromAgent(agentId: string) {
+    if (!agentId) return;
+    const a = savedAgents.find((x) => x.agentId === agentId);
+    if (!a) return;
+    // Snapshot: session owns its own copy; later edits don't touch the saved agent.
+    sessionAgentConfig = { ...defaultConfig(), ...(a.config as Partial<AgentConfig>) };
+    enableTools = true; // a saved (likely tooled) agent implies tools on
+  }
 
   let renamingSessionId = $state<string | null>(null);
   let renameInputValue = $state("");
   let renamingInProgress = $state(false);
 
-  async function loadChatModelOptions(p: string) {
-    modelsListLoading = true;
-    modelsListError = null;
-    settings.init();
-    const { options, error } = await fetchModelsForProvider(
-      p,
-      p === "ollama" ? settings.get().ollamaEndpoint : undefined,
-    );
-    providerModelOptions = options;
-    modelsListError = error ?? null;
-    modelsListLoading = false;
-  }
-
-  async function setProvider(p: string) {
-    newProvider = p;
-    newModel = "";
-    await loadChatModelOptions(p);
-    if (providerModelOptions[0]) newModel = providerModelOptions[0].value;
-  }
-
+  /** Seed the full panel config + the chat-specific toggles from a saved session. */
   function hydrateFormFromSessionConfig(config: Record<string, unknown>) {
-    newProvider = typeof config.provider === "string" && config.provider.trim() ? config.provider : newProvider;
-    newModel = typeof config.model === "string" ? config.model : "";
-    newSystemPrompt = typeof config.systemPrompt === "string" ? config.systemPrompt : "";
+    sessionAgentConfig = { ...defaultConfig(), ...(config as Partial<AgentConfig>) };
     enableTools = config.enableTools === true;
     streamReasoningSteps = config.streamReasoningSteps === true;
-    selectedTools = Array.isArray(config.tools)
-      ? config.tools.filter((t): t is string => typeof t === "string" && t.length > 0)
-      : [];
-    maxChatIterations =
-      typeof config.maxIterations === "number" && config.maxIterations > 0 ? config.maxIterations : 16;
-    reasoningStrategy =
-      typeof config.strategy === "string" && config.strategy.trim()
-        ? config.strategy.trim()
-        : "plan-execute-reflect";
-    strategySwitching = config.strategySwitching !== false;
-    runtimeVerification = config.runtimeVerification !== false;
-    verificationStepReflect = config.verificationStep !== "none";
-    contextSynthesis =
-      config.contextSynthesis === "auto" ||
-      config.contextSynthesis === "template" ||
-      config.contextSynthesis === "llm" ||
-      config.contextSynthesis === "none"
-        ? config.contextSynthesis
-        : "auto";
-    const persona =
-      config.persona && typeof config.persona === "object" && !Array.isArray(config.persona)
-        ? (config.persona as Record<string, unknown>)
-        : undefined;
-    if (persona && typeof persona.traits === "string") {
-      personaTraits = persona.traits;
-    } else {
-      personaTraits =
-        "Think step-by-step, then call tools immediately when needed. Avoid repeating the same thought without acting.";
-    }
-    terminalShellAdditionalCommands =
-      typeof config.terminalShellAdditionalCommands === "string"
-        ? config.terminalShellAdditionalCommands
-        : "";
-    terminalShellAllowedCommands =
-      typeof config.terminalShellAllowedCommands === "string" ? config.terminalShellAllowedCommands : "";
   }
 
   function currentConfigPayload() {
-    const verificationStep: "reflect" | "none" = verificationStepReflect ? "reflect" : "none";
-
     return {
-      provider: newProvider,
-      ...(newModel.trim() ? { model: newModel.trim() } : {}),
-      ...(newSystemPrompt.trim() ? { systemPrompt: newSystemPrompt.trim() } : {}),
-      ...(selectedRunId ? { runId: selectedRunId } : {}),
+      ...sessionAgentConfig,
       enableTools,
       streamReasoningSteps: enableTools ? streamReasoningSteps : false,
-      ...(enableTools && selectedTools.length > 0 ? { tools: [...selectedTools] } : {}),
-      ...(enableTools && maxChatIterations > 0 ? { maxIterations: maxChatIterations } : {}),
-      ...(enableTools ? { strategy: reasoningStrategy } : {}),
-      ...(enableTools ? { strategySwitching } : {}),
-      ...(enableTools ? { runtimeVerification } : {}),
-      ...(enableTools ? { verificationStep } : {}),
-      ...(enableTools ? { contextSynthesis } : {}),
-      ...(enableTools && personaTraits.trim().length > 0
-        ? {
-            persona: {
-              enabled: true,
-              role: "Tool-first problem solver",
-              tone: "technical",
-              traits: personaTraits.trim(),
-              responseStyle: "structured",
-            },
-          }
-        : {}),
-      ...(shellExecuteSelected && terminalShellAdditionalCommands.trim() !== ""
-        ? { terminalShellAdditionalCommands: terminalShellAdditionalCommands.trim() }
-        : {}),
-      ...(shellExecuteSelected && terminalShellAllowedCommands.trim() !== ""
-        ? { terminalShellAllowedCommands: terminalShellAllowedCommands.trim() }
-        : {}),
+      ...(selectedRunId ? { runId: selectedRunId } : {}),
     };
-  }
-
-  function toggleTool(id: string) {
-    if (selectedTools.includes(id)) {
-      selectedTools = selectedTools.filter((t) => t !== id);
-      if (id === "shell-execute") {
-        terminalShellAdditionalCommands = "";
-        terminalShellAllowedCommands = "";
-      }
-    } else {
-      selectedTools = [...selectedTools, id];
-    }
   }
 
   onMount(() => {
     settings.init();
     const s: CortexSettings = settings.get();
-    newProvider = s.defaultProvider;
-    newModel = s.defaultModel;
-    void loadChatModelOptions(newProvider);
+    sessionAgentConfig = { ...sessionAgentConfig, provider: s.defaultProvider, model: s.defaultModel };
     void (async () => {
       try {
         const res = await fetch(`${CORTEX_SERVER_URL}/api/runs`);
@@ -200,15 +101,34 @@
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}`);
       if (!res.ok) return;
       const r = (await res.json()) as { provider?: string; model?: string };
-      if (typeof r.provider === "string" && r.provider && CHAT_PROVIDERS.includes(r.provider as ChatProviderId)) {
-        await setProvider(r.provider);
-      }
-      if (typeof r.model === "string" && r.model.trim()) {
-        newModel = r.model.trim();
-      }
+      const provider =
+        typeof r.provider === "string" && r.provider && CHAT_PROVIDERS.includes(r.provider as ChatProviderId)
+          ? r.provider
+          : sessionAgentConfig.provider;
+      const model = typeof r.model === "string" && r.model.trim() ? r.model.trim() : sessionAgentConfig.model;
+      // Panel owns provider/model; its own $effect reloads the model list on provider change.
+      sessionAgentConfig = { ...sessionAgentConfig, provider, model };
     } catch {
       /* ignore */
     }
+  }
+
+  /** Open the modal in create mode with a fresh default config + reset toggles/name. */
+  function openCreateModal() {
+    const s: CortexSettings = settings.get();
+    sessionAgentConfig = { ...defaultConfig(), provider: s.defaultProvider, model: s.defaultModel };
+    newName = "";
+    enableTools = false;
+    streamReasoningSteps = false;
+    selectedRunId = "";
+    editingSessionId = null;
+    configMode = "create";
+    showConfigModal = true;
+    void loadSavedAgents();
+  }
+
+  function closeConfigModal() {
+    showConfigModal = false;
   }
 
   async function create() {
@@ -219,9 +139,8 @@
         name: newName || undefined,
         ...currentConfigPayload(),
       });
-      showNewForm = false;
+      showConfigModal = false;
       newName = "";
-      newSystemPrompt = "";
       selectedRunId = "";
     } catch (e) {
       toast.error("Failed to create session: " + String(e));
@@ -231,10 +150,12 @@
   }
 
   async function saveActiveConfig() {
-    if (!activeSessionId) return;
+    const targetId = editingSessionId ?? activeSessionId;
+    if (!targetId) return;
     try {
-      await chatStore.updateSessionConfig(activeSessionId, currentConfigPayload());
+      await chatStore.updateSessionConfig(targetId, currentConfigPayload());
       toast.success("Config updated", "New model and reasoning settings apply on next turn");
+      showConfigModal = false;
     } catch (e) {
       toast.error("Failed to update config: " + String(e));
     }
@@ -242,14 +163,15 @@
 
   function editSessionConfig(e: MouseEvent, session: ChatSession) {
     e.stopPropagation();
-    showNewForm = true;
     selectedRunId =
       typeof session.agentConfig.runId === "string" && session.agentConfig.runId.trim().length > 0
         ? session.agentConfig.runId.trim()
         : "";
     hydrateFormFromSessionConfig(session.agentConfig);
     onSelectSession(session.sessionId);
-    void loadChatModelOptions(newProvider);
+    editingSessionId = session.sessionId;
+    configMode = "edit";
+    showConfigModal = true;
   }
 
   async function del(e: MouseEvent, sessionId: string) {
@@ -304,203 +226,14 @@
     <button
       type="button"
       class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-sm text-[var(--cortex-text-muted)] hover:text-primary"
-      onclick={() => (showNewForm = !showNewForm)}
+      onclick={openCreateModal}
       title="New chat session"
     >add</button>
   </div>
 
-  {#if showNewForm}
-    <div class="flex max-h-[min(70vh,520px)] flex-shrink-0 flex-col gap-2 overflow-y-auto border-b border-[color:var(--cortex-border)] p-3">
-      {#if activeSession}
-        <div class="rounded-md border border-secondary/25 bg-secondary/10 px-2 py-1.5 font-mono text-[10px] text-secondary">
-          Editing session config: {activeSession.name}
-        </div>
-      {/if}
-      <div>
-        <label class={label} for="chat-new-name">Name</label>
-        <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
-      </div>
-
-      <div>
-        <label class={label} for="chat-run">Prior run (optional)</label>
-        <select
-          id="chat-run"
-          class={field}
-          value={selectedRunId}
-          onchange={(e) => onRunChange((e.target as HTMLSelectElement).value)}
-        >
-          <option value="">— Fresh chat (no run context) —</option>
-          {#each runs as r (r.runId)}
-            <option value={r.runId}>{r.label}</option>
-          {/each}
-        </select>
-        <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
-          Loads debrief + events into task context (same DB run).
-        </p>
-      </div>
-
-      <div>
-        <span class={label}>Provider</span>
-        <select
-          class={field}
-          value={newProvider}
-          onchange={(e) => void setProvider((e.target as HTMLSelectElement).value)}
-        >
-          {#each CHAT_PROVIDERS as p (p)}
-            <option value={p}>{p}</option>
-          {/each}
-        </select>
-      </div>
-
-      <div>
-        <span class={label}>Model</span>
-        {#if modelsListError}
-          <p class="font-mono text-[10px] text-error/80 mb-1">{modelsListError}</p>
-        {/if}
-        {#if modelsListLoading}
-          <p class="font-mono text-[10px] text-[var(--cortex-text-muted)]">Loading models…</p>
-        {:else if providerModelOptions.length > 0}
-          <select class={field} bind:value={newModel}>
-            {#each providerModelOptions as m (m.value)}
-              <option value={m.value}>{m.label}</option>
-            {/each}
-            {#if newModel.trim() && !providerModelOptions.some((m) => m.value === newModel)}
-              <option value={newModel}>{newModel} (custom)</option>
-            {/if}
-          </select>
-        {:else}
-          <input class={field} bind:value={newModel} placeholder="Model id…" />
-        {/if}
-      </div>
-
-      <div>
-        <label class={label} for="chat-sys">System prompt</label>
-        <textarea
-          id="chat-sys"
-          class="{field} resize-none"
-          placeholder="Optional"
-          rows="2"
-          bind:value={newSystemPrompt}
-        ></textarea>
-      </div>
-
-      <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-        <input type="checkbox" bind:checked={enableTools} class="accent-primary" />
-        Enable tools (ReAct path, like rax playground <code class="text-[9px]">--tools</code>)
-      </label>
-
-      {#if enableTools}
-        <div>
-          <span class={label}>Allowed tools</span>
-          <p class="mb-1 font-mono text-[9px] text-[var(--cortex-text-muted)]">
-            Leave none selected to allow the default Cortex tool stack (kernel + your picks merge on the server).
-          </p>
-          <div class="flex flex-wrap gap-1">
-            {#each CHAT_TOOL_PRESETS as t (t.id)}
-              <button
-                type="button"
-                class="rounded border px-2 py-0.5 font-mono text-[9px] transition-colors border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] text-[var(--cortex-text-muted)] hover:border-primary/40 {selectedTools.includes(t.id)
-                  ? 'border-primary/50 bg-primary/15 text-primary'
-                  : ''}"
-                onclick={() => toggleTool(t.id)}
-              >
-                <span class="material-symbols-outlined align-middle text-[11px]">{t.icon}</span>
-                {t.label}
-              </button>
-            {/each}
-          </div>
-          {#if shellExecuteSelected}
-            <div class="mt-2">
-              <ChatShellToolDisclaimer
-                idSuffix="desk-chat"
-                bind:additionalCommands={terminalShellAdditionalCommands}
-                bind:allowedCommands={terminalShellAllowedCommands}
-              />
-            </div>
-          {/if}
-        </div>
-        <div>
-          <label class={label} for="chat-max-it">Max ReAct iterations</label>
-          <input
-            id="chat-max-it"
-            type="number"
-            min="1"
-            max="40"
-            class={field}
-            bind:value={maxChatIterations}
-          />
-        </div>
-        <div>
-          <label class={label} for="chat-reasoning-strategy">Reasoning strategy</label>
-          <select id="chat-reasoning-strategy" class={field} bind:value={reasoningStrategy}>
-            <option value="plan-execute-reflect">plan-execute-reflect</option>
-            <option value="reactive">reactive</option>
-            <option value="adaptive">adaptive</option>
-            <option value="tree-of-thought">tree-of-thought</option>
-            <option value="reflexion">reflexion</option>
-          </select>
-        </div>
-        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-          <input type="checkbox" bind:checked={streamReasoningSteps} class="accent-primary" />
-          Stream reasoning steps live
-        </label>
-        <div>
-          <label class={label} for="chat-context-synthesis">Context synthesis</label>
-          <select id="chat-context-synthesis" class={field} bind:value={contextSynthesis}>
-            <option value="auto">auto</option>
-            <option value="template">template</option>
-            <option value="llm">llm</option>
-            <option value="none">none</option>
-          </select>
-        </div>
-        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-          <input type="checkbox" bind:checked={strategySwitching} class="accent-primary" />
-          Enable strategy switching on loop risk
-        </label>
-        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-          <input type="checkbox" bind:checked={runtimeVerification} class="accent-primary" />
-          Enable runtime verification layer
-        </label>
-        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-          <input type="checkbox" bind:checked={verificationStepReflect} class="accent-primary" />
-          Final reflect verification step
-        </label>
-        <div>
-          <label class={label} for="chat-persona-traits">Tool-use persona instructions</label>
-          <textarea
-            id="chat-persona-traits"
-            class="{field} resize-none"
-            rows="3"
-            bind:value={personaTraits}
-            placeholder="Think step-by-step then call tools immediately..."
-          ></textarea>
-        </div>
-      {/if}
-
-      <button type="button" disabled={creating} class={btnPrimary} onclick={create}>
-        {creating ? "Creating…" : "Create"}
-      </button>
-      {#if activeSessionId}
-        <button
-          type="button"
-          class="w-full rounded-md border border-secondary/35 bg-secondary/10 px-3 py-1.5 font-mono text-[10px] uppercase text-secondary hover:bg-secondary/20"
-          onclick={() => void saveActiveConfig()}
-        >
-          Save To Active Session
-        </button>
-      {/if}
-
-      {#if activeSession}
-        <button
-          type="button"
-          class="w-full rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] px-3 py-1.5 font-mono text-[10px] uppercase text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]"
-          onclick={() => hydrateFormFromSessionConfig(activeSession.agentConfig)}
-        >
-          Load Active Config
-        </button>
-      {/if}
-    </div>
-  {/if}
+  <div class="flex-shrink-0 border-b border-[color:var(--cortex-border)] p-2">
+    <button type="button" class={btnPrimary} onclick={openCreateModal}>+ New session</button>
+  </div>
 
   <div class="flex-1 overflow-y-auto">
     {#if sessions.length === 0}
@@ -591,3 +324,116 @@
     {/if}
   </div>
 </div>
+
+{#if showConfigModal}
+  <div
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-background/70 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    aria-label={configMode === "create" ? "New chat session config" : "Edit chat session config"}
+  >
+    <!-- Click outside → cancel via invisible full-size button behind modal -->
+    <button
+      type="button"
+      class="absolute inset-0 w-full h-full bg-transparent border-0 cursor-default"
+      onclick={closeConfigModal}
+      aria-label="Close dialog"
+    ></button>
+
+    <!-- Modal panel -->
+    <div
+      class="relative z-10 w-full max-w-3xl max-h-[85vh] overflow-y-auto bg-surface-container
+             border border-outline-variant/20 rounded-xl shadow-neural-strong animate-fade-up mx-4"
+    >
+      <div class="px-6 pt-5 pb-4 flex flex-col gap-3">
+        <h3 class="font-headline text-base font-semibold text-on-surface">
+          {configMode === "create" ? "New chat session" : "Edit session config"}
+        </h3>
+
+        {#if configMode === "create"}
+          <div>
+            <label class={label} for="chat-from-agent">Start from saved agent</label>
+            <select
+              id="chat-from-agent"
+              class={field}
+              onchange={(e) => snapshotFromAgent((e.currentTarget as HTMLSelectElement).value)}
+            >
+              <option value="">Blank (defaults)</option>
+              {#each savedAgents as a (a.agentId)}
+                <option value={a.agentId}>{a.name}</option>
+              {/each}
+            </select>
+            <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
+              Snapshots the agent's config into this session (a copy — edits won't touch the saved agent).
+            </p>
+          </div>
+        {/if}
+
+        {#if configMode === "create"}
+          <div>
+            <label class={label} for="chat-new-name">Name</label>
+            <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
+          </div>
+        {/if}
+
+        <div>
+          <label class={label} for="chat-run">Prior run (optional)</label>
+          <select
+            id="chat-run"
+            class={field}
+            value={selectedRunId}
+            onchange={(e) => onRunChange((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">— Fresh chat (no run context) —</option>
+            {#each runs as r (r.runId)}
+              <option value={r.runId}>{r.label}</option>
+            {/each}
+          </select>
+          <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
+            Loads debrief + events into task context (same DB run).
+          </p>
+        </div>
+
+        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+          <input type="checkbox" bind:checked={enableTools} class="accent-primary" />
+          Enable tools (ReAct path, like rax playground <code class="text-[9px]">--tools</code>)
+        </label>
+
+        {#if enableTools}
+          <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+            <input type="checkbox" bind:checked={streamReasoningSteps} class="accent-primary" />
+            Stream reasoning steps live
+          </label>
+        {/if}
+
+        <!-- Full builder config: provider/model, reasoning, tools, MCP, sub-agents, variables. -->
+        <AgentConfigPanel bind:config={sessionAgentConfig} />
+      </div>
+
+      <div class="px-6 pb-5 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          class="px-4 py-1.5 border border-outline-variant/25 text-outline font-mono text-[11px]
+                 uppercase rounded bg-transparent cursor-pointer hover:text-on-surface transition-colors"
+          onclick={closeConfigModal}
+        >Cancel</button>
+        {#if configMode === "create"}
+          <button
+            type="button"
+            disabled={creating}
+            class="px-4 py-1.5 font-mono text-[11px] uppercase rounded cursor-pointer transition-colors
+                   bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25 disabled:opacity-40"
+            onclick={create}
+          >{creating ? "Creating…" : "Create"}</button>
+        {:else}
+          <button
+            type="button"
+            class="px-4 py-1.5 font-mono text-[11px] uppercase rounded cursor-pointer transition-colors
+                   bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25"
+            onclick={() => void saveActiveConfig()}
+          >Save</button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
