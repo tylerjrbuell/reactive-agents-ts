@@ -17,19 +17,15 @@
 
   type RunOption = { runId: string; label: string };
 
-  let showNewForm = $state(false);
+  let showConfigModal = $state(false);
+  let configMode = $state<"create" | "edit">("create");
+  let editingSessionId = $state<string | null>(null);
   let newName = $state("");
   let creating = $state(false);
   let enableTools = $state(false);
   let streamReasoningSteps = $state(false);
   /** Full builder tool config (provider/model/strategy/tools/MCP/sub-agents/…). */
   let sessionAgentConfig = $state(defaultConfig());
-
-  const activeSession = $derived(
-    activeSessionId
-      ? sessions.find((s: ChatSession) => s.sessionId === activeSessionId) ?? null
-      : null,
-  );
 
   let runs = $state<RunOption[]>([]);
   let selectedRunId = $state("");
@@ -96,6 +92,23 @@
     }
   }
 
+  /** Open the modal in create mode with a fresh default config + reset toggles/name. */
+  function openCreateModal() {
+    const s: CortexSettings = settings.get();
+    sessionAgentConfig = { ...defaultConfig(), provider: s.defaultProvider, model: s.defaultModel };
+    newName = "";
+    enableTools = false;
+    streamReasoningSteps = false;
+    selectedRunId = "";
+    editingSessionId = null;
+    configMode = "create";
+    showConfigModal = true;
+  }
+
+  function closeConfigModal() {
+    showConfigModal = false;
+  }
+
   async function create() {
     if (creating) return;
     creating = true;
@@ -104,7 +117,7 @@
         name: newName || undefined,
         ...currentConfigPayload(),
       });
-      showNewForm = false;
+      showConfigModal = false;
       newName = "";
       selectedRunId = "";
     } catch (e) {
@@ -115,10 +128,12 @@
   }
 
   async function saveActiveConfig() {
-    if (!activeSessionId) return;
+    const targetId = editingSessionId ?? activeSessionId;
+    if (!targetId) return;
     try {
-      await chatStore.updateSessionConfig(activeSessionId, currentConfigPayload());
+      await chatStore.updateSessionConfig(targetId, currentConfigPayload());
       toast.success("Config updated", "New model and reasoning settings apply on next turn");
+      showConfigModal = false;
     } catch (e) {
       toast.error("Failed to update config: " + String(e));
     }
@@ -126,13 +141,15 @@
 
   function editSessionConfig(e: MouseEvent, session: ChatSession) {
     e.stopPropagation();
-    showNewForm = true;
     selectedRunId =
       typeof session.agentConfig.runId === "string" && session.agentConfig.runId.trim().length > 0
         ? session.agentConfig.runId.trim()
         : "";
     hydrateFormFromSessionConfig(session.agentConfig);
     onSelectSession(session.sessionId);
+    editingSessionId = session.sessionId;
+    configMode = "edit";
+    showConfigModal = true;
   }
 
   async function del(e: MouseEvent, sessionId: string) {
@@ -187,80 +204,14 @@
     <button
       type="button"
       class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-sm text-[var(--cortex-text-muted)] hover:text-primary"
-      onclick={() => (showNewForm = !showNewForm)}
+      onclick={openCreateModal}
       title="New chat session"
     >add</button>
   </div>
 
-  {#if showNewForm}
-    <div class="flex max-h-[min(70vh,520px)] flex-shrink-0 flex-col gap-2 overflow-y-auto border-b border-[color:var(--cortex-border)] p-3">
-      {#if activeSession}
-        <div class="rounded-md border border-secondary/25 bg-secondary/10 px-2 py-1.5 font-mono text-[10px] text-secondary">
-          Editing session config: {activeSession.name}
-        </div>
-      {/if}
-      <div>
-        <label class={label} for="chat-new-name">Name</label>
-        <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
-      </div>
-
-      <div>
-        <label class={label} for="chat-run">Prior run (optional)</label>
-        <select
-          id="chat-run"
-          class={field}
-          value={selectedRunId}
-          onchange={(e) => onRunChange((e.target as HTMLSelectElement).value)}
-        >
-          <option value="">— Fresh chat (no run context) —</option>
-          {#each runs as r (r.runId)}
-            <option value={r.runId}>{r.label}</option>
-          {/each}
-        </select>
-        <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
-          Loads debrief + events into task context (same DB run).
-        </p>
-      </div>
-
-      <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-        <input type="checkbox" bind:checked={enableTools} class="accent-primary" />
-        Enable tools (ReAct path, like rax playground <code class="text-[9px]">--tools</code>)
-      </label>
-
-      {#if enableTools}
-        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
-          <input type="checkbox" bind:checked={streamReasoningSteps} class="accent-primary" />
-          Stream reasoning steps live
-        </label>
-      {/if}
-
-      <!-- Full builder config: provider/model, reasoning, tools, MCP, sub-agents, variables. -->
-      <AgentConfigPanel bind:config={sessionAgentConfig} />
-
-      <button type="button" disabled={creating} class={btnPrimary} onclick={create}>
-        {creating ? "Creating…" : "Create"}
-      </button>
-      {#if activeSessionId}
-        <button
-          type="button"
-          class="w-full rounded-md border border-secondary/35 bg-secondary/10 px-3 py-1.5 font-mono text-[10px] uppercase text-secondary hover:bg-secondary/20"
-          onclick={() => void saveActiveConfig()}
-        >
-          Save To Active Session
-        </button>
-      {/if}
-
-      {#if activeSession}
-        <button
-          type="button"
-          class="w-full rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface)] px-3 py-1.5 font-mono text-[10px] uppercase text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]"
-          onclick={() => hydrateFormFromSessionConfig(activeSession.agentConfig)}
-        >
-          Load Active Config
-        </button>
-      {/if}
-    </div>
-  {/if}
+  <div class="flex-shrink-0 border-b border-[color:var(--cortex-border)] p-2">
+    <button type="button" class={btnPrimary} onclick={openCreateModal}>+ New session</button>
+  </div>
 
   <div class="flex-1 overflow-y-auto">
     {#if sessions.length === 0}
@@ -351,3 +302,95 @@
     {/if}
   </div>
 </div>
+
+{#if showConfigModal}
+  <div
+    class="fixed inset-0 z-[200] flex items-center justify-center bg-background/70 backdrop-blur-sm"
+    role="dialog"
+    aria-modal="true"
+    aria-label={configMode === "create" ? "New chat session config" : "Edit chat session config"}
+  >
+    <!-- Click outside → cancel via invisible full-size button behind modal -->
+    <button
+      type="button"
+      class="absolute inset-0 w-full h-full bg-transparent border-0 cursor-default"
+      onclick={closeConfigModal}
+      aria-label="Close dialog"
+    ></button>
+
+    <!-- Modal panel -->
+    <div
+      class="relative z-10 w-full max-w-3xl max-h-[85vh] overflow-y-auto bg-surface-container
+             border border-outline-variant/20 rounded-xl shadow-neural-strong animate-fade-up mx-4"
+    >
+      <div class="px-6 pt-5 pb-4 flex flex-col gap-3">
+        <h3 class="font-headline text-base font-semibold text-on-surface">
+          {configMode === "create" ? "New chat session" : "Edit session config"}
+        </h3>
+
+        <div>
+          <label class={label} for="chat-new-name">Name</label>
+          <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
+        </div>
+
+        <div>
+          <label class={label} for="chat-run">Prior run (optional)</label>
+          <select
+            id="chat-run"
+            class={field}
+            value={selectedRunId}
+            onchange={(e) => onRunChange((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">— Fresh chat (no run context) —</option>
+            {#each runs as r (r.runId)}
+              <option value={r.runId}>{r.label}</option>
+            {/each}
+          </select>
+          <p class="mt-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)]">
+            Loads debrief + events into task context (same DB run).
+          </p>
+        </div>
+
+        <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+          <input type="checkbox" bind:checked={enableTools} class="accent-primary" />
+          Enable tools (ReAct path, like rax playground <code class="text-[9px]">--tools</code>)
+        </label>
+
+        {#if enableTools}
+          <label class="flex cursor-pointer items-center gap-2 font-mono text-[10px] text-[var(--cortex-text)]">
+            <input type="checkbox" bind:checked={streamReasoningSteps} class="accent-primary" />
+            Stream reasoning steps live
+          </label>
+        {/if}
+
+        <!-- Full builder config: provider/model, reasoning, tools, MCP, sub-agents, variables. -->
+        <AgentConfigPanel bind:config={sessionAgentConfig} />
+      </div>
+
+      <div class="px-6 pb-5 flex items-center justify-end gap-3">
+        <button
+          type="button"
+          class="px-4 py-1.5 border border-outline-variant/25 text-outline font-mono text-[11px]
+                 uppercase rounded bg-transparent cursor-pointer hover:text-on-surface transition-colors"
+          onclick={closeConfigModal}
+        >Cancel</button>
+        {#if configMode === "create"}
+          <button
+            type="button"
+            disabled={creating}
+            class="px-4 py-1.5 font-mono text-[11px] uppercase rounded cursor-pointer transition-colors
+                   bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25 disabled:opacity-40"
+            onclick={create}
+          >{creating ? "Creating…" : "Create"}</button>
+        {:else}
+          <button
+            type="button"
+            class="px-4 py-1.5 font-mono text-[11px] uppercase rounded cursor-pointer transition-colors
+                   bg-primary/15 border border-primary/40 text-primary hover:bg-primary/25"
+            onclick={() => void saveActiveConfig()}
+          >Save</button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
