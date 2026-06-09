@@ -369,10 +369,12 @@
           </div>
         {/if}
 
-        <div>
-          <label class={label} for="chat-new-name">Name</label>
-          <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
-        </div>
+        {#if configMode === "create"}
+          <div>
+            <label class={label} for="chat-new-name">Name</label>
+            <input id="chat-new-name" class={field} placeholder="Session name" bind:value={newName} />
+          </div>
+        {/if}
 
         <div>
           <label class={label} for="chat-run">Prior run (optional)</label>
