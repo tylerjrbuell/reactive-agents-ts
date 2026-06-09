@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
+import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 
 /**
  * Faithful mirror of the `AgentStreamEvent` SSE wire union emitted by
@@ -120,7 +121,7 @@ type ChatSessionConfigInput = {
   /** Replaces default shell allowlist when non-empty (advanced). */
   terminalShellAllowedCommands?: string;
   mcpServerIds?: string[];
-  agentTools?: unknown[];
+  agentTools?: CortexAgentToolConfig[];
   dynamicSubAgents?: { enabled: boolean; maxIterations?: number };
   additionalToolNames?: string;
   terminalTools?: boolean;
