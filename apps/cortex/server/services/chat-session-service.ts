@@ -282,6 +282,11 @@ export class ChatSessionService {
         ...(toolsUsed && toolsUsed.length > 0 ? { toolsUsed } : {}),
       });
       updateSessionLastUsed(this.db, sessionId);
+      // Ephemeral per-turn streaming agent (not cached) — dispose so MCP/docker
+      // containers are torn down per turn rather than leaking.
+      await agent.dispose().catch(() => {
+        /* best-effort MCP/container teardown; never block the stream response */
+      });
     }
   }
 
