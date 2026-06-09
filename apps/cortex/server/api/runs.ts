@@ -5,6 +5,68 @@ import { CortexRunnerService } from "../services/runner-service.js";
 import type { VariableDef } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 
+/**
+ * Body schema for `POST /api/runs`. Exported so the chat ⇄ runs config-parity
+ * drift-guard test can assert the chat session body covers the same agent-config
+ * fields (see wiki/Research/Audit-Reports-2026-06-09/cortex-agent-quality-parity-audit.md).
+ */
+export const RunConfigBody = t.Object({
+  prompt: t.String(),
+  provider:           t.Optional(t.String()),
+  model:              t.Optional(t.String()),
+  tools:              t.Optional(t.Array(t.String())),
+  additionalToolNames: t.Optional(t.String()),
+  strategy:           t.Optional(t.String()),
+  temperature:        t.Optional(t.Number()),
+  maxIterations:      t.Optional(t.Number()),
+  minIterations:      t.Optional(t.Number()),
+  systemPrompt:       t.Optional(t.String()),
+  agentName:          t.Optional(t.String()),
+  maxTokens:          t.Optional(t.Number()),
+  numCtx:             t.Optional(t.Number()),
+  timeout:            t.Optional(t.Number()),
+  retryPolicy:        t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), maxRetries: t.Number(), backoffMs: t.Optional(t.Number()) })),
+  cacheTimeout:       t.Optional(t.Number()),
+  progressCheckpoint: t.Optional(t.Number()),
+  fallbacks:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), providers: t.Optional(t.Array(t.String())), errorThreshold: t.Optional(t.Number()) })),
+  metaTools:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), brief: t.Optional(t.Boolean()), find: t.Optional(t.Boolean()), pulse: t.Optional(t.Boolean()), recall: t.Optional(t.Boolean()), harnessSkill: t.Optional(t.Boolean()) })),
+  verificationStep:   t.Optional(t.String()),
+  runtimeVerification: t.Optional(t.Boolean()),
+  terminalTools: t.Optional(t.Boolean()),
+  terminalShellAdditionalCommands: t.Optional(t.String()),
+  terminalShellAllowedCommands: t.Optional(t.String()),
+  observabilityVerbosity: t.Optional(t.Union([t.Literal("off"), t.Literal("minimal"), t.Literal("normal"), t.Literal("verbose")])),
+  mcpServerIds: t.Optional(t.Array(t.String())),
+  agentTools: t.Optional(t.Array(t.Unknown())),
+  dynamicSubAgents: t.Optional(
+    t.Object({
+      enabled: t.Boolean(),
+      maxIterations: t.Optional(t.Number()),
+    }),
+  ),
+  taskContext: t.Optional(t.Record(t.String(), t.String())),
+  healthCheck: t.Optional(t.Boolean()),
+  strategySwitching: t.Optional(t.Boolean()),
+  memory: t.Optional(t.Object({ working: t.Optional(t.Boolean()), episodic: t.Optional(t.Boolean()), semantic: t.Optional(t.Boolean()) })),
+  contextSynthesis: t.Optional(t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")])),
+  guardrails: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), injectionThreshold: t.Optional(t.Number()), piiThreshold: t.Optional(t.Number()), toxicityThreshold: t.Optional(t.Number()) })),
+  persona: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), role: t.Optional(t.String()), tone: t.Optional(t.String()), traits: t.Optional(t.String()), responseStyle: t.Optional(t.String()) })),
+  skills: t.Optional(
+    t.Object({
+      paths: t.Array(t.String()),
+      evolution: t.Optional(
+        t.Object({
+          mode: t.Optional(t.String()),
+          refinementThreshold: t.Optional(t.Number()),
+          rollbackOnRegression: t.Optional(t.Boolean()),
+        }),
+      ),
+    }),
+  ),
+  variables: t.Optional(t.Array(t.Unknown())),
+  variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
+});
+
 export const runsRouter = (
   storeLayer: Layer.Layer<CortexStoreService>,
   runnerLayer: Layer.Layer<CortexRunnerService>,
@@ -78,62 +140,7 @@ export const runsRouter = (
         }
       },
       {
-        body: t.Object({
-          prompt: t.String(),
-          provider:           t.Optional(t.String()),
-          model:              t.Optional(t.String()),
-          tools:              t.Optional(t.Array(t.String())),
-          additionalToolNames: t.Optional(t.String()),
-          strategy:           t.Optional(t.String()),
-          temperature:        t.Optional(t.Number()),
-          maxIterations:      t.Optional(t.Number()),
-          minIterations:      t.Optional(t.Number()),
-          systemPrompt:       t.Optional(t.String()),
-          agentName:          t.Optional(t.String()),
-          maxTokens:          t.Optional(t.Number()),
-          numCtx:             t.Optional(t.Number()),
-          timeout:            t.Optional(t.Number()),
-          retryPolicy:        t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), maxRetries: t.Number(), backoffMs: t.Optional(t.Number()) })),
-          cacheTimeout:       t.Optional(t.Number()),
-          progressCheckpoint: t.Optional(t.Number()),
-          fallbacks:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), providers: t.Optional(t.Array(t.String())), errorThreshold: t.Optional(t.Number()) })),
-          metaTools:          t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), brief: t.Optional(t.Boolean()), find: t.Optional(t.Boolean()), pulse: t.Optional(t.Boolean()), recall: t.Optional(t.Boolean()), harnessSkill: t.Optional(t.Boolean()) })),
-          verificationStep:   t.Optional(t.String()),
-          runtimeVerification: t.Optional(t.Boolean()),
-          terminalTools: t.Optional(t.Boolean()),
-          terminalShellAdditionalCommands: t.Optional(t.String()),
-          terminalShellAllowedCommands: t.Optional(t.String()),
-          observabilityVerbosity: t.Optional(t.Union([t.Literal("off"), t.Literal("minimal"), t.Literal("normal"), t.Literal("verbose")])),
-          mcpServerIds: t.Optional(t.Array(t.String())),
-          agentTools: t.Optional(t.Array(t.Unknown())),
-          dynamicSubAgents: t.Optional(
-            t.Object({
-              enabled: t.Boolean(),
-              maxIterations: t.Optional(t.Number()),
-            }),
-          ),
-          taskContext: t.Optional(t.Record(t.String(), t.String())),
-          healthCheck: t.Optional(t.Boolean()),
-          strategySwitching: t.Optional(t.Boolean()),
-          memory: t.Optional(t.Object({ working: t.Optional(t.Boolean()), episodic: t.Optional(t.Boolean()), semantic: t.Optional(t.Boolean()) })),
-          contextSynthesis: t.Optional(t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")])),
-          guardrails: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), injectionThreshold: t.Optional(t.Number()), piiThreshold: t.Optional(t.Number()), toxicityThreshold: t.Optional(t.Number()) })),
-          persona: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), role: t.Optional(t.String()), tone: t.Optional(t.String()), traits: t.Optional(t.String()), responseStyle: t.Optional(t.String()) })),
-          skills: t.Optional(
-            t.Object({
-              paths: t.Array(t.String()),
-              evolution: t.Optional(
-                t.Object({
-                  mode: t.Optional(t.String()),
-                  refinementThreshold: t.Optional(t.Number()),
-                  rollbackOnRegression: t.Optional(t.Boolean()),
-                }),
-              ),
-            }),
-          ),
-          variables: t.Optional(t.Array(t.Unknown())),
-          variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
-        }),
+        body: RunConfigBody,
       },
     )
     .post("/:runId/pause", async ({ params, set }) => {

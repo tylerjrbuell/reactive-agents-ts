@@ -1,21 +1,51 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Context } from "effect";
+import { Effect, Layer, Context, Stream } from "effect";
 import {
   ExecutionEngine,
   ExecutionEngineLive,
   LifecycleHookRegistryLive,
 } from "../src/index.js";
 import { defaultReactiveAgentsConfig } from "../src/types.js";
+import { withHistoryBlock } from "../src/reactive-agent.js";
+import type { ChatMessage } from "../src/chat.js";
 
-// ── Tool-capable chat must seed the kernel with prior conversation turns ──
+// ── Tool-capable chat presents prior turns as a labeled reference block ──
 //
-// Regression: `ReactiveAgent.chat(..., { useTools:true })` runs a full kernel
-// via `run()`. Before this fix the kernel only saw the current message — chat
-// history was dropped, so tool-enabled chat answered as if it had no memory of
-// earlier turns. The fix threads history through `task.metadata.context.
-// conversationHistory` → reasoning-think → kernel `initialMessages`. This pins
-// that the engine forwards a history-prepended `initialMessages` to the
-// ReasoningService.
+// History is folded into the task TEXT (gateway-style, gateway-context-formatting.ts)
+// rather than seeded into the kernel's native-FC `state.messages`. Seeding plain
+// prior "assistant" final-answers into the FC tool thread made the model treat
+// them as its own tool-orchestration turns → it re-ran tools and conflated data
+// on a follow-up ("based on your findings, should I…"). A labeled text block keeps
+// the FC thread clean while staying history-aware.
+
+const hist = (turns: Array<["user" | "assistant", string]>): ChatMessage[] =>
+  turns.map(([role, content]) => ({ role, content, timestamp: 0 }));
+
+describe("withHistoryBlock — gateway-style history presentation", () => {
+  it("returns the input unchanged when there is no history", () => {
+    expect(withHistoryBlock("What is my name?")).toBe("What is my name?");
+    expect(withHistoryBlock("hi", [])).toBe("hi");
+  });
+
+  it("prepends a labeled conversation block and a current-message marker", () => {
+    const out = withHistoryBlock(
+      "Should I hold or sell?",
+      hist([
+        ["user", "Research XRP."],
+        ["assistant", "XRP is $1.14, trend down."],
+      ]),
+    );
+    expect(out).toContain("--- Conversation history ---");
+    expect(out).toContain("User: Research XRP.");
+    expect(out).toContain("Assistant: XRP is $1.14, trend down.");
+    expect(out).toContain("--- Current message ---");
+    // The actual ask comes after the history, clearly delineated.
+    expect(out.indexOf("--- Conversation history ---")).toBeLessThan(
+      out.indexOf("--- Current message ---"),
+    );
+    expect(out.trimEnd().endsWith("Should I hold or sell?")).toBe(true);
+  });
+});
 
 const ReasoningServiceTag = Context.GenericTag<{
   execute: (params: {
@@ -29,80 +59,14 @@ const ReasoningServiceTag = Context.GenericTag<{
   }>;
 }>("ReasoningService");
 
-const taskWithHistory = {
-  id: "task-chs-001" as any,
-  agentId: "agent-chs" as any,
-  type: "query" as const,
-  input: { question: "What did I just ask you?" },
-  priority: "medium" as const,
-  status: "pending" as const,
-  metadata: {
-    tags: [],
-    context: {
-      conversationHistory: [
-        { role: "user", content: "My name is Ada." },
-        { role: "assistant", content: "Nice to meet you, Ada." },
-        // Defensive: malformed entries must be dropped, not crash.
-        { role: "system", content: "ignored" },
-        { role: "user", content: 42 },
-        null,
-      ],
-    },
-  },
-  createdAt: new Date(),
-};
-
-describe("Tool-capable chat seeds kernel with conversation history", () => {
-  it("forwards history-prepended initialMessages to ReasoningService.execute()", async () => {
-    const capturedParams: Array<{
-      initialMessages?: readonly { readonly role: string; readonly content: string }[];
-    }> = [];
-
-    const stubReasoning = {
-      execute: (params: any) => {
-        capturedParams.push(params);
-        return Effect.succeed({
-          output: "You said your name is Ada.",
-          status: "completed",
-          steps: [{ id: "s-1", type: "thought", content: "recalled from history" }],
-          metadata: { cost: 0, tokensUsed: 20, stepsCount: 1 },
-        });
-      },
-    };
-    const MockReasoning = Layer.succeed(ReasoningServiceTag, stubReasoning);
-
-    const config = defaultReactiveAgentsConfig("agent-chs", {});
-    const hookLayer = LifecycleHookRegistryLive;
-    const engineLayer = ExecutionEngineLive(config).pipe(Layer.provide(hookLayer));
-    const testLayer = Layer.mergeAll(hookLayer, engineLayer, MockReasoning);
-
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const engine = yield* ExecutionEngine;
-        return yield* engine.execute(taskWithHistory);
-      }).pipe(Effect.provide(testLayer)),
-    );
-
-    expect(capturedParams.length).toBeGreaterThan(0);
-    const seeded = capturedParams[0]!.initialMessages ?? [];
-
-    // Valid history (2 turns) prepended, malformed entries dropped, current task last.
-    expect(seeded).toEqual([
-      { role: "user", content: "My name is Ada." },
-      { role: "assistant", content: "Nice to meet you, Ada." },
-      { role: "user", content: "What did I just ask you?" },
-    ]);
-
-    expect(result.success).toBe(true);
-  });
-
-  it("seeds only the task when no history is present", async () => {
-    const capturedParams: Array<{
+describe("kernel FC thread is not pre-seeded with prior turns", () => {
+  it("seeds initialMessages with exactly one user message (the task text)", async () => {
+    const captured: Array<{
       initialMessages?: readonly { readonly role: string; readonly content: string }[];
     }> = [];
     const stubReasoning = {
       execute: (params: any) => {
-        capturedParams.push(params);
+        captured.push(params);
         return Effect.succeed({
           output: "ok",
           status: "completed",
@@ -111,7 +75,7 @@ describe("Tool-capable chat seeds kernel with conversation history", () => {
         });
       },
     };
-    const config = defaultReactiveAgentsConfig("agent-chs2", {});
+    const config = defaultReactiveAgentsConfig("agent-fc", {});
     const hookLayer = LifecycleHookRegistryLive;
     const engineLayer = ExecutionEngineLive(config).pipe(Layer.provide(hookLayer));
     const testLayer = Layer.mergeAll(
@@ -120,24 +84,31 @@ describe("Tool-capable chat seeds kernel with conversation history", () => {
       Layer.succeed(ReasoningServiceTag, stubReasoning),
     );
 
+    // The task text already carries the folded history block (as run() produces).
+    const taskText = withHistoryBlock("Should I hold or sell?", hist([["user", "Research XRP."]]));
+
     await Effect.runPromise(
       Effect.gen(function* () {
         const engine = yield* ExecutionEngine;
-        return yield* engine.execute({
-          id: "task-chs-002" as any,
-          agentId: "agent-chs2" as any,
+        const stream = yield* engine.executeStream({
+          id: "task-fc-001" as any,
+          agentId: "agent-fc" as any,
           type: "query" as const,
-          input: { question: "Hello there" },
+          input: { question: taskText },
           priority: "medium" as const,
           status: "pending" as const,
           metadata: { tags: [] },
           createdAt: new Date(),
         });
+        yield* Stream.runDrain(stream);
       }).pipe(Effect.provide(testLayer)),
     );
 
-    expect(capturedParams[0]!.initialMessages).toEqual([
-      { role: "user", content: "Hello there" },
-    ]);
+    const seeded = captured[0]!.initialMessages ?? [];
+    // Exactly one user message — no separate "assistant" turns injected into the
+    // FC thread. The history lives inside that single message's text.
+    expect(seeded.length).toBe(1);
+    expect(seeded[0]!.role).toBe("user");
+    expect(seeded[0]!.content).toContain("--- Conversation history ---");
   });
 });

@@ -45,6 +45,22 @@ import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { RunController } from './run-controller.js'
+import { applyHistoryWindow, formatHistoryBlock } from './gateway-context-formatting.js'
+
+/**
+ * Fold prior conversation turns into the task as a labeled reference block —
+ * the same presentation the gateway uses (gateway-context-formatting.ts). This
+ * keeps the kernel's native-FC tool thread clean: seeding plain-text prior
+ * "assistant" final-answers directly into `state.messages` made the model treat
+ * them as its own tool-orchestration turns and re-run tools / conflate context.
+ * History as labeled text in the task avoids that while staying history-aware.
+ */
+export const withHistoryBlock = (input: string, history?: readonly ChatMessage[]): string => {
+    if (!history || history.length === 0) return input
+    const block = formatHistoryBlock(applyHistoryWindow(history))
+    if (!block) return input
+    return `${block}\n\n--- Current message ---\n${input}`
+}
 import type { RunHandle } from './run-controller.js'
 import {
     AgentSession,
@@ -573,8 +589,9 @@ export class ReactiveAgent {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
+        const taskInput = withHistoryBlock(input, options?.history)
         return this.runtime
-            .runPromise(this.buildRunTaskEffect(input, options))
+            .runPromise(this.buildRunTaskEffect(taskInput, options?.taskId ? { taskId: options.taskId } : undefined))
             .catch((e) => {
                 const unwrapped = unwrapError(e)
                 if (this._errorHandler) {
@@ -629,7 +646,7 @@ export class ReactiveAgent {
      */
     private buildRunTaskEffect(
         input: string,
-        options?: { readonly taskId?: string; readonly history?: readonly ChatMessage[] }
+        options?: { readonly taskId?: string }
     ): Effect.Effect<AgentResult, Error> {
         // Pre-set the task description so sub-agents spawned on the first iteration
         // have access to the full user prompt (including phone numbers, URLs, etc.)
@@ -639,13 +656,6 @@ export class ReactiveAgent {
             ? Schema.decodeSync(TaskId)(options.taskId)
             : generateTaskId()
 
-        // Carry prior conversation turns so the tool-capable path (which runs a
-        // full kernel) seeds `state.messages` with the chat history instead of
-        // just the current message. Threaded via the free-form metadata.context
-        // bag → reasoning-think → kernel `initialMessages` (the existing
-        // "chat history injection" seam at kernel/loop/runner.ts).
-        const conversationHistory = (options?.history ?? [])
-            .map((m) => ({ role: m.role, content: m.content }))
         const task: Task = {
             id: taskId,
             agentId: Schema.decodeSync(AgentId)(this.agentId),
@@ -653,10 +663,7 @@ export class ReactiveAgent {
             input: { question: input },
             priority: 'medium' as const,
             status: 'pending' as const,
-            metadata:
-                conversationHistory.length > 0
-                    ? { tags: [], context: { conversationHistory } }
-                    : { tags: [] },
+            metadata: { tags: [] },
             createdAt: new Date(),
         }
 
@@ -800,7 +807,7 @@ export class ReactiveAgent {
      */
     runStream(
         input: string,
-        options?: { density?: StreamDensity; signal?: AbortSignal }
+        options?: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] }
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -812,7 +819,8 @@ export class ReactiveAgent {
             }
         }
         const controller = new RunController(internalAbort);
-        const gen = this._runStreamImpl(input, { ...options, signal: controller.signal }, controller);
+        const taskInput = withHistoryBlock(input, options?.history);
+        const gen = this._runStreamImpl(taskInput, { ...options, signal: controller.signal }, controller);
         return Object.assign(gen, {
             pause: () => controller.pause(),
             resume: () => controller.resume(),
@@ -824,7 +832,7 @@ export class ReactiveAgent {
 
     private async *_runStreamImpl(
         input: string,
-        options: { density?: StreamDensity; signal?: AbortSignal },
+        options: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] },
         controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
