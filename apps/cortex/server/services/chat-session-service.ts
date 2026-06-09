@@ -453,11 +453,44 @@ export class ChatSessionService {
         : [];
     const toolParams = chatToolParams(agentConfig, enableTools, mcpConfigs);
 
+    // Honor a configured memory profile; fall back to episodic-only.
+    const memoryRaw =
+      agentConfig.memory && typeof agentConfig.memory === "object" && !Array.isArray(agentConfig.memory)
+        ? (agentConfig.memory as { working?: boolean; episodic?: boolean; semantic?: boolean })
+        : undefined;
+    const memory = memoryRaw
+      ? {
+          ...(typeof memoryRaw.working === "boolean" ? { working: memoryRaw.working } : {}),
+          episodic: memoryRaw.episodic !== false,
+          ...(typeof memoryRaw.semantic === "boolean" ? { semantic: memoryRaw.semantic } : {}),
+        }
+      : { episodic: true };
+
+    const metaTools =
+      agentConfig.metaTools && typeof agentConfig.metaTools === "object" && !Array.isArray(agentConfig.metaTools)
+        ? (agentConfig.metaTools as BuildCortexAgentParams["metaTools"])
+        : undefined;
+    const fallbacks =
+      agentConfig.fallbacks && typeof agentConfig.fallbacks === "object" && !Array.isArray(agentConfig.fallbacks)
+        ? (agentConfig.fallbacks as BuildCortexAgentParams["fallbacks"])
+        : undefined;
+    const retryPolicy =
+      agentConfig.retryPolicy && typeof agentConfig.retryPolicy === "object" && !Array.isArray(agentConfig.retryPolicy)
+        ? (agentConfig.retryPolicy as BuildCortexAgentParams["retryPolicy"])
+        : undefined;
+    const observabilityVerbosity =
+      agentConfig.observabilityVerbosity === "off" ||
+      agentConfig.observabilityVerbosity === "minimal" ||
+      agentConfig.observabilityVerbosity === "normal" ||
+      agentConfig.observabilityVerbosity === "verbose"
+        ? agentConfig.observabilityVerbosity
+        : undefined;
+
     return {
       agentName: `chat-${sessionId.slice(0, 8)}`,
       provider,
       ...(stableAgentId ? { agentId: stableAgentId } : {}),
-      memory: { episodic: true },
+      memory,
       ...(opts.streaming ? { streaming: true } : {}),
       ...(typeof agentConfig.model === "string" && agentConfig.model.trim()
         ? { model: agentConfig.model.trim() }
@@ -493,6 +526,23 @@ export class ChatSessionService {
       ...(contextSynthesis ? { contextSynthesis } : {}),
       ...(guardrails ? { guardrails } : {}),
       ...(persona ? { persona } : {}),
+      ...(metaTools ? { metaTools } : {}),
+      ...(fallbacks ? { fallbacks } : {}),
+      ...(retryPolicy ? { retryPolicy } : {}),
+      ...(observabilityVerbosity ? { observabilityVerbosity } : {}),
+      ...(typeof agentConfig.minIterations === "number" && agentConfig.minIterations > 0
+        ? { minIterations: agentConfig.minIterations }
+        : {}),
+      ...(agentConfig.healthCheck === true ? { healthCheck: true as const } : {}),
+      ...(typeof agentConfig.timeout === "number" && agentConfig.timeout > 0
+        ? { timeout: agentConfig.timeout }
+        : {}),
+      ...(typeof agentConfig.cacheTimeout === "number" && agentConfig.cacheTimeout > 0
+        ? { cacheTimeout: agentConfig.cacheTimeout }
+        : {}),
+      ...(typeof agentConfig.progressCheckpoint === "number" && agentConfig.progressCheckpoint > 0
+        ? { progressCheckpoint: agentConfig.progressCheckpoint }
+        : {}),
       ...(agentConfig.terminalTools === true ? { terminalTools: true as const } : {}),
       // Forward shell CLI config whenever tools are on and the session stored values — do not
       // gate on `shellInToolPick` alone so `buildCortexAgent` can still apply `terminalShell*`
