@@ -32,32 +32,6 @@ import type { ReasoningServiceLike } from "../../types-reasoning.js";
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
 
-type SeedMessage = { readonly role: "user" | "assistant"; readonly content: string };
-
-/**
- * Read prior conversation turns threaded through `task.metadata.context.
- * conversationHistory` (set by `ReactiveAgent.run({ history })`). The bag is
- * `Record<string, unknown>`, so validate shape defensively and drop anything
- * that is not a `{ role: "user" | "assistant"; content: string }` pair.
- */
-const extractConversationHistory = (raw: unknown): readonly SeedMessage[] => {
-  if (!Array.isArray(raw)) return [];
-  const out: SeedMessage[] = [];
-  for (const item of raw) {
-    if (
-      typeof item === "object" &&
-      item !== null &&
-      "role" in item &&
-      "content" in item &&
-      (item.role === "user" || item.role === "assistant") &&
-      typeof item.content === "string"
-    ) {
-      out.push({ role: item.role, content: item.content });
-    }
-  }
-  return out;
-};
-
 export interface ReasoningThinkDeps {
   readonly config: ReactiveAgentsConfig;
   readonly task: Task;
@@ -195,13 +169,11 @@ export const runReasoningThink = (
     }
 
     let result: ExecutionReasoningResult;
-    // Build initial messages — seed the conversation thread with prior chat
-    // history (if the caller threaded it via metadata.context.conversationHistory)
-    // followed by the current task. Without this, tool-capable chat turns run a
-    // fresh kernel that only sees the latest message and lose conversation context.
-    const priorHistory = extractConversationHistory(task.metadata?.context?.conversationHistory);
+    // Build initial messages — seed the conversation thread with the task.
+    // (Prior chat history is folded into the task text as a labeled reference
+    // block by ReactiveAgent.run/runStream — gateway-style — to keep the native
+    // FC tool thread clean. It is NOT seeded as separate assistant turns here.)
     const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
-      ...priorHistory,
       { role: "user", content: extractTaskText(task.input) },
     ];
     const effectiveStrategyName = c.selectedStrategy ?? "reactive";
