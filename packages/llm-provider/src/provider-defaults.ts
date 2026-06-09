@@ -5,7 +5,7 @@
  */
 
 export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-    anthropic: 'claude-sonnet-4-20250514',
+    anthropic: 'claude-sonnet-4-6',
     openai: 'gpt-4o',
     ollama: 'llama3.2',
     gemini: 'gemini-2.5-flash',

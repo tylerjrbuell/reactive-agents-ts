@@ -86,6 +86,6 @@ describe("ModelPresets", () => {
     const sonnet = ModelPresets["claude-sonnet"];
     expect(sonnet.costPer1MInput).toBe(3.0);
     expect(sonnet.costPer1MOutput).toBe(15.0);
-    expect(sonnet.maxContext).toBe(200_000);
+    expect(sonnet.maxContext).toBe(1_000_000); // Claude Sonnet 4.6 — 1M context
   });
 });

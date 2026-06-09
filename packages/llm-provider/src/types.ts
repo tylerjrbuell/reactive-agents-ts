@@ -94,7 +94,7 @@ export const DefaultEmbeddingConfig: EmbeddingConfig = {
  * ```typescript
  * const config: ModelConfig = {
  *   provider: "anthropic",
- *   model: "claude-opus-4-20250514",
+ *   model: "claude-opus-4-8",
  *   maxTokens: 4096,
  *   temperature: 0.7
  * };
@@ -132,17 +132,17 @@ export type ModelConfig = Schema.Schema.Type<typeof ModelConfigSchema>;
  * @example
  * ```typescript
  * const preset = ModelPresets["claude-opus"];
- * // { provider: "anthropic", model: "claude-opus-4-20250514", costPer1MInput: 15.0, ... }
+ * // { provider: "anthropic", model: "claude-opus-4-8", costPer1MInput: 15.0, ... }
  * ```
  */
 export const ModelPresets = {
   /**
-   * Claude 3.5 Haiku — fast, cost-effective Anthropic model.
+   * Claude Haiku 4.5 — fast, cost-effective Anthropic model.
    * Best for low-latency, simple reasoning tasks; not recommended for complex analysis.
    */
   "claude-haiku": {
     provider: "anthropic" as const,
-    model: "claude-3-5-haiku-20241022",
+    model: "claude-haiku-4-5",
     /** Cost per 1 million input tokens in USD */
     costPer1MInput: 1.0,
     /** Cost per 1 million output tokens in USD */
@@ -153,15 +153,15 @@ export const ModelPresets = {
     quality: 0.6,
   },
   /**
-   * Claude Sonnet 4 — balanced Anthropic model.
+   * Claude Sonnet 4.6 — balanced Anthropic model.
    * Recommended for general-purpose reasoning, tool use, and production agents.
    */
   "claude-sonnet": {
     provider: "anthropic" as const,
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     costPer1MInput: 3.0,
     costPer1MOutput: 15.0,
-    maxContext: 200_000,
+    maxContext: 1_000_000,
     /** Quality tier (0.85 = excellent reasoning) */
     quality: 0.85,
   },
@@ -179,15 +179,15 @@ export const ModelPresets = {
     quality: 0.9,
   },
   /**
-   * Claude Opus 4 — most capable Anthropic model.
+   * Claude Opus 4.8 — most capable Anthropic model.
    * Best for complex analysis, research, and high-accuracy multi-hop reasoning.
-   * Largest context window (1M tokens); highest cost.
+   * Largest context window (1M tokens).
    */
   "claude-opus": {
     provider: "anthropic" as const,
-    model: "claude-opus-4-20250514",
-    costPer1MInput: 15.0,
-    costPer1MOutput: 75.0,
+    model: "claude-opus-4-8",
+    costPer1MInput: 5.0,
+    costPer1MOutput: 25.0,
     maxContext: 1_000_000,
     /** Quality tier (1.0 = frontier-class reasoning) */
     quality: 1.0,
@@ -206,7 +206,33 @@ export const ModelPresets = {
     quality: 0.55,
   },
   /**
-   * GPT-4o — latest OpenAI flagship model.
+   * GPT-5.5 — OpenAI flagship model.
+   * Frontier reasoning for coding and professional work; 1M context, vision.
+   */
+  "gpt-5.5": {
+    provider: "openai" as const,
+    model: "gpt-5.5",
+    costPer1MInput: 5.0,
+    costPer1MOutput: 30.0,
+    maxContext: 1_000_000,
+    /** Quality tier (1.0 = frontier-class reasoning) */
+    quality: 1.0,
+  },
+  /**
+   * GPT-5.4 — strong, lower-cost OpenAI model.
+   * Excellent reasoning at a production-friendly price; 1M context, vision.
+   */
+  "gpt-5.4": {
+    provider: "openai" as const,
+    model: "gpt-5.4",
+    costPer1MInput: 2.5,
+    costPer1MOutput: 15.0,
+    maxContext: 1_000_000,
+    /** Quality tier (0.9 = very strong reasoning) */
+    quality: 0.9,
+  },
+  /**
+   * GPT-4o — earlier OpenAI model (still active).
    * Strong reasoning, multimodal support; recommended for tool use and complex analysis.
    */
   "gpt-4o": {
@@ -219,25 +245,26 @@ export const ModelPresets = {
     quality: 0.8,
   },
   /**
-   * Gemini 2.0 Flash — fast Google model.
+   * Gemini 2.5 Flash-Lite — fastest, lowest-cost Google model.
    * Excellent speed and cost efficiency; large 1M context window.
+   * (Gemini 2.0 Flash was shut down 2026-06-01.)
    */
-  "gemini-2.0-flash": {
+  "gemini-2.5-flash-lite": {
     provider: "gemini" as const,
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash-lite",
     costPer1MInput: 0.1,
     costPer1MOutput: 0.4,
     maxContext: 1_000_000,
-    /** Quality tier (0.75 = good reasoning) */
-    quality: 0.75,
+    /** Quality tier (0.7 = good for simple tasks) */
+    quality: 0.7,
   },
   /**
-   * Gemini 2.5 Pro Preview — advanced Google model.
+   * Gemini 2.5 Pro — advanced Google model.
    * Superior reasoning to Flash; large context window and competitive pricing.
    */
   "gemini-2.5-pro": {
     provider: "gemini" as const,
-    model: "gemini-2.5-pro-preview-03-25",
+    model: "gemini-2.5-pro",
     costPer1MInput: 1.25,
     costPer1MOutput: 10.0,
     maxContext: 1_000_000,
@@ -736,7 +763,7 @@ export type TokenLogprob = {
  *     { role: "system", content: "You are a helpful assistant." },
  *     { role: "user", content: "What is the capital of France?" }
  *   ],
- *   model: { provider: "anthropic", model: "claude-opus-4-20250514" },
+ *   model: { provider: "anthropic", model: "claude-opus-4-8" },
  *   maxTokens: 1024,
  *   temperature: 0.7,
  *   tools: [
@@ -804,7 +831,7 @@ export type CompletionRequest = {
  *   content: "The capital of France is Paris.",
  *   stopReason: "end_turn",
  *   usage: { inputTokens: 120, outputTokens: 15, totalTokens: 135, estimatedCost: 0.00041 },
- *   model: "claude-opus-4-20250514",
+ *   model: "claude-opus-4-8",
  *   toolCalls: undefined
  * };
  * ```
@@ -1028,7 +1055,7 @@ export type TruncationStrategy =
  * const event: LLMRequestEvent = {
  *   requestId: "req-123",
  *   provider: "anthropic",
- *   model: "claude-opus-4-20250514",
+ *   model: "claude-opus-4-8",
  *   timestamp: new Date(),
  *   durationMs: 1250,
  *   systemPromptLength: 340,
