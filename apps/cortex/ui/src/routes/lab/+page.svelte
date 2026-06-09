@@ -851,7 +851,8 @@
               <HighlightedField
                 multiline
                 id="builder-prompt"
-                bind:value={builderConfig.prompt}
+                value={builderConfig.prompt}
+                oninput={(e) => (builderConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
                 placeholder="Describe what you want the agent to do…"
                 rows={5}
                 frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
