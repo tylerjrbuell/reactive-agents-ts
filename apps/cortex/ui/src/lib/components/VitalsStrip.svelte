@@ -230,6 +230,7 @@
             type="text"
             bind:value={renameValue}
             onkeydown={handleRenameKeydown}
+            onblur={() => void commitRename()}
             class="w-full min-w-0 truncate rounded border border-primary/40 bg-surface-container px-1.5 py-0.5 font-mono text-[9px] normal-case tracking-normal text-on-surface outline-none focus:border-primary"
             aria-label="Rename this run"
             autofocus
