@@ -66,10 +66,20 @@ export class ChatSessionService {
     this.db = db;
   }
 
-  async createSession(opts: { name?: string; agentConfig: Record<string, unknown> }): Promise<string> {
+  async createSession(opts: {
+    name?: string;
+    agentConfig: Record<string, unknown>;
+    seedTurns?: Array<{ role: "user" | "assistant"; content: string }>;
+  }): Promise<string> {
     const stableAgentId = generateTaskId();
     const normalizedAgentConfig = normalizeCortexAgentConfig(opts.agentConfig);
-    return createChatSession(this.db, { ...opts, agentConfig: normalizedAgentConfig, stableAgentId });
+    const sessionId = await createChatSession(this.db, { ...opts, agentConfig: normalizedAgentConfig, stableAgentId });
+    if (opts.seedTurns?.length) {
+      for (const turn of opts.seedTurns) {
+        appendChatTurn(this.db, { sessionId, role: turn.role, content: turn.content, tokensUsed: 0 });
+      }
+    }
+    return sessionId;
   }
 
   listSessions(): ChatSessionRow[] {

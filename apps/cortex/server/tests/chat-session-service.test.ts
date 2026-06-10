@@ -302,4 +302,22 @@ describe("ChatSessionService", () => {
     expect(metadata).toBeDefined();
     expect(typeof metadata.tokensUsed).toBe("number");
   });
+
+  it("createSession with seedTurns inserts turns into the session", async () => {
+    const { getChatTurns } = await import("../db/chat-queries.js");
+    const id = await svc.createSession({
+      name: "Seeded",
+      agentConfig: { provider: "test", model: "test-model" },
+      seedTurns: [
+        { role: "user", content: "What is 2+2?" },
+        { role: "assistant", content: "4" },
+      ],
+    });
+    const turns = getChatTurns(db, id);
+    expect(turns).toHaveLength(2);
+    expect(turns[0]?.role).toBe("user");
+    expect(turns[0]?.content).toBe("What is 2+2?");
+    expect(turns[1]?.role).toBe("assistant");
+    expect(turns[1]?.content).toBe("4");
+  });
 });

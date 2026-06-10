@@ -40,6 +40,14 @@ const ChatSessionConfigBody = t.Object({
   ),
   terminalShellAdditionalCommands: t.Optional(t.String()),
   terminalShellAllowedCommands: t.Optional(t.String()),
+  seedTurns: t.Optional(
+    t.Array(
+      t.Object({
+        role: t.Union([t.Literal("user"), t.Literal("assistant")]),
+        content: t.String(),
+      }),
+    ),
+  ),
 });
 
 export const chatRouter = (svc: ChatSessionService) =>
@@ -51,6 +59,7 @@ export const chatRouter = (svc: ChatSessionService) =>
         try {
           const sessionId = await svc.createSession({
             ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.seedTurns?.length ? { seedTurns: body.seedTurns } : {}),
             agentConfig: {
               provider: body.provider ?? "anthropic",
               ...(body.model ? { model: body.model } : {}),

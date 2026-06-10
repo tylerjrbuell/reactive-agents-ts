@@ -142,6 +142,37 @@
     if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
   }
 
+  // ── Continue in Chat ───────────────────────────────────────────────────
+  let openingChat = $state(false);
+
+  async function continueInChat() {
+    if (openingChat) return;
+    openingChat = true;
+    try {
+      const output = finalDeliverableText.trim();
+      const seedTurns: Array<{ role: "user" | "assistant"; content: string }> = [];
+      if (output) seedTurns.push({ role: "assistant", content: output });
+
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `Chat: ${runId.slice(0, 8)}`,
+          provider: $runStore.vitals.provider ?? "anthropic",
+          ...($runStore.vitals.model ? { model: $runStore.vitals.model } : {}),
+          ...(seedTurns.length > 0 ? { seedTurns } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const { sessionId } = (await res.json()) as { sessionId: string };
+      await goto(`/chat?session=${encodeURIComponent(sessionId)}`);
+    } catch (e) {
+      toast.error("Could not open chat", String(e));
+    } finally {
+      openingChat = false;
+    }
+  }
+
   // ── Export ─────────────────────────────────────────────────────────────
   async function exportJSON() {
     try {
@@ -400,6 +431,21 @@
     {/if}
 
     <div class="flex-1 min-w-[8px]"></div>
+
+    <!-- Continue in Chat -->
+    {#if $runStore.status === "completed" && finalDeliverableText.trim()}
+      <Tooltip text="Open run output in a new chat session">
+        <button
+          type="button"
+          onclick={() => void continueInChat()}
+          disabled={openingChat}
+          class="flex items-center gap-1 rounded-md border border-secondary/35 bg-secondary/8 px-2 py-1 font-mono text-[9px] uppercase text-secondary transition-colors hover:border-secondary hover:bg-secondary/15 disabled:opacity-40 shrink-0"
+        >
+          <span class="material-symbols-outlined text-[12px]">chat</span>
+          {openingChat ? "Opening…" : "Chat"}
+        </button>
+      </Tooltip>
+    {/if}
 
     <!-- Export buttons -->
     <div
