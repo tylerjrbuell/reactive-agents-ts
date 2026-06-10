@@ -26,7 +26,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 const agent = await ReactiveAgents.create()
   .withName("ops-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory("1")
   .withGateway({
     heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },

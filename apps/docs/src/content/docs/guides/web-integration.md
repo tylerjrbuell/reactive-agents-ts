@@ -350,7 +350,7 @@ export async function POST(req: Request) {
 
   const agent = await ReactiveAgents.create()
     .withProvider("anthropic")
-    .withModel({ model: "claude-sonnet-4-20250514", temperature: temperature ?? 0.7 })
+    .withModel({ model: "claude-sonnet-4-6", temperature: temperature ?? 0.7 })
     .build();
 
   return AgentStream.toSSE(agent.runStream(prompt));

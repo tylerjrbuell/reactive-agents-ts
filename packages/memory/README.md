@@ -54,7 +54,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 const agent = await ReactiveAgents.create()
   .withName("my-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory("1") // "1" = FTS5; "2" = vector embeddings
   .build();
 
@@ -109,13 +109,13 @@ import { ExperienceStore } from "@reactive-agents/memory";
 const exp = yield* ExperienceStore;
 yield* exp.record({
   agentId: "researcher",
-  modelId: "claude-sonnet-4-20250514",
+  modelId: "claude-sonnet-4-6",
   toolName: "web-search",
   outcome: "success",
   /* ... */
 });
 
-const summary = yield* exp.queryByModel("claude-sonnet-4-20250514");
+const summary = yield* exp.queryByModel("claude-sonnet-4-6");
 ```
 
 `ExperienceSummary` materialization feeds the calibration system in `@reactive-agents/llm-provider`.

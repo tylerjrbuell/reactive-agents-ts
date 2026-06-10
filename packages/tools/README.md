@@ -42,7 +42,7 @@ import { Effect } from "effect";
 const agent = await ReactiveAgents.create()
   .withName("research-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning()
   .withTools()
   .build();

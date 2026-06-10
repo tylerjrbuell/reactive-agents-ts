@@ -11,7 +11,7 @@ The package is `private: true` and is consumed only by in-tree scripts and CI. T
 ### Via CLI (rax)
 
 ```bash
-rax bench --provider anthropic --model claude-sonnet-4-20250514
+rax bench --provider anthropic --model claude-sonnet-4-6
 rax bench --provider openai     --tiers simple,moderate
 rax bench --provider ollama     --model qwen3:14b --tiers trivial,simple
 ```
@@ -23,7 +23,7 @@ import { runBenchmarks, getTasksByTier, BENCHMARK_TASKS } from "@reactive-agents
 
 const report = await runBenchmarks({
   provider: "anthropic",
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-6",
   tiers: ["simple", "moderate"],
   timeoutMs: 120_000,
 });

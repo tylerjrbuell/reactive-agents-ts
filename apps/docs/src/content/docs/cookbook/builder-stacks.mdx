@@ -35,7 +35,7 @@ import { ReactiveAgents } from "reactive-agents";
 await using agent = await ReactiveAgents.create()
   .withName("qa-bot")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .build();
 
 const result = await agent.run("Explain what a functor is in one paragraph.");
@@ -52,7 +52,7 @@ import { ReactiveAgents } from "reactive-agents";
 await using agent = await ReactiveAgents.create()
   .withName("tool-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning()
   .withTools()
   .build();
@@ -71,7 +71,7 @@ import { ReactiveAgents } from "reactive-agents";
 await using agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory() // or .withMemory({ tier: "enhanced" })
   .withReasoning()
   .withTools()
@@ -91,7 +91,7 @@ import { ReactiveAgents } from "reactive-agents";
 await using agent = await ReactiveAgents.create()
   .withName("production-shape")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning()
   .withTools()
   .withGuardrails({ toxicity: true, injection: true, pii: true })
@@ -111,7 +111,7 @@ import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning()
   .withStreaming({ density: "tokens" })
   .build();
@@ -136,7 +136,7 @@ import {
 const builder = ReactiveAgents.create()
   .withName("saved-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning()
   .withTools();
 
@@ -155,7 +155,7 @@ import { ReactiveAgents } from "reactive-agents";
 
 await using agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning({
     defaultStrategy: "adaptive",
     adaptive: { enabled: true },

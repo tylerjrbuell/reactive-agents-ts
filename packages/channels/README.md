@@ -59,7 +59,7 @@ const slackAdapter = new WebhookChannelAdapter({
 const agent = await ReactiveAgents.create()
   .withName("ops-bot")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory("1")
   .withGateway({
     accessControl: {

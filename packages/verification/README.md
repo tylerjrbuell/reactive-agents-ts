@@ -35,7 +35,7 @@ import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("fact-checker")
-  .withProvider("anthropic", { model: "claude-sonnet-4-20250514" })
+  .withProvider("anthropic", { model: "claude-sonnet-4-6" })
   .withVerification()
   .build();
 

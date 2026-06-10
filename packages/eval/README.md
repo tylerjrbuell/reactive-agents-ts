@@ -63,7 +63,7 @@ const program = Effect.gen(function* () {
         { id: "q2", input: "Who wrote 'The Great Gatsby'?", expectedOutput: "F. Scott Fitzgerald" },
       ],
     },
-    "anthropic/claude-sonnet-4-20250514",      // SUT identifier
+    "anthropic/claude-sonnet-4-6",      // SUT identifier
     myAgentRunner,
     {
       judge: {
