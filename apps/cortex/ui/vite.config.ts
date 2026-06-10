@@ -1,8 +1,6 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
 import type { ProxyOptions } from "vite";
-import { execSync } from "child_process";
-import path from "path";
 
 const apiPort = process.env.CORTEX_PORT ?? "4321";
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
@@ -22,16 +20,10 @@ const apiProxy: ProxyOptions = {
   // can fight Vite’s proxyRes wiring. timeout + proxyTimeout above are enough for Node’s side.
 };
 
-// --git-common-dir always resolves to the main .git dir, even from a worktree
-const gitCommonDir = execSync("git rev-parse --git-common-dir", { cwd: import.meta.dirname }).toString().trim();
-const monorepoRoot = path.resolve(gitCommonDir, "..");
-
 export default defineConfig({
   plugins: [sveltekit()],
   server: {
-    fs: {
-      allow: [monorepoRoot],
-    },
+    fs: { strict: false },
     proxy: {
       "/api": {
         ...apiProxy,
