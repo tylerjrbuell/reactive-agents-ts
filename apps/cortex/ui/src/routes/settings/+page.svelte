@@ -28,6 +28,8 @@
   let notifPermission = $state<NotificationPermission>("default");
   let serverHealth = $state<"checking" | "online" | "offline">("checking");
   let serverVersion = $state<string | null>(null);
+  let providerHealth = $state<Record<string, string>>({});
+  let checkingProviders = $state(false);
 
   /** From `/api/models/framework/*` or live Ollama tags (same source as Lab builder). */
   let providerModelOptions = $state<UiModelOption[]>([]);
@@ -63,6 +65,20 @@
     };
   });
 
+  async function checkProviderHealth() {
+    checkingProviders = true;
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/health/providers`);
+      if (res.ok) {
+        providerHealth = await res.json() as Record<string, string>;
+      }
+    } catch {
+      // silently ignore — server may not be reachable
+    } finally {
+      checkingProviders = false;
+    }
+  }
+
   onMount(() => {
     settingsStore.init();
     // Populate local form from persisted settings
@@ -83,6 +99,8 @@
         }
       })
       .catch(() => { serverHealth = "offline"; });
+
+    void checkProviderHealth();
   });
 
   function saveSettings() {
@@ -197,6 +215,38 @@
           Override the Ollama server used when selecting the Ollama provider in agent config.
           Can also be set server-side via <code class="text-primary/70">OLLAMA_HOST</code>.
         </p>
+      </div>
+
+      <!-- Provider API Key Status -->
+      <div>
+        <div class="font-mono text-[10px] text-outline uppercase tracking-widest mb-2">
+          API Key Status
+        </div>
+        {#if checkingProviders}
+          <div class="font-mono text-[10px] text-outline/50">Checking…</div>
+        {:else if Object.keys(providerHealth).length === 0}
+          <div class="font-mono text-[10px] text-outline/50">Unavailable (server offline)</div>
+        {:else}
+          <div class="flex flex-wrap gap-2">
+            {#each [
+              { key: "anthropic", label: "Anthropic" },
+              { key: "openai",    label: "OpenAI" },
+              { key: "gemini",    label: "Gemini" },
+            ] as provider}
+              {@const status = providerHealth[provider.key]}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-mono text-[10px]
+                {status === 'ok'
+                  ? 'bg-secondary/10 border-secondary/30 text-secondary'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-500 dark:text-amber-400'}">
+                <span class="material-symbols-outlined text-[12px]">
+                  {status === 'ok' ? 'check_circle' : 'warning'}
+                </span>
+                {provider.label}
+                <span class="opacity-70">{status === 'ok' ? 'configured' : 'missing'}</span>
+              </span>
+            {/each}
+          </div>
+        {/if}
       </div>
     </section>
 
