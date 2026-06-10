@@ -608,6 +608,73 @@ created: 2026-05-23
 ```
 
 
+```yaml
+- task: v0112-pre-tag-release-audit
+  date: 2026-06-10
+  warden: release-warden
+  routed: warden
+  commits: 0  # audit-only by design
+  agent-spawns: 1
+  tokens-est: ~53K
+  regression-prevented: residual-retired-model-fallback-404 (runtime.ts:268,1079) + tag-on-unpushed-main + stale-changeset-release-notes
+  notes: >
+    Pre-tag audit for fast 0.11.2 (June-15 model retirement deadline). All
+    quality gates PASS on ad059ec2 (release:dry 35-pkg lockstep clean; build
+    38/38; typecheck 68/68; tests 6205/0/23-skip). NO-GO verdict solely on
+    git-sync (local main 51 ahead of origin). Diagnosed 0.10.6-vs-0.11.1
+    package.json "drift" as by-design (release.ts stamps at publish; VERSION
+    file is truth). Caught P1: createRuntime/createLightRuntime still
+    hard-coded claude-sonnet-4-20250514 — the exact 404 class the release
+    exists to fix. Caught P2: 7 stale v0.11.0-era changesets would have
+    produced wrong release notes.
+
+- task: v0112-runtime-fallback-model-fix
+  date: 2026-06-10
+  warden: runtime-warden
+  routed: warden
+  commits: 1
+  agent-spawns: 1
+  tokens-est: ~38K
+  regression-prevented: future-retired-id-drift-in-runtime (guard test pins every claude-* literal to static capability table)
+  notes: >
+    runtime.ts:268 + :1079 terminal fallbacks → claude-sonnet-4-6 (read-verified
+    against provider-defaults.ts, not assumed). BONUS: warden's own new guard
+    test caught a third retired id (claude-opus-4-20250514 in JSDoc :245) the
+    audit missed. New tests/default-model-fallback.test.ts (40 LOC). Runtime
+    934/0; typecheck forced-uncached 21/21.
+
+- task: v0112-runtime-readme-retired-id
+  date: 2026-06-10
+  warden: runtime-warden
+  routed: warden
+  commits: 0  # folded into release commit
+  agent-spawns: 1
+  tokens-est: ~21K
+  regression-prevented: none
+  notes: >
+    One-liner: packages/runtime/README.md:44 retired id → claude-sonnet-4-6.
+    Micro-dispatch honored contract; observation for evaluation day — 21K
+    tokens for a 1-line doc sed is the contract's worst-case overhead shape.
+
+- task: v0112-repo-wide-readme-id-sweep
+  date: 2026-06-10
+  warden: main
+  routed: main
+  bypass-reason: >
+    Cross-cutting mechanical sed (same literal, 13 packages + apps/docs);
+    primary scope is repo-wide docs, not any single warden domain — per-warden
+    routing would have required 5+ dispatches for identical one-line seds.
+    Logged for transparency; not claiming pilot-data eligibility.
+  commits: 0  # folded into release commit
+  agent-spawns: 0
+  tokens-est: ~3K
+  regression-prevented: none
+  notes: >
+    20 retired-id refs in published package READMEs + docs site → current ids.
+    Reverted sed collateral on apps/docs/src/data/benchmark-report.json
+    (historical benchmark record — must not be rewritten).
+```
+
 ## Summary (2026-06-15)
 
 (written on evaluation day)
