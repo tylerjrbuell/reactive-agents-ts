@@ -28,9 +28,11 @@
   // ── Inline rename state ──────────────────────────────────────────────
   let renaming = $state(false);
   let renameValue = $state("");
+  // Local shadow so successful renames are reflected without mutating the prop
+  let localDisplayName = $state(displayName ?? "");
 
   function startRename() {
-    renameValue = displayName ?? "";
+    renameValue = localDisplayName || displayName ?? "";
     renaming = true;
   }
 
@@ -56,7 +58,7 @@
         toast.error("Rename failed", body.error ?? `HTTP ${res.status}`);
         return;
       }
-      displayName = label;
+      localDisplayName = label;
       renaming = false;
       toast.success("Run renamed", label);
     } catch (e) {
@@ -256,8 +258,8 @@
               onclick={handleRunIdClick}
               onkeydown={handleRunIdKeydown}
             >
-              {#if displayName}
-                <span class="text-on-surface/80">{displayName.length > 22 ? `${displayName.slice(0, 22)}…` : displayName}</span>
+              {#if localDisplayName}
+                <span class="text-on-surface/80">{localDisplayName.length > 22 ? `${localDisplayName.slice(0, 22)}…` : localDisplayName}</span>
               {:else}
                 {runShort}
               {/if}

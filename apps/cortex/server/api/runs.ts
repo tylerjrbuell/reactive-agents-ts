@@ -228,18 +228,22 @@ export const runsRouter = (
     .patch(
       "/:runId/label",
       async ({ params, body, set }) => {
-        const b = body as { label?: unknown };
-        if (typeof b.label !== "string" || !b.label.trim()) {
+        if (!body.label.trim()) {
           set.status = 400;
           return { error: "label must be a non-empty string" };
         }
         const program = Effect.gen(function* () {
           const store = yield* CortexStoreService;
-          yield* store.updateRunLabel(params.runId, b.label as string);
-          return { ok: true as const };
+          const found = yield* store.updateRunLabel(params.runId, body.label);
+          return found;
         });
         try {
-          return await Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
+          const result = await Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
+          if (!result.ok) {
+            set.status = 404;
+            return { error: "Run not found" };
+          }
+          return { ok: true };
         } catch (e) {
           set.status = 500;
           return { error: String(e) };

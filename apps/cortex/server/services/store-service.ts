@@ -37,7 +37,7 @@ export class CortexStoreService extends Context.Tag("CortexStoreService")<
       includeLive?: boolean,
     ) => Effect.Effect<number, CortexError>;
     readonly recomputeRunStats: (runId: string) => Effect.Effect<boolean, CortexError>;
-    readonly updateRunLabel: (runId: string, label: string) => Effect.Effect<void, CortexError>;
+    readonly updateRunLabel: (runId: string, label: string) => Effect.Effect<{ ok: boolean }, CortexError>;
     readonly getSkills: () => Effect.Effect<unknown[], CortexError>;
     readonly getTools: () => Effect.Effect<unknown[], CortexError>;
     /** MCP configs for desk runs (runner). Unknown ids are skipped. */
@@ -101,7 +101,7 @@ export const CortexStoreServiceLive = (db: Database) =>
       ),
 
     updateRunLabel: (runId, label) =>
-      Effect.sync(() => updateRunLabel(db, runId, label)).pipe(
+      Effect.sync(() => ({ ok: updateRunLabel(db, runId, label) })).pipe(
         Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
       ),
 
