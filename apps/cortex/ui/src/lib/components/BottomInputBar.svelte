@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { settings } from "$lib/stores/settings.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
+  import PromptLibrary from "$lib/components/PromptLibrary.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
 
   interface Props {
@@ -19,6 +20,7 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let expanded = $state(false);
   let config = $state<AgentConfig>(defaultConfig());
+  let showPromptLib = $state(false);
 
   onMount(() => {
     settings.init();
@@ -114,6 +116,30 @@
       class="flex-1 bg-transparent border-none outline-none text-on-surface text-sm py-3 px-2
              placeholder:text-outline/45 placeholder:font-mono placeholder:text-[13px]"
     />
+
+    <!-- Prompt library -->
+    <div class="relative flex-shrink-0">
+      <button
+        type="button"
+        onclick={() => (showPromptLib = !showPromptLib)}
+        title="Prompt library"
+        class="flex items-center justify-center h-8 w-8 rounded-full border-0 bg-transparent
+               cursor-pointer hover:bg-primary/10 transition-colors text-outline/60 hover:text-primary"
+      >
+        <span class="material-symbols-outlined text-[18px]">menu_book</span>
+      </button>
+      {#if showPromptLib}
+        <div class="absolute bottom-10 right-0 z-50 rounded-lg border border-[var(--cortex-border)] bg-surface shadow-lg">
+          <PromptLibrary
+            onSelect={(body) => {
+              value = body;
+              showPromptLib = false;
+              inputEl?.focus();
+            }}
+          />
+        </div>
+      {/if}
+    </div>
 
     <!-- Submit: gradient neural pulse button -->
     <button
