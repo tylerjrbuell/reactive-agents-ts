@@ -162,6 +162,49 @@
       }
     });
 
+    commandPalette.register([
+      {
+        id: "nav:beacon",
+        label: "Go to Beacon",
+        description: "Agent grid and live status",
+        icon: "radar",
+        keywords: ["beacon", "home", "agents", "grid"],
+        action: () => void goto("/"),
+      },
+      {
+        id: "nav:chat",
+        label: "New Chat",
+        description: "Start a new agent conversation",
+        icon: "chat",
+        keywords: ["chat", "conversation", "new"],
+        action: () => void goto("/chat"),
+      },
+      {
+        id: "nav:runs",
+        label: "Execution Trace",
+        description: "Browse all agent runs",
+        icon: "alt_route",
+        keywords: ["runs", "trace", "history"],
+        action: () => void goto("/runs"),
+      },
+      {
+        id: "nav:lab",
+        label: "Open Lab",
+        description: "Build and configure agents",
+        icon: "science",
+        keywords: ["lab", "builder", "configure"],
+        action: () => void goto("/lab"),
+      },
+      {
+        id: "nav:settings",
+        label: "Settings",
+        description: "Configure Cortex",
+        icon: "settings",
+        keywords: ["settings", "config", "preferences"],
+        action: () => void goto("/settings"),
+      },
+    ]);
+
     // Safety-net reconciliation so deletes/new runs reflect without manual reload
     // even if a WS message is missed during navigation transitions.
     refreshTimer = setInterval(() => {
