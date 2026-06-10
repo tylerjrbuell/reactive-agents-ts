@@ -16,6 +16,13 @@
   let scrollEl = $state<HTMLDivElement | null>(null);
   let expandedSteps = $state<Set<number>>(new Set());
 
+  const sessionTokenTotal = $derived(
+    turns.reduce((sum, t) => sum + (t.streaming ? (t.liveTokens ?? 0) : (t.tokensUsed ?? 0)), 0),
+  );
+  const sessionCostTotal = $derived(
+    turns.reduce((sum, t) => sum + (t.streaming ? (t.liveCost ?? 0) : (t.costUsd ?? 0)), 0),
+  );
+
   function toggleSteps(turnId: number) {
     expandedSteps = new Set(
       expandedSteps.has(turnId)
@@ -89,20 +96,30 @@
     <h2 class="text-[11px] uppercase tracking-widest font-mono text-[var(--cortex-text-muted)]">
       Conversation
     </h2>
-    {#if turns.length > 0}
-      <button
-        type="button"
-        onclick={() => void copyAllConversation()}
-        class="flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25
-               text-secondary/90 font-mono text-[9px] uppercase tracking-wider
-               bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40
-               transition-colors cursor-pointer shadow-sm"
-        aria-label="Copy all conversation"
-      >
-        <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
-        Copy all
-      </button>
-    {/if}
+    <div class="flex items-center gap-3">
+      {#if sessionTokenTotal > 0}
+        <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums">
+          {sessionTokenTotal.toLocaleString()} tok
+          {#if sessionCostTotal > 0}
+            · ${(sessionCostTotal * 100).toFixed(3)}¢
+          {/if}
+        </span>
+      {/if}
+      {#if turns.length > 0}
+        <button
+          type="button"
+          onclick={() => void copyAllConversation()}
+          class="flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25
+                 text-secondary/90 font-mono text-[9px] uppercase tracking-wider
+                 bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40
+                 transition-colors cursor-pointer shadow-sm"
+          aria-label="Copy all conversation"
+        >
+          <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
+          Copy all
+        </button>
+      {/if}
+    </div>
   </div>
 
   <div
@@ -125,7 +142,14 @@
               >
                 {turn.role}
               </span>
-              {#if turn.tokensUsed > 0}
+              {#if turn.streaming && (turn.liveTokens ?? 0) > 0}
+                <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums animate-pulse">
+                  {(turn.liveTokens ?? 0).toLocaleString()} tok
+                  {#if (turn.liveCost ?? 0) > 0}
+                    · ${((turn.liveCost ?? 0) * 100).toFixed(3)}¢
+                  {/if}
+                </span>
+              {:else if turn.tokensUsed > 0}
                 <span class="text-[9px] text-[var(--cortex-text-muted)]">{turn.tokensUsed} tok</span>
               {/if}
               {#if turn.steps != null && turn.steps > 0}

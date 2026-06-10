@@ -46,7 +46,8 @@ export type AgentStreamEvent =
       readonly callId: string;
       readonly durationMs: number;
       readonly success: boolean;
-    };
+    }
+  | { readonly _tag: "LLMRequestCompleted"; readonly tokensUsed?: number; readonly estimatedCost?: number };
 
 export type ReasoningStep = {
   iteration: number;
@@ -66,6 +67,11 @@ export type ChatTurn = {
   streaming?: boolean;
   streamProgress?: { iteration: number; maxIterations: number };
   reasoningSteps?: ReasoningStep[];
+  /** Running totals during streaming — undefined when not streaming. */
+  liveTokens?: number;
+  liveCost?: number;
+  /** Final cost after streaming completes, from StreamCompleted metadata. */
+  costUsd?: number;
 };
 
 export type ChatSession = {
@@ -364,6 +370,7 @@ function createChatStore() {
       const decoder = new TextDecoder();
       let toolsUsed: string[] = [];
       let tokensUsed = 0;
+      let costUsd = 0;
       let steps = 0;
       let buffer = "";
       let eventCount = 0;
@@ -495,8 +502,25 @@ function createChatStore() {
                       };
                     }),
                   }));
+                } else if (event._tag === "LLMRequestCompleted") {
+                  const tokens = event.tokensUsed ?? 0;
+                  const cost = event.estimatedCost ?? 0;
+                  if (tokens > 0 || cost > 0) {
+                    update((s) => ({
+                      ...s,
+                      activeTurns: s.activeTurns.map((turn) => {
+                        if (turn.id !== assistantTurnId) return turn;
+                        return {
+                          ...turn,
+                          liveTokens: (turn.liveTokens ?? 0) + tokens,
+                          liveCost: (turn.liveCost ?? 0) + cost,
+                        };
+                      }),
+                    }));
+                  }
                 } else if (event._tag === "StreamCompleted") {
                   tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
+                  costUsd = (event.metadata?.cost as number | undefined) ?? (event.metadata?.estimatedCost as number | undefined) ?? 0;
                   steps =
                     (event.metadata?.iterations as number | undefined) ??
                     (event.metadata?.stepsCount as number | undefined) ??
@@ -543,6 +567,9 @@ function createChatStore() {
                 streamProgress: undefined,
                 // reasoningSteps intentionally kept for post-stream inspection
                 tokensUsed,
+                liveTokens: undefined,
+                liveCost: undefined,
+                ...(costUsd > 0 ? { costUsd } : {}),
                 ...(steps > 0 ? { steps } : {}),
                 ...(toolsUsed.length > 0 ? { toolsUsed } : {}),
               }
