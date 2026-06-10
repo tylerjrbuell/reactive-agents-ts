@@ -176,6 +176,25 @@
   }
 
   // ── Gateway agents ────────────────────────────────────────────────────
+  type AgentStats = { runCount: number; successRate: number; avgTokens: number; totalCostUsd: number };
+  let agentStats = $state<Record<string, AgentStats>>({});
+
+  async function loadAgentStats(agentId: string) {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents/${encodeURIComponent(agentId)}/stats`);
+      if (res.ok) {
+        const data: unknown = await res.json();
+        if (data && typeof data === "object") agentStats = { ...agentStats, [agentId]: data as AgentStats };
+      }
+    } catch { /* ignore */ }
+  }
+
+  $effect(() => {
+    if (activeTab === "gateway") {
+      for (const agent of gatewayAgents) void loadAgentStats(agent.agentId);
+    }
+  });
+
   let gatewayAgents = $state<GatewayRow[]>([]);
   let gatewayLoading = $state(false);
   let showForm = $state(false);
@@ -1186,6 +1205,14 @@
                     <span>·</span><span>{agent.runCount} runs</span>
                     {#if agent.lastRunAt}<span>· last {relativeTime(agent.lastRunAt)}</span>{/if}
                   </div>
+                  {#if agentStats[agent.agentId] && agentStats[agent.agentId].runCount > 0}
+                    {@const s = agentStats[agent.agentId]}
+                    <div class="flex gap-3 font-mono text-[9px] text-outline mt-1 tabular-nums">
+                      <span>{Math.round(s.successRate * 100)}% ok</span>
+                      <span>{Math.round(s.avgTokens).toLocaleString()} avg tok</span>
+                      {#if s.totalCostUsd > 0}<span>${(s.totalCostUsd * 100).toFixed(2)}¢ total</span>{/if}
+                    </div>
+                  {/if}
                 </div>
                 <div class="flex items-center gap-1 flex-shrink-0">
                   <!-- Run: gateway (manual fire vs cron) and ad-hoc (on-demand saved config) -->

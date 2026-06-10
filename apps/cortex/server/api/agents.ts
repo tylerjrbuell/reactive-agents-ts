@@ -6,6 +6,7 @@ import {
   createGatewayAgent,
   updateGatewayAgent,
   deleteGatewayAgent,
+  getAgentStats,
 } from "../db/queries.js";
 import type { GatewayProcessManager } from "../services/gateway-process-manager.js";
 
@@ -142,4 +143,5 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
         return { error: result.error };
       }
       return { triggered: true, runId: result.runId, agentId: result.agentId };
-    });
+    })
+    .get("/:agentId/stats", ({ params }) => getAgentStats(db, params.agentId));

@@ -480,3 +480,49 @@ export function deleteGatewayAgent(db: Database, agentId: string): boolean {
   const info = db.prepare("DELETE FROM cortex_agents WHERE agent_id = ?").run(agentId) as { changes?: number };
   return (info.changes ?? 0) > 0;
 }
+
+export interface AgentStats {
+  runCount: number;
+  successCount: number;
+  failedCount: number;
+  successRate: number;
+  avgTokens: number;
+  totalCostUsd: number;
+  avgDurationMs: number;
+}
+
+export function getAgentStats(db: Database, agentId: string): AgentStats {
+  const row = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS run_count,
+         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS success_count,
+         SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_count,
+         AVG(CAST(tokens_used AS REAL)) AS avg_tokens,
+         SUM(cost_usd) AS total_cost,
+         AVG(CASE WHEN completed_at IS NOT NULL THEN completed_at - started_at ELSE NULL END) AS avg_duration_ms
+       FROM cortex_runs
+       WHERE agent_id = ?`,
+    )
+    .get(agentId) as {
+    run_count: number;
+    success_count: number;
+    failed_count: number;
+    avg_tokens: number | null;
+    total_cost: number | null;
+    avg_duration_ms: number | null;
+  } | null;
+
+  if (!row || row.run_count === 0) {
+    return { runCount: 0, successCount: 0, failedCount: 0, successRate: 0, avgTokens: 0, totalCostUsd: 0, avgDurationMs: 0 };
+  }
+  return {
+    runCount: row.run_count,
+    successCount: row.success_count,
+    failedCount: row.failed_count,
+    successRate: row.run_count > 0 ? row.success_count / row.run_count : 0,
+    avgTokens: row.avg_tokens ?? 0,
+    totalCostUsd: row.total_cost ?? 0,
+    avgDurationMs: row.avg_duration_ms ?? 0,
+  };
+}
