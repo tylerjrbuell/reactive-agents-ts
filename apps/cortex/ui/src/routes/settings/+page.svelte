@@ -70,7 +70,14 @@
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/health/providers`);
       if (res.ok) {
-        providerHealth = await res.json() as Record<string, string>;
+        const data: unknown = await res.json();
+        if (data && typeof data === "object" && !Array.isArray(data)) {
+          providerHealth = Object.fromEntries(
+            Object.entries(data as Record<string, unknown>).filter(
+              (entry): entry is [string, string] => entry[1] === "ok" || entry[1] === "missing"
+            )
+          );
+        }
       }
     } catch {
       // silently ignore — server may not be reachable

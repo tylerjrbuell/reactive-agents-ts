@@ -30,4 +30,5 @@ export const healthRouter = new Elysia({ prefix: "/api/health" })
       };
     },
   )
+  // Intentionally unauthenticated: Cortex is a single-user local tool; callers are on the same machine.
   .get("/providers", () => checkProviders());
