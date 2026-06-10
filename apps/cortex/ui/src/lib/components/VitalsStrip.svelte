@@ -32,7 +32,7 @@
   let localDisplayName = $state(displayName ?? "");
 
   function startRename() {
-    renameValue = localDisplayName || displayName ?? "";
+    renameValue = localDisplayName || displayName || "";
     renaming = true;
   }
 
