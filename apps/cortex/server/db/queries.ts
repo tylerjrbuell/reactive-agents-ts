@@ -118,6 +118,11 @@ export function updateRunStats(
   );
 }
 
+export function updateRunLabel(db: Database, runId: string, label: string): void {
+  db.prepare("UPDATE cortex_runs SET display_name = ? WHERE run_id = ?")
+    .run(label.trim().slice(0, 200), runId);
+}
+
 type RunRow = {
   run_id: string;
   agent_id: string;

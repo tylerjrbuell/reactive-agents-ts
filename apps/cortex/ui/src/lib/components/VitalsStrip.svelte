@@ -2,11 +2,14 @@
   import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { CORTEX_SERVER_URL } from "$lib/constants.js";
 
   export interface Props {
     vitals: RunVitals;
     status: RunStatus;
     runId: string;
+    /** Human-readable label for this run, editable inline. */
+    displayName?: string;
     /** When set with replayMaxLoops &gt; 0, bar and LOOP readout follow replay scrub (not live vitals). */
     replayLoopIndex?: number | null;
     replayMaxLoops?: number;
@@ -16,10 +19,55 @@
     vitals,
     status,
     runId,
+    displayName = undefined,
     replayLoopIndex = null,
     replayMaxLoops = 0,
     replayPlaying = false,
   }: Props = $props();
+
+  // ── Inline rename state ──────────────────────────────────────────────
+  let renaming = $state(false);
+  let renameValue = $state("");
+
+  function startRename() {
+    renameValue = displayName ?? "";
+    renaming = true;
+  }
+
+  function cancelRename() {
+    renaming = false;
+    renameValue = "";
+  }
+
+  async function commitRename() {
+    const label = renameValue.trim();
+    if (!label) {
+      cancelRename();
+      return;
+    }
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/label`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        toast.error("Rename failed", body.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      displayName = label;
+      renaming = false;
+      toast.success("Run renamed", label);
+    } catch (e) {
+      toast.error("Rename failed", String(e));
+    }
+  }
+
+  function handleRenameKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") { e.preventDefault(); void commitRename(); }
+    if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
+  }
 
   const replayActive = $derived(replayLoopIndex !== null && replayMaxLoops > 0);
 
@@ -170,23 +218,59 @@
 </script>
 
 <div
-  class="w-full bg-surface-container-lowest/90 dark:bg-surface-container-lowest/75 border-b border-[var(--cortex-border)] relative overflow-hidden flex-shrink-0"
+  class="group/vitals w-full bg-surface-container-lowest/90 dark:bg-surface-container-lowest/75 border-b border-[var(--cortex-border)] relative overflow-hidden flex-shrink-0"
 >
   <div
     class="max-w-full px-6 py-3 flex items-center gap-0 font-mono text-[11px] uppercase tracking-widest text-on-surface-variant overflow-x-auto"
   >
     <div class="flex items-center gap-2 pr-5">
-      <Tooltip text={`Click to copy: ${runId}`} class="max-w-[100px] min-w-0">
-        <span
-          class="text-[9px] text-outline normal-case tracking-normal truncate block cursor-pointer hover:text-primary hover:drop-shadow-[0_0_4px_rgba(139,92,246,0.3)] transition-colors"
-          role="button"
-          tabindex="0"
-          onclick={handleRunIdClick}
-          onkeydown={handleRunIdKeydown}
-        >
-          {runShort}
-        </span>
-      </Tooltip>
+      <div class="flex min-w-0 max-w-[180px] items-center gap-1">
+        {#if renaming}
+          <input
+            type="text"
+            bind:value={renameValue}
+            onkeydown={handleRenameKeydown}
+            class="w-full min-w-0 truncate rounded border border-primary/40 bg-surface-container px-1.5 py-0.5 font-mono text-[9px] normal-case tracking-normal text-on-surface outline-none focus:border-primary"
+            aria-label="Rename this run"
+            autofocus
+          />
+          <button
+            type="button"
+            onclick={() => void commitRename()}
+            class="material-symbols-outlined shrink-0 cursor-pointer border-0 bg-transparent text-[14px] text-primary hover:drop-shadow-[0_0_4px_rgba(139,92,246,0.5)]"
+            aria-label="Save rename"
+          >check</button>
+          <button
+            type="button"
+            onclick={cancelRename}
+            class="material-symbols-outlined shrink-0 cursor-pointer border-0 bg-transparent text-[14px] text-outline/60 hover:text-error"
+            aria-label="Cancel rename"
+          >close</button>
+        {:else}
+          <Tooltip text={displayName ? `${displayName} · Click to copy run ID: ${runId}` : `Click to copy: ${runId}`} class="max-w-[140px] min-w-0">
+            <span
+              class="text-[9px] text-outline normal-case tracking-normal truncate block cursor-pointer hover:text-primary hover:drop-shadow-[0_0_4px_rgba(139,92,246,0.3)] transition-colors"
+              role="button"
+              tabindex="0"
+              onclick={handleRunIdClick}
+              onkeydown={handleRunIdKeydown}
+            >
+              {#if displayName}
+                <span class="text-on-surface/80">{displayName.length > 22 ? `${displayName.slice(0, 22)}…` : displayName}</span>
+              {:else}
+                {runShort}
+              {/if}
+            </span>
+          </Tooltip>
+          <button
+            type="button"
+            onclick={startRename}
+            class="material-symbols-outlined shrink-0 cursor-pointer border-0 bg-transparent text-[13px] text-outline/40 opacity-0 transition-opacity group-hover/vitals:opacity-100 hover:text-primary"
+            aria-label="Rename this run"
+            title="Rename run"
+          >edit</button>
+        {/if}
+      </div>
       <div class="flex items-center gap-2 px-2 py-0.5 rounded-full border {statusClass}">
         {#if status === "live"}
           <span

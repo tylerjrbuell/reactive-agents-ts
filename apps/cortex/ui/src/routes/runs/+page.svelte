@@ -19,6 +19,7 @@
     provider?: string;
     model?: string;
     strategy?: string;
+    displayName?: string;
   };
 
   let runs = $state<RunRow[]>([]);
@@ -241,6 +242,7 @@
           !searchText.trim() ||
           r.runId.toLowerCase().includes(searchText.toLowerCase()) ||
           r.agentId.toLowerCase().includes(searchText.toLowerCase()) ||
+          (r.displayName ?? "").toLowerCase().includes(searchText.toLowerCase()) ||
           (r.provider ?? "").toLowerCase().includes(searchText.toLowerCase()) ||
           (r.model ?? "").toLowerCase().includes(searchText.toLowerCase());
         const matchStatus = statusFilter === "all" || r.status === statusFilter;
@@ -629,9 +631,15 @@
                       class="material-symbols-outlined text-[11px] text-primary/70"
                       style="font-variation-settings: 'FILL' 1;">push_pin</span>
                   {/if}
-                  <span
-                    class="truncate font-mono text-[11px] text-slate-900 dark:text-on-surface/95"
-                    title={run.runId}>{run.runId.slice(0, 12)}…</span>
+                  {#if run.displayName}
+                    <span
+                      class="truncate font-mono text-[11px] text-slate-900 dark:text-on-surface/95"
+                      title={run.displayName}>{run.displayName}</span>
+                  {:else}
+                    <span
+                      class="truncate font-mono text-[11px] text-slate-900 dark:text-on-surface/95"
+                      title={run.runId}>{run.runId.slice(0, 12)}…</span>
+                  {/if}
                   {#if run.hasDebrief}
                     <span
                       class="rounded bg-cyan-50/90 px-1 font-mono text-[9px] text-cyan-800 dark:bg-secondary/10 dark:text-secondary/80"
@@ -649,6 +657,12 @@
                   {/if}
                 </div>
                 <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  {#if run.displayName}
+                    <span
+                      class="truncate font-mono text-[9px] text-slate-400 dark:text-on-surface-variant/50"
+                      title={run.runId}>{run.runId.slice(0, 12)}…</span>
+                    <span class="font-mono text-[9px] text-slate-300 dark:text-outline/35">·</span>
+                  {/if}
                   <span
                     class="truncate font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/75"
                     title={run.agentId}>{run.agentId}</span>

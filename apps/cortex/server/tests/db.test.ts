@@ -7,6 +7,7 @@ import {
   getRecentRuns,
   getNextSeq,
   updateRunStats,
+  updateRunLabel,
   getRunById,
   getRunEvents,
 } from "../db/queries.js";
@@ -228,6 +229,13 @@ describe("CortexDB schema + queries", () => {
     upsertRun(db, "b", "only");
     enforceRetention(db, "b");
     expect(getRunById(db, "only")).not.toBeNull();
+  });
+
+  it("updateRunLabel sets display_name", () => {
+    upsertRun(db, "agent-1", "run-abc");
+    updateRunLabel(db, "run-abc", "My Research Task");
+    const row = db.prepare("SELECT display_name FROM cortex_runs WHERE run_id = ?").get("run-abc") as { display_name: string };
+    expect(row.display_name).toBe("My Research Task");
   });
 
   it("cortex_chat_sessions has stable_agent_id column after migration", () => {

@@ -225,6 +225,32 @@ export const runsRouter = (
         return { error: String(e) };
       }
     })
+    .patch(
+      "/:runId/label",
+      async ({ params, body, set }) => {
+        const b = body as { label?: unknown };
+        if (typeof b.label !== "string" || !b.label.trim()) {
+          set.status = 400;
+          return { error: "label must be a non-empty string" };
+        }
+        const program = Effect.gen(function* () {
+          const store = yield* CortexStoreService;
+          yield* store.updateRunLabel(params.runId, b.label as string);
+          return { ok: true as const };
+        });
+        try {
+          return await Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
+        } catch (e) {
+          set.status = 500;
+          return { error: String(e) };
+        }
+      },
+      {
+        body: t.Object({
+          label: t.String(),
+        }),
+      },
+    )
     .get("/", async ({ query }) => {
       const limit = query.limit != null ? Math.max(0, Number(query.limit)) : 50;
       const program = Effect.gen(function* () {
