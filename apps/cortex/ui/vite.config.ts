@@ -1,5 +1,5 @@
 import { sveltekit } from "@sveltejs/kit/vite";
-import { defineConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import type { ProxyOptions } from "vite";
 
 const apiPort = process.env.CORTEX_PORT ?? "4321";
@@ -20,9 +20,15 @@ const apiProxy: ProxyOptions = {
   // can fight Vite’s proxyRes wiring. timeout + proxyTimeout above are enough for Node’s side.
 };
 
+// Allow serving shared node_modules from monorepo root (needed in git worktrees)
+const monorepoRoot = searchForWorkspaceRoot(import.meta.dirname);
+
 export default defineConfig({
   plugins: [sveltekit()],
   server: {
+    fs: {
+      allow: [monorepoRoot],
+    },
     proxy: {
       "/api": {
         ...apiProxy,
