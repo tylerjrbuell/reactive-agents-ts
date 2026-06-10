@@ -728,6 +728,25 @@ created: 2026-05-23
     Empirical RED→GREEN: reflexion live ollama hook 0→1. Full reasoning
     1617/0. Remaining sub-gap (#195 open): tool_call/analysis steps bypass
     kernel.
+- task: durable-exec-phase-a-checkpoint-seam-codec
+  date: 2026-06-10
+  warden: kernel-warden
+  routed: warden
+  commits: 1
+  agent-spawns: 1
+  tokens-est: ~76K
+  regression-prevented: pre-existing-lossy-serialize-pair-flagged (kernel-state.ts:856/886 drops 6 fields, zero callers — Phase B consolidation note)
+  notes: >
+    Durable execution Phase A (design spec 2026-06-10-durable-execution.md).
+    TDD RED→GREEN: (1) onCheckpoint observer seam wired in iterate-pass.ts
+    at iteration boundary via sanctioned asKernelStateLike() adapter, 14 LOC,
+    throw-safe (triple-surface warn), zero cost when absent; (2) new
+    kernel/state/kernel-codec.ts — versioned envelope, tagged Map/Set/Date
+    encoding, meta WARN-skip for non-serializable values. 12/12 new tests;
+    full reasoning suite 1620/0; typecheck 8/8. Core contract
+    (RunControllerLike.onCheckpoint?) landed main-thread (core has no
+    assigned warden).
+```
 
 ## Summary (2026-06-15)
 

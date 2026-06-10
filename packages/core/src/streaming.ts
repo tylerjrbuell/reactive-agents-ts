@@ -1,4 +1,5 @@
 import { FiberRef, Effect } from "effect";
+import type { KernelStateLike } from "./services/entropy-sensor-tag.js";
 
 /**
  * FiberRef carrying an optional text-delta callback for streaming agent runs.
@@ -34,6 +35,16 @@ export const StreamingTextCallback = FiberRef.unsafeMake<
 /** Minimal interface accessed by runner.ts for pause/stop control. */
 export interface RunControllerLike {
   checkpoint(): Promise<{ stop: true } | undefined>;
+  /**
+   * Optional durable-checkpoint observer. When present, the kernel invokes it
+   * at each iteration boundary (same point as checkpoint()) with a readonly
+   * reference to the current kernel state. Implementations decide whether and
+   * how to persist (e.g. every-N-iterations serialization to a RunStore).
+   * Must not throw and must not block the loop — fire-and-forget persistence
+   * belongs inside the implementation. Absent on the default in-process
+   * controller, so the kernel pays zero cost unless durability is enabled.
+   */
+  onCheckpoint?(state: Readonly<KernelStateLike>, iteration: number): void;
 }
 
 /**

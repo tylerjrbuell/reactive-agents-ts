@@ -81,6 +81,7 @@ import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
 import {
   transitionState,
+  asKernelStateLike,
   type KernelState,
   type KernelContext,
   type KernelInput,
@@ -361,6 +362,18 @@ export function runIterationPass(
             deliverable: passthroughOutputDeliverable(state.output),
           });
           sync(); return "break";
+        }
+        // Durable-execution seam (v0.12.0 track 1): surface the iteration-boundary
+        // state to an optional durable controller. Observer must NEVER kill the
+        // loop — failures are warn-surfaced (R11 precedent), not propagated.
+        if (_runCtl.onCheckpoint) {
+          try {
+            _runCtl.onCheckpoint(asKernelStateLike(state), state.iteration);
+          } catch (err) {
+            const msg = `[durable-checkpoint] onCheckpoint observer threw at iteration ${state.iteration}: ${err instanceof Error ? err.message : String(err)}`;
+            console.warn(msg);
+            yield* Effect.logWarning(msg);
+          }
         }
       }
 
