@@ -1,12 +1,14 @@
 ---
 type: design-spec
-status: proposed
+status: implemented (Phases A–D, 2026-06-11)
 created: 2026-06-11
 tags: [canonical-path, tool-execution, plan-execute, kernel, spec, FM-I]
 supersedes-analysis: 2026-06-11-canonical-tool-execution-analysis.md
 ---
 
 # Spec: Canonical Tool-Execution-and-Observe Primitive
+
+> **Implementation status (2026-06-11):** Phases A–D shipped to `main`. Primitive `executeToolAndObserve` built (`kernel/capabilities/act/tool-observe.ts`); kernel act single path migrated byte-identical (golden-master gated); plan-execute `tool_call` migrated (#195 fixed, live-verified). Full reasoning suite 1625/0. Verifier + semantic-memory were deferred out of the day-1 primitive into **Phase E** (optional, separately-reviewed): unifying the pre-existing kernel single/batch asymmetry — the batch path emits no Compose tags today and the single path attaches no verification / stores no memory. Plan: `wiki/Planning/Implementation-Plans/2026-06-11-canonical-tool-execution.md`.
 
 > Design spec for collapsing the kernel act-phase tool handling and plan-execute's hand-rolled direct dispatch into ONE primitive. Analysis + scope rationale: [[2026-06-11-canonical-tool-execution-analysis]]. User decisions (2026-06-11): plan-execute adopts the **parity-cheap** capability set (verifier + semantic-memory stay off); execute via full-spec → plan → phased TDD.
 

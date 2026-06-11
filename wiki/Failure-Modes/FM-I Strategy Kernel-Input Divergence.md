@@ -3,7 +3,8 @@ aliases: [FM-I, Kernel-Input Field Drop, Strategy Divergence]
 tags: [failure-modes, architecture, compose, kernel, empirical, v0.12]
 severity: high
 discovered: 2026-06-11
-status: open
+status: resolved
+resolved: 2026-06-11
 ---
 
 # FM-I: Strategy Kernel-Input Divergence
@@ -60,11 +61,18 @@ The runtime **does** supply the field upstream (`runtime.ts:348 harnessPipeline:
 
 **Core threading FIXED across all 4 heavy strategies** (commits on `main`, full reasoning suite 1617/0): reflexion, tree-of-thought, adaptive, plan-execute now thread `{harnessPipeline, budgetLimits, calibration, auditRationale}` through `buildKernelInput` to every kernel pass. Phase hooks (`before/after think/act`), `prompt.system`, `nudge.*`, `message.tool-result`, `observation.tool-result` (kernel path), killswitches, and model calibration are live. Per-strategy `before('think')`-fires regression tests guard it. Empirical: reflexion live hook 0→1.
 
-### Remaining sub-gap (distinct emit-site, same root family)
+### tool_call sub-gap — RESOLVED 2026-06-11 (canonical tool-execution primitive)
 
-`observation.tool-result` still does **not** fire for plan-execute **`tool_call`** steps (`step-executor.ts:123` direct `toolService.execute`) or **`analysis`** steps (`:293` direct `llm.complete`) — these **bypass the kernel entirely**, so the kernel-act emit (`act.ts:791`) never runs. Only **`composite`** steps (which use the ReAct kernel) emit it. So in practice a plan-execute run's compose coverage depends on which step types the planner emits (gemma4:e4b live test fired 0× because the planner chose non-composite steps).
+`observation.tool-result` now fires for plan-execute **`tool_call`** steps. The hand-rolled direct `toolService.execute` dispatch (`step-executor.ts:123`) was replaced by the canonical **`executeToolAndObserve`** primitive (`kernel/capabilities/act/tool-observe.ts`), which both the kernel act phase and plan-execute now share. tool_call steps gain healing, `observation.tool-result` + `lifecycle.failure` Compose tags, guaranteed observation metadata, and deterministic fact-extraction; verifier + semantic-memory stay off (parity-cheap opt-out, by design). Direct dispatch retained — no forced LLM round-trip.
 
-This is the SAME divergence one level deeper: plan-execute runs tools/LLM **outside the canonical kernel** for two of three step types. The consolidation-aligned fix is to route tool_call dispatch through the kernel act path (or emit the tag from the tool_call branch, mirroring `act.ts:791`). Tracked as the remaining item on #195 / the canonical-kernel-input design.
+- **Design:** `wiki/Architecture/Design-Specs/2026-06-11-canonical-tool-execution-spec.md` (+ analysis).
+- **Plan:** `wiki/Planning/Implementation-Plans/2026-06-11-canonical-tool-execution.md` (Phases A–D shipped; Phase E = optional kernel single/batch symmetry, separate review).
+- **Tests:** `tests/strategies/plan-execute-tool-observe.test.ts` (RED→GREEN: tag fires ≥1, healing repairs a misspelled tool name, opt-outs hold). Kernel single path migrated byte-identical, golden-master `tests/kernel/act/act-single-equivalence.test.ts`. Full reasoning suite 1625/0.
+- **Live:** ollama gemma4:12b plan-execute-reflect + `.withHarness().tap('observation.tool-result')` → fired 1× (`tool=crypto-price`), was 0× before.
+
+**`analysis` steps remain out of scope by design** — a `analysis` step is a direct `llm.complete` with **no tool to observe** (`step-executor.ts:293`); there is no tool-result to emit. This is correct, not a gap.
+
+Orchestration outer loops stay legitimately divergent (BFS / plan-refine / critique-improve) — the consolidation deliberately did NOT collapse them. The line falls between *orchestration* (preserve) and *tool execution* (canonicalize); see the analysis doc.
 
 ## Related
 
