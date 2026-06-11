@@ -21,6 +21,7 @@ import {
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
+import { executeToolAndObserve } from "./tool-observe.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 // Sprint 3.2 — Verifier promotion: every effector output flows through
 // defaultVerifier.verify() so the structured VerificationResult is
@@ -694,26 +695,59 @@ export function handleActing(
           continue;
         }
 
-        yield* emitLog({ _tag: "tool_call", tool: tc.name, iteration: state.iteration, timestamp: new Date() });
-        const toolStartMs = Date.now();
-        const execResult = yield* executeNativeToolCall(
-          toolService.value,
-          tc,
-          input.agentId ?? "reasoning-agent",
-          input.sessionId ?? "reasoning-session",
-          { compression, scratchpad: sharedScratchpad, profile },
+        // Pre-computed missing-required-tools for the adapter's error-recovery.
+        // Closed over by the errorRecovery callback (matches the prior inline
+        // computation at the tool-failure site).
+        const missingRequiredTools = getEffectiveMissingRequiredTools(
+          allSteps,
+          input.requiredTools ?? [],
+          input.requiredToolQuantities,
         );
-        const toolDurationMs = Date.now() - toolStartMs;
-        yield* emitLog({
-          _tag: "tool_result",
-          tool: tc.name,
-          duration: toolDurationMs,
-          status: execResult.success ? "success" : "error",
-          error: execResult.success ? undefined : execResult.content,
-          timestamp: new Date(),
-        });
 
-        // Update action step with duration
+        // Canonical execute-and-observe primitive. Healing already ran upstream
+        // (act.ts HealingPipeline block); the precomputed `healed` flag is passed
+        // via ctx. The primitive owns: emitLog(tool_call/tool_result),
+        // executeNativeToolCall, errorRecovery guidance, LLM fact-extraction,
+        // obsStep construction, and the observation.tool-result / lifecycle.failure
+        // Compose tags — byte-identical to the prior inline block. Verifier/memory
+        // are intentionally NOT attached on the single path (Phase E).
+        const observe = yield* executeToolAndObserve(
+          toolService,
+          { toolName: tc.name, args: tc.arguments as Record<string, unknown> },
+          {
+            iteration: state.iteration,
+            phase: "act",
+            strategy: state.strategy ?? "react",
+            state: asKernelStateLike(state),
+            callId: tc.id,
+            // Healing already ran upstream (act.ts HealingPipeline). Pass the
+            // precomputed flag rather than re-healing inside the primitive.
+            healed: healResult.succeeded && healResult.call !== rawTc,
+          },
+          {
+            compression,
+            profile,
+            scratchpad: sharedScratchpad,
+            extractFactsLLM: shouldExtract,
+            pipeline,
+            errorRecovery: (toolName, errorContent) =>
+              adapter.errorRecovery?.({
+                toolName,
+                errorContent,
+                missingTools: missingRequiredTools,
+                tier: profile.tier ?? "mid",
+              }),
+            agentId: input.agentId,
+            sessionId: input.sessionId,
+            emitLog,
+            // emitToolCallEvents stays FALSE — hooks.onAction/onObservation emit
+            // ToolCall* events for the kernel path.
+          },
+        );
+
+        const toolDurationMs = observe.durationMs;
+
+        // Update action step with duration (kernel orchestration, stays here).
         const lastActionIdx = allSteps.length - 1;
         const lastAction = allSteps[lastActionIdx];
         if (lastAction) {
@@ -723,91 +757,19 @@ export function handleActing(
           };
         }
 
-        if (execResult.success) {
-          for (const delegatedTool of execResult.delegatedToolsUsed ?? []) {
+        if (observe.success) {
+          for (const delegatedTool of observe.delegatedToolsUsed ?? []) {
             newToolsUsed.add(delegatedTool);
           }
         }
 
-        // errorRecovery hook — inject guidance when a tool fails (404, timeout, etc.)
-        let obsContent = execResult.content;
-        if (!execResult.success) {
-          const missingRequiredTools = getEffectiveMissingRequiredTools(
-            allSteps,
-            input.requiredTools ?? [],
-            input.requiredToolQuantities,
-          );
-          const recovery = adapter.errorRecovery?.({
-            toolName: tc.name,
-            errorContent: execResult.content,
-            missingTools: missingRequiredTools,
-            tier: profile.tier ?? "mid",
-          });
-          if (recovery) {
-            obsContent = `${execResult.content}\n\n[Recovery guidance: ${recovery}]`;
-          }
-        }
-
-        if (execResult.success && shouldExtract) {
-          const extracted = yield* extractObservationFacts(
-            tc.name,
-            execResult.content,
-            tc.arguments as Record<string, unknown>,
-            compression.budget ?? 800,
-          );
-          if (extracted) {
-            obsContent = `[${tc.name} result — key facts]\n${extracted}`;
-          }
-        }
-
-        const obsStep = makeStep("observation", obsContent, {
-          toolCallId: tc.id,
-          storedKey: execResult.storedKey,
-          extractedFact: execResult.extractedFact,
-          observationResult: makeObservationResult(tc.name, execResult.success, obsContent, {
-            delegatedToolsUsed: execResult.delegatedToolsUsed,
-          }),
-        });
+        const obsStep = observe.obsStep;
 
         yield* hooks.onObservation(
           transitionState(state, { steps: allSteps }),
-          obsContent,
-          execResult.success,
+          observe.content,
+          observe.success,
         );
-
-        // HS-112 — lit the `observation.tool-result` Compose tag. Fires
-        // once per non-meta, non-blocked tool execution so external
-        // observers see every effector outcome with full payload + ctx.
-        const toolResultCtx = {
-          iteration: state.iteration,
-          phase: "act" as const,
-          state: asKernelStateLike(state),
-          strategy: state.strategy ?? "react",
-          toolName: tc.name,
-          callId: tc.id,
-          healed: healResult.succeeded && healResult.call !== rawTc,
-          durationMs: toolDurationMs,
-        };
-        yield* emitToCompose(pipeline, "observation.tool-result", obsStep, toolResultCtx);
-
-        // HS-112 — lit the `lifecycle.failure` Compose tag on tool error.
-        // `lifecycle.failure` covers all three mid-run failure modes
-        // (tool-error / llm-refusal / verifier-rejection); this is the
-        // tool-error site.
-        if (!execResult.success) {
-          yield* emitToCompose(pipeline, "lifecycle.failure", {
-            reason: "tool-error",
-            errorMessage: execResult.content,
-            attemptNumber: state.iteration,
-            failureStreak: 1,
-            currentStrategy: state.strategy ?? "react",
-          }, {
-            iteration: state.iteration,
-            phase: "act",
-            state: asKernelStateLike(state),
-            strategy: state.strategy ?? "react",
-          });
-        }
 
         allSteps = [...allSteps, obsStep];
         lastMetaToolCall = undefined;
