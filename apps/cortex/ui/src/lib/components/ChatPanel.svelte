@@ -9,7 +9,7 @@
     sending: boolean;
     error: string | null;
   }
-  const { sessionId, turns, sending, error } = $props();
+  const { sessionId, turns, sending, error }: Props = $props();
 
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
@@ -36,8 +36,15 @@
     message = "";
   });
 
+  // Smart autoscroll: follow the stream only while the user is pinned at the bottom.
+  let atBottom = $state(true);
+  function onScroll() {
+    if (!scrollEl) return;
+    atBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 80;
+  }
   $effect(() => {
-    if (turns.length > 0 && scrollEl) {
+    void turns; // track every store update (deltas re-create the array)
+    if (turns.length > 0 && scrollEl && atBottom) {
       scrollEl.scrollTop = scrollEl.scrollHeight;
     }
   });
@@ -124,6 +131,7 @@
 
   <div
     bind:this={scrollEl}
+    onscroll={onScroll}
     class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"
   >
     {#if turns.length === 0}
@@ -234,12 +242,16 @@
                       Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
                     </p>
                   {/if}
-                  {#if turn.streaming && turn.reasoningSteps && turn.reasoningSteps.length > 0}
-                    <p class="text-[10px] italic text-[var(--cortex-text-muted)]">Drafting final response…</p>
-                  {:else if turn.streaming && !turn.content}
-                    <!-- content not yet started -->
-                  {:else if turn.streaming}
+                  {#if turn.streaming && turn.liveText}
+                    <!-- Live answer preview: streams the current iteration's text as rendered markdown -->
+                    <div class="live-stream-md">
+                      <MarkdownRich markdown={turn.liveText} showCopy={false} class="text-[11px]" />
+                      <span class="inline-block w-1.5 h-3.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span>
+                    </div>
+                  {:else if turn.streaming && turn.content}
                     <p class="whitespace-pre-wrap text-[11px] leading-relaxed m-0">{turn.content}<span class="inline-block w-1.5 h-3.5 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
+                  {:else if turn.streaming}
+                    <!-- no text yet: thinking indicator above covers this state -->
                   {:else}
                     <MarkdownRich markdown={turn.content} showCopy={true} class="text-[11px]" />
                   {/if}
