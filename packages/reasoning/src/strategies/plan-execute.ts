@@ -127,6 +127,11 @@ interface PlanExecuteInput {
    * `kernel/capabilities/reflect/reactive-observer.ts:306` (HS-112).
    */
   readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  // FM-I (#195): cross-cutting fields that must reach each per-step kernel.
+  /** Budget killswitch limits (budgetLimit/watchdog). */
+  readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
+  /** Pre-resolved model calibration — drives steering channel selection. */
+  readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
 }
 
 export const executePlanExecute = (

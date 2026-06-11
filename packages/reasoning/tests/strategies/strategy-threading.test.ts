@@ -119,6 +119,25 @@ describe("FM-I (#195) — harnessPipeline threads to the kernel in every strateg
     );
     expect(h.fired()).toBeGreaterThan(0);
   });
+
+  it("plan-execute fires before('think') hooks during per-step (composite) kernel execution", async () => {
+    // analysis steps bypass the kernel (direct llm.complete — step-executor.ts:293),
+    // so a COMPOSITE step is required to exercise the per-step ReAct kernel where
+    // the FM-I drop lived (step-executor → executeReActKernel → runKernel).
+    const compositePlanLLM = TestLLMServiceLayer([
+      { match: "planning agent", text: JSON.stringify({
+        steps: [{ title: "Execute", instruction: "Do the task", type: "composite" }],
+      }) },
+      { match: "Synthesize", text: "Final synthesized answer." },
+    ]);
+    const h = makeFiresPipeline();
+    await Effect.runPromise(
+      executePlanExecute({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
+        Effect.provide(compositePlanLLM),
+      ),
+    );
+    expect(h.fired()).toBeGreaterThan(0);
+  });
 });
 
 describe("Strategy threading", () => {

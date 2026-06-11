@@ -41,6 +41,7 @@ import { handleActing } from "../../kernel/capabilities/act/act.js";
 import type { ReActKernelInput, ReActKernelResult } from "../../kernel/state/kernel-state.js";
 export type { ReActKernelInput, ReActKernelResult };
 import { resolveExecutableToolCapabilities } from "../../kernel/capabilities/act/tool-capabilities.js";
+import { buildKernelInput } from "../../kernel/state/build-kernel-input.js";
 
 // ── makeKernel / reactKernel ─────────────────────────────────────────────────
 
@@ -168,31 +169,58 @@ export const executeReActKernel = (
     // it auto-detects provider capabilities and injects the FC flag + resolver.
     // No need to duplicate that logic here.
 
+    // FM-I (GH #195), Layer-3: assemble the inner KernelInput through the
+    // canonical `buildKernelInput(crossCutting, perPass)` builder rather than a
+    // hand-written literal. The builder's bundles are `Pick<KernelInput, …>`, so
+    // a dropped cross-cutting field becomes a COMPILE error instead of a silent
+    // runtime gap. This is what closes the plan-execute-per-step path: the
+    // run-wide cross-cutting fields — `harnessPipeline`, `budgetLimits`,
+    // `calibration`, `auditRationale` — now flow through unconditionally (the
+    // old literal forwarded none of them, killing `.withHarness()` hooks,
+    // killswitches, and model calibration on every per-step ReAct pass).
+    //
+    // Behaviour-preservation: `availableToolSchemas` / `allToolSchemas` come
+    // from `capabilitySnapshot` (POST-resolve), NOT raw input, so they stay
+    // per-pass. `verifier` is deliberately ABSENT — per-step passes must not
+    // gain a terminal §9.0 gate. `blockedTools`, `strictToolDependencyChain`,
+    // and `toolCallResolver` are not part of the cross-cutting/per-pass Picks;
+    // they are spread AFTER the builder (no drop risk, same pattern reflexion
+    // uses for `blockedTools`).
     const state = yield* runKernel(reactKernel, {
-      task: input.task,
-      systemPrompt: input.systemPrompt,
-      availableToolSchemas: capabilitySnapshot.availableToolSchemas,
-      allToolSchemas: capabilitySnapshot.allToolSchemas,
-      priorContext: input.priorContext,
-      contextProfile: input.contextProfile,
-      resultCompression: input.resultCompression,
-      temperature: input.temperature,
-      agentId: input.agentId,
-      sessionId: input.sessionId,
+      ...buildKernelInput(
+        {
+          resultCompression: input.resultCompression,
+          providerName: input.providerName,
+          agentId: input.agentId,
+          sessionId: input.sessionId,
+          requiredTools: input.requiredTools,
+          // Forward classifier-relevant tools so the kernel's lazy-disclosure prune
+          // (required+relevant+used+discovered+meta) keeps MCP/user tools visible.
+          // Without this, plan-execute's per-step ReAct kernel pruned every non-meta
+          // tool — see reflexion / spot-test GitHub-MCP regression.
+          relevantTools: input.relevantTools,
+          maxRequiredToolRetries: input.maxRequiredToolRetries,
+          metaTools: input.metaTools,
+          synthesisConfig: input.synthesisConfig,
+          environmentContext: input.environmentContext,
+          modelId: input.modelId,
+          auditRationale: input.auditRationale,
+          calibration: input.calibration,
+          harnessPipeline: input.harnessPipeline,
+          budgetLimits: input.budgetLimits,
+        },
+        {
+          task: input.task,
+          systemPrompt: input.systemPrompt,
+          availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+          allToolSchemas: capabilitySnapshot.allToolSchemas,
+          priorContext: input.priorContext,
+          contextProfile: input.contextProfile,
+          temperature: input.temperature,
+        },
+      ),
       blockedTools: input.blockedTools,
-      requiredTools: input.requiredTools,
-      // Forward classifier-relevant tools so the kernel's lazy-disclosure prune
-      // (required+relevant+used+discovered+meta) keeps MCP/user tools visible.
-      // Without this, plan-execute's per-step ReAct kernel pruned every non-meta
-      // tool — see reflexion / spot-test GitHub-MCP regression.
-      relevantTools: input.relevantTools,
-      maxRequiredToolRetries: input.maxRequiredToolRetries,
       strictToolDependencyChain: input.strictToolDependencyChain,
-      metaTools: input.metaTools,
-      synthesisConfig: input.synthesisConfig,
-      environmentContext: input.environmentContext,
-      providerName: input.providerName,
-      modelId: input.modelId,
       ...(input.toolCallResolver ? { toolCallResolver: input.toolCallResolver } : {}),
     } as KernelInput, {
       maxIterations: input.maxIterations ?? 10,
