@@ -1028,7 +1028,17 @@ git commit -m "docs(reasoning): close FM-I tool_call sub-gap; canonical tool-obs
 | qwen3.5:latest (n=4) | ~0 (3/4 strict both arms, identical outputs) | ~0 | parity |
 | cogito:8b (n=2) | +0.00 | −27% | parity |
 
-A first-pass n=2 run flagged qwen3.5 at −2.00 quality; an n=4 deep-dive proved it a **witness artifact** (bare-number outputs like `$62,578` scored 0 by a btc-word-AND-price regex) + small-n noise — both arms produced identical answers. No E2 regression. **Full cross-tier (local + frontier) ablation for a default-on decision is BLOCKED on missing frontier API keys** (no ANTHROPIC/OPENAI/GEMINI key in env) — and the `ablation-warden` (Read/Grep/Glob/Bash only) cannot author its own probe script. So the default-on call is **deferred to a frontier-capable ablation run**; E2 ships **opt-in**, now with local-tier multi-model parity evidence.
+A first-pass n=2 run flagged qwen3.5 at −2.00 quality; an n=4 deep-dive proved it a **witness artifact** (bare-number outputs like `$62,578` scored 0 by a btc-word-AND-price regex) + small-n noise — both arms produced identical answers. No E2 regression.
+
+**Full CROSS-TIER ablation (2026-06-11) — RAN, E2 = parity on every tier, OPT-IN confirmed.** (Keys are present in `.env`, auto-loaded by bun; an earlier `echo $VAR` check looked at the shell env, not `.env` — corrected.) reactive, crypto-price, 3 runs/arm:
+
+| tier | model | success lift | priceOk (real answer) | tokens |
+|---|---|---|---|---|
+| local | gemma4:12b | +0pp (0→0) | 100% → 100% | −7.8% |
+| frontier | claude-sonnet-4-6 | +0pp (0→0) | 100% → 100% | −11.5% |
+| frontier | gpt-4o | +0pp (0→0) | 100% → 100% | +5.5% |
+
+**Lift rule (≥3pp success lift AND ≤15% tokens → default-on): no tier clears ≥3pp → E2 stays OPT-IN.** Parity everywhere (real-answer correctness 100% both arms; tokens within ±12%). Side-finding (NOT E2, identical off/on): framework `metadata.success` is `0%` on ALL tiers incl. frontier — the evidence-grounding verifier uniformly rejects this crypto task's terminal answer (stated price not byte-matching the compressed tool obs). Floors the success metric but doesn't affect the E2 comparison. Worth a separate look as a possible over-strict evidence-grounding case on numeric tool results.
 
 **Follow-up #1 (route batch fully through the primitive) — EVALUATED, DELIBERATELY NOT DONE (2026-06-11).** The batch path processes results in a **sequential** post-loop (`act.ts:541-630`) where `verification` (`:604` `priorSteps: allSteps, toolsUsed: newToolsUsed`) and `errorRecovery` (`:572` `missingTools` from `allSteps`) read state that is **mutated mid-loop** (each obsStep append grows `allSteps`; `newToolsUsed` accumulates). Moving these into the parallel per-call primitive (inside `Effect.all`) would snapshot the context at parallel-time → **different verification/error-recovery inputs = a behavior change**, not a byte-identical dedup. The execute-core is already shared (both call `executeNativeToolCall`); the batch's parallel-execute→sequential-observe orchestration is legitimately divergent (same "orchestration divergence is legitimate" principle, one level down). Per the no-metric-gaming / cohesion-over-LOC doctrine, forcing one-path here trades a real semantic hazard for cosmetic LOC. **Left intentionally.** The compose-emit gain already landed via E1.
 
