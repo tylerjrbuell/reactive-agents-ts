@@ -142,7 +142,7 @@ describe("chatStore stream completion handling", () => {
     expect(assistant?.reasoningSteps?.[0]?.thought).toContain("Filter by date window");
   });
 
-  it("routes TextDelta into reasoning step thought when reasoning progress is active", async () => {
+  it("streams TextDelta into liveText and exposes it mid-stream", async () => {
     const fetchImpl: FetchFn = (async (url: string) => {
       if (url.endsWith("/api/chat/sessions")) {
         return new Response(
@@ -192,13 +192,91 @@ describe("chatStore stream completion handling", () => {
 
     await chatStore.loadSessions();
     await chatStore.selectSession("s1");
+
+    const liveSnapshots: string[] = [];
+    const unsub = chatStore.subscribe((s) => {
+      const a = [...s.activeTurns].reverse().find((t) => t.role === "assistant");
+      if (a?.liveText) liveSnapshots.push(a.liveText);
+    });
+
     await chatStore.sendMessageStream("give me last commits");
+    unsub();
+
+    // Mid-stream: deltas were visible as liveText (the live answer preview)
+    expect(liveSnapshots.some((t) => t.includes("Checking repo state..."))).toBe(true);
+    expect(
+      liveSnapshots.some((t) => t.includes("Checking repo state... gathering last five commits...")),
+    ).toBe(true);
 
     const state = get(chatStore);
     const assistant = [...state.activeTurns].reverse().find((t) => t.role === "assistant");
     expect(assistant).toBeDefined();
-    expect(assistant?.reasoningSteps?.[0]?.thought).toContain("Checking repo state...");
-    expect(assistant?.reasoningSteps?.[0]?.thought).toContain("gathering last five commits...");
     expect(assistant?.content).toBe("Final table");
+    // liveText cleared once the stream completes
+    expect(assistant?.liveText).toBeUndefined();
+  });
+
+  it("folds liveText into the previous step's thought when a new iteration starts", async () => {
+    const fetchImpl: FetchFn = (async (url: string) => {
+      if (url.endsWith("/api/chat/sessions")) {
+        return new Response(
+          JSON.stringify([
+            {
+              sessionId: "s1",
+              name: "S1",
+              agentConfig: {},
+              createdAt: Date.now(),
+              lastUsedAt: Date.now(),
+            },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "s1",
+            name: "S1",
+            agentConfig: {},
+            createdAt: Date.now(),
+            lastUsedAt: Date.now(),
+            turns: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1/chat/stream")) {
+        return sseStreamResponse([
+          'data: {"_tag":"IterationProgress","iteration":1,"maxIterations":3,"status":"iteration 1/3"}\n\n',
+          'data: {"_tag":"TextDelta","text":"I will search the repo first."}\n\n',
+          'data: {"_tag":"IterationProgress","iteration":2,"maxIterations":3,"status":"iteration 2/3"}\n\n',
+          'data: {"_tag":"TextDelta","text":"Here is the final summary."}\n\n',
+          'data: {"_tag":"StreamCompleted","output":"Here is the final summary.","metadata":{"tokensUsed":50,"iterations":2}}\n\n',
+        ]);
+      }
+
+      return new Response(JSON.stringify({ error: "unexpected url" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as FetchFn;
+
+    globalThis.fetch = fetchImpl;
+
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s1");
+    await chatStore.sendMessageStream("summarize repo");
+
+    const state = get(chatStore);
+    const assistant = [...state.activeTurns].reverse().find((t) => t.role === "assistant");
+    expect(assistant).toBeDefined();
+    // Iteration-1 streaming text folded into step 1 thought when iteration 2 began
+    const step1 = assistant?.reasoningSteps?.find((s) => s.iteration === 1);
+    expect(step1?.thought).toContain("I will search the repo first.");
+    // Final answer is authoritative output, not polluted with step-1 text
+    expect(assistant?.content).toBe("Here is the final summary.");
+    expect(assistant?.liveText).toBeUndefined();
   });
 });

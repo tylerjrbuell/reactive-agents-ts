@@ -43,6 +43,8 @@ export interface AgentNode {
   readonly strategy?: string;
   /** Parent run ID for sub-agent hierarchy — populated from AgentStarted event context */
   readonly parentRunId?: string;
+  /** Current action label — set on ToolCallStarted, cleared on completion/new-iter. */
+  readonly currentStepLabel?: string;
 }
 
 export interface AgentStoreState {
@@ -341,6 +343,14 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           patch.reasoningSteps = Math.max(existing?.reasoningSteps ?? 0, Math.max(0, steps));
           break;
         }
+        case "ToolCallStarted": {
+          const toolName = typeof msg.payload.toolName === "string" ? msg.payload.toolName : "tool";
+          patch.currentStepLabel = `Calling ${toolName}…`;
+          break;
+        }
+        case "ToolCallCompleted":
+          patch.currentStepLabel = undefined;
+          break;
         case "ReasoningIterationProgress": {
           const iter = typeof (msg.payload as { iteration?: number }).iteration === "number"
             ? (msg.payload as { iteration: number }).iteration
@@ -350,6 +360,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
             : existing?.maxIterations ?? 0;
           patch.loopIteration = Math.max(existing?.loopIteration ?? 0, Math.max(0, iter));
           patch.maxIterations = max;
+          patch.currentStepLabel = undefined;
           if (existing?.state !== "completed" && existing?.state !== "error") {
             patch.state = entropyToState(existing?.entropy ?? 0, true);
           }
@@ -365,10 +376,12 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
             patch.tokensUsed = Math.max(existing?.tokensUsed ?? 0, msg.payload.totalTokens);
           }
           patch.completedAt = nowFn();
+          patch.currentStepLabel = undefined;
           break;
         case "TaskFailed":
           patch.state = "error";
           patch.completedAt = nowFn();
+          patch.currentStepLabel = undefined;
           break;
       }
 
@@ -424,6 +437,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         cost: existing?.cost ?? 0,
         connectedAt: existing?.connectedAt ?? nowFn(),
         parentRunId: existing?.parentRunId,
+        currentStepLabel: existing?.currentStepLabel,
         ...patch,
         lastEventAt: nextLastEventAt,
         completedAt: patch["completedAt"] ?? existing?.completedAt,

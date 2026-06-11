@@ -10,6 +10,7 @@ import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
 import { chatRouter } from "./api/chat.js";
 import { memoryRouter } from "./api/memory.js";
+import { promptRouter } from "./api/prompts.js";
 import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
 import { ChatSessionService } from "./services/chat-session-service.js";
@@ -78,6 +79,7 @@ export async function startCortexServer(
     .use(modelsRouter)
     .use(chatRouter(chatSessionService))
     .use(memoryRouter())
+    .use(promptRouter(runtime.rawDb))
     .use(templateResolveRouter())
     .ws("/ws/ingest", {
       open() {

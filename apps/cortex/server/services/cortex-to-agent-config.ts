@@ -46,6 +46,7 @@ export function cortexParamsToAgentConfig(
     reasoning.defaultStrategy = params.strategy;
   }
   if (params.strategySwitching === true) reasoning.enableStrategySwitching = true;
+  if (params.auditRationale === true) reasoning.auditRationale = true;
   if (Object.keys(reasoning).length > 0) draft.reasoning = reasoning;
 
   const execution: Record<string, unknown> = {};

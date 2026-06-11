@@ -2,6 +2,7 @@
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
 
   interface Props {
     sessionId: string;
@@ -9,12 +10,19 @@
     sending: boolean;
     error: string | null;
   }
-  const { sessionId, turns, sending, error } = $props();
+  const { sessionId, turns, sending, error }: Props = $props();
 
   let message = $state("");
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let scrollEl = $state<HTMLDivElement | null>(null);
   let expandedSteps = $state<Set<number>>(new Set());
+
+  const sessionTokenTotal = $derived(
+    turns.reduce((sum, t) => sum + (t.streaming ? (t.liveTokens ?? 0) : (t.tokensUsed ?? 0)), 0),
+  );
+  const sessionCostTotal = $derived(
+    turns.reduce((sum, t) => sum + (t.streaming ? (t.liveCost ?? 0) : (t.costUsd ?? 0)), 0),
+  );
 
   function toggleSteps(turnId: number) {
     expandedSteps = new Set(
@@ -29,8 +37,15 @@
     message = "";
   });
 
+  // Smart autoscroll: follow the stream only while the user is pinned at the bottom.
+  let atBottom = $state(true);
+  function onScroll() {
+    if (!scrollEl) return;
+    atBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 80;
+  }
   $effect(() => {
-    if (turns.length > 0 && scrollEl) {
+    void turns; // track every store update (deltas re-create the array)
+    if (turns.length > 0 && scrollEl && atBottom) {
       scrollEl.scrollTop = scrollEl.scrollHeight;
     }
   });
@@ -89,24 +104,35 @@
     <h2 class="text-[11px] uppercase tracking-widest font-mono text-[var(--cortex-text-muted)]">
       Conversation
     </h2>
-    {#if turns.length > 0}
-      <button
-        type="button"
-        onclick={() => void copyAllConversation()}
-        class="flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25
-               text-secondary/90 font-mono text-[9px] uppercase tracking-wider
-               bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40
-               transition-colors cursor-pointer shadow-sm"
-        aria-label="Copy all conversation"
-      >
-        <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
-        Copy all
-      </button>
-    {/if}
+    <div class="flex items-center gap-3">
+      {#if sessionTokenTotal > 0}
+        <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums">
+          {sessionTokenTotal.toLocaleString()} tok
+          {#if sessionCostTotal > 0}
+            · ${(sessionCostTotal * 100).toFixed(3)}¢
+          {/if}
+        </span>
+      {/if}
+      {#if turns.length > 0}
+        <button
+          type="button"
+          onclick={() => void copyAllConversation()}
+          class="flex items-center gap-1 px-2 py-1 rounded-md border border-secondary/25
+                 text-secondary/90 font-mono text-[9px] uppercase tracking-wider
+                 bg-surface-container-low/90 hover:bg-secondary/10 hover:border-secondary/40
+                 transition-colors cursor-pointer shadow-sm"
+          aria-label="Copy all conversation"
+        >
+          <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span>
+          Copy all
+        </button>
+      {/if}
+    </div>
   </div>
 
   <div
     bind:this={scrollEl}
+    onscroll={onScroll}
     class="flex-1 space-y-4 overflow-y-auto p-4 font-mono text-[12px]"
   >
     {#if turns.length === 0}
@@ -125,7 +151,14 @@
               >
                 {turn.role}
               </span>
-              {#if turn.tokensUsed > 0}
+              {#if turn.streaming && (turn.liveTokens ?? 0) > 0}
+                <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] tabular-nums animate-pulse">
+                  {(turn.liveTokens ?? 0).toLocaleString()} tok
+                  {#if (turn.liveCost ?? 0) > 0}
+                    · ${((turn.liveCost ?? 0) * 100).toFixed(3)}¢
+                  {/if}
+                </span>
+              {:else if turn.tokensUsed > 0}
                 <span class="text-[9px] text-[var(--cortex-text-muted)]">{turn.tokensUsed} tok</span>
               {/if}
               {#if turn.steps != null && turn.steps > 0}
@@ -210,12 +243,16 @@
                       Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
                     </p>
                   {/if}
-                  {#if turn.streaming && turn.reasoningSteps && turn.reasoningSteps.length > 0}
-                    <p class="text-[10px] italic text-[var(--cortex-text-muted)]">Drafting final response…</p>
-                  {:else if turn.streaming && !turn.content}
-                    <!-- content not yet started -->
-                  {:else if turn.streaming}
+                  {#if turn.streaming && turn.liveText}
+                    <!-- Live answer preview: streams the current iteration's text as rendered markdown -->
+                    <div class="live-stream-md">
+                      <MarkdownRich markdown={turn.liveText} showCopy={false} class="text-[11px]" />
+                      <span class="inline-block w-1.5 h-3.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span>
+                    </div>
+                  {:else if turn.streaming && turn.content}
                     <p class="whitespace-pre-wrap text-[11px] leading-relaxed m-0">{turn.content}<span class="inline-block w-1.5 h-3.5 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
+                  {:else if turn.streaming}
+                    <!-- no text yet: thinking indicator above covers this state -->
                   {:else}
                     <MarkdownRich markdown={turn.content} showCopy={true} class="text-[11px]" />
                   {/if}
@@ -265,6 +302,14 @@
       onkeydown={onKeydown}
       disabled={sending}
     ></textarea>
+    <PromptPickerButton
+      types={["task", "snippet"]}
+      defaultSaveType="task"
+      onSelect={(body) => {
+        message = message ? `${message}\n${body}` : body;
+        inputEl?.focus();
+      }}
+    />
     <button
       type="button"
       disabled={sending || !message.trim()}

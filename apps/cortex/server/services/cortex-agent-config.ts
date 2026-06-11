@@ -241,6 +241,9 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   else if (raw.strategySwitching === false) out.strategySwitching = false;
   else delete out.strategySwitching;
 
+  if (raw.auditRationale === true) out.auditRationale = true;
+  else delete out.auditRationale;
+
   const mem = raw.memory;
   if (mem && typeof mem === "object" && !Array.isArray(mem)) {
     const m = mem as Record<string, unknown>;

@@ -12,6 +12,7 @@
   import ChatShellToolDisclaimer from "$lib/components/ChatShellToolDisclaimer.svelte";
   import type { ChatTurn, AgentStreamEvent, ReasoningStep } from "$lib/stores/chat-store.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import {
     forgetRunChatSession,
     peekRunChatSession,
@@ -572,12 +573,16 @@
                     Thinking<span class="inline-block w-1.5 h-2.5 ml-0.5 bg-secondary/60 animate-pulse rounded-sm align-middle"></span>
                   </p>
                 {/if}
-                {#if turn.streaming && turn.reasoningSteps && turn.reasoningSteps.length > 0}
-                  <p class="text-[9px] italic text-[var(--cortex-text-muted)]">Drafting final response…</p>
-                {:else if turn.streaming && !turn.content}
-                  <!-- awaiting first token -->
-                {:else if turn.streaming}
+                {#if turn.streaming && turn.liveText}
+                  <!-- Live answer preview: current iteration's text streams as rendered markdown -->
+                  <div>
+                    <MarkdownRich markdown={turn.liveText} showCopy={false} class="text-[10px]" />
+                    <span class="inline-block w-1 h-3 bg-secondary/80 animate-pulse rounded-sm align-middle"></span>
+                  </div>
+                {:else if turn.streaming && turn.content}
                   <p class="whitespace-pre-wrap leading-snug text-[11px]">{turn.content}<span class="inline-block w-1 h-3 ml-0.5 bg-secondary/80 animate-pulse rounded-sm align-middle"></span></p>
+                {:else if turn.streaming}
+                  <!-- awaiting first token: thinking indicator above covers this state -->
                 {:else}
                   <MarkdownRich markdown={turn.content} showCopy={true} class="text-[10px]" />
                 {/if}
@@ -606,6 +611,14 @@
         onkeydown={onKeydown}
         disabled={sending}
       ></textarea>
+      <PromptPickerButton
+        types={["task", "snippet"]}
+        defaultSaveType="task"
+        onSelect={(body) => {
+          message = message ? `${message}\n${body}` : body;
+          inputEl?.focus();
+        }}
+      />
       <button
         type="button"
         disabled={sending || !message.trim()}

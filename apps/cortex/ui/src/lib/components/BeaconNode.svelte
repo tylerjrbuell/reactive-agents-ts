@@ -114,6 +114,15 @@
         {agent.tokensUsed >= 1000 ? `${(agent.tokensUsed / 1000).toFixed(1)}k tok` : `${agent.tokensUsed} tok`}
       </p>
     {/if}
+
+    {#if isRunning && agent.currentStepLabel}
+      <p
+        class="node-step font-mono text-[7px] truncate max-w-[112px] mt-0.5 animate-pulse"
+        title={agent.currentStepLabel}
+      >
+        {agent.currentStepLabel}
+      </p>
+    {/if}
   </div>
 
   <button
@@ -194,11 +203,13 @@
   }
 
   .node-iter,
-  .node-tokens {
+  .node-tokens,
+  .node-step {
     color: rgba(71, 85, 105, 0.8);
   }
   :global(html:not(.dark)) .node-iter,
-  :global(html:not(.dark)) .node-tokens {
+  :global(html:not(.dark)) .node-tokens,
+  :global(html:not(.dark)) .node-step {
     color: rgba(100, 116, 139, 0.7);
   }
 

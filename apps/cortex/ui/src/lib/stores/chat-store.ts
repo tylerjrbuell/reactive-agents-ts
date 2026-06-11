@@ -47,7 +47,8 @@ export type AgentStreamEvent =
       readonly callId: string;
       readonly durationMs: number;
       readonly success: boolean;
-    };
+    }
+  | { readonly _tag: "LLMRequestCompleted"; readonly tokensUsed?: number; readonly estimatedCost?: number };
 
 export type ReasoningStep = {
   iteration: number;
@@ -67,6 +68,18 @@ export type ChatTurn = {
   streaming?: boolean;
   streamProgress?: { iteration: number; maxIterations: number };
   reasoningSteps?: ReasoningStep[];
+  /**
+   * Live answer preview: the current iteration's streaming text. The final
+   * iteration's deltas ARE the final answer in the common case, so this is
+   * rendered live in the bubble. When a newer iteration starts, the text is
+   * folded into that step's thought; StreamCompleted.output replaces it.
+   */
+  liveText?: string;
+  /** Running totals during streaming — undefined when not streaming. */
+  liveTokens?: number;
+  liveCost?: number;
+  /** Final cost after streaming completes, from StreamCompleted metadata. */
+  costUsd?: number;
 };
 
 export type ChatSession = {
@@ -371,6 +384,7 @@ function createChatStore() {
       const decoder = new TextDecoder();
       let toolsUsed: string[] = [];
       let tokensUsed = 0;
+      let costUsd = 0;
       let steps = 0;
       let buffer = "";
       let eventCount = 0;
@@ -405,46 +419,14 @@ function createChatStore() {
                 eventCount++;
 
                 if (event._tag === "TextDelta") {
+                  // All deltas land in liveText — the visible answer preview.
+                  // The final iteration's deltas are the final answer; earlier
+                  // iterations' text gets folded into its step when superseded.
                   update((s) => ({
                     ...s,
                     activeTurns: s.activeTurns.map((t) =>
                       t.id === assistantTurnId
-                        ? (() => {
-                            const existing = t.reasoningSteps ?? [];
-                            if (existing.length === 0) {
-                              return { ...t, content: t.content + event.text };
-                            }
-
-                            const currentIteration =
-                              t.streamProgress?.iteration ??
-                              existing[existing.length - 1]?.iteration ??
-                              1;
-                            const idx = existing.findIndex((r) => r.iteration === currentIteration);
-
-                            if (idx >= 0) {
-                              const prev = existing[idx]!;
-                              const next: ReasoningStep = {
-                                ...prev,
-                                thought: appendThoughtDelta(prev.thought, event.text),
-                              };
-                              return {
-                                ...t,
-                                reasoningSteps: existing.map((r, i) => (i === idx ? next : r)),
-                              };
-                            }
-
-                            return {
-                              ...t,
-                              reasoningSteps: [
-                                ...existing,
-                                {
-                                  iteration: currentIteration,
-                                  maxIterations: t.streamProgress?.maxIterations ?? 0,
-                                  thought: appendThoughtDelta(undefined, event.text),
-                                },
-                              ],
-                            };
-                          })()
+                        ? { ...t, liveText: appendThoughtDelta(t.liveText, event.text) }
                         : t,
                     ),
                   }));
@@ -463,7 +445,7 @@ function createChatStore() {
                       if (t.id !== assistantTurnId) return t;
                       const existing = t.reasoningSteps ?? [];
                       const idx = existing.findIndex((r) => r.iteration === iter);
-                      const steps = idx >= 0
+                      let steps = idx >= 0
                         ? existing.map((r, i) =>
                             i === idx
                               ? {
@@ -473,7 +455,31 @@ function createChatStore() {
                               : r,
                           )
                         : [...existing, step];
-                      return { ...t, streamProgress: { iteration: iter, maxIterations: max }, reasoningSteps: steps };
+
+                      // New iteration started: the previous iteration's liveText was
+                      // reasoning, not the final answer — fold it into that step.
+                      const prevIter = t.streamProgress?.iteration;
+                      let liveText = t.liveText;
+                      if (prevIter != null && iter > prevIter && liveText && liveText.trim().length > 0) {
+                        const folded = liveText;
+                        const pIdx = steps.findIndex((r) => r.iteration === prevIter);
+                        steps = pIdx >= 0
+                          ? steps.map((r, i) =>
+                              i === pIdx ? { ...r, thought: mergeThoughtText(r.thought, folded) } : r,
+                            )
+                          : [
+                              { iteration: prevIter, maxIterations: max, thought: folded },
+                              ...steps,
+                            ];
+                        liveText = undefined;
+                      }
+
+                      return {
+                        ...t,
+                        streamProgress: { iteration: iter, maxIterations: max },
+                        reasoningSteps: steps,
+                        liveText,
+                      };
                     }),
                   }));
                 } else if (event._tag === "ThoughtEmitted") {
@@ -502,8 +508,25 @@ function createChatStore() {
                       };
                     }),
                   }));
+                } else if (event._tag === "LLMRequestCompleted") {
+                  const tokens = event.tokensUsed ?? 0;
+                  const cost = event.estimatedCost ?? 0;
+                  if (tokens > 0 || cost > 0) {
+                    update((s) => ({
+                      ...s,
+                      activeTurns: s.activeTurns.map((turn) => {
+                        if (turn.id !== assistantTurnId) return turn;
+                        return {
+                          ...turn,
+                          liveTokens: (turn.liveTokens ?? 0) + tokens,
+                          liveCost: (turn.liveCost ?? 0) + cost,
+                        };
+                      }),
+                    }));
+                  }
                 } else if (event._tag === "StreamCompleted") {
                   tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
+                  costUsd = (event.metadata?.cost as number | undefined) ?? (event.metadata?.estimatedCost as number | undefined) ?? 0;
                   steps =
                     (event.metadata?.iterations as number | undefined) ??
                     (event.metadata?.stepsCount as number | undefined) ??
@@ -513,16 +536,15 @@ function createChatStore() {
                   }
                   // StreamCompleted.output is authoritative final output after verification/retries.
                   const output: string | undefined = event.output;
-                  if (output?.trim()) {
-                    update((s) => {
-                      return {
-                        ...s,
-                        activeTurns: s.activeTurns.map((t) =>
-                          t.id === assistantTurnId ? { ...t, content: output } : t,
-                        ),
-                      };
-                    });
-                  }
+                  update((s) => ({
+                    ...s,
+                    activeTurns: s.activeTurns.map((t) => {
+                      if (t.id !== assistantTurnId) return t;
+                      // Prefer authoritative output; fall back to the live preview text
+                      const content = output?.trim() ? output : (t.liveText ?? t.content);
+                      return { ...t, content, liveText: undefined };
+                    }),
+                  }));
                 } else if (event._tag === "StreamError") {
                   // Handle stream errors
                   console.error("[Chat Stream] Stream error:", event.cause);
@@ -549,7 +571,13 @@ function createChatStore() {
                 streaming: false,
                 streamProgress: undefined,
                 // reasoningSteps intentionally kept for post-stream inspection
+                // Safety net: stream ended without StreamCompleted output
+                content: t.content || (t.liveText ?? ""),
+                liveText: undefined,
                 tokensUsed,
+                liveTokens: undefined,
+                liveCost: undefined,
+                ...(costUsd > 0 ? { costUsd } : {}),
                 ...(steps > 0 ? { steps } : {}),
                 ...(toolsUsed.length > 0 ? { toolsUsed } : {}),
               }

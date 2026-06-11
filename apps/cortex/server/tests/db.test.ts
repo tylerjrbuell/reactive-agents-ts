@@ -7,8 +7,10 @@ import {
   getRecentRuns,
   getNextSeq,
   updateRunStats,
+  updateRunLabel,
   getRunById,
   getRunEvents,
+  getAgentStats,
 } from "../db/queries.js";
 
 describe("CortexDB schema + queries", () => {
@@ -230,6 +232,13 @@ describe("CortexDB schema + queries", () => {
     expect(getRunById(db, "only")).not.toBeNull();
   });
 
+  it("updateRunLabel sets display_name", () => {
+    upsertRun(db, "agent-1", "run-abc");
+    updateRunLabel(db, "run-abc", "My Research Task");
+    const row = db.prepare("SELECT display_name FROM cortex_runs WHERE run_id = ?").get("run-abc") as { display_name: string };
+    expect(row.display_name).toBe("My Research Task");
+  });
+
   it("cortex_chat_sessions has stable_agent_id column after migration", () => {
     const db2 = new Database(":memory:");
     db2.exec(`
@@ -246,5 +255,17 @@ describe("CortexDB schema + queries", () => {
       (c) => c.name,
     );
     expect(cols).toContain("stable_agent_id");
+  });
+
+  it("getAgentStats returns correct aggregates", () => {
+    upsertRun(db, "agent-1", "run-1");
+    db.prepare("UPDATE cortex_runs SET status='completed', tokens_used=1000, cost_usd=0.01 WHERE run_id='run-1'").run();
+    upsertRun(db, "agent-1", "run-2");
+    db.prepare("UPDATE cortex_runs SET status='failed', tokens_used=500, cost_usd=0.005 WHERE run_id='run-2'").run();
+
+    const stats = getAgentStats(db, "agent-1");
+    expect(stats.runCount).toBe(2);
+    expect(stats.successRate).toBeCloseTo(0.5);
+    expect(stats.avgTokens).toBeCloseTo(750);
   });
 });

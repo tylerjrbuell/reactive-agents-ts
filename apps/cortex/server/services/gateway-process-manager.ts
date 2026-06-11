@@ -317,6 +317,7 @@ export class GatewayProcessManager {
         ...(_terminalShellAllowed ? { terminalShellAllowedCommands: _terminalShellAllowed } : {}),
         ...(_observabilityVerbosity ? { observabilityVerbosity: _observabilityVerbosity } : {}),
         strategySwitching: config.strategySwitching === true,
+        ...(config.auditRationale === true ? { auditRationale: true as const } : {}),
         ...(_memory ? { memory: _memory } : {}),
         ...(_contextSynthesis ? { contextSynthesis: _contextSynthesis } : {}),
         ...(_guardrails ? { guardrails: _guardrails } : {}),

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { settings } from "$lib/stores/settings.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
+  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
 
   interface Props {
@@ -113,6 +114,16 @@
       onkeydown={handleKeydown}
       class="flex-1 bg-transparent border-none outline-none text-on-surface text-sm py-3 px-2
              placeholder:text-outline/45 placeholder:font-mono placeholder:text-[13px]"
+    />
+
+    <!-- Prompt library -->
+    <PromptPickerButton
+      types={["task", "snippet"]}
+      defaultSaveType="task"
+      onSelect={(body) => {
+        value = body;
+        inputEl?.focus();
+      }}
     />
 
     <!-- Submit: gradient neural pulse button -->

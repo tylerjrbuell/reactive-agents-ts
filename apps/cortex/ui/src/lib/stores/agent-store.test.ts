@@ -223,6 +223,34 @@ describe("createAgentStore", () => {
     expect(get({ subscribe: store.subscribe })[0]?.lastEventAt).toBe(first);
   });
 
+  it("sets currentStepLabel on ToolCallStarted and clears on ToolCallCompleted", () => {
+    const store = createAgentStore({ loadOnInit: false, now: () => 1 });
+    store.handleLiveMessage({
+      agentId: "x", runId: "r", type: "ToolCallStarted",
+      payload: { toolName: "web-search", callId: "c1" },
+    });
+    expect(get({ subscribe: store.subscribe })[0]?.currentStepLabel).toBe("Calling web-search…");
+
+    store.handleLiveMessage({
+      agentId: "x", runId: "r", type: "ToolCallCompleted",
+      payload: { toolName: "web-search", callId: "c1", durationMs: 100, success: true },
+    });
+    expect(get({ subscribe: store.subscribe })[0]?.currentStepLabel).toBeUndefined();
+  });
+
+  it("clears currentStepLabel on ReasoningIterationProgress", () => {
+    const store = createAgentStore({ loadOnInit: false, now: () => 1 });
+    store.handleLiveMessage({
+      agentId: "x", runId: "r", type: "ToolCallStarted",
+      payload: { toolName: "read-file", callId: "c1" },
+    });
+    store.handleLiveMessage({
+      agentId: "x", runId: "r", type: "ReasoningIterationProgress",
+      payload: { iteration: 2, maxIterations: 5 },
+    });
+    expect(get({ subscribe: store.subscribe })[0]?.currentStepLabel).toBeUndefined();
+  });
+
   it("loadAgents maps agentRecordName to savedAgentName and prefers run displayName in headline", async () => {
     const rows: RunSummaryDto[] = [
       {

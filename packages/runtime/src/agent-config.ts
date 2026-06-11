@@ -44,6 +44,8 @@ export const ReasoningConfigSchema = Schema.Struct({
   enableStrategySwitching: Schema.optional(Schema.Boolean),
   maxStrategySwitches: Schema.optional(Schema.Number),
   fallbackStrategy: Schema.optional(Schema.String),
+  /** Opt-in: emit per-tool-call decision rationale into the debrief (audit feature; speed/token tax on smaller models). */
+  auditRationale: Schema.optional(Schema.Boolean),
 });
 
 export const ToolsConfigSchema = Schema.Struct({
@@ -369,6 +371,7 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(r?.enableStrategySwitching !== undefined ? { enableStrategySwitching: r.enableStrategySwitching } : {}),
       ...(r?.maxStrategySwitches !== undefined ? { maxStrategySwitches: r.maxStrategySwitches } : {}),
       ...(r?.fallbackStrategy ? { fallbackStrategy: r.fallbackStrategy } : {}),
+      ...(r?.auditRationale !== undefined ? { auditRationale: r.auditRationale } : {}),
     };
     builder = builder.withReasoning(Object.keys(opts).length > 0 ? opts : undefined);
   }

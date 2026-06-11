@@ -86,6 +86,12 @@ export interface BuildCortexAgentParams {
   readonly observabilityVerbosity?: "off" | "minimal" | "normal" | "verbose";
   /** When true, enables automatic strategy switching on loop detection. */
   readonly strategySwitching?: boolean;
+  /**
+   * Opt-in: emit per-tool-call decision rationale into the debrief (framework
+   * `ReasoningOptions.auditRationale`). Audit feature — can degrade speed/quality
+   * on smaller local models (cross-tier ablation: pure token tax, zero quality lift).
+   */
+  readonly auditRationale?: boolean;
   readonly memory?: {
     readonly working?: boolean;
     readonly episodic?: boolean;
@@ -152,13 +158,15 @@ export async function buildCortexAgent(
 
   // Builder replaces `_reasoningOptions` on each `withReasoning` call — merge schema-derived
   // reasoning with ICS synthesis so we do not drop defaultStrategy / strategy switching.
-  if (params.contextSynthesis && params.contextSynthesis !== "none") {
+  // `auditRationale` is read from `params` directly (not schema) so the opt-in survives even
+  // when AgentConfigSchema is resolved from a build that predates the field.
+  const synthesisActive = !!params.contextSynthesis && params.contextSynthesis !== "none";
+  if (synthesisActive || params.auditRationale === true) {
     const synthesisMap: Record<string, ReasoningOptions["synthesis"]> = {
       auto: "auto",
       template: "fast",
       llm: "deep",
     };
-    const synthesis = synthesisMap[params.contextSynthesis] ?? "auto";
     const r = agentConfig.reasoning;
     b = b.withReasoning({
       ...(r?.defaultStrategy ? { defaultStrategy: r.defaultStrategy } : {}),
@@ -167,7 +175,8 @@ export async function buildCortexAgent(
         : {}),
       ...(r?.maxStrategySwitches !== undefined ? { maxStrategySwitches: r.maxStrategySwitches } : {}),
       ...(r?.fallbackStrategy ? { fallbackStrategy: r.fallbackStrategy } : {}),
-      synthesis,
+      ...(params.auditRationale === true ? { auditRationale: true } : {}),
+      ...(synthesisActive ? { synthesis: synthesisMap[params.contextSynthesis!] ?? "auto" } : {}),
     } as ReasoningOptions);
   }
 

@@ -47,6 +47,7 @@ export const RunConfigBody = t.Object({
   taskContext: t.Optional(t.Record(t.String(), t.String())),
   healthCheck: t.Optional(t.Boolean()),
   strategySwitching: t.Optional(t.Boolean()),
+  auditRationale: t.Optional(t.Boolean()),
   memory: t.Optional(t.Object({ working: t.Optional(t.Boolean()), episodic: t.Optional(t.Boolean()), semantic: t.Optional(t.Boolean()) })),
   contextSynthesis: t.Optional(t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")])),
   guardrails: t.Optional(t.Object({ enabled: t.Optional(t.Boolean()), injectionThreshold: t.Optional(t.Number()), piiThreshold: t.Optional(t.Number()), toxicityThreshold: t.Optional(t.Number()) })),
@@ -125,6 +126,7 @@ export const runsRouter = (
               ? { variableValues: b.variableValues as Record<string, string | number> }
               : {}),
             ...(b.strategySwitching != null ? { strategySwitching: b.strategySwitching } : {}),
+            ...(b.auditRationale === true ? { auditRationale: true as const } : {}),
             ...(b.memory ? { memory: b.memory } : {}),
             ...(b.contextSynthesis ? { contextSynthesis: b.contextSynthesis } : {}),
             ...(b.guardrails ? { guardrails: b.guardrails } : {}),
@@ -240,6 +242,36 @@ export const runsRouter = (
         return { error: String(e) };
       }
     })
+    .patch(
+      "/:runId/label",
+      async ({ params, body, set }) => {
+        if (!body.label.trim()) {
+          set.status = 400;
+          return { error: "label must be a non-empty string" };
+        }
+        const program = Effect.gen(function* () {
+          const store = yield* CortexStoreService;
+          const found = yield* store.updateRunLabel(params.runId, body.label);
+          return found;
+        });
+        try {
+          const result = await Effect.runPromise(program.pipe(Effect.provide(storeLayer)));
+          if (!result.ok) {
+            set.status = 404;
+            return { error: "Run not found" };
+          }
+          return { ok: true };
+        } catch (e) {
+          set.status = 500;
+          return { error: String(e) };
+        }
+      },
+      {
+        body: t.Object({
+          label: t.String(),
+        }),
+      },
+    )
     .get("/", async ({ query }) => {
       const limit = query.limit != null ? Math.max(0, Number(query.limit)) : 50;
       const program = Effect.gen(function* () {

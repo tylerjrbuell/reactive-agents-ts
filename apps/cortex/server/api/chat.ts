@@ -17,6 +17,7 @@ export const ChatSessionConfigBody = t.Object({
   strategy: t.Optional(t.String()),
   strategySwitching: t.Optional(t.Boolean()),
   runtimeVerification: t.Optional(t.Boolean()),
+  auditRationale: t.Optional(t.Boolean()),
   verificationStep: t.Optional(t.Union([t.Literal("none"), t.Literal("reflect")])),
   contextSynthesis: t.Optional(
     t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
@@ -40,6 +41,14 @@ export const ChatSessionConfigBody = t.Object({
   ),
   terminalShellAdditionalCommands: t.Optional(t.String()),
   terminalShellAllowedCommands: t.Optional(t.String()),
+  seedTurns: t.Optional(
+    t.Array(
+      t.Object({
+        role: t.Union([t.Literal("user"), t.Literal("assistant")]),
+        content: t.String(),
+      }),
+    ),
+  ),
   mcpServerIds: t.Optional(t.Array(t.String())),
   agentTools: t.Optional(t.Array(t.Unknown())),
   dynamicSubAgents: t.Optional(t.Object({ enabled: t.Boolean(), maxIterations: t.Optional(t.Number()) })),
@@ -100,6 +109,7 @@ export const chatRouter = (svc: ChatSessionService) =>
         try {
           const sessionId = await svc.createSession({
             ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.seedTurns?.length ? { seedTurns: body.seedTurns } : {}),
             agentConfig: {
               provider: body.provider ?? "anthropic",
               ...(body.model ? { model: body.model } : {}),

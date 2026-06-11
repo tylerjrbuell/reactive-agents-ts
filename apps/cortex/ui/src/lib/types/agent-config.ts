@@ -57,6 +57,12 @@ export interface AgentConfig {
    * Distinct from {@link verificationStep} “reflect”, which is a single post-answer LLM review pass.
    */
   runtimeVerification: boolean;
+  /**
+   * Opt-in: emit per-tool-call decision rationale into the debrief. Audit feature —
+   * a cross-tier ablation showed it adds latency/tokens with no quality lift, and can
+   * degrade output on smaller/less-capable local models. Default OFF.
+   */
+  auditRationale: boolean;
   tools: string[];
   /**
    * Registers `shell-execute` with default allowlist/blocklist on the host (**not** Docker-isolated).
@@ -118,6 +124,11 @@ export interface AgentConfig {
     paths: string[];
     evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean };
   };
+  /**
+   * Lifecycle webhooks — server fires a POST to each URL on run start/completion/failure.
+   * `events` empty or `["all"]` = every lifecycle event. Fire-and-forget, best-effort.
+   */
+  lifecycleWebhooks: { url: string; events: string[] }[];
   /** Template variables for parameterized runs. `{{name}}` in any string field resolves against these. */
   variables: VariableDef[];
 }
@@ -139,6 +150,8 @@ export function defaultConfig(): AgentConfig {
     strategySwitching: false,
     verificationStep: "none",
     runtimeVerification: false,
+    auditRationale: false,
+    lifecycleWebhooks: [],
     tools: ["web-search"],
     terminalTools: false,
     terminalShellAdditionalCommands: "",

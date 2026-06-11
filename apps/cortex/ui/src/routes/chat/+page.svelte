@@ -9,6 +9,9 @@
 
   onMount(async () => {
     await chatStore.loadSessions();
+    const params = new URLSearchParams(window.location.search);
+    const sessionParam = params.get("session");
+    if (sessionParam) void chatStore.selectSession(sessionParam);
   });
 
   function selectSession(id: string) {

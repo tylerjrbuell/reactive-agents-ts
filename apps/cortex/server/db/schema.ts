@@ -128,6 +128,19 @@ export function applySchema(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_skills_created
       ON skills(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS cortex_prompts (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL DEFAULT '',
+      body        TEXT    NOT NULL,
+      type        TEXT    NOT NULL DEFAULT 'snippet',
+      tags        TEXT    NOT NULL DEFAULT '[]',
+      created_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
+      updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_prompts_created
+      ON cortex_prompts(created_at DESC);
   `);
 
   // Migrations — safe to run on existing DBs (ALTER TABLE IF NOT EXISTS column)
@@ -155,6 +168,12 @@ export function applySchema(db: Database): void {
     .map((c) => c.name);
   if (!chatSessionCols.includes("stable_agent_id")) {
     db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN stable_agent_id TEXT");
+  }
+
+  const promptCols = (db.prepare("PRAGMA table_info(cortex_prompts)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  if (!promptCols.includes("type")) {
+    db.exec("ALTER TABLE cortex_prompts ADD COLUMN type TEXT NOT NULL DEFAULT 'snippet'");
   }
 }
 

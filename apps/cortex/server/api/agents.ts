@@ -6,6 +6,7 @@ import {
   createGatewayAgent,
   updateGatewayAgent,
   deleteGatewayAgent,
+  getAgentStats,
 } from "../db/queries.js";
 import type { GatewayProcessManager } from "../services/gateway-process-manager.js";
 
@@ -153,4 +154,5 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
           variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
         }),
       ),
-    });
+    })
+    .get("/:agentId/stats", ({ params }) => getAgentStats(db, params.agentId));

@@ -35,6 +35,16 @@ describe("cortexRunsPostBody", () => {
     expect(on.terminalTools).toBe(true);
   });
 
+  it("includes auditRationale only when enabled", () => {
+    const off = cortexRunsPostBody("x", defaultConfig()) as { auditRationale?: boolean };
+    expect(off.auditRationale).toBeUndefined();
+
+    const on = cortexRunsPostBody("x", { ...defaultConfig(), auditRationale: true }) as {
+      auditRationale?: boolean;
+    };
+    expect(on.auditRationale).toBe(true);
+  });
+
   it("includes additionalToolNames when non-empty", () => {
     const body = cortexRunsPostBody("x", {
       ...defaultConfig(),

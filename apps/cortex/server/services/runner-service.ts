@@ -69,6 +69,8 @@ export interface LaunchParams {
   readonly variableValues?: Record<string, string | number>;
   /** When true, enables automatic strategy switching on loop detection. */
   readonly strategySwitching?: boolean;
+  /** Opt-in per-tool-call decision rationale in debrief (`ReasoningOptions.auditRationale`). */
+  readonly auditRationale?: boolean;
   /** Memory tier selection. episodic or semantic presence → enhanced tier. */
   readonly memory?: { working?: boolean; episodic?: boolean; semantic?: boolean };
   /** Context synthesis mode passed to `.withReasoning({ synthesis })`. */
@@ -172,6 +174,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                   : {}),
                 ...(params.observabilityVerbosity ? { observabilityVerbosity: params.observabilityVerbosity } : {}),
                 ...(params.strategySwitching != null ? { strategySwitching: params.strategySwitching } : {}),
+                ...(params.auditRationale === true ? { auditRationale: true as const } : {}),
                 ...(params.memory ? { memory: params.memory } : {}),
                 ...(params.contextSynthesis ? { contextSynthesis: params.contextSynthesis } : {}),
                 ...(params.guardrails ? { guardrails: params.guardrails } : {}),

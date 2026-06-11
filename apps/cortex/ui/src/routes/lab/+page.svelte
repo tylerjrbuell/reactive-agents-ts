@@ -2,6 +2,9 @@
   import { onMount } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
+  import PromptManager from "$lib/components/PromptManager.svelte";
+  import AgentExportModal from "$lib/components/AgentExportModal.svelte";
+  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
@@ -47,7 +50,7 @@
     };
   }
 
-  let activeTab = $state<"builder" | "gateway" | "skills" | "tools">("builder");
+  let activeTab = $state<"builder" | "gateway" | "skills" | "tools" | "prompts">("builder");
 
   // ── Quick Run builder ─────────────────────────────────────────────────
   let builderConfig = $state<BuilderAgentConfig>(builderDefaultsFromSettings());
@@ -191,12 +194,33 @@
   }
 
   // ── Gateway agents ────────────────────────────────────────────────────
+  type AgentStats = { runCount: number; successRate: number; avgTokens: number; totalCostUsd: number };
+  let agentStats = $state<Record<string, AgentStats>>({});
+
+  async function loadAgentStats(agentId: string) {
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents/${encodeURIComponent(agentId)}/stats`);
+      if (res.ok) {
+        const data: unknown = await res.json();
+        if (data && typeof data === "object") agentStats = { ...agentStats, [agentId]: data as AgentStats };
+      }
+    } catch { /* ignore */ }
+  }
+
+  $effect(() => {
+    if (activeTab === "gateway") {
+      for (const agent of gatewayAgents) void loadAgentStats(agent.agentId);
+    }
+  });
+
   let gatewayAgents = $state<GatewayRow[]>([]);
   let gatewayLoading = $state(false);
   let showForm = $state(false);
   let editingAgent = $state<GatewayRow | null>(null);
   let deleteConfirmAgent = $state<GatewayRow | null>(null);
   let deleteConfirmBulk = $state<GatewayRow[] | null>(null);
+  // Agent export modal: { config, name } | null
+  let exportTarget = $state<{ config: AgentConfig; name: string } | null>(null);
   let selectedGatewayAgentIds = $state(new Set<string>());
   let gatewaySelectAllEl = $state<HTMLInputElement | undefined>(undefined);
 
@@ -718,10 +742,11 @@
     if (h === "#gateway") activeTab = "gateway";
     else if (h === "#skills") activeTab = "skills";
     else if (h === "#tools")  activeTab = "tools";
+    else if (h === "#prompts") activeTab = "prompts";
 
     function onTabSwitch(e: Event) {
       const tab = (e as CustomEvent<string>).detail as typeof activeTab;
-      if (tab === "builder" || tab === "gateway" || tab === "skills" || tab === "tools") {
+      if (tab === "builder" || tab === "gateway" || tab === "skills" || tab === "tools" || tab === "prompts") {
         activeTab = tab;
       }
     }
@@ -790,6 +815,7 @@
       { id: "gateway", label: "Agents", icon: "hub", badge: gatewayAgents.length },
       { id: "skills",  label: "Skills",  icon: "psychology" },
       { id: "tools",   label: "Tools",   icon: "construction" },
+      { id: "prompts", label: "Prompts", icon: "menu_book" },
     ] as tab}
       <button type="button"
         class="flex items-center gap-2 rounded-md border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150
@@ -847,7 +873,18 @@
 
             <div class="space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-0.5">
               <div>
-              <label for="builder-prompt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Prompt</label>
+              <div class="mb-1.5 flex items-end justify-between gap-2">
+                <label for="builder-prompt" class="block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Prompt</label>
+                <PromptPickerButton
+                  types={["task", "snippet"]}
+                  defaultSaveType="task"
+                  placement="down"
+                  title="Insert a saved prompt"
+                  onSelect={(body) => {
+                    builderConfig = { ...builderConfig, prompt: builderConfig.prompt ? `${builderConfig.prompt}\n${body}` : body };
+                  }}
+                />
+              </div>
               <HighlightedField
                 multiline
                 id="builder-prompt"
@@ -1016,6 +1053,14 @@
                   Create Gateway Agent
                 </button>
               {/if}
+              <button
+                type="button"
+                onclick={() => (exportTarget = { config: builderConfig, name: builderPersistentName.trim() || "agent" })}
+                class="mt-2 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[var(--cortex-border)] px-6 py-2 font-mono text-[10px] uppercase tracking-wider text-slate-600 transition-colors hover:border-primary/40 hover:text-primary dark:text-on-surface-variant"
+              >
+                <span class="material-symbols-outlined text-sm">ios_share</span>
+                Export agent (TS / JSON)
+              </button>
             </div>
           </aside>
 
@@ -1097,9 +1142,20 @@
                 </div>
 
                 <div>
-                  <label for="gateway-edit-prompt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">
-                    Prompt <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/50">(default task — same as Builder tab)</span>
-                  </label>
+                  <div class="mb-1.5 flex items-end justify-between gap-2">
+                    <label for="gateway-edit-prompt" class="block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">
+                      Prompt <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/50">(default task — same as Builder tab)</span>
+                    </label>
+                    <PromptPickerButton
+                      types={["task", "snippet"]}
+                      defaultSaveType="task"
+                      placement="down"
+                      title="Insert a saved prompt"
+                      onSelect={(body) => {
+                        formConfig = { ...formConfig, prompt: formConfig.prompt ? `${formConfig.prompt}\n${body}` : body };
+                      }}
+                    />
+                  </div>
                   <HighlightedField
                     multiline
                     id="gateway-edit-prompt"
@@ -1234,6 +1290,14 @@
                     <span>·</span><span>{agent.runCount} runs</span>
                     {#if agent.lastRunAt}<span>· last {relativeTime(agent.lastRunAt)}</span>{/if}
                   </div>
+                  {#if agentStats[agent.agentId] && agentStats[agent.agentId].runCount > 0}
+                    {@const s = agentStats[agent.agentId]}
+                    <div class="flex gap-3 font-mono text-[9px] text-outline mt-1 tabular-nums">
+                      <span>{Math.round(s.successRate * 100)}% ok</span>
+                      <span>{Math.round(s.avgTokens).toLocaleString()} avg tok</span>
+                      {#if s.totalCostUsd > 0}<span>${(s.totalCostUsd * 100).toFixed(2)}¢ total</span>{/if}
+                    </div>
+                  {/if}
                 </div>
                 <div class="flex items-center gap-1 flex-shrink-0">
                   <!-- Run: gateway (manual fire vs cron) and ad-hoc (on-demand saved config) -->
@@ -1257,6 +1321,9 @@
                   <button type="button" onclick={() => openEdit(agent)}
                     class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
                     title="Edit agent">edit</button>
+                  <button type="button" onclick={() => (exportTarget = { config: agent.config, name: agent.name })}
+                    class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
+                    title="Export agent (TS / JSON)">ios_share</button>
                   <button type="button" onclick={() => (deleteConfirmAgent = agent)}
                     class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-error dark:text-on-surface-variant dark:hover:text-error"
                     title="Delete agent">delete</button>
@@ -1574,6 +1641,12 @@
       </div>
     </div>
 
+  <!-- ── PROMPTS (reusable prompt library manager) ─────────────────────── -->
+  {:else if activeTab === "prompts"}
+    <div class="min-h-0 flex-1 overflow-hidden px-4 pb-4 pt-4 sm:px-6">
+      <PromptManager />
+    </div>
+
   <!-- ── TOOLS (unified catalog + create tool: custom + MCP) ───────────── -->
   {:else}
     <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -1583,6 +1656,14 @@
 </div>
 </div>
 </CortexDeskShell>
+
+{#if exportTarget}
+  <AgentExportModal
+    config={exportTarget.config}
+    name={exportTarget.name}
+    onClose={() => (exportTarget = null)}
+  />
+{/if}
 
 {#if deleteConfirmAgent}
   <ConfirmModal

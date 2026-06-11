@@ -23,6 +23,7 @@ const apiProxy: ProxyOptions = {
 export default defineConfig({
   plugins: [sveltekit()],
   server: {
+    fs: { strict: false },
     proxy: {
       "/api": {
         ...apiProxy,

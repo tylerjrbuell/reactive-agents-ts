@@ -87,6 +87,23 @@
     return lines.join("\n");
   }
 
+  /** Full transcript across every kernel pass — the complete record sent to the model. */
+  function formatFullTranscript(): string {
+    return groups.map(formatThreadForCopy).join("\n");
+  }
+
+  function downloadTranscriptJson() {
+    const blob = new Blob([JSON.stringify(groups, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `transcript-${runId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const totalMessages = $derived(groups.reduce((n, g) => n + g.messages.length, 0));
+
   const roleStyle: Record<string, { border: string; label: string; labelColor: string }> = {
     system: { border: "border-outline-variant/30 dark:border-outline-variant/25", label: "system", labelColor: "text-outline/50" },
     user: { border: "border-primary/25", label: "user", labelColor: "text-primary/70" },
@@ -99,7 +116,37 @@
   };
 </script>
 
-<div class="h-full overflow-y-auto font-mono text-[11px] p-3 space-y-4">
+<div class="flex h-full flex-col">
+  {#if !loading && !error && groups.length > 0}
+    <div class="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--cortex-border)] px-3 py-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="material-symbols-outlined text-[15px] text-outline/60">chat_bubble</span>
+        <span class="font-mono text-[10px] uppercase tracking-widest text-outline/60">Full transcript</span>
+        <span class="font-mono text-[9px] text-outline/40 tabular-nums">{totalMessages} msgs · {groups.length} {groups.length === 1 ? "pass" : "passes"}</span>
+      </div>
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <Tooltip text={copiedField === "all" ? "Copied!" : "Copy entire transcript"}>
+          <button
+            type="button"
+            class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-outline hover:text-primary hover:border-primary/40 bg-transparent cursor-pointer transition-colors"
+            onclick={() => copyToClipboard(formatFullTranscript(), "all")}
+          >
+            <span class="material-symbols-outlined text-[13px] leading-none">{copiedField === "all" ? "check" : "content_copy"}</span> Copy all
+          </button>
+        </Tooltip>
+        <Tooltip text="Download transcript as JSON">
+          <button
+            type="button"
+            class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-outline hover:text-primary hover:border-primary/40 bg-transparent cursor-pointer transition-colors"
+            onclick={downloadTranscriptJson}
+          >
+            <span class="material-symbols-outlined text-[13px] leading-none">download</span> JSON
+          </button>
+        </Tooltip>
+      </div>
+    </div>
+  {/if}
+<div class="flex-1 overflow-y-auto font-mono text-[11px] p-3 space-y-4">
   {#if loading}
     <p class="text-outline/40 italic">Loading messages…</p>
   {:else if error}
@@ -198,4 +245,5 @@
       </div>
     {/each}
   {/if}
+</div>
 </div>
