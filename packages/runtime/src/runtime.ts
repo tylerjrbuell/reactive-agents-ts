@@ -344,6 +344,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     // Issue #128 / North Star v5.0 Pillar 6 — declarative budget caps for
     // the Arbitrator pre-intent guard. Propagated from `.withBudget()`.
     budgetLimits: options.budgetLimits,
+    // Opt-in numeric evidence-grounding. Propagated from `.withGrounding()`.
+    grounding: options.grounding,
     verifier: options.leanHarness ? leanModeVerifier : undefined,
     harnessPipeline: options.harnessPipeline,
     enableReactiveIntelligence: options.enableReactiveIntelligence,

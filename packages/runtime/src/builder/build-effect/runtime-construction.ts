@@ -170,6 +170,8 @@ export interface BuilderRuntimeStateView {
    * Set via `.withBudget()`; mirrored into `RuntimeOptions.budgetLimits`.
    */
   readonly _budgetLimits: import("../../builder.js").BudgetLimits | undefined;
+  /** Opt-in numeric evidence-grounding config. Absent = off (default). */
+  readonly _groundingConfig: import("../types.js").GroundingOptions | undefined;
   /** Registrations collected by `.withHarness()` calls — compiled into a HarnessPipeline. */
   readonly _harnessRegistrations: ReadonlyArray<(harness: import("@reactive-agents/core").Harness) => void>;
 }
@@ -448,6 +450,7 @@ export const buildBaseRuntimeAndEngine = (
           : undefined,
       leanHarness: state._leanHarness || undefined,
       budgetLimits: state._budgetLimits,
+      grounding: state._groundingConfig,
       harnessPipeline,
     });
 

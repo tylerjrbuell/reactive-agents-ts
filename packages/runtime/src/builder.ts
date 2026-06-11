@@ -379,6 +379,8 @@ export class ReactiveAgentBuilder {
      * `ReactiveAgentsConfig.budgetLimits` → `KernelInput.budgetLimits`.
      */
     private _budgetLimits: BudgetLimits | undefined = undefined
+    /** Opt-in numeric evidence-grounding config. Absent = off (default). */
+    private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
 
     // ─── Calibration ───
@@ -834,6 +836,22 @@ export class ReactiveAgentBuilder {
     withVerification(options?: VerificationOptions): this {
         this._enableVerification = true
         if (options) this._verificationOptions = options
+        return this
+    }
+
+    /**
+     * Enable opt-in numeric evidence-grounding. Off by default.
+     *
+     * When on, figures in the final answer are checked against the FULL tool
+     * data (resolved via storedKey to bypass compression) with rounding
+     * tolerance. `mode: "warn"` = advisory; `mode: "block"` = one corrective
+     * retry then degrade to warn (never hard-fails the run).
+     *
+     * @param options - Grounding configuration
+     * @returns `this` for chaining
+     */
+    withGrounding(options: import('./builder/types.js').GroundingOptions): this {
+        this._groundingConfig = options
         return this
     }
 

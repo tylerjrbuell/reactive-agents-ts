@@ -316,6 +316,27 @@ export interface GuardrailsOptions {
  * agent.withVerification({ hallucinationDetection: true, passThreshold: 0.8 })
  * ```
  */
+/**
+ * Options for `.withGrounding()` — opt-in numeric evidence-grounding.
+ *
+ * When enabled, figures in the final answer are checked against the FULL tool
+ * data with rounding tolerance.
+ *
+ * @example
+ * ```typescript
+ * agent.withGrounding({ mode: "warn" })          // advisory
+ * agent.withGrounding({ mode: "block", tolerance: 0.02 }) // corrective retry
+ * ```
+ */
+export interface GroundingOptions {
+    /** `warn`: advisory check only. `block`: one corrective retry then degrade to warn (never hard-fails). */
+    readonly mode: "block" | "warn";
+    /** Numeric match tolerance as a fraction (rounding). Default 0.01 (1%). */
+    readonly tolerance?: number;
+    /** `block` mode: corrective retries before degrading to warn. Default 1. */
+    readonly maxRetries?: number;
+}
+
 export interface VerificationOptions {
     /** Enable semantic entropy estimation. Default: true */
     readonly semanticEntropy?: boolean

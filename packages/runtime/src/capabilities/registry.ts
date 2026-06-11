@@ -193,7 +193,7 @@ export const bootstrapEntries: readonly CapabilityEntry[] = [
     liftEvidence: {
       measuredOn: ["local", "frontier"],
       averageDelta:
-        "9 checks (agent-took-action / synthesis-grounded / no-fabrication / etc.); catches FM-A1 / M2 leaks at terminal gate",
+        "9 checks (agent-took-action / scaffold-leak / no-fabrication / etc.); catches FM-A1 / M2 leaks at terminal gate; numeric evidence-grounding is opt-in via .withGrounding()",
       evidence:
         "wiki/Research/Harness-Reports/phase-1.5-m3-ablation-2026-05-12.md",
       measuredAt: "2026-05-12",

@@ -237,6 +237,8 @@ export const runReasoningThink = (
       // in `strategies/reactive.ts`); the field is forwarded here so that
       // plumb arrives intact as soon as the reasoning leg lands.
       budgetLimits: config.budgetLimits,
+      // Opt-in numeric evidence-grounding. Propagated from `.withGrounding()`.
+      grounding: config.grounding,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);
