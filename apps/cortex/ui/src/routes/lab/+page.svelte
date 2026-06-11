@@ -3,6 +3,7 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import PromptManager from "$lib/components/PromptManager.svelte";
+  import AgentExportModal from "$lib/components/AgentExportModal.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
@@ -202,6 +203,8 @@
   let editingAgent = $state<GatewayRow | null>(null);
   let deleteConfirmAgent = $state<GatewayRow | null>(null);
   let deleteConfirmBulk = $state<GatewayRow[] | null>(null);
+  // Agent export modal: { config, name } | null
+  let exportTarget = $state<{ config: AgentConfig; name: string } | null>(null);
   let selectedGatewayAgentIds = $state(new Set<string>());
   let gatewaySelectAllEl = $state<HTMLInputElement | undefined>(undefined);
 
@@ -996,6 +999,14 @@
                   Create Gateway Agent
                 </button>
               {/if}
+              <button
+                type="button"
+                onclick={() => (exportTarget = { config: builderConfig, name: builderPersistentName.trim() || "agent" })}
+                class="mt-2 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[var(--cortex-border)] px-6 py-2 font-mono text-[10px] uppercase tracking-wider text-slate-600 transition-colors hover:border-primary/40 hover:text-primary dark:text-on-surface-variant"
+              >
+                <span class="material-symbols-outlined text-sm">ios_share</span>
+                Export agent (TS / JSON)
+              </button>
             </div>
           </aside>
 
@@ -1239,6 +1250,9 @@
                   <button type="button" onclick={() => openEdit(agent)}
                     class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
                     title="Edit agent">edit</button>
+                  <button type="button" onclick={() => (exportTarget = { config: agent.config, name: agent.name })}
+                    class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
+                    title="Export agent (TS / JSON)">ios_share</button>
                   <button type="button" onclick={() => (deleteConfirmAgent = agent)}
                     class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-error dark:text-on-surface-variant dark:hover:text-error"
                     title="Delete agent">delete</button>
@@ -1571,6 +1585,14 @@
 </div>
 </div>
 </CortexDeskShell>
+
+{#if exportTarget}
+  <AgentExportModal
+    config={exportTarget.config}
+    name={exportTarget.name}
+    onClose={() => (exportTarget = null)}
+  />
+{/if}
 
 {#if deleteConfirmAgent}
   <ConfirmModal
