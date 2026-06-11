@@ -56,6 +56,16 @@ The runtime **does** supply the field upstream (`runtime.ts:348 harnessPipeline:
 
 **Structural (the durable fix — the user's consolidation instinct):** introduce a single `buildKernelInput(strategyInput, perPassOverrides)` helper in `kernel/state/` that is the ONLY way to construct a `KernelInput`. Cross-cutting fields pass through by construction; per-pass code supplies only what varies (task, systemPrompt, maxIterations, kernelPass…). Lint/type-guard so a raw `KernelInput` object literal outside the builder fails review. This makes field-drop *structurally impossible* — the same discipline `transitionState()` brought to status mutations.
 
+## Status (2026-06-11)
+
+**Core threading FIXED across all 4 heavy strategies** (commits on `main`, full reasoning suite 1617/0): reflexion, tree-of-thought, adaptive, plan-execute now thread `{harnessPipeline, budgetLimits, calibration, auditRationale}` through `buildKernelInput` to every kernel pass. Phase hooks (`before/after think/act`), `prompt.system`, `nudge.*`, `message.tool-result`, `observation.tool-result` (kernel path), killswitches, and model calibration are live. Per-strategy `before('think')`-fires regression tests guard it. Empirical: reflexion live hook 0→1.
+
+### Remaining sub-gap (distinct emit-site, same root family)
+
+`observation.tool-result` still does **not** fire for plan-execute **`tool_call`** steps (`step-executor.ts:123` direct `toolService.execute`) or **`analysis`** steps (`:293` direct `llm.complete`) — these **bypass the kernel entirely**, so the kernel-act emit (`act.ts:791`) never runs. Only **`composite`** steps (which use the ReAct kernel) emit it. So in practice a plan-execute run's compose coverage depends on which step types the planner emits (gemma4:e4b live test fired 0× because the planner chose non-composite steps).
+
+This is the SAME divergence one level deeper: plan-execute runs tools/LLM **outside the canonical kernel** for two of three step types. The consolidation-aligned fix is to route tool_call dispatch through the kernel act path (or emit the tag from the tool_call branch, mirroring `act.ts:791`). Tracked as the remaining item on #195 / the canonical-kernel-input design.
+
 ## Related
 
 - Compose tags: `core/src/services/harness-pipeline.ts`, `composition-recipes.mdx`
