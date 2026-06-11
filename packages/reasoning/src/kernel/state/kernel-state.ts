@@ -184,6 +184,18 @@ export interface KernelMeta {
    */
   readonly synthesisRetryCount?: number;
 
+  // ── Phase D1 — block-mode evidence-grounding retry counter ──
+  /**
+   * How many corrective synthesis attempts the terminal verifier gate has
+   * triggered for a block-mode `evidence-grounded` reject. Capped at
+   * `grounding.maxRetries` (default 1); once exhausted the run DEGRADES to
+   * warn (surfaces the answer with `verificationWarning`) — it NEVER
+   * hard-fails. Dedicated counter (NOT `synthesisRetryCount`, which the
+   * Arbitrator owns) to keep the two retry budgets independent. See
+   * runner-helpers/grounding-block.ts.
+   */
+  readonly groundingBlockRetry?: number;
+
   // ── Stage 5 W3 — RI dispatcher budget (FIX-23) ──
   /**
    * Per-run intervention budget threaded through dispatch context. Each
