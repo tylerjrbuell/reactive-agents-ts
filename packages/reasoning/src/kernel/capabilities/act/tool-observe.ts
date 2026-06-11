@@ -32,10 +32,16 @@ import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
 import { publishReasoningStep } from "../../utils/service-utils.js";
 import type { StrategyServices } from "../../utils/service-utils.js";
+import {
+  contextFromObservation,
+  type VerificationContext,
+  type VerificationResult,
+} from "../verify/verifier.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type {
   MaybeService,
+  MemoryServiceInstance,
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
 
@@ -96,6 +102,26 @@ export interface ToolObserveConfig {
   /** Caller's own emitLog (kernel + plan-execute share the same shape). When
    *  omitted the primitive resolves ObservableLogger itself. */
   readonly emitLog?: (event: LogEvent) => Effect.Effect<void, never>;
+  /**
+   * Phase E (E2) — when present WITH `verifierContext`, the primitive attaches a
+   * structured `VerificationResult` to the obsStep metadata (mirrors the kernel
+   * batch path). `verify()` is sync + pure (no LLM). Single path opts in only
+   * under `RA_TOOL_OBSERVE_SYMMETRY=1`. Absent ⇒ no verification (byte-identical).
+   */
+  readonly verifier?: { readonly verify: (ctx: VerificationContext) => VerificationResult };
+  /** Inputs the verifier consults — built from kernel state by the caller. */
+  readonly verifierContext?: {
+    readonly task: string;
+    readonly priorSteps: readonly ReasoningStep[];
+    readonly requiredTools?: readonly string[];
+    readonly toolsUsed: ReadonlySet<string>;
+  };
+  /**
+   * Phase E (E2) — when present, passed straight through to
+   * `executeNativeToolCall` so successful tool results are forked into semantic
+   * memory (it already forks a daemon store). Absent ⇒ no memory write.
+   */
+  readonly memoryService?: MaybeService<MemoryServiceInstance>;
 }
 
 export interface ToolObserveResult {
@@ -237,6 +263,7 @@ export function executeToolAndObserve(
         ...(config.scratchpad ? { scratchpad: config.scratchpad } : {}),
         ...(config.profile ? { profile: config.profile } : {}),
         ...(config.preprocess ? { preprocess: config.preprocess } : {}),
+        ...(config.memoryService ? { memoryService: config.memoryService } : {}),
       },
     );
     const durationMs = Date.now() - startMs;
@@ -288,13 +315,33 @@ export function executeToolAndObserve(
       : obsContent;
 
     // ── 9. Build the observation step — metadata guaranteed ──────────────────
+    const obsResult = makeObservationResult(toolName, exec.success, displayContent, {
+      ...(exec.delegatedToolsUsed ? { delegatedToolsUsed: exec.delegatedToolsUsed } : {}),
+    });
+    // Phase E (E2) — attach a structured VerificationResult when the caller
+    // opted in (kernel single path under RA_TOOL_OBSERVE_SYMMETRY=1). Mirrors
+    // the batch path's `defaultVerifier.verify(contextFromObservation(...))`.
+    // verify() is sync + pure; no LLM call. Absent ⇒ undefined (byte-identical).
+    const verification =
+      config.verifier && config.verifierContext
+        ? config.verifier.verify(
+            contextFromObservation({
+              observation: obsResult,
+              task: config.verifierContext.task,
+              priorSteps: config.verifierContext.priorSteps,
+              ...(config.verifierContext.requiredTools
+                ? { requiredTools: config.verifierContext.requiredTools }
+                : {}),
+              toolsUsed: config.verifierContext.toolsUsed,
+            }),
+          )
+        : undefined;
     const obsStep = makeStep("observation", displayContent, {
       toolCallId: ctx.callId,
       ...(exec.storedKey ? { storedKey: exec.storedKey } : {}),
       ...(exec.extractedFact ? { extractedFact: exec.extractedFact } : {}),
-      observationResult: makeObservationResult(toolName, exec.success, displayContent, {
-        ...(exec.delegatedToolsUsed ? { delegatedToolsUsed: exec.delegatedToolsUsed } : {}),
-      }),
+      observationResult: obsResult,
+      ...(verification ? { verification } : {}),
     });
 
     // ── 10. Compose tags ─────────────────────────────────────────────────────

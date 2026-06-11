@@ -144,6 +144,14 @@ export function handleActing(
     const shouldExtract = obsMode === true
       || (obsMode !== false && (profile.tier === "local" || profile.tier === "mid"));
 
+    // Phase E (E2) — single/batch observation symmetry. Default OFF: the single
+    // path stays byte-identical (no verification, no semantic-memory write). When
+    // RA_TOOL_OBSERVE_SYMMETRY=1, the single path also attaches a VerificationResult
+    // (sync + pure) and forks the daemon semantic-memory store — matching the batch
+    // path. This is a HOT-PATH behavior change, gated so it can be benched live
+    // before any default-on decision (project lift rule + no-metric-gaming doctrine).
+    const symmetry = process.env.RA_TOOL_OBSERVE_SYMMETRY === "1";
+
     // ── ACTING BRANCH ──────────────────────────────────────────────────────────
     // For text-parse mode: extract tool calls from the last assistant message text
     // using the TextParseDriver's parse pipeline. For native-fc mode: use the
@@ -627,6 +635,38 @@ export function handleActing(
               obsContent,
               result.execResult.success,
             );
+
+            // Phase E (E1, unconditional) — emit the same Compose tags the single
+            // path fires (via the primitive), so parallel tool-results are visible
+            // to .on()/.tap() observers. Without this, batch (>=2 parallel calls)
+            // tool-results were silently invisible to observers — the #195 bug
+            // class for parallel turns. healed:false is advisory-correct here:
+            // per-call heal linkage isn't tracked through the batch result map
+            // (out of scope for this surgical add).
+            yield* emitToCompose(pipeline, "observation.tool-result", obsStep, {
+              iteration: state.iteration,
+              phase: "act",
+              state: asKernelStateLike(state),
+              strategy: state.strategy ?? "react",
+              toolName: result.toolName,
+              callId: result.callId,
+              healed: false,
+              durationMs: result.durationMs,
+            });
+            if (!result.execResult.success) {
+              yield* emitToCompose(pipeline, "lifecycle.failure", {
+                reason: "tool-error",
+                errorMessage: result.execResult.content,
+                attemptNumber: state.iteration,
+                failureStreak: 1,
+                currentStrategy: state.strategy ?? "react",
+              }, {
+                iteration: state.iteration,
+                phase: "act",
+                state: asKernelStateLike(state),
+                strategy: state.strategy ?? "react",
+              });
+            }
             allSteps = [...allSteps, obsStep];
           }
 
@@ -742,6 +782,22 @@ export function handleActing(
             emitLog,
             // emitToolCallEvents stays FALSE — hooks.onAction/onObservation emit
             // ToolCall* events for the kernel path.
+            // Phase E (E2) — gated single/batch symmetry. When unset, these three
+            // are OMITTED → byte-identical to the pre-Phase-E single path (no
+            // verification, no memory write). When set, the single path matches
+            // the batch path (verifier-attaching + memory-storing).
+            ...(symmetry
+              ? {
+                  verifier: defaultVerifier,
+                  verifierContext: {
+                    task: input.task,
+                    priorSteps: allSteps,
+                    ...(input.requiredTools ? { requiredTools: input.requiredTools } : {}),
+                    toolsUsed: newToolsUsed,
+                  },
+                  memoryService,
+                }
+              : {}),
           },
         );
 
