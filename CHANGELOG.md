@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **Evidence-grounding is now opt-in (off by default).** The previous always-on numeric grounding check false-flagged correctly-formatted figures (e.g. `$62,578`) when the tool observation was compressed or reformatted — firing a `failed at evidence-grounded` verifier warning on correct answers and impeding progress. Enable per-agent via `.withGrounding({ mode: "block" | "warn" })`. When enabled it grounds against the **full** tool data (resolved via `storedKey`→scratchpad, not the compressed preview) with **rounding/format tolerance** (`$62,578` ≈ `62578.12` ≈ `$62.5k`), so correct figures are no longer flagged. `mode: "warn"` is advisory (surfaces a `verificationWarning`, ships the answer); `mode: "block"` runs one corrective re-synthesis then **degrades to warn** — it never hard-fails a run. The prose claim-grounding pass (which false-rejected legitimate summaries at 64–73%) was removed.
+
+### Added
+- **Always-on scaffold-leak guard.** A standalone check (`detectScaffoldLeak`) rejects terminal output that echoes framework internals (`[STORED:]`, `_tool_result_N`, "compressed preview") instead of synthesizing a real answer. This is separate from grounding, has ~zero false-positive rate, and stays on regardless of the grounding opt-in.
+
+---
+
 ## [0.11.2] — 2026-06-11
 
 Canonical kernel architecture refactor. The reasoning kernel is now organized into capability-grouped modules (act, attend, comprehend, decide, learn, reason, recall, reflect, sense, verify) with an acyclic dependency mesh. Termination has a single owner: every exit path routes through the arbitrator and `terminate()`, and a state-grounded post-condition spine validates that "done" claims are backed by evidence before a run completes. Context assembly is unified on the `project()` pipeline — an event log plus content-addressed result store with recency-aware, two-budget projection — replacing the previous parallel assembly paths. Kernel state changes go through `transitionState()` exclusively, making run state machine-checkable.
