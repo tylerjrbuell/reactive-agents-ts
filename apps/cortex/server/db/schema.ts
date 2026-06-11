@@ -133,6 +133,7 @@ export function applySchema(db: Database): void {
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       name        TEXT    NOT NULL DEFAULT '',
       body        TEXT    NOT NULL,
+      type        TEXT    NOT NULL DEFAULT 'snippet',
       tags        TEXT    NOT NULL DEFAULT '[]',
       created_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
       updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
@@ -167,6 +168,12 @@ export function applySchema(db: Database): void {
     .map((c) => c.name);
   if (!chatSessionCols.includes("stable_agent_id")) {
     db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN stable_agent_id TEXT");
+  }
+
+  const promptCols = (db.prepare("PRAGMA table_info(cortex_prompts)").all() as Array<{ name: string }>)
+    .map((c) => c.name);
+  if (!promptCols.includes("type")) {
+    db.exec("ALTER TABLE cortex_prompts ADD COLUMN type TEXT NOT NULL DEFAULT 'snippet'");
   }
 }
 

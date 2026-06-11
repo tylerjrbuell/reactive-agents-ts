@@ -2,6 +2,7 @@
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
 
   interface Props {
     sessionId: string;
@@ -301,6 +302,14 @@
       onkeydown={onKeydown}
       disabled={sending}
     ></textarea>
+    <PromptPickerButton
+      types={["task", "snippet"]}
+      defaultSaveType="task"
+      onSelect={(body) => {
+        message = message ? `${message}\n${body}` : body;
+        inputEl?.focus();
+      }}
+    />
     <button
       type="button"
       disabled={sending || !message.trim()}

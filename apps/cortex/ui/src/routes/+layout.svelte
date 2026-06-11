@@ -196,6 +196,18 @@
         action: () => void goto("/lab"),
       },
       {
+        id: "nav:prompts",
+        label: "Prompt Library",
+        description: "Manage reusable prompts",
+        icon: "menu_book",
+        keywords: ["prompts", "library", "templates", "snippets"],
+        action: () => {
+          void goto("/lab#prompts");
+          // Covers the already-on-/lab case where goto() won't remount the page
+          window.dispatchEvent(new CustomEvent("cortex:lab-tab", { detail: "prompts" }));
+        },
+      },
+      {
         id: "nav:settings",
         label: "Settings",
         description: "Configure Cortex",

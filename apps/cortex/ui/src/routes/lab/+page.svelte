@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
+  import PromptManager from "$lib/components/PromptManager.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
@@ -44,7 +45,7 @@
     };
   }
 
-  let activeTab = $state<"builder" | "gateway" | "skills" | "tools">("builder");
+  let activeTab = $state<"builder" | "gateway" | "skills" | "tools" | "prompts">("builder");
 
   // ── Quick Run builder ─────────────────────────────────────────────────
   let builderConfig = $state<BuilderAgentConfig>(builderDefaultsFromSettings());
@@ -701,10 +702,11 @@
     if (h === "#gateway") activeTab = "gateway";
     else if (h === "#skills") activeTab = "skills";
     else if (h === "#tools")  activeTab = "tools";
+    else if (h === "#prompts") activeTab = "prompts";
 
     function onTabSwitch(e: Event) {
       const tab = (e as CustomEvent<string>).detail as typeof activeTab;
-      if (tab === "builder" || tab === "gateway" || tab === "skills" || tab === "tools") {
+      if (tab === "builder" || tab === "gateway" || tab === "skills" || tab === "tools" || tab === "prompts") {
         activeTab = tab;
       }
     }
@@ -773,6 +775,7 @@
       { id: "gateway", label: "Agents", icon: "hub", badge: gatewayAgents.length },
       { id: "skills",  label: "Skills",  icon: "psychology" },
       { id: "tools",   label: "Tools",   icon: "construction" },
+      { id: "prompts", label: "Prompts", icon: "menu_book" },
     ] as tab}
       <button type="button"
         class="flex items-center gap-2 rounded-md border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150
@@ -1551,6 +1554,12 @@
           {/if}
         </aside>
       </div>
+    </div>
+
+  <!-- ── PROMPTS (reusable prompt library manager) ─────────────────────── -->
+  {:else if activeTab === "prompts"}
+    <div class="min-h-0 flex-1 overflow-hidden px-4 pb-4 pt-4 sm:px-6">
+      <PromptManager />
     </div>
 
   <!-- ── TOOLS (unified catalog + create tool: custom + MCP) ───────────── -->

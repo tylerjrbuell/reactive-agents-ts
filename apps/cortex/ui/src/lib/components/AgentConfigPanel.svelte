@@ -9,6 +9,7 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { settings } from "$lib/stores/settings.js";
+  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import type { AgentConfig, CortexAgentToolConfig } from "$lib/types/agent-config.js";
   import { defaultConfig } from "$lib/types/agent-config.js";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
@@ -607,7 +608,18 @@
         </div>
         <!-- System prompt -->
         <div>
-          <label for="system-prompt" class="config-label">System Prompt <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+          <div class="flex items-end justify-between gap-2 mb-1">
+            <label for="system-prompt" class="config-label !mb-0">System Prompt <span class="text-outline/30 normal-case font-normal">(optional)</span></label>
+            <PromptPickerButton
+              types={["system", "persona"]}
+              defaultSaveType="system"
+              placement="down"
+              title="Insert from prompt library"
+              onSelect={(body) => {
+                config = { ...config, systemPrompt: config.systemPrompt ? `${config.systemPrompt}\n${body}` : body };
+              }}
+            />
+          </div>
           <textarea id="system-prompt" bind:value={config.systemPrompt}
             placeholder="Custom instructions prepended to every run…"
             rows="3"
