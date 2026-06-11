@@ -27,8 +27,8 @@ updated: 2026-06-10
 - Phase B next: RunStore (SQLite) + `.withDurableRuns()` + checkpoint writes (runtime-warden). Phase B should also consolidate the pre-existing LOSSY `serializeKernelState` pair at `kernel-state.ts:856/886` (zero callers).
 
 **Cleanup pass (2026-06-10):**
-- **Track A cortex fixes were DANGLING commits (no branch!)** — rescued to `rescue/cortex-runtime-controls-split-brain` (`a7a35216`) + `rescue/numctx-probe-writethrough` (`b6f05d67`). Merge-or-drop decision pending.
-- Branches deleted (verified merged): `feat/cortex-parameterized-runs`, `worktree-provider-models` (local+remote), `feat/cortex-dynamic-models`, `feat/cortex-rich-trace-timeline-2026-06-06`. Kept: `worktree-docs-sync-0.12.0` (open PR #194), `feat/durable-execution`, rescues.
+- Track A cortex "dangling fixes" scare RESOLVED: `a7a35216`/`b6f05d67` were pre-rebase duplicates — fixes live on main as `88ae945c` + `a66e4069` (cherry-pick verified empty). Rescue branches deleted.
+- Branches deleted (verified merged): `feat/cortex-parameterized-runs`, `worktree-provider-models` (local+remote), `feat/cortex-dynamic-models`, `feat/cortex-rich-trace-timeline-2026-06-06`. Kept: `worktree-docs-sync-0.12.0` (open PR #194), `feat/durable-execution`.
 - Memory pruned both files (stale unmerged/pending claims flipped; index back under size limit).
 
 ## Prior Sessions (compact pointers)
@@ -40,10 +40,9 @@ updated: 2026-06-10
 ## What's Next
 
 1. **Durable execution Phase B** — RunStore + `.withDurableRuns()` via runtime-warden on `feat/durable-execution`; then Phase C resume(), Phase D durable HITL, Phase E cortex UI (spec §4).
-2. **Decide rescue branches** — merge or drop the two Track A fixes.
-3. **Docs-sync PR #194** — review/merge (0.12.0 API surface).
-4. **Team-ownership pilot evaluation 2026-06-15** — ablation-warden applies lift rule; ~10 logged tasks in pilot log.
-5. v0.12.0 lever stack after durable-exec: DX wave → bench receipts → cost honesty → strategy honesty (audit doc has the ranked table).
+2. **Docs-sync PR #194** — review/merge (0.12.0 API surface).
+3. **Team-ownership pilot evaluation 2026-06-15** — ablation-warden applies lift rule; ~10 logged tasks in pilot log.
+4. v0.12.0 lever stack after durable-exec: DX wave → bench receipts → cost honesty → strategy honesty (audit doc has the ranked table).
 
 ## Authoritative Document Hierarchy
 
