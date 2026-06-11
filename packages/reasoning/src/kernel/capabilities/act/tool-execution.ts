@@ -656,8 +656,16 @@ export function executeNativeToolCall(
      * unaffected — see `storeToolObservationSemantic`.
      */
     memoryService?: MaybeService<MemoryServiceInstance>;
+    /**
+     * Optional caller-supplied transform applied to the raw stringified tool
+     * result BEFORE normalizeObservation/compression. plan-execute binds its
+     * `sanitizeToolOutput` here so action-tool args/recipients are stripped
+     * from the compressed preview that feeds its tool-less downstream prompts.
+     * Kernel callers omit it (normalizeObservation already covers their needs).
+     */
+    preprocess?: (raw: string) => string;
   },
-): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; extractedFact?: string }, never> {
+): Effect.Effect<{ content: string; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; extractedFact?: string; fullContent?: string }, never> {
   return toolService
     .execute({
       toolName: toolCall.name,
@@ -669,6 +677,7 @@ export function executeNativeToolCall(
       Effect.map((r) => {
         const delegatedToolsUsed = extractDelegatedToolsUsed(r.result);
         let content = typeof r.result === "string" ? r.result : JSON.stringify(r.result);
+        if (config?.preprocess) content = config.preprocess(content);
         const success = r.success !== false;
 
         // Apply tool-specific normalization (HTML stripping for http-get, etc.)
@@ -684,6 +693,10 @@ export function executeNativeToolCall(
               content,
             )
           : undefined;
+
+        // Full normalized (post-preprocess, pre-compress) content. plan-execute's
+        // synthesis step needs the complete data, not the compressed preview.
+        const fullContent = content;
 
         // Apply result compression for large outputs
         let storedKey: string | undefined;
@@ -717,7 +730,7 @@ export function executeNativeToolCall(
           }
         }
 
-        return { content, success, storedKey, delegatedToolsUsed, extractedFact };
+        return { content, success, storedKey, delegatedToolsUsed, extractedFact, fullContent };
       }),
       // Fire-and-forget semantic memory store on successful tool results.
       // Uses Effect.forkDaemon inside storeToolObservationSemantic so this
