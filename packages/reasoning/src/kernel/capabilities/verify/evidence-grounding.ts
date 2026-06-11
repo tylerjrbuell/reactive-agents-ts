@@ -7,48 +7,32 @@
  */
 import type { ReasoningStep } from "../../../types/index.js";
 
-/** Strip $, commas, spaces; keep digits and decimal for substring checks. */
-function normalizeForDigitMatch(s: string): string {
-  return s.replace(/[$,\s]/g, "").toLowerCase();
-}
-
-/** Pull the first major numeric token from a dollar-like fragment (handles ~$68,000 and \\$65,000). */
-function primaryNumericKey(amountToken: string): string {
-  const cleaned = amountToken.replace(/[~≈\\]/g, "").replace(/approx\.?/gi, "").trim();
-  const m = cleaned.match(/[\d,]+(?:\.\d+)?/);
-  return m ? m[0].replace(/,/g, "").toLowerCase() : "";
-}
-
 /**
  * Concatenate non-system tool observation bodies from the step log.
  * Used as the authoritative evidence corpus for grounding checks.
+ *
+ * Prefers the FULL stored value (resolved via `storedKey`→scratchpad) over the
+ * compressed step content — the inline preview is lossy, so figures past the
+ * truncation cutoff would read as ungrounded against the compressed body.
  */
-export function buildEvidenceCorpusFromSteps(steps: readonly ReasoningStep[]): string {
+export function buildEvidenceCorpusFromSteps(
+  steps: readonly ReasoningStep[],
+  scratchpad?: ReadonlyMap<string, string>,
+): string {
   const chunks: string[] = [];
   for (const s of steps) {
     if (s.type !== "observation") continue;
     const tr = s.metadata?.observationResult as { toolName?: string } | undefined;
     const tn = tr?.toolName;
     if (tn === "system" || tn === "final-answer") continue;
-    if (typeof s.content === "string" && s.content.trim().length > 0) {
-      chunks.push(s.content);
-    }
+    const storedKey = s.metadata?.storedKey as string | undefined;
+    const full = storedKey ? scratchpad?.get(storedKey) : undefined;
+    const fact = s.metadata?.extractedFact as string | undefined;
+    const body = full ?? (typeof s.content === "string" ? s.content : "");
+    if (body.trim().length > 0) chunks.push(body);
+    if (fact && fact.trim().length > 0) chunks.push(fact);
   }
   return chunks.join("\n\n");
-}
-
-/**
- * Extract unique dollar-like amounts from model output.
- * Covers: `$71,535`, `~$68,000`, `$\approx \$65,000$` (LaTeX-style), optional `approx` / `≈` prefixes.
- */
-function extractDollarAmounts(output: string): readonly string[] {
-  const re = /(?:~|≈|approx\.?\s*)?(?:\\)?\$[\d,]+(?:\.\d+)?/gi;
-  const found: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(output)) !== null) {
-    found.push(m[0]);
-  }
-  return [...new Set(found)];
 }
 
 function entityAliasMatch(lowerOutput: string, entity: string): boolean {
@@ -78,38 +62,57 @@ export function validateExpectedEntitiesInOutput(
   return { ok: false, violations };
 }
 
-function significantDigitCount(normalizedCore: string): number {
-  return normalizedCore.replace(/\D/g, "").length;
+/** Parse a numeric token (handles $, commas, k/M/B suffixes) → value or null. */
+function parseNumericValue(token: string): number | null {
+  const cleaned = token.replace(/[$,~≈\\\s]/gi, "").replace(/approx\.?/gi, "").toLowerCase();
+  const m = cleaned.match(/^(\d+(?:\.\d+)?)([kmb])?$/);
+  if (!m) {
+    const plain = cleaned.match(/\d+(?:\.\d+)?/);
+    return plain ? Number(plain[0]) : null;
+  }
+  const base = Number(m[1]);
+  const mult = m[2] === "k" ? 1e3 : m[2] === "m" ? 1e6 : m[2] === "b" ? 1e9 : 1;
+  return Number.isFinite(base) ? base * mult : null;
+}
+
+/** Extract candidate numeric values from text (dollar amounts + bare ≥3-digit numbers). */
+function extractNumericValues(text: string): number[] {
+  const values: number[] = [];
+  for (const m of text.matchAll(/(?:~|≈|approx\.?\s*)?(?:\\)?\$\s?[\d,]+(?:\.\d+)?(?:\s?[kmbKMB])?/g)) {
+    const v = parseNumericValue(m[0]);
+    if (v !== null) values.push(v);
+  }
+  for (const m of text.matchAll(/\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d{3,}(?:\.\d+)?\b/g)) {
+    const v = parseNumericValue(m[0]);
+    if (v !== null) values.push(v);
+  }
+  return values;
 }
 
 /**
- * Returns violations when any `$…` amount in `output` does not appear (after comma
- * normalization) in `evidence`. Empty evidence or amounts with fewer than 3 significant
- * digits are skipped to reduce false positives.
+ * Numeric grounding (opt-in). A figure in `output` is grounded iff some figure
+ * in `evidence` is within `tolerance` (fractional). Tolerant value-match — NOT
+ * substring — so $62,578 grounds against 62578.12 and $62.5k against 62500.
+ * Skips when corpus is thin or output has no numeric claims (never false-reject).
  */
-export function validateOutputGroundedInEvidence(
+export function validateNumericGrounding(
   output: string,
   evidence: string,
+  tolerance: number,
 ): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[] } {
-  const evFlat = normalizeForDigitMatch(evidence);
-  if (evFlat.length < 20) {
-    return { ok: true };
-  }
+  if (evidence.replace(/\s/g, "").length < 20) return { ok: true };
+  const corpusValues = extractNumericValues(evidence);
+  if (corpusValues.length === 0) return { ok: true };
 
-  const amounts = extractDollarAmounts(output);
-  if (amounts.length === 0) {
-    return { ok: true };
-  }
-
+  // Re-extract output dollar tokens for human-readable violation messages.
+  const outDollarTokens = [...output.matchAll(/(?:~|≈|approx\.?\s*)?(?:\\)?\$\s?[\d,]+(?:\.\d+)?(?:\s?[kmbKMB])?/g)].map((m) => m[0]);
   const violations: string[] = [];
-  for (const amt of amounts) {
-    const core = primaryNumericKey(amt);
-    if (significantDigitCount(core) < 3) continue;
-    if (!evFlat.includes(core)) {
-      violations.push(`amount ${amt} not found in tool observations`);
-    }
+  for (const token of outDollarTokens) {
+    const c = parseNumericValue(token);
+    if (c === null) continue;
+    const grounded = corpusValues.some((e) => Math.abs(c - e) <= tolerance * Math.max(Math.abs(c), Math.abs(e)));
+    if (!grounded) violations.push(`unverified figure: ${token}`);
   }
-
   if (violations.length === 0) return { ok: true };
   return { ok: false, violations };
 }
