@@ -808,7 +808,10 @@ Beside the existing imports (`:25-46`):
 
 ```ts
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
-import type { KernelStateLike } from "../../kernel/utils/diagnostics.js";
+// ⚠️ PHASE-A FINDING: the primitive's ctx.state is typed against the CORE
+// KernelStateLike (emitToCompose's ContextFor<T> demands the fuller shape).
+// Import the core type, NOT kernel/utils/diagnostics.js.
+import type { KernelStateLike } from "@reactive-agents/core";
 ```
 
 Add the file-tool-names set used for healing (mirror `act.ts:58`) near the top of the module:
@@ -835,13 +838,23 @@ Replace the entire `Effect.gen` body of the `if (step.type === "tool_call" && st
         }
       }
 
-      // Synthetic minimal KernelStateLike — satisfies what the
-      // observation.tool-result / lifecycle.failure transforms read off ctx.state
-      // (status/steps/toolsUsed). plan-execute has no KernelState.
+      // Synthetic KernelStateLike (CORE shape — emitToCompose's ContextFor<T>
+      // requires all 11 fields; the diagnostics narrow shape TS-errors). plan-
+      // execute has no KernelState, so build the minimal real fields — no cast.
       const syntheticState: KernelStateLike = {
+        taskId: input.taskId ?? "plan-execute",
+        strategy: "plan-execute",
+        kernelType: "react",
+        steps: completedSteps.map(() => ({ type: "observation" })),
+        toolsUsed: new Set(
+          completedSteps.map((s) => s.toolName).filter((n): n is string => !!n),
+        ),
+        iteration: stepIndex,
+        tokens: 0,
         status: "acting",
-        steps: completedSteps.map((s) => ({ type: "observation" as const })),
-        toolsUsed: new Set(completedSteps.map((s) => s.toolName).filter((n): n is string => !!n)),
+        output: null,
+        error: null,
+        meta: {},
       };
 
       const observe = yield* executeToolAndObserve(
