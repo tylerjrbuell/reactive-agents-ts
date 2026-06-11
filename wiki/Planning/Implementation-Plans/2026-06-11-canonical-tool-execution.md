@@ -1003,7 +1003,28 @@ git commit -m "docs(reasoning): close FM-I tool_call sub-gap; canonical tool-obs
 
 ---
 
-## Task E1 (OPTIONAL, separate review): Unify the kernel single/batch asymmetry
+## Phase E — SHIPPED (E1 default-on) + BENCHED (E2 opt-in, default-off) — 2026-06-11
+
+**Implemented as a safer split than the original Task E1 below:**
+- **E1 (default-on, shipped `b0219b50`):** kernel batch act path now emits `observation.tool-result` + `lifecycle.failure` per parallel call (surgical inline emit, mirrors single path). Parallel tool-results were invisible to `.on()`/`.tap()` — same bug class as #195. Pure win.
+- **E2 (opt-in, default-off, shipped `b0219b50`):** `executeToolAndObserve` extended with optional `verifier`/`verifierContext`/`memoryService`; the single act path opts in only under `RA_TOOL_OBSERVE_SYMMETRY=1`. Default-off is byte-identical (Phase B golden-master green). Suite 1628/0.
+
+**Live ablation bench (gemma4:12b, reactive, crypto-price, 3 runs/arm, interleaved):**
+
+| arm | quality /4 | tokens | duration | ok-rate |
+|---|---|---|---|---|
+| baseline (off) | 4.00 | 6260 | 29.9s | 0/3 |
+| treatment (sym=1) | 4.00 | 6293 (+0.5%) | 17.3s (noise) | 0/3 |
+
+Δ quality +0.00, Δ tokens +0.5% (≤15% cap), duration neutral (baseline run1 cold-start skewed it). `ok=false` both arms = pre-existing evidence-grounding verifier rejecting an ungrounded paraphrased price, NOT an E2 effect.
+
+**Decision (project lift rule):** parity on quality + tokens, **no measured single-run lift → E2 stays OPT-IN (default-off)**. Its real gains (cross-session tool-memory recall, per-tool arbitration signal) are latent and not capturable in a single run. Defer the default-on call to a cross-tier ablation-warden run.
+
+**Remaining cleanup (not blocking):** route the batch path fully *through* the primitive (E1 was a surgical inline emit; the execute/verify/memory still live inline in the batch loop). Low-value dedup; do when next in that code.
+
+---
+
+## Task E1 (ORIGINAL spec — superseded by the split above): Unify the kernel single/batch asymmetry
 
 > This is a **behavior change**, deliberately isolated from the byte-identical migration. Today: the kernel **batch** path attaches `verification` + stores semantic memory but emits **no** Compose tags; the **single** path emits Compose tags but attaches **no** `verification` and stores **no** memory. After E, both kernel sites are symmetric: heal-aware, compose-emitting, verifier-attaching, memory-storing. **kernel-warden territory. Do NOT start without explicit user approval** (it changes externally-observable behavior — batch tool-results begin firing `.on('observation.tool-result')`).
 
