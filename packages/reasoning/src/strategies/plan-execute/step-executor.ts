@@ -91,6 +91,13 @@ export interface StepExecutorInput {
   readonly maxRequiredToolRetries?: number;
   readonly modelId?: string;
   readonly synthesisConfig?: import("../../context/synthesis-types.js").SynthesisConfig;
+  // FM-I (#195): cross-cutting fields forwarded to each per-step ReAct kernel.
+  // Previously omitted from this narrowed interface → Compose hooks,
+  // killswitches, and calibration were dead during plan-execute steps.
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  readonly budgetLimits?: import("../../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
+  readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  readonly auditRationale?: boolean;
 }
 
 /**
@@ -361,6 +368,13 @@ export function executeStep(
     modelId: input.modelId,
     exitOnAllToolsCalled: true,
     synthesisConfig: input.synthesisConfig,
+    // FM-I (#195): forward cross-cutting fields so Compose hooks, killswitches,
+    // and model calibration are live during per-step execution. executeReActKernel
+    // forwards these through buildKernelInput to the kernel.
+    harnessPipeline: input.harnessPipeline,
+    budgetLimits: input.budgetLimits,
+    calibration: input.calibration,
+    auditRationale: input.auditRationale,
   }).pipe(
     Effect.map((kernelResult) => ({
       output: stripFinalAnswerPrefix(kernelResult.output || `[Step ${stepIndex + 1} completed]`),

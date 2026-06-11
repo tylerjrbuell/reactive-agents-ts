@@ -15,7 +15,7 @@ import { Effect } from "effect";
 import { parseCron, shouldFireAt } from "@reactive-agents/gateway";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import type { Database } from "bun:sqlite";
-import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun } from "../db/queries.js";
+import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun, updateRunStats } from "../db/queries.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import {
   coerceTaskContextRecord,
@@ -29,6 +29,7 @@ import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 interface AgentProcess {
@@ -101,7 +102,10 @@ export class GatewayProcessManager {
   }
 
   /** Immediately trigger a gateway agent run (ignores schedule). */
-  async triggerNow(agentId: string): Promise<{ runId: string; agentId: string } | { error: string }> {
+  async triggerNow(
+    agentId: string,
+    variableValues: Record<string, string | number> = {},
+  ): Promise<{ runId: string; agentId: string } | { error: string }> {
     const row = getGatewayAgent(this.db, agentId);
     if (!row) return { error: `Agent ${agentId} not found in DB` };
 
@@ -112,7 +116,7 @@ export class GatewayProcessManager {
 
     const config = JSON.parse(row.config) as Record<string, unknown>;
     try {
-      const result = await this.fireAgent(agentId, row.name, config);
+      const result = await this.fireAgent(agentId, row.name, config, variableValues);
       if (!result) return { error: `Failed to start agent "${row.name}" — check server logs` };
       return result;
     } catch (e) {
@@ -176,11 +180,39 @@ export class GatewayProcessManager {
     agentId: string,
     name: string,
     configRaw: Record<string, unknown>,
+    variableValues: Record<string, string | number> = {},
   ): Promise<{ runId: string; agentId: string } | null> {
     const proc = this.processes.get(agentId);
     if (proc) proc.running = true;
 
-    const config = normalizeCortexAgentConfig(configRaw);
+    let config = normalizeCortexAgentConfig(configRaw);
+    const runId = generateTaskId();
+
+    // Resolve `{{tokens}}` before reading `prompt`/building the agent. Manual
+    // "trigger now" runs supply `variableValues` (from the fill-modal); scheduled
+    // cron runs pass none, so each token falls back to its variable's DEFAULT. A
+    // required variable with neither a value nor a default stays unresolved → fail
+    // this run with a clear message recorded to cortex_runs.error_message; do NOT
+    // build with literal tokens.
+    const _configVars = (config as { variables?: VariableDef[] }).variables;
+    const _vars = Array.isArray(_configVars) ? _configVars : [];
+    const _resolved = resolveTemplate(config, _vars, variableValues);
+    if (_resolved.unresolved.length > 0) {
+      const msg = `Unresolved template variable(s): ${_resolved.unresolved.join(", ")}`;
+      if (proc) proc.running = false;
+      // Record the failure the codebase-canonical way (same call ingest-service uses).
+      // The run row does not exist yet at this pre-build stage, so create it first.
+      try {
+        upsertRun(this.db, agentId, runId);
+        updateRunStats(this.db, runId, {
+          status: "failed",
+          completedAt: Date.now(),
+          errorMessage: msg,
+        });
+      } catch { /* ok */ }
+      throw new Error(msg);
+    }
+    config = _resolved.value;
 
     // `prompt` is the task instruction; `systemPrompt` is the separate system context.
     // Fallback chain: explicit prompt > systemPrompt (legacy) > generic instruction.
@@ -189,7 +221,6 @@ export class GatewayProcessManager {
 
     const providerRaw = (config.provider as string | undefined) ?? "anthropic";
     const modelRaw    = (config.model    as string | undefined) ?? undefined;
-    const runId = generateTaskId();
 
     try {
       const ingest = await Effect.runPromise(

@@ -3,12 +3,13 @@ import { Effect, Layer, Ref, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
-import { EventBus } from "@reactive-agents/core";
+import { EventBus, HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { executeReactive } from "../../src/strategies/reactive.js";
+import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 
 /** Build a proper Stream stub from a response string */
@@ -69,6 +70,75 @@ const makePlanExecuteLLM = () => TestLLMServiceLayer([
   { match: "GOAL:", text: "SATISFIED: Done." },
   { match: "Synthesize", text: "Final synthesized answer." },
 ]);
+
+/**
+ * FM-I (#195) regression: a registered `before('think')` phase hook MUST fire
+ * during the strategy's kernel pass — proving `harnessPipeline` threads from
+ * the strategy input through to the kernel. Before the canonical-input fix,
+ * heavy strategies dropped `harnessPipeline` and these hooks were silently dead
+ * (Compose, killswitches, and calibration all no-op). `before('think')` fires
+ * every kernel iteration with no tool call required, so the signal is
+ * deterministic under the simple mock LLM.
+ */
+const makeFiresPipeline = () => {
+  let fired = 0;
+  const rh = new RegistrationHarness();
+  rh.before("think", () => {
+    fired += 1;
+  });
+  return { pipeline: new HarnessPipeline(rh._collected), fired: () => fired };
+};
+
+describe("FM-I (#195) — harnessPipeline threads to the kernel in every strategy", () => {
+  it("reflexion fires before('think') hooks", async () => {
+    const h = makeFiresPipeline();
+    await Effect.runPromise(
+      executeReflexion({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
+        Effect.provide(makeReflexionLLM()),
+      ),
+    );
+    expect(h.fired()).toBeGreaterThan(0);
+  });
+
+  it("tree-of-thought fires before('think') hooks", async () => {
+    const h = makeFiresPipeline();
+    await Effect.runPromise(
+      executeTreeOfThought({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
+        Effect.provide(mockLLM),
+      ),
+    );
+    expect(h.fired()).toBeGreaterThan(0);
+  });
+
+  it("adaptive forwards harnessPipeline to the dispatched sub-strategy", async () => {
+    const h = makeFiresPipeline();
+    await Effect.runPromise(
+      executeAdaptive({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
+        Effect.provide(makeReflexionLLM()),
+      ),
+    );
+    expect(h.fired()).toBeGreaterThan(0);
+  });
+
+  it("plan-execute fires before('think') hooks during per-step (composite) kernel execution", async () => {
+    // analysis steps bypass the kernel (direct llm.complete — step-executor.ts:293),
+    // so a COMPOSITE step is required to exercise the per-step ReAct kernel where
+    // the FM-I drop lived (step-executor → executeReActKernel → runKernel).
+    const compositePlanLLM = TestLLMServiceLayer([
+      { match: "planning agent", text: JSON.stringify({
+        steps: [{ title: "Execute", instruction: "Do the task", type: "composite" }],
+      }) },
+      { match: "Synthesize", text: "Final synthesized answer." },
+    ]);
+    const h = makeFiresPipeline();
+    await Effect.runPromise(
+      executePlanExecute({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
+        Effect.provide(compositePlanLLM),
+      ),
+    );
+    expect(h.fired()).toBeGreaterThan(0);
+  });
+});
 
 describe("Strategy threading", () => {
   it("reflexion accepts resultCompression", async () => {
@@ -186,9 +256,11 @@ describe("Strategy threading", () => {
     const result = await Effect.runPromise(
       executePlanExecute({
         ...baseInput,
-        // Minimal stub — only structural shape matters for input typing.
-        // The dispatcher's bridge consumer is exercised separately.
-        harnessPipeline: { transform: () => Effect.succeed(null) } as never,
+        // Real (empty) pipeline. A prior stub `{ transform }` only survived
+        // because the strategy DROPPED harnessPipeline (FM-I #195) — once the
+        // field reaches the kernel, runPhaseHooks calls collectPhaseHooks(),
+        // which a stub lacks.
+        harnessPipeline: new HarnessPipeline(),
       }).pipe(Effect.provide(makePlanExecuteLLM())),
     );
     expect(result.status).toBe("completed");
@@ -198,7 +270,7 @@ describe("Strategy threading", () => {
     const result = await Effect.runPromise(
       executeTreeOfThought({
         ...baseInput,
-        harnessPipeline: { transform: () => Effect.succeed(null) } as never,
+        harnessPipeline: new HarnessPipeline(),
       }).pipe(Effect.provide(mockLLM)),
     );
     expect(result.status).toBe("completed");

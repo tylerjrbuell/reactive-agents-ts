@@ -16,6 +16,7 @@ import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 import { parseScore } from "../kernel/capabilities/verify/quality-utils.js";
 import {
@@ -113,6 +114,13 @@ interface TreeOfThoughtInput {
    * (HS-112).
    */
   readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  // FM-I (#195): cross-cutting fields that must reach every branch kernel.
+  /** Budget killswitch limits (budgetLimit/watchdog). */
+  readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
+  /** Pre-resolved model calibration — drives steering channel selection. */
+  readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  /** Opt-in per-tool-call rationale auditing. */
+  readonly auditRationale?: boolean;
 }
 
 interface ThoughtNode {
@@ -142,6 +150,25 @@ export const executeTreeOfThought = (
       availableToolSchemas: input.availableToolSchemas,
       metaTools: input.metaTools,
     });
+    // FM-I (#195): run-wide cross-cutting bundle, built once, fed to every
+    // branch kernel via buildKernelInput. Previously these branch kernels
+    // dropped harnessPipeline/budgetLimits/calibration/auditRationale.
+    const crossCutting: CrossCuttingInput = {
+      resultCompression: input.resultCompression,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      requiredTools: input.requiredTools,
+      relevantTools: input.relevantTools,
+      maxRequiredToolRetries: input.maxRequiredToolRetries,
+      synthesisConfig: input.synthesisConfig,
+      metaTools: input.metaTools,
+      briefResolvedSkills: input.briefResolvedSkills,
+      modelId: input.modelId,
+      harnessPipeline: input.harnessPipeline,
+      budgetLimits: input.budgetLimits,
+      calibration: input.calibration,
+      auditRationale: input.auditRationale,
+    };
     const maxCost = input.config.strategies.treeOfThought.maxCost;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
@@ -186,22 +213,13 @@ export const executeTreeOfThought = (
       );
 
       const tierLimitsForSkip = TOT_TIER_LIMITS[input.tier ?? "mid"];
-      const skipExecState = yield* runKernel(reactKernel, {
+      const skipExecState = yield* runKernel(reactKernel, buildKernelInput(crossCutting, {
         task: input.taskDescription,
         systemPrompt: input.systemPrompt,
         availableToolSchemas: capabilitySnapshot.availableToolSchemas,
         allToolSchemas: capabilitySnapshot.allToolSchemas,
-        resultCompression: input.resultCompression,
         temperature: 0.7,
-        agentId: input.agentId,
-        sessionId: input.sessionId,
-        requiredTools: input.requiredTools,
-        relevantTools: input.relevantTools,
-        maxRequiredToolRetries: input.maxRequiredToolRetries,
-        synthesisConfig: input.synthesisConfig,
-        metaTools: input.metaTools,
-        briefResolvedSkills: input.briefResolvedSkills,
-      }, {
+      }), {
         maxIterations: tierLimitsForSkip.maxPhase2Iterations,
         strategy: "tree-of-thought",
         kernelType: "react",
@@ -644,7 +662,7 @@ export const executeTreeOfThought = (
 
     // ── Phase 2: Execute best path using ReAct kernel ──
     const bestPathSummary = bestPath.join("\n→ ");
-    const execState = yield* runKernel(reactKernel, {
+    const execState = yield* runKernel(reactKernel, buildKernelInput(crossCutting, {
       task: input.taskDescription,
       systemPrompt: input.systemPrompt
         ? `${input.systemPrompt}\n\nYou are a systematic problem solver. Execute the given approach to produce a final answer.`
@@ -652,17 +670,8 @@ export const executeTreeOfThought = (
       availableToolSchemas: capabilitySnapshot.availableToolSchemas,
       allToolSchemas: capabilitySnapshot.allToolSchemas,
       priorContext: `Selected Approach (from planning phase):\n${bestPathSummary}`,
-      resultCompression: input.resultCompression,
       temperature: 0.7,
-      agentId: input.agentId,
-      sessionId: input.sessionId,
-      requiredTools: input.requiredTools,
-      relevantTools: input.relevantTools,
-      maxRequiredToolRetries: input.maxRequiredToolRetries,
-      synthesisConfig: input.synthesisConfig,
-      metaTools: input.metaTools,
-      briefResolvedSkills: input.briefResolvedSkills,
-    }, {
+    }), {
       maxIterations: tierLimits.maxPhase2Iterations,
       strategy: "tree-of-thought",
       kernelType: "react",

@@ -51,7 +51,7 @@ const result = await Effect.runPromise(
     const llm = yield* LLMService;
     return yield* llm.complete({
       messages: [{ role: "user", content: "Hello!" }],
-      model: { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+      model: { provider: "anthropic", model: "claude-sonnet-4-6" },
     });
   }).pipe(Effect.provide(layer)),
 );

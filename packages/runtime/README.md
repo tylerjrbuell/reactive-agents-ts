@@ -41,7 +41,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 const agent = await ReactiveAgents.create()
   .withName("my-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory("1")
   .withReasoning()
   .withGuardrails()

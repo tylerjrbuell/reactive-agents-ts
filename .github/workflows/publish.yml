@@ -129,23 +129,42 @@ jobs:
       - name: Release
         run: bun scripts/release.ts ${{ steps.ver.outputs.version }}
 
-      # Tag-driven flow leaves repo package.json unbumped. Sync the single
-      # VERSION file back to main so `cat VERSION` == npm @latest. [skip ci]
-      # prevents a docs/publish re-trigger loop.
-      - name: Sync VERSION to main
+      # Tag-driven flow leaves repo package.json unbumped. Sync the release
+      # artifacts back to main: VERSION (so `cat VERSION` == npm @latest),
+      # the CHANGELOG.md section release.ts just aggregated, and the deletion
+      # of the changesets it consumed. Without the latter two, consumed
+      # changesets linger on main and re-aggregate into the NEXT release's
+      # notes (bit v0.11.2: seven v0.11.0-era notes had to be purged by hand).
+      # [skip ci] prevents a docs/publish re-trigger loop.
+      # Known tradeoff: if main's CHANGELOG gained edits between the tagged
+      # commit and this step, the release-generated copy wins.
+      - name: Sync VERSION + CHANGELOG + consumed changesets to main
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Preserve release.ts outputs from the tag workspace before the
+          # branch switch discards them.
+          cp CHANGELOG.md "$RUNNER_TEMP/CHANGELOG.release.md"
+          ls .changeset/ > "$RUNNER_TEMP/changesets-remaining.txt"
           git fetch origin main
-          git checkout -B main origin/main
+          git checkout -f -B main origin/main
           echo "${{ steps.ver.outputs.version }}" > VERSION
-          if git diff --quiet -- VERSION; then
-            echo "VERSION already ${{ steps.ver.outputs.version }} — nothing to sync"
+          cp "$RUNNER_TEMP/CHANGELOG.release.md" CHANGELOG.md
+          # Remove any changeset note present on main but absent from the
+          # post-release workspace (i.e. consumed by release.ts).
+          for f in .changeset/*.md; do
+            [ -e "$f" ] || continue
+            if ! grep -qx "$(basename "$f")" "$RUNNER_TEMP/changesets-remaining.txt"; then
+              git rm -q "$f"
+            fi
+          done
+          git add VERSION CHANGELOG.md .changeset/
+          if git diff --cached --quiet; then
+            echo "release artifacts already synced — nothing to commit"
             exit 0
           fi
-          git add VERSION
-          git commit -m "chore(release): VERSION → ${{ steps.ver.outputs.version }} [skip ci]"
+          git commit -m "chore(release): sync VERSION/CHANGELOG/changesets → ${{ steps.ver.outputs.version }} [skip ci]"
           git push origin main
 
       - name: Create consolidated GitHub release

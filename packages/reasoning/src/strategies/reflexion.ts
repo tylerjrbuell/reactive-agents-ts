@@ -17,6 +17,7 @@ import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import {
   iterateUntil,
@@ -93,6 +94,17 @@ interface ReflexionInput {
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
   /** HS-cleanup-2: upstream task classification snapshot (currently unused, kept for forward compat). */
   readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
+  // FM-I (#195): cross-cutting fields that MUST reach every kernel sub-pass.
+  // Previously absent from this interface → reflexion silently dropped them →
+  // Compose hooks, killswitches, and model calibration were dead under reflexion.
+  /** Compose harness pipeline — drives `.on/.tap/.before/.after` + all tags. */
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  /** Budget killswitch limits (budgetLimit/watchdog). */
+  readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
+  /** Pre-resolved model calibration — drives steering channel selection. */
+  readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  /** Opt-in per-tool-call rationale auditing. */
+  readonly auditRationale?: boolean;
 }
 
 /**
@@ -126,6 +138,29 @@ export const executeReflexion = (
       metaTools: input.metaTools,
     });
 
+    // FM-I (#195): build the run-wide cross-cutting bundle ONCE and feed it to
+    // every kernel pass via buildKernelInput. This is the canonical assembly
+    // point — a dropped cross-cutting field is now a compile error, not a
+    // silent runtime gap. `verifier` is intentionally absent: reflexion's own
+    // critique loop is its verification; threading a terminal verifier into
+    // each sub-pass would change behaviour.
+    const crossCutting: CrossCuttingInput = {
+      resultCompression: input.resultCompression,
+      agentId: input.agentId,
+      sessionId: input.sessionId,
+      requiredTools: input.requiredTools,
+      relevantTools: input.relevantTools,
+      maxRequiredToolRetries: input.maxRequiredToolRetries,
+      synthesisConfig: input.synthesisConfig,
+      metaTools: input.metaTools,
+      briefResolvedSkills: input.briefResolvedSkills,
+      modelId: input.modelId,
+      harnessPipeline: input.harnessPipeline,
+      budgetLimits: input.budgetLimits,
+      calibration: input.calibration,
+      auditRationale: input.auditRationale,
+    };
+
     yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
 
     // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
@@ -146,23 +181,14 @@ export const executeReflexion = (
       ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
       : undefined;
 
-    const genPass = yield* runPass(reactKernel, {
+    const genPass = yield* runPass(reactKernel, buildKernelInput(crossCutting, {
       task: buildGenerationPrompt(input, null),
       systemPrompt: genSystemPrompt,
       priorContext: genPriorContext,
       availableToolSchemas: capabilitySnapshot.availableToolSchemas,
       allToolSchemas: capabilitySnapshot.allToolSchemas,
-      resultCompression: input.resultCompression,
       temperature: 0.7,
-      agentId: input.agentId,
-      sessionId: input.sessionId,
-      requiredTools: input.requiredTools,
-      relevantTools: input.relevantTools,
-      maxRequiredToolRetries: input.maxRequiredToolRetries,
-      synthesisConfig: input.synthesisConfig,
-      metaTools: input.metaTools,
-      briefResolvedSkills: input.briefResolvedSkills,
-    }, {
+    }), {
       maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
       strategy: "reflexion",
       kernelType: "react",
@@ -449,23 +475,18 @@ export const executeReflexion = (
           const blockedTools = extractSuccessfulSideEffectTools(s.allSideEffectSteps);
 
           const improvePass = yield* runPass(reactKernel, {
-            task: improvementTask,
-            systemPrompt: improveSystemPrompt,
-            priorContext: improvePriorContext,
-            initialMessages: s.runningMessages,
-            availableToolSchemas: capabilitySnapshot.availableToolSchemas,
-            allToolSchemas: capabilitySnapshot.allToolSchemas,
-            resultCompression: input.resultCompression,
-            temperature: 0.6,
-            agentId: input.agentId,
-            sessionId: input.sessionId,
+            ...buildKernelInput(crossCutting, {
+              task: improvementTask,
+              systemPrompt: improveSystemPrompt,
+              priorContext: improvePriorContext,
+              initialMessages: s.runningMessages,
+              availableToolSchemas: capabilitySnapshot.availableToolSchemas,
+              allToolSchemas: capabilitySnapshot.allToolSchemas,
+              temperature: 0.6,
+            }),
+            // Per-pass extra outside the cross-cutting/per-pass Picks; spread
+            // AFTER the builder (not cross-cutting, so no drop risk).
             blockedTools,
-            requiredTools: input.requiredTools,
-            relevantTools: input.relevantTools,
-            maxRequiredToolRetries: input.maxRequiredToolRetries,
-            synthesisConfig: input.synthesisConfig,
-            metaTools: input.metaTools,
-            briefResolvedSkills: input.briefResolvedSkills,
           }, {
             maxIterations: input.config.strategies.reflexion?.kernelMaxIterations ?? 3,
             strategy: "reflexion",

@@ -8,12 +8,15 @@
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
+  import ParamFillModal from "$lib/components/ParamFillModal.svelte";
+  import HighlightedField from "$lib/components/HighlightedField.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { goto } from "$app/navigation";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
   import ToolWorkshop from "$lib/components/ToolWorkshop.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
+  import { syncVariables } from "$lib/template/sync-variables.js";
 
   type SkillRow  = { id?: string; name?: string; description?: string; content?: string };
   type GatewayRow = {
@@ -56,6 +59,7 @@
   let builderPersistentSchedule = $state("");
   let builderRunning = $state(false);
   let builderSaving = $state(false);
+  let showParamModal = $state(false);
 
   type BuilderAdHocAction = "run" | "save" | "save-run";
   let builderAdHocAction = $state<BuilderAdHocAction>("save-run");
@@ -92,7 +96,7 @@
     builderActionMenuOpen = false;
     switch (builderAdHocAction) {
       case "run":
-        await runFromBuilder();
+        onRunClick();
         break;
       case "save":
         await createAgentFromBuilder(false);
@@ -121,14 +125,17 @@
     };
   });
 
-  async function runFromBuilder() {
+  async function launchRun(variableValues?: Record<string, string | number>) {
+    // Re-entrancy guard: the modal's Run button is not bound to builderRunning,
+    // so a fast double-confirm could otherwise POST /api/runs twice.
+    if (builderRunning) return;
     if (!builderConfig.prompt.trim()) return;
     builderRunning = true;
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cortexRunsPostBody(builderConfig.prompt.trim(), builderConfig)),
+        body: JSON.stringify(cortexRunsPostBody(builderConfig.prompt.trim(), builderConfig, variableValues)),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json() as { runId?: string };
@@ -137,6 +144,14 @@
     } catch (e) {
       toast.error("Run failed", String(e));
     } finally { builderRunning = false; }
+  }
+
+  function onRunClick() {
+    if ((builderConfig.variables ?? []).length > 0) {
+      showParamModal = true;
+    } else {
+      void launchRun();
+    }
   }
 
   async function createAgentFromBuilder(runNow: boolean) {
@@ -228,10 +243,31 @@
     { label: "First of month",  cron: "0 9 1 * *"    },
   ];
 
-  async function triggerAgent(agent: GatewayRow) {
+  // Saved agent whose run is awaiting variable values in the fill-modal.
+  let triggerModalAgent = $state<GatewayRow | null>(null);
+
+  function triggerAgent(agent: GatewayRow) {
+    // Derive variables from the config's {{tokens}} (preserving any stored
+    // enrichment) rather than trusting the persisted array — agents saved before
+    // auto-detect carry tokens in their prompt but an empty `variables` list.
+    const vars = syncVariables(agent.config);
+    if (vars.length > 0) {
+      // Collect values in the fill-modal first so the gateway resolves with them
+      // instead of failing on an unresolved required token.
+      triggerModalAgent = { ...agent, config: { ...agent.config, variables: vars } };
+      return;
+    }
+    void doTrigger(agent);
+  }
+
+  async function doTrigger(agent: GatewayRow, variableValues?: Record<string, string | number>) {
     triggeringAgent = agent.agentId;
     try {
-      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents/${agent.agentId}/trigger`, { method: "POST" });
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/agents/${agent.agentId}/trigger`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(variableValues ? { variableValues } : {}),
+      });
       const data = await res.json() as { runId?: string; error?: string };
       if (res.ok) {
         toast.success(`${agent.name} triggered`, "Run started");
@@ -849,10 +885,16 @@
                   }}
                 />
               </div>
-              <textarea id="builder-prompt" bind:value={builderConfig.prompt}
-                placeholder="Describe what you want the agent to do…" rows="5"
-                class="w-full resize-y rounded-lg border border-[var(--cortex-border)] bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20 min-h-[7.5rem] lg:min-h-[11rem]"
-              ></textarea>
+              <HighlightedField
+                multiline
+                id="builder-prompt"
+                value={builderConfig.prompt}
+                oninput={(e) => (builderConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
+                placeholder="Describe what you want the agent to do…"
+                rows={5}
+                frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
+                textClass="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 min-h-[7.5rem] lg:min-h-[11rem]"
+              />
               </div>
 
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -1114,10 +1156,16 @@
                       }}
                     />
                   </div>
-                  <textarea id="gateway-edit-prompt" bind:value={formConfig.prompt}
-                    placeholder="Describe what this agent should do when triggered or on schedule…" rows="5"
-                    class="w-full resize-y rounded-lg border border-[var(--cortex-border)] bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20 min-h-[7.5rem] lg:min-h-[11rem]"
-                  ></textarea>
+                  <HighlightedField
+                    multiline
+                    id="gateway-edit-prompt"
+                    value={formConfig.prompt}
+                    oninput={(e) => (formConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
+                    placeholder="Describe what this agent should do when triggered or on schedule…"
+                    rows={5}
+                    frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
+                    textClass="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 min-h-[7.5rem] lg:min-h-[11rem]"
+                  />
                   <p class="mt-1 font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/65">
                     Model-level instructions live in <span class="text-slate-700 dark:text-on-surface/80">Inference → System Prompt</span> in the panel on the right.
                   </p>
@@ -1646,3 +1694,31 @@
     onCancel={() => (deleteConfirmSkill = null)}
   />
 {/if}
+
+<ParamFillModal
+  open={showParamModal}
+  variables={builderConfig.variables ?? []}
+  previewPayload={{
+    prompt: builderConfig.prompt,
+    systemPrompt: builderConfig.systemPrompt,
+    taskContext: builderConfig.taskContext,
+  }}
+  onConfirm={(values) => { showParamModal = false; void launchRun(values); }}
+  onCancel={() => (showParamModal = false)}
+/>
+
+<ParamFillModal
+  open={triggerModalAgent !== null}
+  variables={triggerModalAgent?.config.variables ?? []}
+  previewPayload={{
+    prompt: triggerModalAgent?.config.prompt,
+    systemPrompt: triggerModalAgent?.config.systemPrompt,
+    taskContext: triggerModalAgent?.config.taskContext,
+  }}
+  onConfirm={(values) => {
+    const agent = triggerModalAgent;
+    triggerModalAgent = null;
+    if (agent) void doTrigger(agent, values);
+  }}
+  onCancel={() => (triggerModalAgent = null)}
+/>

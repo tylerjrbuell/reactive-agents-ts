@@ -24,7 +24,17 @@ export function cortexParamsToAgentConfig(
 
   if (params.temperature != null) draft.temperature = params.temperature;
   if (params.maxTokens) draft.maxTokens = params.maxTokens;
-  if (typeof params.numCtx === "number" && params.numCtx > 0) draft.numCtx = params.numCtx;
+  // Local providers honor num_ctx; their own default (Ollama 2048) commonly
+  // breaks tool-calling once the system prompt + tool schema overflow the window.
+  // When the user leaves numCtx unset on a local provider, default to 8192 (best
+  // practice — see wiki/Research/Audit-Reports-2026-06-09/cortex-agent-quality-parity-audit.md).
+  // No-op for cloud providers, which ignore num_ctx.
+  const LOCAL_PROVIDERS = new Set(["ollama", "litellm"]);
+  if (typeof params.numCtx === "number" && params.numCtx > 0) {
+    draft.numCtx = params.numCtx;
+  } else if (LOCAL_PROVIDERS.has(provider)) {
+    draft.numCtx = 8192;
+  }
 
   // No model sentinel needed: agentConfigToBuilder applies temperature/maxTokens/
   // numCtx/thinking independently of `model` (framework fix, audit C1/C2).

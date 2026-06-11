@@ -6,6 +6,62 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and
 
 ---
 
+## [0.11.2] — 2026-06-11
+
+Canonical kernel architecture refactor. The reasoning kernel is now organized into capability-grouped modules (act, attend, comprehend, decide, learn, reason, recall, reflect, sense, verify) with an acyclic dependency mesh. Termination has a single owner: every exit path routes through the arbitrator and `terminate()`, and a state-grounded post-condition spine validates that "done" claims are backed by evidence before a run completes. Context assembly is unified on the `project()` pipeline — an event log plus content-addressed result store with recency-aware, two-budget projection — replacing the previous parallel assembly paths. Kernel state changes go through `transitionState()` exclusively, making run state machine-checkable.
+
+Refresh cloud-provider model support to the 2026-06 lineup and remove all retiring model defaults. `claude-sonnet-4-20250514` (retires 2026-06-15) is replaced by `claude-sonnet-4-6` in every default path: `provider-defaults.ts`, `getLLMConfig()`, and the `createRuntime()`/`createLightRuntime()` terminal fallbacks. Retired ids removed from presets (`claude-3-5-haiku-20241022`, `gemini-2.0-flash/pro`); new capability entries for `claude-opus-4-8`, `claude-sonnet-4-5`, `gpt-5.5`/`gpt-5.4`/`gpt-5.4-mini`, `gemini-2.5-pro/flash/flash-lite`, `gemini-3.5-flash` with corrected context windows. Two consistency guard tests now pin every default and preset to the static capability table so retired-id drift fails CI loudly.
+
+Helper LLM calls (verification scoring, cost/complexity routing) now run on the agent's own configured provider and model instead of a hard-coded provider. Agents configured for local or non-default providers no longer make surprise cross-provider calls — or fail when only one provider's credentials are present.
+
+API-honesty fix cluster. Memory operations no longer silently swallow telemetry failures; telemetry sinks expose a health counter. `ResultMetadata` gains `complexity` and `llmCalls` fields, and `ReactiveAgent.getLastDebrief()` provides direct access to the most recent debrief. The interaction HITL surface drops a documented-but-nonexistent phantom method, `confidenceFloor` documentation now matches its actual behavior, the cortex UI `AgentStreamEvent` union is fully typed, and the LLM provider schema deep-clone is deduplicated through a shared helper.
+
+Cortex: parameterized runs and chat/builder parity. Agent templates support `{{variable}}` placeholders filled at launch — server-authoritative resolver, `POST /api/template/resolve` live preview, schema-driven fill modal on Lab and saved-agent runs, a Variables editor with auto-detection and inline highlighting in prompt/persona/task fields, and cron/gateway runs resolving from variable defaults (runs 400 on unresolved required variables; the `secret.` namespace is reserved). Chat sessions gain full builder tool parity: MCP servers, agent-tools, and sub-agents now thread into chat agents, with session config editable in a modal and chats startable from a saved agent's config snapshot. Cortex also follows framework provider defaults dynamically (with a refreshed offline model mirror) and disposes cached/ephemeral chat agents correctly so MCP containers tear down.
+
+Tool-calling routing hardening across all model tiers. The model capability signal is now the single master input for native-FC vs text-parse routing, eliminating split-brain drift between resolver and driver. Lazy tool pruning floors at `allowedTools` and can never prune down to meta-tools only. Sanitized tool names are rendered in the prompt so the text the model sees always matches the native function-calling array. Reflexion no longer produces empty outputs when generation comes back blank (clean synthesis backfill), and reflexion / tree-of-thought / plan-execute now forward classifier `relevantTools`, so MCP and user-registered tools are visible to the model in every strategy. Verified across local (Ollama), Anthropic, and OpenAI providers.
+
+Deeper run observability. Traces now record decision-record instrumentation and per-stream cache-token accounting, and `rax-diagnose replay` shows per-iteration tool calls, output, and cache detail for root-cause analysis. Per-tool-call rationale auditing is available opt-in (default off — it measurably affects weak-model behavior when forced).
+
+Chat history fixes for gateway and tool-capable conversations. Conversation history now seeds the kernel on tool-capable chat turns — including streaming — so multi-turn chats with tools no longer lose prior context. History is presented to the model as a clearly labeled context block rather than synthetic function-calling messages, which removes a class of provider confusion on resumed threads. Local providers default to `numCtx` 8192 so longer histories are not silently truncated by the runtime default context window.
+
+# Changelog
+
+All notable changes to Reactive Agents will be documented here.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased] — v0.11 Phase C
+
+### Added
+
+- **`@reactive-agents/replay` package** — deterministic re-run of recorded traces with prompt/model overrides and tool-result freezing. Public surface: `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces`, `computeArgsHash`. Strict mode errors on unrecorded/truncated tool calls; lenient mode returns failure marker. Integration via existing `.withLayers(makeReplayToolLayer(ctrl, mode))`.
+- **`ToolCallCompleted` event payload extension** — new optional fields `args`, `result`, `error`, `resultTruncated` carry full tool call/response data for replay. Backward compatible (all fields optional). Emission sites updated: `reasoning/src/kernel/state/kernel-hooks.ts`, `runtime/src/engine/phases/agent-loop/inline-act.ts`, `reasoning/src/strategies/plan-execute.ts`.
+- **`ToolCallEvent` trace event extension** — `result` + `resultTruncated` projected from `ToolCallCompleted`. Trace recorder truncates results >8KB and substitutes a `{ replayUnserializable: true }` marker for non-JSON-serializable payloads.
+- **`rax-diagnose replay-run <runId>` CLI subcommand** — summary of a recorded run (metadata, tool call count, unique tool list) for feeding into the `replay()` API. Supports `--json`.
+- **Docs:** `features/snapshot-replay.mdx` (full API + diff shape + determinism guarantee) + index card + stability marker.
+- **Public ROADMAP.md alignment to North Star v5.0** — Phase A/B shipped, Phase C in flight, accurate v0.11 line-up.
+- **`rax diagnose` unified subcommand** — folds the standalone `rax-diagnose` binary into the main `rax` CLI as `rax diagnose <sub>` (list, replay, replay-run, grep, diff, debrief). Standalone `rax-diagnose` bin retained for backwards compatibility. New programmatic exports from `@reactive-agents/diagnose`: `debriefCommand`, `replayRunCommand`, `ReplayRunOpts`.
+- **`.withTools({ focusedTools })` documented** — soft tool-focus guidance (full set stays callable; focused names prioritized), distinct from the hard `allowedTools` allowlist. Resolution order: `focusedTools` → `allowedTools` → all tools.
+- **`numCtx` is now a first-class `AgentConfig` field** — previously only reachable via the `.withModel({ numCtx })` builder param, it is now in `AgentConfigSchema` and applied by `agentConfigToBuilder`, so it round-trips through `toConfig()` / `fromJSON()` and the config-driven path. Exposed in the Cortex Studio agent builder as a "Context length (numCtx)" field. Honored by providers with a context-window knob (Ollama `num_ctx`); ignored by cloud providers that don't expose one. Becomes the authoritative denominator for Cortex's context-usage gauge.
+
+### Changed
+
+- **Tool-call rationale is now opt-in.** Previously the kernel unconditionally injected a MANDATORY `<rationale>` instruction on every tool-using run. It is now gated by `auditRationale` (`.withReasoning({ auditRationale: true })` or env `RA_RATIONALE_AUDIT=1`), **off by default**. Rationale is an audit feature, not a performance one — enabling it added ~20–27% output tokens/latency on rationale-emitting local models with no quality change (cross-tier ablation). The `plan-execute-reflect` plan-step rationale is unchanged (always-on schema field). `result.debrief.rationale[]` shape is unchanged.
+
+### Fixed
+
+- **Rationale parser hardened for small-model output** (`@reactive-agents/tools` `parseRationaleBlocks` / `extractRationale`). Opt-in rationale was silently dropped for some local models: strict `JSON.parse` rejected markdown-fenced/prose-wrapped bodies, `why` over 280 chars rejected the whole block, and models that tag every block `call="1"` (e.g. gemma) collided into one map entry (later calls dropped). Now: fenced/prose bodies are tolerated, over-length `why` is truncated, and colliding `call="N"` attributes fall back to sequential positional keys — so opt-in capture is reliable cross-tier.
+
+### Notes
+
+- Snapshot/Replay is the v0.11 Phase C differentiator: every Reactive Agents decision is auditable-by-demo, distinguishing the framework from black-box alternatives.
+- The layer-override gate test (`packages/replay/tests/layer-override.test.ts`) pins `Layer.merge(live, replay)` priority — if Effect's merge semantics ever changed, replay would silently call the live tool; this test fails first.
+- **Deferred to v0.11.1:** full end-to-end determinism integration test (builder + `TestLLMServiceLayer` + replay layer → assert no-override replay reproduces recorded output). Override mechanism and tool-result freezing are pinned today.
+
+---
+
 ## [Unreleased] — v0.11 Phase C
 
 ### Added

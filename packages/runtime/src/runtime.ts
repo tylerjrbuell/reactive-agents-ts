@@ -242,7 +242,7 @@ function buildToolsLayer(
  * const layer = createRuntime({
  *   agentId: "my-agent",
  *   provider: "anthropic",
- *   model: "claude-opus-4-20250514",
+ *   model: "claude-opus-4-8",
  *   enableReasoning: true,
  *   enableTools: true,
  *   enableObservability: true,
@@ -265,7 +265,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     (options.provider
       ? getProviderDefaultModel(options.provider)
       : undefined) ||
-    "claude-sonnet-4-20250514";
+    "claude-sonnet-4-6";
 
   const config: ReactiveAgentsConfig = {
     ...defaultReactiveAgentsConfig(options.agentId),
@@ -1076,7 +1076,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     options.model ||
     process.env.LLM_DEFAULT_MODEL ||
     (options.provider ? getProviderDefaultModel(options.provider) : undefined) ||
-    "claude-sonnet-4-20250514";
+    "claude-sonnet-4-6";
 
   const config: ReactiveAgentsConfig = {
     ...defaultReactiveAgentsConfig(options.agentId),

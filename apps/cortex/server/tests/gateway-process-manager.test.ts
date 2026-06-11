@@ -209,4 +209,60 @@ describe("GatewayProcessManager — triggerNow", () => {
 
     gpm.destroy();
   });
+
+  it("triggerNow with NO values fails a required templated var that has no default", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const gpm = makeGateway(db);
+
+    createGatewayAgent(
+      db,
+      "tmpl-req",
+      "Templated",
+      JSON.stringify({
+        prompt: "Research {{topic}}",
+        provider: "test",
+        model: "test-model",
+        variables: [{ name: "topic", type: "string", required: true }],
+      }),
+      null,
+    );
+
+    const result = await gpm.triggerNow("tmpl-req"); // no fill values, no default
+    expect("error" in result).toBe(true);
+    const err = (result as { error: string }).error;
+    expect(err).toContain("Unresolved template variable");
+    expect(err).toContain("topic");
+
+    gpm.destroy();
+  });
+
+  it("triggerNow resolves templated vars from supplied variableValues", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const gpm = makeGateway(db);
+
+    createGatewayAgent(
+      db,
+      "tmpl-val",
+      "Templated",
+      JSON.stringify({
+        prompt: "Research {{topic}}",
+        provider: "test",
+        model: "test-model",
+        variables: [{ name: "topic", type: "string", required: true }],
+      }),
+      null,
+    );
+
+    // Supplying the value resolves the token → build proceeds (deterministic test
+    // provider) → no Unresolved error.
+    const result = await gpm.triggerNow("tmpl-val", { topic: "quantum computing" });
+    expect("error" in result).toBe(false);
+    if (!("error" in result)) {
+      expect(result.runId).toBeTruthy();
+    }
+
+    gpm.destroy();
+  });
 });

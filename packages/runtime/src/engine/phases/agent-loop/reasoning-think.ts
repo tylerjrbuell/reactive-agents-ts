@@ -169,7 +169,10 @@ export const runReasoningThink = (
     }
 
     let result: ExecutionReasoningResult;
-    // Build initial messages — seed the conversation thread with the task
+    // Build initial messages — seed the conversation thread with the task.
+    // (Prior chat history is folded into the task text as a labeled reference
+    // block by ReactiveAgent.run/runStream — gateway-style — to keep the native
+    // FC tool thread clean. It is NOT seeded as separate assistant turns here.)
     const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
       { role: "user", content: extractTaskText(task.input) },
     ];

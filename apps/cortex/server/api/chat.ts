@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { ChatSessionService } from "../services/chat-session-service.js";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 
-const ChatSessionConfigBody = t.Object({
+export const ChatSessionConfigBody = t.Object({
   name: t.Optional(t.String()),
   provider: t.Optional(t.String()),
   model: t.Optional(t.String()),
@@ -17,6 +17,7 @@ const ChatSessionConfigBody = t.Object({
   strategy: t.Optional(t.String()),
   strategySwitching: t.Optional(t.Boolean()),
   runtimeVerification: t.Optional(t.Boolean()),
+  auditRationale: t.Optional(t.Boolean()),
   verificationStep: t.Optional(t.Union([t.Literal("none"), t.Literal("reflect")])),
   contextSynthesis: t.Optional(
     t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
@@ -47,6 +48,55 @@ const ChatSessionConfigBody = t.Object({
         content: t.String(),
       }),
     ),
+  ),
+  mcpServerIds: t.Optional(t.Array(t.String())),
+  agentTools: t.Optional(t.Array(t.Unknown())),
+  dynamicSubAgents: t.Optional(t.Object({ enabled: t.Boolean(), maxIterations: t.Optional(t.Number()) })),
+  additionalToolNames: t.Optional(t.String()),
+  terminalTools: t.Optional(t.Boolean()),
+  skills: t.Optional(t.Object({ paths: t.Array(t.String()) })),
+  // ── Parity fields (previously dropped before the DB — see
+  //    wiki/Research/Audit-Reports-2026-06-09/cortex-agent-quality-parity-audit.md) ──
+  numCtx: t.Optional(t.Number()),
+  minIterations: t.Optional(t.Number()),
+  memory: t.Optional(
+    t.Object({
+      working: t.Optional(t.Boolean()),
+      episodic: t.Optional(t.Boolean()),
+      semantic: t.Optional(t.Boolean()),
+    }),
+  ),
+  metaTools: t.Optional(
+    t.Object({
+      enabled: t.Optional(t.Boolean()),
+      brief: t.Optional(t.Boolean()),
+      find: t.Optional(t.Boolean()),
+      pulse: t.Optional(t.Boolean()),
+      recall: t.Optional(t.Boolean()),
+      harnessSkill: t.Optional(t.Boolean()),
+    }),
+  ),
+  fallbacks: t.Optional(
+    t.Object({
+      enabled: t.Optional(t.Boolean()),
+      providers: t.Optional(t.Array(t.String())),
+      errorThreshold: t.Optional(t.Number()),
+    }),
+  ),
+  observabilityVerbosity: t.Optional(
+    t.Union([t.Literal("off"), t.Literal("minimal"), t.Literal("normal"), t.Literal("verbose")]),
+  ),
+  taskContext: t.Optional(t.Record(t.String(), t.String())),
+  healthCheck: t.Optional(t.Boolean()),
+  timeout: t.Optional(t.Number()),
+  cacheTimeout: t.Optional(t.Number()),
+  progressCheckpoint: t.Optional(t.Number()),
+  retryPolicy: t.Optional(
+    t.Object({
+      enabled: t.Optional(t.Boolean()),
+      maxRetries: t.Number(),
+      backoffMs: t.Optional(t.Number()),
+    }),
   ),
 });
 
@@ -90,6 +140,34 @@ export const chatRouter = (svc: ChatSessionService) =>
               body.terminalShellAllowedCommands.trim() !== ""
                 ? { terminalShellAllowedCommands: body.terminalShellAllowedCommands.trim() }
                 : {}),
+              ...(body.mcpServerIds?.length ? { mcpServerIds: body.mcpServerIds } : {}),
+              ...(body.agentTools?.length ? { agentTools: body.agentTools } : {}),
+              ...(body.dynamicSubAgents ? { dynamicSubAgents: body.dynamicSubAgents } : {}),
+              ...(body.additionalToolNames ? { additionalToolNames: body.additionalToolNames } : {}),
+              ...(body.terminalTools === true ? { terminalTools: true } : {}),
+              ...(body.skills?.paths.length ? { skills: body.skills } : {}),
+              ...(typeof body.numCtx === "number" && body.numCtx > 0 ? { numCtx: body.numCtx } : {}),
+              ...(typeof body.minIterations === "number" && body.minIterations > 0
+                ? { minIterations: body.minIterations }
+                : {}),
+              ...(body.memory ? { memory: body.memory } : {}),
+              ...(body.metaTools ? { metaTools: body.metaTools } : {}),
+              ...(body.fallbacks ? { fallbacks: body.fallbacks } : {}),
+              ...(body.observabilityVerbosity
+                ? { observabilityVerbosity: body.observabilityVerbosity }
+                : {}),
+              ...(body.taskContext && Object.keys(body.taskContext).length > 0
+                ? { taskContext: body.taskContext }
+                : {}),
+              ...(body.healthCheck === true ? { healthCheck: true } : {}),
+              ...(typeof body.timeout === "number" && body.timeout > 0 ? { timeout: body.timeout } : {}),
+              ...(typeof body.cacheTimeout === "number" && body.cacheTimeout > 0
+                ? { cacheTimeout: body.cacheTimeout }
+                : {}),
+              ...(typeof body.progressCheckpoint === "number" && body.progressCheckpoint > 0
+                ? { progressCheckpoint: body.progressCheckpoint }
+                : {}),
+              ...(body.retryPolicy?.enabled === true ? { retryPolicy: body.retryPolicy } : {}),
             },
           });
           return { sessionId };
@@ -110,8 +188,8 @@ export const chatRouter = (svc: ChatSessionService) =>
       }
       return session;
     })
-    .delete("/sessions/:sessionId", ({ params, set }) => {
-      const ok = svc.deleteSession(params.sessionId);
+    .delete("/sessions/:sessionId", async ({ params, set }) => {
+      const ok = await svc.deleteSession(params.sessionId);
       if (!ok) {
         set.status = 404;
         return { error: "Session not found" };
@@ -132,9 +210,9 @@ export const chatRouter = (svc: ChatSessionService) =>
     )
     .patch(
       "/sessions/:sessionId/config",
-      ({ params, body, set }) => {
+      async ({ params, body, set }) => {
         try {
-          svc.updateSessionConfig(params.sessionId, {
+          await svc.updateSessionConfig(params.sessionId, {
             ...(body.provider !== undefined ? { provider: body.provider } : {}),
             ...(body.model !== undefined ? { model: body.model } : {}),
             ...(body.systemPrompt !== undefined ? { systemPrompt: body.systemPrompt } : {}),
@@ -164,6 +242,30 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.terminalShellAllowedCommands !== undefined
               ? { terminalShellAllowedCommands: body.terminalShellAllowedCommands }
               : {}),
+            ...(body.mcpServerIds !== undefined ? { mcpServerIds: body.mcpServerIds } : {}),
+            ...(body.agentTools !== undefined ? { agentTools: body.agentTools } : {}),
+            ...(body.dynamicSubAgents !== undefined ? { dynamicSubAgents: body.dynamicSubAgents } : {}),
+            ...(body.additionalToolNames !== undefined
+              ? { additionalToolNames: body.additionalToolNames }
+              : {}),
+            ...(body.terminalTools !== undefined ? { terminalTools: body.terminalTools } : {}),
+            ...(body.skills !== undefined ? { skills: body.skills } : {}),
+            ...(body.numCtx !== undefined ? { numCtx: body.numCtx } : {}),
+            ...(body.minIterations !== undefined ? { minIterations: body.minIterations } : {}),
+            ...(body.memory !== undefined ? { memory: body.memory } : {}),
+            ...(body.metaTools !== undefined ? { metaTools: body.metaTools } : {}),
+            ...(body.fallbacks !== undefined ? { fallbacks: body.fallbacks } : {}),
+            ...(body.observabilityVerbosity !== undefined
+              ? { observabilityVerbosity: body.observabilityVerbosity }
+              : {}),
+            ...(body.taskContext !== undefined ? { taskContext: body.taskContext } : {}),
+            ...(body.healthCheck !== undefined ? { healthCheck: body.healthCheck } : {}),
+            ...(body.timeout !== undefined ? { timeout: body.timeout } : {}),
+            ...(body.cacheTimeout !== undefined ? { cacheTimeout: body.cacheTimeout } : {}),
+            ...(body.progressCheckpoint !== undefined
+              ? { progressCheckpoint: body.progressCheckpoint }
+              : {}),
+            ...(body.retryPolicy !== undefined ? { retryPolicy: body.retryPolicy } : {}),
           });
           return { ok: true };
         } catch (e) {

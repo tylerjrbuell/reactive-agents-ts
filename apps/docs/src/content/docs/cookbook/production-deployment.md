@@ -17,7 +17,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("production-agent")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
 
   // Core capabilities
   .withReasoning({ defaultStrategy: "adaptive" })
@@ -55,7 +55,7 @@ const agent = await ReactiveAgents.create()
 ```bash
 # LLM Provider
 ANTHROPIC_API_KEY=sk-ant-...
-LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
+LLM_DEFAULT_MODEL=claude-sonnet-4-6
 LLM_DEFAULT_TEMPERATURE=0.7
 LLM_MAX_RETRIES=3
 LLM_TIMEOUT_MS=30000

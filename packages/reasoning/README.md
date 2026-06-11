@@ -34,7 +34,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning() // defaults to ReAct
   .withTools()
   .build();

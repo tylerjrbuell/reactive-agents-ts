@@ -51,7 +51,7 @@
     void (async () => {
       modelsLoading = true;
       modelsError = null;
-      const { options, error } = await fetchModelsForProvider(
+      const { options, default: def, error } = await fetchModelsForProvider(
         p,
         p === "ollama" ? ep : undefined,
       );
@@ -59,6 +59,11 @@
       providerModelOptions = options;
       modelsError = error ?? null;
       modelsLoading = false;
+      // Show the framework's current default when the user hasn't pinned one.
+      if (!localSettings.defaultModel.trim()) {
+        const seed = def && options.some((o) => o.value === def) ? def : options[0]?.value;
+        if (seed) localSettings = { ...localSettings, defaultModel: seed };
+      }
     })();
     return () => {
       cancelled = true;
@@ -275,12 +280,13 @@
             onchange={async () => {
               localSettings = { ...localSettings, defaultModel: "" };
               const p = localSettings.defaultProvider;
-              const { options } = await fetchModelsForProvider(
+              const { options, default: def } = await fetchModelsForProvider(
                 p,
                 p === "ollama" ? localSettings.ollamaEndpoint : undefined,
               );
-              if (options[0]) {
-                localSettings = { ...localSettings, defaultModel: options[0].value };
+              const seed = def && options.some((o) => o.value === def) ? def : options[0]?.value;
+              if (seed) {
+                localSettings = { ...localSettings, defaultModel: seed };
               }
             }}
             class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2

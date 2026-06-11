@@ -19,7 +19,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .build();
 ```
 
@@ -35,7 +35,7 @@ Memory persists context across conversations:
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory()                          // tier: "standard" (default)
   .build();
 ```
@@ -61,7 +61,7 @@ The reasoning layer gives your agent structured thinking:
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory()
   .withReasoning()  // ReAct loop: Think -> Act -> Observe
   .build();
@@ -80,7 +80,7 @@ Guardrails protect against prompt injection, PII leakage, and toxic content:
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withMemory()
   .withReasoning()
   .withGuardrails()       // Input/output safety

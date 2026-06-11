@@ -25,6 +25,20 @@ export interface AgentPersona {
   responseStyle: "prose" | "bullet-points" | "structured";
 }
 
+export type VariableType = "string" | "number" | "enum" | "multiline";
+
+/** A template variable. `{{name}}` tokens in any string config field resolve against these. */
+export interface VariableDef {
+  name: string;
+  type: VariableType;
+  description?: string;
+  default?: string | number;
+  required: boolean;
+  enumValues?: string[];
+  /** Reserved for the future secret store; Phase 1 leaves `{{secret.X}}` unresolved. */
+  secret?: boolean;
+}
+
 export interface AgentConfig {
   provider: string;
   model: string;
@@ -115,12 +129,18 @@ export interface AgentConfig {
    * `events` empty or `["all"]` = every lifecycle event. Fire-and-forget, best-effort.
    */
   lifecycleWebhooks: { url: string; events: string[] }[];
+  /** Template variables for parameterized runs. `{{name}}` in any string field resolves against these. */
+  variables: VariableDef[];
 }
 
 export function defaultConfig(): AgentConfig {
   return {
     provider: "anthropic",
-    model: "claude-sonnet-4-20250514",
+    // Empty → the builder seeds the framework's current default for the provider
+    // (AgentConfigPanel auto-selects it), and an empty model resolves to the
+    // framework provider default at run time. Never hardcode a model id here —
+    // it would drift when the framework bumps defaults (e.g. a model retiring).
+    model: "",
     temperature: 0.7,
     maxTokens: 0,
     numCtx: 0,
@@ -157,5 +177,6 @@ export function defaultConfig(): AgentConfig {
     taskContext: {},
     healthCheck: false,
     skills: { paths: [] },
+    variables: [],
   };
 }

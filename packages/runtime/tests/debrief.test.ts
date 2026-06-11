@@ -279,7 +279,7 @@ describe("DebriefCompleted event emission", () => {
     await agent.dispose();
 
     expect(published.some((event) => event._tag === "DebriefCompleted")).toBe(true);
-  });
+  }, 30000); // full agent build incl. .withMemory() SQLite init — generous timeout for slow CI runners
 });
 
 describe("ProviderFallbackActivated event shape", () => {

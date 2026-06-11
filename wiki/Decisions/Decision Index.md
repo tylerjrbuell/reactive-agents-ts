@@ -11,6 +11,12 @@ tags: [decisions, index, trade-offs]
 
 ## Phase Gates & Major Milestones
 
+### Roadmap Realignment v0.12 → v1.0 (Accepted ✅)
+- [[Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0|Roadmap Realignment 2026-06-10]] — milestone arc: v0.12 "Durable & Honest" (durable exec + DX wave + memory default-off) → v0.13 "Receipts" (public local-model bench + LAUNCH) → v0.14 "Compounding" (recitation/experience-reuse, ablation-gated) → v1.0 polish
+- **Status:** ✅ Accepted (2026-06-10, 3 forks user-ratified)
+- **Impact:** supersedes root ROADMAP.md v0.12/v0.13 sections + 07-ROADMAP remaining-phase sequencing; vision pillars unchanged
+- **Evidence:** `wiki/Research/Audit-Reports-2026-06-10/v0.12.0-leverage-audit.md`
+
 ### Phase 0: Frozen Judge (Complete ✅)
 - [[Decisions/Phase 0 Frozen Judge|Frozen Judge Gate]] — Single-model arbitration validation
 - **Status:** ✅ Complete (requirement, not design)

@@ -45,6 +45,22 @@ import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { RunController } from './run-controller.js'
+import { applyHistoryWindow, formatHistoryBlock } from './gateway-context-formatting.js'
+
+/**
+ * Fold prior conversation turns into the task as a labeled reference block —
+ * the same presentation the gateway uses (gateway-context-formatting.ts). This
+ * keeps the kernel's native-FC tool thread clean: seeding plain-text prior
+ * "assistant" final-answers directly into `state.messages` made the model treat
+ * them as its own tool-orchestration turns and re-run tools / conflate context.
+ * History as labeled text in the task avoids that while staying history-aware.
+ */
+export const withHistoryBlock = (input: string, history?: readonly ChatMessage[]): string => {
+    if (!history || history.length === 0) return input
+    const block = formatHistoryBlock(applyHistoryWindow(history))
+    if (!block) return input
+    return `${block}\n\n--- Current message ---\n${input}`
+}
 import type { RunHandle } from './run-controller.js'
 import {
     AgentSession,
@@ -568,13 +584,14 @@ export class ReactiveAgent {
      */
     async run(
         input: string,
-        options?: { readonly taskId?: string }
+        options?: { readonly taskId?: string; readonly history?: readonly ChatMessage[] }
     ): Promise<AgentResult> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
+        const taskInput = withHistoryBlock(input, options?.history)
         return this.runtime
-            .runPromise(this.buildRunTaskEffect(input, options))
+            .runPromise(this.buildRunTaskEffect(taskInput, options?.taskId ? { taskId: options.taskId } : undefined))
             .catch((e) => {
                 const unwrapped = unwrapError(e)
                 if (this._errorHandler) {
@@ -790,7 +807,7 @@ export class ReactiveAgent {
      */
     runStream(
         input: string,
-        options?: { density?: StreamDensity; signal?: AbortSignal }
+        options?: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] }
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -802,7 +819,8 @@ export class ReactiveAgent {
             }
         }
         const controller = new RunController(internalAbort);
-        const gen = this._runStreamImpl(input, { ...options, signal: controller.signal }, controller);
+        const taskInput = withHistoryBlock(input, options?.history);
+        const gen = this._runStreamImpl(taskInput, { ...options, signal: controller.signal }, controller);
         return Object.assign(gen, {
             pause: () => controller.pause(),
             resume: () => controller.resume(),
@@ -814,7 +832,7 @@ export class ReactiveAgent {
 
     private async *_runStreamImpl(
         input: string,
-        options: { density?: StreamDensity; signal?: AbortSignal },
+        options: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] },
         controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
@@ -1069,7 +1087,13 @@ export class ReactiveAgent {
         const enrichedMessage = contextSummary
             ? `Context from prior run:\n${contextSummary}\n\nNew request: ${message}`
             : message
-        const result = await this.run(enrichedMessage)
+        // Seed the kernel with prior conversation turns (session or agent-level)
+        // so tool-capable chat stays history-aware, mirroring the direct path.
+        const priorTurns = _history ?? this._chatHistory
+        const result = await this.run(
+            enrichedMessage,
+            priorTurns.length > 0 ? { history: priorTurns } : undefined
+        )
         await publishChatTurns(
             'react-loop',
             result.output,

@@ -9,7 +9,11 @@ function shellExecuteActive(cfg: AgentConfig): boolean {
 }
 
 /** Build the object passed to `JSON.stringify` for Cortex run creation. */
-export function cortexRunsPostBody(prompt: string, cfg: AgentConfig): Record<string, unknown> {
+export function cortexRunsPostBody(
+  prompt: string,
+  cfg: AgentConfig,
+  variableValues?: Record<string, string | number>,
+): Record<string, unknown> {
   return {
     prompt: prompt.trim(),
     provider: cfg.provider,
@@ -61,5 +65,9 @@ export function cortexRunsPostBody(prompt: string, cfg: AgentConfig): Record<str
     ...(cfg.contextSynthesis ? { contextSynthesis: cfg.contextSynthesis } : {}),
     ...(cfg.guardrails?.enabled ? { guardrails: cfg.guardrails } : {}),
     ...(cfg.persona?.enabled ? { persona: cfg.persona } : {}),
+    ...(cfg.variables?.length ? { variables: cfg.variables } : {}),
+    ...(cfg.variables?.length && variableValues && Object.keys(variableValues).length
+      ? { variableValues }
+      : {}),
   };
 }

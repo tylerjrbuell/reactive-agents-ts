@@ -96,7 +96,7 @@ const agent = await ReactiveAgents.create()
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withCostTracking({ budget: { daily: 5.0 } })
   .withReasoning({ defaultStrategy: "adaptive" })
   .withVerification()
@@ -111,7 +111,7 @@ const agent = await ReactiveAgents.create()
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withCostTracking({ budget: { daily: 20.0 } })
   .withReasoning({ defaultStrategy: "adaptive", maxIterations: 20 })
   .withMemory({ tier: "enhanced" })
@@ -186,7 +186,7 @@ When configured, Reactive Agents automatically routes simple tasks to cheaper mo
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")  // Primary
+  .withModel("claude-sonnet-4-6")  // Primary
   .withComplexityRouting({
     simple: "claude-haiku-4-5-20251001",  // Simple tasks use Haiku
     threshold: 0.5                        // Routing confidence (0–1)

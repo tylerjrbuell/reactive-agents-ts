@@ -92,7 +92,7 @@ import { ReactiveAgents } from "reactive-agents";
 // Enable all built-in templates
 const agent = await ReactiveAgents.create()
   .withName("researcher")
-  .withProvider("anthropic", { model: "claude-sonnet-4-20250514" })
+  .withProvider("anthropic", { model: "claude-sonnet-4-6" })
   .withPrompts()
   .build();
 

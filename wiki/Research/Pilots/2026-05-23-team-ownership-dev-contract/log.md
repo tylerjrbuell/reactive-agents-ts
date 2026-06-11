@@ -608,6 +608,127 @@ created: 2026-05-23
 ```
 
 
+```yaml
+- task: v0112-pre-tag-release-audit
+  date: 2026-06-10
+  warden: release-warden
+  routed: warden
+  commits: 0  # audit-only by design
+  agent-spawns: 1
+  tokens-est: ~53K
+  regression-prevented: residual-retired-model-fallback-404 (runtime.ts:268,1079) + tag-on-unpushed-main + stale-changeset-release-notes
+  notes: >
+    Pre-tag audit for fast 0.11.2 (June-15 model retirement deadline). All
+    quality gates PASS on ad059ec2 (release:dry 35-pkg lockstep clean; build
+    38/38; typecheck 68/68; tests 6205/0/23-skip). NO-GO verdict solely on
+    git-sync (local main 51 ahead of origin). Diagnosed 0.10.6-vs-0.11.1
+    package.json "drift" as by-design (release.ts stamps at publish; VERSION
+    file is truth). Caught P1: createRuntime/createLightRuntime still
+    hard-coded claude-sonnet-4-20250514 — the exact 404 class the release
+    exists to fix. Caught P2: 7 stale v0.11.0-era changesets would have
+    produced wrong release notes.
+
+- task: v0112-runtime-fallback-model-fix
+  date: 2026-06-10
+  warden: runtime-warden
+  routed: warden
+  commits: 1
+  agent-spawns: 1
+  tokens-est: ~38K
+  regression-prevented: future-retired-id-drift-in-runtime (guard test pins every claude-* literal to static capability table)
+  notes: >
+    runtime.ts:268 + :1079 terminal fallbacks → claude-sonnet-4-6 (read-verified
+    against provider-defaults.ts, not assumed). BONUS: warden's own new guard
+    test caught a third retired id (claude-opus-4-20250514 in JSDoc :245) the
+    audit missed. New tests/default-model-fallback.test.ts (40 LOC). Runtime
+    934/0; typecheck forced-uncached 21/21.
+
+- task: v0112-runtime-readme-retired-id
+  date: 2026-06-10
+  warden: runtime-warden
+  routed: warden
+  commits: 0  # folded into release commit
+  agent-spawns: 1
+  tokens-est: ~21K
+  regression-prevented: none
+  notes: >
+    One-liner: packages/runtime/README.md:44 retired id → claude-sonnet-4-6.
+    Micro-dispatch honored contract; observation for evaluation day — 21K
+    tokens for a 1-line doc sed is the contract's worst-case overhead shape.
+
+- task: v0112-repo-wide-readme-id-sweep
+  date: 2026-06-10
+  warden: main
+  routed: main
+  bypass-reason: >
+    Cross-cutting mechanical sed (same literal, 13 packages + apps/docs);
+    primary scope is repo-wide docs, not any single warden domain — per-warden
+    routing would have required 5+ dispatches for identical one-line seds.
+    Logged for transparency; not claiming pilot-data eligibility.
+  commits: 0  # folded into release commit
+  agent-spawns: 0
+  tokens-est: ~3K
+  regression-prevented: none
+  notes: >
+    20 retired-id refs in published package READMEs + docs site → current ids.
+    Reverted sed collateral on apps/docs/src/data/benchmark-report.json
+    (historical benchmark record — must not be rewritten).
+```
+
+```yaml
+- task: fm-i-canonical-buildkernelinput
+  date: 2026-06-11
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # main-thread committed the integrated change
+  agent-spawns: 1
+  tokens-est: ~59K
+  regression-prevented: cross-cutting-field-drop-becomes-compile-error (Pick-partition builder)
+  notes: >
+    FM-I (#195) Phase 1: built kernel/state/build-kernel-input.ts —
+    buildKernelInput(crossCutting, perPass), both bundles Pick<KernelInput,…>
+    so a dropped cross-cutting field is a compile error not a silent gap.
+    Equivalence test pins reactive's field set incl. the verifier env-branch.
+    verifier kept PER-PASS (gate-safe — no new terminal gate on sub-passes).
+    12/12 builder tests, reasoning typecheck 8/8. Strategy migration was
+    main-thread (strategies/** unmapped).
+
+- task: fm-i-reactkernel-inner-forwarding
+  date: 2026-06-11
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # main-thread committed
+  agent-spawns: 1
+  tokens-est: ~65K
+  regression-prevented: plan-execute-inner-literal-field-drop (executeReActKernel now uses buildKernelInput)
+  notes: >
+    FM-I (#195) Layer-3: executeReActKernel's inner runKernel literal
+    (react-kernel.ts) re-built kernel input by hand and dropped the 4
+    cross-cutting fields. Migrated it to buildKernelInput; all 21 original
+    fields preserved, 4 now forwarded. Found ReActKernelInput = KernelInput
+    alias so no type edit needed (fields already declared). before('think')
+    forwarding test RED→GREEN. 606 scoped tests 0 fail. Handed off
+    step-executor call-site migration to main-thread.
+
+- task: fm-i-strategy-migration
+  date: 2026-06-11
+  warden: main
+  routed: main
+  bypass-reason: >
+    packages/reasoning/src/strategies/** is unmapped in the pilot table —
+    main-thread is canonical owner. Migrated reflexion, tree-of-thought,
+    adaptive, plan-execute(+step-executor) call sites onto buildKernelInput
+    and widened each strategy's narrowed input interface to carry the
+    cross-cutting fields. Per-strategy before('think')-fires regression tests.
+  commits: 4  # 90c7c089, 9030d5a1, plan-execute, docs
+  agent-spawns: 0
+  tokens-est: ~40K
+  regression-prevented: compose/killswitch/calibration-dead-on-4-strategies
+  notes: >
+    Empirical RED→GREEN: reflexion live ollama hook 0→1. Full reasoning
+    1617/0. Remaining sub-gap (#195 open): tool_call/analysis steps bypass
+    kernel.
+
 ## Summary (2026-06-15)
 
 (written on evaluation day)

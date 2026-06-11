@@ -23,7 +23,7 @@ import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("smart-agent")
-  .withProvider("anthropic", { model: "claude-sonnet-4-20250514" })
+  .withProvider("anthropic", { model: "claude-sonnet-4-6" })
   .withReasoning()
   .withReactiveIntelligence()
   .build();

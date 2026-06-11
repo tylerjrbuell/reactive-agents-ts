@@ -34,7 +34,7 @@ import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("traced-agent")
-  .withProvider("anthropic", { model: "claude-sonnet-4-20250514" })
+  .withProvider("anthropic", { model: "claude-sonnet-4-6" })
   .withObservability({
     exporters: ["console", "file", "otlp"],
     otlpEndpoint: "http://localhost:4318/v1/traces",

@@ -91,7 +91,7 @@ All chain methods return `this` unless noted.
 
 | Method         | Signature                                                                                    | Description                                                                |
 | -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-20250514"`)             |
+| `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-6"`)             |
 | `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens`, `numCtx` |
 | `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
 
@@ -109,7 +109,7 @@ interface ModelParams {
 
 ```typescript
 // String form — simple model selection
-.withModel("claude-opus-4-20250514")
+.withModel("claude-opus-4-8")
 
 // ModelParams form — local model with thinking mode
 .withModel({ model: "qwen3:14b", thinking: true, temperature: 0.7 })
@@ -889,7 +889,7 @@ import { Effect } from "effect";
 await using agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withPersona({
     role: "CRISPR Research Specialist",
     background: "Expert in gene editing and molecular biology",

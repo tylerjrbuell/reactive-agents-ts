@@ -55,7 +55,7 @@ import { ReactiveAgents } from "reactive-agents";
 const agent = await ReactiveAgents.create()
   .withName("research-assistant")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withReasoning()         // ReAct loop with adaptive strategy switching
   .withTools()             // Built-in tools + MCP support + meta-tools
   .withMemory("1")         // Persistent SQLite memory with FTS5 search
@@ -227,7 +227,7 @@ Let the model decide when to delegate — no pre-declared agent tools required:
 ```typescript
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-20250514")
+  .withModel("claude-sonnet-4-6")
   .withTools()
   .withDynamicSubAgents({ maxIterations: 5 })
   .build();
@@ -241,7 +241,7 @@ Sub-agents get a clean context window, inherit the parent's provider/model, and 
 
 | Provider | Models | Native FC | Streaming |
 | --- | --- | :---: | :---: |
-| **Anthropic** | `claude-sonnet-4-20250514`, `claude-haiku-4-5-20251001`, Opus | Yes | Yes |
+| **Anthropic** | `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, Opus | Yes | Yes |
 | **OpenAI** | `gpt-4o`, `gpt-4o-mini`, o1 | Yes | Yes |
 | **Google Gemini** | `gemini-2.5-pro`, Flash | Yes | Yes |
 | **Ollama** | Any local model (qwen3, llama3, etc.) | Yes | Yes |
@@ -253,7 +253,7 @@ Sub-agents get a clean context window, inherit the parent's provider/model, and 
 // or
 .withProvider("openai").withModel("gpt-4o")
 // or
-.withProvider("anthropic").withModel("claude-sonnet-4-20250514")
+.withProvider("anthropic").withModel("claude-sonnet-4-6")
 ```
 
 Same agent code, different model. Provider fallback chains and dynamic pricing are also one-liners:
@@ -364,7 +364,7 @@ OPENAI_API_KEY=sk-...                           # OpenAI GPT
 GOOGLE_API_KEY=...                              # Google Gemini
 EMBEDDING_PROVIDER=openai                       # For semantic memory (default: openai)
 EMBEDDING_MODEL=text-embedding-3-small
-LLM_DEFAULT_MODEL=claude-sonnet-4-20250514
+LLM_DEFAULT_MODEL=claude-sonnet-4-6
 ```
 
 Ollama and the Test provider need no API keys. LiteLLM picks up its own provider keys.

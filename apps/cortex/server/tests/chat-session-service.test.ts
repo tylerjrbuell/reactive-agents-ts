@@ -194,7 +194,7 @@ describe("ChatSessionService", () => {
     const sessionsMap = (svc as unknown as { sessions: Map<string, unknown> }).sessions;
     expect(sessionsMap.has(id)).toBe(true);
 
-    svc.updateSessionConfig(id, {
+    await svc.updateSessionConfig(id, {
       provider: "test",
       model: "updated-model",
       enableTools: true,
