@@ -110,6 +110,11 @@ export interface AgentConfig {
     paths: string[];
     evolution?: { mode?: string; refinementThreshold?: number; rollbackOnRegression?: boolean };
   };
+  /**
+   * Lifecycle webhooks — server fires a POST to each URL on run start/completion/failure.
+   * `events` empty or `["all"]` = every lifecycle event. Fire-and-forget, best-effort.
+   */
+  lifecycleWebhooks: { url: string; events: string[] }[];
 }
 
 export function defaultConfig(): AgentConfig {
@@ -126,6 +131,7 @@ export function defaultConfig(): AgentConfig {
     verificationStep: "none",
     runtimeVerification: false,
     auditRationale: false,
+    lifecycleWebhooks: [],
     tools: ["web-search"],
     terminalTools: false,
     terminalShellAdditionalCommands: "",

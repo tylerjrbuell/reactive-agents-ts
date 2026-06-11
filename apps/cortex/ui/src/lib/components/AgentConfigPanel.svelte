@@ -140,6 +140,37 @@
     config = { ...config, taskContext: next };
   }
 
+  // ── Lifecycle webhooks ────────────────────────────────────────────────
+  const LIFECYCLE_EVENTS = ["AgentStarted", "AgentCompleted", "TaskFailed", "DebriefCompleted"] as const;
+
+  function addWebhook() {
+    config = { ...config, lifecycleWebhooks: [...(config.lifecycleWebhooks ?? []), { url: "", events: [] }] };
+  }
+  function removeWebhook(i: number) {
+    config = { ...config, lifecycleWebhooks: (config.lifecycleWebhooks ?? []).filter((_, j) => j !== i) };
+  }
+  function updateWebhookUrl(i: number, url: string) {
+    config = {
+      ...config,
+      lifecycleWebhooks: (config.lifecycleWebhooks ?? []).map((w, j) => (j === i ? { ...w, url } : w)),
+    };
+  }
+  function webhookHasEvent(wh: { events: string[] }, ev: string): boolean {
+    return wh.events.length === 0 || wh.events.includes(ev);
+  }
+  function toggleWebhookEvent(i: number, ev: string) {
+    config = {
+      ...config,
+      lifecycleWebhooks: (config.lifecycleWebhooks ?? []).map((w, j) => {
+        if (j !== i) return w;
+        // Empty = all; first click narrows to the full set minus the toggled one.
+        const base = w.events.length === 0 ? [...LIFECYCLE_EVENTS] : w.events;
+        const next = base.includes(ev) ? base.filter((e) => e !== ev) : [...base, ev];
+        return { ...w, events: next };
+      }),
+    };
+  }
+
   function parseSkillPathsLines(s: string): string[] {
     return s.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
   }
@@ -811,6 +842,45 @@
             — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--ra-amber-strong,inherit)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
           </span>
         </label>
+
+        <!-- Lifecycle webhooks -->
+        <div class="rounded-lg border border-[var(--cortex-border)] p-2.5 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-mono text-[9px] uppercase tracking-widest text-[var(--cortex-text-muted)]">Lifecycle webhooks</span>
+            <button type="button" onclick={addWebhook}
+              class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--cortex-text-muted)] hover:text-primary hover:border-primary/40 transition-colors">
+              <span class="material-symbols-outlined text-[12px] leading-none">add</span> Add URL
+            </button>
+          </div>
+          <p class="font-mono text-[8px] text-[var(--cortex-text-muted)] leading-relaxed m-0">
+            Server POSTs a JSON payload to each URL on run start / completion / failure. Fire-and-forget; applies to saved agents.
+          </p>
+          {#each config.lifecycleWebhooks ?? [] as wh, i (i)}
+            <div class="space-y-1 rounded border border-[var(--cortex-border)] p-1.5">
+              <div class="flex items-center gap-1">
+                <input
+                  type="url"
+                  placeholder="https://example.com/hook"
+                  value={wh.url}
+                  oninput={(e) => updateWebhookUrl(i, (e.target as HTMLInputElement).value)}
+                  class="flex-1 min-w-0 rounded border border-[var(--cortex-border)] bg-[var(--cortex-surface-low)] px-2 py-1 font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <button type="button" onclick={() => removeWebhook(i)}
+                  class="material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] hover:text-error transition-colors p-0.5"
+                  aria-label="Remove webhook">delete</button>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                {#each LIFECYCLE_EVENTS as ev (ev)}
+                  <button type="button" onclick={() => toggleWebhookEvent(i, ev)}
+                    class="rounded-full px-1.5 py-0.5 font-mono text-[8px] border transition-colors
+                           {webhookHasEvent(wh, ev) ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-[var(--cortex-text-muted)] hover:border-primary/30'}">
+                    {ev}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        </div>
       </div>
     {/if}
   </div>

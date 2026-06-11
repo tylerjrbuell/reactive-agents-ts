@@ -4,12 +4,20 @@ import type { AgentEvent } from "@reactive-agents/core";
 import {
   insertEvent,
   getRunAgentId,
+  getGatewayAgent,
   upsertRun,
   updateRunStats,
   getNextSeq,
 } from "../db/queries.js";
 import { enforceRetention } from "../db/schema.js";
 import { CortexEventBridge } from "./event-bridge.js";
+import {
+  isLifecycleEvent,
+  parseWebhookConfigs,
+  selectWebhookTargets,
+  buildWebhookPayload,
+  dispatchWebhooks,
+} from "./webhook-dispatch.js";
 import type { CortexIngestMessage, CortexLiveMessage } from "../types.js";
 import { CORTEX_DESK_LIVE_AGENT_ID } from "../types.js";
 import { CortexError } from "../errors.js";
@@ -174,6 +182,33 @@ export const CortexIngestServiceLive = (db: Database) =>
                 .prepare("SELECT COUNT(*) as c FROM cortex_events WHERE agent_id = ?")
                 .get(canonicalAgentId) as { c: number } | null;
               if ((count?.c ?? 0) % 100 === 0) enforceRetention(db, canonicalAgentId);
+
+              // Lifecycle webhooks — fire-and-forget for saved agents that configured them.
+              // Gated to lifecycle tags first so the common (per-step) event never hits the DB.
+              if (isLifecycleEvent(msg.event._tag)) {
+                const row = getGatewayAgent(db, canonicalAgentId);
+                if (row) {
+                  let cfg: unknown;
+                  try { cfg = JSON.parse(row.config); } catch { cfg = null; }
+                  const webhooks = parseWebhookConfigs(
+                    cfg && typeof cfg === "object"
+                      ? (cfg as { lifecycleWebhooks?: unknown }).lifecycleWebhooks
+                      : undefined,
+                  );
+                  const targets = selectWebhookTargets(webhooks, msg.event._tag);
+                  if (targets.length > 0) {
+                    dispatchWebhooks(
+                      targets,
+                      buildWebhookPayload({
+                        agentId: canonicalAgentId,
+                        runId,
+                        eventTag: msg.event._tag,
+                        event: msg.event as unknown as Record<string, unknown>,
+                      }),
+                    );
+                  }
+                }
+              }
             });
           }).pipe(
             Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
