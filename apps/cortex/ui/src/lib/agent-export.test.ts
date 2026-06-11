@@ -64,6 +64,16 @@ describe("generateAgentTs", () => {
     expect(ts).toContain(".withHealthCheck()");
     expect(ts).toContain(".withGuardrails(");
   });
+
+  it("does not crash on a sparse/legacy config missing newer fields", () => {
+    // Gateway cards pass stored configs that may predate auditRationale / tools / strategy.
+    const sparse = { provider: "ollama", model: "qwen3:4b" } as unknown as Parameters<typeof generateAgentTs>[0];
+    const ts = generateAgentTs(sparse, "Legacy Agent");
+    expect(ts).toContain('.withProvider("ollama")');
+    expect(ts).toContain('.withModel("qwen3:4b")');
+    expect(ts).toContain(".withTools()");
+    expect(ts).toContain(".build()");
+  });
 });
 
 describe("generateAgentJson", () => {

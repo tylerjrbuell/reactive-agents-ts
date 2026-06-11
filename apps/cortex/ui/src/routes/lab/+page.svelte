@@ -4,6 +4,7 @@
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import PromptManager from "$lib/components/PromptManager.svelte";
   import AgentExportModal from "$lib/components/AgentExportModal.svelte";
+  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
   import { settings } from "$lib/stores/settings.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
@@ -836,7 +837,18 @@
 
             <div class="space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-0.5">
               <div>
-              <label for="builder-prompt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Prompt</label>
+              <div class="mb-1.5 flex items-end justify-between gap-2">
+                <label for="builder-prompt" class="block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Prompt</label>
+                <PromptPickerButton
+                  types={["task", "snippet"]}
+                  defaultSaveType="task"
+                  placement="down"
+                  title="Insert a saved prompt"
+                  onSelect={(body) => {
+                    builderConfig = { ...builderConfig, prompt: builderConfig.prompt ? `${builderConfig.prompt}\n${body}` : body };
+                  }}
+                />
+              </div>
               <textarea id="builder-prompt" bind:value={builderConfig.prompt}
                 placeholder="Describe what you want the agent to do…" rows="5"
                 class="w-full resize-y rounded-lg border border-[var(--cortex-border)] bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20 min-h-[7.5rem] lg:min-h-[11rem]"
@@ -1088,9 +1100,20 @@
                 </div>
 
                 <div>
-                  <label for="gateway-edit-prompt" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">
-                    Prompt <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/50">(default task — same as Builder tab)</span>
-                  </label>
+                  <div class="mb-1.5 flex items-end justify-between gap-2">
+                    <label for="gateway-edit-prompt" class="block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">
+                      Prompt <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/50">(default task — same as Builder tab)</span>
+                    </label>
+                    <PromptPickerButton
+                      types={["task", "snippet"]}
+                      defaultSaveType="task"
+                      placement="down"
+                      title="Insert a saved prompt"
+                      onSelect={(body) => {
+                        formConfig = { ...formConfig, prompt: formConfig.prompt ? `${formConfig.prompt}\n${body}` : body };
+                      }}
+                    />
+                  </div>
                   <textarea id="gateway-edit-prompt" bind:value={formConfig.prompt}
                     placeholder="Describe what this agent should do when triggered or on schedule…" rows="5"
                     class="w-full resize-y rounded-lg border border-[var(--cortex-border)] bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/12 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20 min-h-[7.5rem] lg:min-h-[11rem]"

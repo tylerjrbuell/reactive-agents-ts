@@ -12,6 +12,7 @@
   import ChatShellToolDisclaimer from "$lib/components/ChatShellToolDisclaimer.svelte";
   import type { ChatTurn, AgentStreamEvent, ReasoningStep } from "$lib/stores/chat-store.js";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import {
     forgetRunChatSession,
     peekRunChatSession,
@@ -610,6 +611,14 @@
         onkeydown={onKeydown}
         disabled={sending}
       ></textarea>
+      <PromptPickerButton
+        types={["task", "snippet"]}
+        defaultSaveType="task"
+        onSelect={(body) => {
+          message = message ? `${message}\n${body}` : body;
+          inputEl?.focus();
+        }}
+      />
       <button
         type="button"
         disabled={sending || !message.trim()}
