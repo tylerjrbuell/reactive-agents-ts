@@ -675,6 +675,60 @@ created: 2026-05-23
     (historical benchmark record — must not be rewritten).
 ```
 
+```yaml
+- task: fm-i-canonical-buildkernelinput
+  date: 2026-06-11
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # main-thread committed the integrated change
+  agent-spawns: 1
+  tokens-est: ~59K
+  regression-prevented: cross-cutting-field-drop-becomes-compile-error (Pick-partition builder)
+  notes: >
+    FM-I (#195) Phase 1: built kernel/state/build-kernel-input.ts —
+    buildKernelInput(crossCutting, perPass), both bundles Pick<KernelInput,…>
+    so a dropped cross-cutting field is a compile error not a silent gap.
+    Equivalence test pins reactive's field set incl. the verifier env-branch.
+    verifier kept PER-PASS (gate-safe — no new terminal gate on sub-passes).
+    12/12 builder tests, reasoning typecheck 8/8. Strategy migration was
+    main-thread (strategies/** unmapped).
+
+- task: fm-i-reactkernel-inner-forwarding
+  date: 2026-06-11
+  warden: kernel-warden
+  routed: warden
+  commits: 0  # main-thread committed
+  agent-spawns: 1
+  tokens-est: ~65K
+  regression-prevented: plan-execute-inner-literal-field-drop (executeReActKernel now uses buildKernelInput)
+  notes: >
+    FM-I (#195) Layer-3: executeReActKernel's inner runKernel literal
+    (react-kernel.ts) re-built kernel input by hand and dropped the 4
+    cross-cutting fields. Migrated it to buildKernelInput; all 21 original
+    fields preserved, 4 now forwarded. Found ReActKernelInput = KernelInput
+    alias so no type edit needed (fields already declared). before('think')
+    forwarding test RED→GREEN. 606 scoped tests 0 fail. Handed off
+    step-executor call-site migration to main-thread.
+
+- task: fm-i-strategy-migration
+  date: 2026-06-11
+  warden: main
+  routed: main
+  bypass-reason: >
+    packages/reasoning/src/strategies/** is unmapped in the pilot table —
+    main-thread is canonical owner. Migrated reflexion, tree-of-thought,
+    adaptive, plan-execute(+step-executor) call sites onto buildKernelInput
+    and widened each strategy's narrowed input interface to carry the
+    cross-cutting fields. Per-strategy before('think')-fires regression tests.
+  commits: 4  # 90c7c089, 9030d5a1, plan-execute, docs
+  agent-spawns: 0
+  tokens-est: ~40K
+  regression-prevented: compose/killswitch/calibration-dead-on-4-strategies
+  notes: >
+    Empirical RED→GREEN: reflexion live ollama hook 0→1. Full reasoning
+    1617/0. Remaining sub-gap (#195 open): tool_call/analysis steps bypass
+    kernel.
+
 ## Summary (2026-06-15)
 
 (written on evaluation day)
