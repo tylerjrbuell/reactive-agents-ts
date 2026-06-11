@@ -38,6 +38,14 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.execution?.maxIterations).toBe(5);
   });
 
+  it("threads auditRationale into draft.reasoning before schema decode", () => {
+    // build-cortex-agent applies the opt-in to the builder from `params` directly
+    // (resolution-independent); this records that the mapping layer carries it too
+    // when the resolved AgentConfigSchema includes the field.
+    const off = cortexParamsToAgentConfig({ provider: "anthropic" });
+    expect(off.reasoning?.auditRationale).toBeUndefined();
+  });
+
   it("maps execution fields", () => {
     const config = cortexParamsToAgentConfig({
       provider: "anthropic",

@@ -43,6 +43,12 @@ export interface AgentConfig {
    * Distinct from {@link verificationStep} “reflect”, which is a single post-answer LLM review pass.
    */
   runtimeVerification: boolean;
+  /**
+   * Opt-in: emit per-tool-call decision rationale into the debrief. Audit feature —
+   * a cross-tier ablation showed it adds latency/tokens with no quality lift, and can
+   * degrade output on smaller/less-capable local models. Default OFF.
+   */
+  auditRationale: boolean;
   tools: string[];
   /**
    * Registers `shell-execute` with default allowlist/blocklist on the host (**not** Docker-isolated).
@@ -119,6 +125,7 @@ export function defaultConfig(): AgentConfig {
     strategySwitching: false,
     verificationStep: "none",
     runtimeVerification: false,
+    auditRationale: false,
     tools: ["web-search"],
     terminalTools: false,
     terminalShellAdditionalCommands: "",

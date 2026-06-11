@@ -54,6 +54,7 @@ const FULL_CONFIG_BODY = {
   minIterations:      2,
   verificationStep:   "reflect",
   runtimeVerification: true,
+  auditRationale:     true,
   terminalTools:      true,
   terminalShellAdditionalCommands: "bun, gh",
   tools:              ["web-search"],
@@ -114,6 +115,7 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.minIterations).toBe(2);
     expect(p.verificationStep).toBe("reflect");
     expect(p.runtimeVerification).toBe(true);
+    expect(p.auditRationale).toBe(true);
     expect(p.terminalTools).toBe(true);
     expect(p.terminalShellAdditionalCommands).toBe("bun, gh");
     expect(p.terminalShellAllowedCommands).toBeUndefined();

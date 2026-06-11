@@ -31,6 +31,7 @@ export function cortexRunsPostBody(prompt: string, cfg: AgentConfig): Record<str
     metaTools: cfg.metaTools.enabled ? cfg.metaTools : undefined,
     verificationStep: cfg.verificationStep !== "none" ? cfg.verificationStep : undefined,
     ...(cfg.runtimeVerification ? { runtimeVerification: true as const } : {}),
+    ...(cfg.auditRationale ? { auditRationale: true as const } : {}),
     ...(cfg.terminalTools ? { terminalTools: true as const } : {}),
     ...(shellExecuteActive(cfg) && cfg.terminalShellAdditionalCommands.trim() !== ""
       ? { terminalShellAdditionalCommands: cfg.terminalShellAdditionalCommands.trim() }

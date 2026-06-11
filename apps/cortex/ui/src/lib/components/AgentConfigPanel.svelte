@@ -804,6 +804,13 @@
             — enables the <code class="text-[8px]">@reactive-agents/verification</code> package (semantic entropy and related checks). Adds latency and provider calls; use when you want automated confidence signals, not only a reflect pass.
           </span>
         </label>
+        <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
+          <input type="checkbox" bind:checked={config.auditRationale} class="accent-primary mt-0.5 shrink-0" />
+          <span class="font-mono text-[9px] text-[var(--cortex-text)] leading-snug">
+            <span class="font-semibold text-tertiary">Decision rationale in debrief</span>
+            — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--ra-amber-strong,inherit)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
+          </span>
+        </label>
       </div>
     {/if}
   </div>
