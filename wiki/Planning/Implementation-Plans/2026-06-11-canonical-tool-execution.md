@@ -15,6 +15,17 @@
 - Spec didn't capture that the kernel's **batch** path emits NO compose tags and the **single** path attaches NO `verification` / stores NO semantic memory. That three-axis asymmetry is a latent instance of the *same* reported bug (parallel tool-results invisible to `.on()`). Fixing it is a behavior change → isolated in Phase E, NOT smuggled into the "equivalence" migration.
 - Added three parameterizations the spec implied but didn't name: `heal` config (heal-internally vs pre-healed), `emitToolCallEvents` (kernel uses hooks; plan-execute emits manually), and a `preprocess` hook on `executeNativeToolCall` (plan-execute's `sanitizeToolOutput`).
 
+**Strategy coverage (why only plan-execute gets a strategy-specific task):**
+Reflexion and Tree-of-Thought hand-roll **no** tool execution — verified: zero `toolService.execute`/`executeNativeToolCall` in either file. They dispatch tools **only** through the kernel:
+- reflexion → `runPass(reactKernel, buildKernelInput(crossCutting, …))` (`reflexion.ts:184,477`)
+- ToT → `runKernel(reactKernel, buildKernelInput(crossCutting, …))` (`tree-of-thought.ts:216,665`)
+
+So their tool path is `buildKernelInput → runPass/runKernel → react-kernel → act.ts → tool execution` — they live **downstream** of the act phase. Two consequences:
+1. They were never broken the way plan-execute's `tool_call` was — the earlier FM-I `buildKernelInput` fix already threads `harnessPipeline` into their `crossCutting`, so `observation.tool-result` already fires for their tool calls today.
+2. **Phase B covers them transitively.** Once `act.ts` routes through `executeToolAndObserve`, reflexion / ToT / adaptive / composite plan-execute steps inherit healing + compose tags + guaranteed metadata with **zero per-strategy edits**.
+
+Therefore: **adaptive, reflexion, ToT, and plan-execute *composite* steps = transitive via Phase B. Only plan-execute's `tool_call` direct-dispatch branch (Phase C) needs a strategy-specific task.** Do NOT add per-strategy tasks for reflexion/ToT — none should exist. (ToT runs each branch as a separate sub-kernel via `runKernel`; each still passes through `act.ts`, so still covered. ToT's `dispatcher-early-stop` outer-loop debt is orchestration, orthogonal, untouched.)
+
 **Ownership / warden routing (pilot active until 2026-06-15):**
 - Phases A, B, E touch `packages/reasoning/src/kernel/**` → route through **kernel-warden** (MissionBrief in, UpwardReport out).
 - Phases C, D touch `packages/reasoning/src/strategies/**` + docs → **main-thread** (strategies/ unmapped).
