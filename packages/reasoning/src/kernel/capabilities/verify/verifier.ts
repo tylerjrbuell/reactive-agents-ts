@@ -33,9 +33,9 @@ import type { ObservationResult } from "../../../types/observation.js";
 import { isSatisfied } from "./quality-utils.js";
 import {
   buildEvidenceCorpusFromSteps,
-  validateOutputGroundedInEvidence,
-  validateGeneralizedGrounding,
+  validateNumericGrounding,
 } from "./evidence-grounding.js";
+import { detectScaffoldLeak } from "./scaffold-leak.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -99,6 +99,10 @@ export interface VerificationContext {
    * fallback from synthesis.
    */
   readonly terminatedBy?: string;
+  /** Opt-in grounding config. Absent ⇒ numeric grounding does NOT run. */
+  readonly grounding?: import("../../state/kernel-state.js").GroundingConfig;
+  /** Scratchpad for resolving storedKey→full tool data in the grounding corpus. */
+  readonly scratchpad?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -522,43 +526,32 @@ export const defaultVerifier: Verifier = {
           : "no explicit completion-claim phrasing detected (informational)",
       });
 
-      // Check 5: evidence-grounding (legacy: dollar amounts only)
-      // Kept for backward compat — financial-task-specific signal.
-      if (ctx.priorSteps.length > 0) {
-        const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps);
+      // Check 4b: scaffold-leak (ALWAYS-ON). Output echoing framework internals
+      // ([STORED:], _tool_result_N, compressed preview) is never a valid answer.
+      // Severity: reject — always wrong, ~zero false-positive.
+      const scaffoldLeak = detectScaffoldLeak(ctx.content);
+      checks.push({
+        name: "scaffold-leak",
+        passed: !scaffoldLeak.leaked,
+        severity: scaffoldLeak.leaked ? "reject" : "pass",
+        reason: scaffoldLeak.leaked ? scaffoldLeak.reason : undefined,
+      });
+
+      // Check 5: numeric evidence-grounding (OPT-IN). Runs ONLY when the user
+      // enabled grounding via .withGrounding(). Severity follows mode:
+      // block → reject (suppress + retry, degrades to warn — see runner);
+      // warn  → warn (advisory). Off by default = no false-positive impediment.
+      if (ctx.grounding) {
+        const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps, ctx.scratchpad);
         if (corpus.length > 0) {
-          const grounding = validateOutputGroundedInEvidence(
-            ctx.content,
-            corpus,
-          );
-          // Severity: failure is `warn`. Preserves the legacy softFail flow
-          // — grounding is advisory because compressed observations and
-          // scratchpad lookups frequently produce false negatives. The
-          // Loop Controller surfaces the output with a warning rather
-          // than suppressing it.
+          const tolerance = ctx.grounding.tolerance ?? 0.01;
+          const grounding = validateNumericGrounding(ctx.content, corpus, tolerance);
+          const sev = ctx.grounding.mode === "block" ? "reject" : "warn";
           checks.push({
             name: "evidence-grounded",
             passed: grounding.ok,
-            severity: grounding.ok ? "pass" : "warn",
-            reason: grounding.ok
-              ? undefined
-              : `ungrounded amounts: ${grounding.violations.join(", ")}`,
-          });
-
-          // Check 6: Sprint 3.4 Scaffold 2 — generalized grounding.
-          // Catches the WHOLE class of fabrication (titles, names, IDs, not just
-          // dollar amounts) AND the framework-compression-marker echo failure
-          // mode. Task-agnostic: works for any synthesis task.
-          // Severity: failure is `warn` (same rationale as evidence-grounded).
-          const generalGrounding = validateGeneralizedGrounding(
-            ctx.content,
-            corpus,
-          );
-          checks.push({
-            name: "synthesis-grounded",
-            passed: generalGrounding.verified,
-            severity: generalGrounding.verified ? "pass" : "warn",
-            reason: generalGrounding.verified ? undefined : generalGrounding.reason,
+            severity: grounding.ok ? "pass" : sev,
+            reason: grounding.ok ? undefined : grounding.violations.join(", "),
           });
         }
       }

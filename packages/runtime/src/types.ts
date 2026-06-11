@@ -557,6 +557,17 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       warningRatio: Schema.optional(Schema.Number),
     })
   ),
+  /**
+   * Opt-in numeric evidence-grounding. Absent ⇒ grounding off (default).
+   * Populated by `.withGrounding()`; threaded into `KernelInput.grounding`.
+   */
+  grounding: Schema.optional(
+    Schema.Struct({
+      mode: Schema.Literal("block", "warn"),
+      tolerance: Schema.optional(Schema.Number),
+      maxRetries: Schema.optional(Schema.Number),
+    })
+  ),
   /** Dynamic strategy switching configuration. When enabled, the kernel automatically
    *  switches reasoning strategies on loop detection instead of failing immediately. */
   strategySwitching: Schema.optional(

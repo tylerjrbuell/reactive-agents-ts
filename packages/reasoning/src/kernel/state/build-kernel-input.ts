@@ -52,6 +52,7 @@ export type CrossCuttingInput = Pick<
   | "calibration"
   | "harnessPipeline"
   | "budgetLimits"
+  | "grounding"
 >;
 
 /**

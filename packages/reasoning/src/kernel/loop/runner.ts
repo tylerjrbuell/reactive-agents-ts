@@ -61,6 +61,7 @@ import {
   resolveMaxSameTool,
 } from "./runner-helpers/tier-guards.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
+import { decideGroundingBlockOutcome } from "./runner-helpers/grounding-block.js";
 import {
   assembleDeliverable,
   commitDeliverable,
@@ -568,7 +569,7 @@ export function runKernel(
     //
     // The defaultVerifier with terminal=true runs:
     //   - required-tools-satisfied (catches "no tool was called" parrots)
-    //   - synthesis-grounded (catches fabricated content)
+    //   - scaffold-leak (catches framework-internal scaffolding echoed as the answer)
     //
     // On verifier rejection: transition to status="failed" with the verdict
     // in state.error. The reactive.ts strategy adapter (Sprint 3.4 stage 2)
@@ -608,24 +609,115 @@ export function runKernel(
       // WS-3 Phase 5a — verify+emit colocated at the verify capability
       // boundary. `verdict` is still consumed below (severity branching,
       // softFail surfacing, escalation tagging).
-      const verdict = yield* verifyAndEmit({
+      //
+      // `buildTerminalVerifyContext(content)` keeps the verifier context
+      // literal in one place so the Phase-D1 block-mode corrective re-verify
+      // (below) inspects the same priorSteps/grounding/scratchpad as the first
+      // pass — only the candidate `content` changes between attempts.
+      const buildTerminalVerifyContext = (content: string) => ({
+        action: "final-answer" as const,
+        content,
+        actionSuccess: true,
+        task: effectiveInput.task,
+        priorSteps: state.steps,
+        requiredTools: effectiveInput.requiredTools,
+        relevantTools: effectiveInput.relevantTools,
+        toolsUsed: state.toolsUsed,
+        availableUserTools,
+        terminal: true,
+        grounding: effectiveInput.grounding,
+        scratchpad: state.scratchpad,
+      });
+      let verdict = yield* verifyAndEmit({
         verifier,
-        context: {
-          action: "final-answer",
-          content: state.output,
-          actionSuccess: true,
-          task: effectiveInput.task,
-          priorSteps: state.steps,
-          requiredTools: effectiveInput.requiredTools,
-          relevantTools: effectiveInput.relevantTools,
-          toolsUsed: state.toolsUsed,
-          availableUserTools,
-          terminal: true,
-        },
+        context: buildTerminalVerifyContext(state.output),
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
       });
-      if (!verdict.verified) {
+
+      // ── Phase D1 — block-mode evidence-grounding: cap-then-degrade ─────────
+      // When grounding is enabled in `block` mode and the terminal verdict
+      // carries an `evidence-grounded` reject, attempt up to
+      // `grounding.maxRetries` (default 1) CORRECTIVE synthesis passes that
+      // inject the ungrounded figures as guidance. If a corrective pass
+      // grounds → accept. If the budget is exhausted → DEGRADE to warn: the
+      // answer ships with `verificationWarning`, status stays non-failed.
+      // This NEVER hard-fails the run and NEVER loops past the cap — both are
+      // enforced by the pure `decideGroundingBlockOutcome` decision. `warn`
+      // mode is untouched (it rides the softFail surface path below).
+      let groundingDegradeWarning: string | undefined;
+      // Bounded by the pure decision: the loop can only iterate while the
+      // decision returns `retry`, which is impossible past `maxRetries`.
+      while (state.status === "done" && state.output) {
+        const outcome = decideGroundingBlockOutcome(
+          verdict,
+          state.meta.groundingBlockRetry ?? 0,
+          effectiveInput.grounding,
+        );
+        if (outcome.kind === "pass") break;
+        if (outcome.kind === "degrade") {
+          groundingDegradeWarning = outcome.warning;
+          break;
+        }
+        // outcome.kind === "retry": one corrective synthesis attempt.
+        state = transitionState(state, {
+          meta: {
+            ...state.meta,
+            groundingBlockRetry: (state.meta.groundingBlockRetry ?? 0) + 1,
+          } as KernelState["meta"],
+        });
+        const llmOpt = yield* Effect.serviceOption(LLMService);
+        if (llmOpt._tag !== "Some") {
+          // No LLM to re-synthesize with — cannot correct. Degrade now rather
+          // than spin: surface the answer with the grounding warning.
+          groundingDegradeWarning = outcome.guidance;
+          break;
+        }
+        const corrected = yield* llmOpt.value
+          .complete({
+            messages: [
+              {
+                role: "user",
+                content:
+                  `${buildSynthesisPrompt(state.output, taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
+              },
+            ],
+            maxTokens: THINKING_SAFE_MIN_TOKENS,
+            temperature: 0.2,
+          })
+          .pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
+        const correctedContent = extractThinkingSafeContent(corrected).content;
+        if (!correctedContent || correctedContent.trim().length === 0) {
+          // Synthesis produced nothing usable — keep the original answer and
+          // re-decide; the bumped counter guarantees the next pass degrades.
+          continue;
+        }
+        // Single-writer: route the corrected answer through commitDeliverable.
+        // harness_synthesis provenance — the harness ran an LLM synthesis pass
+        // to produce this corrected prose (S11: not model_synthesis).
+        state = commitDeliverable(
+          state,
+          harnessSynthesisDeliverable([], undefined, correctedContent),
+        );
+        verdict = yield* verifyAndEmit({
+          verifier,
+          context: buildTerminalVerifyContext(correctedContent),
+          taskId: currentOptions.taskId ?? state.taskId,
+          iteration: state.iteration,
+        });
+      }
+
+      if (groundingDegradeWarning !== undefined) {
+        // DEGRADE-to-warn: surface the answer WITH a warning; do NOT nullify,
+        // do NOT fail. Mirrors the softFail warn-surface contract.
+        state = transitionState(state, {
+          meta: {
+            ...state.meta,
+            verifierRejected: false,
+            verificationWarning: groundingDegradeWarning,
+          } as KernelState["meta"],
+        });
+      } else if (!verdict.verified) {
         // GH #121 / I5 Loop Controller wire — resolve severity with the
         // back-compat default so external Verifier implementations that
         // predate I5 still get a sensible classification.

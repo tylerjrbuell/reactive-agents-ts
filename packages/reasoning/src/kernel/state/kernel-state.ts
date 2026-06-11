@@ -184,6 +184,18 @@ export interface KernelMeta {
    */
   readonly synthesisRetryCount?: number;
 
+  // ── Phase D1 — block-mode evidence-grounding retry counter ──
+  /**
+   * How many corrective synthesis attempts the terminal verifier gate has
+   * triggered for a block-mode `evidence-grounded` reject. Capped at
+   * `grounding.maxRetries` (default 1); once exhausted the run DEGRADES to
+   * warn (surfaces the answer with `verificationWarning`) — it NEVER
+   * hard-fails. Dedicated counter (NOT `synthesisRetryCount`, which the
+   * Arbitrator owns) to keep the two retry budgets independent. See
+   * runner-helpers/grounding-block.ts.
+   */
+  readonly groundingBlockRetry?: number;
+
   // ── Stage 5 W3 — RI dispatcher budget (FIX-23) ──
   /**
    * Per-run intervention budget threaded through dispatch context. Each
@@ -410,6 +422,16 @@ export interface KernelState {
 
 // ── KernelInput — Frozen execution input ─────────────────────────────────────
 
+/** Opt-in numeric evidence-grounding. Presence on KernelInput = enabled. */
+export interface GroundingConfig {
+  /** block: suppress + corrective retry → degrade to warn. warn: advisory only. */
+  readonly mode: "block" | "warn";
+  /** Numeric match tolerance as a fraction (rounding). Default 0.01 (1%). */
+  readonly tolerance?: number;
+  /** block mode: corrective retries before degrading to warn. Default 1. */
+  readonly maxRetries?: number;
+}
+
 export interface KernelInput {
   readonly task: string;
   readonly systemPrompt?: string;
@@ -575,6 +597,8 @@ export interface KernelInput {
     readonly costLimit?: number;
     readonly warningRatio?: number;
   };
+  /** Opt-in evidence-grounding config. Absent ⇒ grounding off (default). */
+  readonly grounding?: GroundingConfig;
   /** Task ID for EventBus correlation */
   readonly taskId?: string;
   /** Name of the calling strategy (for event tagging) */

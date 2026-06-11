@@ -24,7 +24,7 @@ import {
 import { computeNoveltyRatio } from "../attend/tool-formatting.js";
 import {
   buildEvidenceCorpusFromSteps,
-  validateOutputGroundedInEvidence,
+  validateNumericGrounding,
 } from "../verify/evidence-grounding.js";
 import { gateNativeToolCallsForRequiredTools } from "../decide/tool-gating.js";
 import {
@@ -420,7 +420,11 @@ export function guardEvidenceGrounding(
   newSteps: readonly ReasoningStep[],
   newTokens: number,
   newCost: number,
+  grounding: import("../../state/kernel-state.js").GroundingConfig | undefined,
 ): KernelState | undefined {
+  // Opt-in: the mid-loop "fix before finishing" nudge runs ONLY in block mode.
+  // warn mode is advisory (must not interrupt); off = never runs.
+  if (!grounding || grounding.mode !== "block") return undefined;
   // Only run once and only when there are prior iterations with real observations.
   if (state.iteration <= 0) return undefined;
   if (state.meta.evidenceGroundingDone) return undefined;
@@ -438,16 +442,17 @@ export function guardEvidenceGrounding(
     .map((s) => (s.metadata?.extractedFact as string | undefined) ?? "")
     .filter(Boolean)
     .join("\n");
-  const rawObservations = buildEvidenceCorpusFromSteps(newSteps);
+  const rawObservations = buildEvidenceCorpusFromSteps(newSteps, state.scratchpad);
   const evidenceCorpus = extractedFacts.length > 0
     ? `${rawObservations}\n\n${extractedFacts}`
     : rawObservations;
 
-  const check = validateOutputGroundedInEvidence(thought, evidenceCorpus);
+  const tolerance = grounding.tolerance ?? 0.01;
+  const check = validateNumericGrounding(thought, evidenceCorpus, tolerance);
   if (check.ok) return undefined;
 
   const violationsMsg =
-    `Output contains claims not found in tool observations:\n` +
+    `Output contains figures not found in tool observations:\n` +
     check.violations.map((v) => `• ${v}`).join("\n") +
     `\nRevise your answer to use only figures from the tool results.`;
 

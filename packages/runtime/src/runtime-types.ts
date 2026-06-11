@@ -195,6 +195,16 @@ export interface RuntimeOptions {
   budgetLimits?: import("./builder.js").BudgetLimits;
 
   /**
+   * Opt-in numeric evidence-grounding. Absent ⇒ grounding off (default).
+   * Populated by `.withGrounding()`; threaded into `KernelInput.grounding`.
+   * When on, figures in the final answer are checked against the FULL tool
+   * data with rounding tolerance.
+   *
+   * Default: undefined (grounding off).
+   */
+  grounding?: import("./builder/types.js").GroundingOptions;
+
+  /**
    * Mock LLM responses for testing (provider: "test" only).
    * Maps input patterns to predefined outputs.
    *

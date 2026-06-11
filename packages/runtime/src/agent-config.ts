@@ -196,6 +196,12 @@ export const VerificationConfigSchema = Schema.Struct({
   riskThreshold: Schema.optional(Schema.Number),
 });
 
+export const GroundingConfigSchema = Schema.Struct({
+  mode: Schema.Literal("block", "warn"),
+  tolerance: Schema.optional(Schema.Number),
+  maxRetries: Schema.optional(Schema.Number),
+});
+
 // ─── Root AgentConfig Schema ──────────────────────────────────────────────────
 
 export const AgentConfigSchema = Schema.Struct({
@@ -235,6 +241,8 @@ export const AgentConfigSchema = Schema.Struct({
   fallbacks: Schema.optional(FallbackConfigSchema),
   /** Verification configuration. */
   verification: Schema.optional(VerificationConfigSchema),
+  /** Opt-in numeric evidence-grounding. Absent = off (default). */
+  grounding: Schema.optional(GroundingConfigSchema),
   /** Model parameters: thinking mode, temperature, max tokens. */
   thinking: Schema.optional(Schema.Boolean),
   temperature: Schema.optional(Schema.Number),
@@ -456,6 +464,11 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
       ...(v?.riskThreshold !== undefined ? { riskThreshold: v.riskThreshold } : {}),
     };
     builder = builder.withVerification(Object.keys(opts).length > 0 ? opts : undefined);
+  }
+
+  // Grounding
+  if (config.grounding) {
+    builder = builder.withGrounding(config.grounding);
   }
 
   // Execution
