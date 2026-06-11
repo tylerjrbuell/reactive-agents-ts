@@ -18,6 +18,8 @@ updated: 2026-06-10
 - **Changeset coverage gap closed:** span v0.11.1→v0.11.2 was 622 commits with ONE changeset; 7 themed notes authored (ancestry-verified) before tagging. **Lesson: changeset discipline at merge time, not release time.**
 - **publish.yml sync-back fixed** (`4bcd5cc5`): now commits VERSION + CHANGELOG + consumed-changeset deletions to main (previously only VERSION — consumed notes lingered and re-aggregated).
 
+**Roadmap realigned + ratified** — `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md`: v0.12 "Durable & Honest" → v0.13 "Receipts" (**launch here**, public local-model bench) → v0.14 "Compounding" → v1.0. Root ROADMAP.md rewritten; 07-ROADMAP amendment logged; vision pillars unchanged.
+
 **v0.12.0 strategy locked** — full audit: `wiki/Research/Audit-Reports-2026-06-10/v0.12.0-leverage-audit.md` (3-agent sweep: mechanism census, DX audit, competitive landscape).
 - Verdict: structure healthy (A−); leverage = identity not architecture. Differentiators already built but buried: (1) local-model reliability, (2) local-first deterministic replay + rax-diagnose. Table-stakes gap: **durable execution**.
 - User decisions: durable-execution = first 0.12.0 track; **memory default OFF in 0.12.0**; then DX wave (Effect-free hooks, 77 builder methods → facades), local-model bench receipts, tier-aware debrief, strategy-surface honesty.

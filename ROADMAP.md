@@ -1,122 +1,69 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-05-14
+> **Last updated:** 2026-06-10 (post-v0.11.2, roadmap realignment)
 > **The open-source agent framework built for control, not magic.**
 
-This roadmap is the public-facing milestone tracker. The internal authoritative plan lives in `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md` (v5.0). When the two disagree, North Star wins and this doc is out of date — open an issue.
+This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` + `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`. When they disagree, the decision doc wins and this doc is out of date — open an issue.
 
-**Live board:** [github.com/users/tylerjrbuell/projects/1](https://github.com/users/tylerjrbuell/projects/1) — 24+ tracked issues across 5 milestones with `Phase` and `Priority` fields.
-
----
-
-## Where we are today (v0.10.6 → v0.11 in flight)
-
-- **v0.10.6** is published on npm. All packages green. Stable foundation.
-- **Phase A (Architecture Cleanup)** ✅ complete. `execution-engine.ts` 4,499→1,539 LOC (−66%). `builder.ts` 6,232→2,407 LOC (−61%). 39 new focused modules.
-- **Phase B (Compose API)** ✅ complete (Waves A–F).
-  - Harness pipeline registry + tag catalog (7 tags) + `.compose()` builder method
-  - 7 live chokepoints: `prompt.system`, `nudge.loop-detected`, `nudge.healing-failure`, `message.tool-result`, `observation.tool-result`, `lifecycle.failure`, `control.strategy-evaluated`
-  - `RunHandle` / `RunController` with pause/resume/stop/terminate
-  - `packages/compose` with 5 killswitches: `maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`
-  - `.withX()` sugar desugars through harness; backward compatible
-  - Docs: `compose-api.mdx`, `harness-tags.mdx`, `composition-recipes.mdx`
-- **Phase 1.5 mechanism improvements** in flight (M3 REWORK shipped; M6 skill persistence shipped; M7/M8/M10/M14 ongoing).
-
-**Strategic positioning, empirically validated:**
-- 100% on internal frontier bench (claude-sonnet-4-6, haiku-4-5, gpt-4o-mini, gemini-2.5-pro)
-- 13-mechanism Phase 1 validation: 8 KEEP, 5 IMPROVE, 0 REMOVE
-- Harness pruning principle adopted: full harness is +13.6× tokens and −0.8pp on frontier — opt-in by gate, not by default
+**Live board:** [github.com/users/tylerjrbuell/projects/1](https://github.com/users/tylerjrbuell/projects/1)
 
 ---
 
-## v0.11.0 — Show-HN Launch (Phase C, in flight)
+## Where we are today (v0.11.2 published)
 
-**Target:** June 2026. The composable / auditable / transparent alternative to AutoGen / CrewAI / Mastra.
+- **v0.11.2** on npm (2026-06-10): all 35 packages, 2026-06 model lineup, zero retiring defaults, guard tests pinning every default to the capability table. 6,200+ tests green.
+- **v0.11 line shipped:** Compose API (7 chokepoints, killswitches), Snapshot/Replay, `rax-diagnose`, OTel exporter (`@reactive-agents/observe`), `create-reactive-agent`, code-action strategy, skill persistence, gateway chat, Cortex studio with parameterized runs.
+- **Architecture:** canonical kernel (capability-grouped, acyclic, single termination owner, unified `project()` context assembly). Independent audit grade: structurally healthy.
 
-| Item | Status | Effort |
+**What we learned (and publish honestly):**
+- Heavy strategies (reflexion / tree-of-thought / plan-execute) show **no quality lift over the reactive kernel** on our internal benches, at 3–15× cost on local models. We document them as frontier/niche options, not headline features.
+- The defensible, externally-demanded strengths are: **agents that actually work on local models** (per-model calibration, 4-stage tool-call healing, tier-adaptive context) and the **local flight recorder** (deterministic replay + diagnosis CLI, no SaaS attached).
+
+---
+
+## v0.12 — "Durable & Honest"
+
+**Goal:** close the one 2026 table-stakes gap, and make the surface match the quality of the internals. One migration event for users.
+
+| Track | Contents | Status |
 |---|---|---|
-| Compose API (`.compose(harness)` — 7 tags, 6 killswitches, full docs) | ✅ Shipped | — |
-| Skill Persistence (M6: SQLite-backed, cross-session) | ✅ Shipped | — |
-| Live Playground (Stackblitz, 3 scenarios) | ✅ Shipped | — |
-| Decision rationale traceability (every milestone) | ✅ Shipped | — |
-| `npx create-reactive-agent` + 4 templates × 4 providers | ✅ Shipped | — |
-| OpenInference / OTel exporter (`@reactive-agents/observe`) | ✅ Shipped | — |
-| Snapshot / Replay (`@reactive-agents/replay`) | ✅ Shipped | — |
-| Code-as-Action strategy (`code-action`, experimental, v0.11.1 promote) | ✅ Shipped | — |
-| Public roadmap + named users (this doc + GitHub Projects) | 🔄 In progress | 1 day |
+| **Durable execution** | Crash-resume: opt-in `.withDurableRuns()`, SQLite RunStore, checkpoint-every-N, `agent.resume(runId)`. Durable human-in-the-loop: approval requests survive process death (`approve`/`deny` from a new process). Acceptance: SIGKILL mid-run → resume → identical output. | Phase A shipped (kernel checkpoint seam + state codec); Phases B–E in flight |
+| **DX wave** | Effect-free lifecycle hooks (no `Effect.succeed` required), builder consolidation (observability 5 methods → 1; one canonical hook route; documented config precedence), plain-Error mapping at promise boundaries. | Planned |
+| **Memory default OFF** | Breaking-ish: stateless by default, one-line `.withMemory()` opt-in. No more surprise SQLite writes in CI. | Planned |
+| **Cost honesty** | Tier-aware debrief synthesis (skip/template on local — the single largest per-run overhead), meta-tool prompt audit per tier. | Planned |
+| **Strategy honesty** | Adaptive routing defaults to reactive on local tier; heavy strategies documented per the parity data. | Planned |
 
-**v0.11.0 release gate:**
-- [x] All Phase C items shipped (compose, skill persistence, playground, create-reactive-agent, observe, replay)
-- [x] Zero regressions on 5,128+ tests
-- [ ] Snapshot / Replay deterministic E2E integration test (deferred to v0.11.1)
-- [ ] GitHub Projects board live + named users section
-- [x] This doc aligned to North Star v5.0 ✅ (May 14, 2026)
+Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`.
 
 ---
 
-## Phase 1.5 — Mechanism Improvements (parallel with C → D)
+## v0.13 — "Receipts" (public launch)
 
-These run alongside Phase C. Different files, no conflicts.
+**Goal:** prove the differentiated claims reproducibly, then make noise.
 
-| Mech | Action | Target | Status |
-|---|---|---|---|
-| **M3** Verifier Retry | Disable terminal retry loop; keep heuristic gate | Ablation REWORK verdict | ✅ Shipped (commit `051c22be`) |
-| **M6** Skill Persistence | SQLite-backed; per-agent scope; SKILL.md import/export | >70% cross-session recall | ✅ Shipped |
-| **M7** Calibration Consumers | Wire `parallelCallCapability`, `interventionResponseRate`, `tokenEfficiency`, `reasoningDepth`, `knownToolAliases` | ≥8 fields active with measurable lift | 🔲 Open |
-| **M8** Sub-agent Delegation | 10 scenarios on frontier + qwen3:14b; route through `control.strategy-evaluated` | ≥20% accuracy lift on ≥3-step tasks | 🔲 Open (post-Wave A unblocked) |
-| **M10** Memory Multi-session | 3 multi-session scenarios; Tier-2 semantic search for verbose queries | >80% recall across 3+ sessions | 🔲 Open |
-| **M14** Self-Evolution | `composeNarrowRetry(maxBroadenAfter)` via `lifecycle.failure` + `control.strategy-evaluated` | ≥3pp lift on looping gate scenarios | 🔲 Open |
-
-Research basis: arXiv:2603.25723 (NLAH), arXiv:2603.28052 (Stanford Meta-Harness). See `wiki/Architecture/Design-Specs/2026-05-11-harness-research-integration.md`.
+- **Public local-model bench:** same task suite, qwen/llama 7–14B via Ollama — Reactive Agents vs Mastra vs LangGraph.js vs raw AI SDK. First-attempt success + token cost. Model + provider + date pinned, ≥3 seed variance, raw traces published. Stop-the-line rule: if external delta >15% from internal, fix the harness — not the result.
+- **Flight recorder, front and center:** "record once, debug forever" — deterministic offline replay of the full provider interaction + `rax-diagnose` root-cause CLI. No observability SaaS required.
+- **Cost governance demo:** budget + watchdog + approval killswitches composing on one agent, with our own measured overhead published.
+- **Infra:** OIDC trusted publishing (no npm token rotation).
+- **Show-HN / launch happens here** — with evidence, not adjectives.
 
 ---
 
-## v0.12 — Local-First Engineering (Phases D + E)
+## v0.14 — "Compounding"
 
-**Goal:** close the local-model agentic gap. qwen3:14B at ≥30% of frontier on τ-bench retail.
+**Goal:** the capability bet — agents that get better across runs.
 
-**Phase D — Code-as-Action Strategy**
-- 6th reasoning strategy: `CodeAgentStrategy` emits code blocks composing tools as function calls
-- Closes round-trip overhead on multi-step tasks
-- Sandboxed execution (no host FS, no unwhitelisted network, timeout)
-- **Gate:** ≥20% accuracy lift + ≥25% token reduction vs `reactive` on qwen3:14B; ≤5% regression on frontier
-
-**Phase E — Local Model Engineering** (3 parallel tracks)
-- **Track 1:** Per-provider tool-call parser — fix qwen3 + Ollama + thinking-mode + `tool_calls` coexistence (LiteLLM #18922)
-- **Track 2:** Activate ≥8 calibration consumers (Phase 1.5 M7 expanded)
-- **Track 3:** Tool-result paging — 50KB per-tool / 200KB per-message caps with disk spill
-- **Gate:** qwen3:14B ≥30% of frontier on τ-bench retail subset
+- Progress recitation and cross-run experience-reuse, behind ablation gates.
+- Sequenced after v0.13 deliberately: lift gets measured on the public bench (≥3 percentage-point rule, ≤15% token overhead), making results publishable rather than anecdotal.
 
 ---
 
-## v0.13 — Public Benchmark Discipline (Phase F)
+## v1.0 — Polish & Release
 
-**Goal:** ≥1 third-party benchmark with reproducible methodology. Close the "self-graded marketing" gap.
-
-- **Recommended first:** τ²-bench retail (clearest reproducibility story; validates Phase D/E local-tier claim)
-- **Gate:** model + provider + date pinned, cost reported, ≥3 seed variance (mean ± stdev), raw JSONL traces published
-- **Stop-the-line:** if external delta >15% from internal, fix the harness — not the result
-
----
-
-## v1.0 — Polish & Release (Phase G)
-
-- Every Phase A–F gate re-run on integrated codebase
-- `README.md` rewritten: no aspirational claims, only validated state
-- Vision pillar artifact table complete — each of the 8 pillars cites a file, bench number, or doc
-- Snapshot/Replay determinism re-validated
-- This doc rewritten: what shipped, what's deferred, what was killed and why
-
----
-
-## Beyond v1.0
-
-Deferred until evidence justifies the work.
-
-- **Multi-agent orchestration** — `@reactive-agents/a2a` + `@reactive-agents/orchestration` exist as capabilities; full spec at `wiki/Architecture/Specs/16-multi-agent-orchestration.md`
-- **Agent sessions** — multi-turn lifecycle; `AgentMemory` port is ~90% of the plumbing
-- **Phase 4 active skill retrieval** — gated on a passing spike
-- **Evolutionary intelligence** (`@reactive-agents/evolution`) — long-term R&D theme; no active work
+- Every prior milestone gate re-run on the integrated codebase.
+- `README.md` states only validated claims; vision pillar artifact table complete — each of the 8 pillars cites a file, bench number, or doc.
+- Snapshot/replay determinism re-validated.
+- This doc rewritten: what shipped, what was deferred, what was killed and why.
 
 ---
 
@@ -124,26 +71,24 @@ Deferred until evidence justifies the work.
 
 The framework's defensible value, per empirical evidence:
 
-- **Trust** — verifier refuses to ship fabrications; `agent-took-action` check converts confident-fabrication → honest-fail
-- **Control** — every harness primitive is developer-overridable via `.compose(harness)`; 7 live chokepoints, 6 prebuilt killswitches, `RunHandle` pause/resume/stop/terminate
-- **Observability** — default-on; every run produces traces + metrics + logs without opt-in; OTel exporter in flight
-- **Local-first** — Layer-1 builders + calibration consumers + (Phase D) code-as-action strategy close the local-model gap
+- **Local-first reliability** — per-model runtime calibration, capability-signal tool routing, 4-stage healing pipeline, tier-adaptive context. The same agent code runs on a 4B Ollama model and a frontier model.
+- **Control** — every harness primitive is developer-overridable via `.compose(harness)`; killswitches; `RunHandle` pause/resume/stop/terminate; (v0.12) durable resume.
+- **Observability** — default-on traces/metrics/logs, OTel exporter, deterministic replay + diagnosis CLI — all local, no SaaS coupling.
+- **Honesty** — we publish our own overhead numbers and negative results (heavy-strategy parity, falsified optimizations). Claims scope per `01-RESEARCH-DISCIPLINE.md` Rule 11.
 
 What we do **not** yet have:
-- Public third-party benchmark (Phase F)
-- Production case studies / named users (Phase C item, in flight)
-- Phase D code-as-action validation
-
-Per `01-RESEARCH-DISCIPLINE.md` Rule 11, claims scope to one mechanism × one failure mode × ≤2 models × one task. Single-spike findings shape the next spike, not framework-level marketing.
+- Public third-party benchmark (v0.13 gate)
+- Production case studies / named users
+- Durable execution story complete (v0.12, in flight)
 
 ---
 
 ## How to track progress
 
-- **North Star v5.0** (`wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`) is the single internal source of truth
-- **Hot cache** (`wiki/Hot.md`) tracks the current session's working state
-- **Implementation plans** live in `wiki/Planning/Implementation-Plans/YYYY-MM-DD-<feature>.md`
-- **Evidence artifacts** live in `wiki/Research/Harness-Reports/`
-- **Release tags** are cut by CI from the `main` branch; CHANGELOG entries are authoritative
+- **Decision record** — `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` (why this sequencing)
+- **Hot cache** (`wiki/Hot.md`) — current working state
+- **Implementation plans** — `wiki/Planning/Implementation-Plans/`
+- **Evidence artifacts** — `wiki/Research/Harness-Reports/`
+- **Release tags** are cut by CI from `main`; CHANGELOG entries are authoritative
 
-*Roadmap is rewritten on major releases. Don't update it for every commit — update it when the strategic picture shifts.*
+*Roadmap is rewritten on major releases or strategic shifts — not per commit.*
