@@ -1020,7 +1020,12 @@ git commit -m "docs(reasoning): close FM-I tool_call sub-gap; canonical tool-obs
 
 **Decision (project lift rule):** parity on quality + tokens, **no measured single-run lift → E2 stays OPT-IN (default-off)**. Its real gains (cross-session tool-memory recall, per-tool arbitration signal) are latent and not capturable in a single run. Defer the default-on call to a cross-tier ablation-warden run.
 
-**Remaining cleanup (not blocking):** route the batch path fully *through* the primitive (E1 was a surgical inline emit; the execute/verify/memory still live inline in the batch loop). Low-value dedup; do when next in that code.
+**Follow-up #1 (route batch fully through the primitive) — EVALUATED, DELIBERATELY NOT DONE (2026-06-11).** The batch path processes results in a **sequential** post-loop (`act.ts:541-630`) where `verification` (`:604` `priorSteps: allSteps, toolsUsed: newToolsUsed`) and `errorRecovery` (`:572` `missingTools` from `allSteps`) read state that is **mutated mid-loop** (each obsStep append grows `allSteps`; `newToolsUsed` accumulates). Moving these into the parallel per-call primitive (inside `Effect.all`) would snapshot the context at parallel-time → **different verification/error-recovery inputs = a behavior change**, not a byte-identical dedup. The execute-core is already shared (both call `executeNativeToolCall`); the batch's parallel-execute→sequential-observe orchestration is legitimately divergent (same "orchestration divergence is legitimate" principle, one level down). Per the no-metric-gaming / cohesion-over-LOC doctrine, forcing one-path here trades a real semantic hazard for cosmetic LOC. **Left intentionally.** The compose-emit gain already landed via E1.
+
+**Follow-up: strategy compose-hook confirmation (2026-06-11) — ALL PASS.** Every strategy that runs a tool fires `observation.tool-result`:
+- reactive — deterministic test `tests/strategies/strategy-compose-tags.test.ts` (TestLLM `toolCall` turn → kernel act → tap fires).
+- plan-execute `tool_call` — Phase C deterministic + Phase D live.
+- reflexion / tree-of-thought / adaptive — live probe (gemma4:12b, crypto-price): fired 1× each (`strat=reflexion` / `tree-of-thought` / `reactive`-via-adaptive). They route tools through the same kernel act phase (zero `toolService.execute` in those files), so Phase B's migration covers them; the live probe confirms end-to-end through real orchestration.
 
 ---
 
