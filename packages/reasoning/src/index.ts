@@ -162,6 +162,11 @@ export { filterToolsByRelevance } from "./kernel/capabilities/attend/tool-format
 export { planNextMoveBatches } from "./kernel/capabilities/decide/tool-gating.js";
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
 export type { KernelMessage, EntropyScoreLike } from "./kernel/state/kernel-state.js";
+// Canonical KernelInput assembly (FM-I #195) — strategies merge their run-wide
+// cross-cutting bundle with a per-pass bundle here instead of hand-building
+// literals that silently drop {harnessPipeline, budgetLimits, calibration, …}.
+export { buildKernelInput } from "./kernel/state/build-kernel-input.js";
+export type { CrossCuttingInput, PerPassInput } from "./kernel/state/build-kernel-input.js";
 export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
 export { extractOutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
 export { classifyTask } from "./kernel/capabilities/comprehend/task-classification.js";

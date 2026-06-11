@@ -3,7 +3,7 @@ import { Effect, Layer, Ref, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
-import { EventBus } from "@reactive-agents/core";
+import { EventBus, HarnessPipeline, RegistrationHarness } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
@@ -69,6 +69,36 @@ const makePlanExecuteLLM = () => TestLLMServiceLayer([
   { match: "GOAL:", text: "SATISFIED: Done." },
   { match: "Synthesize", text: "Final synthesized answer." },
 ]);
+
+/**
+ * FM-I (#195) regression: a registered `before('think')` phase hook MUST fire
+ * during the strategy's kernel pass — proving `harnessPipeline` threads from
+ * the strategy input through to the kernel. Before the canonical-input fix,
+ * heavy strategies dropped `harnessPipeline` and these hooks were silently dead
+ * (Compose, killswitches, and calibration all no-op). `before('think')` fires
+ * every kernel iteration with no tool call required, so the signal is
+ * deterministic under the simple mock LLM.
+ */
+const makeFiresPipeline = () => {
+  let fired = 0;
+  const rh = new RegistrationHarness();
+  rh.before("think", () => {
+    fired += 1;
+  });
+  return { pipeline: new HarnessPipeline(rh._collected), fired: () => fired };
+};
+
+describe("FM-I (#195) — harnessPipeline threads to the kernel in every strategy", () => {
+  it("reflexion fires before('think') hooks", async () => {
+    const h = makeFiresPipeline();
+    await Effect.runPromise(
+      executeReflexion({ ...baseInput, harnessPipeline: h.pipeline }).pipe(
+        Effect.provide(makeReflexionLLM()),
+      ),
+    );
+    expect(h.fired()).toBeGreaterThan(0);
+  });
+});
 
 describe("Strategy threading", () => {
   it("reflexion accepts resultCompression", async () => {
