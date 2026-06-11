@@ -84,6 +84,15 @@ interface AdaptiveInput {
    * once at entry and threads that snapshot.
    */
   readonly taskClassification?: TaskClassification;
+  // FM-I (#195): cross-cutting fields forwarded verbatim to the dispatched
+  // sub-strategy (via `{ ...input }` spread). Declared here so the forward is
+  // type-visible — at runtime the spread already carried them, but the type
+  // previously hid them, making the dispatch look lossy.
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
+  readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
+  readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
+  readonly auditRationale?: boolean;
+  readonly verifier?: import("../kernel/capabilities/verify/verifier.js").Verifier;
 }
 
 type SubStrategy =
