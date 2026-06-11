@@ -1018,7 +1018,17 @@ git commit -m "docs(reasoning): close FM-I tool_call sub-gap; canonical tool-obs
 
 Δ quality +0.00, Δ tokens +0.5% (≤15% cap), duration neutral (baseline run1 cold-start skewed it). `ok=false` both arms = pre-existing evidence-grounding verifier rejecting an ungrounded paraphrased price, NOT an E2 effect.
 
-**Decision (project lift rule):** parity on quality + tokens, **no measured single-run lift → E2 stays OPT-IN (default-off)**. Its real gains (cross-session tool-memory recall, per-tool arbitration signal) are latent and not capturable in a single run. Defer the default-on call to a cross-tier ablation-warden run.
+**Decision (project lift rule):** parity on quality + tokens, **no measured single-run lift → E2 stays OPT-IN (default-off)**. Its real gains (cross-session tool-memory recall, per-tool arbitration signal) are latent and not capturable in a single run.
+
+**Follow-up #2 — multi-model local ablation (2026-06-11):** extended the bench to 3 local models. **E2 = parity on all three**, no regression:
+
+| model | Δ quality | Δ tokens | verdict |
+|---|---|---|---|
+| gemma4:12b (n=3) | +0.00 | +0.5% | parity |
+| qwen3.5:latest (n=4) | ~0 (3/4 strict both arms, identical outputs) | ~0 | parity |
+| cogito:8b (n=2) | +0.00 | −27% | parity |
+
+A first-pass n=2 run flagged qwen3.5 at −2.00 quality; an n=4 deep-dive proved it a **witness artifact** (bare-number outputs like `$62,578` scored 0 by a btc-word-AND-price regex) + small-n noise — both arms produced identical answers. No E2 regression. **Full cross-tier (local + frontier) ablation for a default-on decision is BLOCKED on missing frontier API keys** (no ANTHROPIC/OPENAI/GEMINI key in env) — and the `ablation-warden` (Read/Grep/Glob/Bash only) cannot author its own probe script. So the default-on call is **deferred to a frontier-capable ablation run**; E2 ships **opt-in**, now with local-tier multi-model parity evidence.
 
 **Follow-up #1 (route batch fully through the primitive) — EVALUATED, DELIBERATELY NOT DONE (2026-06-11).** The batch path processes results in a **sequential** post-loop (`act.ts:541-630`) where `verification` (`:604` `priorSteps: allSteps, toolsUsed: newToolsUsed`) and `errorRecovery` (`:572` `missingTools` from `allSteps`) read state that is **mutated mid-loop** (each obsStep append grows `allSteps`; `newToolsUsed` accumulates). Moving these into the parallel per-call primitive (inside `Effect.all`) would snapshot the context at parallel-time → **different verification/error-recovery inputs = a behavior change**, not a byte-identical dedup. The execute-core is already shared (both call `executeNativeToolCall`); the batch's parallel-execute→sequential-observe orchestration is legitimately divergent (same "orchestration divergence is legitimate" principle, one level down). Per the no-metric-gaming / cohesion-over-LOC doctrine, forcing one-path here trades a real semantic hazard for cosmetic LOC. **Left intentionally.** The compose-emit gain already landed via E1.
 
