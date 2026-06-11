@@ -34,8 +34,8 @@ import { isSatisfied } from "./quality-utils.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateOutputGroundedInEvidence,
-  validateGeneralizedGrounding,
 } from "./evidence-grounding.js";
+import { detectScaffoldLeak } from "./scaffold-leak.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -522,6 +522,17 @@ export const defaultVerifier: Verifier = {
           : "no explicit completion-claim phrasing detected (informational)",
       });
 
+      // Check 4b: scaffold-leak (ALWAYS-ON). Output echoing framework internals
+      // ([STORED:], _tool_result_N, compressed preview) is never a valid answer.
+      // Severity: reject — always wrong, ~zero false-positive.
+      const scaffoldLeak = detectScaffoldLeak(ctx.content);
+      checks.push({
+        name: "scaffold-leak",
+        passed: !scaffoldLeak.leaked,
+        severity: scaffoldLeak.leaked ? "reject" : "pass",
+        reason: scaffoldLeak.leaked ? scaffoldLeak.reason : undefined,
+      });
+
       // Check 5: evidence-grounding (legacy: dollar amounts only)
       // Kept for backward compat — financial-task-specific signal.
       if (ctx.priorSteps.length > 0) {
@@ -543,22 +554,6 @@ export const defaultVerifier: Verifier = {
             reason: grounding.ok
               ? undefined
               : `ungrounded amounts: ${grounding.violations.join(", ")}`,
-          });
-
-          // Check 6: Sprint 3.4 Scaffold 2 — generalized grounding.
-          // Catches the WHOLE class of fabrication (titles, names, IDs, not just
-          // dollar amounts) AND the framework-compression-marker echo failure
-          // mode. Task-agnostic: works for any synthesis task.
-          // Severity: failure is `warn` (same rationale as evidence-grounded).
-          const generalGrounding = validateGeneralizedGrounding(
-            ctx.content,
-            corpus,
-          );
-          checks.push({
-            name: "synthesis-grounded",
-            passed: generalGrounding.verified,
-            severity: generalGrounding.verified ? "pass" : "warn",
-            reason: generalGrounding.verified ? undefined : generalGrounding.reason,
           });
         }
       }

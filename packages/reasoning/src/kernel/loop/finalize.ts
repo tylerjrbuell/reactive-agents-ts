@@ -30,7 +30,7 @@ import {
   validateContentCompleteness,
   buildSynthesisPrompt,
 } from "./output-synthesis.js";
-import { validateGeneralizedGrounding } from "../capabilities/verify/evidence-grounding.js";
+import { detectScaffoldLeak } from "../capabilities/verify/scaffold-leak.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
@@ -66,8 +66,8 @@ export function decideSynthesisInput(
   // instead of synthesizing real content. This was the MCP probe M4 failure
   // mode on plan-execute: model echoed the github/search_repositories preview
   // verbatim. Force synthesis-from-tool-data when detected.
-  const markerCheck = validateGeneralizedGrounding(output, "");
-  if (markerCheck.compressionEchoDetected) {
+  const markerCheck = detectScaffoldLeak(output);
+  if (markerCheck.leaked) {
     const rawForSynthesis = toolData && toolData.length > 0 ? toolData : output;
     return { needsSynthesis: true, rawForSynthesis };
   }

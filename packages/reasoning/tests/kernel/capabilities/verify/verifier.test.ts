@@ -90,7 +90,7 @@ describe("defaultVerifier — non-terminal vs terminal checks", () => {
     // awareness (where a child kernel's tool call satisfies the parent's
     // requirement). That logic now lives in runner.ts post-loop check.
     // The verifier focuses on output-quality signals (agent-took-action,
-    // synthesis-grounded, completion-claim).
+    // scaffold-leak, completion-claim).
     expect(r.checks.find((c) => c.name === "required-tools-satisfied")).toBeUndefined();
   });
 

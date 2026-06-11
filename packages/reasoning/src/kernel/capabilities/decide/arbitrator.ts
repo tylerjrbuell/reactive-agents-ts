@@ -765,26 +765,26 @@ function synthesisQualityRetry(
 
   if (corpus.length < 20) return { retry: false }; // no evidence → can't ground
 
-  // Use lazy-require pattern to avoid runtime cycle (verify ↔ decide).
-  // Since we're in the same package, a static import is fine — both modules
-  // are siblings under capabilities/.
-  const grounding = validateGroundingForRetry(intent.output, corpus);
-  if (grounding.verified) return { retry: false };
+  // Scaffold-leak echo is the only synthesis-quality failure this retry path
+  // acts on: the model shipped framework internal scaffolding ([STORED:],
+  // _tool_result_N, "compressed preview") instead of synthesizing real
+  // content. (Prose claim-grounding was removed — it false-rejected legitimate
+  // summaries at 64-73%.) No leak ⇒ no retry.
+  const leak = detectScaffoldLeak(intent.output);
+  if (!leak.leaked) return { retry: false };
 
   // Build feedback the model can act on.
   // IMPORTANT: do not include literal example strings of the bad output —
   // local models often copy quoted negative examples verbatim. Describe the
   // failure abstractly and instruct the model toward the desired shape.
-  const feedback = grounding.compressionEchoDetected
-    ? `Your previous answer was rejected because it described the structure of the tool result instead of synthesizing the actual values. Use the concrete fields (titles, scores, names, numbers) from the tool observations above and produce the answer the user requested. Do not describe the data — present it.`
-    : `Your previous answer contained claims that don't appear in the tool observations: ${grounding.ungroundedClaims.slice(0, 5).map((c) => `"${c.slice(0, 50)}"`).join(", ")}. Please regenerate the answer citing only specific values found in the tool results above.`;
+  const feedback = `Your previous answer was rejected because it described the structure of the tool result instead of synthesizing the actual values. Use the concrete fields (titles, scores, names, numbers) from the tool observations above and produce the answer the user requested. Do not describe the data — present it.`;
 
   return { retry: true, feedback };
 }
 
 // Late binding to avoid cycle ambiguity in tooling. Both files compile fine
 // either way; this keeps the import block at the top tidy.
-import { validateGeneralizedGrounding as validateGroundingForRetry } from "../verify/evidence-grounding.js";
+import { detectScaffoldLeak } from "../verify/scaffold-leak.js";
 import { deriveConditions } from "../verify/derive-conditions.js";
 import { verify as verifyPostConditions, describeUnmet } from "../verify/post-conditions.js";
 

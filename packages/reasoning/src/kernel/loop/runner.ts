@@ -568,7 +568,7 @@ export function runKernel(
     //
     // The defaultVerifier with terminal=true runs:
     //   - required-tools-satisfied (catches "no tool was called" parrots)
-    //   - synthesis-grounded (catches fabricated content)
+    //   - scaffold-leak (catches framework-internal scaffolding echoed as the answer)
     //
     // On verifier rejection: transition to status="failed" with the verdict
     // in state.error. The reactive.ts strategy adapter (Sprint 3.4 stage 2)
