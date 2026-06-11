@@ -32,9 +32,9 @@ import type { Plan, PlanStep } from "../../types/plan.js";
 import { buildStepExecutionPrompt } from "../plan-prompts.js";
 import type { ToolSummary } from "../plan-prompts.js";
 import { executeReActKernel } from "../../kernel/loop/react-kernel.js";
-import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
-import { compressToolResult } from "../../kernel/capabilities/attend/tool-formatting.js";
+import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
+import type { KernelStateLike } from "@reactive-agents/core";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
@@ -100,9 +100,12 @@ export interface StepExecutorInput {
   readonly auditRationale?: boolean;
 }
 
+/** File tools whose relative paths the healing pipeline resolves (mirrors act.ts). */
+const FILE_TOOL_NAMES = new Set(["file-read", "file-write", "code-execute", "shell-execute"]);
+
 /**
  * Execute a single plan step based on its type:
- * - tool_call: direct tool dispatch via toolService.execute
+ * - tool_call: direct tool dispatch via executeToolAndObserve (canonical primitive)
  * - analysis: ReAct kernel with NO tools
  * - composite: ReAct kernel with scoped tools
  */
@@ -121,7 +124,12 @@ export function executeStep(
   const { toolService } = services;
 
   if (step.type === "tool_call" && step.toolName && toolService._tag === "Some") {
-    // Direct tool dispatch — no LLM kernel needed
+    // Direct tool dispatch routed through the canonical executeToolAndObserve
+    // primitive (no LLM kernel) — gains healing + observation.tool-result /
+    // lifecycle.failure Compose tags + guaranteed observation metadata that the
+    // hand-rolled dispatch lacked (#195/FM-I). Verifier + semantic-memory stay
+    // OFF (parity-cheap opt-out); the result string flow is preserved via the
+    // sanitize `preprocess` hook + `stripDeadStorageHints` + `fullResult`.
     return Effect.gen(function* () {
       const rawArgs = step.toolArgs ?? {};
       const resolvedArgs = resolveStepReferences(rawArgs, completedSteps);
@@ -137,123 +145,86 @@ export function executeStep(
         }
       }
 
-      const toolStart = Date.now();
-
-      yield* emitLog({
-        _tag: "tool_call",
-        tool: step.toolName!,
-        iteration: stepIndex + 1,
-        timestamp: new Date(),
-      });
-
-      // Publish ToolCallStarted with the step's intentional rationale so
-      // execution-engine collects it into the debrief. plan-execute owns
-      // tool dispatch directly (no kernel act-phase), so without this
-      // hand-off the rationale never reaches the rationaleLog subscriber.
-      yield* publishReasoningStep(services.eventBus, {
-        _tag: "ToolCallStarted",
+      // Synthetic KernelStateLike (CORE shape — emitToCompose's ContextFor<T>
+      // requires all fields). plan-execute has no KernelState; build minimal
+      // real fields from the plan/step — no cast.
+      const syntheticState: KernelStateLike = {
         taskId: input.taskId ?? "plan-execute",
-        toolName: step.toolName!,
-        callId: `${plan.id}_${step.id}`,
-        ...(step.rationale && step.rationale.why
-          ? { rationale: { why: step.rationale.why, ...(typeof step.rationale.confidence === "number" ? { confidence: step.rationale.confidence } : {}) } }
-          : {}),
-        kernelPass: `plan-execute:step-${stepIndex + 1}`,
-      });
+        strategy: "plan-execute",
+        kernelType: "react",
+        steps: completedSteps.map(() => ({ type: "observation" })),
+        toolsUsed: new Set(
+          completedSteps.map((s) => s.toolName).filter((n): n is string => !!n),
+        ),
+        iteration: stepIndex,
+        tokens: 0,
+        status: "acting",
+        output: null,
+        error: null,
+        meta: {},
+      };
 
-      const toolResult = yield* toolService.value
-        .execute({
+      const observe = yield* executeToolAndObserve(
+        toolService,
+        {
           toolName: step.toolName!,
-          arguments: resolvedArgs,
-          agentId: input.agentId ?? "reasoning-agent",
-          sessionId: input.sessionId ?? "reasoning-session",
-        })
-        .pipe(
-          Effect.tapError(
-            (e) => {
-              const toolDurationMs = Date.now() - toolStart;
-              return emitLog({
-                _tag: "tool_result",
-                tool: step.toolName!,
-                duration: toolDurationMs,
-                status: "error",
-                error: String(e),
-                timestamp: new Date(),
-              });
-            }
-          ),
-          Effect.mapError(
-            (e) =>
-              new ExecutionError({
-                strategy: "plan-execute-reflect",
-                message: `Tool ${step.toolName} failed: ${String(e)}`,
-                step: stepIndex,
-                cause: e,
-              }),
-          ),
-        );
-      const toolDurationMs = Date.now() - toolStart;
-
-      yield* emitLog({
-        _tag: "tool_result",
-        tool: step.toolName!,
-        duration: toolDurationMs,
-        status: "success",
-        timestamp: new Date(),
-      });
-
-      // Publish ToolCallCompleted so MetricsCollector tracks tool execution
-      yield* publishReasoningStep(services.eventBus, {
-        _tag: "ToolCallCompleted",
-        taskId: input.taskId ?? "plan-execute",
-        toolName: step.toolName!,
-        callId: `${plan.id}_${step.id}`,
-        durationMs: toolDurationMs,
-        success: toolResult.success !== false,
-        kernelPass: `plan-execute:step-${stepIndex + 1}`,
-        ...(step.toolArgs !== undefined ? { args: step.toolArgs } : {}),
-        ...(toolResult.success !== false ? { result: toolResult.result } : { error: String(toolResult.result) }),
-      });
-
-      const rawOutput =
-        typeof toolResult.result === "string"
-          ? toolResult.result
-          : JSON.stringify(toolResult.result);
-
-      // Sanitize tool_call output: strip internal metadata (args, recipient, raw JSON)
-      // so it doesn't leak into downstream steps or final synthesis.
-      // Data-fetching tools keep full output; action tools get a clean confirmation.
-      const sanitized = sanitizeToolOutput(step.toolName!, rawOutput, resolvedArgs);
-
-      // Structured-result compression — symmetric to kernel/act path. Without
-      // this, plan-execute shipped raw 50KB+ MCP arrays (github/list_commits)
-      // into the next step's prompt AND the reflection prompt, blowing local-tier
-      // context and triggering fabrication-from-training (MCP probe M2/M3:
-      // composite 15-20%). The kernel's `compressToolResult` already produces
-      // a fit-aware preview with scratchpad pointer — reuse it here.
-      const compressionBudget = input.resultCompression?.budget ?? 2000;
-      const compressionPreviewItems = input.resultCompression?.previewItems ?? 8;
-      const compressed = compressToolResult(
-        sanitized,
-        step.toolName!,
-        compressionBudget,
-        compressionPreviewItems,
+          args: resolvedArgs,
+          ...(step.rationale && step.rationale.why
+            ? {
+                rationale: {
+                  why: step.rationale.why,
+                  ...(typeof step.rationale.confidence === "number"
+                    ? { confidence: step.rationale.confidence }
+                    : {}),
+                },
+              }
+            : {}),
+        },
+        {
+          iteration: stepIndex,
+          phase: "act",
+          strategy: "plan-execute",
+          state: syntheticState,
+          callId: `${plan.id}_${step.id}`,
+        },
+        {
+          ...(input.resultCompression
+            ? { compression: input.resultCompression }
+            : { compression: { budget: 2000, previewItems: 8 } }),
+          // Strip action-tool args/recipients from the compressed preview that
+          // feeds tool-less downstream prompts (analysis/reflection/synthesis).
+          preprocess: (raw) => sanitizeToolOutput(step.toolName!, raw, resolvedArgs),
+          // Strip dead [STORED:]/recall() pointers — downstream prompts can't recall.
+          stripDeadStorageHints,
+          // Heal internally (the kernel pre-heals; plan-execute didn't heal at all).
+          heal: {
+            schemas: input.availableToolSchemas ?? [],
+            fileToolNames: FILE_TOOL_NAMES,
+            cwd: process.cwd(),
+          },
+          pipeline: input.harnessPipeline,
+          eventBus: services.eventBus,
+          emitToolCallEvents: true,
+          taskId: input.taskId ?? "plan-execute",
+          kernelPass: `plan-execute:step-${stepIndex + 1}`,
+          ...(input.agentId ? { agentId: input.agentId } : {}),
+          ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+          emitLog,
+          // extractFactsLLM omitted (false) — parity-cheap, no LLM fact pass.
+          // verifier / memoryService omitted — opt-out holds (Phase E only).
+        },
       );
 
-      // Strip dead [STORED:]/recall() pointers: plan-execute discards the full
-      // data and injects this into tool-less prompts (analysis/reflection/
-      // synthesis), so the recall hints compressToolResult emits are uncallable
-      // dead pointers (invites fabricated tails / scaffolding-echo that
-      // evidence-grounding HARD-fails). Persisting + a resolving ref is #4.
       return {
-        output: stripDeadStorageHints(compressed.content, step.toolName!),
-        // Preserve the full sanitized data for synthesis (the final render).
-        // Intermediate prompts still consume the compressed `output`.
-        fullResult: sanitized,
+        output: observe.content,
+        // Full sanitized data for the tool-less SYNTHESIS step. The primitive's
+        // `content` is the compressed preview for intermediate prompts; synthesis
+        // needs the complete data (fullResult is surfaced from executeNativeToolCall).
+        fullResult: observe.fullResult ?? observe.content,
         tokens: 0,
         cost: 0,
-        success: toolResult.success !== false,
-      };
+        success: observe.success,
+      } satisfies StepExecResult;
     });
   }
 
