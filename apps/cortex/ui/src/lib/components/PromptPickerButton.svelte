@@ -9,7 +9,7 @@
     types?: PromptType[];
     /** Pre-selected type for the save form. */
     defaultSaveType?: PromptType;
-    /** Popover placement relative to the button. */
+    /** Preferred placement relative to the button; auto-flips if there is no room. */
     placement?: "up" | "down";
     title?: string;
   }
@@ -21,32 +21,85 @@
     title = "Prompt library",
   }: Props = $props();
 
+  const PANEL_W = 288; // matches PromptLibrary min-w-[280px] + padding
+  const MARGIN = 8;
+
   let open = $state(false);
+  let btnEl = $state<HTMLButtonElement | null>(null);
+  let panelEl = $state<HTMLDivElement | null>(null);
+  let coords = $state<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  function place() {
+    if (!btnEl) return;
+    const r = btnEl.getBoundingClientRect();
+    // Right-align panel to the button, then clamp into the viewport.
+    let left = r.right - PANEL_W;
+    left = Math.max(MARGIN, Math.min(left, window.innerWidth - PANEL_W - MARGIN));
+    // Flip up/down based on available space below.
+    const spaceBelow = window.innerHeight - r.bottom;
+    const openUp = placement === "up" ? spaceBelow < 280 || r.top > 320 : spaceBelow < 280;
+    const top = openUp ? Math.max(MARGIN, r.top - 4 - 320) : r.bottom + 4;
+    coords = { top, left };
+  }
+
+  function toggle() {
+    open = !open;
+    if (open) {
+      place();
+    }
+  }
 
   function choose(body: string) {
     open = false;
     onSelect(body);
   }
+
+  // Portal the panel to <body> so it escapes overflow/backdrop-blur clipping.
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
+  }
+
+  function onWindowChange() {
+    if (open) place();
+  }
+
+  function onDocPointerDown(e: PointerEvent) {
+    if (!open) return;
+    const target = e.target as Node;
+    if (btnEl?.contains(target)) return;
+    if (panelEl?.contains(target)) return;
+    open = false;
+  }
 </script>
 
-<div class="relative flex-shrink-0">
-  <button
-    type="button"
-    onclick={() => (open = !open)}
-    {title}
-    aria-label={title}
-    aria-expanded={open}
-    class="flex items-center justify-center p-1.5 rounded border border-[var(--cortex-border)] text-outline
-           hover:text-primary hover:border-primary/40 bg-transparent cursor-pointer transition-colors"
+<svelte:window onresize={onWindowChange} onscroll={onWindowChange} />
+<svelte:document onpointerdown={onDocPointerDown} />
+
+<button
+  bind:this={btnEl}
+  type="button"
+  onclick={toggle}
+  {title}
+  aria-label={title}
+  aria-expanded={open}
+  class="flex flex-shrink-0 items-center justify-center p-1.5 rounded border border-[var(--cortex-border)] text-outline
+         hover:text-primary hover:border-primary/40 bg-transparent cursor-pointer transition-colors"
+>
+  <span class="material-symbols-outlined text-[18px] leading-none">menu_book</span>
+</button>
+
+{#if open}
+  <div
+    bind:this={panelEl}
+    use:portal
+    class="fixed z-[200] rounded-lg border border-[var(--cortex-border)] bg-surface-container-lowest shadow-2xl"
+    style="top: {coords.top}px; left: {coords.left}px; max-height: 320px; overflow-y: auto;"
   >
-    <span class="material-symbols-outlined text-[18px] leading-none">menu_book</span>
-  </button>
-  {#if open}
-    <div
-      class="absolute {placement === 'up' ? 'bottom-10' : 'top-10'} right-0 z-50 rounded-lg border border-[var(--cortex-border)]
-             bg-surface-container-lowest shadow-lg"
-    >
-      <PromptLibrary onSelect={choose} {types} {defaultSaveType} />
-    </div>
-  {/if}
-</div>
+    <PromptLibrary onSelect={choose} {types} {defaultSaveType} />
+  </div>
+{/if}
