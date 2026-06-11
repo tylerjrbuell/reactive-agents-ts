@@ -160,26 +160,38 @@ describe("defaultVerifier — evidence grounding (terminal)", () => {
     },
   });
 
-  it("passes evidence-grounded when output's amounts appear in tool evidence", () => {
+  it("passes evidence-grounded when output's amounts appear in tool evidence (grounding enabled)", () => {
     const r = defaultVerifier.verify({
       ...baseCtx,
       terminal: true,
+      grounding: { mode: "warn" },
       content: "The price is $1,234.56 today.",
       priorSteps: [withEvidence("Search results: BTC trades at $1234.56 USD")],
     });
     expect(r.checks.find((c) => c.name === "evidence-grounded")?.passed).toBe(true);
   });
 
-  it("flags evidence-grounded when output cites amounts not in evidence", () => {
+  it("flags evidence-grounded when output cites amounts not in evidence (grounding enabled)", () => {
     const r = defaultVerifier.verify({
       ...baseCtx,
       terminal: true,
+      grounding: { mode: "warn" },
       content: "The price is $9,999.99 today.",
       priorSteps: [withEvidence("Search results: BTC trades at $1,234.56 USD")],
     });
     const check = r.checks.find((c) => c.name === "evidence-grounded");
     expect(check?.passed).toBe(false);
     expect(check?.reason).toContain("9,999.99");
+  });
+
+  it("skips evidence-grounded by default (grounding off) even with evidence + ungrounded figure", () => {
+    const r = defaultVerifier.verify({
+      ...baseCtx,
+      terminal: true,
+      content: "The price is $9,999.99 today.",
+      priorSteps: [withEvidence("Search results: BTC trades at $1,234.56 USD")],
+    });
+    expect(r.checks.find((c) => c.name === "evidence-grounded")).toBeUndefined();
   });
 });
 
@@ -458,10 +470,11 @@ describe("defaultVerifier — multi-severity (GH #121)", () => {
 
   describe("overall severity rollup (max severity wins)", () => {
     it("warn + pass → overall=warn (softFail=true, verified=false)", () => {
-      // Synthesis-grounded fails (warn), no rejects/escalates.
+      // evidence-grounded fails (warn mode), no rejects/escalates.
       const r = defaultVerifier.verify({
         ...baseCtx,
         terminal: true,
+        grounding: { mode: "warn" },
         content: "The price is $9,999.99 today.",
         priorSteps: [
           {

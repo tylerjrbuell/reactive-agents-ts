@@ -18,13 +18,14 @@ describe("verifier soft-fail", () => {
     terminal: true,
   };
 
-  it("sets softFail=true when only evidence-grounded fails", () => {
+  it("sets softFail=true when only evidence-grounded fails (grounding enabled, warn mode)", () => {
     const ctx = {
       ...baseCtx,
+      grounding: { mode: "warn" as const },
       priorSteps: [
         {
           type: "observation" as const,
-          content: "prices fetched successfully",
+          content: "prices: [{symbol:'BTC',price:62578}] fetched successfully",
           timestamp: new Date(),
         },
       ],

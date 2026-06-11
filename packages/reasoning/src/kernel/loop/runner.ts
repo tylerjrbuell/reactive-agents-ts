@@ -621,6 +621,8 @@ export function runKernel(
           toolsUsed: state.toolsUsed,
           availableUserTools,
           terminal: true,
+          grounding: effectiveInput.grounding,
+          scratchpad: state.scratchpad,
         },
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,

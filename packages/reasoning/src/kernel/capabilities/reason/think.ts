@@ -1091,7 +1091,7 @@ export function handleThinking(
           guardPrematureFinalAnswer(input, state, profile, adapter, newSteps, newTokens, newCost) ??
           guardCompletionGaps(input, state, newSteps, newTokens, newCost) ??
           guardQualityCheck(input, state, profile, adapter, newSteps, newTokens, newCost) ??
-          guardEvidenceGrounding(state, resolverResult.content, newSteps, newTokens, newCost);
+          guardEvidenceGrounding(state, resolverResult.content, newSteps, newTokens, newCost, input.grounding);
         if (redirect) return redirect;
 
         // All checks pass — assemble final output

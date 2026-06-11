@@ -46,24 +46,41 @@ const EVIDENCE_STEPS: readonly ReasoningStep[] = [
   obsStep("XRP spot ~$1.37 on CoinMarketCap"),
 ];
 
+// Grounding is opt-in: the mid-loop nudge runs ONLY when block mode is enabled.
+const BLOCK = { mode: "block" as const };
+
 describe("guardEvidenceGrounding", () => {
+  it("returns undefined when grounding config is absent (opt-in default off)", () => {
+    const state = makeState();
+    const output = "ETH is $3,500.00 today."; // ungrounded, but grounding off
+    const result = guardEvidenceGrounding(state, output, EVIDENCE_STEPS, 10, 0, undefined);
+    expect(result).toBeUndefined();
+  });
+
+  it("returns undefined in warn mode (advisory only — never interrupts mid-loop)", () => {
+    const state = makeState();
+    const output = "ETH is $3,500.00 today."; // ungrounded
+    const result = guardEvidenceGrounding(state, output, EVIDENCE_STEPS, 10, 0, { mode: "warn" });
+    expect(result).toBeUndefined();
+  });
+
   it("returns undefined when no dollar amounts in output", () => {
     const state = makeState();
-    const result = guardEvidenceGrounding(state, "The prices are very high.", EVIDENCE_STEPS, 10, 0);
+    const result = guardEvidenceGrounding(state, "The prices are very high.", EVIDENCE_STEPS, 10, 0, BLOCK);
     expect(result).toBeUndefined();
   });
 
   it("returns undefined when all dollar amounts are grounded in evidence", () => {
     const state = makeState();
     const output = "ETH is $2,208.24 and BTC is $71,535.42.";
-    const result = guardEvidenceGrounding(state, output, EVIDENCE_STEPS, 10, 0);
+    const result = guardEvidenceGrounding(state, output, EVIDENCE_STEPS, 10, 0, BLOCK);
     expect(result).toBeUndefined();
   });
 
-  it("redirects when output contains an ungrounded dollar amount", () => {
+  it("redirects when output contains an ungrounded dollar amount (block mode)", () => {
     const state = makeState();
     const output = "ETH is $3,500.00 today."; // not in evidence
-    const result = guardEvidenceGrounding(state, output, EVIDENCE_STEPS, 10, 0);
+    const result = guardEvidenceGrounding(state, output, EVIDENCE_STEPS, 10, 0, BLOCK);
     expect(result).toBeDefined();
     expect(result!.status).not.toBe("failed");
     // pendingGuidance.evidenceGap should be set
@@ -76,13 +93,13 @@ describe("guardEvidenceGrounding", () => {
 
   it("returns undefined on iteration 0 (no prior tool results)", () => {
     const state = makeState({ iteration: 0 });
-    const result = guardEvidenceGrounding(state, "ETH $3,500.00", EVIDENCE_STEPS, 10, 0);
+    const result = guardEvidenceGrounding(state, "ETH $3,500.00", EVIDENCE_STEPS, 10, 0, BLOCK);
     expect(result).toBeUndefined();
   });
 
   it("returns undefined when evidenceGroundingDone is already set (fires at most once)", () => {
     const state = makeState({ meta: { maxIterations: 10, evidenceGroundingDone: true } as any });
-    const result = guardEvidenceGrounding(state, "ETH $3,500.00", EVIDENCE_STEPS, 10, 0);
+    const result = guardEvidenceGrounding(state, "ETH $3,500.00", EVIDENCE_STEPS, 10, 0, BLOCK);
     expect(result).toBeUndefined();
   });
 
@@ -94,18 +111,18 @@ describe("guardEvidenceGrounding", () => {
     const state = makeState();
     // These figures come from extractedFact, not raw content — should pass
     const output = "BTC is $71,535.42 and ETH is $2,208.24.";
-    const result = guardEvidenceGrounding(state, output, stepsWithFacts, 10, 0);
+    const result = guardEvidenceGrounding(state, output, stepsWithFacts, 10, 0, BLOCK);
     expect(result).toBeUndefined();
   });
 
-  it("redirects ungrounded claim even when extractedFacts exist", () => {
+  it("redirects ungrounded claim even when extractedFacts exist (block mode)", () => {
     const stepsWithFacts: readonly ReasoningStep[] = [
       // extractedFact must be >= 20 chars to be used as corpus
       obsStep("Long raw observation content that is not used", "web-search", "BTC price: $71,535.42 USD per Yahoo Finance"),
     ];
     const state = makeState();
     const output = "BTC is $68,000.00."; // not in extractedFact corpus
-    const result = guardEvidenceGrounding(state, output, stepsWithFacts, 10, 0);
+    const result = guardEvidenceGrounding(state, output, stepsWithFacts, 10, 0, BLOCK);
     expect(result).toBeDefined();
     expect((result!.pendingGuidance as any)?.evidenceGap).toContain("$68,000");
   });

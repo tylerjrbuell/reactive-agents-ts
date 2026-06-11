@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   buildEvidenceCorpusFromSteps,
-  validateOutputGroundedInEvidence,
+  validateNumericGrounding,
   validateExpectedEntitiesInOutput,
 } from "../../../src/kernel/capabilities/verify/evidence-grounding.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
@@ -31,28 +31,28 @@ describe("buildEvidenceCorpusFromSteps", () => {
   }, 15000);
 });
 
-describe("validateOutputGroundedInEvidence", () => {
+describe("validateNumericGrounding (tolerant value-match)", () => {
   it("passes when all dollar amounts appear in evidence", () => {
     const evidence = "ETH last 2,208.24 USD per Yahoo; BTC 71,535.42";
     const output = "| ETH | $2,208.24 | yahoo |\n| BTC | $71,535.42 | yahoo |";
-    expect(validateOutputGroundedInEvidence(output, evidence)).toEqual({ ok: true });
+    expect(validateNumericGrounding(output, evidence, 0.01)).toEqual({ ok: true });
   }, 15000);
 
   it("fails when output invents a price not in evidence", () => {
     const evidence = "ETH last 2,208.24 USD; BTC 71,535.42";
     const output = "ETH is $3,500.00 today.";
-    const r = validateOutputGroundedInEvidence(output, evidence);
+    const r = validateNumericGrounding(output, evidence, 0.01);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.violations.some((v) => v.includes("$3,500"))).toBe(true);
   }, 15000);
 
   it("skips check when evidence corpus is too short", () => {
-    const r = validateOutputGroundedInEvidence("Costs $9,999", "short");
+    const r = validateNumericGrounding("Costs $9,999", "short", 0.01);
     expect(r).toEqual({ ok: true });
   }, 15000);
 
   it("passes when output has no dollar amounts", () => {
-    const r = validateOutputGroundedInEvidence("No prices here.", "BTC is 71535 USD");
+    const r = validateNumericGrounding("No prices here.", "BTC is 71535 USD on venue", 0.01);
     expect(r).toEqual({ ok: true });
   }, 15000);
 
@@ -60,7 +60,7 @@ describe("validateOutputGroundedInEvidence", () => {
     const evidence = "BTC trading near 71535 USD on Yahoo.";
     // Model-style: $\approx \$65,000$
     const output = "BTC is ~$68,000 or $\\approx \\$65,000$ depending on venue.";
-    const r = validateOutputGroundedInEvidence(output, evidence);
+    const r = validateNumericGrounding(output, evidence, 0.01);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.violations.length).toBeGreaterThanOrEqual(2);
   }, 15000);

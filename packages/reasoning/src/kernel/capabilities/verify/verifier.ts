@@ -33,7 +33,7 @@ import type { ObservationResult } from "../../../types/observation.js";
 import { isSatisfied } from "./quality-utils.js";
 import {
   buildEvidenceCorpusFromSteps,
-  validateOutputGroundedInEvidence,
+  validateNumericGrounding,
 } from "./evidence-grounding.js";
 import { detectScaffoldLeak } from "./scaffold-leak.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
@@ -99,6 +99,10 @@ export interface VerificationContext {
    * fallback from synthesis.
    */
   readonly terminatedBy?: string;
+  /** Opt-in grounding config. Absent ⇒ numeric grounding does NOT run. */
+  readonly grounding?: import("../../state/kernel-state.js").GroundingConfig;
+  /** Scratchpad for resolving storedKey→full tool data in the grounding corpus. */
+  readonly scratchpad?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -533,27 +537,21 @@ export const defaultVerifier: Verifier = {
         reason: scaffoldLeak.leaked ? scaffoldLeak.reason : undefined,
       });
 
-      // Check 5: evidence-grounding (legacy: dollar amounts only)
-      // Kept for backward compat — financial-task-specific signal.
-      if (ctx.priorSteps.length > 0) {
-        const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps);
+      // Check 5: numeric evidence-grounding (OPT-IN). Runs ONLY when the user
+      // enabled grounding via .withGrounding(). Severity follows mode:
+      // block → reject (suppress + retry, degrades to warn — see runner);
+      // warn  → warn (advisory). Off by default = no false-positive impediment.
+      if (ctx.grounding) {
+        const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps, ctx.scratchpad);
         if (corpus.length > 0) {
-          const grounding = validateOutputGroundedInEvidence(
-            ctx.content,
-            corpus,
-          );
-          // Severity: failure is `warn`. Preserves the legacy softFail flow
-          // — grounding is advisory because compressed observations and
-          // scratchpad lookups frequently produce false negatives. The
-          // Loop Controller surfaces the output with a warning rather
-          // than suppressing it.
+          const tolerance = ctx.grounding.tolerance ?? 0.01;
+          const grounding = validateNumericGrounding(ctx.content, corpus, tolerance);
+          const sev = ctx.grounding.mode === "block" ? "reject" : "warn";
           checks.push({
             name: "evidence-grounded",
             passed: grounding.ok,
-            severity: grounding.ok ? "pass" : "warn",
-            reason: grounding.ok
-              ? undefined
-              : `ungrounded amounts: ${grounding.violations.join(", ")}`,
+            severity: grounding.ok ? "pass" : sev,
+            reason: grounding.ok ? undefined : grounding.violations.join(", "),
           });
         }
       }
