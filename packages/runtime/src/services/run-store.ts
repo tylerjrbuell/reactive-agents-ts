@@ -65,6 +65,14 @@ export interface RunStore {
   readonly getRun: (
     runId: string,
   ) => Effect.Effect<RunRecord | undefined, never>;
+  /**
+   * All persisted run rows, newest-updated first. When `status` is supplied,
+   * only runs in that lifecycle state are returned. Used by `agent.listRuns()`
+   * (Phase C) to enumerate resumable / completed / failed runs.
+   */
+  readonly listRuns: (
+    status?: RunStatus,
+  ) => Effect.Effect<readonly RunRecord[], never>;
 }
 
 export class RunStoreService extends Context.Tag("RunStoreService")<
@@ -187,6 +195,36 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
                 updatedAt: row.updated_at,
               }
             : undefined;
+        }),
+
+      listRuns: (status) =>
+        Effect.sync(() => {
+          const rows = (
+            status === undefined
+              ? db
+                  .prepare(
+                    `SELECT run_id, agent_id, task, status, config_hash, updated_at
+                       FROM runs
+                   ORDER BY updated_at DESC`,
+                  )
+                  .all()
+              : db
+                  .prepare(
+                    `SELECT run_id, agent_id, task, status, config_hash, updated_at
+                       FROM runs
+                      WHERE status = ?
+                   ORDER BY updated_at DESC`,
+                  )
+                  .all(status)
+          ) as RunRow[];
+          return rows.map((row) => ({
+            runId: row.run_id,
+            agentId: row.agent_id,
+            task: row.task,
+            status: row.status as RunStatus,
+            configHash: row.config_hash,
+            updatedAt: row.updated_at,
+          }));
         }),
     };
   });

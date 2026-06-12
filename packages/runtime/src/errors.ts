@@ -131,6 +131,39 @@ export class BudgetExceededError extends Data.TaggedError(
 }> {}
 
 /**
+ * Thrown by `agent.resume(runId)` when no run / no checkpoint exists for `runId`.
+ *
+ * Either the run id is unknown to the durable store, or the run was created but
+ * never checkpointed (nothing to rehydrate). Durable execution Phase C.
+ */
+export class DurableRunNotFoundError extends Data.TaggedError(
+  "DurableRunNotFoundError",
+)<{
+  /** The run id that could not be resumed. */
+  readonly runId: string;
+}> {}
+
+/**
+ * Thrown by `agent.resume(runId)` when the resuming agent's config hash differs
+ * from the hash stored when the run was created.
+ *
+ * Resume rehydrates a `KernelState` (data) but re-materializes services, tools,
+ * and the system prompt from the live builder config. If that config drifted,
+ * continuing the run would silently mix two contracts — so resume is refused.
+ * Durable execution Phase C.
+ */
+export class DurableConfigMismatchError extends Data.TaggedError(
+  "DurableConfigMismatchError",
+)<{
+  /** The run id whose stored config no longer matches. */
+  readonly runId: string;
+  /** Config hash recorded when the run was first created. */
+  readonly storedHash: string;
+  /** Config hash of the agent attempting the resume. */
+  readonly currentHash: string;
+}> {}
+
+/**
  * Union of all runtime error types that can be thrown by `agent.run()`.
  *
  * Use this as the error type in Effect pipelines or when calling `agent.run()`
