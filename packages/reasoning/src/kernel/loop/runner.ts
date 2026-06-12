@@ -679,7 +679,7 @@ export function runKernel(
               {
                 role: "user",
                 content:
-                  `${buildSynthesisPrompt(state.output, taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
+                  `${buildSynthesisPrompt(state.output ?? "", taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
               },
             ],
             maxTokens: THINKING_SAFE_MIN_TOKENS,
