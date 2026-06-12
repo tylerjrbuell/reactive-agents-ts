@@ -118,6 +118,24 @@ git commit -m "feat(kernel): KernelInput.resumeState seam + codec re-export for 
 
 ---
 
+## ⚠️ C2 SCOPE CORRECTION (2026-06-12 — runtime-warden finding)
+
+C1 added `KernelInput.resumeState` + the runner consumption + codec re-export, but **NOT the forwarding tail** — `resumeState` is dropped before it reaches the kernel (same FM-I field-drop class). C2 is therefore blocked until two cross-package hops land (both OUTSIDE runtime-warden authority, hence main-thread / kernel-warden):
+
+**Hop A — forward `resumeState` to `KernelInput` (reasoning package):**
+- `reactive.ts` — add `resumeState?: KernelState` to `ReactiveInput` (~:90) AND `resumeState: input.resumeState` to the `kernelInput` literal (~:202, it's a field-by-field map, no spread). (+ reflexion/plan-execute/tree-of-thought literals for parity if resume must support heavy strategies; reactive-only suffices for the default-path e2e gate.)
+- `reasoning-service.ts:27` — add `resumeState?: KernelState` to the `execute` params interface; `:152` impl — forward it into the strategy input.
+- `reasoning-think.ts:189` — add `resumeState` to `executeRequest` (sourced from a new run-option).
+- **DONE (C2 slice, committed):** `RunStore.listRuns` + `DurableRunNotFoundError`/`DurableConfigMismatchError`.
+
+**Hop B — agent carries durable config (builder):** `ReactiveAgent` (`reactive-agent.ts:103` ctor) receives no durable dir/configHash/`withDurableRuns`-flag; it lives only in the builder + `execute-stream.ts`. Thread it onto the agent at `builder/build-effect/agent-instantiation.ts:99` so `resume()`/`listRuns()` can resolve dbPath + current hash.
+
+**Untraced:** the run-option source — how `resume()` injects `resumeState` into the execute path so `reasoning-think.ts` can put it on `executeRequest`. Trace `agent.run` options → `reasoning-think` and add a `resumeState` pass-through.
+
+After A+B+the run-option thread land, `durable-resume.ts` + `agent.resume/listRuns` + the test (below) are fully runtime-warden-completable.
+
+---
+
 ## Task C2: `resume(runId)` + `listRuns()` + config-hash guard
 
 **Files:** `run-store.ts`, `reactive-agent.ts`, `engine/durable-resume.ts` (new), `errors.ts`, `tests/durable-resume.test.ts`
