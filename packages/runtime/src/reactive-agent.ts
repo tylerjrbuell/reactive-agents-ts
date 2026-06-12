@@ -34,7 +34,14 @@ import { unwrapError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef } from '@reactive-agents/core'
+import { join } from 'node:path'
+import {
+    loadResumePayload,
+    listDurableRuns,
+    markRunStatus,
+} from './engine/durable-resume.js'
+import type { RunRecord, RunStatus } from './services/run-store.js'
 import type {
     AgentEvent,
     OutputFormat,
@@ -167,7 +174,9 @@ export class ReactiveAgent {
             }
             outputValidatorOptions?: { maxRetries?: number }
             customTermination?: (state: { output: string }) => boolean
-        }
+        },
+        /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
+        private readonly _durableResume?: { readonly dir: string; readonly configHash: string }
     ) {}
 
     /**
@@ -607,6 +616,72 @@ export class ReactiveAgent {
                 }
                 throw unwrapped
             })
+    }
+
+    /**
+     * Resume a crashed or paused durable run from its last checkpoint (Phase C).
+     *
+     * Loads the highest-iteration checkpoint persisted by `.withDurableRuns()`,
+     * validates that this agent's config still matches the one the run was
+     * captured under (config-hash guard), seeds the restored `KernelState` via
+     * `ResumeStateRef`, and continues the run to completion. Completed tools are
+     * NOT re-executed — their results live in the restored steps/messages.
+     *
+     * @param runId - The run id reported when the original run was created.
+     * @throws Error if the agent was not built with `.withDurableRuns()`.
+     * @throws DurableRunNotFoundError if the run / checkpoint is unknown.
+     * @throws DurableConfigMismatchError if the agent config changed since capture.
+     *
+     * Named `resumeRun` (not `resume`) to avoid colliding with the in-process
+     * pause/resume control verb `resume()`.
+     */
+    async resumeRun(runId: string): Promise<AgentResult> {
+        if (!this._durableResume) {
+            throw new Error(
+                'resumeRun() requires .withDurableRuns() — this agent has no durable run store.',
+            )
+        }
+        const { dir, configHash } = this._durableResume
+        const dbPath = join(dir, 'runs.db')
+
+        // 1. Load + guard the checkpoint on the default runtime (RunStore is
+        //    self-contained; no agent services required).
+        const payload = await Effect.runPromise(
+            loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
+        )
+
+        // 2. Re-run to completion with the restored state seeded via FiberRef.
+        //    reasoning-think reads ResumeStateRef, deserializes, and forwards it
+        //    as KernelInput.resumeState so the runner continues mid-stream.
+        const pipeline = this.buildRunTaskEffect(payload.run.task, { taskId: runId })
+        try {
+            const result = await this.runtime.runPromise(
+                Effect.locally(pipeline, ResumeStateRef, payload.stateJson),
+            )
+            await Effect.runPromise(
+                markRunStatus({ dbPath, runId, status: 'completed' }),
+            )
+            return result
+        } catch (e) {
+            await Effect.runPromise(
+                markRunStatus({ dbPath, runId, status: 'failed' }),
+            )
+            throw unwrapError(e)
+        }
+    }
+
+    /**
+     * List persisted durable runs (newest-updated first), optionally filtered by
+     * lifecycle status. Requires `.withDurableRuns()`.
+     */
+    async listRuns(filter?: { status?: RunStatus }): Promise<readonly RunRecord[]> {
+        if (!this._durableResume) {
+            throw new Error(
+                'listRuns() requires .withDurableRuns() — this agent has no durable run store.',
+            )
+        }
+        const dbPath = join(this._durableResume.dir, 'runs.db')
+        return Effect.runPromise(listDurableRuns({ dbPath, status: filter?.status }))
     }
 
     /**

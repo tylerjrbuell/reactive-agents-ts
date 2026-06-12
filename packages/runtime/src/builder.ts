@@ -1,6 +1,9 @@
 import { Effect, Layer } from 'effect'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 // createRuntime usage extracted to ./builder/build-effect/runtime-construction.ts (W25-B step 7)
 // createLightRuntime is no longer used directly from builder.ts.
+import { durableConfigHash } from './services/run-store.js'
 import type { MCPServerConfig } from './runtime.js'
 import {
     defaultTracingConfig,
@@ -2184,6 +2187,23 @@ export class ReactiveAgentBuilder {
                     outputValidatorOptions: self._outputValidatorOptions,
                     customTermination: self._customTermination,
                 },
+                // Phase C: when durable runs are enabled, resolve the same
+                // checkpoint dir + identity configHash execute-stream computes
+                // at run start, so agent.resume(runId) can open the store and
+                // guard config drift. dir derivation MUST mirror
+                // execute-stream.ts:175-179.
+                durableResume: self._durableRuns
+                    ? {
+                          dir:
+                              self._durableRuns.dir ??
+                              join(homedir(), '.reactive-agents', agentId),
+                          configHash: durableConfigHash({
+                              systemPrompt: composedSystemPrompt,
+                              provider: self._provider,
+                              model: self._model,
+                          }),
+                      }
+                    : undefined,
             })
         }) as Effect.Effect<ReactiveAgent, Error>
     }

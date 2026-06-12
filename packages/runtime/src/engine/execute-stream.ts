@@ -28,7 +28,7 @@ import type { AgentResultMetadata } from "../builder/types.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
-import { RunStoreLive, RunStoreService } from "../services/run-store.js";
+import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
 
 export interface ExecuteStreamDeps {
@@ -181,7 +181,13 @@ export const makeExecuteStream =
         const runStoreLayer = RunStoreLive(dbPath);
         // Stable-ish run id: content hash of agent + task + start time.
         const runId = hash(`${agentId}:${String(task.id)}:${startMs}`).toString(36);
-        const configHash = hash(JSON.stringify(config)).toString(36);
+        // Phase C: hash the reproducible identity descriptor (not the whole
+        // config) so ReactiveAgent.resume() can recompute a matching hash.
+        const configHash = durableConfigHash({
+          systemPrompt: config.systemPrompt,
+          provider: config.provider,
+          model: config.defaultModel,
+        });
 
         yield* Effect.gen(function* () {
           const store = yield* RunStoreService;

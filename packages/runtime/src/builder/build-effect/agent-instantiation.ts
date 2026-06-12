@@ -63,6 +63,13 @@ export interface AgentInstantiationDeps {
     outputValidatorOptions?: { maxRetries?: number };
     customTermination?: (state: { output: string }) => boolean;
   };
+  /**
+   * Durable resume context (Phase C). Present only when `.withDurableRuns()`
+   * was called: the resolved checkpoint `dir` and the agent-identity
+   * `configHash` (via `durableConfigHash`), so `agent.resume(runId)` can open
+   * the RunStore and guard against a config drift.
+   */
+  readonly durableResume?: { readonly dir: string; readonly configHash: string };
 }
 
 /**
@@ -113,5 +120,6 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.ragStore,
     deps.channelsConfig,
     deps.capabilities,
+    deps.durableResume,
   );
 };

@@ -14,7 +14,31 @@
  * for single-row reads (verified against runtime-shim/src/database.ts).
  */
 import { Context, Effect, Layer } from "effect";
-import { Database } from "@reactive-agents/runtime-shim";
+import { Database, hash } from "@reactive-agents/runtime-shim";
+
+/**
+ * Canonical durable config hash (Phase C config-hash guard).
+ *
+ * Hashes a STABLE three-field agent-identity descriptor — system prompt,
+ * provider, model — rather than the whole runtime config. The full config
+ * cannot be reproduced from a built agent at `resume()` time (it lives inside
+ * the engine layer), so both the write side (`execute-stream.ts`, at run start)
+ * and the resume side (`ReactiveAgent.resume`) must derive the hash from the
+ * same reproducible descriptor. A mismatch (e.g. the system prompt changed
+ * between the original run and the resume) trips `DurableConfigMismatchError`.
+ */
+export const durableConfigHash = (d: {
+  readonly systemPrompt?: string;
+  readonly provider?: string;
+  readonly model?: string;
+}): string =>
+  hash(
+    JSON.stringify({
+      systemPrompt: d.systemPrompt ?? "",
+      provider: d.provider ?? "",
+      model: d.model ?? "",
+    }),
+  ).toString(36);
 
 export type RunStatus =
   | "running"
