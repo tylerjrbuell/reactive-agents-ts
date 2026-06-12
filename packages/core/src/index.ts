@@ -199,7 +199,7 @@ export type {
 } from "./services/harness-types.js";
 
 // ─── Streaming ───
-export { StreamingTextCallback, RunControllerRef } from "./streaming.js";
+export { StreamingTextCallback, RunControllerRef, ResumeStateRef } from "./streaming.js";
 export type { RunControllerLike } from "./streaming.js";
 
 // ─── AgentMemory port (NS §3.1 — FIX-34) ───

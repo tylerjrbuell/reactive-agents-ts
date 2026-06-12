@@ -11,11 +11,11 @@
  * Behavior preserved verbatim — error sites use semantic anchors at the
  * actual module path for telemetry accuracy.
  */
-import { Effect } from "effect";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { Effect, FiberRef } from "effect";
+import { emitErrorSwallowed, errorTag, ResumeStateRef } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
-import { classifyTask } from "@reactive-agents/reasoning";
+import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -186,6 +186,13 @@ export const runReasoningThink = (
     // canonical snapshot instead of re-classifying the same task string.
     const taskClassification = classifyTask(extractTaskText(task.input));
 
+    // Durable resume (Phase C): when ReactiveAgent.resume(runId) set the
+    // ResumeStateRef to a serialized checkpoint, deserialize it here and forward
+    // it as `resumeState` so the kernel continues from the restored state instead
+    // of a fresh seed. Null on every normal run (zero cost).
+    const resumeJson = yield* FiberRef.get(ResumeStateRef);
+    const resumeState = resumeJson ? deserializeKernelState(resumeJson) : undefined;
+
     const executeRequest = {
       taskDescription: extractTaskText(task.input),
       taskType: task.type,
@@ -218,6 +225,7 @@ export const runReasoningThink = (
         c.metadata as Record<string, unknown>,
       ),
       initialMessages,
+      resumeState,
       synthesisConfig: resolveSynthesisConfigForStrategy(
         config.reasoningOptions,
         effectiveStrategyName,

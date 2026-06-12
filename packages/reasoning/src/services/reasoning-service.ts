@@ -83,6 +83,9 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
       /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
       readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+      /** Durable resume (v0.12.0 Phase C): fully-restored KernelState from a checkpoint;
+       *  spread through to the strategy's `resumeState`. */
+      readonly resumeState?: import("../kernel/state/kernel-state.js").KernelState;
       readonly synthesisConfig?: SynthesisConfig;
       /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
       readonly observationSummary?: boolean | "auto";

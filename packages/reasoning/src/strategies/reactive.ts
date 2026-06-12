@@ -13,7 +13,7 @@ import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.j
 import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
-import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
+import type { KernelInput, KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -88,6 +88,10 @@ interface ReactiveInput {
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
   readonly initialMessages?: readonly KernelMessage[];
+  /** Durable resume (v0.12.0 Phase C): fully-restored KernelState from a checkpoint.
+   *  When present, the runner uses it as base state instead of building fresh —
+   *  forwarded into `kernelInput.resumeState`. */
+  readonly resumeState?: KernelState;
   /** Intelligent Context Synthesis — from .withReasoning({ synthesis: ... }) */
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
@@ -200,6 +204,7 @@ export const executeReactive = (
       nextMovesPlanning: input.config.strategies.reactive.nextMovesPlanning,
       briefResolvedSkills: input.briefResolvedSkills,
       initialMessages: input.initialMessages,
+      resumeState: input.resumeState,
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
       auditRationale: input.auditRationale,

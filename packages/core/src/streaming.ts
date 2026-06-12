@@ -57,3 +57,16 @@ export interface RunControllerLike {
  * Null for run() calls (no control plane needed).
  */
 export const RunControllerRef = FiberRef.unsafeMake<RunControllerLike | null>(null);
+
+/**
+ * FiberRef carrying a durable-resume checkpoint as an opaque serialized string.
+ *
+ * Set by `ReactiveAgent.resume(runId)` (via `Effect.locally`) before re-running
+ * the normal execute path. Read by the reasoning THINK phase
+ * (`reasoning-think.ts`), which deserializes it with the kernel codec and places
+ * the restored `KernelState` on `resumeState` so the kernel continues mid-stream
+ * instead of starting fresh. The string is opaque to core (same contract as
+ * `onCheckpoint`'s serialized snapshot) — no dependency on the reasoning layer.
+ * Null for normal runs, so non-resume executions pay zero cost.
+ */
+export const ResumeStateRef = FiberRef.unsafeMake<string | null>(null);
