@@ -216,10 +216,16 @@ export function runKernel(
 
     // ── 6. Create initial state ──────────────────────────────────────────────
     const baseState = initialKernelState(options);
-    // Seed messages from input.initialMessages if provided (e.g. chat history injection)
-    let state = effectiveInput.initialMessages?.length
-      ? transitionState(baseState, { messages: effectiveInput.initialMessages })
-      : baseState;
+    // Durable resume (Phase C): a fully-restored checkpoint state wins over the
+    // fresh seed. It is already a complete KernelState (iteration/steps/scratchpad/
+    // toolsUsed/meta/tokens preserved) so it is used VERBATIM — NOT passed through
+    // transitionState. Otherwise seed messages from input.initialMessages if
+    // provided (e.g. chat history injection) onto the fresh base state.
+    let state = effectiveInput.resumeState
+      ? effectiveInput.resumeState
+      : effectiveInput.initialMessages?.length
+        ? transitionState(baseState, { messages: effectiveInput.initialMessages })
+        : baseState;
     // Seed environmentContext onto state so project()/fromKernelState can
     // reproduce the Environment block (incl. caller custom fields). It lives on
     // KernelInput (react-kernel.ts:193) but was never copied to state, so under

@@ -161,7 +161,18 @@ export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 export { filterToolsByRelevance } from "./kernel/capabilities/attend/tool-formatting.js";
 export { planNextMoveBatches } from "./kernel/capabilities/decide/tool-gating.js";
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
-export type { KernelMessage, EntropyScoreLike } from "./kernel/state/kernel-state.js";
+export type { KernelMessage, EntropyScoreLike, KernelState } from "./kernel/state/kernel-state.js";
+
+// ─── Durable-execution codec (v0.12.0 track 1) ───
+// Lossless KernelState ⇄ JSON-string codec. The runtime resume path (Phase C2)
+// persists serialized snapshots and re-materializes them onto
+// KernelInput.resumeState; re-exported here so @reactive-agents/runtime can
+// deserialize without reaching into reasoning's deep paths.
+export {
+  serializeKernelState,
+  deserializeKernelState,
+  KERNEL_CODEC_VERSION,
+} from "./kernel/state/kernel-codec.js";
 // Canonical KernelInput assembly (FM-I #195) — strategies merge their run-wide
 // cross-cutting bundle with a per-pass bundle here instead of hand-building
 // literals that silently drop {harnessPipeline, budgetLimits, calibration, …}.

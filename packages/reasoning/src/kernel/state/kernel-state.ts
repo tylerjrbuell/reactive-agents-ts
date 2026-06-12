@@ -537,6 +537,18 @@ export interface KernelInput {
    */
   readonly initialMessages?: readonly KernelMessage[];
   /**
+   * Durable resume (v0.12.0 track 1, Phase C — design spec
+   * wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md §2.3): a
+   * fully-restored KernelState rebuilt from a persisted checkpoint. When present
+   * the runner uses it VERBATIM as the base state instead of building a fresh
+   * iteration-0 state — preserving iteration / steps / scratchpad / toolsUsed /
+   * meta / tokens so the run continues mid-stream. It is already a complete
+   * state and is NOT passed through `transitionState`. Completed tools are NOT
+   * re-executed — their results live in the restored steps / messages. Wins over
+   * `initialMessages` (which only seeds the conversation thread of a fresh state).
+   */
+  readonly resumeState?: KernelState;
+  /**
    * Output-synthesis configuration — consumed by the terminal output assembly
    * phase in `kernel/loop/runner.ts` (output-synthesis.ts), NOT by ICS guidance.
    * Despite the historical name, this configures how the final answer is
