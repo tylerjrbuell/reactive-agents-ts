@@ -65,6 +65,10 @@ export {
 
   // Harness Profile presets (MOVE-6)
   HarnessProfile,
+
+  // Durable execution (track 1)
+  DurableRunNotFoundError,
+  DurableConfigMismatchError,
 } from "@reactive-agents/runtime";
 
 export type {

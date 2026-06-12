@@ -1631,19 +1631,19 @@ export class ReactiveAgentBuilder {
     }
 
     /**
-     * Save a progress checkpoint to PlanStore every N iterations.
-     * Enables resumable long-running agents — on restart, session resumption
-     * detects the incomplete plan and injects it as prior context.
+     * Save a coarse progress checkpoint to PlanStore every N iterations. On
+     * restart, session resumption detects the incomplete plan and injects it as
+     * prior context (a soft "where was I" hint).
      *
-     * **Note:** PlanStore write execution is pending (V1.1). This method stores
-     * the config and the session resumption context will surface it, but
-     * mid-run checkpointing requires kernel-level hooks not yet wired.
+     * **For true crash-resume, use {@link withDurableRuns} instead.** That path
+     * persists a lossless serialized `KernelState` per iteration to a SQLite
+     * RunStore and exposes `agent.resumeRun(runId)` / `agent.listRuns()` to
+     * reconstruct and finish a crashed run from its last checkpoint. This method
+     * remains a lighter-weight plan-level hint and does not reconstruct full
+     * kernel state.
      * @param every - Checkpoint interval in iterations
      * @param options.autoResume - Automatically resume from last checkpoint (default: false)
      * @returns `this` for chaining
-     * Composable equivalent: `.compose(h => h.after('iteration', ...))` +
-     *   the `@reactive-agents/replay` checkpoint store (full PlanStore
-     *   wiring lands in V1.1).
      */
     withProgressCheckpoint(
         every: number,

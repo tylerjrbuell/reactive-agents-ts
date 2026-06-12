@@ -39,6 +39,8 @@ export {
   BudgetExceededError,
   KillSwitchTriggeredError,
   BehavioralContractViolationError,
+  DurableRunNotFoundError,
+  DurableConfigMismatchError,
   unwrapError,
   unwrapErrorWithSuggestion,
   errorContext,
