@@ -1,5 +1,9 @@
 # Durable Execution Phase C — `resume(runId)` + crash-resume e2e
 
+> **✅ COMPLETE (2026-06-12).** Shipped on `feat/durable-execution`. C1 kernel seam (`8a07f544`); Hop A forwarding (`ResumeStateRef` FiberRef → reasoning-think → executeRequest → ReactiveInput → kernelInput); Hop B agent durable-config (`durableConfigHash` identity = systemPrompt+provider, threaded onto agent at instantiation); `agent.resumeRun(runId)` (renamed to avoid the pause/resume control verb) + `listRuns()`; `durable-resume.ts` load+guard helpers; C2 test 3/3; C3 cross-process hard-kill e2e 1/1; C4 guide + honesty fix + public error exports. Full monorepo build 38/38, reasoning 1665/0, runtime 934/1 (the 1 = pre-existing `as-unknown-as-ceiling`, red on `main` too — not a Phase C regression).
+>
+> **Scope note vs original plan:** resume API named `resumeRun` not `resume` (collision with the in-process pause/resume verb). Config-hash guard hashes systemPrompt+provider (NOT model — the resolved default model isn't reproducible from a freshly-built agent). Resume runs via `engine.execute` (no re-checkpoint write on the run() path); re-crash-during-resume coverage deferred (documented).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Checkbox (`- [ ]`) steps.
 
 **Goal:** Reconstruct a crashed/paused run from its last checkpoint and continue it to completion — the marketable "kill the process → resume → finish" story that gates evaluations.
