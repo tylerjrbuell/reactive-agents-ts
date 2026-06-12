@@ -29,7 +29,8 @@
     "@reactive-agents/a2a": "workspace:*",
     "@reactive-agents/health": "workspace:*",
     "@reactive-agents/reactive-intelligence": "workspace:*",
-    "@reactive-agents/trace": "workspace:*"
+    "@reactive-agents/trace": "workspace:*",
+    "@reactive-agents/runtime-shim": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

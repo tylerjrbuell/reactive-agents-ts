@@ -568,6 +568,18 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       maxRetries: Schema.optional(Schema.Number),
     })
   ),
+  /**
+   * Opt-in durable run persistence (Phase B). Absent ⇒ off (zero overhead).
+   * Populated by `.withDurableRuns()`; when set, the runtime persists a
+   * serialized kernel-state snapshot to a SQLite RunStore every
+   * `checkpointEvery` iterations so a crashed run can be resumed (Phase C).
+   */
+  durableRuns: Schema.optional(
+    Schema.Struct({
+      dir: Schema.optional(Schema.String),
+      checkpointEvery: Schema.optional(Schema.Number),
+    })
+  ),
   /** Dynamic strategy switching configuration. When enabled, the kernel automatically
    *  switches reasoning strategies on loop detection instead of failing immediately. */
   strategySwitching: Schema.optional(

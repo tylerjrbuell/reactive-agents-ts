@@ -19,11 +19,17 @@ import {
   emitErrorSwallowed,
   errorTag,
 } from "@reactive-agents/core";
+import { hash } from "@reactive-agents/runtime-shim";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 import type { ReactiveAgentsConfig } from "../types.js";
 import type { AgentResultMetadata } from "../builder/types.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
+import { RunStoreLive, RunStoreService } from "../services/run-store.js";
+import { installDurableCheckpointing } from "../run-controller.js";
 
 export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
@@ -156,8 +162,55 @@ export const makeExecuteStream =
       const streamCallback = (text: string) =>
         Queue.offer(queue, { _tag: "TextDelta", text }).pipe(Effect.map(() => {}));
 
+      // ── Durable runs (Phase B write-side) ──
+      // Opt-in only: when `.withDurableRuns()` set `config.durableRuns` AND this
+      // run carries a RunController, install a fire-and-forget `onCheckpoint`
+      // that persists each Nth iteration's serialized snapshot to a SQLite
+      // RunStore, plus a `finish(success)` to flip the run status at the end.
+      // Absent the opt-in this whole block is skipped: no store, no run row, no
+      // db file, and the controller's `onCheckpoint` stays undefined (zero cost).
+      let durableFinish: ((success: boolean) => void) | undefined;
+      if (config.durableRuns && options?.runController) {
+        const agentId = config.agentId;
+        const dir =
+          config.durableRuns.dir ??
+          join(homedir(), ".reactive-agents", agentId);
+        mkdirSync(dir, { recursive: true });
+        const dbPath = join(dir, "runs.db");
+        const checkpointEvery = config.durableRuns.checkpointEvery ?? 1;
+        const runStoreLayer = RunStoreLive(dbPath);
+        // Stable-ish run id: content hash of agent + task + start time.
+        const runId = hash(`${agentId}:${String(task.id)}:${startMs}`).toString(36);
+        const configHash = hash(JSON.stringify(config)).toString(36);
+
+        yield* Effect.gen(function* () {
+          const store = yield* RunStoreService;
+          yield* store.createRun({
+            runId,
+            agentId,
+            task: String((task.input as { question?: unknown })?.question ?? task.id),
+            configHash,
+          });
+        }).pipe(
+          Effect.provide(runStoreLayer),
+          Effect.catchAllCause((cause) =>
+            emitErrorSwallowed({
+              site: "runtime/src/engine/execute-stream.ts:durable-createRun",
+              tag: errorTag(cause),
+            }),
+          ),
+        );
+
+        durableFinish = installDurableCheckpointing(options.runController, {
+          runId,
+          runStoreLayer,
+          checkpointEvery,
+        }).finish;
+      }
+
       yield* execute(task).pipe(
         Effect.tap((taskResult) => {
+          durableFinish?.(true);
           const debriefToolsUsed = (taskResult as { debrief?: { toolsUsed?: Array<{ name: string; calls: number; successRate: number }> } })
             .debrief?.toolsUsed;
           const toolSummary =
@@ -202,6 +255,7 @@ export const makeExecuteStream =
           );
         }),
         Effect.catchAll((err: unknown) => {
+          durableFinish?.(false);
           const cause =
             typeof err === "object" && err !== null && "message" in err
               ? String((err as { message: unknown }).message)

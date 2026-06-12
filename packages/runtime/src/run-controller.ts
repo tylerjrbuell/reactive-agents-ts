@@ -1,8 +1,88 @@
+import { Effect, Layer } from "effect";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "./stream-types.js";
 import type { RunControllerLike } from "@reactive-agents/core";
+import {
+    RunStoreService,
+    type RunStatus as RunStoreStatus,
+} from "./services/run-store.js";
 
 // Re-export for consumers who import from runtime rather than core
 export type { RunControllerLike };
+
+/**
+ * Dependencies for {@link installDurableCheckpointing} — the write-side of
+ * crash-resume (Phase B). The RunStore layer + runId are pre-resolved by the
+ * caller (execute-stream) where the durable config and Effect runtime live.
+ */
+export interface DurableCheckpointDeps {
+    /** Stable id for this run (also the RunStore primary key). */
+    readonly runId: string;
+    /** A `RunStoreLive(dbPath)` layer to provide on each fire-and-forget write. */
+    readonly runStoreLayer: Layer.Layer<RunStoreService>;
+    /** Persist a checkpoint every N iterations (>=1). */
+    readonly checkpointEvery: number;
+}
+
+/**
+ * Wire durable checkpoint persistence onto a {@link RunController}.
+ *
+ * Installs `controller.onCheckpoint` so the kernel seam (which already no-ops
+ * when `onCheckpoint` is absent) hands every Nth iteration's serialized
+ * snapshot to the RunStore. Writes go through `Effect.runFork` — fire-and-forget,
+ * never blocking the reasoning loop and never failing it (errors are swallowed
+ * non-silently via `emitErrorSwallowed`, R11). Returns a `finish(success)`
+ * callback the caller invokes at run end to flip the run status to
+ * `completed` / `failed`.
+ *
+ * Only called when `.withDurableRuns()` was set, so absent that opt-in the
+ * controller's `onCheckpoint` stays undefined and the kernel pays zero cost.
+ */
+export function installDurableCheckpointing(
+    controller: RunControllerLike,
+    deps: DurableCheckpointDeps,
+): { finish: (success: boolean) => void } {
+    const { runId, runStoreLayer, checkpointEvery } = deps;
+    const every = checkpointEvery >= 1 ? checkpointEvery : 1;
+
+    const runWrite = (
+        effect: Effect.Effect<void, never, RunStoreService>,
+        site: string,
+    ): void => {
+        Effect.runFork(
+            effect.pipe(
+                Effect.provide(runStoreLayer),
+                Effect.catchAllDefect((defect) =>
+                    emitErrorSwallowed({ site, tag: errorTag(defect) }),
+                ),
+            ),
+        );
+    };
+
+    controller.onCheckpoint = (serializedState: string, iteration: number): void => {
+        if (iteration % every !== 0) return;
+        runWrite(
+            Effect.gen(function* () {
+                const store = yield* RunStoreService;
+                yield* store.putCheckpoint(runId, iteration, serializedState);
+            }),
+            "runtime/src/run-controller.ts:putCheckpoint",
+        );
+    };
+
+    return {
+        finish: (success: boolean): void => {
+            const status: RunStoreStatus = success ? "completed" : "failed";
+            runWrite(
+                Effect.gen(function* () {
+                    const store = yield* RunStoreService;
+                    yield* store.setStatus(runId, status);
+                }),
+                "runtime/src/run-controller.ts:setStatus",
+            );
+        },
+    };
+}
 
 /**
  * Return type of agent.runStream(). Extends AsyncGenerator<AgentStreamEvent>
