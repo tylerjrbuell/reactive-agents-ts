@@ -79,9 +79,9 @@ import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
+import { serializeKernelState } from "../state/kernel-codec.js";
 import {
   transitionState,
-  asKernelStateLike,
   type KernelState,
   type KernelContext,
   type KernelInput,
@@ -368,7 +368,7 @@ export function runIterationPass(
         // loop — failures are warn-surfaced (R11 precedent), not propagated.
         if (_runCtl.onCheckpoint) {
           try {
-            _runCtl.onCheckpoint(asKernelStateLike(state), state.iteration);
+            _runCtl.onCheckpoint(serializeKernelState(state), state.iteration);
           } catch (err) {
             const msg = `[durable-checkpoint] onCheckpoint observer threw at iteration ${state.iteration}: ${err instanceof Error ? err.message : String(err)}`;
             console.warn(msg);

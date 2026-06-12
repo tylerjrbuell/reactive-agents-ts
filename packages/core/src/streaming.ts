@@ -36,15 +36,17 @@ export const StreamingTextCallback = FiberRef.unsafeMake<
 export interface RunControllerLike {
   checkpoint(): Promise<{ stop: true } | undefined>;
   /**
-   * Optional durable-checkpoint observer. When present, the kernel invokes it
-   * at each iteration boundary (same point as checkpoint()) with a readonly
-   * reference to the current kernel state. Implementations decide whether and
-   * how to persist (e.g. every-N-iterations serialization to a RunStore).
-   * Must not throw and must not block the loop — fire-and-forget persistence
-   * belongs inside the implementation. Absent on the default in-process
-   * controller, so the kernel pays zero cost unless durability is enabled.
+   * Optional durable-checkpoint observer. The kernel invokes it at each
+   * iteration boundary (same point as checkpoint()) with a LOSSLESS serialized
+   * snapshot of kernel state (produced by the kernel's codec) plus the
+   * iteration number. The string is opaque to core; a durable controller
+   * persists it (e.g. every-N-iterations to a RunStore) and Phase C's resume()
+   * rehydrates it. Must not throw and must not block the loop — fire-and-forget
+   * persistence belongs inside the implementation. Absent on the default
+   * in-process controller, so the kernel pays zero cost unless durability is
+   * enabled.
    */
-  onCheckpoint?(state: Readonly<KernelStateLike>, iteration: number): void;
+  onCheckpoint?(serializedState: string, iteration: number): void;
 }
 
 /**

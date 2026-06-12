@@ -8,10 +8,11 @@
  * runtime-side durable controller can persist state every-N iterations.
  *
  * Invariants under test:
- *   1. A RunControllerLike with onCheckpoint set receives (state, iteration)
- *      at each iteration boundary when run through the real kernel loop.
- *   2. The state argument is structurally a KernelStateLike snapshot whose
- *      iteration matches the iteration argument.
+ *   1. A RunControllerLike with onCheckpoint set receives (serializedState,
+ *      iteration) at each iteration boundary when run through the real kernel
+ *      loop. The state arg is a LOSSLESS serialized snapshot string (Phase B).
+ *   2. The serialized string round-trips through deserializeKernelState, and
+ *      the restored iteration matches the iteration argument.
  *   3. An onCheckpoint observer that THROWS must never kill the loop — the
  *      run still completes (R11 triple-surface precedent: warn, don't crash).
  *   4. A controller WITHOUT onCheckpoint (the default in-process controller)
@@ -20,11 +21,11 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { RunControllerRef, type RunControllerLike } from "@reactive-agents/core";
-import type { KernelStateLike } from "@reactive-agents/core";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ReasoningService } from "../../../src/services/reasoning-service.js";
 import { createReasoningLayer } from "../../../src/runtime.js";
 import { defaultReasoningConfig } from "../../../src/types/config.js";
+import { deserializeKernelState } from "../../../src/kernel/state/kernel-codec.js";
 
 const llmLayer = TestLLMServiceLayer([
   { match: ".*", text: "FINAL ANSWER: durable checkpoint seam verified" },
@@ -61,16 +62,12 @@ const runTask = (controller: RunControllerLike) => {
 };
 
 describe("durable-checkpoint seam — onCheckpoint at iteration boundary", () => {
-  it("invokes onCheckpoint(state, iteration) at each iteration boundary", async () => {
-    const calls: Array<{ iteration: number; stateIteration: number; status: string }> = [];
+  it("invokes onCheckpoint(serializedState, iteration) at each iteration boundary", async () => {
+    const calls: Array<{ iteration: number; serialized: string }> = [];
     const controller: RunControllerLike = {
       checkpoint: () => Promise.resolve(undefined),
-      onCheckpoint: (state: Readonly<KernelStateLike>, iteration: number) => {
-        calls.push({
-          iteration,
-          stateIteration: state.iteration,
-          status: state.status,
-        });
+      onCheckpoint: (serialized: string, iteration: number) => {
+        calls.push({ iteration, serialized });
       },
     };
 
@@ -80,9 +77,13 @@ describe("durable-checkpoint seam — onCheckpoint at iteration boundary", () =>
     // At least the first iteration boundary must have fired the observer.
     expect(calls.length).toBeGreaterThanOrEqual(1);
     for (const call of calls) {
-      // iteration argument mirrors the state's own counter at the boundary.
-      expect(call.iteration).toBe(call.stateIteration);
-      expect(typeof call.status).toBe("string");
+      // The observer receives a serialized string, not a live object.
+      expect(typeof call.serialized).toBe("string");
+      // It round-trips through the kernel codec; the restored iteration
+      // mirrors the iteration argument passed alongside it.
+      const restored = deserializeKernelState(call.serialized);
+      expect(restored.iteration).toBe(call.iteration);
+      expect(Array.isArray(restored.steps)).toBe(true);
     }
     // Iterations observed are non-decreasing (boundary order preserved).
     for (let i = 1; i < calls.length; i++) {
@@ -90,24 +91,32 @@ describe("durable-checkpoint seam — onCheckpoint at iteration boundary", () =>
     }
   });
 
-  it("passes a structurally complete KernelStateLike snapshot", async () => {
-    let snapshot: Readonly<KernelStateLike> | null = null;
+  it("passes a lossless serialized snapshot that round-trips", async () => {
+    let serialized: string | null = null;
+    let iteration = -1;
     const controller: RunControllerLike = {
       checkpoint: () => Promise.resolve(undefined),
-      onCheckpoint: (state) => {
-        if (snapshot === null) snapshot = state;
+      onCheckpoint: (state, iter) => {
+        if (serialized === null) {
+          serialized = state;
+          iteration = iter;
+        }
       },
     };
 
     await runTask(controller);
-    expect(snapshot).not.toBeNull();
-    const s = snapshot as unknown as KernelStateLike;
+    expect(serialized).not.toBeNull();
+    expect(typeof serialized).toBe("string");
+    if (serialized === null) throw new Error("no checkpoint observed");
+
+    const s = deserializeKernelState(serialized);
     expect(typeof s.taskId).toBe("string");
     expect(typeof s.strategy).toBe("string");
     expect(typeof s.kernelType).toBe("string");
     expect(Array.isArray(s.steps)).toBe(true);
     expect(s.toolsUsed instanceof Set).toBe(true);
     expect(typeof s.iteration).toBe("number");
+    expect(s.iteration).toBe(iteration);
     expect(typeof s.tokens).toBe("number");
     expect(typeof s.status).toBe("string");
     expect(typeof s.meta).toBe("object");
