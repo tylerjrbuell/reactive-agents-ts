@@ -381,6 +381,8 @@ export class ReactiveAgentBuilder {
     private _budgetLimits: BudgetLimits | undefined = undefined
     /** Opt-in numeric evidence-grounding config. Absent = off (default). */
     private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
+    /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
+    private _durableRuns: import('./builder/types.js').DurableRunsOptions | undefined = undefined
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
 
     // ─── Calibration ───
@@ -852,6 +854,26 @@ export class ReactiveAgentBuilder {
      */
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
         this._groundingConfig = options
+        return this
+    }
+
+    /**
+     * Opt in to durable run persistence (off by default).
+     *
+     * When enabled, the runtime generates a stable `runId` for each run,
+     * records it in a SQLite `RunStore` (`runs.db` under `dir`, default
+     * `~/.reactive-agents/<agentId>/`), and persists a lossless serialized
+     * kernel-state snapshot every `checkpointEvery` iterations (default 1).
+     * Writes are fire-and-forget — they never block or fail the run. This is
+     * the write half of crash-resume; Phase C's `resume(runId)` reads these
+     * checkpoints back. Zero cost when not called: no store, no run row, no
+     * db file.
+     *
+     * @param options - Durable run configuration (dir, checkpointEvery)
+     * @returns `this` for chaining
+     */
+    withDurableRuns(options?: import('./builder/types.js').DurableRunsOptions): this {
+        this._durableRuns = options ?? {}
         return this
     }
 

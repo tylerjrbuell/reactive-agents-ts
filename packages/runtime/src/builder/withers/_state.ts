@@ -52,7 +52,7 @@ import type { TelemetryConfig } from "@reactive-agents/observability";
 import type { DocumentSpec } from "../../context-ingestion.js";
 import type { CalibrationMode } from "../../types.js";
 import type { BudgetLimits } from "../../builder.js";
-import type { GroundingOptions } from "../types.js";
+import type { GroundingOptions, DurableRunsOptions } from "../types.js";
 import type { StreamDensity } from "../../stream-types.js";
 import type { RuntimeErrors } from "../../errors.js";
 import type { MCPServerConfig } from "../../runtime.js";
@@ -116,6 +116,8 @@ export interface BuilderState {
   _budgetLimits: BudgetLimits | undefined;
   /** Opt-in numeric evidence-grounding. Absent = grounding off (default). */
   _groundingConfig: GroundingOptions | undefined;
+  /** Opt-in durable run persistence. Absent = off (zero overhead, default). */
+  _durableRuns: DurableRunsOptions | undefined;
   _executionTimeoutMs?: number;
   _retryPolicy?: { maxRetries: number; backoffMs: number };
   _cacheTimeoutMs?: number;

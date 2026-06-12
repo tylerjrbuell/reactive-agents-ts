@@ -205,6 +205,17 @@ export interface RuntimeOptions {
   grounding?: import("./builder/types.js").GroundingOptions;
 
   /**
+   * Opt-in durable run persistence. Absent ⇒ off (zero overhead, default).
+   * Populated by `.withDurableRuns()`; threaded into
+   * `ReactiveAgentsConfig.durableRuns`. When set, the runtime persists a
+   * serialized kernel-state snapshot to a SQLite RunStore every
+   * `checkpointEvery` iterations (the write half of crash-resume).
+   *
+   * Default: undefined (no persistence).
+   */
+  durableRuns?: import("./builder/types.js").DurableRunsOptions;
+
+  /**
    * Mock LLM responses for testing (provider: "test" only).
    * Maps input patterns to predefined outputs.
    *

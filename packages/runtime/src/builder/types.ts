@@ -337,6 +337,31 @@ export interface GroundingOptions {
     readonly maxRetries?: number;
 }
 
+/**
+ * Options for `.withDurableRuns()` — opt-in durable run persistence (Phase B).
+ *
+ * When enabled, the runtime serializes kernel state to a SQLite RunStore every
+ * `checkpointEvery` iterations so a crashed run can be resumed (Phase C
+ * `resume()`). Absent ⇒ no RunStore, no run row, no checkpoints, no db file
+ * (zero overhead).
+ *
+ * @example
+ * ```typescript
+ * agent.withDurableRuns()                                  // default dir, every iteration
+ * agent.withDurableRuns({ checkpointEvery: 5 })            // every 5th iteration
+ * agent.withDurableRuns({ dir: "./.runs", checkpointEvery: 2 })
+ * ```
+ */
+export interface DurableRunsOptions {
+    /**
+     * Directory for the `runs.db` SQLite file.
+     * Default: `~/.reactive-agents/<agentId>/`.
+     */
+    readonly dir?: string;
+    /** Persist a checkpoint every N iterations. Default 1. */
+    readonly checkpointEvery?: number;
+}
+
 export interface VerificationOptions {
     /** Enable semantic entropy estimation. Default: true */
     readonly semanticEntropy?: boolean

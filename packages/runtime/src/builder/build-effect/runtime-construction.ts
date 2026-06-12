@@ -172,6 +172,8 @@ export interface BuilderRuntimeStateView {
   readonly _budgetLimits: import("../../builder.js").BudgetLimits | undefined;
   /** Opt-in numeric evidence-grounding config. Absent = off (default). */
   readonly _groundingConfig: import("../types.js").GroundingOptions | undefined;
+  /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
+  readonly _durableRuns: import("../types.js").DurableRunsOptions | undefined;
   /** Registrations collected by `.withHarness()` calls — compiled into a HarnessPipeline. */
   readonly _harnessRegistrations: ReadonlyArray<(harness: import("@reactive-agents/core").Harness) => void>;
 }
@@ -451,6 +453,7 @@ export const buildBaseRuntimeAndEngine = (
       leanHarness: state._leanHarness || undefined,
       budgetLimits: state._budgetLimits,
       grounding: state._groundingConfig,
+      durableRuns: state._durableRuns,
       harnessPipeline,
     });
 
