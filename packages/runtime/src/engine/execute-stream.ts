@@ -186,7 +186,6 @@ export const makeExecuteStream =
         const configHash = durableConfigHash({
           systemPrompt: config.systemPrompt,
           provider: config.provider,
-          model: config.defaultModel,
         });
 
         yield* Effect.gen(function* () {

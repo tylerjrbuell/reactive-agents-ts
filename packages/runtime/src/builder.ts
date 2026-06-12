@@ -2200,7 +2200,6 @@ export class ReactiveAgentBuilder {
                           configHash: durableConfigHash({
                               systemPrompt: composedSystemPrompt,
                               provider: self._provider,
-                              model: self._model,
                           }),
                       }
                     : undefined,
