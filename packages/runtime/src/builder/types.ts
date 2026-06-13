@@ -751,8 +751,20 @@ export interface AgentResult {
      *   the model finished its turn without explicitly signaling completion. Treat as "maybe".
      */
     readonly goalAchieved?: boolean | null
-    /** Structured post-run debrief synthesized after the kernel exits. */
+    /**
+     * Structured post-run debrief. This is the INSTANT deterministic fallback —
+     * available the moment `run()` returns (no LLM wait). The richer LLM-synthesized
+     * debrief is produced off the critical path; await {@link debriefRich} for it.
+     */
     readonly debrief?: AgentDebrief
+    /**
+     * Await the LLM-synthesized rich debrief, which the engine forks off the
+     * critical path so it never delays the answer (measured ~4.7s/48% of a run).
+     * Resolves to the rich debrief, or the deterministic fallback if no LLM
+     * debrief was scheduled (trivial task / memory off / LLM unavailable).
+     * Present only when a debrief was produced (reasoning path + `.withMemory()`).
+     */
+    readonly debriefRich?: () => Promise<AgentDebrief | undefined>
     /** Error message when `success` is false. */
     readonly error?: string
 }

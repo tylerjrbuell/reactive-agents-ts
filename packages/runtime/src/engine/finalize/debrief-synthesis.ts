@@ -5,10 +5,19 @@
  * errorsFromLoop collection, synthesizeDebrief() call, DebriefCompleted
  * event publication, and DebriefStoreService persistence.
  *
- * Returns the produced debrief (or undefined), the errorsFromLoop array
- * (consumed by T4 telemetry), and executionDurationMs (consumed by result
- * assembly). All side-effects are wrapped with Effect.catchAll so errors
- * never propagate to the caller.
+ * Split (2026-06-12, debrief-off-critical-path) into:
+ *   - `prepareDebrief`  — CHEAP, synchronous signals: tool stats, errorsFromLoop,
+ *     executionDurationMs, the DebriefInput, and the deterministic fallback
+ *     debrief. Emits FinalAnswerProduced. Stays on the critical path (the
+ *     fallback populates `result.debrief` instantly).
+ *   - `finalizeDebriefBackground` — EXPENSIVE: the LLM `synthesizeDebrief` call
+ *     (non-trivial + memory + LLM), then DebriefCompleted + DebriefStore.save.
+ *     The engine `Effect.forkDaemon`s this so it never blocks `run()`'s return
+ *     (measured 4.7s / 48% of a frontier run, ~6s local — GH #143).
+ *   - `synthesizeAndStoreDebrief` — the original sequential composition (prepare
+ *     then finalize), preserved for callers/tests that want the awaited result.
+ *
+ * All side-effects are wrapped with Effect.catchAll so errors never propagate.
  *
  * Lifted from execution-engine.ts post-W23-6a-8 (2358-LOC checkpoint).
  */
@@ -72,6 +81,22 @@ export interface DebriefSynthesisDeps {
   }[];
 }
 
+/**
+ * Output of `prepareDebrief` — the cheap, synchronous signals plus the
+ * deterministic fallback. `fallbackDebrief` is undefined only when no debrief
+ * should be produced at all (non-reasoning path or memory disabled).
+ */
+export interface PreparedDebrief {
+  readonly debriefInput: DebriefInput;
+  readonly fallbackDebrief: AgentDebrief | undefined;
+  readonly errorsFromLoop: readonly string[];
+  readonly executionDurationMs: number;
+  /** rr present AND memory enabled — a debrief (fallback at minimum) is produced + persisted. */
+  readonly shouldFinalize: boolean;
+  /** shouldFinalize AND the task is non-trivial — the (forkable) LLM call is warranted. */
+  readonly shouldSynthesizeLLM: boolean;
+}
+
 export interface DebriefSynthesisResult {
   readonly debrief: AgentDebrief | undefined;
   readonly errorsFromLoop: readonly string[];
@@ -85,11 +110,16 @@ export interface DebriefSynthesisResult {
   readonly debriefTokensUsed: number;
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── prepareDebrief (cheap, critical-path) ──────────────────────────────────────
 
-export const synthesizeAndStoreDebrief = (
+/**
+ * Compute the deterministic debrief signals + fallback. No LLM call. Emits
+ * FinalAnswerProduced (needed for streaming consumers). Cheap enough to stay on
+ * the critical path; its `fallbackDebrief` populates `result.debrief` instantly.
+ */
+export const prepareDebrief = (
   deps: DebriefSynthesisDeps,
-): Effect.Effect<DebriefSynthesisResult, never> => {
+): Effect.Effect<PreparedDebrief, never> => {
   const { ctx, task, config, eb, rr, terminatedByRaw, sanitizedOutput, outputForSuccess, hasSubstantiveOutput, toolCallLog, rationaleLog } = deps;
 
   return Effect.gen(function* () {
@@ -169,60 +199,80 @@ export const synthesizeAndStoreDebrief = (
     // empty content), and bench evidence showed it burned ~825 tok and ~6 s
     // per task uncounted.
     //
-    // Lever 7 (2026-05-26) — relaxed the gate to also fire on tool-using
-    // tasks with short outputs. The original gate required zero tool calls,
-    // which left tasks like t1-calculator-add ("Use bench_calculator → 391")
-    // paying the full debrief LLM cost even though the output is 3 chars and
-    // the fallback could trivially summarize it. Profile evidence: t1 local
-    // burned 6.3 s on the debrief LLM call alone (37% of total runtime).
-    //
     // Conditions:
     //  - outputForSuccess.length < 100  — short answer, fallback handles it
     //  - errorsFromLoop.length === 0    — no error narrative for the LLM
-    //
-    // Tool-call presence is no longer a gating signal — the fallback already
-    // records `toolsUsed` from `toolCallHistory`, which the LLM debrief
-    // adds no information on top of for trivial answers.
     const isTrivialForDebrief =
       outputForSuccess.length < 100 &&
       errorsFromLoop.length === 0;
 
-    // Synthesize debrief (best-effort, only on the reasoning path with memory enabled).
-    // Gated on BOTH: rr !== undefined (reasoning path was used) AND config.enableMemory
-    // (user opted in with .withMemory()). Skipped otherwise to avoid injecting extra
-    // LLM calls in direct-LLM path tests and non-memory configurations.
-    // Also requires LLMService to be available in context — use serviceOption to check.
+    // Gated on BOTH: rr !== undefined (reasoning path was used) AND
+    // config.enableMemory (user opted in with .withMemory()). Skipped otherwise
+    // to avoid injecting extra LLM calls in direct-LLM path tests and non-memory
+    // configurations.
+    const shouldFinalize = rr !== undefined && config.enableMemory === true;
+    const shouldSynthesizeLLM = shouldFinalize && !isTrivialForDebrief;
+
+    const fallbackDebrief = shouldFinalize ? buildFallbackDebrief(debriefInput) : undefined;
+
+    return {
+      debriefInput,
+      fallbackDebrief,
+      errorsFromLoop,
+      executionDurationMs,
+      shouldFinalize,
+      shouldSynthesizeLLM,
+    } satisfies PreparedDebrief;
+  });
+};
+
+// ─── finalizeDebriefBackground (expensive, forkable) ────────────────────────────
+
+/**
+ * Produce the FINAL debrief — the LLM-synthesized rich version when warranted,
+ * else the deterministic fallback — then emit DebriefCompleted and persist to
+ * DebriefStore. The engine `Effect.forkDaemon`s this so it never blocks the
+ * answer's return. Returns the rich debrief + the LLM tokens it consumed.
+ *
+ * No-ops to `{ debrief: undefined, tokensUsed: 0 }` when `prepared.shouldFinalize`
+ * is false (non-reasoning path / memory off), matching pre-split behavior.
+ */
+export const finalizeDebriefBackground = (
+  deps: DebriefSynthesisDeps,
+  prepared: PreparedDebrief,
+): Effect.Effect<{ debrief: AgentDebrief | undefined; tokensUsed: number }, never> => {
+  const { ctx, task, eb, terminatedByRaw, sanitizedOutput } = deps;
+  const { debriefInput, fallbackDebrief, shouldFinalize, shouldSynthesizeLLM } = prepared;
+
+  return Effect.gen(function* () {
+    if (!shouldFinalize) {
+      return { debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 };
+    }
+
+    // Resolve the final debrief: rich LLM synthesis when non-trivial + LLM
+    // available, else the deterministic fallback (always available).
     const debriefAndTokens: { debrief: AgentDebrief | undefined; tokensUsed: number } =
-      yield* (rr !== undefined && config.enableMemory
-        ? isTrivialForDebrief
-          ? Effect.succeed({ debrief: buildFallbackDebrief(debriefInput), tokensUsed: 0 })
-          : Effect.serviceOption(LLMService).pipe(
-              Effect.flatMap((llmOpt) => {
-                if (llmOpt._tag !== "Some") {
-                  // No LLM available — still build a fallback so downstream consumers
-                  // (DebriefStoreService persist, DebriefCompleted event) see a record.
-                  return Effect.succeed({ debrief: buildFallbackDebrief(debriefInput), tokensUsed: 0 });
-                }
-                return synthesizeDebrief(debriefInput).pipe(
-                  Effect.provideService(LLMService, llmOpt.value),
-                  Effect.map((result) => ({ debrief: result.debrief as AgentDebrief | undefined, tokensUsed: result.tokensUsed })),
-                  Effect.catchAll(() =>
-                    Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }),
-                  ),
-                );
-              }),
-              Effect.catchAll(() =>
-                Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }),
-              ),
-            )
-        : Effect.succeed({ debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 }));
+      yield* (shouldSynthesizeLLM
+        ? Effect.serviceOption(LLMService).pipe(
+            Effect.flatMap((llmOpt) => {
+              if (llmOpt._tag !== "Some") {
+                return Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 });
+              }
+              return synthesizeDebrief(debriefInput).pipe(
+                Effect.provideService(LLMService, llmOpt.value),
+                Effect.map((result) => ({ debrief: (result.debrief as AgentDebrief | undefined) ?? fallbackDebrief, tokensUsed: result.tokensUsed })),
+                // On LLM failure fall back to the deterministic debrief so the
+                // store + event always see a record (was `undefined` pre-split).
+                Effect.catchAll(() => Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 })),
+              );
+            }),
+            Effect.catchAll(() => Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 })),
+          )
+        : Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 }));
 
-    const { debrief, tokensUsed: debriefTokensUsed } = debriefAndTokens;
+    const { debrief, tokensUsed } = debriefAndTokens;
 
-    // Publish DebriefCompleted from a single site so all paths (trivial-fallback,
-    // LLM-success, LLM-failure-fallback) emit consistently. Prior to GH #143 this
-    // fired only on the LLM-success path; subscribers expecting the event missed it
-    // when the trivial gate routed to the fallback synthesizer.
+    // Publish DebriefCompleted from a single site so all paths emit consistently.
     if (debrief !== undefined && eb) {
       yield* eb
         .publish({
@@ -270,11 +320,28 @@ export const synthesizeAndStoreDebrief = (
       );
     }
 
-    return {
-      debrief,
-      errorsFromLoop,
-      executionDurationMs,
-      debriefTokensUsed,
-    } satisfies DebriefSynthesisResult;
+    return { debrief, tokensUsed };
   });
 };
+
+// ─── synthesizeAndStoreDebrief (sequential composition — awaited) ────────────────
+
+/**
+ * Original awaited composition: prepare then finalize, in sequence. Preserved
+ * for callers/tests that want the debrief computed + persisted before the Effect
+ * completes. The execution engine no longer uses this on the hot path — it calls
+ * `prepareDebrief` inline and `forkDaemon`s `finalizeDebriefBackground`.
+ */
+export const synthesizeAndStoreDebrief = (
+  deps: DebriefSynthesisDeps,
+): Effect.Effect<DebriefSynthesisResult, never> =>
+  Effect.gen(function* () {
+    const prepared = yield* prepareDebrief(deps);
+    const { debrief, tokensUsed } = yield* finalizeDebriefBackground(deps, prepared);
+    return {
+      debrief,
+      errorsFromLoop: prepared.errorsFromLoop,
+      executionDurationMs: prepared.executionDurationMs,
+      debriefTokensUsed: tokensUsed,
+    } satisfies DebriefSynthesisResult;
+  });

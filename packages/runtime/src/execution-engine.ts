@@ -1,4 +1,4 @@
-import { Effect, Context, Layer, Ref, Stream as EStream, Duration, Logger, FiberRef } from "effect";
+import { Effect, Context, Layer, Ref, Stream as EStream, Duration, Logger, FiberRef, Fiber } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import {
   ExecutionError,
@@ -73,7 +73,7 @@ import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postproce
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { captureFinalSnapshot } from "./engine/finalize/snapshot-final.js";
 import { makeExecuteStream } from "./engine/execute-stream.js";
-import { synthesizeAndStoreDebrief } from "./engine/finalize/debrief-synthesis.js";
+import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
 import { runLocalLearning } from "./engine/finalize/local-learning.js";
 import { finalizeRun } from "./engine/finalize/run-finalize.js";
@@ -1056,9 +1056,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                         (rr.status === "partial" && hasSubstantiveOutput)
                     : Boolean(ctx.metadata.isComplete);
 
-                // ── Debrief Synthesis (best-effort, never blocks the result) ──
-                // Extracted to engine/finalize/debrief-synthesis.ts (W24-B step 1).
-                const { debrief, errorsFromLoop, executionDurationMs, debriefTokensUsed } = yield* synthesizeAndStoreDebrief({
+                // ── Debrief: cheap signals inline, rich LLM synthesis FORKED ──
+                // (2026-06-12 debrief-off-critical-path). prepareDebrief computes
+                // the deterministic fallback + errorsFromLoop + duration on the
+                // critical path; finalizeDebriefBackground (the LLM call + persist
+                // + DebriefCompleted event) is forkDaemon'd so it NEVER blocks the
+                // answer's return — measured 4.7s / 48% of a frontier run, ~6s
+                // local (GH #143). The fallback populates result.debrief instantly;
+                // ReactiveAgent.debriefRich() awaits the fiber for the rich version.
+                // Extracted to engine/finalize/debrief-synthesis.ts.
+                const debriefDeps = {
                   ctx,
                   task,
                   config,
@@ -1070,18 +1077,22 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   hasSubstantiveOutput,
                   toolCallLog,
                   rationaleLog,
-                });
+                };
+                const prepared = yield* prepareDebrief(debriefDeps);
+                const { errorsFromLoop, executionDurationMs, fallbackDebrief } = prepared;
+                const debrief = fallbackDebrief;
 
-                // GH #143 honesty fix — debrief LLM call's tokens now flow into
-                // the reported total. Without this, bench undercounted RA by ~5x
-                // on local tier (k1 reported 206 tok, actual ~1031 incl. debrief).
-                // Mutating ctx.tokensUsed mirrors the per-iter accumulator pattern
-                // used at inline-think.ts / reasoning-think.ts (those rebuild a new
-                // context object; here we mutate the final ctx before TaskResult
-                // assembly since no downstream phase reads tokensUsed after this).
-                if (debriefTokensUsed > 0) {
-                  (ctx as { tokensUsed: number }).tokensUsed = ctx.tokensUsed + debriefTokensUsed;
-                }
+                // Fork the rich debrief + persistence into a daemon fiber on the
+                // runtime scope (survives this run; joined by dispose()). Only when
+                // a debrief is actually produced (reasoning path + memory enabled).
+                const debriefFiber = prepared.shouldFinalize
+                  ? yield* Effect.forkDaemon(finalizeDebriefBackground(debriefDeps, prepared))
+                  : undefined;
+
+                // NOTE (GH #143): debrief LLM tokens are no longer folded into
+                // result.metadata.tokensUsed at return — the call is now background
+                // (post-answer), so the reported total reflects the ANSWER's cost.
+                // The forked debrief's tokens surface via debriefRich()/telemetry.
 
                 const result: TaskResult & {
                   format?: string;
@@ -1143,6 +1154,18 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   terminatedBy: terminatedByRaw,
                   ...(debrief !== undefined ? { debrief } : {}),
                 };
+
+                // Surface the forked rich-debrief fiber on the result (internal,
+                // non-enumerable) so ReactiveAgent can expose debriefRich() and
+                // join it on dispose(). Consumed at reactive-agent.ts result map.
+                if (debriefFiber !== undefined) {
+                  Object.defineProperty(result, "_debriefFiber", {
+                    value: debriefFiber,
+                    enumerable: false,
+                    writable: false,
+                    configurable: true,
+                  });
+                }
 
                 if (obs) {
                   yield* obs.info("Execution completed", {

@@ -211,6 +211,14 @@ export class ReactiveAgent {
 
     /** @internal Last debrief from a completed run — used as context in chat() calls. */
     private _lastDebrief?: AgentDebrief
+    /**
+     * @internal In-flight forked debrief fibers (one per run that produced a
+     * debrief). The rich LLM debrief synthesizes off the critical path; dispose()
+     * joins these so a short-lived `run(); dispose()` never drops the persist.
+     */
+    private _pendingDebriefs = new Set<
+        Fiber.RuntimeFiber<{ debrief?: AgentDebrief; tokensUsed: number }, never>
+    >()
     /** @internal Tool observations from the last run — gives chat access to actual data. */
     private _lastRunObservations: string[] = []
     /** @internal Conversation history for the agent-level chat context. */
@@ -230,6 +238,16 @@ export class ReactiveAgent {
      * ```
      */
     async dispose(): Promise<void> {
+        // Join any in-flight forked debrief fibers BEFORE tearing down the
+        // runtime — disposing the ManagedRuntime interrupts daemon fibers, which
+        // would drop the debrief persist on a short-lived `run(); dispose()`.
+        if (this._pendingDebriefs.size > 0) {
+            const fibers = [...this._pendingDebriefs]
+            this._pendingDebriefs.clear()
+            await Promise.allSettled(
+                fibers.map((f) => this.runtime.runPromise(Fiber.join(f))),
+            )
+        }
         const serverNames = this._mcpServerNames
         if (serverNames.length > 0) {
             await this.runtime.runPromise(
@@ -781,6 +799,10 @@ export class ReactiveAgent {
                     ...(reasoningSteps !== undefined ? { reasoningSteps } : {}),
                     ...(derivedToolCalls.length > 0 ? { toolCalls: derivedToolCalls } : {}),
                 }
+                // Rich LLM debrief: the engine forks it off the critical path and
+                // attaches the fiber here. debriefRich() awaits it lazily; the
+                // fiber is tracked so dispose() joins it (no dropped persist).
+                const debriefFiber = (r as { _debriefFiber?: Fiber.RuntimeFiber<{ debrief?: AgentDebrief; tokensUsed: number }, never> })._debriefFiber
                 const agentResult: AgentResult = {
                     output: String(r.output ?? ''),
                     success: r.success,
@@ -793,10 +815,35 @@ export class ReactiveAgent {
                         : {}),
                     goalAchieved: deriveGoalAchieved(r.terminatedBy),
                     ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
+                    ...(debriefFiber
+                        ? {
+                              debriefRich: () =>
+                                  this.runtime
+                                      .runPromise(Fiber.join(debriefFiber))
+                                      .then((res) => res.debrief ?? r.debrief)
+                                      .catch(() => r.debrief),
+                          }
+                        : {}),
                     ...(r.error !== undefined ? { error: r.error } : {}),
                 }
-                // Capture debrief for use as context in subsequent chat() calls
+                // Capture debrief for use as context in subsequent chat() calls.
+                // result.debrief is the instant deterministic fallback.
                 if (agentResult.debrief) this._lastDebrief = agentResult.debrief
+
+                // Track the fiber for dispose(); upgrade _lastDebrief to the rich
+                // version once it resolves; deregister when done (fire-and-forget).
+                if (debriefFiber) {
+                    this._pendingDebriefs.add(debriefFiber)
+                    void this.runtime
+                        .runPromise(Fiber.join(debriefFiber))
+                        .then((res) => {
+                            if (res.debrief) this._lastDebrief = res.debrief
+                        })
+                        .catch(() => {})
+                        .finally(() => {
+                            this._pendingDebriefs.delete(debriefFiber)
+                        })
+                }
                 // Capture reasoning context so chat() has access to actual data.
                 // Includes: tool observations + agent analysis thoughts (which contain
                 // the synthesized data from tool results, not just compressed previews).
