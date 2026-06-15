@@ -59,7 +59,7 @@ function fromEffectSchema<A>(schema: Schema.Schema<A, A, never>): SchemaContract
     toJsonSchema(): Record<string, unknown> | undefined {
       try {
         const js = JSONSchema.make(schema);
-        return js as Record<string, unknown>;
+        return js as unknown as Record<string, unknown>;
       } catch {
         return undefined;
       }
@@ -95,7 +95,12 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
    * rather than silently dropping the result.
    */
   function runValidate(v: unknown): SchemaValidationResult<A> {
-    const raw = props.validate(v);
+    let raw;
+    try {
+      raw = props.validate(v);
+    } catch (e) {
+      return { ok: false, issues: [{ path: [], message: String(e) }] };
+    }
 
     if (raw instanceof Promise) {
       return {
@@ -135,6 +140,7 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
   return {
     effectSchema,
     validate: runValidate,
+    label: props.vendor,
     toJsonSchema(): Record<string, unknown> | undefined {
       // Standard Schema v1 does not standardize JSON Schema emission.
       // Fall back to the prompt+heal path.

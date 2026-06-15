@@ -51,4 +51,12 @@ describe("toSchemaContract — Standard Schema", () => {
     }
   });
   it("returns undefined JSON schema when the validator has no emitter", () => { expect(toSchemaContract(std).toJsonSchema()).toBeUndefined(); });
+  it("surfaces an issue when ~standard.validate is async", () => {
+    const asyncStd: StandardSchemaV1<unknown, unknown> = {
+      "~standard": { version: 1, vendor: "test", validate: async (v) => ({ value: v }) },
+    };
+    const r = toSchemaContract(asyncStd).validate({});
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues[0].message).toContain("async");
+  });
 });
