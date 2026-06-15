@@ -2,10 +2,15 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Cause, Exit } from "effect";
 import { normalizeHookResult, runHookResultForSideEffect } from "../src/hooks-normalize.js";
 import type { ExecutionContext } from "../src/types.js";
+import { ExecutionError } from "../src/errors.js";
 
 // Minimal ExecutionContext stand-in — only identity matters for these tests.
 const baseCtx = { phase: "think", iteration: 1 } as unknown as ExecutionContext;
 const nextCtx = { phase: "think", iteration: 2 } as unknown as ExecutionContext;
+
+// A legacy Effect hook's error channel is ExecutionError (per RawHookResult).
+const execErr = (message: string) =>
+  new ExecutionError({ message, taskId: "", phase: "think" });
 
 const run = <A, E>(eff: Effect.Effect<A, E>) => Effect.runPromise(eff);
 
@@ -59,7 +64,7 @@ describe("normalizeHookResult", () => {
   });
 
   it("failed Effect → fails with the original error as the cause (back-compat)", async () => {
-    const eff = normalizeHookResult(() => Effect.fail(new Error("eff-fail")), baseCtx);
+    const eff = normalizeHookResult(() => Effect.fail(execErr("eff-fail")), baseCtx);
     const cause = failValue(await Effect.runPromiseExit(eff));
     expect(cause).toBeInstanceOf(Error);
     expect((cause as Error).message).toBe("eff-fail");
@@ -99,7 +104,7 @@ describe("runHookResultForSideEffect", () => {
     // Effect.runPromise rejects with a FiberFailure (an Error subclass) — assert
     // a real error surfaces, symmetric with the rejected-Promise case above.
     await expect(
-      runHookResultForSideEffect(Effect.fail(new Error("y"))),
+      runHookResultForSideEffect(Effect.fail(execErr("y"))),
     ).rejects.toBeInstanceOf(Error);
   });
 });
