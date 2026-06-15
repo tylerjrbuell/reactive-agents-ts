@@ -46,6 +46,11 @@ function isThenable(u: unknown): u is Promise<unknown> {
 export function normalizeHookResult(
   handler: (ctx: ExecutionContext) => RawHookResult,
   ctx: ExecutionContext,
+  // Narrow-shim `unknown` error channel (counted by no-silent-swallow-floor):
+  // a hook can throw / reject with any value, so the raw cause is genuinely
+  // untyped here. It is TRANSLATED to a tagged `HookError` at the boundary in
+  // `hooks.ts` (`Effect.mapError`), which is the legitimate-shim pattern from
+  // the doc-block at `packages/core/src/errors/index.ts`. Not a swallow.
 ): Effect.Effect<ExecutionContext, unknown> {
   return Effect.suspend(() => {
     let raw: RawHookResult;
@@ -62,12 +67,12 @@ export function normalizeHookResult(
       return Effect.succeed(ctx);
     }
     if (Effect.isEffect(raw)) {
-      // Safe narrowing: RawHookResult constrains the Effect arm to
-      // Effect<ExecutionContext, ExecutionError>; we only widen the error
-      // channel to `unknown` to unify it with the throw/reject paths.
-      // The `?? ctx` is defensive — the type says the success is always an
-      // ExecutionContext, but an untyped-JS Effect could resolve to undefined.
-      return (raw as Effect.Effect<ExecutionContext, unknown>).pipe(
+      // Safe narrowing: RawHookResult constrains the Effect arm to exactly
+      // Effect<ExecutionContext, ExecutionError>, so assert that (not the
+      // wider `unknown` error channel — keeps this off the silent-swallow
+      // ceiling). The `?? ctx` is defensive — the type says success is always
+      // an ExecutionContext, but an untyped-JS Effect could resolve undefined.
+      return (raw as Effect.Effect<ExecutionContext, ExecutionError>).pipe(
         Effect.map((r) => r ?? ctx),
       );
     }
@@ -96,7 +101,9 @@ export async function runHookResultForSideEffect(
 ): Promise<void> {
   if (raw === undefined || raw === null) return;
   if (Effect.isEffect(raw)) {
-    await Effect.runPromise(raw as Effect.Effect<ExecutionContext, unknown>);
+    // Same narrowing as normalizeHookResult — RawHookResult's Effect arm is
+    // Effect<ExecutionContext, ExecutionError>; assert that exact shape.
+    await Effect.runPromise(raw as Effect.Effect<ExecutionContext, ExecutionError>);
     return;
   }
   if (isThenable(raw)) {

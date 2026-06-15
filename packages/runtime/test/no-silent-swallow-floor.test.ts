@@ -80,12 +80,19 @@ const SCOPED_ROOTS = [
 // History:
 //   2026-05-29 (WS-5 Phase 2): pinned at 20 (was 22 before deduping
 //     ContextManagerLike between inline-think.ts and execution-engine.ts).
+//   2026-06-15 (effect-free hooks): 20 → 21. One legitimate narrow-shim site
+//     added at `runtime/src/hooks-normalize.ts` `normalizeHookResult` return:
+//     a lifecycle hook may throw/reject with any value, so the raw cause is
+//     genuinely `unknown` and is TRANSLATED to a tagged `HookError` at the
+//     boundary in `hooks.ts` (`Effect.mapError`). Category-A per the
+//     errors/index.ts doc-block. The two sibling `Effect.isEffect` casts were
+//     typed to `ExecutionError` (not `unknown`) so only this one site counts.
 //
 // Note: this count differs from a naive grep (~25) because the AST
 // walker excludes false-positive `Effect<X, Y>` matches where `unknown`
 // only appears inside the success channel (e.g., `Record<string, unknown>`
 // or `Layer.Layer<unknown, unknown, unknown>`).
-const CEILING = 20;
+const CEILING = 21;
 
 function listTsFiles(root: string): string[] {
   const out: string[] = [];
