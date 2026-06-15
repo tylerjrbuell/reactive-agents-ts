@@ -13,6 +13,7 @@
 import type { ReactiveAgentBuilder } from "../builder.js";
 import type { LifecycleHook, ExecutionContext } from "../types.js";
 import type { RuntimeErrors } from "../errors.js";
+import { runHookResultForSideEffect } from "../hooks-normalize.js";
 
 /**
  * Reconstruct a builder from an AgentConfig object.
@@ -98,11 +99,9 @@ export async function invokeUserHookSafely(
     surface(err);
     return;
   }
-  if (result && typeof (result as { then?: unknown }).then === "function") {
-    try {
-      await (result as Promise<unknown>);
-    } catch (err) {
-      surface(err);
-    }
+  try {
+    await runHookResultForSideEffect(result as Parameters<typeof runHookResultForSideEffect>[0]);
+  } catch (err) {
+    surface(err);
   }
 }

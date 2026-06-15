@@ -3,6 +3,8 @@ import { Effect, Cause } from "effect";
 import { LifecycleHookRegistry, LifecycleHookRegistryLive } from "../src/hooks.js";
 import { HookError } from "../src/errors.js";
 import type { ExecutionContext, LifecycleHook } from "../src/types.js";
+import { invokeUserHookSafely } from "../src/builder/api-surface.js";
+import { ReactiveAgents } from "../src/builder.js";
 
 const ctx = (iteration: number) =>
   ({ phase: "think", iteration } as unknown as ExecutionContext);
@@ -84,5 +86,44 @@ describe("effect-free lifecycle hooks — registry path", () => {
       expect(failure._tag).toBe("Some");
       expect(failure._tag === "Some" && failure.value instanceof HookError).toBe(true);
     }
+  });
+});
+
+describe("effect-free lifecycle hooks — harness-mirror path", () => {
+  it("runs a plain async handler for its side effect", async () => {
+    let ran = false;
+    const builder = ReactiveAgents.create().withName("mirror-plain");
+    const hook: LifecycleHook = {
+      phase: "think",
+      timing: "before",
+      handler: async () => {
+        ran = true;
+      },
+    };
+    await invokeUserHookSafely(
+      builder as never,
+      hook,
+      { phase: "think", iteration: 0 },
+    );
+    expect(ran).toBe(true);
+  });
+
+  it("runs a legacy Effect handler for its side effect (was a latent no-op)", async () => {
+    let ran = false;
+    const builder = ReactiveAgents.create().withName("mirror-effect");
+    const hook: LifecycleHook = {
+      phase: "think",
+      timing: "before",
+      handler: () => Effect.sync(() => {
+        ran = true;
+        return { phase: "think", iteration: 0 } as ExecutionContext;
+      }),
+    };
+    await invokeUserHookSafely(
+      builder as never,
+      hook,
+      { phase: "think", iteration: 0 },
+    );
+    expect(ran).toBe(true);
   });
 });
