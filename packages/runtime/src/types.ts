@@ -351,13 +351,13 @@ export type ToolResult = typeof ToolResultSchema.Type;
  *
  * @example
  * ```typescript
+ * // Plain function — no Effect import needed. Return nothing to observe.
  * const hook: LifecycleHook = {
  *   phase: "think",
  *   timing: "after",
- *   handler: (ctx) => Effect.sync(() => {
+ *   handler: (ctx) => {
  *     console.log(`Iteration ${ctx.iteration}: ${ctx.selectedStrategy}`);
- *     return ctx; // Must return the (possibly modified) context
- *   })
+ *   },
  * };
  * ```
  */
@@ -374,9 +374,9 @@ export interface LifecycleHook {
    * and Effects are all accepted — you do NOT need to import Effect:
    *
    * ```ts
-   * handler: (ctx) => { console.log(ctx.iteration); }          // observe
-   * handler: (ctx) => ({ ...ctx, foo: 1 })                      // modify
-   * handler: async (ctx) => { await save(ctx); return ctx; }    // async
+   * handler: (ctx) => { console.log(ctx.iteration); }                       // observe
+   * handler: (ctx) => ({ ...ctx, metadata: { ...ctx.metadata, seen: 1 } })  // modify
+   * handler: async (ctx) => { await save(ctx); return ctx; }                // async
    * ```
    *
    * A thrown error (or rejected Promise / failed Effect) propagates as a

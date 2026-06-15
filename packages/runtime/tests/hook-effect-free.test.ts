@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Cause } from "effect";
 import { LifecycleHookRegistry, LifecycleHookRegistryLive } from "../src/hooks.js";
+import { HookError } from "../src/errors.js";
 import type { ExecutionContext, LifecycleHook } from "../src/types.js";
 
 const ctx = (iteration: number) =>
@@ -76,5 +77,12 @@ describe("effect-free lifecycle hooks — registry path", () => {
       }).pipe(Effect.provide(LifecycleHookRegistryLive)),
     );
     expect(exit._tag).toBe("Failure");
+    // The thrown error must be wrapped as a HookError (registry mapError),
+    // not leak the raw Error — this pins the documented contract.
+    if (exit._tag === "Failure") {
+      const failure = Cause.failureOption(exit.cause);
+      expect(failure._tag).toBe("Some");
+      expect(failure._tag === "Some" && failure.value instanceof HookError).toBe(true);
+    }
   });
 });

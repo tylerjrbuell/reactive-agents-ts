@@ -65,6 +65,8 @@ export function normalizeHookResult(
       // Safe narrowing: RawHookResult constrains the Effect arm to
       // Effect<ExecutionContext, ExecutionError>; we only widen the error
       // channel to `unknown` to unify it with the throw/reject paths.
+      // The `?? ctx` is defensive — the type says the success is always an
+      // ExecutionContext, but an untyped-JS Effect could resolve to undefined.
       return (raw as Effect.Effect<ExecutionContext, unknown>).pipe(
         Effect.map((r) => r ?? ctx),
       );
