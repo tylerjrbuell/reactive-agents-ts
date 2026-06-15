@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Cause, Exit } from "effect";
-import { normalizeHookResult } from "../src/hooks-normalize.js";
+import { normalizeHookResult, runHookResultForSideEffect } from "../src/hooks-normalize.js";
 import type { ExecutionContext } from "../src/types.js";
 
 // Minimal ExecutionContext stand-in — only identity matters for these tests.
@@ -63,5 +63,41 @@ describe("normalizeHookResult", () => {
     const cause = failValue(await Effect.runPromiseExit(eff));
     expect(cause).toBeInstanceOf(Error);
     expect((cause as Error).message).toBe("eff-fail");
+  });
+});
+
+describe("runHookResultForSideEffect", () => {
+  it("awaits a Promise return", async () => {
+    let ran = false;
+    await runHookResultForSideEffect(
+      Promise.resolve().then(() => { ran = true; }),
+    );
+    expect(ran).toBe(true);
+  });
+
+  it("runs an Effect return (legacy form executes for side effects)", async () => {
+    let ran = false;
+    await runHookResultForSideEffect(
+      Effect.sync(() => { ran = true; return nextCtx; }),
+    );
+    expect(ran).toBe(true);
+  });
+
+  it("plain/void return resolves without throwing", async () => {
+    await runHookResultForSideEffect(nextCtx);
+    await runHookResultForSideEffect(undefined);
+    expect(true).toBe(true);
+  });
+
+  it("a rejected Promise propagates (caller surfaces it)", async () => {
+    await expect(
+      runHookResultForSideEffect(Promise.reject(new Error("x"))),
+    ).rejects.toThrow("x");
+  });
+
+  it("a failed Effect propagates (caller surfaces it)", async () => {
+    await expect(
+      runHookResultForSideEffect(Effect.fail(new Error("y"))),
+    ).rejects.toBeDefined();
   });
 });

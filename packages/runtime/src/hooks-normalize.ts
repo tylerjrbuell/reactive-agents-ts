@@ -78,3 +78,27 @@ export function normalizeHookResult(
     return Effect.succeed(raw);
   });
 }
+
+/**
+ * Run an already-produced hook return value purely for its side effects —
+ * the harness-mirror path observes hooks and discards any returned context.
+ *
+ * Unlike {@link normalizeHookResult} this takes the *result* (not the handler)
+ * because the mirror calls the handler itself inside its own try/catch. An
+ * `Effect` is executed via `Effect.runPromise` (fixing a latent gap where a
+ * lazy Effect previously never ran on this path); a `Promise` is awaited; a
+ * plain value is ignored. Failures reject so the caller's error handler fires.
+ */
+export async function runHookResultForSideEffect(
+  raw: RawHookResult,
+): Promise<void> {
+  if (raw === undefined || raw === null) return;
+  if (Effect.isEffect(raw)) {
+    await Effect.runPromise(raw as Effect.Effect<ExecutionContext, unknown>);
+    return;
+  }
+  if (isThenable(raw)) {
+    await raw;
+  }
+  // Plain ExecutionContext: observation-only path discards it.
+}
