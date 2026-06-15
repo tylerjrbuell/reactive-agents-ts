@@ -77,3 +77,17 @@ describe("toSchemaContract — Standard Schema", () => {
     if (!r.ok) expect(r.issues[0].message).toContain("async");
   });
 });
+
+import { z } from "zod";
+describe("toSchemaContract — Zod JSON Schema (zod-to-json-schema)", () => {
+  it("renders a JSON schema for a Zod schema (was undefined → blind prompt)", () => {
+    const Invoice = z.object({ vendor: z.string(), total: z.number(), lineItems: z.array(z.object({ amount: z.number() })) });
+    const c = toSchemaContract(Invoice as never);
+    const js = c.toJsonSchema();
+    expect(js).toBeDefined();
+    const s = JSON.stringify(js);
+    expect(s).toContain("vendor");
+    expect(s).toContain("total");
+    expect(s).toContain("lineItems");
+  });
+});

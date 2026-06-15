@@ -1,5 +1,6 @@
 import { Schema, JSONSchema, ParseResult, Either } from "effect";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -152,8 +153,19 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
           // fall through — converter may not support the requested target
         }
       }
-      // Standard Schema v1 does not standardize JSON Schema emission.
-      // Fall back to the prompt+heal path.
+      // Zod (the dominant Standard Schema vendor, and what the docs lead with) does
+      // not implement the StandardJSONSchemaV1 extension until v4. For Zod 3.x we
+      // convert via zod-to-json-schema. `std` IS the ZodType at runtime when
+      // vendor === "zod" (the Standard Schema interface is layered onto the schema
+      // object itself). Without this, the extraction prompt is blind to the shape.
+      if (props.vendor === "zod") {
+        try {
+          return zodToJsonSchema(std as unknown as Parameters<typeof zodToJsonSchema>[0]) as Record<string, unknown>;
+        } catch {
+          // fall through — degrade to prompt+heal
+        }
+      }
+      // Other vendors without a JSON Schema emitter: fall back to the prompt+heal path.
       return undefined;
     },
   };
