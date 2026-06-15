@@ -241,6 +241,8 @@ export type { StructuredOutputConfig, StructuredOutputResult } from "./structure
 export { groundedExtract } from "./structured-output/grounded/grounded-extract.js";
 export type { GroundedInput, GroundedOutput } from "./structured-output/grounded/grounded-extract.js";
 export { buildEvidenceCorpusFromSteps } from "./kernel/capabilities/verify/evidence-grounding.js";
+export { parsePartial } from "./structured-output/partial-parse.js";
+export { stripThinking } from "./kernel/utils/stream-parser.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

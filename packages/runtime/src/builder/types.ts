@@ -18,6 +18,16 @@ import type { OutputFormat, TerminatedBy } from '@reactive-agents/core'
 import type { Redactor } from '@reactive-agents/observability'
 import type { AgentDebrief } from '../debrief.js'
 
+// ─── DeepPartial ─────────────────────────────────────────────────────────────
+
+/**
+ * Recursively makes all properties optional.
+ * Used by `streamObject()` to type intermediate partial emissions as tokens arrive.
+ */
+export type DeepPartial<T> = T extends object
+    ? { [K in keyof T]?: DeepPartial<T[K]> }
+    : T
+
 // ─── Provider Types ──────────────────────────────────────────────────────────
 
 /**

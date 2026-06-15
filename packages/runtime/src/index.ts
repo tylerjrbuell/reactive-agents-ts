@@ -48,6 +48,7 @@ export {
   type ErrorContext,
 } from "./errors.js";
 export { StructuredOutputError } from "./errors/structured-output-error.js";
+export type { DeepPartial } from "./builder/types.js";
 
 // ─── Services ───
 export { LifecycleHookRegistry, LifecycleHookRegistryLive } from "./hooks.js";

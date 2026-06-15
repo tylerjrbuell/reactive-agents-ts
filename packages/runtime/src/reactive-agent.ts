@@ -83,6 +83,8 @@ import {
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { streamObjectFrom } from './engine/stream-object.js'
+import type { DeepPartial } from './builder/types.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import type {
     GatewayHandle,
@@ -1202,6 +1204,54 @@ export class ReactiveAgent<TOut = unknown> {
             Effect.runFork(Fiber.interrupt(fiber))
             controller.markCompleted()
         }
+    }
+
+    /**
+     * Execute a task and stream deep-partial objects as tokens arrive, ending
+     * with the final validated object.
+     *
+     * Requires `.withOutputSchema()` to have been called during builder setup.
+     * Each yielded `{ object }` is a `DeepPartial<TOut>` built from the JSON
+     * accumulated so far; only unique (changed) partials are emitted to avoid
+     * noise. The final yield carries the schema-validated full value when parsing
+     * succeeds, or the last best-effort partial in `degrade` mode.
+     *
+     * @param input - The task prompt or question
+     * @param options - Optional streaming configuration (density, signal, history)
+     * @returns `AsyncGenerator<{ object: DeepPartial<TOut> }>`
+     * @throws `Error` when called without `.withOutputSchema()`.
+     * @throws `StructuredOutputError` at the end when `onParseFail: "throw"` is set
+     *         and the final buffer fails schema validation.
+     *
+     * @example
+     * ```typescript
+     * const agent = await ReactiveAgents.create()
+     *   .withOutputSchema(Schema.Struct({ city: Schema.String }))
+     *   .build();
+     *
+     * for await (const { object } of agent.streamObject("name a city")) {
+     *   console.log(object.city); // "Par", "Paris", "Paris"
+     * }
+     * ```
+     */
+    streamObject(
+        input: string,
+        options?: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] }
+    ): AsyncGenerator<{ object: DeepPartial<TOut> }> {
+        if (!this._outputSchemaConfig) {
+            throw new Error(
+                'streamObject() requires .withOutputSchema() to be configured on this agent. ' +
+                'Call .withOutputSchema(schema) before .build().'
+            )
+        }
+        const { contract, options: schemaOptions } = this._outputSchemaConfig
+        const onParseFail = schemaOptions.onParseFail ?? "degrade"
+        const stream = this.runStream(input, options)
+        return streamObjectFrom(
+            stream,
+            contract as import('@reactive-agents/reasoning').SchemaContract<TOut>,
+            onParseFail
+        )
     }
 
     /**
