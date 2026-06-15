@@ -11,6 +11,8 @@ import {
 } from "./reasoning-options-schema.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { TaskComplexity } from "./telemetry-enrichment.js";
+import type { RawHookResult } from "./hooks-normalize.js";
+export type { RawHookResult } from "./hooks-normalize.js";
 
 /**
  * Calibration mode for `.withCalibration()`:
@@ -365,18 +367,22 @@ export interface LifecycleHook {
   /** When to invoke the hook relative to the phase */
   readonly timing: HookTiming;
   /**
-   * Handler function that processes the execution context.
-   * Must return the context (possibly modified) or throw an ExecutionError.
+   * Handler invoked with the current execution context.
    *
-   * @param ctx - Current execution context
-   * @returns Effect producing the modified context
+   * Return the (possibly modified) context to pass it down the phase chain,
+   * or return nothing to observe without changing it. Plain values, Promises,
+   * and Effects are all accepted — you do NOT need to import Effect:
+   *
+   * ```ts
+   * handler: (ctx) => { console.log(ctx.iteration); }          // observe
+   * handler: (ctx) => ({ ...ctx, foo: 1 })                      // modify
+   * handler: async (ctx) => { await save(ctx); return ctx; }    // async
+   * ```
+   *
+   * A thrown error (or rejected Promise / failed Effect) propagates as a
+   * `HookError`.
    */
-  readonly handler: (
-    ctx: ExecutionContext,
-  ) => import("effect").Effect.Effect<
-    ExecutionContext,
-    import("./errors.js").ExecutionError
-  >;
+  readonly handler: (ctx: ExecutionContext) => RawHookResult;
 }
 
 /**

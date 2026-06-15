@@ -6,6 +6,7 @@ import type {
   ExecutionContext,
 } from "./types.js";
 import { HookError } from "./errors.js";
+import { normalizeHookResult } from "./hooks-normalize.js";
 
 // ─── Service Tag ───
 
@@ -56,7 +57,7 @@ export const LifecycleHookRegistryLive = Layer.effect(
 
           let current = ctx;
           for (const hook of matching) {
-            current = yield* hook.handler(current).pipe(
+            current = yield* normalizeHookResult(hook.handler, current).pipe(
               Effect.mapError(
                 (cause) =>
                   new HookError({
