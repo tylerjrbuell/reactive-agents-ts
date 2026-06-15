@@ -23,11 +23,7 @@ import { stripThinking } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { SchemaContract } from "./schema-contract.js";
 
-export interface StructuredOutputConfig<T> {
-  /** Provide exactly one of `schema` or `contract`. */
-  readonly schema?: Schema.Schema<T>;
-  /** Optional SchemaContract — validated via contract.validate(); overrides schema validation. */
-  readonly contract?: SchemaContract<T>;
+interface StructuredOutputBase<T> {
   readonly prompt: string;
   readonly systemPrompt?: string;
   readonly examples?: readonly T[];
@@ -45,6 +41,14 @@ export interface StructuredOutputConfig<T> {
    */
   readonly traceContext?: { readonly taskId?: string; readonly iteration?: number };
 }
+
+/**
+ * Provide exactly one of `schema` or `contract` — passing neither or both is
+ * a compile-time error via the discriminated union below.
+ */
+export type StructuredOutputConfig<T> =
+  | (StructuredOutputBase<T> & { readonly schema: Schema.Schema<T>; readonly contract?: never })
+  | (StructuredOutputBase<T> & { readonly contract: SchemaContract<T>; readonly schema?: never });
 
 export interface StructuredOutputResult<T> {
   readonly data: T;
@@ -135,18 +139,45 @@ export const extractStructuredOutput = <T>(
     // Layer 0: Try provider-native structured output first
     const nativeResult = yield* tryNativeStructuredOutput(llm, config, effectSchema, maxTokens, temp);
     if (nativeResult !== null) {
-      if (eb) {
-        yield* eb.publish({
-          _tag: "ReasoningStepCompleted",
-          taskId: "structured-output",
-          strategy: "structured-output-native",
-          step: 1,
-          totalSteps: 1,
-          prompt: { system: config.systemPrompt ?? "", user: config.prompt },
-          thought: nativeResult.raw,
-        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:116", tag: errorTag(err) })));
+      // Fix 1: when a contract is set, re-validate the native result against it.
+      // completeStructured() uses an Effect-Schema structural predicate that is
+      // weaker than the full contract.validate() path (Standard-Schema / Zod /
+      // Valibot contracts carry richer coercion and refinement rules).
+      // If contract validation fails, discard the native result and fall through
+      // to the prompt+repair loop so the user gets full repair semantics.
+      if (config.contract) {
+        const r = config.contract.validate(nativeResult.data);
+        if (!r.ok) {
+          // Native result failed contract validation — fall through to prompt path
+        } else {
+          const validated: StructuredOutputResult<T> = { ...nativeResult, data: r.value };
+          if (eb) {
+            yield* eb.publish({
+              _tag: "ReasoningStepCompleted",
+              taskId: "structured-output",
+              strategy: "structured-output-native",
+              step: 1,
+              totalSteps: 1,
+              prompt: { system: config.systemPrompt ?? "", user: config.prompt },
+              thought: validated.raw,
+            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:native-contract", tag: errorTag(err) })));
+          }
+          return validated;
+        }
+      } else {
+        if (eb) {
+          yield* eb.publish({
+            _tag: "ReasoningStepCompleted",
+            taskId: "structured-output",
+            strategy: "structured-output-native",
+            step: 1,
+            totalSteps: 1,
+            prompt: { system: config.systemPrompt ?? "", user: config.prompt },
+            thought: nativeResult.raw,
+          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:116", tag: errorTag(err) })));
+        }
+        return nativeResult;
       }
-      return nativeResult;
     }
 
     // Fallback: prompt engineering + repair pipeline
