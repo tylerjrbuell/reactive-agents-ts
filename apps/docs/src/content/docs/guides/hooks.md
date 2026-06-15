@@ -9,21 +9,13 @@ sidebar:
 
 Every agent execution flows through a deterministic 12-phase lifecycle. Hooks let you intercept any phase to add logging, metrics, validation, or custom behavior.
 
-:::tip[Effect imports for hooks]
-Hook handlers must return an **`Effect`** (not a raw value). At the top of your module:
-
-```typescript
-import { Effect } from "effect";
-import { ReactiveAgents } from "reactive-agents";
-```
-
-You will most often use **`Effect.succeed(ctx)`** to mean “continue with this context.” For failures, use **`Effect.fail(...)`** with a tagged error, or **`Effect.try`** / **`Effect.tryPromise`** to wrap code that throws. See the [Effect-TS primer](/concepts/effect-ts/) for a full helper table.
+:::tip[No Effect import required]
+Hook handlers can be plain sync or `async` functions — no `Effect` import needed for most use cases. The Effect form is still accepted if you are already using Effect-TS elsewhere. See the [Effect-TS primer](/concepts/effect-ts/) for the full helper table.
 :::
 
 ## Quick Example
 
 ```typescript
-import { Effect } from "effect";
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
@@ -32,13 +24,20 @@ const agent = await ReactiveAgents.create()
   .withHook({
     phase: "think",
     timing: "after",
+    // Plain function — no Effect import needed.
+    // Return nothing to observe, or return the (modified) context to change it.
     handler: (ctx) => {
       console.log(`Iteration ${ctx.metadata.stepsCount}`);
-      return Effect.succeed(ctx);
     },
   })
   .build();
 ```
+
+:::note
+Hook handlers can be plain sync functions, `async` functions, or return an
+Effect. Return the (modified) context to change it, or return nothing to
+observe. Throwing (or a rejected promise / failed Effect) raises a `HookError`.
+:::
 
 ## Available Phases
 
@@ -66,10 +65,13 @@ Each phase supports three timing points:
 ## Hook Handler Signature
 
 ```typescript
-handler: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, HookError>
+handler: (ctx: ExecutionContext) =>
+  | ExecutionContext | void
+  | Promise<ExecutionContext | void>
+  | Effect.Effect<ExecutionContext, HookError>
 ```
 
-The handler receives the current `ExecutionContext` and must return it (possibly modified). Useful fields include:
+The handler receives the current `ExecutionContext`. Return the (possibly modified) context to change execution, or return nothing (`void`) to observe without side-effects. The Effect form is also accepted. Useful fields include:
 - `metadata` — step count, strategy, last response, reasoning results (engine-populated)
 - `toolResults` — tool execution results accumulated this run
 - `messages` — conversation messages for the task
@@ -89,8 +91,6 @@ Hooks registered for the same phase and timing run **sequentially in registratio
 ### Progress Logging
 
 ```typescript
-import { Effect } from "effect";
-
 // …then chain on your builder:
 .withHook({
   phase: "think",
@@ -99,7 +99,7 @@ import { Effect } from "effect";
     const step = ctx.metadata.stepsCount + 1;
     const max = ctx.metadata.maxIterations ?? 10;
     console.log(`Step ${step}/${max}`);
-    return Effect.succeed(ctx);
+    // Return nothing — just observing.
   },
 })
 ```
@@ -107,8 +107,6 @@ import { Effect } from "effect";
 ### Cost Alert
 
 ```typescript
-import { Effect } from "effect";
-
 .withHook({
   phase: "complete",
   timing: "after",
@@ -116,7 +114,7 @@ import { Effect } from "effect";
     if (ctx.metadata.cost > 0.10) {
       console.warn(`⚠ Execution cost $${ctx.metadata.cost.toFixed(3)} exceeded $0.10 threshold`);
     }
-    return Effect.succeed(ctx);
+    // Return nothing — just observing.
   },
 })
 ```
@@ -124,8 +122,6 @@ import { Effect } from "effect";
 ### Audit Trail
 
 ```typescript
-import { Effect } from "effect";
-
 .withHook({
   phase: "act",
   timing: "after",
@@ -133,7 +129,7 @@ import { Effect } from "effect";
     const last = ctx.toolResults.at(-1) as { toolName?: string } | undefined;
     const toolName = last?.toolName ?? "unknown";
     auditLog.append({ event: "tool_call", tool: toolName, taskId: ctx.taskId, timestamp: Date.now() });
-    return Effect.succeed(ctx);
+    // Return nothing — just observing.
   },
 })
 ```
@@ -141,14 +137,12 @@ import { Effect } from "effect";
 ### Error Handling
 
 ```typescript
-import { Effect } from "effect";
-
 .withHook({
   phase: "think",
   timing: "on-error",
   handler: (ctx) => {
     console.error(`Think phase failed at step ${ctx.metadata.stepsCount}. Check your prompt or model.`);
-    return Effect.succeed(ctx);
+    // Return nothing — just observing the error.
   },
 })
 ```
