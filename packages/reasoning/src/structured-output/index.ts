@@ -1,4 +1,5 @@
 export { extractJsonBlock, repairJson } from "./json-repair.js";
+export { parsePartial } from "./partial-parse.js";
 export { extractStructuredOutput } from "./pipeline.js";
 export type { StructuredOutputConfig, StructuredOutputResult } from "./pipeline.js";
 export { toSchemaContract } from "./schema-contract.js";
