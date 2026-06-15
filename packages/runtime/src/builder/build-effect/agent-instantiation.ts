@@ -3,7 +3,7 @@
  *
  * Wraps the fully-composed runtime layer in a ManagedRuntime so all facade
  * calls share the same scope + service instances, then constructs the public
- * ReactiveAgent with the 17-arg constructor.
+ * ReactiveAgent with the 18-arg constructor.
  *
  * Extracted from builder.ts:2258-2317.
  */
