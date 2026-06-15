@@ -133,38 +133,65 @@ function asObject(v: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * Strip markdown code fences and locate the first `{` in a buffer.
+ *
+ * Handles:
+ *   - ` ```json\n...\n``` ` fences (with or without language tag)
+ *   - Leading prose before the first `{` (e.g. "Here is the result: {...}")
+ *
+ * Returns the preprocessed string ready for bracket-walking, or the original
+ * trimmed string if no transformation applies.
+ */
+function stripFencesAndProse(text: string): string {
+  // Strip leading ``` (with optional language tag) and trailing ```
+  // Covers both complete (``` ... ```) and partial mid-stream (``` ... no closing)
+  const fenced = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+
+  // Find the first `{` — if prose precedes it, slice from there
+  const braceIdx = fenced.indexOf("{");
+  if (braceIdx < 0) return fenced; // no object found; let downstream handle it
+  if (braceIdx === 0) return fenced; // already starts with `{`
+  return fenced.slice(braceIdx);
+}
+
+/**
  * Parse a (possibly incomplete) JSON object prefix, returning a best-effort
  * `Record<string, unknown>`.
  *
  * - Complete object → full parse.
  * - Truncated mid-value → stable fields returned; dangling key/value dropped.
  * - Non-object / unparseable → `{}`.
+ * - Markdown code fences and leading prose are stripped before parsing.
  */
 export function parsePartial(buf: string): Record<string, unknown> {
   const trimmed = buf.trim();
 
   if (trimmed.length === 0) return {};
 
+  // Preprocess: strip markdown fences and leading prose so the bracket walker
+  // always sees a `{`-headed string.
+  const preprocessed = stripFencesAndProse(trimmed);
+
   // Fast path: already valid JSON
-  const quick = tryParse(trimmed);
+  const quick = tryParse(preprocessed);
   if (quick !== null) {
     return asObject(quick) ?? {};
   }
 
-  // Non-object head: try repairJson and return if object
-  if (!trimmed.startsWith("{")) {
-    const repaired = tryParse(repairJson(trimmed));
+  // Non-object head after preprocessing: try repairJson and return if object
+  if (!preprocessed.startsWith("{")) {
+    const repaired = tryParse(repairJson(preprocessed));
     return asObject(repaired) ?? {};
   }
 
   // Walk the buffer to collect stable-cut snapshots
-  const { snapshots, finalStack, finalInStr } = walkBuffer(trimmed);
+  const { snapshots, finalStack, finalInStr } = walkBuffer(preprocessed);
 
   // --- Tier 1: Try stable cuts from latest to earliest ---
   // Iterating in reverse gives us the maximum parsed content.
   for (let i = snapshots.length - 1; i >= 0; i--) {
     const snap = snapshots[i]!;
-    const candidate = buildCandidate(trimmed, snap.index, snap.stack);
+    const candidate = buildCandidate(preprocessed, snap.index, snap.stack);
     const parsed = tryParse(candidate);
     if (parsed !== null) {
       const obj = asObject(parsed);
@@ -176,7 +203,7 @@ export function parsePartial(buf: string): Record<string, unknown> {
   // This can succeed when the buffer ends cleanly between values, e.g. after a
   // complete number or boolean where no stable cut was recorded (unlikely but safe).
   {
-    let full = trimmed;
+    let full = preprocessed;
     if (finalInStr) full += '"';
     for (let j = finalStack.length - 1; j >= 0; j--) {
       full += finalStack[j]!;
@@ -188,8 +215,8 @@ export function parsePartial(buf: string): Record<string, unknown> {
     }
   }
 
-  // --- Tier 3: repairJson fallback on full trimmed buffer ---
-  const repairedFull = tryParse(repairJson(trimmed));
+  // --- Tier 3: repairJson fallback on full preprocessed buffer ---
+  const repairedFull = tryParse(repairJson(preprocessed));
   if (repairedFull !== null) {
     const obj = asObject(repairedFull);
     if (obj !== null) return obj;

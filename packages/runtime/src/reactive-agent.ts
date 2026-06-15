@@ -1250,7 +1250,24 @@ export class ReactiveAgent<TOut = unknown> {
         }
         const { contract, options: schemaOptions } = this._outputSchemaConfig
         const onParseFail = schemaOptions.onParseFail ?? "degrade"
-        const stream = this.runStream(input, options)
+
+        // Steer the agent to emit schema-JSON instead of free-form prose.
+        // Without this, the model answers naturally (e.g. "The total is **$4,200**")
+        // and parsePartial yields {} because there is no JSON to extract.
+        const jsonSchema = contract.toJsonSchema()
+        const jsonSchemaString = jsonSchema !== undefined
+            ? JSON.stringify(jsonSchema, null, 2)
+            : undefined
+        const schemaBlock = jsonSchemaString !== undefined
+            ? `\n\n${jsonSchemaString}`
+            : ""
+        const steeringInstruction =
+            `\n\nRespond with ONLY a single JSON object that exactly matches this JSON Schema` +
+            ` — no prose, no markdown fences, no explanation.` +
+            ` Use exactly these top-level keys; do not nest or wrap:${schemaBlock}`
+        const augmentedTask = `${input}${steeringInstruction}`
+
+        const stream = this.runStream(augmentedTask, options)
         return streamObjectFrom(
             stream,
             contract as import('@reactive-agents/reasoning').SchemaContract<TOut>,

@@ -58,4 +58,17 @@ describe("parsePartial", () => {
     const r = parsePartial("{");
     expect(r).toEqual({});
   });
+
+  it("strips ```json fences", () => {
+    expect(parsePartial('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+  });
+
+  it("skips leading prose before the object", () => {
+    expect(parsePartial('Here is the result: {"a":1,"b":2}')).toEqual({ a: 1, b: 2 });
+  });
+
+  it("handles fenced partial mid-stream", () => {
+    const r = parsePartial('```json\n{"total":4200,"currency":');
+    expect(r.total).toBe(4200);
+  });
 });
