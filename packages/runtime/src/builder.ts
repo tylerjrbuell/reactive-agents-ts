@@ -199,7 +199,7 @@ export const ReactiveAgents = {
  * when configuration is complete to instantiate the agent.
  *
  */
-export class ReactiveAgentBuilder {
+export class ReactiveAgentBuilder<TOut = unknown> {
     private _name: string = 'agent'
     private _stableAgentId?: string
     private _provider: ProviderName = 'test'
@@ -881,9 +881,9 @@ export class ReactiveAgentBuilder {
     withOutputSchema<A>(
         schema: StandardSchemaV1<unknown, A> | Schema.Schema<A>,
         options: OutputSchemaOptions = {},
-    ): this {
+    ): ReactiveAgentBuilder<A> {
         this._outputSchemaConfig = { contract: toSchemaContract(schema) as SchemaContract<unknown>, options }
-        return this
+        return this as unknown as ReactiveAgentBuilder<A>
     }
 
     /**
@@ -1916,7 +1916,7 @@ export class ReactiveAgentBuilder {
      * @returns Promise resolving to a ReactiveAgent instance
      * @throws Error if configuration is invalid or API keys are missing
      */
-    async build(): Promise<ReactiveAgent> {
+    async build(): Promise<ReactiveAgent<TOut>> {
         // Auto-resolve context profile from model name if not explicitly set.
         // resolveProfileWithWindow binds maxTokens to the MODEL's real window
         // (recommendedNumCtx) instead of the tier placeholder — otherwise the
@@ -2036,7 +2036,7 @@ export class ReactiveAgentBuilder {
      *
      * @returns Effect that produces a ReactiveAgent
      */
-    buildEffect(): Effect.Effect<ReactiveAgent, Error> {
+    buildEffect(): Effect.Effect<ReactiveAgent<TOut>, Error> {
         const self = this
 
         return Effect.gen(function* () {
@@ -2232,6 +2232,6 @@ export class ReactiveAgentBuilder {
                 outputSchemaConfig: self._outputSchemaConfig,
                 enableTools: self._enableTools,
             })
-        }) as Effect.Effect<ReactiveAgent, Error>
+        }) as Effect.Effect<ReactiveAgent<TOut>, Error>
     }
 }

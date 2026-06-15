@@ -114,7 +114,7 @@ const asToolServiceTag = (tag: unknown): ToolServiceTag =>
     tag as unknown as ToolServiceTag
 
 // ── Class ──
-export class ReactiveAgent {
+export class ReactiveAgent<TOut = unknown> {
     constructor(
         public readonly engine: {
             execute: (
@@ -629,7 +629,7 @@ export class ReactiveAgent {
     async run(
         input: string,
         options?: { readonly taskId?: string; readonly history?: readonly ChatMessage[] }
-    ): Promise<AgentResult> {
+    ): Promise<AgentResult & { object?: TOut }> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
@@ -650,7 +650,7 @@ export class ReactiveAgent {
                     }
                 }
                 throw unwrapped
-            })
+            }) as Promise<AgentResult & { object?: TOut }>
     }
 
     /**
