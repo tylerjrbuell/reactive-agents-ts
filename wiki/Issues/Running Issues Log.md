@@ -169,9 +169,9 @@ Only stale refs are vendored snapshots in `apps/stackblitz/*/node_modules/` (not
 | HS-19 | C | `packages/runtime/src/builder.ts` (2481 LOC), `runtime.ts` (1997 LOC), `execution-engine.ts` (1656 LOC, +8 since 2026-05-20), `reactive-agent.ts` (1578 LOC) | P1 | Four files >1500 LOC; `execution-engine.ts` continues to drift (+116 LOC since W24 May 8). `runner.ts` removed in W25 decomp. **Re-verified 2026-05-21.** | Next decomposition wave (W26+) |
 | HS-20 | C | `packages/reasoning/src/strategies/plan-execute.ts` (1554 LOC), `core/services/event-bus.ts` (1347 LOC), `reasoning/.../think.ts` (1283 LOC), `act.ts` (1137 LOC), `llm-provider/types.ts` (1063 LOC), `decide/arbitrator.ts` (992 LOC), `observability/exporters/console-exporter.ts` (895 LOC) | P2 | 7 single-files >800 LOC — secondary decomposition candidates | Plan post-W26 |
 | HS-21 | C | `packages/llm-provider/src/llm-service.ts:75`, `llm-config.ts:143`, `kernel-state.ts:761-762`, `observability/telemetry/telemetry-schema.ts:37,43`, `tools/adapters/agent-tool-adapter.ts:30` | P2 | 5 `@deprecated` symbols/aliases pending removal — audit removal-target version on each (v0.11 already shipped) | Sweep next minor; amend stale `@deprecated v0.11` annotations |
-| HS-22 | C | Providers — `tool_use_start` + `tool_use_delta` emit pattern across anthropic/gemini/local/openai | ✅ **FIXED** (2026-05-21, commit `8ec95598`) — original "65 duplicated lines" inflated; actual 9 emit sites in 4 providers | Extracted `streaming-helpers.ts` (`emitToolUseStart`/`emitToolUseDelta`/`emitToolCallComplete`); 6 co-emit lines collapsed to 3; `as const`/`as StreamEvent` casts removed. |
+| HS-22 | C | Providers — `tool_use_start` + `tool_use_delta` emit pattern across anthropic/gemini/local/openai | ✅ **FIXED** (2026-05-21, commit `8ec95598`) — original "65 duplicated lines" inflated; actual 9 emit sites in 4 providers | Extracted `streaming-helpers.ts` (`emitToolUseStart`/`emitToolUseDelta`/`emitToolCallComplete`); 4 providers updated; 6 co-emit lines collapsed to 3; `as const`/`as StreamEvent` casts removed. |
 | HS-23 | C | `packages/runtime/src/engine/finalize/telemetry-emit.ts:201`, `execution-engine.ts:1232,1239`, `reasoning/src/context/context-manager.ts:271` | P2 | 4 `TODO` comments on live code paths (placeholder scoring, missing TaskResult metadata fields, unwired ExperienceSummary) | Address with Phase 1.5 M6/M10 work |
-| HS-24 | D | `packages/reactive-intelligence/tests/m1-dispatcher-validation.test.ts:65` | P1 | `test.skip("RED phase: define measurement requirements…")` contradicts shipped M1 ✅ KEEP verdict in MEMORY.md; placeholder is stale | Delete `test.skip` block (lines 65-174) + helper `computeEntropyStdDev` (lines 246-257) + dead interfaces |
+| HS-24 | D | `packages/reactive-intelligence/tests/m1-dispatcher-validation.test.ts:65` | ✅ **FIXED** (confirmed 2026-06-15) | `test.skip("RED phase: define measurement requirements…")` — stale placeholder contradicting shipped M1 KEEP verdict | test.skip block deleted since 2026-05-20 sweep |
 | HS-25 | D | `packages/reactive-intelligence/tests/skills/skill-resolver.test.ts:248,269` | 🟡 **TAGGED** (`<commit>`) — root cause: resolver now returns +1 bundled default skill; assertions written before bundling shipped | Probed by un-skipping: both fail. Comments added in test file documenting drift + fix path. Still skipped; needs `excludeBundled` option or filtered assertions. |
 | HS-26 | D | `packages/{react,svelte,vue}/` | P1 | Three UI packages have **zero `*.test.ts` files** — public hooks/stores ship untested | Add smoke tests via `@testing-library/react` (hook render), Svelte test, Vue composable test |
 | HS-27 | D | `packages/runtime/tests/{gateway-start,gateway-status,abort-signal,builder-tracing,with-channels-gateway}.test.ts` + `apps/cortex/server/tests/ws-{ingest,live}.test.ts` + `compose/test/killswitches.test.ts` | P1 | ~30 `setTimeout` fixed-delay waits in tests — flake risk on slow CI; killswitches honesty memo flagged this surface specifically | Replace with `waitFor` / event-based assertions or `Effect.TestClock` |
@@ -376,7 +376,7 @@ At that point, we expect to see:
 
 ---
 
-**Last Updated:** 2026-05-21 (audit re-verification + GH migration kickoff)
+**Last Updated:** 2026-06-15 (health sweep 2026-06-15: HS-32 fixed, HS-33/34/35 filed, HS-24 confirmed fixed)
 **Total Open:** 1 (#4 — 0 critical, 1 known; #3/#6/#7 closed)
 **Health Sweep 2026-05-20:** 31 findings filed; **9 fixed** (HS-01/05/09/10/11/12/18/22 + count-verify HS-19/31), 1 partial (HS-25 tagged), 2 false-positives closed (HS-13/15)
 **Resolved in Phase 1:** 8
@@ -463,6 +463,49 @@ At that point, we expect to see:
 **5 recommended /execute-backlog bundles** drafted in the audit report (honesty-pass, public-API-honesty, provider-helper-extraction, surface-coverage-gap, deferred-arch-debt-epic).
 
 **Cross-checked**: none of the 60 are open in GH #29-#149 or in this log above.
+
+---
+
+## Health Sweep — 2026-06-15
+
+**Baseline (pre-sweep):** Build GREEN (38/38), Tests 6199 pass / 38 skip / 2 fail (pre-existing: benchmarks env + Docker shell-execution). `bun install` required (fresh container). Branch `main`, v0.11.2.
+
+**Method:** 4 parallel scan agents (A: Type Safety, B: Bug Patterns, C: Inefficiencies, D: Test Quality) + Phase 1.5 verification of each finding before triage. Agent B completed with incomplete output; targeted manual verification substituted.
+
+**Fixed this sweep:** HS-32 (stale path banner). Status update: HS-24 confirmed fixed (test.skip block deleted since 2026-05-20 sweep).
+
+### Register
+
+| ID | Agent | File | Severity | Description | Status | Fix-Direction |
+|----|-------|------|----------|-------------|--------|---------------|
+| HS-32 | C | `packages/reasoning/src/kernel/capabilities/verify/quality-utils.ts:1` | P2 | Stale file path banner: `// File: src/strategies/kernel/quality-utils.ts` — file moved to `src/kernel/capabilities/verify/` in Stage-5 kernel reorganisation | ✅ **FIXED** | 1-line comment corrected |
+| HS-33 | C | `packages/reasoning/src/types/config.ts:32` | P2 | `patchStrategy` field in `PlanExecuteConfigSchema` declared + exported but never consumed in any source file (YAGNI). Zero reads confirmed: `grep -rn patchStrategy packages/reasoning/src` → only declaration. Already listed in AGENTS.md debt table as Open. | FILE | Plan removal in a minor version bump (exported type — breaking for TS consumers who annotate with `PlanExecuteConfig`) |
+| HS-34 | A | `packages/reactive-intelligence/src/runtime.ts:49,50,56,65` | P1 | 4 `Layer.merge(...) as any` sites — same root cause as HS-03 but in reactive-intelligence package, not previously counted in HS-03 scope. `verified-by: grep -n "as any" packages/reactive-intelligence/src/runtime.ts` → 4 matches. | FILE | Extend HS-03 fix scope to include this file |
+| HS-35 | A | `packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:95,154` | P2 | 2 remaining `as any` casts in reasoning src: line 95 `kernelState: s as any` (cross-package KernelStateLike boundary); line 154 `entropyHistory[last] as any` (entropy history element). `verified-by: grep -n "as any" packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts` → 2 matches. Already in AGENTS.md debt table as Open. | FILE | kernel-warden: extend KernelStateLike meta field; add `EntropyScoreLike` to entropy history type |
+
+### Verified non-issues (not re-filed)
+
+- **process.exit** — All 14 sites confirmed: 11 are CLI entrypoints/templates (appropriate), 2 are HS-11/HS-12 (already fixed, comments retained), 1 is `sigterm.ts:39` (graceful shutdown handler, appropriate). No new library-mode exits.
+- **Effect.runPromise without .catch** — Reviewed 15 sites: `observable-logger.ts:144` is fire-and-forget `Ref.update` (infallible Effect), `a2a/http-server.ts:198,215` wrapped in outer try/catch, remaining sites in top-level runners or already have `.catch`/`catchAll`. No new violations.
+- **Skipped tests** — 3 grep matches all false positives: 2 are asserting `.skip!` method exists (engine-phases test), 1 is `test.skipIf(!OLLAMA_E2E)` (conditional E2E, appropriate).
+- **Packages with no tests/ dir** — compose/test, scenarios/__tests__, trace/__tests__ all confirmed present.
+- **HS-24** — `packages/reactive-intelligence/tests/m1-dispatcher-validation.test.ts` — `test.skip` block no longer present. ✅ FIXED since 2026-05-20 sweep.
+
+### Top 3 P2 opportunities for next sprint
+
+1. **HS-34:** Extend HS-03 (Layer.merge-as-any) fix to include `packages/reactive-intelligence/src/runtime.ts` (4 sites) — same pattern, same solution, small add-on to any HS-03 PR.
+2. **HS-33:** Remove `patchStrategy` from `PlanExecuteConfigSchema` — YAGNI field never consumed; stage for v0.12.0 minor bump as a clean-up item.
+3. **HS-35:** Fix 2 remaining `as any` casts in `reactive-observer.ts` via kernel-warden — only 2 left in all of reasoning src; finishing this closes the reasoning-package clean-types gap completely.
+
+### Final state (post-sweep)
+
+- **Build:** GREEN (38/38) — unchanged
+- **Tests:** 6199 pass / 38 skip / 2 fail — unchanged (both failures pre-existing; no regressions)
+- **Fixes applied (1 commit):** ✅ HS-32 — stale path banner corrected in quality-utils.ts
+- **Filed for planning (4 new items):** HS-33 / HS-34 / HS-35 (new), HS-03 scope update (HS-34)
+- **Status updates:** HS-24 → ✅ FIXED
+
+---
 
 ### Iter 2 update — 2026-05-28 (apps/* + docs)
 
