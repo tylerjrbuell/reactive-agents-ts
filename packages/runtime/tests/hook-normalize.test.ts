@@ -84,9 +84,9 @@ describe("runHookResultForSideEffect", () => {
   });
 
   it("plain/void return resolves without throwing", async () => {
+    // Reaching the end without either await rejecting is the assertion.
     await runHookResultForSideEffect(nextCtx);
     await runHookResultForSideEffect(undefined);
-    expect(true).toBe(true);
   });
 
   it("a rejected Promise propagates (caller surfaces it)", async () => {
@@ -96,8 +96,10 @@ describe("runHookResultForSideEffect", () => {
   });
 
   it("a failed Effect propagates (caller surfaces it)", async () => {
+    // Effect.runPromise rejects with a FiberFailure (an Error subclass) — assert
+    // a real error surfaces, symmetric with the rejected-Promise case above.
     await expect(
       runHookResultForSideEffect(Effect.fail(new Error("y"))),
-    ).rejects.toBeDefined();
+    ).rejects.toBeInstanceOf(Error);
   });
 });
