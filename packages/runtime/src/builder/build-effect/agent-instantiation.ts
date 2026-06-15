@@ -19,8 +19,9 @@ import type {
   TaskError,
   RunControllerLike,
 } from "@reactive-agents/core";
-import type { GatewayOptions } from "../types.js";
+import type { GatewayOptions, OutputSchemaOptions } from "../types.js";
 import type { ParentExecutionContextSnapshot } from "./parent-context.js";
+import type { SchemaContract } from "@reactive-agents/reasoning";
 
 type EngineLike = {
   execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
@@ -70,6 +71,8 @@ export interface AgentInstantiationDeps {
    * the RunStore and guard against a config drift.
    */
   readonly durableResume?: { readonly dir: string; readonly configHash: string };
+  /** Opt-in typed structured output config from `.withOutputSchema()`. Absent = off. */
+  readonly outputSchemaConfig?: { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions };
 }
 
 /**
@@ -121,5 +124,6 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.channelsConfig,
     deps.capabilities,
     deps.durableResume,
+    deps.outputSchemaConfig,
   );
 };

@@ -2229,6 +2229,7 @@ export class ReactiveAgentBuilder {
                           }),
                       }
                     : undefined,
+                outputSchemaConfig: self._outputSchemaConfig,
             })
         }) as Effect.Effect<ReactiveAgent, Error>
     }

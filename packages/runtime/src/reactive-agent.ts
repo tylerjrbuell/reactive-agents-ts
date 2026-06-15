@@ -88,7 +88,12 @@ import type {
     GatewayHandle,
     AgentResultMetadata,
     AgentResult,
+    OutputSchemaOptions,
 } from './builder/types.js'
+import type { SchemaContract } from '@reactive-agents/reasoning'
+import { LLMService } from '@reactive-agents/llm-provider'
+import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
+import { StructuredOutputError } from './errors/structured-output-error.js'
 
 /**
  * Narrow widening for the dynamically-imported `ToolService` tag.
@@ -176,7 +181,12 @@ export class ReactiveAgent {
             customTermination?: (state: { output: string }) => boolean
         },
         /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
-        private readonly _durableResume?: { readonly dir: string; readonly configHash: string }
+        private readonly _durableResume?: { readonly dir: string; readonly configHash: string },
+        /** @internal Opt-in typed structured output config from `.withOutputSchema()`. Absent = off. */
+        private readonly _outputSchemaConfig?: {
+            readonly contract: SchemaContract<unknown>
+            readonly options: OutputSchemaOptions
+        }
     ) {}
 
     /**
@@ -761,7 +771,7 @@ export class ReactiveAgent {
         }
 
         return this.engine.execute(task).pipe(
-            Effect.map((result: TaskResult) => {
+            Effect.flatMap((result: TaskResult) => {
                 const r = result as TaskResult & {
                     format?: OutputFormat
                     terminatedBy?: TerminatedBy
@@ -882,11 +892,35 @@ export class ReactiveAgent {
                     }
                 }
                 this._lastRunObservations = contextParts
-                return agentResult
+
+                // ── Structured output extraction (Task 1.4 — fast path) ──────
+                // routing added in Task 1.5
+                const outputSchemaConfig = this._outputSchemaConfig
+                if (!outputSchemaConfig) {
+                    return Effect.succeed(agentResult)
+                }
+                return extractObjectFromAnswer({
+                    contract: outputSchemaConfig.contract,
+                    finalAnswer: agentResult.output,
+                    onParseFail: outputSchemaConfig.options.onParseFail ?? 'degrade',
+                    traceContext: { taskId: String(r.taskId) },
+                }).pipe(
+                    Effect.map((extracted) => ({
+                        ...agentResult,
+                        ...(extracted.object !== undefined ? { object: extracted.object } : {}),
+                        ...(extracted.objectError !== undefined ? { objectError: extracted.objectError } : {}),
+                    } satisfies AgentResult)),
+                    // If onParseFail: "throw" let StructuredOutputError propagate as-is.
+                    // If "degrade" extractObjectFromAnswer already catches and returns
+                    // { objectError } in the success channel — nothing extra needed.
+                    Effect.catchTag('StructuredOutputError', (e: StructuredOutputError) =>
+                        Effect.fail(e as unknown as Error)
+                    ),
+                )
             }),
             Effect.mapError(
-                (e: RuntimeErrors | TaskError) =>
-                    new Error('message' in e ? e.message : String(e))
+                (e: RuntimeErrors | TaskError | Error) =>
+                    e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
             )
         ) as Effect.Effect<AgentResult, Error>
     }
