@@ -238,6 +238,9 @@ export { toSchemaContract } from "./structured-output/schema-contract.js";
 export type { SchemaContract, SchemaIssue, SchemaValidationResult } from "./structured-output/schema-contract.js";
 export { extractStructuredOutput } from "./structured-output/pipeline.js";
 export type { StructuredOutputConfig, StructuredOutputResult } from "./structured-output/pipeline.js";
+export { groundedExtract } from "./structured-output/grounded/grounded-extract.js";
+export type { GroundedInput, GroundedOutput } from "./structured-output/grounded/grounded-extract.js";
+export { buildEvidenceCorpusFromSteps } from "./kernel/capabilities/verify/evidence-grounding.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

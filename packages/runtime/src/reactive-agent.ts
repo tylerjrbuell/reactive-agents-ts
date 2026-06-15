@@ -91,6 +91,8 @@ import type {
     OutputSchemaOptions,
 } from './builder/types.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
+import { groundedExtract, buildEvidenceCorpusFromSteps } from '@reactive-agents/reasoning'
+import type { ReasoningStep } from '@reactive-agents/reasoning'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
 import { chooseStructuredEngine } from './engine/finalize/structured-route.js'
@@ -905,14 +907,21 @@ export class ReactiveAgent<TOut = unknown> {
                 if (!outputSchemaConfig) {
                     return Effect.succeed(agentResult)
                 }
-                // Task 1.5: resolve the fast/grounded route before extracting.
+                // Task 1.5 / 2.5: resolve the fast/grounded route before extracting.
                 // LLMService is in the ManagedRuntime context (same requirement as
-                // extractObjectFromAnswer), so we can flatMap over it here.
+                // extractObjectFromAnswer / groundedExtract), so we can flatMap over it here.
                 const self = this
+                // Build evidence corpus from reasoning steps — used by the grounded engine.
+                // reasoningSteps is already captured above; we cast to ReasoningStep[] for
+                // buildEvidenceCorpusFromSteps (only accesses type/content/metadata fields
+                // that are present on the inline type captured at line ~793).
+                const evidenceCorpus = buildEvidenceCorpusFromSteps(
+                    (reasoningSteps ?? []) as readonly ReasoningStep[]
+                )
                 return LLMService.pipe(
                     Effect.flatMap((llm) => llm.getStructuredOutputCapabilities()),
                     Effect.flatMap((structCaps) => {
-                        const _engine = chooseStructuredEngine({
+                        const engine = chooseStructuredEngine({
                             mode: outputSchemaConfig.options.mode ?? 'auto',
                             nativeJsonMode: structCaps.nativeJsonMode,
                             toolsRegistered: self._enableTools,
@@ -921,26 +930,58 @@ export class ReactiveAgent<TOut = unknown> {
                             // only when nativeJsonMode AND no tools, which is already safe.
                             calibrated: true,
                         })
-                        // grounded engine wired in Phase 2 (Task 2.5); falls back to fast.
-                        void _engine // routing decision computed; both branches call fast path now
+                        const onParseFail = outputSchemaConfig.options.onParseFail ?? 'degrade'
+                        if (engine === 'grounded') {
+                            // ── Task 2.5: grounded engine path ───────────────────────────────
+                            // groundedExtract error channel is `never`; all failures degrade to
+                            // { objectError }. We translate objectError → thrown error here when
+                            // onParseFail === "throw" (callers expect StructuredOutputError).
+                            return groundedExtract({
+                                contract: outputSchemaConfig.contract,
+                                finalAnswer: agentResult.output,
+                                evidenceCorpus,
+                                onParseFail,
+                                abstainBelow: outputSchemaConfig.options.abstainBelow,
+                            }).pipe(
+                                Effect.flatMap((g) => {
+                                    if (g.objectError !== undefined && onParseFail === 'throw') {
+                                        return Effect.fail(new StructuredOutputError({
+                                            rawText: agentResult.output,
+                                            issues: [g.objectError],
+                                        }) as unknown as Error)
+                                    }
+                                    const result: AgentResult = {
+                                        ...agentResult,
+                                        ...(g.object !== undefined ? { object: g.object } : {}),
+                                        ...(g.objectError !== undefined ? { objectError: g.objectError } : {}),
+                                        ...(g.provenance !== undefined ? { provenance: g.provenance } : {}),
+                                        ...(g.confidence !== undefined ? { confidence: g.confidence } : {}),
+                                        ...(g.abstained !== undefined ? { abstained: g.abstained } : {}),
+                                    }
+                                    return Effect.succeed(result)
+                                })
+                            )
+                        }
+                        // ── Fast path (auto → fast) ───────────────────────────────────────
                         return extractObjectFromAnswer({
                             contract: outputSchemaConfig.contract,
                             finalAnswer: agentResult.output,
-                            onParseFail: outputSchemaConfig.options.onParseFail ?? 'degrade',
+                            onParseFail,
                             traceContext: { taskId: String(r.taskId) },
-                        })
+                        }).pipe(
+                            Effect.map((extracted) => ({
+                                ...agentResult,
+                                ...(extracted.object !== undefined ? { object: extracted.object } : {}),
+                                ...(extracted.objectError !== undefined ? { objectError: extracted.objectError } : {}),
+                            } satisfies AgentResult)),
+                            // If onParseFail: "throw" let StructuredOutputError propagate as-is.
+                            // If "degrade" extractObjectFromAnswer already catches and returns
+                            // { objectError } in the success channel — nothing extra needed.
+                            Effect.catchTag('StructuredOutputError', (e: StructuredOutputError) =>
+                                Effect.fail(e as unknown as Error)
+                            ),
+                        )
                     }),
-                    Effect.map((extracted) => ({
-                        ...agentResult,
-                        ...(extracted.object !== undefined ? { object: extracted.object } : {}),
-                        ...(extracted.objectError !== undefined ? { objectError: extracted.objectError } : {}),
-                    } satisfies AgentResult)),
-                    // If onParseFail: "throw" let StructuredOutputError propagate as-is.
-                    // If "degrade" extractObjectFromAnswer already catches and returns
-                    // { objectError } in the success channel — nothing extra needed.
-                    Effect.catchTag('StructuredOutputError', (e: StructuredOutputError) =>
-                        Effect.fail(e as unknown as Error)
-                    ),
                 )
             }),
             Effect.mapError(

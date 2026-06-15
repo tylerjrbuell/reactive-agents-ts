@@ -127,7 +127,7 @@ function pickSubSchema<A>(
 
   // Fallback: use the full schema wrapped as partial so the repair call can
   // return a subset. We only merge the specific missing keys afterward.
-  return Schema.partial(effectSchema);
+  return Schema.partial(effectSchema) as unknown as Schema.Schema<unknown>;
 }
 
 // ── Main orchestrator ─────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ export const groundedExtract = <A>(
   input: GroundedInput<A>,
 ): Effect.Effect<GroundedOutput<A>, never, LLMService> =>
   Effect.gen(function* () {
-    const reqs = fieldRequirementsFromSchema(input.contract.effectSchema);
+    const reqs = fieldRequirementsFromSchema(input.contract.effectSchema as unknown as Schema.Schema<unknown>);
 
     // ── Phase A: Initial extraction via partial schema ────────────────────
     // Using Schema.partial so the pipeline accepts a partial object — avoids
@@ -150,7 +150,7 @@ export const groundedExtract = <A>(
         return toSchemaContract(s as Schema.Schema<Partial<A>>);
       } catch {
         // Not a transformable schema — use full contract
-        return input.contract as SchemaContract<Partial<A>>;
+        return input.contract as unknown as SchemaContract<Partial<A>>;
       }
     })();
 
