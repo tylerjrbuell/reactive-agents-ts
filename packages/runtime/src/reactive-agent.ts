@@ -671,6 +671,8 @@ export class ReactiveAgent<TOut = unknown> {
      * @throws DurableRunNotFoundError if the run / checkpoint is unknown.
      * @throws DurableConfigMismatchError if the agent config changed since capture.
      *
+     * Note: resumed results return the base `AgentResult`; typed structured `object` carry is not threaded through resume yet.
+     *
      * Named `resumeRun` (not `resume`) to avoid colliding with the in-process
      * pause/resume control verb `resume()`.
      */
@@ -1028,6 +1030,8 @@ export class ReactiveAgent<TOut = unknown> {
      * pause()     — freeze at next iteration boundary; await resume().
      * resume()    — continue from paused state.
      * status()    — current RunStatus.
+     *
+     * Note: streamed results do not carry the typed structured `object`; use `streamObject()` for streaming structured output.
      */
     runStream(
         input: string,
