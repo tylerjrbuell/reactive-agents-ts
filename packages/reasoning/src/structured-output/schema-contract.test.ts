@@ -15,7 +15,10 @@ describe("toSchemaContract — Effect Schema", () => {
     const c = toSchemaContract(S);
     const r = c.validate({ total: "nope" });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.issues.length).toBeGreaterThan(0);
+    if (!r.ok) {
+      expect(r.issues.length).toBeGreaterThan(0);
+      expect(r.issues[0].message.length).toBeGreaterThan(0);
+    }
   });
   it("derives a JSON schema for native enforcement", () => {
     const c = toSchemaContract(S);
@@ -37,6 +40,15 @@ describe("toSchemaContract — Standard Schema", () => {
         : { issues: [{ message: "total must be a number", path: ["total"] }] } },
   };
   it("validates via ~standard.validate", () => { const c = toSchemaContract(std); const r = c.validate({ total: 7 }); expect(r.ok).toBe(true); if (r.ok) expect(r.value.total).toBe(7); });
-  it("reports issues from ~standard.validate", () => { const c = toSchemaContract(std); expect(c.validate({ total: "x" }).ok).toBe(false); });
+  it("reports issues from ~standard.validate", () => {
+    const c = toSchemaContract(std);
+    const r = c.validate({ total: "x" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.issues.length).toBeGreaterThan(0);
+      expect(r.issues[0].message).toContain("total");
+      expect(r.issues[0].path).toEqual(["total"]);
+    }
+  });
   it("returns undefined JSON schema when the validator has no emitter", () => { expect(toSchemaContract(std).toJsonSchema()).toBeUndefined(); });
 });
