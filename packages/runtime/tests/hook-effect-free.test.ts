@@ -126,4 +126,24 @@ describe("effect-free lifecycle hooks — harness-mirror path", () => {
     );
     expect(ran).toBe(true);
   });
+
+  it("discards a returned context (mirror path is observe-only)", async () => {
+    // The harness mirror runs hooks purely for side effects — a hook that
+    // returns a modified context must NOT thread it back. invokeUserHookSafely
+    // resolves to void regardless of what the handler returns. This pins the
+    // documented asymmetry vs the registry path so a future change can't
+    // silently start propagating context here.
+    const builder = ReactiveAgents.create().withName("mirror-discard");
+    const hook: LifecycleHook = {
+      phase: "think",
+      timing: "before",
+      handler: (c) => ({ ...c, iteration: 999 }) as ExecutionContext,
+    };
+    const out = await invokeUserHookSafely(
+      builder as never,
+      hook,
+      { phase: "think", iteration: 0 },
+    );
+    expect(out).toBeUndefined();
+  });
 });

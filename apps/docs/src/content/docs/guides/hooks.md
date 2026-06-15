@@ -46,12 +46,14 @@ observe. Throwing (or a rejected promise / failed Effect) raises a `HookError`.
 | `bootstrap` | Before anything else | Load external config, validate preconditions |
 | `guardrail` | Input safety check | Log blocked inputs, custom filtering |
 | `cost-route` | Model tier selection | Override routing decisions |
-| `strategy` | Strategy selection | Log which strategy was chosen |
+| `strategy-select` | Strategy selection | Log which strategy was chosen |
 | `think` | Each reasoning iteration | Progress logging, custom metrics |
 | `act` | Tool execution | Tool call tracking, audit logging |
 | `observe` | Process tool results | Result validation, caching |
 | `verify` | Output fact-checking | Custom verification logic |
 | `memory-flush` | Persist memories | Custom memory operations |
+| `cost-track` | Cost accounting | Budget alerts, cost telemetry |
+| `audit` | Decision audit trail | Rationale logging, compliance |
 | `complete` | Final result assembly | Post-processing, cleanup |
 
 ## Hook Timing
