@@ -100,6 +100,43 @@ if (result.debrief) {
 }
 ```
 
+### Latency: debrief is off the critical path
+
+The rich LLM-synthesized debrief no longer blocks `run()`. As of v0.12.0 the engine
+forks the synthesis call into a background fiber and returns immediately, so
+`result.output` is available ~46% sooner on memory-enabled runs (the debrief LLM
+call was measured blocking ~48% of perceived latency after the answer was already
+produced).
+
+What this means for the two accessors:
+
+```typescript
+const result = await agent.run("...");
+
+// Instant: deterministic fallback debrief (signals + structured summary),
+// available the moment run() returns. Never blocks.
+console.log(result.debrief?.summary);
+
+// Lazy: awaits the forked LLM-synthesized rich debrief. Resolves when the
+// background synthesis completes (may already be done on long-lived agents).
+const rich = await result.debriefRich?.();
+console.log(rich?.summary);
+```
+
+- `result.debrief` — the **instant deterministic fallback** (was the LLM-rich
+  version pre-0.12.0). Safe to read synchronously.
+- `result.debriefRich()` — `Promise<AgentDebrief | undefined>`; awaits the forked
+  rich synthesis. Returns `undefined` when no debrief was scheduled (e.g.
+  `.withoutMemory()`).
+- `getLastDebrief()` and chat context return the fallback first, then upgrade to
+  the rich debrief once the background fiber resolves.
+- `dispose()` joins any pending debrief fibers first, so a short-lived
+  `run(); dispose()` script still persists the rich debrief (it pays the cost at
+  `dispose()` instead of `run()`).
+
+Long-lived agents (gateways, servers) and multi-turn sessions win fully: the
+debrief of run *N* finishes during idle time or run *N+1*.
+
 ### Persistence
 
 Debriefs are persisted to the memory SQLite DB in the `agent_debriefs` table alongside episodic/semantic/procedural memory. No extra config needed — it uses the same DB path from `.withMemory()`.
@@ -122,7 +159,8 @@ interface AgentResult {
   // New optional fields
   format?: "text" | "json" | "markdown" | "csv" | "html";
   terminatedBy?: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn";
-  debrief?: AgentDebrief;
+  debrief?: AgentDebrief;                              // Instant deterministic fallback
+  debriefRich?: () => Promise<AgentDebrief | undefined>; // Awaits forked LLM synthesis (v0.12.0+)
 }
 ```
 

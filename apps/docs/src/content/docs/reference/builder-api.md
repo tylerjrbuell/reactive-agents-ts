@@ -874,10 +874,18 @@ Access it from any run result:
 
 ```typescript
 const result = await agent.run('Fetch the latest commits and summarize')
+
+// result.debrief — instant deterministic fallback (never blocks run()).
 if (result.debrief) {
     console.log(result.debrief.summary)
     console.log(result.debrief.markdown)
 }
+
+// result.debriefRich() — awaits the LLM-synthesized rich debrief, which the
+// engine forks off the critical path (v0.12.0+). Returns undefined when no
+// debrief was scheduled (e.g. .withoutMemory()).
+const rich = await result.debriefRich?.()
+console.log(rich?.markdown)
 ```
 
 ## Full Example
