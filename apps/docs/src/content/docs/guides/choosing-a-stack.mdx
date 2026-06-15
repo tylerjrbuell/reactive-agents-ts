@@ -9,9 +9,31 @@ import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Use this guide to choose a default stack quickly, then tune for cost and reliability.
 
+## Start with a profile
+
+The fastest way to compose capabilities is a `HarnessProfile` preset — it sets the default-on capability bundle in one line, and you override individual pieces afterward (later calls win). _(`HarnessProfile` ships in v0.12+; on earlier versions use the explicit `.with*()` chain below.)_
+
+```typescript
+import { ReactiveAgents, HarnessProfile } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withProfile(HarnessProfile.balanced())   // memory + RI + verifier + strategy switching
+  .withTools()
+  .build();
+```
+
+| Preset | Use when |
+|---|---|
+| `HarnessProfile.lean()` | Latency/cost-sensitive paths or ablations — model only, all default capabilities off. |
+| `HarnessProfile.balanced()` | Most production apps — today's defaults (memory + reactive intelligence + verifier + strategy switching). |
+| `HarnessProfile.intelligent()` | You want cross-session compounding learning — balanced + skill persistence. |
+
+Override after the preset: `.withProfile(HarnessProfile.lean()).withMemory()` re-enables just memory.
+
 ## Default Recommendation
 
-For most production apps:
+For most production apps, the equivalent explicit chain:
 
 ```typescript
 const agent = await ReactiveAgents.create()
