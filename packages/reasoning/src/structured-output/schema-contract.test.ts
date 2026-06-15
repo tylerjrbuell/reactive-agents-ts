@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Schema } from "effect";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { toSchemaContract } from "./schema-contract.js";
 
 describe("toSchemaContract — Effect Schema", () => {
@@ -26,4 +27,16 @@ describe("toSchemaContract — Effect Schema", () => {
     const c = toSchemaContract(S);
     expect(c.effectSchema).toBe(S);
   });
+});
+
+describe("toSchemaContract — Standard Schema", () => {
+  const std: StandardSchemaV1<unknown, { total: number }> = {
+    "~standard": { version: 1, vendor: "test",
+      validate: (value) => (typeof value === "object" && value !== null && typeof (value as { total?: unknown }).total === "number")
+        ? { value: value as { total: number } }
+        : { issues: [{ message: "total must be a number", path: ["total"] }] } },
+  };
+  it("validates via ~standard.validate", () => { const c = toSchemaContract(std); const r = c.validate({ total: 7 }); expect(r.ok).toBe(true); if (r.ok) expect(r.value.total).toBe(7); });
+  it("reports issues from ~standard.validate", () => { const c = toSchemaContract(std); expect(c.validate({ total: "x" }).ok).toBe(false); });
+  it("returns undefined JSON schema when the validator has no emitter", () => { expect(toSchemaContract(std).toJsonSchema()).toBeUndefined(); });
 });
