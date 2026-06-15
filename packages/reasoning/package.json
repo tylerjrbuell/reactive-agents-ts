@@ -13,10 +13,11 @@
   "dependencies": {
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/tools": "workspace:*",
     "@reactive-agents/memory": "workspace:*",
     "@reactive-agents/observability": "workspace:*",
     "@reactive-agents/prompts": "workspace:*",
+    "@reactive-agents/tools": "workspace:*",
+    "@standard-schema/spec": "^1.0.0",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
