@@ -102,7 +102,7 @@ export class ChannelService {
           platform: msg.platform,
           sessionId,
           timestamp: Date.now(),
-        } as unknown as AgentEvent);
+        });
       }
 
       const adapter = self.adapters.get(adapterId);
@@ -123,7 +123,7 @@ export class ChannelService {
           messageId: `local-${Date.now()}`,
           channelId: msg.channelId,
           timestamp: Date.now(),
-        } as unknown as AgentEvent);
+        });
       }
     }).pipe(Effect.catchAll(() => Effect.void));
   }

@@ -121,6 +121,10 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 // fetch`). Stubbing the global fetch type is the canonical test-double widening
 // boundary (the test owns the absorbing side); routing through a helper still
 // leaves one cast each, so the §5.5 "design it out" path doesn't apply.
+// 2026-06-13: follow-up (a) DONE — `AgentEvent` union already carries
+// `TriggerFired` + `ChannelMessageSent`, so the two `as unknown as AgentEvent`
+// casts in channels/src/services/channel-service.ts were stale and removed
+// (68 → 66, back at ceiling). No CEILING bump; this is "design it out".
 const CEILING = 66;
 
 interface Hit {
