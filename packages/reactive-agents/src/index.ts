@@ -69,6 +69,9 @@ export {
   // Durable execution (track 1)
   DurableRunNotFoundError,
   DurableConfigMismatchError,
+
+  // Structured output
+  StructuredOutputError,
 } from "@reactive-agents/runtime";
 
 export type {
@@ -103,6 +106,10 @@ export type {
   // Harness Profile presets (MOVE-6)
   HarnessProfilePatch,
   HarnessProfileName,
+
+  // Structured output
+  OutputSchemaOptions,
+  DeepPartial,
 } from "@reactive-agents/runtime";
 
 // ─── Core Services ───
