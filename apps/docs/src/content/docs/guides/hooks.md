@@ -68,7 +68,7 @@ Each phase supports three timing points:
 handler: (ctx: ExecutionContext) =>
   | ExecutionContext | void
   | Promise<ExecutionContext | void>
-  | Effect.Effect<ExecutionContext, HookError>
+  | Effect.Effect<ExecutionContext, ExecutionError>
 ```
 
 The handler receives the current `ExecutionContext`. Return the (possibly modified) context to change execution, or return nothing (`void`) to observe without side-effects. The Effect form is also accepted. Useful fields include:
@@ -97,7 +97,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
   timing: "before",
   handler: (ctx) => {
     const step = ctx.metadata.stepsCount + 1;
-    const max = ctx.metadata.maxIterations ?? 10;
+    const max = ctx.maxIterations ?? 10;
     console.log(`Step ${step}/${max}`);
     // Return nothing — just observing.
   },
@@ -111,8 +111,8 @@ Hooks registered for the same phase and timing run **sequentially in registratio
   phase: "complete",
   timing: "after",
   handler: (ctx) => {
-    if (ctx.metadata.cost > 0.10) {
-      console.warn(`⚠ Execution cost $${ctx.metadata.cost.toFixed(3)} exceeded $0.10 threshold`);
+    if (ctx.cost > 0.10) {
+      console.warn(`⚠ Execution cost $${ctx.cost.toFixed(3)} exceeded $0.10 threshold`);
     }
     // Return nothing — just observing.
   },
