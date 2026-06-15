@@ -11,7 +11,7 @@
  * `new ReactiveAgentBuilder()` line's location next to the class definition.
  */
 import type { ReactiveAgentBuilder } from "../builder.js";
-import type { LifecycleHook, ExecutionContext } from "../types.js";
+import type { LifecycleHook, ExecutionContext, RawHookResult } from "../types.js";
 import type { RuntimeErrors } from "../errors.js";
 import { runHookResultForSideEffect } from "../hooks-normalize.js";
 
@@ -100,7 +100,7 @@ export async function invokeUserHookSafely(
     return;
   }
   try {
-    await runHookResultForSideEffect(result as Parameters<typeof runHookResultForSideEffect>[0]);
+    await runHookResultForSideEffect(result as RawHookResult);
   } catch (err) {
     surface(err);
   }
