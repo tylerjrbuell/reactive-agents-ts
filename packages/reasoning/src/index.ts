@@ -234,6 +234,8 @@ export type {
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
+export { toSchemaContract } from "./structured-output/schema-contract.js";
+export type { SchemaContract, SchemaIssue, SchemaValidationResult } from "./structured-output/schema-contract.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

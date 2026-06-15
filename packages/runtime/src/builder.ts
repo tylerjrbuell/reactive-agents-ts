@@ -86,6 +86,11 @@ import type { StreamDensity } from './stream-types.js'
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import type { DocumentSpec } from './context-ingestion.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
+import { Schema } from 'effect'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
+import { toSchemaContract } from '@reactive-agents/reasoning'
+import type { SchemaContract } from '@reactive-agents/reasoning'
+import type { OutputSchemaOptions } from './builder/types.js'
 
 // ─── Public Option/Result Types (W25-A: lifted to ./builder/types.ts) ────────
 //
@@ -384,6 +389,10 @@ export class ReactiveAgentBuilder {
     private _budgetLimits: BudgetLimits | undefined = undefined
     /** Opt-in numeric evidence-grounding config. Absent = off (default). */
     private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
+    /** Opt-in typed structured output config. Absent = off (default). */
+    private _outputSchemaConfig:
+        | { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions }
+        | undefined = undefined
     /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
     private _durableRuns: import('./builder/types.js').DurableRunsOptions | undefined = undefined
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
@@ -857,6 +866,23 @@ export class ReactiveAgentBuilder {
      */
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
         this._groundingConfig = options
+        return this
+    }
+
+    /**
+     * Declare a typed structured output schema (Standard Schema or Effect Schema).
+     * `run()` then populates `result.object`. Default lenient: on parse-fail,
+     * `object` is undefined and `objectError` is set (use `{ onParseFail: "throw" }` for strict).
+     *
+     * @param schema - An Effect Schema or any Standard Schema v1-compliant schema
+     * @param options - Structured output options (mode, onParseFail, abstainBelow)
+     * @returns `this` for chaining
+     */
+    withOutputSchema<A>(
+        schema: StandardSchemaV1<unknown, A> | Schema.Schema<A>,
+        options: OutputSchemaOptions = {},
+    ): this {
+        this._outputSchemaConfig = { contract: toSchemaContract(schema) as SchemaContract<unknown>, options }
         return this
     }
 
