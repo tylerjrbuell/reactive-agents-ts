@@ -338,6 +338,28 @@ export interface GroundingOptions {
 }
 
 /**
+ * Options for `.withOutputSchema()` — opt-in typed structured output.
+ *
+ * When enabled, the runtime routes structured extraction through a
+ * capability-selected engine and populates `AgentResult.object`.
+ *
+ * @example
+ * ```typescript
+ * agent.withOutputSchema(MySchema)                        // auto mode, lenient
+ * agent.withOutputSchema(MySchema, { mode: "grounded" })  // loop-integrated
+ * agent.withOutputSchema(MySchema, { onParseFail: "throw" })
+ * ```
+ */
+export interface OutputSchemaOptions {
+    /** `auto` (default): capability-routed. `fast`: single-shot. `grounded`: loop-integrated. */
+    readonly mode?: "auto" | "fast" | "grounded";
+    /** `degrade` (default): object=undefined + objectError. `throw`: StructuredOutputError. */
+    readonly onParseFail?: "degrade" | "throw";
+    /** Grounded engine only: omit fields whose confidence is below this (opt-in; default off = no abstention). */
+    readonly abstainBelow?: number;
+}
+
+/**
  * Options for `.withDurableRuns()` — opt-in durable run persistence (Phase B).
  *
  * When enabled, the runtime serializes kernel state to a SQLite RunStore every
@@ -767,4 +789,14 @@ export interface AgentResult {
     readonly debriefRich?: () => Promise<AgentDebrief | undefined>
     /** Error message when `success` is false. */
     readonly error?: string
+    /** Typed structured output when `.withOutputSchema()` was set; undefined on parse-fail (lenient). */
+    readonly object?: unknown
+    /** Populated (lenient mode) when structured parse failed after retries. */
+    readonly objectError?: string
+    /** Grounded engine only: per-field-path evidence source. */
+    readonly provenance?: Readonly<Record<string, { readonly source: string; readonly evidence: string }>>
+    /** Grounded engine only: per-field-path confidence 0..1. */
+    readonly confidence?: Readonly<Record<string, number>>
+    /** Grounded engine only: per-field-path abstention reason (field omitted, not hallucinated). */
+    readonly abstained?: Readonly<Record<string, string>>
 }
