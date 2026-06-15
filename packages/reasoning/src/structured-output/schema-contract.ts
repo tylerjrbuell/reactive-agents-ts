@@ -142,6 +142,16 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
     validate: runValidate,
     label: props.vendor,
     toJsonSchema(): Record<string, unknown> | undefined {
+      // StandardJSONSchemaV1 extension: ~standard.jsonSchema.output({ target })
+      // See https://github.com/standard-schema/standard-schema (v1 spec, StandardJSONSchemaV1)
+      const jp = (props as { jsonSchema?: { output: (opts: { target: string }) => Record<string, unknown> } }).jsonSchema;
+      if (jp && typeof jp.output === "function") {
+        try {
+          return jp.output({ target: "draft-07" });
+        } catch {
+          // fall through — converter may not support the requested target
+        }
+      }
       // Standard Schema v1 does not standardize JSON Schema emission.
       // Fall back to the prompt+heal path.
       return undefined;

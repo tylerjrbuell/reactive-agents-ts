@@ -21,9 +21,13 @@ import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
 import { stripThinking } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type { SchemaContract } from "./schema-contract.js";
 
 export interface StructuredOutputConfig<T> {
-  readonly schema: Schema.Schema<T>;
+  /** Provide exactly one of `schema` or `contract`. */
+  readonly schema?: Schema.Schema<T>;
+  /** Optional SchemaContract — validated via contract.validate(); overrides schema validation. */
+  readonly contract?: SchemaContract<T>;
   readonly prompt: string;
   readonly systemPrompt?: string;
   readonly examples?: readonly T[];
@@ -58,6 +62,7 @@ export interface StructuredOutputResult<T> {
 const tryNativeStructuredOutput = <T>(
   llm: LLMService["Type"],
   config: StructuredOutputConfig<T>,
+  effectSchema: Schema.Schema<T>,
   maxTokens: number,
   temp: number,
 ): Effect.Effect<StructuredOutputResult<T> | null, never> =>
@@ -68,7 +73,7 @@ const tryNativeStructuredOutput = <T>(
     const result = yield* llm.completeStructured({
       messages: [{ role: "user", content: config.prompt }],
       systemPrompt: config.systemPrompt,
-      outputSchema: config.schema,
+      outputSchema: effectSchema,
       maxTokens,
       temperature: temp,
       maxParseRetries: 1,
@@ -105,6 +110,22 @@ export const extractStructuredOutput = <T>(
     const temp = config.temperature ?? 0.3;
     const maxTokens = config.maxTokens ?? 4096;
 
+    // Resolve effective Effect Schema (from contract or direct schema field)
+    const effectSchema = config.contract ? config.contract.effectSchema : config.schema;
+    if (!effectSchema) {
+      return yield* Effect.fail(new Error("extractStructuredOutput: provide `schema` or `contract`"));
+    }
+
+    // Final-layer validation: contract path uses contract.validate(); schema path uses Effect decode
+    const validateFinal = (parsed: unknown): T => {
+      if (config.contract) {
+        const r = config.contract.validate(parsed);
+        if (r.ok) return r.value;
+        throw new Error(r.issues.map((i) => i.message).join("; "));
+      }
+      return Schema.decodeUnknownSync(effectSchema)(parsed);
+    };
+
     // Optional EventBus for logModelIO observability
     const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
       Effect.catchAll(() => Effect.succeed(Option.none<EventBus["Type"]>())),
@@ -112,7 +133,7 @@ export const extractStructuredOutput = <T>(
     const eb = ebOpt._tag === "Some" ? ebOpt.value : null;
 
     // Layer 0: Try provider-native structured output first
-    const nativeResult = yield* tryNativeStructuredOutput(llm, config, maxTokens, temp);
+    const nativeResult = yield* tryNativeStructuredOutput(llm, config, effectSchema, maxTokens, temp);
     if (nativeResult !== null) {
       if (eb) {
         yield* eb.publish({
@@ -187,10 +208,10 @@ export const extractStructuredOutput = <T>(
         }
       }
 
-      // Layer 3: Schema validation
+      // Layer 3: Schema validation (via contract or direct Effect Schema)
       try {
         const parsed = JSON.parse(jsonText);
-        const data = Schema.decodeUnknownSync(config.schema)(parsed);
+        const data = validateFinal(parsed);
         return { data, raw, attempts: attempt + 1, repaired, nativeMode: false };
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);

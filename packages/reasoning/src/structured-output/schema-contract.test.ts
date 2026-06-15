@@ -51,6 +51,23 @@ describe("toSchemaContract — Standard Schema", () => {
     }
   });
   it("returns undefined JSON schema when the validator has no emitter", () => { expect(toSchemaContract(std).toJsonSchema()).toBeUndefined(); });
+  it("uses ~standard.jsonSchema.output when present (StandardJSONSchemaV1 extension)", () => {
+    const stdWithJsonSchema: StandardSchemaV1<unknown, { total: number }> & {
+      "~standard": StandardSchemaV1.Props<unknown, { total: number }> & {
+        jsonSchema: { output: (opts: { target: string }) => Record<string, unknown> };
+      };
+    } = {
+      "~standard": {
+        ...std["~standard"],
+        jsonSchema: {
+          output: (_opts) => ({ type: "object", properties: { total: { type: "number" } } }),
+        },
+      },
+    };
+    const js = toSchemaContract(stdWithJsonSchema).toJsonSchema();
+    expect(js).toBeDefined();
+    expect((js as Record<string, unknown>).type).toBe("object");
+  });
   it("surfaces an issue when ~standard.validate is async", () => {
     const asyncStd: StandardSchemaV1<unknown, unknown> = {
       "~standard": { version: 1, vendor: "test", validate: async (v) => ({ value: v }) },
