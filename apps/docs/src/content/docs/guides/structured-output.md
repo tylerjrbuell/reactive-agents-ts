@@ -59,7 +59,7 @@ if (result.object) {
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
-import { Schema } from "@effect/schema";
+import { Schema } from "effect";
 
 const Invoice = Schema.Struct({
   vendor: Schema.String,

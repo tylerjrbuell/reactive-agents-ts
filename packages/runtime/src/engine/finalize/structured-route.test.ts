@@ -17,4 +17,8 @@ describe("chooseStructuredEngine", () => {
   it("auto → fast when frontier+native+no tools", () => {
     expect(chooseStructuredEngine({ mode: "auto", nativeJsonMode: true, toolsRegistered: false, calibrated: true })).toBe("fast");
   });
+  it("auto → fast for a no-native-JSON frontier provider (e.g. Anthropic) with no tools", () => {
+    // Regression: nativeJsonMode=false must NOT force grounded (was the RC3 mis-route).
+    expect(chooseStructuredEngine({ mode: "auto", nativeJsonMode: false, toolsRegistered: false, calibrated: true })).toBe("fast");
+  });
 });
