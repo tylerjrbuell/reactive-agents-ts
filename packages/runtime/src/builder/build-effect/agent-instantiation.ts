@@ -73,6 +73,12 @@ export interface AgentInstantiationDeps {
   readonly durableResume?: { readonly dir: string; readonly configHash: string };
   /** Opt-in typed structured output config from `.withOutputSchema()`. Absent = off. */
   readonly outputSchemaConfig?: { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions };
+  /**
+   * Whether the agent has at least one tool registered (`.withTools()` or `.withDocuments()` called).
+   * Forwarded to `ReactiveAgent` so the structured-output router can prefer the grounded path
+   * when tools are present (tool results need structured assembly, not prose extraction).
+   */
+  readonly enableTools: boolean;
 }
 
 /**
@@ -125,5 +131,6 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.capabilities,
     deps.durableResume,
     deps.outputSchemaConfig,
+    deps.enableTools,
   );
 };

@@ -93,6 +93,7 @@ import type {
 import type { SchemaContract } from '@reactive-agents/reasoning'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
+import { chooseStructuredEngine } from './engine/finalize/structured-route.js'
 import { StructuredOutputError } from './errors/structured-output-error.js'
 
 /**
@@ -186,7 +187,13 @@ export class ReactiveAgent {
         private readonly _outputSchemaConfig?: {
             readonly contract: SchemaContract<unknown>
             readonly options: OutputSchemaOptions
-        }
+        },
+        /**
+         * @internal Whether `.withTools()` (or `.withDocuments()`) was called during build.
+         * Forwarded from `AgentInstantiationDeps.enableTools`. Used by the structured-output
+         * router (Task 1.5) to prefer the grounded path when tools are present.
+         */
+        private readonly _enableTools: boolean = false
     ) {}
 
     /**
@@ -893,18 +900,36 @@ export class ReactiveAgent {
                 }
                 this._lastRunObservations = contextParts
 
-                // ── Structured output extraction (Task 1.4 — fast path) ──────
-                // routing added in Task 1.5
+                // ── Structured output extraction (Task 1.4 / 1.5) ───────────
                 const outputSchemaConfig = this._outputSchemaConfig
                 if (!outputSchemaConfig) {
                     return Effect.succeed(agentResult)
                 }
-                return extractObjectFromAnswer({
-                    contract: outputSchemaConfig.contract,
-                    finalAnswer: agentResult.output,
-                    onParseFail: outputSchemaConfig.options.onParseFail ?? 'degrade',
-                    traceContext: { taskId: String(r.taskId) },
-                }).pipe(
+                // Task 1.5: resolve the fast/grounded route before extracting.
+                // LLMService is in the ManagedRuntime context (same requirement as
+                // extractObjectFromAnswer), so we can flatMap over it here.
+                const self = this
+                return LLMService.pipe(
+                    Effect.flatMap((llm) => llm.getStructuredOutputCapabilities()),
+                    Effect.flatMap((structCaps) => {
+                        const _engine = chooseStructuredEngine({
+                            mode: outputSchemaConfig.options.mode ?? 'auto',
+                            nativeJsonMode: structCaps.nativeJsonMode,
+                            toolsRegistered: self._enableTools,
+                            // TODO(P2): wire real calibration signal from Capability table.
+                            // Defaulting to `true` (frontier-ish) is conservative — auto→fast
+                            // only when nativeJsonMode AND no tools, which is already safe.
+                            calibrated: true,
+                        })
+                        // grounded engine wired in Phase 2 (Task 2.5); falls back to fast.
+                        void _engine // routing decision computed; both branches call fast path now
+                        return extractObjectFromAnswer({
+                            contract: outputSchemaConfig.contract,
+                            finalAnswer: agentResult.output,
+                            onParseFail: outputSchemaConfig.options.onParseFail ?? 'degrade',
+                            traceContext: { taskId: String(r.taskId) },
+                        })
+                    }),
                     Effect.map((extracted) => ({
                         ...agentResult,
                         ...(extracted.object !== undefined ? { object: extracted.object } : {}),

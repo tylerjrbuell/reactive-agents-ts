@@ -2230,6 +2230,7 @@ export class ReactiveAgentBuilder {
                       }
                     : undefined,
                 outputSchemaConfig: self._outputSchemaConfig,
+                enableTools: self._enableTools,
             })
         }) as Effect.Effect<ReactiveAgent, Error>
     }
