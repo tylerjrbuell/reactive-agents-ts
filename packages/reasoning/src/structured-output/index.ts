@@ -7,3 +7,5 @@ export { fieldRequirementsFromSchema, missingRequiredFields } from "./grounded/f
 export type { FieldRequirement } from "./grounded/field-requirements.js";
 export { groundFields } from "./grounded/field-provenance.js";
 export type { GroundResult } from "./grounded/field-provenance.js";
+export { schemaSatisfactionCheck } from "./grounded/schema-satisfaction.js";
+export type { SchemaSatisfactionInput } from "./grounded/schema-satisfaction.js";
