@@ -55,10 +55,16 @@ export function normalizeHookResult(
       return Effect.fail(err);
     }
 
+    // `void` is `undefined` at runtime; the `null` arm defends against untyped
+    // JS callers (the builder API is consumed from plain JS too) that return
+    // `null` from a handler — treat both as "observe-only, context unchanged".
     if (raw === undefined || raw === null) {
       return Effect.succeed(ctx);
     }
     if (Effect.isEffect(raw)) {
+      // Safe narrowing: RawHookResult constrains the Effect arm to
+      // Effect<ExecutionContext, ExecutionError>; we only widen the error
+      // channel to `unknown` to unify it with the throw/reject paths.
       return (raw as Effect.Effect<ExecutionContext, unknown>).pipe(
         Effect.map((r) => r ?? ctx),
       );

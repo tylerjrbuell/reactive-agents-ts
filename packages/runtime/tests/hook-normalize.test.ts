@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Cause, Exit } from "effect";
 import { normalizeHookResult } from "../src/hooks-normalize.js";
 import type { ExecutionContext } from "../src/types.js";
 
@@ -35,21 +35,33 @@ describe("normalizeHookResult", () => {
     expect(out).toBe(nextCtx);
   });
 
-  it("sync throw → fails the effect with the thrown error", async () => {
+  // Extract the failure value from an Exit, asserting it failed first.
+  const failValue = (exit: Exit.Exit<unknown, unknown>): unknown => {
+    expect(exit._tag).toBe("Failure");
+    if (exit._tag !== "Failure") return undefined;
+    const opt = Cause.failureOption(exit.cause);
+    expect(opt._tag).toBe("Some");
+    return opt._tag === "Some" ? opt.value : undefined;
+  };
+
+  it("sync throw → fails with the original thrown error as the cause", async () => {
     const eff = normalizeHookResult(() => { throw new Error("boom"); }, baseCtx);
-    const exit = await Effect.runPromiseExit(eff);
-    expect(exit._tag).toBe("Failure");
+    const cause = failValue(await Effect.runPromiseExit(eff));
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe("boom");
   });
 
-  it("rejected Promise → fails the effect", async () => {
+  it("rejected Promise → fails with the rejection error as the cause", async () => {
     const eff = normalizeHookResult(() => Promise.reject(new Error("nope")), baseCtx);
-    const exit = await Effect.runPromiseExit(eff);
-    expect(exit._tag).toBe("Failure");
+    const cause = failValue(await Effect.runPromiseExit(eff));
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe("nope");
   });
 
-  it("failed Effect → fails the effect (back-compat)", async () => {
+  it("failed Effect → fails with the original error as the cause (back-compat)", async () => {
     const eff = normalizeHookResult(() => Effect.fail(new Error("eff-fail")), baseCtx);
-    const exit = await Effect.runPromiseExit(eff);
-    expect(exit._tag).toBe("Failure");
+    const cause = failValue(await Effect.runPromiseExit(eff));
+    expect(cause).toBeInstanceOf(Error);
+    expect((cause as Error).message).toBe("eff-fail");
   });
 });
