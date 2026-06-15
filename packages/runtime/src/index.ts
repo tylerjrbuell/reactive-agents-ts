@@ -47,6 +47,7 @@ export {
   type RuntimeErrors,
   type ErrorContext,
 } from "./errors.js";
+export { StructuredOutputError } from "./errors/structured-output-error.js";
 
 // ─── Services ───
 export { LifecycleHookRegistry, LifecycleHookRegistryLive } from "./hooks.js";
