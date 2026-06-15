@@ -15,7 +15,7 @@
  * Observability: When EventBus is available, emits ReasoningStepCompleted events
  * with prompt/response data for logModelIO integration.
  */
-import { Effect, Option, Schema } from "effect";
+import { Effect, JSONSchema, Option, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
@@ -181,13 +181,16 @@ export const extractStructuredOutput = <T>(
     }
 
     // Fallback: prompt engineering + repair pipeline
+    // Compute JSON Schema string ONCE for use in all prompt builder calls.
+    const jsonSchemaString = computeJsonSchemaString(config, effectSchema);
+
     let lastError: string | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Build prompt
       const prompt = attempt === 0
-        ? buildStructuredPrompt(config)
-        : buildRetryPrompt(config, lastError ?? "Unknown error");
+        ? buildStructuredPrompt(config, jsonSchemaString)
+        : buildRetryPrompt(config, lastError ?? "Unknown error", jsonSchemaString);
 
       const systemPrompt = config.systemPrompt
         ? `${config.systemPrompt}\n\nRespond with ONLY valid JSON. No markdown, no explanation, no thinking tags.`
@@ -261,7 +264,50 @@ export const extractStructuredOutput = <T>(
 
 // ── Prompt builders ──
 
-function buildStructuredPrompt<T>(config: StructuredOutputConfig<T>): string {
+/**
+ * Compute a JSON Schema string for the given config and Effect schema.
+ *
+ * Preference order:
+ * 1. `config.contract.toJsonSchema()` — returns a pre-built Record (may be
+ *    richer for Standard Schema vendors that implement the extension).
+ * 2. `JSONSchema.make(effectSchema)` from the `effect` package — works for
+ *    all Effect Schema shapes (Struct, Union, etc.).
+ * 3. `undefined` — both sources failed; callers degrade gracefully (no crash).
+ */
+function computeJsonSchemaString<T>(
+  config: StructuredOutputConfig<T>,
+  effectSchema: Schema.Schema<T>,
+): string | undefined {
+  // Prefer contract path first
+  if (config.contract) {
+    const js = config.contract.toJsonSchema();
+    if (js !== undefined) {
+      try {
+        return JSON.stringify(js, null, 2);
+      } catch {
+        // fall through to Effect JSONSchema
+      }
+    }
+  }
+  // Fall back to Effect JSONSchema.make
+  try {
+    const js = JSONSchema.make(effectSchema);
+    return JSON.stringify(js, null, 2);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Build the initial structured-output prompt.
+ *
+ * When `jsonSchemaString` is provided the schema is embedded verbatim so the
+ * model can see the exact field names and types it must produce.
+ */
+export function buildStructuredPrompt<T>(
+  config: StructuredOutputConfig<T>,
+  jsonSchemaString: string | undefined,
+): string {
   const parts: string[] = [config.prompt];
 
   if (config.examples && config.examples.length > 0) {
@@ -271,11 +317,43 @@ function buildStructuredPrompt<T>(config: StructuredOutputConfig<T>): string {
     }
   }
 
-  parts.push("\nRespond with ONLY a JSON object matching the schema above. No markdown fences, no explanation.");
+  if (jsonSchemaString !== undefined) {
+    parts.push(
+      "\nRespond with ONLY a JSON object that exactly matches this JSON Schema." +
+      " Use these exact top-level keys; do NOT nest, wrap, or add extra keys:\n",
+    );
+    parts.push(jsonSchemaString);
+    parts.push("\nNo markdown fences, no explanation, no <think> tags.");
+  } else {
+    parts.push("\nRespond with ONLY a JSON object. No markdown fences, no explanation.");
+  }
+
   return parts.join("\n");
 }
 
-function buildRetryPrompt<T>(config: StructuredOutputConfig<T>, error: string): string {
+/**
+ * Build the retry prompt shown after a validation failure.
+ *
+ * Includes the prior error message and (when available) the target JSON Schema
+ * so the model can self-correct with full type information.
+ */
+export function buildRetryPrompt<T>(
+  config: StructuredOutputConfig<T>,
+  error: string,
+  jsonSchemaString: string | undefined,
+): string {
+  if (jsonSchemaString !== undefined) {
+    return `Your previous response did not match the required JSON Schema. Error: ${error}
+
+The response MUST be a JSON object matching exactly this schema (exact top-level keys, no nesting/wrapping):
+
+${jsonSchemaString}
+
+Original request: ${config.prompt}
+
+Respond with ONLY the valid JSON object. No markdown, no explanation.`;
+  }
+
   return `Your previous response was not valid JSON. Error: ${error}
 
 Original request: ${config.prompt}

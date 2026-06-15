@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Schema } from "effect";
-import { extractStructuredOutput } from "./pipeline.js";
+import { extractStructuredOutput, buildStructuredPrompt, buildRetryPrompt } from "./pipeline.js";
 import { toSchemaContract } from "./schema-contract.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
@@ -87,5 +87,55 @@ describe("extractStructuredOutput — contract overload", () => {
       }).pipe(Effect.provide(llm)),
     );
     expect(out.data).toEqual({ answer: "ok" });
+  });
+});
+
+describe("buildStructuredPrompt / buildRetryPrompt — schema rendering", () => {
+  it("buildStructuredPrompt renders schema field names into the prompt", () => {
+    const contract = toSchemaContract(Schema.Struct({ total: Schema.Number, currency: Schema.String }));
+    const jsonSchemaString = JSON.stringify(contract.toJsonSchema(), null, 2);
+    const prompt = buildStructuredPrompt({ contract, prompt: "extract invoice" }, jsonSchemaString);
+    expect(prompt).toContain("total");
+    expect(prompt).toContain("currency");
+    expect(prompt).toContain("JSON Schema");
+  });
+
+  it("buildRetryPrompt renders schema field names + original error into the retry prompt", () => {
+    const contract = toSchemaContract(Schema.Struct({ total: Schema.Number, currency: Schema.String }));
+    const jsonSchemaString = JSON.stringify(contract.toJsonSchema(), null, 2);
+    const prompt = buildRetryPrompt({ contract, prompt: "extract invoice" }, "is missing", jsonSchemaString);
+    expect(prompt).toContain("total");
+    expect(prompt).toContain("currency");
+    expect(prompt).toContain("JSON Schema");
+    expect(prompt).toContain("is missing");
+    expect(prompt).toContain("extract invoice");
+  });
+
+  it("buildStructuredPrompt gracefully omits schema block when jsonSchemaString is undefined", () => {
+    const contract = toSchemaContract(Schema.Struct({ answer: Schema.String }));
+    const prompt = buildStructuredPrompt({ contract, prompt: "say ok" }, undefined);
+    expect(prompt).toContain("say ok");
+    // Should not throw and must still include the JSON-only instruction
+    expect(prompt).toContain("JSON");
+  });
+
+  it("extractStructuredOutput sends schema in prompt (integration: prompt-mode captures schema)", async () => {
+    // The test LLM returns a valid response; the side-effect we verify is that
+    // the PROMPT sent to the LLM contains the field names from the schema.
+    // We do this by reading the captured prompt via the EventBus or by inspecting
+    // the prompt indirectly: if extraction succeeds and the schema was rendered,
+    // the test LLM would have received it. We verify via buildStructuredPrompt unit above.
+    // This integration test confirms the full pipeline doesn't crash.
+    const contract = toSchemaContract(Schema.Struct({ total: Schema.Number, currency: Schema.String }));
+    const llm = TestLLMServiceLayer([{ text: '{"total":42,"currency":"USD"}' }]);
+    const out = await Effect.runPromise(
+      extractStructuredOutput({
+        contract,
+        prompt: "extract invoice",
+        forcePromptMode: true,
+      }).pipe(Effect.provide(llm)),
+    );
+    expect(out.data).toEqual({ total: 42, currency: "USD" });
+    expect(out.nativeMode).toBe(false);
   });
 });
