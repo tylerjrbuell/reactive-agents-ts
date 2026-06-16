@@ -102,6 +102,20 @@ Each claim is classified by confidence:
 - **likely** — General factual assertions
 - **uncertain** — Contains hedging language ("might", "possibly")
 
+### Evidence Grounding (opt-in)
+
+Separate from the post-output checks above, `.withGrounding({ mode })` verifies that **numeric figures** in the final answer are supported by the actual tool data the agent gathered, with rounding tolerance. It is **off by default**.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools()
+  .withGrounding({ mode: "block" })  // "warn" = advisory; "block" = one corrective retry then degrade
+  .build();
+```
+
+`block` mode does a bounded corrective retry then degrades to a warning — it never hard-fails a correct answer. A scaffold-leak guard (catching `[STORED:]` / `_tool_result_N` placeholders echoed as the answer) is always on, independent of this setting. See [Builder API](/reference/builder-api/) for the full options shape.
+
 ## Verification Result
 
 Each verification returns a `VerificationResult`:

@@ -236,6 +236,8 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withTerminalTools(options?)`        | Register the built-in `git-cli` / `gh-cli` / `gws-cli` terminal tools (`ShellExecuteConfig`).                                                                                                                                                                                                                                                                                                                |
 | `withTracing(opts?)`                 | Write structured trace files (`{ dir? }`) for `rax diagnose`. Governed separately from the metrics dashboard; also toggled by `REACTIVE_AGENTS_TRACE`. Pair with `.withoutTracing()` to disable.                                                                                                                                                                                                              |
 | `withChannels(config)`               | Wire `@reactive-agents/channels` sender-policy access control (`ChannelsConfig`). See [Messaging Channels](/guides/messaging-channels/).                                                                                                                                                                                                                                                                      |
+| `withOutputSchema(schema, options?)` | **Typed structured output.** Attach any Standard Schema (Zod / Valibot / ArkType) or Effect Schema; the result carries a typed `result.object` (or `result.objectError` on parse failure). Options: `{ mode?: "auto" \| "grounded", onParseFail?: "lenient" \| "throw" }`. Builder-only — set before `.build()`. See [Typed Structured Output](/guides/structured-output/).                                       |
+| `withDurableRuns(options?)`          | Persist run state so a crashed or paused run can resume from its last checkpoint. Exposes `agent.resumeRun(runId)` and `agent.listRuns({ status? })`. Config hash = system prompt + provider. See [Durable Execution](/guides/durable-execution/).                                                                                                                                                            |
 
 #### ToolsOptions
 
@@ -596,6 +598,18 @@ Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: Abo
 ### `runEffect(input: string): Effect.Effect<AgentResult, Error>`
 
 Run a task as an Effect for composition (see [Effect-TS primer](/concepts/effect-ts/)).
+
+### `streamObject(input): AsyncGenerator<{ object: DeepPartial<T> }>`
+
+Stream typed structured output field-by-field as it fills in. Requires `.withOutputSchema()`. Each yield carries a deep-partial of the schema type; the final yield is the validated object. See [Typed Structured Output](/guides/structured-output/).
+
+### `resumeRun(runId: string): Promise<AgentResult>`
+
+Resume a crashed or paused durable run from its last checkpoint. Requires `.withDurableRuns()`. See [Durable Execution](/guides/durable-execution/).
+
+### `listRuns(filter?: { status? }): Promise<readonly RunRecord[]>`
+
+List persisted durable runs, optionally filtered by lifecycle status (e.g. `{ status: "running" }`). Requires `.withDurableRuns()`.
 
 ### Dynamic tools & RAG (runtime)
 
