@@ -466,6 +466,30 @@ export function runIterationPass(
 
       state = yield* kernel(state, currentContext);
 
+      // Durable HITL (Phase D): when the act gate paused the run, checkpoint the
+      // PAUSED state NOW — the per-iteration onCheckpoint above fires at the pass
+      // BOUNDARY (before think/act), so it never captures the post-gate state that
+      // carries `meta.awaitingApprovalFor` + the pending call. Without this, resume
+      // restores a pre-gate checkpoint, the runner re-entry finds no
+      // `awaitingApprovalFor`, and the gate re-fires instead of executing the
+      // approved call. Fire-and-forget through the same observer contract (never
+      // kills the loop). The loop exits immediately after (status:"done").
+      if (state.meta.terminatedBy === "awaiting-approval" && _runCtl?.onCheckpoint) {
+        try {
+          // Write at iteration+1 so this is a DISTINCT row that always wins
+          // `latestCheckpoint` (ORDER BY iteration DESC) — the pass-boundary
+          // checkpoint above writes the pre-gate state at this same iteration, and
+          // both go through fire-and-forget `Effect.runFork`, so a same-iteration
+          // write would race. The stateJson keeps its real iteration; the column
+          // is only an ordering key. Resume reads the stateJson, not the column.
+          _runCtl.onCheckpoint(serializeKernelState(state), state.iteration + 1);
+        } catch (err) {
+          yield* Effect.logWarning(
+            `[durable-checkpoint] paused-state onCheckpoint threw at iteration ${state.iteration}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
       // 'after think' hooks
       yield* Effect.promise(() =>
         runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'think', state.iteration, state)
