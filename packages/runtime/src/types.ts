@@ -668,6 +668,17 @@ export type ReasoningOptions = ReasoningOptionsEncoded & {
  */
 export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfigSchema> & {
   readonly reasoningOptions?: ReasoningOptions;
+  /**
+   * Durable HITL approval policy (Phase D). Resolved from `.withApprovalPolicy()`.
+   * Carries a `requireFor` predicate (a function), so it lives on the non-Schema
+   * intersection rather than the Schema. Threaded into `KernelInput.approvalPolicy`
+   * by `reasoning-think.ts`.
+   */
+  readonly approvalPolicy?: {
+    readonly mode: "detach" | "block";
+    readonly tools: readonly string[];
+    readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+  };
   readonly synthesisConfig?: SynthesisConfigJson & { readonly synthesisStrategy?: SynthesisStrategy };
   /** User-defined predicate called after each reasoning result. If it returns false, the agent re-runs. */
   readonly customTermination?: (state: { output: string }) => boolean;
