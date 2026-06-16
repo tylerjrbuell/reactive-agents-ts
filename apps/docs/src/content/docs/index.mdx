@@ -110,37 +110,24 @@ One package. Composable layers. Enable exactly what you need — skip everything
 
 Two headline capabilities just landed: **typed structured output** and **durable crash-resume**.
 
+<div class="ra-v12-cards">
 <CardGrid>
     <Card title="Typed Structured Output" icon="seti:typescript">
         Attach any Standard Schema (Zod, Valibot, ArkType, Effect) and read a fully-typed value off the result — no prompt engineering, no manual parsing. Streams field-by-field with `streamObject()`.
 
-        ```ts
-        const Invoice = z.object({ total: z.number(), currency: z.string() })
-        const agent = await ReactiveAgents.create()
-            .withModel({ provider: 'anthropic', model: 'claude-sonnet-4-6' })
-            .withOutputSchema(Invoice)
-            .build()
-        const { object } = await agent.run('Extract: total $4,200 USD')
-        object // { total: 4200, currency: 'USD' } — typed
-        ```
+        `.withOutputSchema(schema)` → typed `result.object`
 
         [Read the guide →](/guides/structured-output/)
     </Card>
     <Card title="Durable Execution" icon="setting">
         Persist runs to disk and resume a crashed or paused run from its last checkpoint — across process boundaries.
 
-        ```ts
-        const agent = await ReactiveAgents.create()
-            .withModel({ provider: 'anthropic', model: 'claude-sonnet-4-6' })
-            .withDurableRuns()
-            .build()
-        const runs = await agent.listRuns({ status: 'running' })
-        await agent.resumeRun(runs[0].runId) // continue from checkpoint
-        ```
+        `.withDurableRuns()` → `agent.resumeRun(runId)`
 
         [Read the guide →](/guides/durable-execution/)
     </Card>
 </CardGrid>
+</div>
 
   </div>
 </div>

@@ -1688,6 +1688,20 @@ nav a[data-ra-new='true']::before {
     }
 }
 
+/* "New in v0.12" highlight cards: code blocks were forcing the grid items
+   wider than their column (white-space:pre min-content), bleeding the right
+   card off-screen. Let the cards shrink and the code scroll horizontally. */
+.ra-v12-cards .card-grid {
+    min-width: 0;
+}
+.ra-v12-cards .card {
+    min-width: 0;
+}
+.ra-v12-cards .card :where(.expressive-code, pre, .frame) {
+    max-width: 100%;
+    min-width: 0;
+}
+
 /* Right-sidebar (TOC) subscribe card — narrow, stacked, on every page.
    Everything is border-box + width-clamped so the input/button never
    overflow the narrow TOC column. */
