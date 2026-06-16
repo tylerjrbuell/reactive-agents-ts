@@ -244,6 +244,41 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.auditRationale === true) out.auditRationale = true;
   else delete out.auditRationale;
 
+  // v0.12 features — persist so saved agents (gateway-triggered) carry them.
+  if (raw.useReasoning === true) out.useReasoning = true;
+  else if (raw.useReasoning === false) out.useReasoning = false;
+  else delete out.useReasoning;
+
+  if (raw.outputSchema && typeof raw.outputSchema === "object" && !Array.isArray(raw.outputSchema)) {
+    out.outputSchema = raw.outputSchema;
+  } else {
+    delete out.outputSchema;
+  }
+
+  const dr = raw.durableRuns;
+  if (dr && typeof dr === "object" && !Array.isArray(dr) && (dr as { enabled?: boolean }).enabled) {
+    const d = dr as Record<string, unknown>;
+    // Accept BOTH shapes: the UI config (`approvalTools: string[]`) and the
+    // build/runner shape (`approvalPolicy: { tools, mode }`). Normalize to the
+    // build shape (`approvalPolicy.tools`) that buildCortexAgent consumes.
+    const ap = d.approvalPolicy as { tools?: unknown; mode?: unknown } | undefined;
+    const policyTools = Array.isArray(ap?.tools)
+      ? (ap?.tools as unknown[])
+      : Array.isArray(d.approvalTools)
+        ? (d.approvalTools as unknown[])
+        : undefined;
+    const mode = ap?.mode === "block" ? "block" : "detach";
+    out.durableRuns = {
+      enabled: true,
+      ...(typeof d.checkpointEvery === "number" ? { checkpointEvery: d.checkpointEvery } : {}),
+      ...(policyTools && policyTools.length > 0
+        ? { approvalPolicy: { tools: policyTools, mode } }
+        : {}),
+    };
+  } else {
+    delete out.durableRuns;
+  }
+
   const mem = raw.memory;
   if (mem && typeof mem === "object" && !Array.isArray(mem)) {
     const m = mem as Record<string, unknown>;

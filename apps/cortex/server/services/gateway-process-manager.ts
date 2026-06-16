@@ -29,6 +29,7 @@ import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { durableApprovals } from "./durable-approvals.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -283,6 +284,15 @@ export class GatewayProcessManager {
       const _contextSynthesis = config.contextSynthesis as "auto" | "template" | "llm" | "none" | undefined;
       const _guardrails = config.guardrails as { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number } | undefined;
       const _persona = config.persona as { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string } | undefined;
+      const _useReasoning = typeof config.useReasoning === "boolean" ? (config.useReasoning as boolean) : undefined;
+      const _outputSchema =
+        config.outputSchema && typeof config.outputSchema === "object" && !Array.isArray(config.outputSchema)
+          ? (config.outputSchema as Record<string, unknown>)
+          : undefined;
+      const _durableRuns =
+        config.durableRuns && typeof config.durableRuns === "object" && (config.durableRuns as { enabled?: boolean }).enabled
+          ? (config.durableRuns as { enabled?: boolean; checkpointEvery?: number; dir?: string; approvalPolicy?: { tools?: string[]; mode?: "detach" | "block" } })
+          : undefined;
 
       const agent = await buildCortexAgent({
         agentName: name,
@@ -322,6 +332,9 @@ export class GatewayProcessManager {
         ...(_contextSynthesis ? { contextSynthesis: _contextSynthesis } : {}),
         ...(_guardrails ? { guardrails: _guardrails } : {}),
         ...(_persona ? { persona: _persona } : {}),
+        ...(_useReasoning !== undefined ? { useReasoning: _useReasoning } : {}),
+        ...(_outputSchema ? { outputSchema: _outputSchema } : {}),
+        ...(_durableRuns ? { durableRuns: _durableRuns } : {}),
       });
       const agentId_ = agent.agentId;
 
@@ -339,8 +352,18 @@ export class GatewayProcessManager {
 
       cortexLog("info", "gateway", `Running "${name}"`, { agentId, runId });
 
+      // Durable HITL: retain a paused agent so approve/deny work from the shared
+      // /api/runs/pending-approvals endpoints (same as the runner path).
+      let paused = false;
+
       void agent.run(prompt, { taskId: runId })
         .then((result) => {
+          const r = result as { status?: string; pendingApproval?: { runId: string }; object?: unknown; objectError?: string };
+          if (r.status === "awaiting-approval" && r.pendingApproval) {
+            paused = true;
+            cortexLog("info", "gateway", `Agent "${name}" paused — awaiting approval`, { agentId, runId, durableRunId: r.pendingApproval.runId });
+            durableApprovals.register({ agentId: agentId_, durableRunId: r.pendingApproval.runId, agent, startedAt: Date.now() });
+          }
           // Emit debrief if available
           const debrief = (result as any).debrief;
           if (debrief) {
@@ -349,6 +372,19 @@ export class GatewayProcessManager {
                 v: 1, agentId: agentId_, runId,
                 event: { _tag: "DebriefCompleted" as const, taskId: runId, agentId: agentId_, debrief } as any,
               }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:316", tag: errorTag(err) }))),
+            );
+          }
+          // Typed structured output (.withOutputSchema) — same synthetic event as the runner.
+          if (r.object !== undefined || r.objectError !== undefined) {
+            Effect.runFork(
+              ingest.handleEvent(agentId_, runId, {
+                v: 1, agentId: agentId_, runId,
+                event: {
+                  _tag: "StructuredOutputExtracted" as const, taskId: runId, agentId: agentId_,
+                  ...(r.object !== undefined ? { object: r.object } : {}),
+                  ...(r.objectError !== undefined ? { objectError: r.objectError } : {}),
+                } as any,
+              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:structured-output", tag: errorTag(err) }))),
             );
           }
         })
@@ -360,6 +396,12 @@ export class GatewayProcessManager {
           });
         })
         .finally(() => {
+          // Paused (awaiting-approval) runs keep their agent + subscription alive
+          // for approve/deny via the shared registry; cleanup happens on resolve.
+          if (paused) {
+            if (proc) proc.running = false;
+            return;
+          }
           try { unsubscribe(); } catch { /* ok */ }
           if (proc) proc.running = false;
           // Release the agent's resources — MCP transports and their docker

@@ -177,3 +177,33 @@ describe("mergeCortexAllowedTools", () => {
     expect(merged).toEqual(expect.arrayContaining(["spawn-agent", "researcher", "final-answer"]));
   });
 });
+
+describe("normalizeCortexAgentConfig — v0.12 fields (saved-agent durable/structured)", () => {
+  test("converts UI durableRuns.approvalTools → approvalPolicy.tools (build shape)", () => {
+    const out = normalizeCortexAgentConfig({
+      provider: "ollama",
+      durableRuns: { enabled: true, approvalTools: ["file-read", "shell-execute"] },
+    }) as { durableRuns?: { enabled?: boolean; approvalPolicy?: { tools?: string[]; mode?: string } } };
+    expect(out.durableRuns?.enabled).toBe(true);
+    expect(out.durableRuns?.approvalPolicy?.tools).toEqual(["file-read", "shell-execute"]);
+    expect(out.durableRuns?.approvalPolicy?.mode).toBe("detach");
+  });
+  test("accepts the build shape durableRuns.approvalPolicy.tools too", () => {
+    const out = normalizeCortexAgentConfig({
+      provider: "ollama",
+      durableRuns: { enabled: true, approvalPolicy: { tools: ["x"], mode: "block" } },
+    }) as { durableRuns?: { approvalPolicy?: { tools?: string[]; mode?: string } } };
+    expect(out.durableRuns?.approvalPolicy?.tools).toEqual(["x"]);
+    expect(out.durableRuns?.approvalPolicy?.mode).toBe("block");
+  });
+  test("drops durableRuns when disabled", () => {
+    const out = normalizeCortexAgentConfig({ provider: "ollama", durableRuns: { enabled: false } }) as { durableRuns?: unknown };
+    expect(out.durableRuns).toBeUndefined();
+  });
+  test("persists useReasoning + outputSchema", () => {
+    const schema = { type: "object", properties: { a: { type: "string" } } };
+    const out = normalizeCortexAgentConfig({ provider: "ollama", useReasoning: false, outputSchema: schema }) as { useReasoning?: boolean; outputSchema?: unknown };
+    expect(out.useReasoning).toBe(false);
+    expect(out.outputSchema).toEqual(schema);
+  });
+});
