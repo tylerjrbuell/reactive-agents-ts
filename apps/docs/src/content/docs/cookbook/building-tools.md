@@ -152,7 +152,7 @@ Give the agent a focused set of tools for a specific task — prevents distracti
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({
-    allowedTools: ["web-search", "read-file"],  // LLM only sees these
+    allowedTools: ["web-search", "file-read"],  // LLM only sees these
   })
   .build();
 ```
