@@ -1,9 +1,11 @@
 ---
 // The release-subscribe form now lives in the right-hand page sidebar
-// (see PageSidebar.astro), shown on every page, so the footer no longer
-// duplicates it. Footer falls through to Starlight's default.
+// (see PageSidebar.astro). The footer renders Starlight's default plus the
+// floating Feedback button, which mounts once per page.
 import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/Footer.astro";
+import FeedbackButton from "./FeedbackButton.astro";
 ---
 
 <Default {...Astro.props}><slot /></Default>
+<FeedbackButton />
