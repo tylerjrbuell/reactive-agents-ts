@@ -179,23 +179,11 @@ const agent = await ReactiveAgents.create()
 
 **Impact:** Reduces context bloat from API responses (e.g., 5,000-char web search result → 2,000 char summary).
 
-### Complexity Routing
+### Complexity-Based Model Routing
 
-When configured, Reactive Agents automatically routes simple tasks to cheaper models:
+To route simple tasks to cheaper models and reserve the expensive model for hard ones, `@reactive-agents/cost` ships the routing primitives: `analyzeComplexity(task)` scores a task and `routeToModel(task)` returns a `ModelCostConfig` for the recommended tier. Both are Effect-based and also surface on `CostService.routeToModel(task, context)`, so you can decide the model **before** building the agent. Pick the model from the routing result, then pass it to `.withModel(...)`.
 
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withModel("claude-sonnet-4-6")  // Primary
-  .withComplexityRouting({
-    simple: "claude-haiku-4-5-20251001",  // Simple tasks use Haiku
-    threshold: 0.5                        // Routing confidence (0–1)
-  })
-  .build();
-
-// Agent analyzes input and routes to Haiku if simple, Sonnet if complex
-// Save up to 60% on routine queries
-```
+For an automatic, builder-level path — fall back to a cheaper or alternate model on error or budget pressure — use [`.withFallbacks()`](/reference/builder-api/), which is wired into the agent loop directly.
 
 ### Context Profile Tiers
 
