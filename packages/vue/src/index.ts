@@ -21,4 +21,6 @@
  */
 export { useAgentStream } from "./use-agent-stream.js";
 export { useAgent } from "./use-agent.js";
+export { useStructuredObject } from "./use-structured-object.js";
+export { parsePartialObject } from "./parse-partial.js";
 export type { AgentStreamEvent, AgentHookState } from "./types.js";

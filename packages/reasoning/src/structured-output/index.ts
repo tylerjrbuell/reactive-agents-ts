@@ -1,3 +1,14 @@
 export { extractJsonBlock, repairJson } from "./json-repair.js";
+export { parsePartial } from "./partial-parse.js";
 export { extractStructuredOutput } from "./pipeline.js";
 export type { StructuredOutputConfig, StructuredOutputResult } from "./pipeline.js";
+export { toSchemaContract } from "./schema-contract.js";
+export type { SchemaContract, SchemaIssue, SchemaValidationResult } from "./schema-contract.js";
+export { fieldRequirementsFromSchema, missingRequiredFields } from "./grounded/field-requirements.js";
+export type { FieldRequirement } from "./grounded/field-requirements.js";
+export { groundFields } from "./grounded/field-provenance.js";
+export type { GroundResult } from "./grounded/field-provenance.js";
+export { schemaSatisfactionCheck } from "./grounded/schema-satisfaction.js";
+export type { SchemaSatisfactionInput } from "./grounded/schema-satisfaction.js";
+export { groundedExtract } from "./grounded/grounded-extract.js";
+export type { GroundedInput, GroundedOutput } from "./grounded/grounded-extract.js";

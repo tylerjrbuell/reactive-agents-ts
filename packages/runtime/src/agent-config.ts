@@ -202,6 +202,21 @@ export const GroundingConfigSchema = Schema.Struct({
   maxRetries: Schema.optional(Schema.Number),
 });
 
+/**
+ * Declarative options for typed structured output.
+ *
+ * NOTE: The schema object itself is NOT JSON-serializable, so declarative config
+ * supports only the behavioural knobs (`mode`, `onParseFail`, `abstainBelow`).
+ * The schema must be provided in code via `.withOutputSchema(schema, options)`.
+ * This field allows config files to set/round-trip the options without rejecting
+ * an otherwise-valid agent definition.
+ */
+export const OutputSchemaOptionsSchema = Schema.Struct({
+  mode: Schema.optional(Schema.Literal("auto", "fast", "grounded")),
+  onParseFail: Schema.optional(Schema.Literal("degrade", "throw")),
+  abstainBelow: Schema.optional(Schema.Number),
+});
+
 // ─── Root AgentConfig Schema ──────────────────────────────────────────────────
 
 export const AgentConfigSchema = Schema.Struct({
@@ -243,6 +258,14 @@ export const AgentConfigSchema = Schema.Struct({
   verification: Schema.optional(VerificationConfigSchema),
   /** Opt-in numeric evidence-grounding. Absent = off (default). */
   grounding: Schema.optional(GroundingConfigSchema),
+  /**
+   * Behavioural options for typed structured output (mode, onParseFail, abstainBelow).
+   *
+   * The schema object cannot be expressed in declarative config (not JSON-serializable).
+   * Call `.withOutputSchema(schema, options)` in code to activate extraction; this field
+   * allows config files to carry the options so they round-trip without error.
+   */
+  outputSchemaOptions: Schema.optional(OutputSchemaOptionsSchema),
   /** Model parameters: thinking mode, temperature, max tokens. */
   thinking: Schema.optional(Schema.Boolean),
   temperature: Schema.optional(Schema.Number),

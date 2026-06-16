@@ -86,6 +86,11 @@ import type { StreamDensity } from './stream-types.js'
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import type { DocumentSpec } from './context-ingestion.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
+import { Schema } from 'effect'
+import type { StandardSchemaV1 } from '@standard-schema/spec'
+import { toSchemaContract } from '@reactive-agents/reasoning'
+import type { SchemaContract } from '@reactive-agents/reasoning'
+import type { OutputSchemaOptions } from './builder/types.js'
 
 // ─── Public Option/Result Types (W25-A: lifted to ./builder/types.ts) ────────
 //
@@ -194,7 +199,7 @@ export const ReactiveAgents = {
  * when configuration is complete to instantiate the agent.
  *
  */
-export class ReactiveAgentBuilder {
+export class ReactiveAgentBuilder<TOut = unknown> {
     private _name: string = 'agent'
     private _stableAgentId?: string
     private _provider: ProviderName = 'test'
@@ -384,6 +389,10 @@ export class ReactiveAgentBuilder {
     private _budgetLimits: BudgetLimits | undefined = undefined
     /** Opt-in numeric evidence-grounding config. Absent = off (default). */
     private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
+    /** Opt-in typed structured output config. Absent = off (default). */
+    private _outputSchemaConfig:
+        | { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions }
+        | undefined = undefined
     /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
     private _durableRuns: import('./builder/types.js').DurableRunsOptions | undefined = undefined
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
@@ -858,6 +867,23 @@ export class ReactiveAgentBuilder {
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
         this._groundingConfig = options
         return this
+    }
+
+    /**
+     * Declare a typed structured output schema (Standard Schema or Effect Schema).
+     * `run()` then populates `result.object`. Default lenient: on parse-fail,
+     * `object` is undefined and `objectError` is set (use `{ onParseFail: "throw" }` for strict).
+     *
+     * @param schema - An Effect Schema or any Standard Schema v1-compliant schema
+     * @param options - Structured output options (mode, onParseFail, abstainBelow)
+     * @returns `this` for chaining
+     */
+    withOutputSchema<A>(
+        schema: StandardSchemaV1<unknown, A> | Schema.Schema<A>,
+        options: OutputSchemaOptions = {},
+    ): ReactiveAgentBuilder<A> {
+        this._outputSchemaConfig = { contract: toSchemaContract(schema) as SchemaContract<unknown>, options }
+        return this as unknown as ReactiveAgentBuilder<A>
     }
 
     /**
@@ -1890,7 +1916,7 @@ export class ReactiveAgentBuilder {
      * @returns Promise resolving to a ReactiveAgent instance
      * @throws Error if configuration is invalid or API keys are missing
      */
-    async build(): Promise<ReactiveAgent> {
+    async build(): Promise<ReactiveAgent<TOut>> {
         // Auto-resolve context profile from model name if not explicitly set.
         // resolveProfileWithWindow binds maxTokens to the MODEL's real window
         // (recommendedNumCtx) instead of the tier placeholder — otherwise the
@@ -2010,7 +2036,7 @@ export class ReactiveAgentBuilder {
      *
      * @returns Effect that produces a ReactiveAgent
      */
-    buildEffect(): Effect.Effect<ReactiveAgent, Error> {
+    buildEffect(): Effect.Effect<ReactiveAgent<TOut>, Error> {
         const self = this
 
         return Effect.gen(function* () {
@@ -2203,7 +2229,9 @@ export class ReactiveAgentBuilder {
                           }),
                       }
                     : undefined,
+                outputSchemaConfig: self._outputSchemaConfig,
+                enableTools: self._enableTools,
             })
-        }) as Effect.Effect<ReactiveAgent, Error>
+        }) as Effect.Effect<ReactiveAgent<TOut>, Error>
     }
 }

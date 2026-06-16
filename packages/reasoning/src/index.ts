@@ -234,6 +234,17 @@ export type {
 // ─── Structured Output ───
 export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
+export { toSchemaContract } from "./structured-output/schema-contract.js";
+export type { SchemaContract, SchemaIssue, SchemaValidationResult } from "./structured-output/schema-contract.js";
+export { extractStructuredOutput } from "./structured-output/pipeline.js";
+export type { StructuredOutputConfig, StructuredOutputResult } from "./structured-output/pipeline.js";
+export { groundedExtract } from "./structured-output/grounded/grounded-extract.js";
+export type { GroundedInput, GroundedOutput } from "./structured-output/grounded/grounded-extract.js";
+export { groundFields } from "./structured-output/grounded/field-provenance.js";
+export type { GroundResult } from "./structured-output/grounded/field-provenance.js";
+export { buildEvidenceCorpusFromSteps } from "./kernel/capabilities/verify/evidence-grounding.js";
+export { parsePartial } from "./structured-output/partial-parse.js";
+export { stripThinking } from "./kernel/utils/stream-parser.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";

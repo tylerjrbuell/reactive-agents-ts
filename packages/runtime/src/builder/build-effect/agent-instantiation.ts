@@ -3,7 +3,7 @@
  *
  * Wraps the fully-composed runtime layer in a ManagedRuntime so all facade
  * calls share the same scope + service instances, then constructs the public
- * ReactiveAgent with the 17-arg constructor.
+ * ReactiveAgent with the 19-arg constructor.
  *
  * Extracted from builder.ts:2258-2317.
  */
@@ -19,8 +19,9 @@ import type {
   TaskError,
   RunControllerLike,
 } from "@reactive-agents/core";
-import type { GatewayOptions } from "../types.js";
+import type { GatewayOptions, OutputSchemaOptions } from "../types.js";
 import type { ParentExecutionContextSnapshot } from "./parent-context.js";
+import type { SchemaContract } from "@reactive-agents/reasoning";
 
 type EngineLike = {
   execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
@@ -70,6 +71,14 @@ export interface AgentInstantiationDeps {
    * the RunStore and guard against a config drift.
    */
   readonly durableResume?: { readonly dir: string; readonly configHash: string };
+  /** Opt-in typed structured output config from `.withOutputSchema()`. Absent = off. */
+  readonly outputSchemaConfig?: { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions };
+  /**
+   * Whether the agent has at least one tool registered (`.withTools()` or `.withDocuments()` called).
+   * Forwarded to `ReactiveAgent` so the structured-output router can prefer the grounded path
+   * when tools are present (tool results need structured assembly, not prose extraction).
+   */
+  readonly enableTools: boolean;
 }
 
 /**
@@ -121,5 +130,7 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.channelsConfig,
     deps.capabilities,
     deps.durableResume,
+    deps.outputSchemaConfig,
+    deps.enableTools,
   );
 };

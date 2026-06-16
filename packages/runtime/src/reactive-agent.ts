@@ -83,12 +83,22 @@ import {
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { streamObjectFrom } from './engine/stream-object.js'
+import type { DeepPartial } from './builder/types.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import type {
     GatewayHandle,
     AgentResultMetadata,
     AgentResult,
+    OutputSchemaOptions,
 } from './builder/types.js'
+import type { SchemaContract } from '@reactive-agents/reasoning'
+import { groundedExtract, buildEvidenceCorpusFromSteps, parsePartial, stripThinking, groundFields } from '@reactive-agents/reasoning'
+import type { ReasoningStep } from '@reactive-agents/reasoning'
+import { LLMService } from '@reactive-agents/llm-provider'
+import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
+import { chooseStructuredEngine } from './engine/finalize/structured-route.js'
+import { StructuredOutputError } from './errors/structured-output-error.js'
 
 /**
  * Narrow widening for the dynamically-imported `ToolService` tag.
@@ -108,7 +118,7 @@ const asToolServiceTag = (tag: unknown): ToolServiceTag =>
     tag as unknown as ToolServiceTag
 
 // ── Class ──
-export class ReactiveAgent {
+export class ReactiveAgent<TOut = unknown> {
     constructor(
         public readonly engine: {
             execute: (
@@ -176,8 +186,89 @@ export class ReactiveAgent {
             customTermination?: (state: { output: string }) => boolean
         },
         /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
-        private readonly _durableResume?: { readonly dir: string; readonly configHash: string }
+        private readonly _durableResume?: { readonly dir: string; readonly configHash: string },
+        /** @internal Opt-in typed structured output config from `.withOutputSchema()`. Absent = off. */
+        private readonly _outputSchemaConfig?: {
+            readonly contract: SchemaContract<unknown>
+            readonly options: OutputSchemaOptions
+        },
+        /**
+         * @internal Whether `.withTools()` (or `.withDocuments()`) was called during build.
+         * Forwarded from `AgentInstantiationDeps.enableTools`. Used by the structured-output
+         * router (Task 1.5) to prefer the grounded path when tools are present.
+         */
+        private readonly _enableTools: boolean = false
     ) {}
+
+    /**
+     * Build the "respond ONLY with JSON matching this schema" suffix from the
+     * schema contract. Returns `""` when the contract has no JSON schema.
+     *
+     * Used by both `streamObject` (to steer streaming) and `buildRunTaskEffect`
+     * (to steer the run() task so the agent emits JSON that parse-first can read).
+     */
+    private buildSchemaSteering(contract: SchemaContract<unknown>): string {
+        const jsonSchema = contract.toJsonSchema()
+        const jsonSchemaString = jsonSchema !== undefined
+            ? JSON.stringify(jsonSchema, null, 2)
+            : undefined
+        const schemaBlock = jsonSchemaString !== undefined
+            ? `\n\n${jsonSchemaString}`
+            : ""
+        // Shape-aware: a top-level array schema must be steered to emit a JSON array,
+        // not an object — otherwise the model wraps it (e.g. {items:[...]}) and
+        // validation/parse-first fails.
+        const isArray = (jsonSchema as { type?: unknown } | undefined)?.type === "array"
+        return isArray
+            ? (
+                `\n\nRespond with ONLY a JSON array that exactly matches this JSON Schema` +
+                ` — no prose, no markdown fences, no explanation, no wrapping object:${schemaBlock}`
+            )
+            : (
+                `\n\nRespond with ONLY a single JSON object that exactly matches this JSON Schema` +
+                ` — no prose, no markdown fences, no explanation.` +
+                ` Use exactly these top-level keys; do not nest or wrap:${schemaBlock}`
+            )
+    }
+
+    /**
+     * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
+     * from `text` after stripping thinking tags, markdown fences, and leading prose.
+     *
+     * Returns the parsed value (object or array) on success, or `null` if no
+     * top-level JSON structure can be found or parsed.
+     */
+    private static parseJsonLoose(text: string): unknown {
+        const cleaned = stripThinking(text).trim()
+        // Strip markdown code fences: ```json … ``` or ``` … ```
+        const defenced = cleaned
+            .replace(/^```(?:json)?\s*\n?/i, "")
+            .replace(/\n?```\s*$/, "")
+            .trim()
+
+        // Try to find first `{` (object) or `[` (array) and parse from there.
+        const braceIdx = defenced.indexOf("{")
+        const bracketIdx = defenced.indexOf("[")
+        // Pick the earlier of the two (or whichever is present)
+        let startIdx: number
+        if (braceIdx === -1 && bracketIdx === -1) return null
+        if (braceIdx === -1) startIdx = bracketIdx
+        else if (bracketIdx === -1) startIdx = braceIdx
+        else startIdx = Math.min(braceIdx, bracketIdx)
+
+        const candidate = defenced.slice(startIdx)
+        try {
+            return JSON.parse(candidate)
+        } catch {
+            // Try parsePartial for objects — handles truncated/fenced input
+            if (candidate.startsWith("{")) {
+                const partial = parsePartial(candidate)
+                // parsePartial returns {} on failure; treat empty as failure
+                if (Object.keys(partial).length > 0) return partial
+            }
+            return null
+        }
+    }
 
     /**
      * MOVE-2 M2.1 — read the agent's active capability registry.
@@ -612,7 +703,7 @@ export class ReactiveAgent {
     async run(
         input: string,
         options?: { readonly taskId?: string; readonly history?: readonly ChatMessage[] }
-    ): Promise<AgentResult> {
+    ): Promise<AgentResult & { object?: TOut }> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
@@ -633,7 +724,7 @@ export class ReactiveAgent {
                     }
                 }
                 throw unwrapped
-            })
+            }) as Promise<AgentResult & { object?: TOut }>
     }
 
     /**
@@ -649,6 +740,8 @@ export class ReactiveAgent {
      * @throws Error if the agent was not built with `.withDurableRuns()`.
      * @throws DurableRunNotFoundError if the run / checkpoint is unknown.
      * @throws DurableConfigMismatchError if the agent config changed since capture.
+     *
+     * Note: resumed results return the base `AgentResult`; typed structured `object` carry is not threaded through resume yet.
      *
      * Named `resumeRun` (not `resume`) to avoid colliding with the in-process
      * pause/resume control verb `resume()`.
@@ -749,11 +842,18 @@ export class ReactiveAgent {
             ? Schema.decodeSync(TaskId)(options.taskId)
             : generateTaskId()
 
+        // Steer the agent to emit schema-shaped JSON when a schema is configured.
+        // This lets parse-first (below) skip the extra LLM extraction call on the
+        // happy path — same pattern used by streamObject.
+        const steeredInput = this._outputSchemaConfig
+            ? `${input}${this.buildSchemaSteering(this._outputSchemaConfig.contract)}`
+            : input
+
         const task: Task = {
             id: taskId,
             agentId: Schema.decodeSync(AgentId)(this.agentId),
             type: 'query' as const,
-            input: { question: input },
+            input: { question: steeredInput },
             priority: 'medium' as const,
             status: 'pending' as const,
             metadata: { tags: [] },
@@ -761,7 +861,7 @@ export class ReactiveAgent {
         }
 
         return this.engine.execute(task).pipe(
-            Effect.map((result: TaskResult) => {
+            Effect.flatMap((result: TaskResult) => {
                 const r = result as TaskResult & {
                     format?: OutputFormat
                     terminatedBy?: TerminatedBy
@@ -882,11 +982,141 @@ export class ReactiveAgent {
                     }
                 }
                 this._lastRunObservations = contextParts
-                return agentResult
+
+                // ── Structured output extraction (Task 1.4 / 1.5) ───────────
+                const outputSchemaConfig = this._outputSchemaConfig
+                if (!outputSchemaConfig) {
+                    return Effect.succeed(agentResult)
+                }
+                // Task 1.5 / 2.5: resolve the fast/grounded route before extracting.
+                // LLMService is in the ManagedRuntime context (same requirement as
+                // extractObjectFromAnswer / groundedExtract), so we can flatMap over it here.
+                const self = this
+                // Build evidence corpus from reasoning steps — used by the grounded engine.
+                // reasoningSteps is already captured above; we cast to ReasoningStep[] for
+                // buildEvidenceCorpusFromSteps (only accesses type/content/metadata fields
+                // that are present on the inline type captured at line ~793).
+                const evidenceCorpus = buildEvidenceCorpusFromSteps(
+                    (reasoningSteps ?? []) as readonly ReasoningStep[]
+                )
+                // ── Parse-first: try to extract the object from the agent's own
+                // answer before touching the LLM. The steering injected above
+                // (buildSchemaSteering) makes the agent emit schema-shaped JSON
+                // directly, so on the happy path this succeeds and we skip the
+                // extra extraction LLM call entirely (~28s on local models).
+                const parsedLoose = ReactiveAgent.parseJsonLoose(agentResult.output)
+                const directValidation = parsedLoose !== null
+                    ? outputSchemaConfig.contract.validate(parsedLoose)
+                    : null
+
+                const onParseFail = outputSchemaConfig.options.onParseFail ?? 'degrade'
+
+                if (directValidation?.ok === true) {
+                    // ── Happy path: agent already emitted valid JSON — zero extra LLM calls.
+                    // For grounded mode we still compute provenance/confidence via groundFields
+                    // (pure function, no LLM) so callers get the expected grounding fields.
+                    // Arrays are skipped for grounding (no top-level Object.entries).
+                    const jsonSchema = outputSchemaConfig.contract.toJsonSchema()
+                    const isTopLevelObject = !jsonSchema || jsonSchema["type"] === "object"
+                    const needsGrounding = (() => {
+                        // Determine if grounded mode would have been selected, but we need
+                        // to avoid an LLM call just for the engine choice. Use a synchronous
+                        // heuristic: mode === "grounded" explicitly always needs grounding;
+                        // "auto" and "fast" don't need groundFields on parse-first success.
+                        return outputSchemaConfig.options.mode === 'grounded'
+                    })()
+
+                    if (needsGrounding && isTopLevelObject && typeof parsedLoose === 'object' && parsedLoose !== null && !Array.isArray(parsedLoose)) {
+                        // Pure provenance computation — no LLM call.
+                        const grounded = groundFields(
+                            parsedLoose as Record<string, unknown>,
+                            evidenceCorpus
+                        )
+                        const result: AgentResult = {
+                            ...agentResult,
+                            object: directValidation.value,
+                            provenance: grounded.provenance,
+                            confidence: grounded.confidence,
+                        }
+                        return Effect.succeed(result)
+                    }
+                    return Effect.succeed({
+                        ...agentResult,
+                        object: directValidation.value,
+                    } satisfies AgentResult)
+                }
+
+                // ── Fallback: parse-first missed — run the LLM extraction pipeline.
+                // This preserves all existing behavior for prose answers / model
+                // non-compliance, and handles onParseFail:"throw" correctly.
+                return LLMService.pipe(
+                    Effect.flatMap((llm) => llm.getStructuredOutputCapabilities()),
+                    Effect.flatMap((structCaps) => {
+                        const engine = chooseStructuredEngine({
+                            mode: outputSchemaConfig.options.mode ?? 'auto',
+                            nativeJsonMode: structCaps.nativeJsonMode,
+                            toolsRegistered: self._enableTools,
+                            // TODO(P2): wire real calibration signal from Capability table.
+                            // Defaulting to `true` (frontier-ish) is conservative — auto→fast
+                            // only when nativeJsonMode AND no tools, which is already safe.
+                            calibrated: true,
+                        })
+                        if (engine === 'grounded') {
+                            // ── Task 2.5: grounded engine path ───────────────────────────────
+                            // groundedExtract error channel is `never`; all failures degrade to
+                            // { objectError }. We translate objectError → thrown error here when
+                            // onParseFail === "throw" (callers expect StructuredOutputError).
+                            return groundedExtract({
+                                contract: outputSchemaConfig.contract,
+                                finalAnswer: agentResult.output,
+                                evidenceCorpus,
+                                onParseFail,
+                                abstainBelow: outputSchemaConfig.options.abstainBelow,
+                            }).pipe(
+                                Effect.flatMap((g) => {
+                                    if (g.objectError !== undefined && onParseFail === 'throw') {
+                                        return Effect.fail(new StructuredOutputError({
+                                            rawText: agentResult.output,
+                                            issues: [g.objectError],
+                                        }) as unknown as Error)
+                                    }
+                                    const result: AgentResult = {
+                                        ...agentResult,
+                                        ...(g.object !== undefined ? { object: g.object } : {}),
+                                        ...(g.objectError !== undefined ? { objectError: g.objectError } : {}),
+                                        ...(g.provenance !== undefined ? { provenance: g.provenance } : {}),
+                                        ...(g.confidence !== undefined ? { confidence: g.confidence } : {}),
+                                        ...(g.abstained !== undefined ? { abstained: g.abstained } : {}),
+                                    }
+                                    return Effect.succeed(result)
+                                })
+                            )
+                        }
+                        // ── Fast path (auto → fast) ───────────────────────────────────────
+                        return extractObjectFromAnswer({
+                            contract: outputSchemaConfig.contract,
+                            finalAnswer: agentResult.output,
+                            onParseFail,
+                            traceContext: { taskId: String(r.taskId) },
+                        }).pipe(
+                            Effect.map((extracted) => ({
+                                ...agentResult,
+                                ...(extracted.object !== undefined ? { object: extracted.object } : {}),
+                                ...(extracted.objectError !== undefined ? { objectError: extracted.objectError } : {}),
+                            } satisfies AgentResult)),
+                            // If onParseFail: "throw" let StructuredOutputError propagate as-is.
+                            // If "degrade" extractObjectFromAnswer already catches and returns
+                            // { objectError } in the success channel — nothing extra needed.
+                            Effect.catchTag('StructuredOutputError', (e: StructuredOutputError) =>
+                                Effect.fail(e as unknown as Error)
+                            ),
+                        )
+                    }),
+                )
             }),
             Effect.mapError(
-                (e: RuntimeErrors | TaskError) =>
-                    new Error('message' in e ? e.message : String(e))
+                (e: RuntimeErrors | TaskError | Error) =>
+                    e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
             )
         ) as Effect.Effect<AgentResult, Error>
     }
@@ -926,6 +1156,8 @@ export class ReactiveAgent {
      * pause()     — freeze at next iteration boundary; await resume().
      * resume()    — continue from paused state.
      * status()    — current RunStatus.
+     *
+     * Note: streamed results do not carry the typed structured `object`; use `streamObject()` for streaming structured output.
      */
     runStream(
         input: string,
@@ -1102,6 +1334,61 @@ export class ReactiveAgent {
             Effect.runFork(Fiber.interrupt(fiber))
             controller.markCompleted()
         }
+    }
+
+    /**
+     * Execute a task and stream deep-partial objects as tokens arrive, ending
+     * with the final validated object.
+     *
+     * Requires `.withOutputSchema()` to have been called during builder setup.
+     * Each yielded `{ object }` is a `DeepPartial<TOut>` built from the JSON
+     * accumulated so far; only unique (changed) partials are emitted to avoid
+     * noise. The final yield carries the schema-validated full value when parsing
+     * succeeds, or the last best-effort partial in `degrade` mode.
+     *
+     * @param input - The task prompt or question
+     * @param options - Optional streaming configuration (density, signal, history)
+     * @returns `AsyncGenerator<{ object: DeepPartial<TOut> }>`
+     * @throws `Error` when called without `.withOutputSchema()`.
+     * @throws `StructuredOutputError` at the end when `onParseFail: "throw"` is set
+     *         and the final buffer fails schema validation.
+     *
+     * @example
+     * ```typescript
+     * const agent = await ReactiveAgents.create()
+     *   .withOutputSchema(Schema.Struct({ city: Schema.String }))
+     *   .build();
+     *
+     * for await (const { object } of agent.streamObject("name a city")) {
+     *   console.log(object.city); // "Par", "Paris", "Paris"
+     * }
+     * ```
+     */
+    streamObject(
+        input: string,
+        options?: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] }
+    ): AsyncGenerator<{ object: DeepPartial<TOut> }> {
+        if (!this._outputSchemaConfig) {
+            throw new Error(
+                'streamObject() requires .withOutputSchema() to be configured on this agent. ' +
+                'Call .withOutputSchema(schema) before .build().'
+            )
+        }
+        const { contract, options: schemaOptions } = this._outputSchemaConfig
+        const onParseFail = schemaOptions.onParseFail ?? "degrade"
+
+        // Steer the agent to emit schema-JSON instead of free-form prose.
+        // Without this, the model answers naturally (e.g. "The total is **$4,200**")
+        // and parsePartial yields {} because there is no JSON to extract.
+        const steeringInstruction = this.buildSchemaSteering(contract)
+        const augmentedTask = `${input}${steeringInstruction}`
+
+        const stream = this.runStream(augmentedTask, options)
+        return streamObjectFrom(
+            stream,
+            contract as import('@reactive-agents/reasoning').SchemaContract<TOut>,
+            onParseFail
+        )
     }
 
     /**

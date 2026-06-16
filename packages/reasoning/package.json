@@ -13,16 +13,21 @@
   "dependencies": {
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/tools": "workspace:*",
     "@reactive-agents/memory": "workspace:*",
     "@reactive-agents/observability": "workspace:*",
     "@reactive-agents/prompts": "workspace:*",
-    "ulid": "^2.3.0"
+    "@reactive-agents/tools": "workspace:*",
+    "@standard-schema/spec": "^1.0.0",
+    "@valibot/to-json-schema": "^1.7.1",
+    "ulid": "^2.3.0",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
+    "arktype": "^2.2.0",
     "bun-types": "latest",
-    "effect": "^3.10.0"
+    "effect": "^3.10.0",
+    "typescript": "^6.0.3",
+    "valibot": "^1.4.1"
   },
   "license": "MIT",
   "repository": {

@@ -15,15 +15,15 @@
  * Observability: When EventBus is available, emits ReasoningStepCompleted events
  * with prompt/response data for logModelIO integration.
  */
-import { Effect, Option, Schema } from "effect";
+import { Effect, JSONSchema, Option, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
 import { stripThinking } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type { SchemaContract } from "./schema-contract.js";
 
-export interface StructuredOutputConfig<T> {
-  readonly schema: Schema.Schema<T>;
+interface StructuredOutputBase<T> {
   readonly prompt: string;
   readonly systemPrompt?: string;
   readonly examples?: readonly T[];
@@ -42,6 +42,14 @@ export interface StructuredOutputConfig<T> {
   readonly traceContext?: { readonly taskId?: string; readonly iteration?: number };
 }
 
+/**
+ * Provide exactly one of `schema` or `contract` — passing neither or both is
+ * a compile-time error via the discriminated union below.
+ */
+export type StructuredOutputConfig<T> =
+  | (StructuredOutputBase<T> & { readonly schema: Schema.Schema<T>; readonly contract?: never })
+  | (StructuredOutputBase<T> & { readonly contract: SchemaContract<T>; readonly schema?: never });
+
 export interface StructuredOutputResult<T> {
   readonly data: T;
   readonly raw: string;
@@ -58,6 +66,7 @@ export interface StructuredOutputResult<T> {
 const tryNativeStructuredOutput = <T>(
   llm: LLMService["Type"],
   config: StructuredOutputConfig<T>,
+  effectSchema: Schema.Schema<T>,
   maxTokens: number,
   temp: number,
 ): Effect.Effect<StructuredOutputResult<T> | null, never> =>
@@ -68,7 +77,7 @@ const tryNativeStructuredOutput = <T>(
     const result = yield* llm.completeStructured({
       messages: [{ role: "user", content: config.prompt }],
       systemPrompt: config.systemPrompt,
-      outputSchema: config.schema,
+      outputSchema: effectSchema,
       maxTokens,
       temperature: temp,
       maxParseRetries: 1,
@@ -105,6 +114,22 @@ export const extractStructuredOutput = <T>(
     const temp = config.temperature ?? 0.3;
     const maxTokens = config.maxTokens ?? 4096;
 
+    // Resolve effective Effect Schema (from contract or direct schema field)
+    const effectSchema = config.contract ? config.contract.effectSchema : config.schema;
+    if (!effectSchema) {
+      return yield* Effect.fail(new Error("extractStructuredOutput: provide `schema` or `contract`"));
+    }
+
+    // Final-layer validation: contract path uses contract.validate(); schema path uses Effect decode
+    const validateFinal = (parsed: unknown): T => {
+      if (config.contract) {
+        const r = config.contract.validate(parsed);
+        if (r.ok) return r.value;
+        throw new Error(r.issues.map((i) => i.message).join("; "));
+      }
+      return Schema.decodeUnknownSync(effectSchema)(parsed);
+    };
+
     // Optional EventBus for logModelIO observability
     const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
       Effect.catchAll(() => Effect.succeed(Option.none<EventBus["Type"]>())),
@@ -112,30 +137,60 @@ export const extractStructuredOutput = <T>(
     const eb = ebOpt._tag === "Some" ? ebOpt.value : null;
 
     // Layer 0: Try provider-native structured output first
-    const nativeResult = yield* tryNativeStructuredOutput(llm, config, maxTokens, temp);
+    const nativeResult = yield* tryNativeStructuredOutput(llm, config, effectSchema, maxTokens, temp);
     if (nativeResult !== null) {
-      if (eb) {
-        yield* eb.publish({
-          _tag: "ReasoningStepCompleted",
-          taskId: "structured-output",
-          strategy: "structured-output-native",
-          step: 1,
-          totalSteps: 1,
-          prompt: { system: config.systemPrompt ?? "", user: config.prompt },
-          thought: nativeResult.raw,
-        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:116", tag: errorTag(err) })));
+      // Fix 1: when a contract is set, re-validate the native result against it.
+      // completeStructured() uses an Effect-Schema structural predicate that is
+      // weaker than the full contract.validate() path (Standard-Schema / Zod /
+      // Valibot contracts carry richer coercion and refinement rules).
+      // If contract validation fails, discard the native result and fall through
+      // to the prompt+repair loop so the user gets full repair semantics.
+      if (config.contract) {
+        const r = config.contract.validate(nativeResult.data);
+        if (!r.ok) {
+          // Native result failed contract validation — fall through to prompt path
+        } else {
+          const validated: StructuredOutputResult<T> = { ...nativeResult, data: r.value };
+          if (eb) {
+            yield* eb.publish({
+              _tag: "ReasoningStepCompleted",
+              taskId: "structured-output",
+              strategy: "structured-output-native",
+              step: 1,
+              totalSteps: 1,
+              prompt: { system: config.systemPrompt ?? "", user: config.prompt },
+              thought: validated.raw,
+            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:native-contract", tag: errorTag(err) })));
+          }
+          return validated;
+        }
+      } else {
+        if (eb) {
+          yield* eb.publish({
+            _tag: "ReasoningStepCompleted",
+            taskId: "structured-output",
+            strategy: "structured-output-native",
+            step: 1,
+            totalSteps: 1,
+            prompt: { system: config.systemPrompt ?? "", user: config.prompt },
+            thought: nativeResult.raw,
+          }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/structured-output/pipeline.ts:116", tag: errorTag(err) })));
+        }
+        return nativeResult;
       }
-      return nativeResult;
     }
 
     // Fallback: prompt engineering + repair pipeline
+    // Compute JSON Schema string ONCE for use in all prompt builder calls.
+    const jsonSchemaString = computeJsonSchemaString(config, effectSchema);
+
     let lastError: string | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Build prompt
       const prompt = attempt === 0
-        ? buildStructuredPrompt(config)
-        : buildRetryPrompt(config, lastError ?? "Unknown error");
+        ? buildStructuredPrompt(config, jsonSchemaString)
+        : buildRetryPrompt(config, lastError ?? "Unknown error", jsonSchemaString);
 
       const systemPrompt = config.systemPrompt
         ? `${config.systemPrompt}\n\nRespond with ONLY valid JSON. No markdown, no explanation, no thinking tags.`
@@ -187,10 +242,10 @@ export const extractStructuredOutput = <T>(
         }
       }
 
-      // Layer 3: Schema validation
+      // Layer 3: Schema validation (via contract or direct Effect Schema)
       try {
         const parsed = JSON.parse(jsonText);
-        const data = Schema.decodeUnknownSync(config.schema)(parsed);
+        const data = validateFinal(parsed);
         return { data, raw, attempts: attempt + 1, repaired, nativeMode: false };
       } catch (e) {
         lastError = e instanceof Error ? e.message : String(e);
@@ -209,7 +264,50 @@ export const extractStructuredOutput = <T>(
 
 // ── Prompt builders ──
 
-function buildStructuredPrompt<T>(config: StructuredOutputConfig<T>): string {
+/**
+ * Compute a JSON Schema string for the given config and Effect schema.
+ *
+ * Preference order:
+ * 1. `config.contract.toJsonSchema()` — returns a pre-built Record (may be
+ *    richer for Standard Schema vendors that implement the extension).
+ * 2. `JSONSchema.make(effectSchema)` from the `effect` package — works for
+ *    all Effect Schema shapes (Struct, Union, etc.).
+ * 3. `undefined` — both sources failed; callers degrade gracefully (no crash).
+ */
+function computeJsonSchemaString<T>(
+  config: StructuredOutputConfig<T>,
+  effectSchema: Schema.Schema<T>,
+): string | undefined {
+  // Prefer contract path first
+  if (config.contract) {
+    const js = config.contract.toJsonSchema();
+    if (js !== undefined) {
+      try {
+        return JSON.stringify(js, null, 2);
+      } catch {
+        // fall through to Effect JSONSchema
+      }
+    }
+  }
+  // Fall back to Effect JSONSchema.make
+  try {
+    const js = JSONSchema.make(effectSchema);
+    return JSON.stringify(js, null, 2);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Build the initial structured-output prompt.
+ *
+ * When `jsonSchemaString` is provided the schema is embedded verbatim so the
+ * model can see the exact field names and types it must produce.
+ */
+export function buildStructuredPrompt<T>(
+  config: StructuredOutputConfig<T>,
+  jsonSchemaString: string | undefined,
+): string {
   const parts: string[] = [config.prompt];
 
   if (config.examples && config.examples.length > 0) {
@@ -219,11 +317,59 @@ function buildStructuredPrompt<T>(config: StructuredOutputConfig<T>): string {
     }
   }
 
-  parts.push("\nRespond with ONLY a JSON object matching the schema above. No markdown fences, no explanation.");
+  if (jsonSchemaString !== undefined) {
+    parts.push(
+      isArraySchemaString(jsonSchemaString)
+        ? "\nRespond with ONLY a JSON array that exactly matches this JSON Schema." +
+          " Do NOT wrap it in an object or add extra keys:\n"
+        : "\nRespond with ONLY a JSON object that exactly matches this JSON Schema." +
+          " Use these exact top-level keys; do NOT nest, wrap, or add extra keys:\n",
+    );
+    parts.push(jsonSchemaString);
+    parts.push("\nNo markdown fences, no explanation, no <think> tags.");
+  } else {
+    parts.push("\nRespond with ONLY a JSON value (object or array) matching the request. No markdown fences, no explanation.");
+  }
+
   return parts.join("\n");
 }
 
-function buildRetryPrompt<T>(config: StructuredOutputConfig<T>, error: string): string {
+/** True when the rendered JSON Schema describes a top-level array. */
+function isArraySchemaString(jsonSchemaString: string): boolean {
+  try {
+    return (JSON.parse(jsonSchemaString) as { type?: unknown }).type === "array";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Build the retry prompt shown after a validation failure.
+ *
+ * Includes the prior error message and (when available) the target JSON Schema
+ * so the model can self-correct with full type information.
+ */
+export function buildRetryPrompt<T>(
+  config: StructuredOutputConfig<T>,
+  error: string,
+  jsonSchemaString: string | undefined,
+): string {
+  if (jsonSchemaString !== undefined) {
+    const shape = isArraySchemaString(jsonSchemaString) ? "JSON array" : "JSON object";
+    const constraint = isArraySchemaString(jsonSchemaString)
+      ? "(do NOT wrap it in an object or add extra keys)"
+      : "(exact top-level keys, no nesting/wrapping)";
+    return `Your previous response did not match the required JSON Schema. Error: ${error}
+
+The response MUST be a ${shape} matching exactly this schema ${constraint}:
+
+${jsonSchemaString}
+
+Original request: ${config.prompt}
+
+Respond with ONLY the valid ${shape}. No markdown, no explanation.`;
+  }
+
   return `Your previous response was not valid JSON. Error: ${error}
 
 Original request: ${config.prompt}

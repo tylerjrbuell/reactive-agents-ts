@@ -20,8 +20,11 @@
  */
 export { createAgentStream } from "./agent-stream.js";
 export { createAgent } from "./agent.js";
+export { createStructuredStream } from "./structured-stream.js";
+export { parsePartialObject } from "./parse-partial.js";
 export type { AgentStreamState } from "./agent-stream.js";
 export type { AgentState } from "./agent.js";
+export type { StructuredStreamState } from "./structured-stream.js";
 export type {
   AgentStreamEvent,
   AgentHookState,
