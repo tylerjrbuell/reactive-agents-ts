@@ -68,6 +68,45 @@ function injectPause(dbPath: string, runId: string): Promise<void> {
   );
 }
 
+describe("durable HITL — run() durable path", () => {
+  it("run() on a durable agent persists a run row (durable wiring fires on the non-stream path)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ra-run-durable-"));
+    try {
+      const agent = await makeAgent(dir);
+      const result = await agent.run("compute the answer");
+      // Normal completion (the test provider does not pause through the runtime).
+      expect(result.status ?? "completed").toBe("completed");
+      // The durable wiring ran on the run() path: a run row exists + is completed.
+      const runs = await agent.listRuns();
+      expect(runs.length).toBeGreaterThanOrEqual(1);
+      const completed = await agent.listRuns({ status: "completed" });
+      expect(completed.length).toBeGreaterThanOrEqual(1);
+      await agent.dispose();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 45000);
+
+  it("run({ onApproval }) does not invoke the callback when the run never pauses", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ra-run-onapproval-"));
+    try {
+      const agent = await makeAgent(dir);
+      let asked = 0;
+      const result = await agent.run("compute the answer", {
+        onApproval: () => {
+          asked += 1;
+          return true;
+        },
+      });
+      expect(asked).toBe(0); // never paused → callback never fired
+      expect(result.status ?? "completed").toBe("completed");
+      await agent.dispose();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 45000);
+});
+
 describe("durable HITL approve/deny API", () => {
   it("listPendingApprovals + approveRun resume from a fresh instance, flips to completed", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ra-hitl-api-approve-"));

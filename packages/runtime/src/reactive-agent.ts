@@ -34,7 +34,7 @@ import { unwrapError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ApprovalDecisionRef } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ApprovalDecisionRef, RunControllerRef } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
@@ -42,6 +42,8 @@ import {
     markRunStatus,
     decideApprovalRecord,
     getPendingApprovalAt,
+    createDurableRun,
+    persistApprovalPauseAt,
 } from './engine/durable-resume.js'
 import type { RunRecord, RunStatus } from './services/run-store.js'
 import type {
@@ -53,7 +55,8 @@ import type {
 import { EventBus } from '@reactive-agents/core'
 import { KillSwitchService } from '@reactive-agents/guardrails'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
-import { RunController } from './run-controller.js'
+import { RunController, installDurableCheckpointing } from './run-controller.js'
+import { RunStoreLive } from './services/run-store.js'
 import { applyHistoryWindow, formatHistoryBlock } from './gateway-context-formatting.js'
 
 /**
@@ -713,29 +716,74 @@ export class ReactiveAgent<TOut = unknown> {
      */
     async run(
         input: string,
-        options?: { readonly taskId?: string; readonly history?: readonly ChatMessage[] }
+        options?: {
+            readonly taskId?: string
+            readonly history?: readonly ChatMessage[]
+            /**
+             * Durable HITL (Phase D) convenience: when a gated tool call pauses the
+             * run, this callback is invoked with the pending action. Return `true`
+             * to approve (the agent executes the call and continues), `false` to
+             * deny, or `{ approve, reason }`. `run()` handles the pause→decide→resume
+             * loop and returns the FINAL result — you never touch the runId. Requires
+             * `.withDurableRuns()` + `.withApprovalPolicy({ mode: "detach" })`. Without
+             * this callback, a paused run returns `status: "awaiting-approval"` +
+             * `pendingApproval` for you to handle (e.g. cross-process).
+             */
+            readonly onApproval?: (pending: {
+                readonly runId: string
+                readonly gateId: string
+                readonly toolName: string
+                readonly args: unknown
+            }) => boolean | { approve: boolean; reason?: string } | Promise<boolean | { approve: boolean; reason?: string }>
+        }
     ): Promise<AgentResult & { object?: TOut }> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
         const taskInput = withHistoryBlock(input, options?.history)
-        return this.runtime
-            .runPromise(this.buildRunTaskEffect(taskInput, options?.taskId ? { taskId: options.taskId } : undefined))
-            .catch((e) => {
-                const unwrapped = unwrapError(e)
-                if (this._errorHandler) {
-                    try {
-                        this._errorHandler(unwrapped as RuntimeErrors | Error, {
-                            taskId: 'unknown',
-                            phase: 'execution',
-                            iteration: 0,
-                        })
-                    } catch {
-                        // Handler exceptions are silently ignored — never replace the original error
-                    }
+        const taskIdOpt = options?.taskId ? { taskId: options.taskId } : undefined
+
+        const execute = async (): Promise<AgentResult> => {
+            // Durable agents create a run row + checkpoint so a pause survives the
+            // process; non-durable agents take the plain path.
+            let result: AgentResult = this._durableResume
+                ? await this.runDurable({
+                      input: taskInput,
+                      runId: crypto.randomUUID(),
+                      task: taskInput,
+                      ...(options?.taskId ? { taskId: options.taskId } : {}),
+                  })
+                : await this.runtime.runPromise(this.buildRunTaskEffect(taskInput, taskIdOpt))
+
+            // Tier 2 — same-process convenience: drive pause→decide→resume in one
+            // call. Loops so multi-gate runs (a resume that pauses again) are handled.
+            const onApproval = options?.onApproval
+            while (onApproval && result.status === 'awaiting-approval' && result.pendingApproval) {
+                const decision = await onApproval(result.pendingApproval)
+                const approve = typeof decision === 'boolean' ? decision : decision.approve
+                const reason = typeof decision === 'object' ? decision.reason : undefined
+                result = approve
+                    ? await this.approveRun(result.pendingApproval.runId)
+                    : await this.denyRun(result.pendingApproval.runId, reason ?? 'denied by onApproval')
+            }
+            return result
+        }
+
+        return execute().catch((e) => {
+            const unwrapped = unwrapError(e)
+            if (this._errorHandler) {
+                try {
+                    this._errorHandler(unwrapped as RuntimeErrors | Error, {
+                        taskId: 'unknown',
+                        phase: 'execution',
+                        iteration: 0,
+                    })
+                } catch {
+                    // Handler exceptions are silently ignored — never replace the original error
                 }
-                throw unwrapped
-            }) as Promise<AgentResult & { object?: TOut }>
+            }
+            throw unwrapped
+        }) as Promise<AgentResult & { object?: TOut }>
     }
 
     /**
@@ -848,30 +896,28 @@ export class ReactiveAgent<TOut = unknown> {
             decideApprovalRecord({ dbPath, runId, status: decision.status, reason: decision.reason }),
         )
 
-        // 2. Load + guard the paused checkpoint, then resume to completion with the
-        //    decision seeded via ApprovalDecisionRef (read in reasoning-think →
-        //    KernelInput.approvalDecision → runner re-entry).
+        // 2. Load + guard the paused checkpoint.
         const payload = await Effect.runPromise(
             loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
         )
-        const pipeline = this.buildRunTaskEffect(payload.run.task, { taskId: runId })
-        try {
-            const result = await this.runtime.runPromise(
-                pipeline.pipe(
-                    Effect.locally(ResumeStateRef, payload.stateJson),
-                    Effect.locally(ApprovalDecisionRef, {
-                        gateId,
-                        status: decision.status,
-                        ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
-                    }),
-                ),
-            )
-            await Effect.runPromise(markRunStatus({ dbPath, runId, status: 'completed' }))
-            return result
-        } catch (e) {
-            await Effect.runPromise(markRunStatus({ dbPath, runId, status: 'failed' }))
-            throw unwrapError(e)
-        }
+
+        // 3. Resume through the durable wrapper (same as run()), seeding the restored
+        //    state + the decision. Using runDurable means a re-pause on resume is
+        //    persisted + surfaced (multi-gate), and completion flips to `completed`.
+        return this.runDurable({
+            input: payload.run.task,
+            taskId: runId,
+            runId,
+            task: payload.run.task,
+            resume: {
+                stateJson: payload.stateJson,
+                decision: {
+                    gateId,
+                    status: decision.status,
+                    ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+                },
+            },
+        })
     }
 
     /**
@@ -954,11 +1000,95 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
+     * Durable HITL (Phase D) — run a task on the NON-streaming path with full
+     * durable wiring: create the run row, install per-iteration + paused-state
+     * checkpointing, run to completion or to an approval pause. On pause the run
+     * is persisted (`awaiting-approval` + a pending row) and the AgentResult
+     * carries `status` + `pendingApproval` (with the durable runId). On normal
+     * completion the run is flipped to `completed`. Shared by `run()` (fresh
+     * runId) and `approveRun`/`denyRun` (existing runId + resume locals), so a
+     * re-pause on resume persists too.
+     */
+    private async runDurable(params: {
+        readonly input: string
+        readonly taskId?: string
+        readonly runId: string
+        readonly task: string
+        readonly resume?: {
+            readonly stateJson: string
+            readonly decision: { gateId: string; status: 'approved' | 'denied'; reason?: string }
+        }
+    }): Promise<AgentResult> {
+        const { dir, configHash } = this._durableResume!
+        const dbPath = join(dir, 'runs.db')
+        const { mkdirSync } = await import('node:fs')
+        mkdirSync(dir, { recursive: true })
+        const runStoreLayer = RunStoreLive(dbPath)
+
+        // 1. Create (or replace) the run row.
+        await Effect.runPromise(
+            createDurableRun({
+                dbPath,
+                runId: params.runId,
+                agentId: this.agentId,
+                task: params.task,
+                configHash,
+            }),
+        )
+
+        // 2. RunController + durable checkpointing (the kernel captures the paused
+        //    state at iteration+1 so resume restores `awaitingApprovalFor`).
+        const controller = new RunController(new AbortController())
+        const { finish } = installDurableCheckpointing(controller, {
+            runId: params.runId,
+            runStoreLayer,
+            checkpointEvery: 1,
+        })
+
+        // 3. Run the pipeline with RunControllerRef set (+ resume locals when resuming).
+        let pipeline = this.buildRunTaskEffect(params.input, {
+            ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
+            durableRunId: params.runId,
+        }).pipe(Effect.locally(RunControllerRef, controller))
+        if (params.resume) {
+            pipeline = pipeline.pipe(
+                Effect.locally(ResumeStateRef, params.resume.stateJson),
+                Effect.locally(ApprovalDecisionRef, params.resume.decision),
+            )
+        }
+
+        try {
+            const result = await this.runtime.runPromise(pipeline)
+            if (result.status === 'awaiting-approval' && result.pendingApproval) {
+                // Paused — persist (status + pending row). Do NOT finish: the run
+                // intentionally stays `awaiting-approval` until approve/deny.
+                await Effect.runPromise(
+                    persistApprovalPauseAt({
+                        dbPath,
+                        runId: params.runId,
+                        gate: {
+                            gateId: result.pendingApproval.gateId,
+                            toolName: result.pendingApproval.toolName,
+                            args: result.pendingApproval.args,
+                        },
+                    }),
+                )
+            } else {
+                finish(true)
+            }
+            return result
+        } catch (e) {
+            finish(false)
+            throw unwrapError(e)
+        }
+    }
+
+    /**
      * Core task execution Effect (requires services from the agent's ManagedRuntime).
      */
     private buildRunTaskEffect(
         input: string,
-        options?: { readonly taskId?: string }
+        options?: { readonly taskId?: string; readonly durableRunId?: string }
     ): Effect.Effect<AgentResult, Error> {
         // Pre-set the task description so sub-agents spawned on the first iteration
         // have access to the full user prompt (including phone numbers, URLs, etc.)
@@ -992,6 +1122,7 @@ export class ReactiveAgent<TOut = unknown> {
                     format?: OutputFormat
                     terminatedBy?: TerminatedBy
                     debrief?: AgentDebrief
+                    awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }
                 }
                 // Derive toolCalls from reasoning steps so consumers don't
                 // have to filter `metadata.reasoningSteps` themselves. The
@@ -1040,6 +1171,21 @@ export class ReactiveAgent<TOut = unknown> {
                         ? { terminatedBy: r.terminatedBy }
                         : {}),
                     goalAchieved: deriveGoalAchieved(r.terminatedBy),
+                    // Durable HITL (Phase D): when the run paused for human approval,
+                    // surface status + the pending action (with the durable runId so
+                    // callers can approveRun/denyRun it). durableRunId is threaded by
+                    // the run()/resume durable wrapper; absent on non-durable runs.
+                    ...(r.awaitingApprovalFor !== undefined && options?.durableRunId !== undefined
+                        ? {
+                              status: 'awaiting-approval' as const,
+                              pendingApproval: {
+                                  runId: options.durableRunId,
+                                  gateId: r.awaitingApprovalFor.gateId,
+                                  toolName: r.awaitingApprovalFor.toolName,
+                                  args: r.awaitingApprovalFor.args,
+                              },
+                          }
+                        : {}),
                     ...(r.debrief !== undefined ? { debrief: r.debrief } : {}),
                     ...(debriefFiber
                         ? {

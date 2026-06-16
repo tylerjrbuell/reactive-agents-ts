@@ -50,18 +50,43 @@ You can also gate by predicate instead of (or in addition to) a name list:
 
 ## Pausing
 
-Durable pauses ride the **`runStream()`** path (where durable persistence lives).
-When the agent hits a gated call, the run pauses and the stream completes with a
+When the agent hits a gated call, the run pauses durably and hands control back.
+Use whichever entrypoint you already use — `run()` or `runStream()`.
+
+With **`run()`** the result carries `status: "awaiting-approval"` and a
 `pendingApproval` descriptor:
 
 ```ts
-let pending: { runId: string; gateId: string; toolName: string; args: unknown } | undefined;
+const result = await agent.run("clean up the temp files");
+if (result.status === "awaiting-approval") {
+  const { runId, toolName, args } = result.pendingApproval!;
+  // The process can now exit. The pause is persisted under runId.
+}
+```
+
+With **`runStream()`** the terminal event carries the same `pendingApproval`:
+
+```ts
 for await (const event of agent.runStream("clean up the temp files")) {
   if (event._tag === "StreamCompleted" && event.pendingApproval) {
-    pending = event.pendingApproval;
+    const { runId, toolName, args } = event.pendingApproval;
   }
 }
-// The process can now exit. The pause is persisted under pending.runId.
+```
+
+### Same-process convenience: `onApproval`
+
+For interactive/CLI use, pass an `onApproval` callback — `run()` drives the whole
+pause → decide → resume loop in one call and returns the **final** result. You
+never touch the runId:
+
+```ts
+const result = await agent.run("clean up the temp files", {
+  onApproval: async ({ toolName, args }) => {
+    // return true to approve, false to deny, or { approve, reason }
+    return confirm(`Run ${toolName}(${JSON.stringify(args)})?`);
+  },
+});
 ```
 
 ## Approving or denying — from any process
@@ -93,18 +118,19 @@ Calling `approveRun`/`denyRun` on a run with no pending approval throws
 ## Lifecycle
 
 ```
-run (stream) ──▶ gated call ──▶ status: awaiting-approval ──▶ process may exit
-                                          │
-              approveRun / denyRun  ◀──────┘   (any process)
-                     │
-                     ▼
-              resume from checkpoint ──▶ status: completed
+run() / runStream() ──▶ gated call ──▶ status: awaiting-approval ──▶ process may exit
+                                              │
+                  approveRun / denyRun  ◀──────┘   (any process)
+                         │
+                         ▼
+                  resume from checkpoint ──▶ status: completed
 ```
 
 ## Scope notes (v0.12)
 
-- Durable pauses are surfaced on the `runStream()` path. `approveRun`/`denyRun`
-  resume to completion via the same checkpoint mechanism as `resumeRun`.
+- Durable pauses work on **both `run()` and `runStream()`**. `approveRun`/`denyRun`
+  resume from the exact paused checkpoint; a re-pause on resume is persisted too
+  (multi-gate). The `onApproval` callback is sugar over this loop for same-process use.
 - Gate triggers are the explicit `tools` list and the `requireFor` predicate. The
   per-tool `requiresApproval` flag does not auto-feed the durable gate yet — list
   the tool names explicitly.

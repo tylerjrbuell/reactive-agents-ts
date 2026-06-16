@@ -86,31 +86,27 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   try {
     if (live) {
-      // 1. Run until the gate pauses the stream.
+      // ── Tier 1: run() pauses and RETURNS (durable, cross-process ready) ──
       const agent = await mkAgent();
-      let pending: { runId: string; gateId: string; toolName: string; args: unknown } | undefined;
-      console.log("Step 1 — running 'delete the stale customer records'…");
-      for await (const ev of agent.runStream("Delete the stale customer records.")) {
-        const e = ev as { _tag: string; pendingApproval?: typeof pending };
-        if (e._tag === "StreamCompleted" && e.pendingApproval) pending = e.pendingApproval;
-      }
+      console.log("Step 1 — run('delete the stale customer records')…");
+      const first = await agent.run("Delete the stale customer records.");
 
-      if (!pending) {
-        // Model answered without calling the gated tool — still a valid run.
+      if (first.status !== "awaiting-approval" || !first.pendingApproval) {
         output = "Run completed without requesting the gated tool (no approval needed).";
         console.log(`  ${output}`);
         passed = true;
       } else {
-        console.log(`  ⏸  PAUSED awaiting approval: ${pending.toolName}(${JSON.stringify(pending.args)})`);
-        console.log(`     runId=${pending.runId}\n`);
+        const p = first.pendingApproval;
+        console.log(`  ⏸  PAUSED awaiting approval: ${p.toolName}(${JSON.stringify(p.args)})`);
+        console.log(`     runId=${p.runId}\n`);
 
-        // 2. A human (any process) lists what's waiting…
+        // A human (any process) lists what's waiting…
         const waiting = await agent.listPendingApprovals();
         console.log(`Step 2 — listPendingApprovals(): ${waiting.length} run(s) awaiting a decision`);
 
-        // 3. …and approves. The run resumes and executes the gated call.
+        // …and approves. The run resumes and executes the EXACT gated call.
         console.log("Step 3 — approveRun()…");
-        const resumed = await agent.approveRun(pending.runId);
+        const resumed = await agent.approveRun(p.runId);
         output = resumed.output;
         tokens = resumed.metadata.tokensUsed ?? 0;
         console.log(`  ✅ resumed & completed: ${output.slice(0, 100)}`);
@@ -119,18 +115,16 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
       }
       await agent.dispose();
 
-      // 4. Show the deny path on a fresh run.
-      console.log("\nStep 4 — deny path on a second run…");
+      // ── Tier 2: run({ onApproval }) — pause→decide→resume in ONE call ──
+      console.log("\nStep 4 — run({ onApproval }) convenience (auto-deny here)…");
       const agent2 = await mkAgent();
-      let pend2: { runId: string } | undefined;
-      for await (const ev of agent2.runStream("Delete the stale customer records.")) {
-        const e = ev as { _tag: string; pendingApproval?: { runId: string } };
-        if (e._tag === "StreamCompleted" && e.pendingApproval) pend2 = e.pendingApproval;
-      }
-      if (pend2) {
-        const denied = await agent2.denyRun(pend2.runId, "not authorized in production");
-        console.log(`  🚫 denied & resumed: ${denied.output.slice(0, 100)}`);
-      }
+      const denied = await agent2.run("Delete the stale customer records.", {
+        onApproval: ({ toolName }) => {
+          console.log(`  🔔 onApproval asked for: ${toolName} → denying`);
+          return { approve: false, reason: "not authorized in production" };
+        },
+      });
+      console.log(`  🚫 final result after deny: ${denied.output.slice(0, 100)}`);
       await agent2.dispose();
     } else {
       // Offline: prove the policy wiring + the detach-requires-durable guard,

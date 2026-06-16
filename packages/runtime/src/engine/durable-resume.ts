@@ -129,3 +129,47 @@ export const getPendingApprovalAt = (params: {
     const store = yield* RunStoreService;
     return yield* store.getPendingApproval(params.runId);
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/**
+ * Durable HITL (Phase D): create (or replace) a run row for the non-streaming
+ * `run()` durable path. Mirrors execute-stream's createRun so `run()` and
+ * `runStream()` produce identical run rows (same config-hash guard on resume).
+ * Idempotent (INSERT OR REPLACE) — safe to call again when resuming the same id.
+ */
+export const createDurableRun = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+  readonly agentId: string;
+  readonly task: string;
+  readonly configHash: string;
+}): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    yield* store.createRun({
+      runId: params.runId,
+      agentId: params.agentId,
+      task: params.task,
+      configHash: params.configHash,
+    });
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/**
+ * Durable HITL (Phase D): persist a paused run — status → awaiting-approval + a
+ * pending approval row. Mirrors execute-stream's `persistApprovalPause` for the
+ * `run()` path.
+ */
+export const persistApprovalPauseAt = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+  readonly gate: { gateId: string; toolName: string; args: unknown };
+}): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    yield* store.setStatus(params.runId, "awaiting-approval");
+    yield* store.putApproval({
+      runId: params.runId,
+      gateId: params.gate.gateId,
+      toolName: params.gate.toolName,
+      argsJson: JSON.stringify(params.gate.args ?? null),
+    });
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
