@@ -70,13 +70,16 @@ A fresh process (or the same one) lists what is waiting and decides:
 
 ```ts
 const waiting = await agent.listPendingApprovals();
-// → [{ runId, gateId, toolName, args, task, updatedAt }]
+// → [{ runId, gateId, toolName, args, task, updatedAt }]  (empty if nothing is paused)
 
-// Approve → the agent executes the gated call, then runs to completion:
-const result = await agent.approveRun(waiting[0].runId);
+const next = waiting[0];
+if (next) {
+  // Approve → the agent executes the gated call, then runs to completion:
+  const result = await agent.approveRun(next.runId);
 
-// Deny → the agent observes the denial and continues WITHOUT running the call:
-await agent.denyRun(waiting[0].runId, "not allowed in production");
+  // Deny → the agent observes the denial and continues WITHOUT running the call:
+  // await agent.denyRun(next.runId, "not allowed in production");
+}
 ```
 
 `approveRun` resumes from the exact checkpoint and executes **the same call the

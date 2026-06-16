@@ -1,8 +1,27 @@
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { RunStoreService, RunStoreLive } from "../../src/services/run-store.js";
 
 const inMem = RunStoreLive(":memory:");
+
+describe("RunStoreService — fresh-agent read path", () => {
+  it("opens a db in a non-existent dir (read path mkdirs) and lists empty", async () => {
+    // Mirrors agent.listRuns()/listPendingApprovals() on a brand-new agent whose
+    // durable dir was never created by a write — must not throw "unable to open
+    // database file".
+    const dir = join(mkdtempSync(join(tmpdir(), "ra-runstore-")), "nested", "deep");
+    const dbPath = join(dir, "runs.db");
+    const runs = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* (yield* RunStoreService).listRuns();
+      }).pipe(Effect.provide(RunStoreLive(dbPath))),
+    );
+    expect(runs).toEqual([]);
+  });
+});
 
 describe("RunStoreService", () => {
   it("creates a run, writes checkpoints, reads the latest", async () => {

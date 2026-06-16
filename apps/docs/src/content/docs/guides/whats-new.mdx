@@ -77,10 +77,18 @@ const agent = await ReactiveAgents.create()
   .withApprovalPolicy({ tools: ["shell-execution", "file-write"], mode: "detach" })
   .build();
 
-// In any process:
-const pending = await agent.listPendingApprovals();
-await agent.approveRun(pending[0].runId);          // resume + execute the call
-// or: await agent.denyRun(pending[0].runId, "not allowed");  // resume, skip the call
+// 1. Run on the stream path; a gated call pauses with a pendingApproval.
+for await (const event of agent.runStream("clean up the temp files")) {
+  if (event._tag === "StreamCompleted" && event.pendingApproval) {
+    console.log("awaiting approval:", event.pendingApproval.toolName);
+  }
+}
+
+// 2. Later, from ANY process — decide on whatever is waiting:
+for (const p of await agent.listPendingApprovals()) {
+  await agent.approveRun(p.runId);          // resume + execute the call
+  // or: await agent.denyRun(p.runId, "not allowed");  // resume, skip the call
+}
 ```
 
 Built on the same durable RunStore as crash-resume — the decision and the paused checkpoint live in SQLite, so approve/deny works across process and machine boundaries.

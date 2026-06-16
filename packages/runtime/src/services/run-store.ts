@@ -15,6 +15,8 @@
  */
 import { Context, Effect, Layer } from "effect";
 import { Database, hash } from "@reactive-agents/runtime-shim";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 /**
  * Canonical durable config hash (Phase C config-hash guard).
@@ -164,6 +166,13 @@ interface ApprovalRow {
  */
 export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
   return Layer.sync(RunStoreService, () => {
+    // Ensure the parent dir exists before opening. The write path (execute-stream)
+    // mkdirs, but the READ path (listRuns / listPendingApprovals / resumeRun /
+    // approveRun) opens the same db on a fresh agent that has never persisted a
+    // run — without this, SQLite fails with "unable to open database file".
+    if (dbPath !== ":memory:") {
+      mkdirSync(dirname(dbPath), { recursive: true });
+    }
     const db = new Database(dbPath);
     db.exec(
       `CREATE TABLE IF NOT EXISTS runs (
