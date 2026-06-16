@@ -12,7 +12,7 @@
  * actual module path for telemetry accuracy.
  */
 import { Effect, FiberRef } from "effect";
-import { emitErrorSwallowed, errorTag, ResumeStateRef } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, ResumeStateRef, ApprovalDecisionRef } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
@@ -193,6 +193,12 @@ export const runReasoningThink = (
     const resumeJson = yield* FiberRef.get(ResumeStateRef);
     const resumeState = resumeJson ? deserializeKernelState(resumeJson) : undefined;
 
+    // Durable HITL (Phase D): a human's approval decision threaded in on a resumed
+    // run (via ApprovalDecisionRef, seeded by approveRun/denyRun). Forwarded to the
+    // runner, which applies it at the gate instead of re-thinking. Null on normal
+    // runs (zero cost).
+    const approvalDecision = (yield* FiberRef.get(ApprovalDecisionRef)) ?? undefined;
+
     const executeRequest = {
       taskDescription: extractTaskText(task.input),
       taskType: task.type,
@@ -226,6 +232,7 @@ export const runReasoningThink = (
       ),
       initialMessages,
       resumeState,
+      approvalDecision,
       synthesisConfig: resolveSynthesisConfigForStrategy(
         config.reasoningOptions,
         effectiveStrategyName,
