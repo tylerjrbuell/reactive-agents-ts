@@ -8,6 +8,20 @@ function shellExecuteActive(cfg: AgentConfig): boolean {
   return cfg.terminalTools === true || cfg.tools.includes("shell-execute");
 }
 
+/** Parse the structured-output schema text → a JSON Schema object, or undefined when blank/invalid. */
+function parseOutputSchema(text: string): Record<string, unknown> | undefined {
+  const trimmed = text.trim();
+  if (trimmed === "") return undefined;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Build the object passed to `JSON.stringify` for Cortex run creation. */
 export function cortexRunsPostBody(
   prompt: string,
@@ -63,6 +77,10 @@ export function cortexRunsPostBody(
     ...(cfg.strategySwitching != null ? { strategySwitching: cfg.strategySwitching } : {}),
     // Reasoning kernel is the default; only send when the user opted into inline-think.
     ...(cfg.useReasoning === false ? { useReasoning: false as const } : {}),
+    // Typed structured output — send the parsed JSON Schema when valid.
+    ...(parseOutputSchema(cfg.outputSchema ?? "") !== undefined
+      ? { outputSchema: parseOutputSchema(cfg.outputSchema ?? "") }
+      : {}),
     // Durable execution (crash-resume + HITL). approvalTools → approvalPolicy gate.
     ...(cfg.durableRuns?.enabled
       ? {

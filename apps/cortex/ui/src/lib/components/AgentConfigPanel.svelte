@@ -40,6 +40,18 @@
   }
   let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false }: Props = $props();
 
+  // Structured-output schema validity (for the editor hint).
+  const outputSchemaText = $derived((config.outputSchema ?? "").trim());
+  const outputSchemaValid = $derived.by(() => {
+    if (outputSchemaText === "") return false;
+    try {
+      const p = JSON.parse(outputSchemaText) as unknown;
+      return p != null && typeof p === "object" && !Array.isArray(p);
+    } catch {
+      return false;
+    }
+  });
+
   // Section expand state
   let openSections = $state(new Set(["inference", "strategy", "tools"]));
   function toggle(s: string) {
@@ -894,6 +906,19 @@
             <span class="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ease-out
                          {config.strategySwitching ? 'translate-x-5' : 'translate-x-0'}"></span>
           </button>
+        </div>
+        <div>
+          <div class="config-label">Structured output (JSON Schema)</div>
+          <textarea bind:value={config.outputSchema} rows="6" spellcheck="false"
+            placeholder={'{\n  "type": "object",\n  "properties": { "name": { "type": "string" } },\n  "required": ["name"]\n}'}
+            class="config-input font-mono text-[10px] leading-snug"></textarea>
+          {#if outputSchemaText !== ''}
+            <p class="mt-1 font-mono text-[8px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--ra-red,#f87171)]'}">
+              {outputSchemaValid ? '✓ Valid — answer extracted into result.object' : '✗ Invalid JSON — schema ignored until fixed'}
+            </p>
+          {:else}
+            <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[8px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
+          {/if}
         </div>
         <div>
           <label for="verification-step" class="config-label">Verification Step</label>

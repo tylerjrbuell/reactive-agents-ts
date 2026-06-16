@@ -127,3 +127,19 @@ describe("cortexRunsPostBody — durable execution", () => {
     expect(body.durableRuns?.approvalPolicy?.mode).toBe("detach");
   });
 });
+
+describe("cortexRunsPostBody — structured output", () => {
+  it("omits outputSchema when blank", () => {
+    const body = cortexRunsPostBody("x", defaultConfig()) as { outputSchema?: unknown };
+    expect(body.outputSchema).toBeUndefined();
+  });
+  it("omits outputSchema when invalid JSON", () => {
+    const body = cortexRunsPostBody("x", { ...defaultConfig(), outputSchema: "{ not json" }) as { outputSchema?: unknown };
+    expect(body.outputSchema).toBeUndefined();
+  });
+  it("sends parsed outputSchema object when valid JSON", () => {
+    const schema = '{"type":"object","properties":{"name":{"type":"string"}}}';
+    const body = cortexRunsPostBody("x", { ...defaultConfig(), outputSchema: schema }) as { outputSchema?: { type?: string } };
+    expect(body.outputSchema?.type).toBe("object");
+  });
+});

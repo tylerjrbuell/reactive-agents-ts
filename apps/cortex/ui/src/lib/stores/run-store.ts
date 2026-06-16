@@ -64,6 +64,10 @@ export interface RunState {
   readonly streamText: string;
   /** Error message from AgentCompleted or TaskFailed when run failed. */
   readonly errorMessage: string | null;
+  /** Typed structured output (`.withOutputSchema`) — from `StructuredOutputExtracted`. */
+  readonly structuredObject: unknown | null;
+  /** Lenient parse-fail message when extraction failed. */
+  readonly structuredError: string | null;
 }
 
 const DEFAULT_VITALS: RunVitals = {
@@ -204,6 +208,8 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     isChat: false,
     streamText: "",
     errorMessage: null,
+    structuredObject: null,
+    structuredError: null,
   });
 
   let unsubMsg: (() => void) | null = null;
@@ -229,6 +235,14 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         debrief = msg.payload.debrief;
       }
       const isChat = s.isChat || msg.type === "ChatTurn";
+
+      // Typed structured output (.withOutputSchema) — surfaced by the runner.
+      let structuredObject = s.structuredObject;
+      let structuredError = s.structuredError;
+      if (msg.type === "StructuredOutputExtracted") {
+        if ("object" in msg.payload) structuredObject = msg.payload.object;
+        if (typeof msg.payload.objectError === "string") structuredError = msg.payload.objectError;
+      }
 
       // Live streaming text — accumulate TextDeltaReceived, clear on new iteration
       let streamText = s.streamText;
@@ -259,6 +273,8 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         streamText,
         isChat,
         errorMessage,
+        structuredObject,
+        structuredError,
         agentId: msg.agentId || s.agentId,
       };
     });

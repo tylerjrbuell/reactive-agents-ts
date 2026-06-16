@@ -18,6 +18,9 @@
     streamText: string;
     failureMessage: string;
     meta?: { model?: string; tokensUsed?: number; estimatedCost?: number; durationMs?: number };
+    /** Typed structured output (`.withOutputSchema`) — rendered as a JSON block when present. */
+    structuredObject?: unknown;
+    structuredError?: string | null;
   }
   let {
     status,
@@ -25,7 +28,16 @@
     streamText,
     failureMessage,
     meta,
+    structuredObject,
+    structuredError,
   }: Props = $props();
+
+  const structuredJson = $derived(
+    structuredObject !== undefined && structuredObject !== null
+      ? JSON.stringify(structuredObject, null, 2)
+      : "",
+  );
+  const showStructured = $derived(structuredJson.length > 0 || !!structuredError);
 
   const showLiveStream = $derived(status === "live" && streamText.length > 0);
   const showDeliverable = $derived(
@@ -35,7 +47,7 @@
   const showFailureOnly = $derived(
     status === "failed" && !deliverableText.trim() && failureMessage.length > 0,
   );
-  const showSection = $derived(showLiveStream || showDeliverable || showFailureOnly);
+  const showSection = $derived(showLiveStream || showDeliverable || showFailureOnly || showStructured);
 
   let deliverableExpanded = $state(true);
   let seededDeliverableUi = $state(false);
@@ -212,6 +224,24 @@
         <p class="font-mono text-[11px] text-error/80 leading-relaxed whitespace-pre-wrap break-words m-0">
           {failureMessage}
         </p>
+      </div>
+    {/if}
+
+    {#if showStructured}
+      <div class="mt-2 rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/30 p-2.5">
+        <div class="mb-1 flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[14px] text-tertiary">data_object</span>
+          <span class="font-mono text-[10px] uppercase tracking-wide text-on-surface/70">Structured output</span>
+          {#if structuredError}
+            <span class="font-mono text-[8px] text-[var(--ra-red,#f87171)]">parse-degraded</span>
+          {/if}
+        </div>
+        {#if structuredJson}
+          <pre class="m-0 overflow-x-auto font-mono text-[10px] leading-snug text-on-surface/90 whitespace-pre">{structuredJson}</pre>
+        {/if}
+        {#if structuredError}
+          <p class="mt-1 font-mono text-[9px] text-[var(--ra-red,#f87171)] m-0">{structuredError}</p>
+        {/if}
       </div>
     {/if}
   </section>

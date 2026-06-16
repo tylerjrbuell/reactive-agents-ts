@@ -490,6 +490,8 @@
     streamText={$runStore.streamText}
     failureMessage={failurePrimaryMessage}
     meta={finalDeliverableMeta}
+    structuredObject={$runStore.structuredObject}
+    structuredError={$runStore.structuredError}
   />
 
   <!-- ── Main content: TRACE + SUMMARY (desk shell) ── -->

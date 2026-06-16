@@ -132,6 +132,12 @@ export interface AgentConfig {
    * kernel on. Framework: `.withDurableRuns()` / `.withApprovalPolicy()`.
    */
   durableRuns: { enabled: boolean; approvalTools: string[] };
+  /**
+   * Typed structured output (v0.12): a JSON Schema (as text) the run's answer is
+   * extracted into. Empty = off. Sent as `outputSchema` → `.withOutputSchema()`;
+   * the extracted value surfaces in the run's Structured Output view.
+   */
+  outputSchema: string;
   /** Living skills: SKILL.md directories + optional evolution (framework `withSkills`). */
   skills: {
     paths: string[];
@@ -163,6 +169,7 @@ export function defaultConfig(): AgentConfig {
     strategySwitching: false,
     useReasoning: true,
     durableRuns: { enabled: false, approvalTools: [] },
+    outputSchema: "",
     verificationStep: "none",
     runtimeVerification: false,
     auditRationale: false,
