@@ -5,7 +5,13 @@ sidebar:
   order: 1
 ---
 
+import { Aside, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
 Reactive Agents is a TypeScript framework for building autonomous AI agents. It's built on [Effect-TS](https://effect.website) — giving you type-safe, composable, and observable agent systems from day one.
+
+<Aside type="tip" title="The one thing to know">
+Every prompt, tool call, and reasoning step is a **typed event you can subscribe to**. No hidden prompts, no proprietary loop. A self-healing tool layer recovers **86.7% of tool-call errors**, so a local 4B Ollama model runs the *same code* as Claude, GPT, and Gemini.
+</Aside>
 
 ## The Problem
 
@@ -26,6 +32,23 @@ Reactive Agents solves each of these with a layered, composable architecture:
 | Monolithic | Layer system — enable only what you need |
 | Opaque | 12-phase execution engine with lifecycle hooks |
 | Unsafe | Built-in guardrails, verification, and cost controls |
+
+## What makes it different
+
+<CardGrid>
+  <Card title="🔍 Transparent harness" icon="magnifier">
+    Every one of the 12 phases emits typed events with `before` / `after` / `on-error` hooks. System prompts are readable templates, not buried strings. Raw provider clients ship standalone — skip the harness entirely if you want.
+  </Card>
+  <Card title="🩹 Local models that work" icon="setting">
+    A 4-stage healing pipeline recovers malformed tool calls on the fly (**+80pp accuracy**, 10× cheaper than an LLM reprompt). Local Ollama models hit **91–94%** on the same suite where frontier APIs hit 100%.
+  </Card>
+  <Card title="🧱 Typed structured output" icon="seti:typescript">
+    Attach a Zod / Valibot / ArkType / Effect schema and read a fully-typed `result.object` — streaming field-by-field if you want. No prompt engineering, no manual parsing. *(New in v0.12)*
+  </Card>
+  <Card title="💾 Durable by design" icon="random">
+    Opt a run into a durable store and resume it from its last checkpoint after a crash, restart, or pause — across process boundaries. *(New in v0.12)*
+  </Card>
+</CardGrid>
 
 ## Key Features
 
@@ -82,6 +105,9 @@ Mode transitions happen automatically based on confidence thresholds, cost, and 
 
 ## Next Steps
 
-- [Quickstart](../quickstart/) — Build your first agent in 5 minutes
-- [Installation](../installation/) — Set up your project
-- [Architecture](../../concepts/architecture/) — Understand the layer system
+<CardGrid>
+  <LinkCard title="Quickstart" description="Build your first agent in 5 minutes — provider key + 3 lines." href="../quickstart/" />
+  <LinkCard title="Installation" description="Set up your project (Bun or Node.js 22.5+)." href="../installation/" />
+  <LinkCard title="Architecture" description="Understand the composable layer system." href="../../concepts/architecture/" />
+  <LinkCard title="Typed Structured Output" description="Turn any agent into a typed extractor — new in v0.12." href="../structured-output/" />
+</CardGrid>
