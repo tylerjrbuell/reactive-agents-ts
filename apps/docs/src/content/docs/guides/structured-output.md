@@ -7,8 +7,9 @@ sidebar:
 
 Agents produce prose. Sometimes you need a typed object — an invoice, a parsed
 entity, a classification result — not a string. **Typed structured output** gives
-you that: call `.withOutputSchema(schema)` and the agent populates
-`result.object` as your declared type.
+you that: call `.withOutputSchema(schema)` in the builder chain and the agent
+populates `result.object` as your declared type, while `result.output` carries
+the steered JSON answer the agent was guided to emit.
 
 Two engines handle the extraction depending on what your stack supports:
 
@@ -21,7 +22,15 @@ Two engines handle the extraction depending on what your stack supports:
 
 The mode is auto-selected by default and can be overridden.
 
+Works across all supported providers and tiers — Anthropic, OpenAI, Gemini,
+and local Ollama models (qwen, gemma, etc.) — making it a practical option
+even on self-hosted infrastructure.
+
 ## Quick start
+
+`.withOutputSchema()` is a **builder method** — call it in the builder chain
+before `.build()`, then use `agent.run()` or `agent.streamObject()` on the
+built agent.
 
 ### With a Zod schema
 
@@ -88,8 +97,44 @@ if (result.object) {
 ```
 
 `.withOutputSchema()` accepts any [Standard Schema v1](https://standardschema.dev/)
-validator (Zod 3.24+, Valibot, ArkType) **or** an Effect `Schema.Schema<A>`. The
-returned builder is re-typed so `result.object` is `A` at compile time.
+validator (Zod 3.24+, Valibot, ArkType) **or** an Effect `Schema.Schema<A>`
+imported from `"effect"` (not `"@effect/schema"`). The returned builder is
+re-typed so `result.object` is `A` at compile time.
+
+### Top-level arrays
+
+Both Zod and Effect Schema support top-level array schemas directly:
+
+```typescript
+import { z } from "zod";
+
+const LineItemList = z.array(
+  z.object({ description: z.string(), amount: z.number() })
+);
+
+const agent = await ReactiveAgents.create()
+  .withOutputSchema(LineItemList)
+  .build();
+
+const result = await agent.run("List all line items from the invoice");
+// result.object is typed as Array<{ description: string; amount: number }>
+if (result.object) {
+  result.object.forEach((item) => console.log(item.description, item.amount));
+}
+```
+
+## `result.output` in structured mode
+
+When `.withOutputSchema()` is set, the agent is steered to emit JSON matching
+the schema as its final answer. As a result:
+
+- **`result.output` is the raw JSON string** the agent produced (not prose).
+- **`result.object` is the parsed, typed value** derived from that JSON.
+
+If you have existing code that reads `result.output` as prose, be aware it
+will contain JSON when structured output is active. Use `result.object` for
+the typed value and fall back to `result.output` only as a last resort (e.g.,
+when `result.object` is undefined after a parse failure).
 
 ## `result.object` and `result.objectError`
 
@@ -105,7 +150,7 @@ if (result.object) {
   // happy path
 } else if (result.objectError) {
   console.error("Extraction failed:", result.objectError);
-  // fall back to result.output (the raw text answer)
+  // fall back to result.output (the raw JSON / text answer)
 }
 ```
 
@@ -139,7 +184,11 @@ try {
 ## The grounded path — provenance, confidence, and abstention
 
 For extraction tasks where you need to know *why* a value was chosen — or when
-model hallucination is a concern — use `mode: "grounded"`.
+model hallucination is a concern — use `mode: "grounded"`. Grounded mode is
+most useful when tools are registered: the engine grounds each field against
+the actual tool-result evidence corpus the agent accumulated during the run.
+Without tools there is no evidence corpus, so the grounded path falls back to
+a best-effort extraction.
 
 The grounded engine:
 1. Extracts fields from the agent's final answer.
@@ -235,6 +284,41 @@ Note that `runStream()` and `resumeRun()` return the base stream / result and do
 **not** carry the typed `object`; use `run()` or `streamObject()` for typed
 structured output.
 
+## Using with the Compose API
+
+`.withOutputSchema()` composes with the full builder chain, including
+[Compose API](/guides/reasoning) killswitches. The agent loop runs under the
+composed harness; structured extraction fires after the loop completes.
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { budgetLimit } from "@reactive-agents/compose";
+import { z } from "zod";
+
+const ReportSchema = z.object({
+  summary: z.string(),
+  riskLevel: z.enum(["low", "medium", "high"]),
+  findings: z.array(z.string()),
+});
+
+const agent = await ReactiveAgents.create()
+  .withSystemPrompt("You are a risk analysis agent.")
+  .withTools({ builtins: ["web-search", "read-file"] })
+  .compose(budgetLimit({ maxTokens: 50_000 }))
+  .withOutputSchema(ReportSchema)
+  .build();
+
+const result = await agent.run("Analyse the attached contract for risk");
+if (result.object) {
+  console.log(result.object.riskLevel, result.object.findings);
+}
+```
+
+Note: structured output is not itself a composable chokepoint — it runs as a
+post-loop extraction step. The harness governs the reasoning loop; the
+extraction call (when the parse-first path misses) happens outside harness
+governance.
+
 ## Limitations
 
 - **Lenient by default** — `onParseFail: "degrade"` means failures are silent
@@ -243,12 +327,18 @@ structured output.
 - **Grounded field-level features are richest with Effect Schema.** Standard
   Schema inputs (Zod/Valibot/ArkType) get provenance and confidence scoring, but
   requirement-tracking and surgical re-extraction of missing required fields are
-  not yet derived from Standard Schema (follow-up planned).
+  Effect-Schema-only today.
 - **`abstainBelow` and grounded-default routing are opt-in** pending cross-tier
   ablation (project lift rule). Auto-mode selects `grounded` only when the fast
   path is not applicable.
 - **`runStream()` / `resumeRun()` results do not carry `result.object`** — use
   `run()` or `streamObject()` for typed output.
+- **On slow local models**, the extraction adds latency only when the parse-first
+  path misses (the agent is steered to emit JSON, so the common path is a free
+  parse of the model's own output).
+- **`result.output` is JSON, not prose**, when structured output is active. Code
+  relying on `result.output` as a human-readable string should switch to
+  `result.object` for the typed value.
 
 ## See also
 

@@ -3,8 +3,9 @@
  *
  * Demonstrates `.withOutputSchema()` for typed structured output:
  * - Define a schema with Effect Schema.Struct (or any Standard Schema — Zod,
- *   Valibot, etc. also work)
+ *   Valibot, etc. also work; top-level arrays are also supported)
  * - `result.object` is typed to the schema shape — zero casting required
+ * - `result.output` contains the steered JSON string (not prose) in structured mode
  * - `result.objectError` is populated (lenient mode) when parsing fails
  * - `agent.streamObject()` yields typed DeepPartial<T> as tokens arrive
  *
