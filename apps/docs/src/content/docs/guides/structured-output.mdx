@@ -5,6 +5,8 @@ sidebar:
   order: 27
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Agents produce prose. Sometimes you need a typed object — an invoice, a parsed
 entity, a classification result — not a string. **Typed structured output** gives
 you that: call `.withOutputSchema(schema)` in the builder chain and the agent
@@ -32,7 +34,8 @@ even on self-hosted infrastructure.
 before `.build()`, then use `agent.run()` or `agent.streamObject()` on the
 built agent.
 
-### With a Zod schema
+<Tabs syncKey="schema-lib">
+  <TabItem label="Zod">
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -64,7 +67,8 @@ if (result.object) {
 }
 ```
 
-### With an Effect Schema
+  </TabItem>
+  <TabItem label="Effect Schema">
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -92,9 +96,12 @@ const result = await agent.run(
 
 if (result.object) {
   // result.object is typed as Schema.Schema.Type<typeof Invoice>
-  console.log(result.object.vendor);
+  console.log(`${result.object.vendor}: ${result.object.total} ${result.object.currency}`);
 }
 ```
+
+  </TabItem>
+</Tabs>
 
 `.withOutputSchema()` accepts any [Standard Schema v1](https://standardschema.dev/)
 validator (Zod 3.24+, Valibot, ArkType) **or** an Effect `Schema.Schema<A>`
@@ -104,6 +111,9 @@ re-typed so `result.object` is `A` at compile time.
 ### Top-level arrays
 
 Both Zod and Effect Schema support top-level array schemas directly:
+
+<Tabs syncKey="schema-lib">
+  <TabItem label="Zod">
 
 ```typescript
 import { z } from "zod";
@@ -122,6 +132,30 @@ if (result.object) {
   result.object.forEach((item) => console.log(item.description, item.amount));
 }
 ```
+
+  </TabItem>
+  <TabItem label="Effect Schema">
+
+```typescript
+import { Schema } from "effect";
+
+const LineItemList = Schema.Array(
+  Schema.Struct({ description: Schema.String, amount: Schema.Number })
+);
+
+const agent = await ReactiveAgents.create()
+  .withOutputSchema(LineItemList)
+  .build();
+
+const result = await agent.run("List all line items from the invoice");
+// result.object is typed as ReadonlyArray<{ readonly description: string; readonly amount: number }>
+if (result.object) {
+  result.object.forEach((item) => console.log(item.description, item.amount));
+}
+```
+
+  </TabItem>
+</Tabs>
 
 ## `result.output` in structured mode
 
