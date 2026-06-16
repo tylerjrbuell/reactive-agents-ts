@@ -17,21 +17,24 @@ Skeptical-engineer questions answered straight. If you have one that isn't here,
 The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.testFiles} files** on every PR; current main has 0 failures. The frontier benchmark passes at **100% across `claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, and `gemini-2.5-pro`** on the `ra-full` 35-task suite. Local-tier `gemma4:e4b` and `cogito:14b` hit 91-94% on the same suite — tied with `gemini-2.5-flash` and `gpt-4o-mini`.
 
 **Honest caveats:**
-- The framework requires **Bun ≥ 1.0** — we use Bun's native SQLite, subprocess, and HTTP APIs. Node.js support is on the roadmap but not shipped.
-- We're at **v0.10.x** — the API has been stable since 0.9.0 (no breaking changes), but we haven't tagged 1.0 yet.
+- **Bun ≥ 1.0 is recommended** (optimal performance — native SQLite, subprocess, HTTP). **Node.js 22.5+ is also fully supported** via `@reactive-agents/runtime-shim`; Node 20+ runs too, with an in-memory SQLite fallback where `node:sqlite` isn't available.
+- We're at **v0.11.2** (v0.12 in flight) — the API has been stable since 0.9.0 (no breaking changes through 0.11; the v0.12 memory-default change has a one-line migration), but we haven't tagged 1.0 yet.
 - Some advanced features (full multi-session memory transfer) are still being hardened — see "What's not done yet" below.
 
 If you need an HTTP-API-as-a-service or a hosted control plane, we don't ship that. The framework is a TypeScript SDK.
 
-### Why Bun, not Node?
+### Bun or Node.js?
 
-The framework leans hard on Bun-native APIs:
+**Both work.** The framework detects the runtime at load and dispatches to native primitives through `@reactive-agents/runtime-shim` — same API surface on each:
 
-- `bun:sqlite` for the 4-layer memory store, calibration observations, and gateway session history
-- `Bun.spawn` for the sandboxed `code-execute` and CLI tools
-- Bun's HTTP server / fetch / streaming primitives for SSE endpoints
+| Primitive | Bun | Node.js |
+| --- | --- | --- |
+| SQLite (memory, calibration, sessions) | `bun:sqlite` | `node:sqlite` (22.5+) → in-memory stub otherwise |
+| Subprocess (`code-execute`, CLI tools) | `Bun.spawn` | `node:child_process` |
+| HTTP / SSE endpoints | `Bun.serve` | `node:http` + Fetch adapter |
+| Files / glob | `Bun.write` / `Bun.Glob` | `node:fs/promises` |
 
-We could add a Node compatibility layer, but it'd duplicate ~30% of the code. Bun is also genuinely faster for the workloads agents do (concurrent IO, SQLite). [Install Bun](https://bun.sh) is one command.
+**Bun is recommended** — it's genuinely faster for agent workloads (concurrent IO, SQLite) and `bun:sqlite` ships full-text search (FTS5); on Node, FTS5 is optional and memory search falls back to `LIKE`. Install Bun with [one command](https://bun.sh), or `npm install reactive-agents` and run with `node` / `npx tsx` if you prefer the Node ecosystem (unblocks Stackblitz WebContainers, Vercel, Netlify).
 
 ### Why Effect-TS?
 
@@ -83,7 +86,7 @@ You'd reinvent: provider adapters (6 LLM providers), guardrails, verification, s
 
 We try to be honest about gaps. Things on the roadmap that aren't shipped:
 
-- **Node.js support** — Bun-only today.
+- **Durable human-in-the-loop** — crash-resume (`.withDurableRuns()`) ships; approval gates that survive process death (approve/deny from a new process) are still being wired.
 - **Multi-session memory transfer** — episodic recall works within a process. Cross-process / cross-machine transfer is being designed.
 - **Sub-agent delegation effectiveness metrics** — the test harness exists; we haven't measured whether delegation beats inline execution on multi-step tasks.
 - **`v1.0` tag** — API is stable since 0.9; we'll tag 1.0 once the items above ship and the calibration store has 1k+ runs across community models.
