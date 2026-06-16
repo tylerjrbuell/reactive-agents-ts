@@ -1,6 +1,6 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-06-10 (post-v0.11.2, roadmap realignment)
+> **Last updated:** 2026-06-16 (v0.12 mid-flight: durable exec A–D + HITL landed, memory default-OFF + effect-free hooks shipped)
 > **The open-source agent framework built for control, not magic.**
 
 This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` + `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`. When they disagree, the decision doc wins and this doc is out of date — open an issue.
@@ -27,13 +27,13 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 
 | Track | Contents | Status |
 |---|---|---|
-| **Durable execution** | Crash-resume: opt-in `.withDurableRuns()`, SQLite RunStore, checkpoint-every-N, `agent.resume(runId)`. Durable human-in-the-loop: approval requests survive process death (`approve`/`deny` from a new process). Acceptance: SIGKILL mid-run → resume → identical output. | Phase A shipped (kernel checkpoint seam + state codec); Phases B–E in flight |
-| **DX wave** | Effect-free lifecycle hooks (no `Effect.succeed` required), builder consolidation (observability 5 methods → 1; one canonical hook route; documented config precedence), plain-Error mapping at promise boundaries. | Planned |
-| **Memory default OFF** | Breaking-ish: stateless by default, one-line `.withMemory()` opt-in. No more surprise SQLite writes in CI. | Planned |
-| **Cost honesty** | Tier-aware debrief synthesis (skip/template on local — the single largest per-run overhead), meta-tool prompt audit per tier. | Planned |
-| **Strategy honesty** | Adaptive routing defaults to reactive on local tier; heavy strategies documented per the parity data. | Planned |
+| **Durable execution** | Crash-resume: opt-in `.withDurableRuns()`, SQLite RunStore, checkpoint-every-N, `agent.resume(runId)`. Durable human-in-the-loop: approval requests survive process death (`approve`/`deny` from a new process). Acceptance: SIGKILL mid-run → resume → identical output. | **Phases A–D shipped** (checkpoint seam + state codec, SQLite RunStore + `.withDurableRuns()`, `resumeRun()`, durable HITL via `.withApprovalPolicy`/`approveRun`/`denyRun` on both `run()` and `runStream()` paths). Phase E (Cortex UI) remaining. |
+| **DX wave** | Effect-free lifecycle hooks (no `Effect.succeed` required), builder consolidation (observability 5 methods → 1; one canonical hook route; documented config precedence), plain-Error mapping at promise boundaries. | **Effect-free hooks shipped** (`.withHook()` accepts plain sync/async fns). Builder consolidation (observability 5→1) remaining. |
+| **Memory default OFF** | Breaking-ish: stateless by default, one-line `.withMemory()` opt-in. No more surprise SQLite writes in CI. | **Shipped** (memory default-OFF; `balanced()`/`intelligent()` opt in explicitly). |
+| **Cost honesty** | Tier-aware debrief synthesis (skip/template on local — the single largest per-run overhead), meta-tool prompt audit per tier. | **Partial** — debrief forked off the critical path (~46% faster `run()`); tier-aware skip/template fallback in place, full per-tier policy remaining. |
+| **Strategy honesty** | Adaptive routing defaults to reactive on local tier; heavy strategies documented per the parity data. | **Core landed** — Compose hooks/killswitches/calibration now thread through all heavy strategies (#195); remaining: `tool_call` batch-emit sub-gap + adaptive-routing local-tier default. |
 
-Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`.
+Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. Open v0.12 issue: #195 (strategy-honesty sub-gap). Slipped during 2026-06-16 triage: #188/#47/#35 → v0.13, #43 → v0.14.
 
 ---
 

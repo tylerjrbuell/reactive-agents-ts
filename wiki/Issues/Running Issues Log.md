@@ -480,8 +480,8 @@ At that point, we expect to see:
 |----|-------|------|----------|-------------|--------|---------------|
 | HS-32 | C | `packages/reasoning/src/kernel/capabilities/verify/quality-utils.ts:1` | P2 | Stale file path banner: `// File: src/strategies/kernel/quality-utils.ts` — file moved to `src/kernel/capabilities/verify/` in Stage-5 kernel reorganisation | ✅ **FIXED** | 1-line comment corrected |
 | HS-33 | C | `packages/reasoning/src/types/config.ts:32` | P2 | `patchStrategy` field in `PlanExecuteConfigSchema` declared + exported but never consumed in any source file (YAGNI). Zero reads confirmed: `grep -rn patchStrategy packages/reasoning/src` → only declaration. Already listed in AGENTS.md debt table as Open. | FILE | Plan removal in a minor version bump (exported type — breaking for TS consumers who annotate with `PlanExecuteConfig`) |
-| HS-34 | A | `packages/reactive-intelligence/src/runtime.ts:49,50,56,65` | P1 | 4 `Layer.merge(...) as any` sites — same root cause as HS-03 but in reactive-intelligence package, not previously counted in HS-03 scope. `verified-by: grep -n "as any" packages/reactive-intelligence/src/runtime.ts` → 4 matches. | FILE | Extend HS-03 fix scope to include this file |
-| HS-35 | A | `packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:95,154` | P2 | 2 remaining `as any` casts in reasoning src: line 95 `kernelState: s as any` (cross-package KernelStateLike boundary); line 154 `entropyHistory[last] as any` (entropy history element). `verified-by: grep -n "as any" packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts` → 2 matches. Already in AGENTS.md debt table as Open. | FILE | kernel-warden: extend KernelStateLike meta field; add `EntropyScoreLike` to entropy history type |
+| HS-34 | A | `packages/reactive-intelligence/src/runtime.ts:49,50,56,65` | P1 | 4 `Layer.merge(...) as any` sites — same root cause as HS-03 but in reactive-intelligence package, not previously counted in HS-03 scope. `verified-by: grep -n "as any" packages/reactive-intelligence/src/runtime.ts` → 4 matches. | ✅ **FIXED** (2026-06-16) | 4 `Layer.merge(...) as any` replaced by typed `widen` helper in `runtime.ts` |
+| HS-35 | A | `packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:95,154` | P2 | 2 remaining `as any` casts in reasoning src: line 95 `kernelState: s as any` (cross-package KernelStateLike boundary); line 154 `entropyHistory[last] as any` (entropy history element). `verified-by: grep -n "as any" packages/reasoning/src/kernel/capabilities/reflect/reactive-observer.ts` → 2 matches. Already in AGENTS.md debt table as Open. | ✅ **FIXED** (2026-06-16) | 2 stale `as any` removed from `reactive-observer.ts` |
 
 ### Verified non-issues (not re-filed)
 
@@ -504,6 +504,8 @@ At that point, we expect to see:
 - **Fixes applied (1 commit):** ✅ HS-32 — stale path banner corrected in quality-utils.ts
 - **Filed for planning (4 new items):** HS-33 / HS-34 / HS-35 (new), HS-03 scope update (HS-34)
 - **Status updates:** HS-24 → ✅ FIXED
+
+**Update 2026-06-16:** HS-34 + HS-35 both ✅ FIXED (C-track clean-types sweep). HS-34: 4 `Layer.merge(...) as any` → typed `widen` helper in `reactive-intelligence/src/runtime.ts`. HS-35: 2 stale `as any` removed from `reactive-observer.ts`. Both governance ceilings green; full suite 6463 pass / 0 fail. HS-33 (`patchStrategy` YAGNI removal) still open — staged for the v0.12.0 minor bump.
 
 ---
 
