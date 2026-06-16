@@ -344,9 +344,10 @@ export const buildBaseRuntimeAndEngine = (
       contextProfile: state._contextProfile,
       resultCompression: state._resultCompression,
       telemetryConfig: state._telemetryConfig,
-      // GH #122 — when memory is default-on (i.e. user did not call
-      // `.withMemory({ dbPath })` explicitly and did not opt out via
-      // `.withoutMemory()` / `.withLeanHarness()`) resolve a stable
+      // When memory is enabled without an explicit dbPath (v0.12: memory is
+      // off in a bare builder, so this means the user opted in via
+      // `.withMemory()` / `.withLearning()` / a HarnessProfile without
+      // passing `{ dbPath }`) resolve a stable
       // user-scope db path (`~/.reactive-agents/<agentId>/memory.db`).
       // Explicit `.withMemory({ dbPath: ... })` consumers keep their
       // configured path; explicit-disable paths bypass this entirely.

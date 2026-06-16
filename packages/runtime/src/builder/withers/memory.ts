@@ -17,8 +17,10 @@ import type { ReactiveAgentBuilder } from "../../builder.js";
 import { asBuilderState } from "./_state.js";
 
 /**
- * Apply `.withoutMemory()` — explicit opt-out from default-on memory + skill
- * persistence (GH #122 control surface). Disables the full memory stack
+ * Apply `.withoutMemory()` — force memory + skill persistence off. Memory is
+ * already off in a bare builder (v0.12); this also clears it after a profile
+ * or `.withMemory()` opt-in, and sets `_memoryExplicitlyDisabled` so
+ * auto-enable rules don't silently turn it back on. Disables the full stack
  * (memory layer, skill persistence, session store, experience learning,
  * memory consolidation) and sets the `_memoryExplicitlyDisabled` flag so
  * downstream auto-enable rules respect the opt-out.

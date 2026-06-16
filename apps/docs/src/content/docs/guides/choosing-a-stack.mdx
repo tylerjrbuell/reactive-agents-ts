@@ -26,7 +26,7 @@ const agent = await ReactiveAgents.create()
 | Preset | Use when |
 |---|---|
 | `HarnessProfile.lean()` | Latency/cost-sensitive paths or ablations — model only, all default capabilities off. |
-| `HarnessProfile.balanced()` | Most production apps — today's defaults (memory + reactive intelligence + verifier + strategy switching). |
+| `HarnessProfile.balanced()` | Most production apps — the full stack (memory + reactive intelligence + verifier + strategy switching). Memory is off in a bare builder as of v0.12; `balanced()` enables it explicitly. |
 | `HarnessProfile.intelligent()` | You want cross-session compounding learning — balanced + skill persistence. |
 
 Override after the preset: `.withProfile(HarnessProfile.lean()).withMemory()` re-enables just memory.

@@ -90,11 +90,11 @@ const agent = await ReactiveAgents.create()
 
 | Preset | Composes |
 |--------|----------|
-| `HarnessProfile.lean()` | **Disables all four** default-on capabilities (memory, reactive intelligence, verifier, strategy switching) + skill persistence. The model is the entire harness — for latency/cost-sensitive paths and benchmark ablations. Fixes the historical `.withLeanHarness()` leak that left reactive intelligence on. |
-| `HarnessProfile.balanced()` | Today's production defaults: memory + reactive intelligence + verifier + strategy switching. No-op patch — registered defaults stay on. |
+| `HarnessProfile.lean()` | **Disables everything**: memory plus the three registry-default capabilities (reactive intelligence, verifier, strategy switching) + skill persistence. The model is the entire harness — for latency/cost-sensitive paths and benchmark ablations. Fixes the historical `.withLeanHarness()` leak that left reactive intelligence on. |
+| `HarnessProfile.balanced()` | The full production stack: reactive intelligence + verifier + strategy switching (registry defaults) **plus memory, enabled explicitly** (memory is off in a bare builder as of v0.12). |
 | `HarnessProfile.intelligent()` | Balanced **+ skill persistence** for cross-session compounding learning. |
 
-Presets compose with individual builder methods — later calls win, so `.withProfile(HarnessProfile.lean()).withMemory()` re-enables memory. See [Choosing a Stack](/guides/choosing-a-stack/) and [Builder API](/reference/builder-api/).
+Presets compose with individual builder methods — later calls win, so `.withProfile(HarnessProfile.balanced()).withoutMemory()` drops memory back off. See [Choosing a Stack](/guides/choosing-a-stack/) and [Builder API](/reference/builder-api/).
 
 ### New builder methods
 
@@ -109,10 +109,10 @@ When an agent builds for a `(provider, model)` whose capability profile resolves
 
 ### Behavior changes
 
-- **Cross-session memory is now default-on** (with a clear opt-out). When `.withMemory()` is active, the SQLite skill store wires by default and prior-session context is available on cold start. Opt out with `HarnessProfile.lean()` or by disabling memory explicitly.
+- **Memory is now OFF by default** (reversing the v0.11 GH #122 default-on). A bare `.create()….build()` is **stateless** — no surprise `~/.reactive-agents/<agentId>/` SQLite writes, predictable in CI. Opt in with one line: `.withMemory()`, `.withLearning()`, or `HarnessProfile.balanced()` / `.intelligent()` (all enable it explicitly). **Migration:** add `.withMemory()` to any v0.11 agent that relied on implicit cross-session memory.
 - **`.withLeanHarness()` is superseded** by `HarnessProfile.lean()`, which additionally disables reactive intelligence (the old method did not). Existing chains keep working.
 
-No breaking API removals — existing `ReactiveAgents.create().with*()` chains continue to compile and run.
+No breaking API removals — existing `ReactiveAgents.create().with*()` chains continue to compile and run; only the memory default changed (see migration note above).
 
 ---
 

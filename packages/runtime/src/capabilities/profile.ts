@@ -70,19 +70,21 @@ export const HarnessProfile = {
   },
 
   /**
-   * Today's production defaults — the 4 bootstrap-default-on registry
-   * entries (memory + reactive-intelligence + verifier +
-   * strategy-switching). Skill persistence stays opt-in.
+   * The full production stack — reactive-intelligence + verifier +
+   * strategy-switching (bootstrap-default-on registry entries) plus memory,
+   * which is explicitly enabled here. Skill persistence stays opt-in
+   * (use `.intelligent()`).
    *
-   * No-op patch — registered entries already start enabled. Provided as
-   * the named third member of the {lean, balanced, intelligent} contract
-   * so users can be explicit about choosing default behavior.
+   * As of v0.12 memory is OFF in a bare builder, so `balanced()` opts it
+   * back in explicitly to preserve the "production defaults" contract —
+   * choosing `balanced()` is itself the consent for cross-session writes.
    *
-   * @returns empty patch (no field overrides)
+   * @returns patch enabling memory on top of the registered defaults
    */
   balanced(): HarnessProfilePatch {
     return {
       name: "balanced",
+      enableMemory: true,
     };
   },
 
@@ -97,6 +99,7 @@ export const HarnessProfile = {
   intelligent(): HarnessProfilePatch {
     return {
       name: "intelligent",
+      enableMemory: true,
       enableSkillPersistence: true,
     };
   },

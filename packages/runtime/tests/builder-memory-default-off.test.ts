@@ -1,30 +1,32 @@
-// Run: bun test packages/runtime/tests/builder-memory-default-on.test.ts --timeout 15000
+// Run: bun test packages/runtime/tests/builder-memory-default-off.test.ts --timeout 15000
 //
-// GH #122 — cross-session memory default-on + clear opt-out control.
+// v0.12 "Durable & Honest" — cross-session memory is OFF by default.
 //
-// Before v0.12 / GH #122: memory was opt-in via `.withMemory()`. The
-// compounding-intelligence promise (skill persistence across sessions,
-// episodic recall) shipped but didn't activate by default — anti-mission #6
-// "no advertised-surface-without-callers" violation surfaced by the
-// 2026-05-23 harness convergence sweep.
+// History:
+//   - Pre-GH #122: memory opt-in via `.withMemory()`.
+//   - GH #122 (v0.11): memory + skill persistence flipped DEFAULT-ON so the
+//     compounding-intelligence promise activated without opt-in.
+//   - v0.12: flipped back to DEFAULT-OFF. A bare build is stateless — no
+//     surprise `~/.reactive-agents/<agentId>/` SQLite writes, predictable in
+//     CI. Memory is one explicit line away.
 //
-// After GH #122: memory + skill persistence default-on. Clear controls:
-//   - `.withoutMemory()` — explicit opt-out (sets _memoryExplicitlyDisabled)
-//   - `.withLeanHarness()` — force-disables memory as part of the lean
-//     latency/cost bundle (Memory v2 spec §lean-mode-interaction)
-//   - `.withLearning()` — explicit opt-in bundle (memory + skill store)
-//     useful when the user wants to be explicit despite the default
+// Opt-in surfaces (all enable memory):
+//   - `.withMemory()` — tier-1 working memory + SQLite cross-session store
+//   - `.withLearning()` — memory + skill store bundle
+//   - `HarnessProfile.balanced()` / `.intelligent()` — enable it explicitly
+// Opt-out surfaces (memory stays off, also for the bare default):
+//   - `.withoutMemory()` / `.withLeanHarness()`
 //
-// This file pins the contract so a future commit flipping the default
-// back to false fails this test, and so the opt-out semantics stay clear.
+// This file pins the default-OFF contract so a future commit flipping the
+// default back to true fails here, and so the opt-in semantics stay clear.
 
 import { describe, it, expect } from "bun:test";
-import { ReactiveAgents } from "../src/index.js";
+import { ReactiveAgents, HarnessProfile } from "../src/index.js";
 
-describe("GH #122 — memory default-on + clear opt-out", () => {
-  it("default build enables memory (no explicit withMemory call needed)", async () => {
+describe("v0.12 — memory default-off + clear opt-in", () => {
+  it("bare build is stateless (memory OFF, no explicit call)", async () => {
     const agent = await ReactiveAgents.create()
-      .withName("default-on-agent")
+      .withName("default-off-agent")
       .withProvider("test")
       .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withReasoning({ defaultStrategy: "reactive" })
@@ -32,20 +34,41 @@ describe("GH #122 — memory default-on + clear opt-out", () => {
 
     const result = await agent.run("simple task");
     expect(result.success).toBe(true);
-    // MOVE-3 Phase 1 (GH #143) — trivial-task gate at
-    // `engine/finalize/debrief-synthesis.ts` now short-circuits debrief
-    // when `ctx.metadata.taskComplexity === "trivial"` (iter≤1 + 0 tools +
-    // !max_iter). This test runs a single `FINAL ANSWER: done` stub →
-    // trivial classification → no debrief synthesized → key omitted.
-    // The "memory was reachable" signal is now asserted via
-    // `result.metadata.complexity` (populated by memory-flush dispatch),
-    // not the legacy debrief-key-presence proxy.
+    // Memory OFF → config.enableMemory false → debrief gate short-circuits to
+    // undefined (no fallback, no LLM call), same as the explicit-opt-out path.
+    expect(result.debrief).toBeUndefined();
+    await agent.dispose();
+  });
+
+  it(".withMemory() opt-in enables memory (debrief reachable)", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("opt-in-agent")
+      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withMemory()
+      .build();
+
+    const result = await agent.run("simple task");
+    expect(result.success).toBe(true);
+    // Memory ON + trivial task → fallback debrief synthesized (zero token cost).
     const metaComplexity = (result.metadata as { complexity?: string }).complexity;
     expect(metaComplexity).toBeDefined();
-    // #144 (debrief honesty): trivial gate now returns a FALLBACK debrief
-    // (no LLM call) instead of undefined. The fallback synthesizer
-    // reconstructs an equivalent record from captured signals at zero
-    // token cost. Memory reachability is asserted via complexity field.
+    expect(result.debrief).toBeDefined();
+    await agent.dispose();
+  });
+
+  it("HarnessProfile.balanced() enables memory explicitly", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("balanced-agent")
+      .withProvider("test")
+      .withTestScenario([{ text: "FINAL ANSWER: done" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withProfile(HarnessProfile.balanced())
+      .build();
+
+    const result = await agent.run("simple task");
+    expect(result.success).toBe(true);
     expect(result.debrief).toBeDefined();
     await agent.dispose();
   });

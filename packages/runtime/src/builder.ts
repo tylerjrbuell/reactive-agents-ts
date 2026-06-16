@@ -209,16 +209,20 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _maxTokens?: number
     private _memoryTier: '1' | '2' = '1'
     /**
-     * Memory + skill persistence default-on (GH #122). Lightweight tier-1
-     * working memory + SQLite cross-session store ship by default so the
-     * compounding-intelligence promise activates without explicit opt-in.
-     * Clear control via `.withoutMemory()` (explicit disable) or
-     * `.withLeanHarness()` (force-disables memory as part of the
-     * latency/cost-sensitive bundle). When the user calls `.withMemory()`
-     * explicitly, the option preserves the project-local cwd dbPath; only
-     * default-on builds resolve to `~/.reactive-agents/<agentId>/memory.db`.
+     * Memory is OFF by default (v0.12 — "Durable & Honest"). A bare
+     * `.create()....build()` is stateless: no `~/.reactive-agents/<agentId>/`
+     * SQLite writes, predictable in CI, no surprise cross-session state.
+     * Opt in with one line — `.withMemory()` (tier-1 working memory + SQLite
+     * cross-session store) — or via `HarnessProfile.balanced()` /
+     * `.intelligent()`, both of which enable it explicitly. When the user
+     * calls `.withMemory()` the option preserves the project-local dbPath;
+     * profile/opt-in builds without an explicit path resolve to
+     * `~/.reactive-agents/<agentId>/memory.db`.
+     *
+     * Migration from v0.11 (memory was default-on, GH #122): add `.withMemory()`
+     * to any agent that relied on implicit cross-session memory.
      */
-    private _enableMemory: boolean = true
+    private _enableMemory: boolean = false
     /**
      * Explicit-disable flag set by `.withoutMemory()` / `.withLeanHarness()`.
      * Distinguishes "user opted out" from "user did not specify". Wardens

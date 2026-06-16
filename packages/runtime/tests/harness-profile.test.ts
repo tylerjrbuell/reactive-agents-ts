@@ -30,22 +30,25 @@ describe("HarnessProfile factory contracts (MOVE-6)", () => {
     expect(patch.enableSkillPersistence).toBe(false);
   });
 
-  it("balanced() returns no-op patch (today's defaults stand)", () => {
+  it("balanced() enables memory explicitly (v0.12 — memory default-off)", () => {
     const patch = HarnessProfile.balanced();
     expect(patch.name).toBe("balanced");
-    expect(patch.enableMemory).toBeUndefined();
+    // v0.12: memory is OFF in a bare builder, so balanced() opts it back in
+    // to preserve the "production defaults" contract. RI / verifier /
+    // strategy-switching remain registry bootstrap-defaults (no field here).
+    expect(patch.enableMemory).toBe(true);
     expect(patch.enableReactiveIntelligence).toBeUndefined();
     expect(patch.enableVerifier).toBeUndefined();
     expect(patch.enableStrategySwitching).toBeUndefined();
     expect(patch.enableSkillPersistence).toBeUndefined();
   });
 
-  it("intelligent() returns patch enabling skill persistence", () => {
+  it("intelligent() enables memory + skill persistence", () => {
     const patch = HarnessProfile.intelligent();
     expect(patch.name).toBe("intelligent");
     expect(patch.enableSkillPersistence).toBe(true);
-    // Other fields stay undefined — balanced base + skill-persistence delta.
-    expect(patch.enableMemory).toBeUndefined();
+    // v0.12: skill persistence needs memory, so intelligent() enables it too.
+    expect(patch.enableMemory).toBe(true);
     expect(patch.enableReactiveIntelligence).toBeUndefined();
   });
 });

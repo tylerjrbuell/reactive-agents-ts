@@ -130,7 +130,7 @@ round-trips through `toConfig()` / `fromJSON()` and the config-driven path.
 
 | Method       | Signature                                         | Description                                                                                                                                                                         |
 | ------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `withMemory` | `(options?: MemoryOptions \| "1" \| "2") => this` | Enable memory. Prefer `.withMemory()` or `.withMemory({ tier: "enhanced", ... })`. Strings `"1"` / `"2"` still work with a deprecation warning (`"1"` → standard, `"2"` → enhanced) |
+| `withMemory` | `(options?: MemoryOptions \| "1" \| "2") => this` | Enable memory — **OFF by default as of v0.12** (a bare build is stateless). Prefer `.withMemory()` or `.withMemory({ tier: "enhanced", ... })`. Strings `"1"` / `"2"` still work with a deprecation warning (`"1"` → standard, `"2"` → enhanced). Also enabled by `HarnessProfile.balanced()` / `.intelligent()`. |
 
 #### MemoryOptions
 
