@@ -66,6 +66,7 @@ That's it. Provider key from `.env`, model auto-picked, direct LLM loop.
 | `.withIdentity()` | <Badge text="advanced" variant="caution" size="small" /> | Ed25519 certificates + RBAC + delegation |
 | `.withKillSwitch()` | <Badge text="recommended" variant="note" size="small" /> | Per-agent + global emergency halt |
 | `.withRequiredTools({ tools: ["web-search"] })` | <Badge text="opt-in" variant="tip" size="small" /> | Force critical tool calls before answering |
+| `.withApprovalPolicy({ tools, mode: "detach" })` | <Badge text="opt-in" variant="tip" size="small" /> | Gate tool calls behind durable human approval ([HITL](/guides/durable-hitl/)) |
 
 ### Observability
 
@@ -88,6 +89,7 @@ That's it. Provider key from `.env`, model auto-picked, direct LLM loop.
 | `.withVerificationStep({ mode: "reflect" })` | LLM self-review before answering |
 | `.withOutputValidator(fn)` | Retry until output passes a predicate |
 | `.withCustomTermination(fn)` | User-defined "done" check |
+| `.withDurableRuns({ dir, checkpointEvery })` | Checkpoint every iteration to SQLite; crash-resume via `resumeRun` ([Durable Execution](/guides/durable-execution/)) |
 
 ### Multi-agent & gateway
 
@@ -121,13 +123,18 @@ Phases: `bootstrap` · `guardrail` · `cost-route` · `strategy-select` · `thin
 
 | Method | Returns |
 |--------|---------|
-| `agent.run(task)` | `Promise<AgentResult>` — full execution |
+| `agent.run(task)` | `Promise<AgentResult>` — full execution (`status: "awaiting-approval"` if gated) |
+| `agent.run(task, { onApproval })` | Same-process HITL — callback drives pause → decide → resume |
 | `agent.runStream(task, { signal })` | `AsyncGenerator<AgentEvent>` — token streaming |
 | `agent.chat(question)` | `Promise<string>` — single-turn Q&A with adaptive routing |
 | `agent.session()` | Multi-turn session with memory |
 | `agent.subscribe(tag, fn)` | Listen to EventBus events |
 | `agent.registerTool(def, handler)` | Add a tool at runtime |
 | `agent.unregisterTool(name)` | Remove a tool at runtime |
+| `agent.listRuns({ status? })` | Persisted durable runs, newest first (needs `.withDurableRuns()`) |
+| `agent.resumeRun(runId)` | Reconstruct + finish a crashed run from its last checkpoint |
+| `agent.listPendingApprovals()` | Runs paused at an approval gate, awaiting a decision |
+| `agent.approveRun(runId)` / `agent.denyRun(runId, reason)` | Resume a paused run — execute or skip the gated call |
 | `agent.health()` | `{ status, checks[] }` — readiness probe |
 | `agent.dispose()` | Cleanup MCP + open resources |
 

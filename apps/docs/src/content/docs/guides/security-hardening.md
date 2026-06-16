@@ -46,7 +46,7 @@ const agent = await ReactiveAgents.create()
 
 - Disable `code-execute` unless strictly required.
 - **`shell-execute` (host terminal)** — runs allowlisted CLI commands on the machine hosting the agent. Treat it as high privilege: only enable when you understand the default allowlist/blocklist, and prefer Docker-isolated or custom-hardened registration for anything user-facing. In **Cortex**, host shell is off by default and must be explicitly enabled in the Lab builder; the UI surfaces this as an at-your-own-risk choice.
-- Require approval for state-changing tools where possible.
+- Require approval for state-changing tools where possible — gate them with `.withApprovalPolicy({ tools: [...], mode: "detach" })` (with `.withDurableRuns()`) so the run pauses for a human and survives process death. See [Durable Human-in-the-Loop](/guides/durable-hitl/).
 - Isolate file-write scope to approved directories.
 
 ## Identity and Audit

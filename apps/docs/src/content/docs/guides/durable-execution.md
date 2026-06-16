@@ -123,7 +123,15 @@ const result = await b.resumeRun(runId);   // reconstructs + completes
 session resumption surfaces the incomplete plan as prior context. It does **not**
 reconstruct full kernel state. For true crash-resume, use `.withDurableRuns()`.
 
+## Human-in-the-loop builds on this
+
+The same checkpoint + resume machinery powers durable **approval gates**: a gated
+tool call pauses the run (`status: "awaiting-approval"`), persists it, and a human
+approves or denies — from any process — to resume from the exact checkpoint. See
+[Durable Human-in-the-Loop](/guides/durable-hitl/).
+
 ## See also
 
+- [Durable Human-in-the-Loop](/guides/durable-hitl/) — approval gates that survive process death.
 - [Reasoning](/guides/reasoning) — the kernel loop that produces the state being checkpointed.
 - [Snapshot & Replay](/features/snapshot-replay) — `@reactive-agents/replay` for deterministic run capture and inspection.

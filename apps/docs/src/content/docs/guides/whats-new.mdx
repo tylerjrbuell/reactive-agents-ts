@@ -68,7 +68,10 @@ Run state is persisted on a content-addressed config hash (system prompt + provi
 
 ### Durable human-in-the-loop — approval gates that survive process death
 
-Name the tool calls that require sign-off. A gated call **pauses** the run on the `runStream()` path, persists `awaiting-approval` plus the pending action, and completes the stream with `pendingApproval` — so the process can exit. A human approves or denies from **any** process; the run resumes from its checkpoint to completion.
+Name the tool calls that require sign-off. A gated call **pauses** the run — on
+**both** `run()` and `runStream()` — persists `awaiting-approval` plus the pending
+action, and returns `pendingApproval` so the process can exit. A human approves or
+denies from **any** process; the run resumes from its checkpoint to completion.
 
 ```ts
 const agent = await ReactiveAgents.create()
@@ -77,11 +80,10 @@ const agent = await ReactiveAgents.create()
   .withApprovalPolicy({ tools: ["shell-execution", "file-write"], mode: "detach" })
   .build();
 
-// 1. Run on the stream path; a gated call pauses with a pendingApproval.
-for await (const event of agent.runStream("clean up the temp files")) {
-  if (event._tag === "StreamCompleted" && event.pendingApproval) {
-    console.log("awaiting approval:", event.pendingApproval.toolName);
-  }
+// 1. A gated call pauses and returns status: "awaiting-approval".
+const result = await agent.run("clean up the temp files");
+if (result.status === "awaiting-approval") {
+  console.log("awaiting approval:", result.pendingApproval.toolName);
 }
 
 // 2. Later, from ANY process — decide on whatever is waiting:
@@ -91,7 +93,18 @@ for (const p of await agent.listPendingApprovals()) {
 }
 ```
 
-Built on the same durable RunStore as crash-resume — the decision and the paused checkpoint live in SQLite, so approve/deny works across process and machine boundaries.
+Need same-process convenience? Pass `onApproval` and one `run()` call drives the
+whole pause → decide → resume loop:
+
+```ts
+const result = await agent.run("clean up the temp files", {
+  onApproval: ({ toolName, args }) => toolName !== "shell-execution",
+});
+```
+
+Built on the same durable RunStore as crash-resume — the decision and the paused
+checkpoint live in SQLite, so approve/deny works across process and machine
+boundaries. See [Durable Human-in-the-Loop](/guides/durable-hitl/).
 
 ### Developer experience — Effect-free where it counts
 

@@ -166,6 +166,7 @@ export default defineConfig({
             { label: "Interaction Modes", link: "guides/interaction-modes/" },
             { label: "Context Engineering", link: "guides/context-engineering/" },
             { label: "Durable Execution", link: "guides/durable-execution/" },
+            { label: "Durable Human-in-the-Loop", link: "guides/durable-hitl/" },
             { label: "Sub-Agents", link: "guides/sub-agents/" },
             { label: "Agent Skills", link: "guides/agent-skills/" },
             { label: "Local Models", link: "guides/local-models/" },

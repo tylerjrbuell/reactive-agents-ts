@@ -588,9 +588,16 @@ try {
 | `runOnce()`   | Single-shot scripts and one-liners                          |
 | `dispose()`   | Multiple sequential runs before teardown                    |
 
-### `run(input: string): Promise<AgentResult>`
+### `run(input, options?): Promise<AgentResult>`
 
 Run a task with the given input. Returns the result with output and metadata.
+
+Options: `{ taskId?, history?, onApproval? }`. On a durable agent with
+`.withApprovalPolicy({ mode: "detach" })`, a gated tool call **pauses**: the
+result carries `status: "awaiting-approval"` + `pendingApproval` (resume with
+`approveRun`/`denyRun`). Pass `onApproval` to handle the pause→decide→resume loop
+in this one call — `(pending) => boolean | { approve, reason }` (sync or async);
+returns the final result. See [Durable HITL](/guides/durable-hitl/).
 
 ### `runStream(input, options?): AsyncGenerator<AgentStreamEvent>`
 
@@ -877,6 +884,15 @@ interface AgentResult {
         | 'end_turn'          // LLM stopped generating (no tool call, no final answer)
         | 'llm_error'         // LLM request or stream failed (provider error, network, etc.)
     llmCalls?: number // Number of LLM calls made during the kernel loop (available when reasoning is enabled)
+
+    // Durable HITL (present when a run paused for human approval — see Durable HITL guide)
+    status?: 'completed' | 'awaiting-approval' | 'failed' // defaults to 'completed' when absent
+    pendingApproval?: {
+        runId: string    // pass to approveRun(runId) / denyRun(runId, reason)
+        gateId: string
+        toolName: string // the gated tool call awaiting a decision
+        args: unknown
+    }
 
     // Debrief (present when .withMemory() + .withReasoning() are enabled)
     debrief?: AgentDebrief

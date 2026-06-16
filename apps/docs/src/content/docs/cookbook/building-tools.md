@@ -66,7 +66,9 @@ const deleteFileTool = new ToolBuilder("delete-file")
   .build();
 ```
 
-`requiresApproval()` stores a boolean flag on the `ToolDefinition`. The framework does **not** automatically pause agent execution — the flag is metadata that your application code can read to implement its own approval gate.
+`requiresApproval()` stores a boolean flag on the `ToolDefinition`. The flag is metadata — it does **not** by itself pause agent execution.
+
+To have the **framework** pause a run on a gated call and resume it on approval, use [Durable Human-in-the-Loop](/guides/durable-hitl/): name the tool in `.withApprovalPolicy({ tools: ["delete-file"], mode: "detach" })` (with `.withDurableRuns()`). The run returns `status: "awaiting-approval"` and you call `agent.approveRun(runId)` / `denyRun(runId, reason)` — from any process. The manual pattern below is for when you want to gate execution in your own pipeline without durable runs.
 
 The flag is visible in `listTools()` output and on the definition returned by `build()`, so you can check it in a custom execution pipeline:
 

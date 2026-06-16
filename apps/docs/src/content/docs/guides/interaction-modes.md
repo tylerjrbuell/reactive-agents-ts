@@ -63,6 +63,13 @@ After sufficient confidence (>= 0.7) and occurrences (>= 3), certain actions can
 
 Approval gates let a human pause agent execution at critical decision points and decide whether to continue.
 
+> **In-process vs durable.** The `InteractionManager.approvalGate()` below is an
+> **in-process** gate — it blocks a live fiber until a human responds in the same
+> process. For approvals that **survive process death** (pause, exit, approve from
+> another process), use [Durable Human-in-the-Loop](/guides/durable-hitl/):
+> `.withApprovalPolicy({ tools: [...], mode: "detach" })` returns
+> `status: "awaiting-approval"` from `run()` and resumes via `approveRun`/`denyRun`.
+
 ### `InteractionManager.approvalGate()`
 
 Calling `approvalGate()` suspends the currently running agent and waits for a human response:

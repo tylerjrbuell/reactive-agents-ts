@@ -60,19 +60,33 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-### Tool Approval Gates
+### Tool Approval Gates (human-in-the-loop)
 
-Mark high-risk tools as requiring human approval before execution. The agent will pause and emit an `ApprovalRequired` event; execution resumes once the gate is cleared.
+Gate high-risk tool calls behind human approval. Name the tools in
+`.withApprovalPolicy()` (with `.withDurableRuns()`): a gated call **pauses** the
+run, persists `awaiting-approval`, and `run()` returns `status:
+"awaiting-approval"` + `pendingApproval`. A human approves or denies — from this
+process or any other — and the run resumes from its checkpoint.
 
 ```typescript
-const dangerousTool = {
-  name: "database-write",
-  description: "Write records to the production database",
-  requiresApproval: true,
-  parameters: { /* ... */ },
-  execute: async (params) => { /* ... */ },
-};
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ tools: [databaseWriteTool] })
+  .withDurableRuns()
+  .withApprovalPolicy({ tools: ["database-write"], mode: "detach" })
+  .build();
+
+const result = await agent.run("purge stale records");
+if (result.status === "awaiting-approval") {
+  await agent.approveRun(result.pendingApproval.runId); // or denyRun(runId, reason)
+}
+// Or, in one call: agent.run(task, { onApproval: ({ toolName }) => confirm(toolName) })
 ```
+
+See [Durable Human-in-the-Loop](/guides/durable-hitl/) for the full flow.
+
+> The per-tool `requiresApproval: true` flag is metadata only — it does not by
+> itself pause a run. Use `.withApprovalPolicy({ tools: [...] })` to gate.
 
 ### Tool Allowlist
 
