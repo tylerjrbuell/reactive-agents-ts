@@ -123,6 +123,22 @@ export interface BuildCortexAgentParams {
   readonly testScenario?: readonly TestTurn[];
   /** When true, enables streaming mode for TextDelta event emission. */
   readonly streaming?: boolean;
+  /**
+   * Durable execution (v0.12) — opt-in crash-resume via SQLite RunStore.
+   * When `enabled`, wires `.withDurableRuns(...)` so the run checkpoints and can
+   * be resumed by id (`agent.resumeRun`) after a process death. `approvalPolicy`
+   * additionally wires durable HITL (`.withApprovalPolicy`) — pauses on the
+   * listed tools and survives restart until `approveRun`/`denyRun`.
+   */
+  readonly durableRuns?: {
+    readonly enabled?: boolean;
+    readonly checkpointEvery?: number;
+    readonly dir?: string;
+    readonly approvalPolicy?: {
+      readonly tools?: string[];
+      readonly mode?: "detach" | "block";
+    };
+  };
 }
 
 /**
@@ -292,6 +308,23 @@ export async function buildCortexAgent(
 
   if (params.streaming === true) {
     b = b.withStreaming();
+  }
+
+  // Durable execution (v0.12) — opt-in crash-resume + durable HITL. Must be
+  // wired before `.withApprovalPolicy({ mode: "detach" })`, which build-guards
+  // on a durable store being present.
+  if (params.durableRuns?.enabled) {
+    const opts: { dir?: string; checkpointEvery?: number } = {};
+    if (params.durableRuns.dir) opts.dir = params.durableRuns.dir;
+    if (params.durableRuns.checkpointEvery !== undefined) {
+      opts.checkpointEvery = params.durableRuns.checkpointEvery;
+    }
+    b = b.withDurableRuns(opts);
+
+    const ap = params.durableRuns.approvalPolicy;
+    if (ap && ap.tools && ap.tools.length > 0) {
+      b = b.withApprovalPolicy({ tools: ap.tools, mode: ap.mode ?? "detach" });
+    }
   }
 
   // Desk / runner pause, resume, and stop call ReactiveAgent.pause|resume|stop (KillSwitchService).

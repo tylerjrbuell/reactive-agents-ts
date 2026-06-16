@@ -79,6 +79,18 @@ export interface LaunchParams {
   readonly guardrails?: { enabled?: boolean; injectionThreshold?: number; piiThreshold?: number; toxicityThreshold?: number };
   /** Persona config; wires `.withPersona()` when enabled. */
   readonly persona?: { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string };
+  /**
+   * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
+   * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
+   * wires `.withApprovalPolicy(...)` so the run pauses (`awaiting-approval`) on
+   * those tools and can be approved/denied from the desk.
+   */
+  readonly durableRuns?: {
+    readonly enabled?: boolean;
+    readonly checkpointEvery?: number;
+    readonly dir?: string;
+    readonly approvalPolicy?: { tools?: string[]; mode?: "detach" | "block" };
+  };
 }
 
 /** Active desk run: keyed by framework task id (`runId`), same id passed to `agent.run(..., { taskId })`. */
@@ -179,6 +191,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.contextSynthesis ? { contextSynthesis: params.contextSynthesis } : {}),
                 ...(params.guardrails ? { guardrails: params.guardrails } : {}),
                 ...(params.persona ? { persona: params.persona } : {}),
+                ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
           });
