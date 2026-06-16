@@ -16,6 +16,63 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## v0.12.0 — Durable & Honest (in development, June 2026)
+
+The v0.12 line makes runs **survive crashes** and makes outputs **typed and grounded**. Two headline capabilities — typed structured output and durable execution — plus a developer-experience pass that removes Effect from the common builder surface.
+
+### Typed Structured Output
+
+Turn any agent into a typed extractor. Attach a schema at build time and read a fully-typed value off the result — no prompt engineering, no manual JSON parsing.
+
+```ts
+import { z } from "zod";
+
+const Invoice = z.object({ total: z.number(), currency: z.string() });
+
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withOutputSchema(Invoice)   // builder-only
+  .build();
+
+const result = await agent.run("Extract the invoice: total $4,200 USD");
+result.object;       // { total: 4200, currency: "USD" } — typed as { total: number; currency: string }
+result.objectError;  // populated instead (lenient) if the model's output didn't validate
+```
+
+- **Any Standard Schema** — Zod, Valibot, ArkType, and Effect Schema all work through one adapter; JSON Schema is derived per-vendor so the model is never blind to the shape.
+- **Streaming** — `agent.streamObject(task)` yields `{ object: DeepPartial<T> }` as fields fill in.
+- **Grounded mode** — `.withOutputSchema(schema, { mode: "grounded" })` runs extraction inside the loop with provenance, confidence, and abstention instead of guessing.
+- **Top-level arrays, lenient-degrade** — array schemas and partial outputs are handled gracefully; parse failures surface on `result.objectError` rather than throwing (configurable via `{ onParseFail: "throw" }`).
+
+Verified live across Anthropic, OpenAI, Gemini, and local Ollama (qwen3.5, gemma4). See [Typed Structured Output](/guides/structured-output/).
+
+### Durable Execution — crash-resume
+
+Opt a run into a durable store and resume it from its last checkpoint after a crash, restart, or graceful pause.
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withDurableRuns()
+  .build();
+
+const runs = await agent.listRuns({ status: "running" });   // discover interrupted runs
+const result = await agent.resumeRun(runs[0].runId);        // continue from last checkpoint
+```
+
+Run state is persisted on a content-addressed config hash (system prompt + provider), so a resumed run reattaches to the correct configuration. Verified cross-process with a hard-kill end-to-end test. See [Durable Execution](/guides/durable-execution/).
+
+### Developer experience — Effect-free where it counts
+
+- **Plain-function hooks** — `.withHook()` handlers now accept ordinary sync/async functions; the Effect form still works. No `Effect.gen` required to tap the lifecycle. See [Lifecycle Hooks](/guides/hooks/).
+- **Faster `run()`** — the post-answer debrief LLM call was moved off the critical path (forked, non-blocking), cutting end-to-end `run()` latency ~46%. Rich debrief is awaited lazily via `result.debriefRich()`.
+
+### Opt-in evidence grounding
+
+`.withGrounding({ mode })` makes numeric grounding explicit (default **off**), eliminating false "failed at evidence-grounded" warnings on correct figures. Blocking mode does a bounded retry then degrades — it never hard-fails a correct answer. See [Verification](/features/verification/).
+
+---
+
 ## v0.11.x — Production tooling + full observability (May 2026)
 
 The focus: developer tooling that makes agents production-observable and repeatable, plus the first `create-reactive-agent` scaffolder, cross-runtime support, and three new capabilities (`code-action` strategy, skill persistence, interactive playground).
