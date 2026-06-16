@@ -1,6 +1,24 @@
 <script lang="ts">
   import { toast } from "$lib/stores/toast-store.js";
-  import type { Toast } from "$lib/stores/toast-store.js";
+  import type { Toast, ToastButton } from "$lib/stores/toast-store.js";
+
+  let busyId = $state<string | null>(null);
+
+  async function runButton(t: Toast, b: ToastButton) {
+    busyId = t.id;
+    try {
+      await b.onClick();
+      if (b.closeOnClick !== false) toast.remove(t.id);
+    } finally {
+      busyId = null;
+    }
+  }
+
+  const BTN_VARIANT: Record<NonNullable<ToastButton["variant"]>, string> = {
+    primary: "bg-primary text-white border-primary",
+    danger: "bg-transparent text-error border-error",
+    ghost: "bg-transparent text-on-surface-variant border-[var(--cortex-border)]",
+  };
 
   const KIND_CONFIG: Record<Toast["kind"], { icon: string; border: string; accent: string; label: string }> = {
     success:    { icon: "task_alt",       border: "border-secondary/40",  accent: "bg-secondary",  label: "text-secondary"  },
@@ -51,6 +69,21 @@
           >
             {t.action.label} →
           </a>
+        {/if}
+        {#if t.buttons && t.buttons.length > 0}
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            {#each t.buttons as b (b.label)}
+              <button
+                type="button"
+                disabled={busyId === t.id}
+                onclick={() => runButton(t, b)}
+                class="rounded-md border px-2.5 py-1 font-mono text-[10px] transition-colors disabled:opacity-50
+                       {BTN_VARIANT[b.variant ?? 'ghost']}"
+              >
+                {b.label}
+              </button>
+            {/each}
+          </div>
         {/if}
       </div>
 
