@@ -1217,7 +1217,38 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withObservability(options?: ObservabilityOptions): this {
         this._enableObservability = true
-        if (options) this._observabilityOptions = options
+        if (options) {
+            this._observabilityOptions = options
+            // DX wave (v0.12) — fan sub-options out to the same state the
+            // dedicated convenience methods set, so this one method configures
+            // the whole observability stack. Last call wins (a later
+            // `.withCortex()` / `.withObservability({cortex})` overrides).
+            if (options.cortex !== undefined) {
+                this._cortexUrl =
+                    (typeof options.cortex === 'object' ? options.cortex.url : undefined) ??
+                    process.env.CORTEX_URL ??
+                    'http://localhost:4321'
+            }
+            if (options.telemetry !== undefined) {
+                this._telemetryConfig =
+                    typeof options.telemetry === 'object' ? options.telemetry : { mode: 'isolated' }
+            }
+            if (options.logging !== undefined) {
+                this._loggingConfig = options.logging
+            }
+            if (options.tracing !== undefined) {
+                this._tracingConfig =
+                    options.tracing === false
+                        ? null
+                        : { dir: (typeof options.tracing === 'object' ? options.tracing.dir : undefined) ?? `.reactive-agents/traces` }
+            }
+            if (options.health) this._enableHealthCheck = true
+            if (options.audit) this._enableAudit = true
+            if (options.costs !== undefined) {
+                this._enableCostTracking = true
+                if (typeof options.costs === 'object') this._costTrackingOptions = options.costs
+            }
+        }
         return this
     }
 

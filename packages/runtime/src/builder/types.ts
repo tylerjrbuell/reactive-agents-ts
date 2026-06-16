@@ -15,7 +15,7 @@ import type {
 } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
 import type { OutputFormat, TerminatedBy } from '@reactive-agents/core'
-import type { Redactor } from '@reactive-agents/observability'
+import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import type { AgentDebrief } from '../debrief.js'
 
 // ─── DeepPartial ─────────────────────────────────────────────────────────────
@@ -521,6 +521,35 @@ export interface ObservabilityOptions {
      * ```
      */
     readonly redactors?: readonly Redactor[]
+
+    // ── DX wave (v0.12): one canonical observability route ──
+    // The sub-options below fan out to the SAME builder state the dedicated
+    // convenience methods set (`.withCortex`, `.withTelemetry`, `.withLogging`,
+    // `.withTracing`, `.withHealthCheck`, `.withAudit`, `.withCostTracking`), so
+    // the whole observability stack can be configured through this one method.
+    // The dedicated methods remain (additive). Precedence: last call wins.
+
+    /** Cortex event reporting. `true` resolves the URL from CORTEX_URL / default; `{ url }` sets it explicitly. Equivalent to `.withCortex(url?)`. */
+    readonly cortex?: boolean | { readonly url?: string }
+    /** Anonymous telemetry (differential privacy). Equivalent to `.withTelemetry(config?)`. */
+    readonly telemetry?: boolean | TelemetryConfig
+    /** Structured logging. Equivalent to `.withLogging(config)`. */
+    readonly logging?: {
+        readonly level?: 'debug' | 'info' | 'warn' | 'error'
+        readonly format?: 'text' | 'json'
+        readonly output?: 'console' | 'file' | WritableStream
+        readonly filePath?: string
+        readonly maxFileSizeBytes?: number
+        readonly maxFiles?: number
+    }
+    /** JSONL trace persistence. `{ dir }` enables (default dir when omitted); `false` disables. Equivalent to `.withTracing()` / `.withoutTracing()`. */
+    readonly tracing?: boolean | { readonly dir?: string }
+    /** Health checks. Equivalent to `.withHealthCheck()`. */
+    readonly health?: boolean
+    /** Per-tool-call rationale auditing. Equivalent to `.withAudit()`. */
+    readonly audit?: boolean
+    /** Cost tracking. `true` enables; an options object also sets budget caps. Equivalent to `.withCostTracking(options?)`. */
+    readonly costs?: boolean | CostTrackingOptions
 }
 
 /**
