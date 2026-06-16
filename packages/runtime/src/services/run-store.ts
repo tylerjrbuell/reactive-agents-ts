@@ -65,6 +65,15 @@ export interface CheckpointRecord {
   readonly createdAt: number;
 }
 
+export interface ApprovalRecord {
+  readonly runId: string;
+  readonly gateId: string;
+  readonly toolName: string;
+  readonly argsJson: string;
+  readonly status: "pending" | "approved" | "denied";
+  readonly reason?: string;
+}
+
 export interface RunStore {
   /** Insert (or replace) a run row, status seeded to `running`. */
   readonly createRun: (r: {
@@ -100,6 +109,24 @@ export interface RunStore {
   readonly listRuns: (
     status?: RunStatus,
   ) => Effect.Effect<readonly RunRecord[], never>;
+  /** Insert a pending approval row for a paused run. */
+  readonly putApproval: (r: {
+    runId: string;
+    gateId: string;
+    toolName: string;
+    argsJson: string;
+  }) => Effect.Effect<void, never>;
+  /** The single pending approval for a run, or undefined if none pending. */
+  readonly getPendingApproval: (
+    runId: string,
+  ) => Effect.Effect<ApprovalRecord | undefined, never>;
+  /** Flip a pending approval to approved/denied. Returns false if no pending row matched. */
+  readonly decideApproval: (
+    runId: string,
+    gateId: string,
+    status: "approved" | "denied",
+    reason?: string,
+  ) => Effect.Effect<boolean, never>;
 }
 
 export class RunStoreService extends Context.Tag("RunStoreService")<
@@ -120,6 +147,15 @@ interface RunRow {
   status: string;
   config_hash: string;
   updated_at: number;
+}
+
+interface ApprovalRow {
+  run_id: string;
+  gate_id: string;
+  tool_name: string;
+  args_json: string;
+  status: string;
+  reason: string | null;
 }
 
 /**
@@ -147,6 +183,19 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
         state_json TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         PRIMARY KEY (run_id, iteration)
+      )`,
+    );
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS run_approvals (
+        run_id     TEXT NOT NULL,
+        gate_id    TEXT NOT NULL,
+        tool_name  TEXT NOT NULL,
+        args_json  TEXT NOT NULL,
+        status     TEXT NOT NULL,
+        reason     TEXT,
+        created_at INTEGER NOT NULL,
+        decided_at INTEGER,
+        PRIMARY KEY (run_id, gate_id)
       )`,
     );
 
@@ -252,6 +301,50 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             configHash: row.config_hash,
             updatedAt: row.updated_at,
           }));
+        }),
+
+      putApproval: ({ runId, gateId, toolName, argsJson }) =>
+        Effect.sync(() => {
+          db.prepare(
+            `INSERT OR REPLACE INTO run_approvals
+               (run_id, gate_id, tool_name, args_json, status, reason, created_at, decided_at)
+             VALUES (?, ?, ?, ?, 'pending', NULL, ?, NULL)`,
+          ).run(runId, gateId, toolName, argsJson, now());
+        }),
+
+      getPendingApproval: (runId) =>
+        Effect.sync(() => {
+          const row = db
+            .prepare(
+              `SELECT run_id, gate_id, tool_name, args_json, status, reason
+                 FROM run_approvals
+                WHERE run_id = ? AND status = 'pending'
+             ORDER BY created_at DESC
+                LIMIT 1`,
+            )
+            .get(runId) as ApprovalRow | undefined;
+          return row
+            ? {
+                runId: row.run_id,
+                gateId: row.gate_id,
+                toolName: row.tool_name,
+                argsJson: row.args_json,
+                status: row.status as ApprovalRecord["status"],
+                reason: row.reason ?? undefined,
+              }
+            : undefined;
+        }),
+
+      decideApproval: (runId, gateId, status, reason) =>
+        Effect.sync(() => {
+          const res = db
+            .prepare(
+              `UPDATE run_approvals
+                  SET status = ?, reason = ?, decided_at = ?
+                WHERE run_id = ? AND gate_id = ? AND status = 'pending'`,
+            )
+            .run(status, reason ?? null, now(), runId, gateId);
+          return res.changes > 0;
         }),
     };
   });

@@ -62,4 +62,36 @@ describe("RunStoreService", () => {
     );
     expect(r).toBeUndefined();
   });
+
+  it("putApproval then getPendingApproval returns the pending row", async () => {
+    const prog = Effect.gen(function* () {
+      const store = yield* RunStoreService;
+      yield* store.createRun({ runId: "ap1", agentId: "a", task: "t", configHash: "h" });
+      yield* store.putApproval({
+        runId: "ap1", gateId: "g1", toolName: "shell-execution",
+        argsJson: '{"cmd":"rm -rf /tmp/x"}',
+      });
+      return yield* store.getPendingApproval("ap1");
+    });
+    const rec = await Effect.runPromise(prog.pipe(Effect.provide(inMem)));
+    expect(rec?.gateId).toBe("g1");
+    expect(rec?.toolName).toBe("shell-execution");
+    expect(rec?.status).toBe("pending");
+  });
+
+  it("decideApproval flips a pending row and blocks double-decide", async () => {
+    const prog = Effect.gen(function* () {
+      const store = yield* RunStoreService;
+      yield* store.createRun({ runId: "ap2", agentId: "a", task: "t", configHash: "h" });
+      yield* store.putApproval({ runId: "ap2", gateId: "g2", toolName: "docker", argsJson: "{}" });
+      const first = yield* store.decideApproval("ap2", "g2", "approved");
+      const pendingAfter = yield* store.getPendingApproval("ap2");
+      const second = yield* store.decideApproval("ap2", "g2", "denied", "too late");
+      return { first, pendingAfter, second };
+    });
+    const { first, pendingAfter, second } = await Effect.runPromise(prog.pipe(Effect.provide(inMem)));
+    expect(first).toBe(true);
+    expect(pendingAfter).toBeUndefined();
+    expect(second).toBe(false);
+  });
 });
