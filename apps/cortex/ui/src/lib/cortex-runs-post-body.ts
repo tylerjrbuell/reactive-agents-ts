@@ -81,6 +81,17 @@ export function cortexRunsPostBody(
     ...(parseOutputSchema(cfg.outputSchema ?? "") !== undefined
       ? { outputSchema: parseOutputSchema(cfg.outputSchema ?? "") }
       : {}),
+    // Budget caps — send when either limit is set.
+    ...(cfg.budget && (cfg.budget.tokenLimit > 0 || cfg.budget.costLimit > 0)
+      ? {
+          budget: {
+            ...(cfg.budget.tokenLimit > 0 ? { tokenLimit: cfg.budget.tokenLimit } : {}),
+            ...(cfg.budget.costLimit > 0 ? { costLimit: cfg.budget.costLimit } : {}),
+          },
+        }
+      : {}),
+    // Numeric grounding — send when enabled.
+    ...(cfg.grounding && cfg.grounding.mode !== "off" ? { grounding: { mode: cfg.grounding.mode } } : {}),
     // Durable execution (crash-resume + HITL). approvalTools → approvalPolicy gate.
     ...(cfg.durableRuns?.enabled
       ? {

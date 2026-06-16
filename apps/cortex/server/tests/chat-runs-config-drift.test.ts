@@ -28,6 +28,10 @@ const RUN_ONLY = new Set([
   "durableRuns",
   "outputSchema",
   "outputSchemaOnParseFail",
+  // budget caps + grounding are surfaced on the run launcher for now; chat
+  // inherits framework defaults. (Persisted for saved agents via normalize.)
+  "budget",
+  "grounding",
 ]);
 
 const keysOf = (schema: { properties: Record<string, unknown> }): string[] =>

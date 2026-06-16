@@ -89,6 +89,10 @@ export interface LaunchParams {
   readonly outputSchema?: Record<string, unknown>;
   /** Parse-fail behaviour for {@link outputSchema}. */
   readonly outputSchemaOnParseFail?: "degrade" | "throw";
+  /** Cost/token budget caps — `.withBudget()`. */
+  readonly budget?: { tokenLimit?: number; costLimit?: number };
+  /** Numeric evidence-grounding — `.withGrounding()`. */
+  readonly grounding?: { mode: "warn" | "block"; tolerance?: number };
   /**
    * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
    * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
@@ -215,6 +219,8 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.useReasoning !== undefined ? { useReasoning: params.useReasoning } : {}),
                 ...(params.outputSchema ? { outputSchema: params.outputSchema } : {}),
                 ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
+                ...(params.budget ? { budget: params.budget } : {}),
+                ...(params.grounding ? { grounding: params.grounding } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),

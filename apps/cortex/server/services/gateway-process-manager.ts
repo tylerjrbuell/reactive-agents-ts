@@ -293,6 +293,8 @@ export class GatewayProcessManager {
         config.durableRuns && typeof config.durableRuns === "object" && (config.durableRuns as { enabled?: boolean }).enabled
           ? (config.durableRuns as { enabled?: boolean; checkpointEvery?: number; dir?: string; approvalPolicy?: { tools?: string[]; mode?: "detach" | "block" } })
           : undefined;
+      const _budget = config.budget as { tokenLimit?: number; costLimit?: number } | undefined;
+      const _grounding = config.grounding as { mode: "warn" | "block"; tolerance?: number } | undefined;
 
       const agent = await buildCortexAgent({
         agentName: name,
@@ -334,6 +336,8 @@ export class GatewayProcessManager {
         ...(_persona ? { persona: _persona } : {}),
         ...(_useReasoning !== undefined ? { useReasoning: _useReasoning } : {}),
         ...(_outputSchema ? { outputSchema: _outputSchema } : {}),
+        ...(_budget && (_budget.tokenLimit != null || _budget.costLimit != null) ? { budget: _budget } : {}),
+        ...(_grounding?.mode ? { grounding: _grounding } : {}),
         ...(_durableRuns ? { durableRuns: _durableRuns } : {}),
       });
       const agentId_ = agent.agentId;

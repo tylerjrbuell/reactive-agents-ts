@@ -920,6 +920,28 @@
             <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[8px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
           {/if}
         </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label for="budget-tokens" class="config-label">Token budget</label>
+            <input id="budget-tokens" type="number" min="0" step="1000" bind:value={config.budget.tokenLimit}
+              placeholder="0 = none" class="config-input" />
+          </div>
+          <div>
+            <label for="budget-cost" class="config-label">Cost cap (USD)</label>
+            <input id="budget-cost" type="number" min="0" step="0.01" bind:value={config.budget.costLimit}
+              placeholder="0 = none" class="config-input" />
+          </div>
+        </div>
+        <p class="-mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Run terminates when a cap is crossed (<code class="text-[8px]">.withBudget</code>).</p>
+        <div>
+          <label for="grounding-mode" class="config-label">Evidence grounding</label>
+          <select id="grounding-mode" bind:value={config.grounding.mode} class="config-input">
+            <option value="off">Off</option>
+            <option value="warn">Warn — flag ungrounded figures</option>
+            <option value="block">Block — one corrective retry, then degrade</option>
+          </select>
+          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Checks numbers in the answer against tool data (<code class="text-[8px]">.withGrounding</code>); never hard-fails.</p>
+        </div>
         <div>
           <label for="verification-step" class="config-label">Verification Step</label>
           <select id="verification-step" bind:value={config.verificationStep} class="config-input">

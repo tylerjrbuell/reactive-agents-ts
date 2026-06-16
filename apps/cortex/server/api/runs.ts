@@ -69,6 +69,8 @@ export const RunConfigBody = t.Object({
   useReasoning: t.Optional(t.Boolean()),
   outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
   outputSchemaOnParseFail: t.Optional(t.Union([t.Literal("degrade"), t.Literal("throw")])),
+  budget: t.Optional(t.Object({ tokenLimit: t.Optional(t.Number()), costLimit: t.Optional(t.Number()) })),
+  grounding: t.Optional(t.Object({ mode: t.Union([t.Literal("warn"), t.Literal("block")]), tolerance: t.Optional(t.Number()) })),
   durableRuns: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -150,6 +152,8 @@ export const runsRouter = (
             ...(typeof b.useReasoning === "boolean" ? { useReasoning: b.useReasoning } : {}),
             ...(b.outputSchema && Object.keys(b.outputSchema).length > 0 ? { outputSchema: b.outputSchema } : {}),
             ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
+            ...(b.budget && (b.budget.tokenLimit != null || b.budget.costLimit != null) ? { budget: b.budget } : {}),
+            ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
           });
         });

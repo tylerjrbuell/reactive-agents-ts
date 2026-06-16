@@ -138,6 +138,10 @@ export interface AgentConfig {
    * the extracted value surfaces in the run's Structured Output view.
    */
   outputSchema: string;
+  /** Cost/token budget caps (v0.12). 0 = unset. `.withBudget()`. */
+  budget: { tokenLimit: number; costLimit: number };
+  /** Numeric evidence-grounding (v0.12). "off" = disabled. `.withGrounding()`. */
+  grounding: { mode: "off" | "warn" | "block" };
   /** Living skills: SKILL.md directories + optional evolution (framework `withSkills`). */
   skills: {
     paths: string[];
@@ -170,6 +174,8 @@ export function defaultConfig(): AgentConfig {
     useReasoning: true,
     durableRuns: { enabled: false, approvalTools: [] },
     outputSchema: "",
+    budget: { tokenLimit: 0, costLimit: 0 },
+    grounding: { mode: "off" },
     verificationStep: "none",
     runtimeVerification: false,
     auditRationale: false,

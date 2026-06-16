@@ -140,6 +140,10 @@ export interface BuildCortexAgentParams {
   readonly outputSchema?: Record<string, unknown>;
   /** Parse-fail behaviour for {@link outputSchema}: "degrade" (default, lenient) or "throw". */
   readonly outputSchemaOnParseFail?: "degrade" | "throw";
+  /** Cost/token budget caps (v0.12) — `.withBudget()`. Arbitrator terminates the run when crossed. */
+  readonly budget?: { readonly tokenLimit?: number; readonly costLimit?: number };
+  /** Numeric evidence-grounding (v0.12) — `.withGrounding()`. Checks figures in the answer against tool data. */
+  readonly grounding?: { readonly mode: "warn" | "block"; readonly tolerance?: number };
   /**
    * Durable execution (v0.12) — opt-in crash-resume via SQLite RunStore.
    * When `enabled`, wires `.withDurableRuns(...)` so the run checkpoints and can
@@ -325,6 +329,22 @@ export async function buildCortexAgent(
 
   if (params.streaming === true) {
     b = b.withStreaming();
+  }
+
+  // Cost/token budget caps (v0.12) — Arbitrator terminates when crossed.
+  if (params.budget && (params.budget.tokenLimit != null || params.budget.costLimit != null)) {
+    b = b.withBudget({
+      ...(params.budget.tokenLimit != null ? { tokenLimit: params.budget.tokenLimit } : {}),
+      ...(params.budget.costLimit != null ? { costLimit: params.budget.costLimit } : {}),
+    });
+  }
+
+  // Numeric evidence-grounding (v0.12) — opt-in; never hard-fails.
+  if (params.grounding?.mode) {
+    b = b.withGrounding({
+      mode: params.grounding.mode,
+      ...(params.grounding.tolerance != null ? { tolerance: params.grounding.tolerance } : {}),
+    });
   }
 
   // Typed structured output (v0.12) — extract the answer into the user's JSON

@@ -255,6 +255,26 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
     delete out.outputSchema;
   }
 
+  const bdg = raw.budget as { tokenLimit?: unknown; costLimit?: unknown } | undefined;
+  if (bdg && typeof bdg === "object" && (typeof bdg.tokenLimit === "number" || typeof bdg.costLimit === "number")) {
+    out.budget = {
+      ...(typeof bdg.tokenLimit === "number" ? { tokenLimit: bdg.tokenLimit } : {}),
+      ...(typeof bdg.costLimit === "number" ? { costLimit: bdg.costLimit } : {}),
+    };
+  } else {
+    delete out.budget;
+  }
+
+  const grd = raw.grounding as { mode?: unknown; tolerance?: unknown } | undefined;
+  if (grd && (grd.mode === "warn" || grd.mode === "block")) {
+    out.grounding = {
+      mode: grd.mode,
+      ...(typeof grd.tolerance === "number" ? { tolerance: grd.tolerance } : {}),
+    };
+  } else {
+    delete out.grounding;
+  }
+
   const dr = raw.durableRuns;
   if (dr && typeof dr === "object" && !Array.isArray(dr) && (dr as { enabled?: boolean }).enabled) {
     const d = dr as Record<string, unknown>;

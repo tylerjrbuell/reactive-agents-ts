@@ -143,3 +143,20 @@ describe("cortexRunsPostBody — structured output", () => {
     expect(body.outputSchema?.type).toBe("object");
   });
 });
+
+describe("cortexRunsPostBody — budget + grounding (Phase C)", () => {
+  it("omits budget/grounding by default", () => {
+    const body = cortexRunsPostBody("x", defaultConfig()) as { budget?: unknown; grounding?: unknown };
+    expect(body.budget).toBeUndefined();
+    expect(body.grounding).toBeUndefined();
+  });
+  it("sends budget when a cap is set", () => {
+    const body = cortexRunsPostBody("x", { ...defaultConfig(), budget: { tokenLimit: 5000, costLimit: 0 } }) as { budget?: { tokenLimit?: number; costLimit?: number } };
+    expect(body.budget?.tokenLimit).toBe(5000);
+    expect(body.budget?.costLimit).toBeUndefined();
+  });
+  it("sends grounding when not off", () => {
+    const body = cortexRunsPostBody("x", { ...defaultConfig(), grounding: { mode: "block" } }) as { grounding?: { mode?: string } };
+    expect(body.grounding?.mode).toBe("block");
+  });
+});
