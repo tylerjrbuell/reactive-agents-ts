@@ -256,10 +256,15 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   }
 
   const bdg = raw.budget as { tokenLimit?: unknown; costLimit?: unknown } | undefined;
-  if (bdg && typeof bdg === "object" && (typeof bdg.tokenLimit === "number" || typeof bdg.costLimit === "number")) {
+  // Only a POSITIVE limit is a real cap; 0 (the UI default) means "no budget".
+  // Persisting {tokenLimit:0} makes the Arbitrator fire budget_exceeded on the
+  // first token (tokens ≥ 0) — the saved-agent failure bug.
+  const budTokenLimit = typeof bdg?.tokenLimit === "number" && bdg.tokenLimit > 0 ? bdg.tokenLimit : undefined;
+  const budCostLimit = typeof bdg?.costLimit === "number" && bdg.costLimit > 0 ? bdg.costLimit : undefined;
+  if (budTokenLimit !== undefined || budCostLimit !== undefined) {
     out.budget = {
-      ...(typeof bdg.tokenLimit === "number" ? { tokenLimit: bdg.tokenLimit } : {}),
-      ...(typeof bdg.costLimit === "number" ? { costLimit: bdg.costLimit } : {}),
+      ...(budTokenLimit !== undefined ? { tokenLimit: budTokenLimit } : {}),
+      ...(budCostLimit !== undefined ? { costLimit: budCostLimit } : {}),
     };
   } else {
     delete out.budget;

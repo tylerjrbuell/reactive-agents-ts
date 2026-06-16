@@ -336,7 +336,7 @@ export class GatewayProcessManager {
         ...(_persona ? { persona: _persona } : {}),
         ...(_useReasoning !== undefined ? { useReasoning: _useReasoning } : {}),
         ...(_outputSchema ? { outputSchema: _outputSchema } : {}),
-        ...(_budget && (_budget.tokenLimit != null || _budget.costLimit != null) ? { budget: _budget } : {}),
+        ...(_budget && ((_budget.tokenLimit ?? 0) > 0 || (_budget.costLimit ?? 0) > 0) ? { budget: _budget } : {}),
         ...(_grounding?.mode ? { grounding: _grounding } : {}),
         ...(_durableRuns ? { durableRuns: _durableRuns } : {}),
       });

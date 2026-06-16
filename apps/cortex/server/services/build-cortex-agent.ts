@@ -331,12 +331,18 @@ export async function buildCortexAgent(
     b = b.withStreaming();
   }
 
-  // Cost/token budget caps (v0.12) — Arbitrator terminates when crossed.
-  if (params.budget && (params.budget.tokenLimit != null || params.budget.costLimit != null)) {
-    b = b.withBudget({
-      ...(params.budget.tokenLimit != null ? { tokenLimit: params.budget.tokenLimit } : {}),
-      ...(params.budget.costLimit != null ? { costLimit: params.budget.costLimit } : {}),
-    });
+  // Cost/token budget caps (v0.12) — Arbitrator terminates when crossed. A limit
+  // of 0 (the UI's "unset" default) means NO cap — never pass it as a real limit,
+  // or the guard fires on the first token (tokens ≥ 0 → budget_exceeded).
+  {
+    const tokenLimit = typeof params.budget?.tokenLimit === "number" && params.budget.tokenLimit > 0 ? params.budget.tokenLimit : undefined;
+    const costLimit = typeof params.budget?.costLimit === "number" && params.budget.costLimit > 0 ? params.budget.costLimit : undefined;
+    if (tokenLimit !== undefined || costLimit !== undefined) {
+      b = b.withBudget({
+        ...(tokenLimit !== undefined ? { tokenLimit } : {}),
+        ...(costLimit !== undefined ? { costLimit } : {}),
+      });
+    }
   }
 
   // Numeric evidence-grounding (v0.12) — opt-in; never hard-fails.

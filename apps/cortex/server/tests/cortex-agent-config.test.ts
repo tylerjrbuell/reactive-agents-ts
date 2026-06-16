@@ -207,3 +207,15 @@ describe("normalizeCortexAgentConfig — v0.12 fields (saved-agent durable/struc
     expect(out.outputSchema).toEqual(schema);
   });
 });
+
+describe("normalizeCortexAgentConfig — budget 0 = unset (regression: budget_exceeded@0)", () => {
+  test("drops budget when both limits are 0 (UI default)", () => {
+    const out = normalizeCortexAgentConfig({ provider: "ollama", budget: { tokenLimit: 0, costLimit: 0 } }) as { budget?: unknown };
+    expect(out.budget).toBeUndefined();
+  });
+  test("keeps only the positive limit", () => {
+    const out = normalizeCortexAgentConfig({ provider: "ollama", budget: { tokenLimit: 5000, costLimit: 0 } }) as { budget?: { tokenLimit?: number; costLimit?: number } };
+    expect(out.budget?.tokenLimit).toBe(5000);
+    expect(out.budget?.costLimit).toBeUndefined();
+  });
+})

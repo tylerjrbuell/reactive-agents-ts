@@ -152,7 +152,7 @@ export const runsRouter = (
             ...(typeof b.useReasoning === "boolean" ? { useReasoning: b.useReasoning } : {}),
             ...(b.outputSchema && Object.keys(b.outputSchema).length > 0 ? { outputSchema: b.outputSchema } : {}),
             ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
-            ...(b.budget && (b.budget.tokenLimit != null || b.budget.costLimit != null) ? { budget: b.budget } : {}),
+            ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
             ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
           });
