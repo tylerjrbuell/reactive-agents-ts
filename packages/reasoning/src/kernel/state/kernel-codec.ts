@@ -43,6 +43,10 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 /** Sentinel returned by encodeValue for values that cannot be represented. */
 const SKIP: unique symbol = Symbol("kernel-codec-skip");
 
+// Category-A legitimate sync fallback (see console-ceiling.test.ts + the
+// doc-block at packages/core/src/errors/index.ts): the codec is a pure
+// synchronous encoder with no Effect runtime to thread, and a skipped
+// non-serializable value during checkpoint encoding must surface immediately.
 const warn = (path: string, reason: string): void => {
   console.warn(`[kernel-codec] Skipped non-serializable value at ${path}: ${reason}`);
 };

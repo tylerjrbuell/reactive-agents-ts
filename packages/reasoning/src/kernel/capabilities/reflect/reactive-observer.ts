@@ -92,7 +92,7 @@ export function runReactiveObserver(
             temperature: s.meta.entropy?.temperature ?? 0,
             priorThought,
             logprobs: s.meta.entropy?.lastLogprobs,
-            kernelState: s as any, // cross-package boundary: KernelStateLike expects index-sig meta
+            kernelState: s,
             taskCategory: s.meta.entropy?.taskCategory,
           })
           .pipe(
@@ -147,11 +147,12 @@ export function runReactiveObserver(
 
     // ── Reactive Controller evaluation ──────────────────────────────────
     if (services.reactiveController._tag === "Some") {
-      // entropyHistory holds EntropyScoreLike[] locally, but the full runtime type from
-      // reactive-intelligence has additional fields (sources, contextPressure, etc.).
-      const entropyHistory = (s.meta.entropy?.entropyHistory ?? []) as readonly any[];
+      // `entropyHistory` is declared `readonly EntropyScoreLike[]` on the kernel
+      // state (kernel-state.ts), so no cast is needed — the richer runtime entries
+      // are read through the EntropyScoreLike view.
+      const entropyHistory = s.meta.entropy?.entropyHistory ?? [];
       if (entropyHistory.length > 0) {
-        const latestScore = entropyHistory[entropyHistory.length - 1] as any;
+        const latestScore = entropyHistory[entropyHistory.length - 1];
 
         // ── Load calibration from EntropySensorService (not hardcoded) ──
         const modelId = s.meta.entropy?.modelId ?? currentOptions.modelId ?? "unknown";

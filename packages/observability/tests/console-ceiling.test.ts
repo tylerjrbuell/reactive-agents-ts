@@ -73,6 +73,10 @@ const SCOPED_ROOTS = [
 //         — resolver fallback (Category-A: sync resolution path).
 //     • packages/memory/src/database.ts (1)
 //         — DB initialization error fallback (Category-A: sync setup).
+//     • packages/reasoning/src/kernel/state/kernel-codec.ts (1)
+//         — non-serializable value skipped during checkpoint encoding
+//           (Category-A: pure sync codec, no Effect runtime to thread).
+//           Added 2026-06-16 with durable-execution KernelState codec.
 //
 //   console.error (0 active sites after WS-5 Phase 3 migration):
 //     • Previously: packages/reasoning/src/kernel/loop/runner.ts:1772
@@ -86,7 +90,11 @@ const SCOPED_ROOTS = [
 //     were inflated by docstring + comment matches (naive grep). Honest
 //     baseline at pinning time was warn=9 active / error=1 active; the
 //     runner.ts site was migrated to Effect.logDebug to take error to 0.
-const WARN_CEILING = 9;
+//   2026-06-16: bumped 9 → 10 for the durable-execution KernelState codec
+//     sync fallback (kernel-codec.ts). The redundant durable-checkpoint
+//     console.warn in iterate-pass.ts (which already yielded Effect.logWarning)
+//     was removed in the same change, so net active sites = 10.
+const WARN_CEILING = 10;
 // Sprint-1 (2026-06-02): bumped 0 → 3 to accommodate three diagnostic-gated
 // console.error sites (RA_ASSEMBLY_DEBUG trace in think.ts; two RA_OVERHAUL_DEBUG
 // traces in overhaul/context-projection.ts). All three are env-gated debug

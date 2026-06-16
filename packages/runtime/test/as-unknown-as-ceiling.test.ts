@@ -125,7 +125,23 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 // `TriggerFired` + `ChannelMessageSent`, so the two `as unknown as AgentEvent`
 // casts in channels/src/services/channel-service.ts were stale and removed
 // (68 → 66, back at ceiling). No CEILING bump; this is "design it out".
-const CEILING = 66;
+// 2026-06-16: bumped 66 → 76 for two v0.12 features whose boundary casts are
+// LEGITIMATE narrow widenings (same category as the anthropic-SDK / runtime-shim
+// ingest casts already documented as out-of-scope above):
+//   • Typed structured output adapter (reasoning/src/structured-output/** +
+//     runtime/src/{reactive-agent,engine/finalize,engine/stream-object}). The
+//     adapter bridges FOUR untyped external schema libraries (Zod, Valibot,
+//     ArkType, Effect) plus Effect-Schema `partial`/`pick` operations that
+//     erase the precise element type — the casts ARE the adapter's purpose.
+//     The three identical vendor reinterpretations were first consolidated into
+//     one `asVendorSchema` helper (schema-contract.ts) before this bump.
+//   • Durable-execution KernelState codec (reasoning/src/kernel/state) — state
+//     serialization widening across the JSON boundary.
+// Before bumping, the redundant `as any` debt in the same merge window was paid
+// down (HS-34: 4 Layer.merge casts → typed `widen` helper; HS-35: 2 stale
+// reactive-observer casts removed), so this increment reflects only the real
+// new feature surface, not carried smells.
+const CEILING = 76;
 
 interface Hit {
   file: string;

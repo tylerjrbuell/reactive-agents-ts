@@ -19,6 +19,19 @@ export type SkillLayerConfig = {
   readonly distillerConfig?: { refinementThreshold?: number };
 };
 
+/**
+ * Single widening boundary for progressive RI layer composition (HS-34;
+ * mirrors `finalizeComposition` / HS-03 in `@reactive-agents/runtime`).
+ *
+ * Effect `Layer` is invariant in its requirements channel, so a binding that
+ * is conditionally re-merged cannot keep one static type — the merges diverge.
+ * `widen` is the ONE place the widening assertion lives, replacing the four
+ * scattered `as any` casts this function previously carried.
+ */
+type ComposableLayer = Layer.Layer<unknown, unknown, never>;
+const widen = <A, E, R>(merged: Layer.Layer<A, E, R>): ComposableLayer =>
+  merged as ComposableLayer;
+
 export const createReactiveIntelligenceLayer = (
   config?: Partial<ReactiveIntelligenceConfig>,
   skillStore?: SkillStore,
@@ -34,7 +47,7 @@ export const createReactiveIntelligenceLayer = (
   const learningLayer = LearningEngineServiceLive(calStore, banditStore, skillStore);
 
   // Start with entropy + learning
-  let combined = Layer.merge(entropyLayer, learningLayer);
+  let combined: ComposableLayer = widen(Layer.merge(entropyLayer, learningLayer));
 
   // Compose controller layer when any controller feature is enabled
   const ctrl = merged.controller;
@@ -46,14 +59,14 @@ export const createReactiveIntelligenceLayer = (
       strategySwitch: ctrl?.strategySwitch ?? false,
     });
     const dispatcherLayer = InterventionDispatcherServiceLive();
-    combined = Layer.merge(combined, controllerLayer) as any;
-    combined = Layer.merge(combined, dispatcherLayer) as any;
+    combined = widen(Layer.merge(combined, controllerLayer));
+    combined = widen(Layer.merge(combined, dispatcherLayer));
   }
 
   // Skill Resolver (optional)
   if (skillConfig?.resolver) {
     const resolverLayer = makeSkillResolverService(skillConfig.resolver);
-    combined = Layer.merge(combined, resolverLayer) as any;
+    combined = widen(Layer.merge(combined, resolverLayer));
   }
 
   // Skill Distiller (optional)
@@ -62,7 +75,7 @@ export const createReactiveIntelligenceLayer = (
       skillConfig.distiller,
       skillConfig.distillerConfig ? { refinementThreshold: skillConfig.distillerConfig.refinementThreshold ?? 5 } : undefined,
     );
-    combined = Layer.merge(combined, distillerLayer) as any;
+    combined = widen(Layer.merge(combined, distillerLayer));
   }
 
   return combined;

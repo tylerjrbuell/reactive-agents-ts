@@ -371,7 +371,6 @@ export function runIterationPass(
             _runCtl.onCheckpoint(serializeKernelState(state), state.iteration);
           } catch (err) {
             const msg = `[durable-checkpoint] onCheckpoint observer threw at iteration ${state.iteration}: ${err instanceof Error ? err.message : String(err)}`;
-            console.warn(msg);
             yield* Effect.logWarning(msg);
           }
         }

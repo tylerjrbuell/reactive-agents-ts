@@ -88,6 +88,17 @@ function normalizePathSegment(
   return seg as PropertyKey;
 }
 
+/**
+ * Single reviewable widening boundary (WS-5b cast discipline). A Standard
+ * Schema validator object IS its underlying vendor schema at runtime — Zod,
+ * Valibot, and ArkType all layer the `~standard` interface onto the schema
+ * object itself — but TS cannot express that identity. This helper is the one
+ * place the reinterpretation happens, replacing the three scattered vendor
+ * `as unknown as` casts in `toJsonSchema` with a single concentration point.
+ */
+const asVendorSchema = <T>(std: StandardSchemaV1<unknown, unknown>): T =>
+  std as unknown as T;
+
 function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContract<A> {
   const props = std["~standard"];
 
@@ -161,7 +172,7 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
       // object itself). Without this, the extraction prompt is blind to the shape.
       if (props.vendor === "zod") {
         try {
-          return zodToJsonSchema(std as unknown as Parameters<typeof zodToJsonSchema>[0]) as Record<string, unknown>;
+          return zodToJsonSchema(asVendorSchema<Parameters<typeof zodToJsonSchema>[0]>(std)) as Record<string, unknown>;
         } catch {
           // fall through — degrade to prompt+heal
         }
@@ -171,7 +182,7 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
       if (props.vendor === "valibot") {
         try {
           return valibotToJsonSchema(
-            std as unknown as Parameters<typeof valibotToJsonSchema>[0],
+            asVendorSchema<Parameters<typeof valibotToJsonSchema>[0]>(std),
           ) as Record<string, unknown>;
         } catch {
           // fall through — degrade to prompt+heal
@@ -179,7 +190,7 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
       }
       // ArkType schemas expose a native `.toJsonSchema()` method.
       if (props.vendor === "arktype") {
-        const at = std as unknown as { toJsonSchema?: () => Record<string, unknown> };
+        const at = asVendorSchema<{ toJsonSchema?: () => Record<string, unknown> }>(std);
         if (typeof at.toJsonSchema === "function") {
           try {
             return at.toJsonSchema();
