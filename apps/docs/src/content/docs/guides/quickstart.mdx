@@ -157,10 +157,10 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-Individual `.withX()` methods still work for backward compatibility,
-but most are now `@deprecated` aliases for either a `HarnessProfile`
-preset or a `.compose(...)` chokepoint. Check the JSDoc on a method
-to see which preset / compose primitive it routes to.
+Individual `.withX()` methods are fully supported and compose cleanly
+with presets. Reach for a `HarnessProfile` preset when you want the
+whole default-on capability set in one line, or `.compose(...)` for a
+precise chokepoint.
 
 ## What's Next?
 

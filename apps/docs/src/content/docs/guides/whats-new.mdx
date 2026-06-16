@@ -18,7 +18,11 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ## v0.12.0 — Durable & Honest (in development, June 2026)
 
-The v0.12 line makes runs **survive crashes** and makes outputs **typed and grounded**. Two headline capabilities — typed structured output and durable execution — plus a developer-experience pass that removes Effect from the common builder surface.
+<Aside type="caution" title="Preview — not yet on npm">
+This section documents APIs on `main` that have **not been published** to npm. The latest released version is `v0.11.x`. Pin to the `v0.12.0` release before relying on the surfaces below.
+</Aside>
+
+The v0.12 line makes runs **survive crashes**, makes outputs **typed and grounded**, and makes "which capabilities are on" **explicit and honest**. Headline capabilities: typed structured output, durable execution, and `HarnessProfile` composition — plus a developer-experience pass that removes Effect from the common builder surface.
 
 ### Typed Structured Output
 
@@ -70,6 +74,45 @@ Run state is persisted on a content-addressed config hash (system prompt + provi
 ### Opt-in evidence grounding
 
 `.withGrounding({ mode })` makes numeric grounding explicit (default **off**), eliminating false "failed at evidence-grounded" warnings on correct figures. Blocking mode does a bounded retry then degrades — it never hard-fails a correct answer. See [Verification](/features/verification/).
+
+### HarnessProfile presets — one-line capability composition
+
+`HarnessProfile` replaces the leaky `.withLeanHarness()` with three named, explicit presets applied via `.withProfile()`:
+
+```ts
+import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+  .withProvider('anthropic')
+  .withProfile(HarnessProfile.balanced())   // canonical entry
+  .build()
+```
+
+| Preset | Composes |
+|--------|----------|
+| `HarnessProfile.lean()` | **Disables all four** default-on capabilities (memory, reactive intelligence, verifier, strategy switching) + skill persistence. The model is the entire harness — for latency/cost-sensitive paths and benchmark ablations. Fixes the historical `.withLeanHarness()` leak that left reactive intelligence on. |
+| `HarnessProfile.balanced()` | Today's production defaults: memory + reactive intelligence + verifier + strategy switching. No-op patch — registered defaults stay on. |
+| `HarnessProfile.intelligent()` | Balanced **+ skill persistence** for cross-session compounding learning. |
+
+Presets compose with individual builder methods — later calls win, so `.withProfile(HarnessProfile.lean()).withMemory()` re-enables memory. See [Choosing a Stack](/guides/choosing-a-stack/) and [Builder API](/reference/builder-api/).
+
+### New builder methods
+
+- **`.withBudget({ tokenLimit?, costLimit? })`** — hard cumulative token/cost ceiling enforced inside the loop (a killswitch, distinct from `.withCostTracking()` accounting). See [Builder API](/reference/builder-api/).
+- **`.withContract(taskContract)`** — declare a [`TaskContract`](/reference/builder-api/): required + forbidden tools, fixtures, a minimum model floor, and a success oracle. Required tools become an execute-time gate; forbidden tools are excluded from the tool schema. Enforced at `build()`.
+- **`.withLearning({ tier?, dbPath? })`** — enable the cross-run learning store (experience + skill learning).
+- **`.withSkillPersistence(enabled?)`** — persist learned `SkillRecord`s across process restarts (also enabled by `HarnessProfile.intelligent()`).
+
+### Capability-source honesty gate
+
+When an agent builds for a `(provider, model)` whose capability profile resolves to a silent **`fallback`** source (no probe, cache, or static-table entry → an assumed 2048-token context), `build()` now surfaces it: a **loud warning by default**, or a hard **error under `.withStrictValidation()`**. This catches the misconfigured-context class of failures at build time for every user instead of silently running on a wrong budget. See [Troubleshooting](/guides/troubleshooting/).
+
+### Behavior changes
+
+- **Cross-session memory is now default-on** (with a clear opt-out). When `.withMemory()` is active, the SQLite skill store wires by default and prior-session context is available on cold start. Opt out with `HarnessProfile.lean()` or by disabling memory explicitly.
+- **`.withLeanHarness()` is superseded** by `HarnessProfile.lean()`, which additionally disables reactive intelligence (the old method did not). Existing chains keep working.
+
+No breaking API removals — existing `ReactiveAgents.create().with*()` chains continue to compile and run.
 
 ---
 
