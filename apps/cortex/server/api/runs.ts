@@ -184,6 +184,54 @@ export const runsRouter = (
         return { error: String(e) };
       }
     })
+    // ── Durable HITL (Phase E) ──
+    // Pending durable approvals across all runs paused in this process.
+    .get("/pending-approvals", async ({ set }) => {
+      const program = Effect.gen(function* () {
+        const runner = yield* CortexRunnerService;
+        return { approvals: yield* runner.listPendingApprovals() };
+      });
+      try {
+        return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+      } catch (e) {
+        set.status = 500;
+        return { error: String(e) };
+      }
+    })
+    .post(
+      "/:runId/approve",
+      async ({ params, body, set }) => {
+        const program = Effect.gen(function* () {
+          const runner = yield* CortexRunnerService;
+          yield* runner.approveApproval(params.runId as RunId, body?.reason);
+          return { ok: true as const };
+        });
+        try {
+          return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+        } catch (e) {
+          set.status = 500;
+          return { error: String(e) };
+        }
+      },
+      { body: t.Optional(t.Object({ reason: t.Optional(t.String()) })) },
+    )
+    .post(
+      "/:runId/deny",
+      async ({ params, body, set }) => {
+        const program = Effect.gen(function* () {
+          const runner = yield* CortexRunnerService;
+          yield* runner.denyApproval(params.runId as RunId, body?.reason ?? "Denied from Cortex");
+          return { ok: true as const };
+        });
+        try {
+          return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+        } catch (e) {
+          set.status = 500;
+          return { error: String(e) };
+        }
+      },
+      { body: t.Optional(t.Object({ reason: t.Optional(t.String()) })) },
+    )
     .delete("/:runId", async ({ params, set }) => {
       const program = Effect.gen(function* () {
         const store = yield* CortexStoreService;

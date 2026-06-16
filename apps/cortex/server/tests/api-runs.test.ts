@@ -15,6 +15,9 @@ const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
   resume: () => Effect.void,
   stop: () => Effect.void,
   getActive: () => Effect.succeed(new Map()),
+  listPendingApprovals: () => Effect.succeed([]),
+  approveApproval: () => Effect.void,
+  denyApproval: () => Effect.void,
 });
 
 /** Creates a mock runner that captures the LaunchParams passed to start(). */
@@ -28,6 +31,9 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
     resume: () => Effect.void,
     stop: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
+    listPendingApprovals: () => Effect.succeed([]),
+    approveApproval: () => Effect.void,
+    denyApproval: () => Effect.void,
   });
 }
 
@@ -464,5 +470,44 @@ describe("error_message persistence", () => {
     const body = (await res.json()) as { runId: string; status: string; errorMessage?: string };
     expect(body.status).toBe("completed");
     expect(body.errorMessage).toBeUndefined();
+  });
+});
+
+describe("Durable HITL endpoints (Phase E)", () => {
+  it("GET /api/runs/pending-approvals returns the approvals list", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    const res = await app.handle(new Request("http://localhost/api/runs/pending-approvals"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { approvals: unknown[] };
+    expect(Array.isArray(body.approvals)).toBe(true);
+  });
+
+  it("POST /api/runs/:runId/approve returns ok", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/run-1/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "looks good" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+  });
+
+  it("POST /api/runs/:runId/deny returns ok", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/run-1/deny", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "nope" }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
   });
 });

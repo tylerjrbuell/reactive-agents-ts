@@ -112,11 +112,36 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     readonly resume: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly stop: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly getActive: () => Effect.Effect<ReadonlyMap<string, ActiveEntry>, never>;
+    // ── Durable HITL (Phase E) — operate on agents retained while a durable run
+    // is paused awaiting approval (in-process, live-session). ──
+    /** Pending durable approvals across all paused runs in this process. */
+    readonly listPendingApprovals: () => Effect.Effect<
+      readonly { runId: string; agentId: string; gateId: string; toolName: string; args: unknown }[],
+      never
+    >;
+    /** Approve a paused run's pending tool call; the run continues durably. */
+    readonly approveApproval: (runId: RunId, reason?: string) => Effect.Effect<void, CortexError>;
+    /** Deny a paused run's pending tool call; the run is terminated. */
+    readonly denyApproval: (runId: RunId, reason: string) => Effect.Effect<void, CortexError>;
   }
 >() {}
 
 const defaultCortexHttpUrl = (): string =>
   process.env.CORTEX_URL?.replace(/^ws/, "http") ?? "http://127.0.0.1:4321";
+
+/** Dispose a resolved (approved/denied) paused run's agent and drop it from the pending map. */
+const finalizePendingRun = (
+  entry: ActiveEntry,
+  pendingRef: Ref.Ref<Map<string, ActiveEntry>>,
+): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    yield* Effect.promise(() => entry.agent.dispose()).pipe(Effect.catchAll(() => Effect.void));
+    yield* Ref.update(pendingRef, (m) => {
+      const copy = new Map(m);
+      copy.delete(entry.runId);
+      return copy;
+    });
+  });
 
 export const CortexRunnerServiceLive = Layer.effect(
   CortexRunnerService,
@@ -127,6 +152,10 @@ export const CortexRunnerServiceLive = Layer.effect(
     const store = yield* CortexStoreService;
     const ingest = yield* CortexIngestService;
     const activeRef = yield* Ref.make(new Map<string, ActiveEntry>());
+    // Durable HITL: agents whose run() resolved with `awaiting-approval` are
+    // retained here (NOT disposed) so approveRun/denyRun can drive the same
+    // instance from a later HTTP call within this server process.
+    const pendingRef = yield* Ref.make(new Map<string, ActiveEntry>());
 
     return {
       start: (rawParams) =>
@@ -254,9 +283,21 @@ export const CortexRunnerServiceLive = Layer.effect(
             params,
           });
 
+          // Durable HITL: when a durable run pauses for approval, run() resolves
+          // with status "awaiting-approval". Retain the agent so approveRun/denyRun
+          // can drive it later; the `.finally` dispose is skipped while paused.
+          let paused = false;
+
           void agent
             .run(params.prompt, { taskId: runId })
             .then((result) => {
+              if ((result as { status?: string }).status === "awaiting-approval") {
+                paused = true;
+                cortexLog("info", "runner", "durable run paused — awaiting approval", { agentId, runId });
+                void Effect.runPromise(
+                  Ref.update(pendingRef, (m) => new Map(m).set(runId, { agentId, runId, agent, startedAt })),
+                );
+              }
               // The framework's DebriefCompleted event is not yet wired in the
               // execution engine. Emit it here from AgentResult.debrief so the
               // Debrief tab shows for agents launched from Cortex.
@@ -311,6 +352,19 @@ export const CortexRunnerServiceLive = Layer.effect(
               );
             })
             .finally(() => {
+              // Paused (awaiting-approval) durable runs keep their agent + event
+              // subscription alive so approveRun/denyRun can resume the SAME
+              // instance. Cleanup happens when the approval is resolved.
+              if (paused) {
+                void Effect.runPromise(
+                  Ref.update(activeRef, (m) => {
+                    const copy = new Map(m);
+                    copy.delete(runId);
+                    return copy;
+                  }),
+                );
+                return;
+              }
               try {
                 unsubscribe();
               } catch {
@@ -375,6 +429,62 @@ export const CortexRunnerServiceLive = Layer.effect(
         }),
 
       getActive: () => Ref.get(activeRef),
+
+      listPendingApprovals: () =>
+        Effect.gen(function* () {
+          const m = yield* Ref.get(pendingRef);
+          const out: { runId: string; agentId: string; gateId: string; toolName: string; args: unknown }[] = [];
+          for (const entry of m.values()) {
+            const pendings = yield* Effect.promise(() => entry.agent.listPendingApprovals()).pipe(
+              Effect.catchAll(() => Effect.succeed([] as readonly unknown[])),
+            );
+            for (const p of pendings as readonly { runId?: string; gateId?: string; toolName?: string; args?: unknown }[]) {
+              out.push({
+                runId: p.runId ?? entry.runId,
+                agentId: entry.agentId,
+                gateId: p.gateId ?? "",
+                toolName: p.toolName ?? "",
+                args: p.args ?? null,
+              });
+            }
+          }
+          return out;
+        }),
+
+      approveApproval: (runId, reason) =>
+        Effect.gen(function* () {
+          const m = yield* Ref.get(pendingRef);
+          const entry = m.get(String(runId));
+          if (!entry) {
+            cortexLog("debug", "runner", "approve: run not pending approval", { runId });
+            return;
+          }
+          const result = yield* Effect.tryPromise({
+            try: () => entry.agent.approveRun(String(runId), reason ? { reason } : undefined),
+            catch: (e) => new CortexError({ message: `approveRun failed: ${String(e)}`, cause: e }),
+          });
+          // Re-pause if it hit another gate; otherwise the run is done — clean up.
+          if ((result as { status?: string }).status === "awaiting-approval") {
+            cortexLog("info", "runner", "durable run re-paused after approval", { runId });
+            return;
+          }
+          yield* finalizePendingRun(entry, pendingRef);
+        }),
+
+      denyApproval: (runId, reason) =>
+        Effect.gen(function* () {
+          const m = yield* Ref.get(pendingRef);
+          const entry = m.get(String(runId));
+          if (!entry) {
+            cortexLog("debug", "runner", "deny: run not pending approval", { runId });
+            return;
+          }
+          yield* Effect.tryPromise({
+            try: () => entry.agent.denyRun(String(runId), reason),
+            catch: (e) => new CortexError({ message: `denyRun failed: ${String(e)}`, cause: e }),
+          });
+          yield* finalizePendingRun(entry, pendingRef);
+        }),
     };
   }),
 );
