@@ -849,6 +849,40 @@
         </div>
         <div class="flex items-center justify-between">
           <div>
+            <div class="font-mono text-[10px] text-on-surface/70">Durable execution</div>
+            <div class="font-mono text-[9px] text-outline/40">Crash-resume + human approval gate (survives restart). Forces reasoning on.</div>
+          </div>
+          <button type="button" onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: !config.durableRuns.enabled } })}
+            aria-label="Toggle durable execution"
+            aria-pressed={config.durableRuns.enabled}
+            class="flex-shrink-0 w-10 h-5 rounded-full border-0 cursor-pointer relative transition-colors duration-200
+                   {config.durableRuns.enabled ? 'bg-primary' : 'bg-surface-container-highest'}">
+            <span class="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ease-out
+                         {config.durableRuns.enabled ? 'translate-x-5' : 'translate-x-0'}"></span>
+          </button>
+        </div>
+        {#if config.durableRuns.enabled}
+          <div class="rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/30 p-2.5">
+            <div class="font-mono text-[9px] uppercase tracking-wide text-outline/60 mb-1.5">Approval-gated tools</div>
+            {#if config.tools.length === 0}
+              <div class="font-mono text-[9px] text-outline/40">Add tools above; gated tools pause the run for approval.</div>
+            {:else}
+              <div class="flex flex-wrap gap-1.5">
+                {#each config.tools as toolName (toolName)}
+                  {@const gated = config.durableRuns.approvalTools.includes(toolName)}
+                  <button type="button"
+                    onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, approvalTools: gated ? config.durableRuns.approvalTools.filter((t) => t !== toolName) : [...config.durableRuns.approvalTools, toolName] } })}
+                    class="rounded-md border px-2 py-1 font-mono text-[9px] transition-colors
+                           {gated ? 'border-primary bg-primary/15 text-primary' : 'border-[var(--cortex-border)] text-on-surface/60 hover:text-on-surface'}">
+                    {gated ? '✓ ' : ''}{toolName}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+        <div class="flex items-center justify-between">
+          <div>
             <div class="font-mono text-[10px] text-on-surface/70">Auto-switch strategy</div>
             <div class="font-mono text-[9px] text-outline/40">Switch strategy if agent gets stuck</div>
           </div>

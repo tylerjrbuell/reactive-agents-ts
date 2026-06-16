@@ -113,3 +113,17 @@ describe("cortexRunsPostBody — useReasoning (inline-think opt-out)", () => {
     expect(body.useReasoning).toBe(false);
   });
 });
+
+describe("cortexRunsPostBody — durable execution", () => {
+  it("omits durableRuns when disabled", () => {
+    const body = cortexRunsPostBody("x", defaultConfig()) as { durableRuns?: unknown };
+    expect(body.durableRuns).toBeUndefined();
+  });
+  it("sends durableRuns + approvalPolicy when enabled with gated tools", () => {
+    const cfg = { ...defaultConfig(), tools: ["file-read", "shell-execute"], durableRuns: { enabled: true, approvalTools: ["shell-execute"] } };
+    const body = cortexRunsPostBody("x", cfg) as { durableRuns?: { enabled: boolean; approvalPolicy?: { tools: string[]; mode: string } } };
+    expect(body.durableRuns?.enabled).toBe(true);
+    expect(body.durableRuns?.approvalPolicy?.tools).toEqual(["shell-execute"]);
+    expect(body.durableRuns?.approvalPolicy?.mode).toBe("detach");
+  });
+});

@@ -125,6 +125,13 @@ export interface AgentConfig {
   taskContext: Record<string, string>;
   /** Enables framework health probes (`agent.health()`). */
   healthCheck: boolean;
+  /**
+   * Durable execution (v0.12): crash-resume via SQLite RunStore + durable HITL.
+   * `approvalTools` are tool names that pause the run for human approval
+   * (surfaced in the Approval panel on the runs page). Forces the reasoning
+   * kernel on. Framework: `.withDurableRuns()` / `.withApprovalPolicy()`.
+   */
+  durableRuns: { enabled: boolean; approvalTools: string[] };
   /** Living skills: SKILL.md directories + optional evolution (framework `withSkills`). */
   skills: {
     paths: string[];
@@ -155,6 +162,7 @@ export function defaultConfig(): AgentConfig {
     minIterations: 0,
     strategySwitching: false,
     useReasoning: true,
+    durableRuns: { enabled: false, approvalTools: [] },
     verificationStep: "none",
     runtimeVerification: false,
     auditRationale: false,
