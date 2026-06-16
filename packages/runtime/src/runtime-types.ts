@@ -216,6 +216,19 @@ export interface RuntimeOptions {
   durableRuns?: import("./builder/types.js").DurableRunsOptions;
 
   /**
+   * Opt-in durable HITL approval policy (Phase D). Resolved from
+   * `.withApprovalPolicy()`: `tools` is the explicit gated-name list, `requireFor`
+   * an optional predicate, `mode` "detach" (durable pause) or "block" (in-process).
+   * Threaded into `KernelInput.approvalPolicy` by `reasoning-think.ts`. Absent ⇒
+   * no durable approval gate.
+   */
+  approvalPolicy?: {
+    readonly mode: "detach" | "block";
+    readonly tools: readonly string[];
+    readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+  };
+
+  /**
    * Mock LLM responses for testing (provider: "test" only).
    * Maps input patterns to predefined outputs.
    *

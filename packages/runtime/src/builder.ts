@@ -399,6 +399,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         | undefined = undefined
     /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
     private _durableRuns: import('./builder/types.js').DurableRunsOptions | undefined = undefined
+    /** Opt-in durable HITL approval policy (Phase D). Absent = off (default). */
+    private _approvalPolicy: import('./builder/types.js').ApprovalPolicyConfig | undefined = undefined
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
 
     // ─── Calibration ───
@@ -1325,6 +1327,26 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
+     * Configure durable human-in-the-loop approval gates (Phase D).
+     *
+     * In `mode: "detach"` (the default when `.withDurableRuns()` is set), a tool
+     * call named in `tools` — or matched by `requireFor` — pauses the run on the
+     * `runStream()` path: the engine persists `awaiting-approval` plus the pending
+     * action and the stream completes with `pendingApproval`. A human then calls
+     * `agent.approveRun(runId)` / `agent.denyRun(runId, reason)` from ANY process,
+     * which resumes the run from its checkpoint to completion.
+     *
+     * `mode: "detach"` requires `.withDurableRuns()` (detached pauses need a
+     * durable store). `mode: "block"` falls back to the in-process approval gate.
+     *
+     * @returns `this` for chaining
+     */
+    withApprovalPolicy(policy: import('./builder/types.js').ApprovalPolicyConfig): this {
+        this._approvalPolicy = policy
+        return this
+    }
+
+    /**
      * Enable the prompt template service for prompt management and A/B experiments.
      *
      * Allows registering and selecting from a library of prompts, with support for
@@ -1921,6 +1943,19 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @throws Error if configuration is invalid or API keys are missing
      */
     async build(): Promise<ReactiveAgent<TOut>> {
+        // Durable HITL (Phase D): a detached approval pause needs a durable store
+        // to persist it. Guard early so misconfiguration fails fast.
+        if (this._approvalPolicy) {
+            const approvalMode =
+                this._approvalPolicy.mode ?? (this._durableRuns ? 'detach' : 'block')
+            if (approvalMode === 'detach' && !this._durableRuns) {
+                throw new Error(
+                    ".withApprovalPolicy({ mode: 'detach' }) requires .withDurableRuns() — " +
+                        'detached approval pauses need a durable store to persist them.',
+                )
+            }
+        }
+
         // Auto-resolve context profile from model name if not explicitly set.
         // resolveProfileWithWindow binds maxTokens to the MODEL's real window
         // (recommendedNumCtx) instead of the tier placeholder — otherwise the

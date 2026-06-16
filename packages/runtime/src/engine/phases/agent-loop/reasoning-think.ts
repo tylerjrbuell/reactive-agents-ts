@@ -233,6 +233,13 @@ export const runReasoningThink = (
       initialMessages,
       resumeState,
       approvalDecision,
+      approvalPolicy: config.approvalPolicy
+        ? {
+            mode: config.approvalPolicy.mode,
+            tools: new Set(config.approvalPolicy.tools),
+            requireFor: config.approvalPolicy.requireFor,
+          }
+        : undefined,
       synthesisConfig: resolveSynthesisConfigForStrategy(
         config.reasoningOptions,
         effectiveStrategyName,

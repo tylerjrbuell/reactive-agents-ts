@@ -174,6 +174,8 @@ export interface BuilderRuntimeStateView {
   readonly _groundingConfig: import("../types.js").GroundingOptions | undefined;
   /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
   readonly _durableRuns: import("../types.js").DurableRunsOptions | undefined;
+  /** Opt-in durable HITL approval policy (Phase D). Absent = off (default). */
+  readonly _approvalPolicy: import("../types.js").ApprovalPolicyConfig | undefined;
   /** Registrations collected by `.withHarness()` calls — compiled into a HarnessPipeline. */
   readonly _harnessRegistrations: ReadonlyArray<(harness: import("@reactive-agents/core").Harness) => void>;
 }
@@ -455,6 +457,15 @@ export const buildBaseRuntimeAndEngine = (
       budgetLimits: state._budgetLimits,
       grounding: state._groundingConfig,
       durableRuns: state._durableRuns,
+      approvalPolicy: state._approvalPolicy
+        ? {
+            mode:
+              state._approvalPolicy.mode ??
+              (state._durableRuns ? "detach" : "block"),
+            tools: state._approvalPolicy.tools ?? [],
+            requireFor: state._approvalPolicy.requireFor,
+          }
+        : undefined,
       harnessPipeline,
     });
 

@@ -394,6 +394,28 @@ export interface DurableRunsOptions {
     readonly checkpointEvery?: number;
 }
 
+/**
+ * Durable human-in-the-loop approval policy (Phase D). Names the tool calls that
+ * must pause for human approval, and/or a predicate. In `mode: "detach"` (default
+ * when `.withDurableRuns()` is set) a gated call pauses the run, persists
+ * `awaiting-approval`, and returns control so a human can approve/deny from any
+ * process via `agent.approveRun`/`denyRun`. Detached pauses ride the `runStream()`
+ * path (where durable persistence lives). In `mode: "block"` the in-process
+ * approval gate handles it instead.
+ *
+ * Note (v0.12): the per-tool `requiresApproval` flag does NOT auto-feed this gate
+ * yet — list the tool names explicitly in `tools` or use `requireFor`. The
+ * flag-auto-trigger is a fast-follow.
+ */
+export interface ApprovalPolicyConfig {
+    /** Tool names whose calls must pause for approval. */
+    readonly tools?: readonly string[];
+    /** Predicate: return true to require approval for this call. */
+    readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+    /** "detach" (durable, default when durable runs are on) or "block" (in-process). */
+    readonly mode?: "detach" | "block";
+}
+
 export interface VerificationOptions {
     /** Enable semantic entropy estimation. Default: true */
     readonly semanticEntropy?: boolean
