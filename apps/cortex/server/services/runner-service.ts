@@ -291,11 +291,16 @@ export const CortexRunnerServiceLive = Layer.effect(
           void agent
             .run(params.prompt, { taskId: runId })
             .then((result) => {
-              if ((result as { status?: string }).status === "awaiting-approval") {
+              const r = result as { status?: string; pendingApproval?: { runId: string } };
+              if (r.status === "awaiting-approval" && r.pendingApproval) {
                 paused = true;
-                cortexLog("info", "runner", "durable run paused — awaiting approval", { agentId, runId });
+                // Key the retained agent by the DURABLE runId (what
+                // listPendingApprovals surfaces and approve/deny are called with),
+                // NOT the cortex taskId — they differ (runDurable mints its own id).
+                const durableRunId = r.pendingApproval.runId;
+                cortexLog("info", "runner", "durable run paused — awaiting approval", { agentId, runId, durableRunId });
                 void Effect.runPromise(
-                  Ref.update(pendingRef, (m) => new Map(m).set(runId, { agentId, runId, agent, startedAt })),
+                  Ref.update(pendingRef, (m) => new Map(m).set(durableRunId, { agentId, runId: durableRunId, agent, startedAt })),
                 );
               }
               // The framework's DebriefCompleted event is not yet wired in the

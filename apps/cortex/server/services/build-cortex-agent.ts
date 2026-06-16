@@ -167,6 +167,17 @@ export async function buildCortexAgent(
     b = b.withMemory();
   }
 
+  // Durable execution (checkpoint seam + the HITL approval gate) lives ONLY in
+  // the reasoning kernel — the engine's inline-think fallback (used when no
+  // ReasoningService is present) has neither. Cortex only enables reasoning when
+  // a strategy/synthesis/audit option is set, so a durable run launched without
+  // those would silently run inline and never checkpoint or pause for approval.
+  // Force reasoning on whenever durable runs are requested. A later
+  // `.withReasoning({...})` (synthesis/audit block below) refines these defaults.
+  if (params.durableRuns?.enabled) {
+    b = b.withReasoning();
+  }
+
   if (params.observabilityVerbosity && params.observabilityVerbosity !== "off") {
     const agentLogFile = process.env.CORTEX_AGENT_LOG_FILE ?? ".cortex/logs/agent-debug.log";
     ensureParentDirForFile(agentLogFile);
