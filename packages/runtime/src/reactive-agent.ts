@@ -215,11 +215,20 @@ export class ReactiveAgent<TOut = unknown> {
         const schemaBlock = jsonSchemaString !== undefined
             ? `\n\n${jsonSchemaString}`
             : ""
-        return (
-            `\n\nRespond with ONLY a single JSON object that exactly matches this JSON Schema` +
-            ` — no prose, no markdown fences, no explanation.` +
-            ` Use exactly these top-level keys; do not nest or wrap:${schemaBlock}`
-        )
+        // Shape-aware: a top-level array schema must be steered to emit a JSON array,
+        // not an object — otherwise the model wraps it (e.g. {items:[...]}) and
+        // validation/parse-first fails.
+        const isArray = (jsonSchema as { type?: unknown } | undefined)?.type === "array"
+        return isArray
+            ? (
+                `\n\nRespond with ONLY a JSON array that exactly matches this JSON Schema` +
+                ` — no prose, no markdown fences, no explanation, no wrapping object:${schemaBlock}`
+            )
+            : (
+                `\n\nRespond with ONLY a single JSON object that exactly matches this JSON Schema` +
+                ` — no prose, no markdown fences, no explanation.` +
+                ` Use exactly these top-level keys; do not nest or wrap:${schemaBlock}`
+            )
     }
 
     /**

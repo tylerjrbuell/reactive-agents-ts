@@ -319,16 +319,28 @@ export function buildStructuredPrompt<T>(
 
   if (jsonSchemaString !== undefined) {
     parts.push(
-      "\nRespond with ONLY a JSON object that exactly matches this JSON Schema." +
-      " Use these exact top-level keys; do NOT nest, wrap, or add extra keys:\n",
+      isArraySchemaString(jsonSchemaString)
+        ? "\nRespond with ONLY a JSON array that exactly matches this JSON Schema." +
+          " Do NOT wrap it in an object or add extra keys:\n"
+        : "\nRespond with ONLY a JSON object that exactly matches this JSON Schema." +
+          " Use these exact top-level keys; do NOT nest, wrap, or add extra keys:\n",
     );
     parts.push(jsonSchemaString);
     parts.push("\nNo markdown fences, no explanation, no <think> tags.");
   } else {
-    parts.push("\nRespond with ONLY a JSON object. No markdown fences, no explanation.");
+    parts.push("\nRespond with ONLY a JSON value (object or array) matching the request. No markdown fences, no explanation.");
   }
 
   return parts.join("\n");
+}
+
+/** True when the rendered JSON Schema describes a top-level array. */
+function isArraySchemaString(jsonSchemaString: string): boolean {
+  try {
+    return (JSON.parse(jsonSchemaString) as { type?: unknown }).type === "array";
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -343,15 +355,19 @@ export function buildRetryPrompt<T>(
   jsonSchemaString: string | undefined,
 ): string {
   if (jsonSchemaString !== undefined) {
+    const shape = isArraySchemaString(jsonSchemaString) ? "JSON array" : "JSON object";
+    const constraint = isArraySchemaString(jsonSchemaString)
+      ? "(do NOT wrap it in an object or add extra keys)"
+      : "(exact top-level keys, no nesting/wrapping)";
     return `Your previous response did not match the required JSON Schema. Error: ${error}
 
-The response MUST be a JSON object matching exactly this schema (exact top-level keys, no nesting/wrapping):
+The response MUST be a ${shape} matching exactly this schema ${constraint}:
 
 ${jsonSchemaString}
 
 Original request: ${config.prompt}
 
-Respond with ONLY the valid JSON object. No markdown, no explanation.`;
+Respond with ONLY the valid ${shape}. No markdown, no explanation.`;
   }
 
   return `Your previous response was not valid JSON. Error: ${error}
