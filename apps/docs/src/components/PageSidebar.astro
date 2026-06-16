@@ -11,6 +11,7 @@
 import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/PageSidebar.astro";
 import EmailSubscribe from "./EmailSubscribe.astro";
+import FeedbackButton from "./FeedbackButton.astro";
 ---
 
 <Default {...Astro.props}><slot /></Default>
@@ -18,5 +19,6 @@ import EmailSubscribe from "./EmailSubscribe.astro";
 <div class="right-sidebar-panel sl-hidden lg:sl-block ra-sub-panel-wrap">
     <div class="sl-container">
         <EmailSubscribe sidebar />
+        <FeedbackButton />
     </div>
 </div>

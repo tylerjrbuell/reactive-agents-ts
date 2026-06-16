@@ -1,29 +1,28 @@
 ---
 /**
- * Floating "Feedback" button + modal, shown on every docs page (rendered from
- * the Footer override). Collects a message + optional contact email and POSTs
- * to the feedback API, which relays it to the maintainer via Resend.
+ * "Share feedback" trigger button + modal, rendered in the right-hand page
+ * sidebar (PageSidebar.astro) directly under the subscribe form. Collects a
+ * message + optional contact email and POSTs to the feedback API, which relays
+ * it to the maintainer via Resend.
  *
  * Endpoint contract (implement server-side — see wiki/Reference/feedback-endpoint):
  *   POST https://api.reactiveagents.dev/v1/feedback
  *   body: { message: string; email?: string; page?: string; userAgent?: string }
  *   200 on success; 400 invalid; 429 rate-limited.
- *
- * Placed bottom-LEFT to avoid the Context7 widget (bottom-right).
  */
 ---
 
 <button
   type="button"
-  class="ra-fb-fab"
+  class="ra-fb-trigger"
   id="ra-fb-open"
   aria-haspopup="dialog"
   aria-controls="ra-fb-modal"
 >
-  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
   </svg>
-  <span>Feedback</span>
+  <span>Share feedback</span>
 </button>
 
 <div class="ra-fb-overlay" id="ra-fb-modal" role="dialog" aria-modal="true" aria-labelledby="ra-fb-title" hidden>
