@@ -18,6 +18,8 @@ import {
   makeStep,
   buildStrategyResult,
 } from "../kernel/capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../kernel/utils/observation-helpers.js";
+import { emitToCompose } from "@reactive-agents/core";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { generateToolBindings } from "./code-action/tool-binding.js";
@@ -52,6 +54,12 @@ export interface CodeActionInput {
   readonly initialMessages?: readonly KernelMessage[];
   /** Override verifier — defaults to noopVerifier (code-action is its own judge) */
   readonly verifier?: Verifier;
+  /**
+   * Compose harness pipeline — drives `.on/.tap/.before/.after` + all tags.
+   * FM-I (#195): code-action runs tools inside the sandbox Worker (not the kernel
+   * act phase), so without this thread its tool calls were invisible to observers.
+   */
+  readonly harnessPipeline?: import("@reactive-agents/core").HarnessPipeline;
 }
 
 // ── executeCodeAction ─────────────────────────────────────────────────────────
@@ -153,6 +161,46 @@ export const executeCodeAction = (
 
       lastToolCalls = sandboxResult.toolCalls;
       lastResult = sandboxResult.finalResult;
+
+      // FM-I (#195) — emit the canonical observation.tool-result Compose tag for
+      // each tool the sandbox actually executed, so `.on()/.tap()` observers,
+      // killswitches, and calibration see code-action tool calls like every other
+      // strategy. A rejected sandbox throws before this point, so every recorded
+      // call succeeded (healed:false — code-action has no healing pipeline).
+      if (input.harnessPipeline) {
+        const stateLike = {
+          taskId: input.taskId ?? "code-action",
+          strategy: "code-action",
+          kernelType: "code-action",
+          steps,
+          toolsUsed: new Set(sandboxResult.toolCalls.map((c) => c.name)),
+          iteration,
+          tokens: totalTokens,
+          status: "running",
+          output: null,
+          error: null,
+          meta: {},
+        };
+        let callIdx = 0;
+        for (const tc of sandboxResult.toolCalls) {
+          const resultText =
+            typeof tc.result === "string" ? tc.result : JSON.stringify(tc.result) ?? "";
+          const obsContent = `[${tc.name} result]\n${resultText}`;
+          const obsStep = makeStep("observation", obsContent, {
+            observationResult: makeObservationResult(tc.name, true, obsContent),
+          });
+          yield* emitToCompose(input.harnessPipeline, "observation.tool-result", obsStep, {
+            iteration,
+            phase: "act",
+            state: stateLike,
+            strategy: "code-action",
+            toolName: tc.name,
+            callId: `code-action-${iteration}-${callIdx++}`,
+            healed: false,
+            durationMs: 0,
+          });
+        }
+      }
 
       steps.push(
         makeStep(
