@@ -115,6 +115,17 @@ E1 → E2 (durable headline, P0) → S → C. Build server + store + test per ph
   `durableRuns`/`approvalPolicy` in the run body. Full UI-shape E2E live-verified:
   launch → pause on gated tool → Approval panel → approve → resume → clear.
 
-- **Phase S (structured output `.withOutputSchema`→`result.object` + UI viewer) +
-  Phase C (budget/grounding/calibration config surface): NOT STARTED** — next
-  increments.
+- **✅ Phase S — structured output SHIPPED + live-verified** (`edba7278`, `8a6ed23e`):
+  - `json-schema-output.ts` wraps a raw JSON Schema as a lenient Standard Schema
+    (StandardJSONSchemaV1 `~standard.jsonSchema.output` extension) → no
+    JSON-Schema→Effect-Schema conversion needed. `.withOutputSchema()` steers
+    extraction; lenient (objectError, never throws).
+  - Threaded outputSchema through buildCortexAgent + LaunchParams + RunConfigBody +
+    post-body. Runner emits synthetic `StructuredOutputExtracted` event.
+  - UI: AgentConfigPanel schema editor (live validity) + run-store handling +
+    RunFinalDeliverable typed-object viewer.
+  - Live-verified (gemma4:e4b): object schema → `{ name:"Ada Lovelace",
+    role:"mathematician", born:1815 }` (typed). cortex 416/416.
+
+- **Phase C (budget caps / grounding / calibration config surface): NOT STARTED** —
+  next increment.
