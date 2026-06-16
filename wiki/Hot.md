@@ -63,7 +63,7 @@ updated: 2026-06-16
 ## What's Next
 
 1. **Push `main` to origin** (~50 commits unpushed) — confirms #194 closed, syncs durable-exec + HITL + docs overhaul.
-2. **Finish v0.12 remaining levers:** DX-wave builder consolidation (observability 5→1); cost-honesty full per-tier debrief policy; strategy-honesty adaptive-routing local-tier default; durable Phase E (Cortex UI). (#195 strategy-honesty hook-drop DONE.)
+2. **v0.12 levers — 3 of 4 SHIPPED 2026-06-16:** ✅ cost-honesty (debrief LLM synth skipped on local tier, `4841be7e`), ✅ strategy-honesty (adaptive→reactive on local tier, `4841be7e`; #195 already closed), ✅ DX-wave (`withObservability` 5→1 fan-out, `0819a645`). **Only durable Phase E (Cortex resume/approval UI) remains** — greenfield (server endpoints + Svelte UI + playwright verify); Cortex has zero durable wiring today. Needs its own session.
 3. **Cut v0.12.0** — bump VERSION, `bun run release:dry 0.12.0` (sole drift gate), tag-driven publish.
 4. **Stale-doc cleanup:** update `wiki/Issues/Running Issues Log.md` (HS-34/HS-35 → cleared).
 5. Team-ownership pilot window ended 2026-06-15 — ablation-warden lift-rule evaluation outstanding.
