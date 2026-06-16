@@ -9,7 +9,7 @@
  * the only structural change is that `config` and `execute` are now factory parameters
  * instead of closure-captured.
  */
-import { Effect, Option, Queue, Stream as EStream } from "effect";
+import { Effect, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import {
@@ -35,6 +35,31 @@ export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
   readonly execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
 }
+
+/** Persist a paused run: status → awaiting-approval + a pending approval row. */
+const persistApprovalPause = (params: {
+  runStoreLayer: Layer.Layer<RunStoreService>;
+  runId: string;
+  gate: { gateId: string; toolName: string; args: unknown };
+}): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    yield* store.setStatus(params.runId, "awaiting-approval");
+    yield* store.putApproval({
+      runId: params.runId,
+      gateId: params.gate.gateId,
+      toolName: params.gate.toolName,
+      argsJson: JSON.stringify(params.gate.args ?? null),
+    });
+  }).pipe(
+    Effect.provide(params.runStoreLayer),
+    Effect.catchAllCause((cause) =>
+      emitErrorSwallowed({
+        site: "runtime/src/engine/execute-stream.ts:persistApprovalPause",
+        tag: errorTag(cause),
+      }),
+    ),
+  );
 
 export const makeExecuteStream =
   ({ config, execute }: ExecuteStreamDeps) =>
@@ -170,6 +195,7 @@ export const makeExecuteStream =
       // Absent the opt-in this whole block is skipped: no store, no run row, no
       // db file, and the controller's `onCheckpoint` stays undefined (zero cost).
       let durableFinish: ((success: boolean) => void) | undefined;
+      let runStoreCtx: { runId: string; runStoreLayer: Layer.Layer<RunStoreService> } | undefined;
       if (config.durableRuns && options?.runController) {
         const agentId = config.agentId;
         const dir =
@@ -181,6 +207,7 @@ export const makeExecuteStream =
         const runStoreLayer = RunStoreLive(dbPath);
         // Stable-ish run id: content hash of agent + task + start time.
         const runId = hash(`${agentId}:${String(task.id)}:${startMs}`).toString(36);
+        runStoreCtx = { runId, runStoreLayer };
         // Phase C: hash the reproducible identity descriptor (not the whole
         // config) so ReactiveAgent.resume() can recompute a matching hash.
         const configHash = durableConfigHash({
@@ -215,7 +242,15 @@ export const makeExecuteStream =
 
       yield* execute(task).pipe(
         Effect.tap((taskResult) => {
-          durableFinish?.(true);
+          // Durable HITL: detect if the run paused for approval.
+          const gate = (taskResult as { awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown } }).awaitingApprovalFor;
+          const paused = gate !== undefined && runStoreCtx !== undefined;
+
+          // Only mark a non-paused run as finished in the durable store.
+          if (!paused) {
+            durableFinish?.(true);
+          }
+
           const debriefToolsUsed = (taskResult as { debrief?: { toolsUsed?: Array<{ name: string; calls: number; successRate: number }> } })
             .debrief?.toolsUsed;
           const toolSummary =
@@ -235,8 +270,24 @@ export const makeExecuteStream =
             taskId: String(task.id),
             agentId: String(task.agentId),
             ...(toolSummary.length > 0 ? { toolSummary } : {}),
+            ...(paused && runStoreCtx !== undefined
+              ? {
+                  runId: runStoreCtx.runId,
+                  pendingApproval: {
+                    runId: runStoreCtx.runId,
+                    gateId: gate!.gateId,
+                    toolName: gate!.toolName,
+                    args: gate!.args,
+                  },
+                }
+              : {}),
           };
-          const offer = Queue.offer(queue, completedEvent);
+          // Persist the pause BEFORE emitting StreamCompleted so callers that
+          // consume the event can immediately call decideApproval.
+          const persistStep = paused && runStoreCtx !== undefined
+            ? persistApprovalPause({ runStoreLayer: runStoreCtx.runStoreLayer, runId: runStoreCtx.runId, gate: gate! })
+            : Effect.void;
+          const offer = persistStep.pipe(Effect.zipRight(Queue.offer(queue, completedEvent)));
           if (!eb) return offer;
           return offer.pipe(
             Effect.tap(() =>

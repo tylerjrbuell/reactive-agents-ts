@@ -809,4 +809,17 @@ export interface AgentResult {
     readonly confidence?: Readonly<Record<string, number>>
     /** Grounded engine only: per-field-path abstention reason (field omitted, not hallucinated). */
     readonly abstained?: Readonly<Record<string, string>>
+    /**
+     * Lifecycle status. Defaults to `"completed"` for the normal path; set to
+     * `"awaiting-approval"` when a durable run paused for human approval (durable
+     * HITL, Phase D), or `"failed"` on error.
+     */
+    readonly status?: "completed" | "awaiting-approval" | "failed";
+    /** Present only when `status === "awaiting-approval"`. The paused gate + the durable runId to approve/deny. */
+    readonly pendingApproval?: {
+        readonly runId: string;
+        readonly gateId: string;
+        readonly toolName: string;
+        readonly args: unknown;
+    };
 }

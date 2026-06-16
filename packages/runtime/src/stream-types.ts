@@ -25,6 +25,15 @@ export type AgentStreamEvent =
       readonly taskId?: string;
       readonly agentId?: string;
       readonly toolSummary?: ReadonlyArray<{ readonly name: string; readonly calls: number; readonly avgMs: number }>;
+      /** Durable HITL: the durable runId, present when this run paused for approval. */
+      readonly runId?: string;
+      /** Durable HITL: the paused gate descriptor, present when status is awaiting-approval. */
+      readonly pendingApproval?: {
+        readonly runId: string;
+        readonly gateId: string;
+        readonly toolName: string;
+        readonly args: unknown;
+      };
     }
   | {
       /** Execution failed. Last event on a failed stream. */

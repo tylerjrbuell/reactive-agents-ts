@@ -1153,6 +1153,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   format: "text",
                   terminatedBy: terminatedByRaw,
                   ...(debrief !== undefined ? { debrief } : {}),
+                  ...((rr?.metadata as Record<string, unknown> | undefined)?.["awaitingApprovalFor"] !== undefined
+                    ? { awaitingApprovalFor: (rr!.metadata as Record<string, unknown>)["awaitingApprovalFor"] as { gateId: string; toolName: string; args: unknown } }
+                    : {}),
                 };
 
                 // Surface the forked rich-debrief fiber on the result (internal,
