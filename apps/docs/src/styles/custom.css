@@ -1520,6 +1520,7 @@ nav a[data-ra-new='true']::before {
 .ra-sub-input {
     flex: 1;
     min-width: 0;
+    box-sizing: border-box;
     padding: 0.6rem 1rem;
     border-radius: 10px;
     border: 1px solid rgba(139, 92, 246, 0.35);
@@ -1543,6 +1544,7 @@ nav a[data-ra-new='true']::before {
 .ra-sub-btn {
     position: relative;
     flex: 0 0 auto;
+    box-sizing: border-box;
     padding: 0.6rem 1.25rem;
     border-radius: 10px;
     border: none;
@@ -1665,17 +1667,44 @@ nav a[data-ra-new='true']::before {
     border-color: rgba(124, 58, 237, 0.6);
 }
 
-/* Right-sidebar (TOC) subscribe card — narrow, stacked, on every page */
+/* Subscribe panel mirrors Starlight's .right-sidebar-panel > .sl-container so
+   the card matches the narrow TOC column width exactly. (Starlight's own
+   .sl-container sizing is component-scoped, so it is replicated here.) */
+.ra-sub-panel-wrap {
+    padding: 0 var(--sl-sidebar-pad-x) 1rem;
+}
+.ra-sub-panel-wrap .sl-container {
+    width: calc(var(--sl-sidebar-width) - 2 * var(--sl-sidebar-pad-x));
+    box-sizing: border-box;
+}
+@media (min-width: 72rem) {
+    .ra-sub-panel-wrap .sl-container {
+        max-width: calc(
+            (
+                100vw - var(--sl-sidebar-width) - 2 * var(--sl-content-pad-x) - 2 *
+                    var(--sl-sidebar-pad-x)
+            ) * 0.25
+        );
+    }
+}
+
+/* Right-sidebar (TOC) subscribe card — narrow, stacked, on every page.
+   Everything is border-box + width-clamped so the input/button never
+   overflow the narrow TOC column. */
 .ra-sidebar-subscribe {
-    margin-top: 1.75rem;
     padding-top: 1.25rem;
     border-top: 1px solid rgba(139, 92, 246, 0.18);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .ra-sub-side {
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+    width: 100%;
+    max-width: 100%;
 }
 
 .ra-sub-side-label {
@@ -1689,25 +1718,30 @@ nav a[data-ra-new='true']::before {
 .ra-sub-form--side {
     flex-direction: column;
     gap: 0.45rem;
-    max-width: none;
     width: 100%;
+    max-width: 100%;
+}
+
+.ra-sub-form--side .ra-sub-input,
+.ra-sub-btn--side {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    font-size: 0.82rem;
 }
 
 .ra-sub-form--side .ra-sub-input {
-    width: 100%;
     padding: 0.5rem 0.7rem;
-    font-size: 0.82rem;
 }
 
 .ra-sub-btn--side {
-    width: 100%;
     padding: 0.5rem 0.9rem;
-    font-size: 0.82rem;
 }
 
 .ra-sub-side .ra-sub-msg {
     font-size: 0.78rem;
     min-height: 0;
+    word-break: break-word;
 }
 
 .ra-sub-side-fine {

@@ -1,8 +1,12 @@
 ---
 /**
  * Right-hand page sidebar override. Renders Starlight's default "On this page"
- * table of contents, then appends the release-subscribe form so it is visible
- * on every docs page without cluttering the article body.
+ * table of contents, then appends the release-subscribe form in its own panel
+ * that mirrors Starlight's `.right-sidebar-panel > .sl-container` structure so
+ * it inherits the exact narrow TOC column width (the default `.right-sidebar`
+ * is position:fixed and full-width — content must live inside `.sl-container`).
+ * Width CSS is replicated in custom.css (.ra-sub-panel-wrap) because Starlight's
+ * scoped styles do not reach this component.
  */
 import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/PageSidebar.astro";
@@ -11,6 +15,8 @@ import EmailSubscribe from "./EmailSubscribe.astro";
 
 <Default {...Astro.props}><slot /></Default>
 
-<div class="ra-sidebar-subscribe">
-    <EmailSubscribe sidebar />
+<div class="right-sidebar-panel sl-hidden lg:sl-block ra-sub-panel-wrap">
+    <div class="sl-container">
+        <EmailSubscribe sidebar />
+    </div>
 </div>
