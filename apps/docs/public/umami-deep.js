@@ -207,6 +207,12 @@
       wrap.querySelector(".ra-feedback-actions").hidden = true;
       wrap.querySelector(".ra-feedback-q").hidden = true;
       wrap.querySelector(".ra-feedback-thanks").hidden = false;
+      // A "No" vote is a dead-end count on its own. Invite the why: open the
+      // global feedback modal (tailored copy + tagged as a page downvote).
+      // No-ops gracefully if the modal hasn't mounted.
+      if (vote === "no" && typeof window.__raOpenFeedback === "function") {
+        setTimeout(() => window.__raOpenFeedback({ reason: "page-unhelpful" }), 250);
+      }
     });
   };
 

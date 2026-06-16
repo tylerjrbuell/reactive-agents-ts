@@ -1,14 +1,8 @@
 ---
 /**
- * "Share feedback" trigger button + modal, rendered in the right-hand page
- * sidebar (PageSidebar.astro) directly under the subscribe form. Collects a
- * message + optional contact email and POSTs to the feedback API, which relays
- * it to the maintainer via Resend.
- *
- * Endpoint contract (implement server-side — see wiki/Reference/feedback-endpoint):
- *   POST https://api.reactiveagents.dev/v1/feedback
- *   body: { message: string; email?: string; page?: string; userAgent?: string }
- *   200 on success; 400 invalid; 429 rate-limited.
+ * "Share feedback" trigger button, rendered in the right-hand page sidebar
+ * (PageSidebar.astro) directly under the subscribe form. Opens the global
+ * FeedbackModal singleton (rendered from the Footer) via window.__raOpenFeedback.
  */
 ---
 
@@ -25,144 +19,21 @@
   <span>Share feedback</span>
 </button>
 
-<div class="ra-fb-overlay" id="ra-fb-modal" role="dialog" aria-modal="true" aria-labelledby="ra-fb-title" hidden>
-  <div class="ra-fb-card" role="document">
-    <button type="button" class="ra-fb-close" id="ra-fb-close" aria-label="Close feedback dialog">
-      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
-    </button>
-
-    <h2 class="ra-fb-title" id="ra-fb-title">Share feedback</h2>
-    <p class="ra-fb-desc">
-      What's working, what's missing, what's confusing? It goes straight to the
-      maintainer and shapes the roadmap. No account needed.
-    </p>
-
-    <form id="ra-fb-form" class="ra-fb-form" novalidate>
-      <label class="ra-fb-label" for="ra-fb-message">Your feedback</label>
-      <textarea
-        id="ra-fb-message"
-        name="message"
-        class="ra-fb-textarea"
-        rows="5"
-        required
-        maxlength="4000"
-        placeholder="A bug, a missing feature, a docs gap, a rough edge…"
-      ></textarea>
-
-      <label class="ra-fb-label" for="ra-fb-email">Email <span class="ra-fb-optional">(optional — for a reply)</span></label>
-      <input
-        id="ra-fb-email"
-        type="email"
-        name="email"
-        class="ra-fb-input"
-        autocomplete="email"
-        placeholder="you@example.com"
-        aria-label="Email (optional)"
-      />
-
-      <div class="ra-fb-actions">
-        <button type="button" class="ra-fb-btn ra-fb-btn--ghost" id="ra-fb-cancel">Cancel</button>
-        <button type="submit" class="ra-fb-btn ra-fb-btn--primary">
-          <span class="ra-fb-btn-text">Send feedback</span>
-          <span class="ra-fb-btn-spinner" aria-hidden="true"></span>
-        </button>
-      </div>
-      <p class="ra-fb-msg" aria-live="polite"></p>
-    </form>
-  </div>
-</div>
-
 <script>
 (function () {
-  const API = "https://api.reactiveagents.dev/v1/feedback";
-
-  function init() {
-    const openBtn = document.getElementById("ra-fb-open");
-    const modal = document.getElementById("ra-fb-modal");
-    const closeBtn = document.getElementById("ra-fb-close");
-    const cancelBtn = document.getElementById("ra-fb-cancel");
-    const form = document.getElementById("ra-fb-form");
-    if (!openBtn || !modal || !form) return;
-
-    const msgEl = form.querySelector(".ra-fb-msg");
-    const submitBtn = form.querySelector(".ra-fb-btn--primary");
-    const message = form.querySelector("textarea[name=message]");
-    let lastFocused = null;
-
-    function open() {
-      lastFocused = document.activeElement;
-      modal.removeAttribute("hidden");
-      document.body.style.overflow = "hidden";
-      requestAnimationFrame(() => {
-        modal.classList.add("ra-fb-overlay--in");
-        message && message.focus();
-      });
-    }
-    function close() {
-      modal.classList.remove("ra-fb-overlay--in");
-      document.body.style.overflow = "";
-      setTimeout(() => modal.setAttribute("hidden", ""), 180);
-      if (lastFocused && lastFocused.focus) lastFocused.focus();
-    }
-    function showMsg(text, kind) {
-      if (!msgEl) return;
-      msgEl.textContent = text;
-      msgEl.className = "ra-fb-msg ra-fb-msg--" + kind;
-    }
-
-    openBtn.addEventListener("click", open);
-    closeBtn && closeBtn.addEventListener("click", close);
-    cancelBtn && cancelBtn.addEventListener("click", close);
-    modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !modal.hasAttribute("hidden")) close();
-    });
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const text = (message && message.value || "").trim();
-      if (!text) { showMsg("Please enter some feedback first.", "err"); message && message.focus(); return; }
-      const email = (form.querySelector("input[name=email]").value || "").trim();
-
-      submitBtn && submitBtn.setAttribute("disabled", "true");
-      submitBtn && submitBtn.classList.add("ra-fb-btn--loading");
-      showMsg("", "");
-
-      try {
-        const res = await fetch(API, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: text,
-            email: email || undefined,
-            page: location.pathname + location.search,
-            userAgent: navigator.userAgent,
-          }),
-        });
-        if (res.ok) {
-          showMsg("Thanks — your feedback was sent. 🙌", "ok");
-          form.reset();
-          setTimeout(close, 1400);
-        } else if (res.status === 429) {
-          showMsg("Too many submissions — try again in a moment.", "warn");
-        } else if (res.status === 400) {
-          showMsg("Please check your input and try again.", "err");
-        } else {
-          showMsg("Couldn't send right now. Try again, or reach us on Discord.", "err");
-        }
-      } catch (_) {
-        showMsg("Network error — check your connection and try again.", "err");
-      } finally {
-        submitBtn && submitBtn.removeAttribute("disabled");
-        submitBtn && submitBtn.classList.remove("ra-fb-btn--loading");
-      }
+  function wire() {
+    const btn = document.getElementById("ra-fb-open");
+    if (!btn || btn.dataset.wired) return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      if (typeof window.__raOpenFeedback === "function") window.__raOpenFeedback();
     });
   }
-
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", wire);
   } else {
-    init();
+    wire();
   }
+  document.addEventListener("astro:page-load", wire);
 })();
 </script>

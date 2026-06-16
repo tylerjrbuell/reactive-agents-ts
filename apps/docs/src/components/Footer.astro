@@ -1,9 +1,12 @@
 ---
-// The release-subscribe form and the Share-feedback button both live in the
-// right-hand page sidebar (see PageSidebar.astro). Footer falls through to
-// Starlight's default.
+// The subscribe form + Share-feedback trigger live in the right-hand page
+// sidebar (PageSidebar.astro). The feedback MODAL is a global singleton
+// rendered here so it is always in the DOM and openable from anywhere
+// (sidebar button, or a "👎 No" vote on the helpful widget).
 import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/Footer.astro";
+import FeedbackModal from "./FeedbackModal.astro";
 ---
 
 <Default {...Astro.props}><slot /></Default>
+<FeedbackModal />
