@@ -206,12 +206,19 @@ export const prepareDebrief = (
       outputForSuccess.length < 100 &&
       errorsFromLoop.length === 0;
 
+    // Cost honesty (v0.12) — tier-aware debrief skip. The rich LLM synthesis is
+    // the single largest per-run overhead; on the local tier it failed ~52% of
+    // the time (max_tokens / empty content) while burning ~825 tok + ~6s per
+    // task (GH #143). Local runs keep the deterministic fallback record but skip
+    // the LLM call entirely. Mid/large tiers retain full synthesis.
+    const isLocalTier = config.contextProfile?.tier === "local";
+
     // Gated on BOTH: rr !== undefined (reasoning path was used) AND
     // config.enableMemory (user opted in with .withMemory()). Skipped otherwise
     // to avoid injecting extra LLM calls in direct-LLM path tests and non-memory
     // configurations.
     const shouldFinalize = rr !== undefined && config.enableMemory === true;
-    const shouldSynthesizeLLM = shouldFinalize && !isTrivialForDebrief;
+    const shouldSynthesizeLLM = shouldFinalize && !isTrivialForDebrief && !isLocalTier;
 
     const fallbackDebrief = shouldFinalize ? buildFallbackDebrief(debriefInput) : undefined;
 

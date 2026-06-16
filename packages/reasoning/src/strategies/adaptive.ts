@@ -126,9 +126,18 @@ export const executeAdaptive = (
     const taskClassification =
       input.taskClassification ?? classifyTask(input.taskDescription);
 
+    // ── Strategy honesty (v0.12) — local-tier default ──
+    // Heavy strategies (reflexion / tree-of-thought / plan-execute) show no
+    // quality lift over the reactive kernel on local models (internal parity
+    // data) at 3–15× cost. On the local tier, default adaptive to reactive —
+    // this also skips the analysis LLM call. Non-local tiers keep the full
+    // heuristic + LLM selection path.
+    const localTierDefault: SubStrategy | undefined =
+      input.contextProfile?.tier === "local" ? "reactive" : undefined;
+
     // ── Heuristic pre-classifier ──
     // Avoid an LLM call for obvious cases. Only consult the LLM for ambiguous tasks.
-    const heuristicResult = heuristicClassify(input, taskClassification);
+    const heuristicResult = localTierDefault ?? heuristicClassify(input, taskClassification);
 
     let selectedStrategy: SubStrategy;
     let analysisTokens = 0;
@@ -138,7 +147,9 @@ export const executeAdaptive = (
       selectedStrategy = heuristicResult;
       steps.push(makeStep(
         "thought",
-        `[ADAPTIVE] Heuristic pre-classifier selected: ${selectedStrategy} (no LLM call needed)`,
+        localTierDefault
+          ? `[ADAPTIVE] Local tier → reactive (heavy-strategy parity; honest default, no LLM analysis)`
+          : `[ADAPTIVE] Heuristic pre-classifier selected: ${selectedStrategy} (no LLM call needed)`,
       ));
 
       yield* publishReasoningStep(ebOpt, {
