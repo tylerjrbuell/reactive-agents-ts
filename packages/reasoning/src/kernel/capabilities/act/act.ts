@@ -45,8 +45,9 @@ import {
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phase-hooks.js";
-import { emitToCompose } from "@reactive-agents/core";
-import { planNextMoveBatches } from "../decide/tool-gating.js";
+import { emitToCompose, sentinelDeliverable } from "@reactive-agents/core";
+import { planNextMoveBatches, shouldGate } from "../decide/tool-gating.js";
+import { terminate } from "../../../kernel/loop/terminate.js";
 import {
   getEffectiveMissingRequiredTools,
 } from "../verify/requirement-state.js";
@@ -187,6 +188,35 @@ export function handleActing(
 
     if (pendingCalls.length > 0) {
       const normalizedPendingCalls = pendingCalls.map(normalizeToolCallArguments);
+
+      // ── Durable HITL gate (Phase D) ──────────────────────────────────────────
+      // In detach mode, pause BEFORE executing any flagged call. Gate on the
+      // FIRST flagged call (remaining calls re-surface on resume). The paused
+      // call is stored on meta.awaitingApprovalFor and serialized into the
+      // checkpoint; the engine persists `awaiting-approval` and returns control.
+      const approvalPolicy = input.approvalPolicy;
+      if (approvalPolicy?.mode === "detach") {
+        const gated = normalizedPendingCalls.find((c) =>
+          shouldGate(c.name, approvalPolicy, { iteration: state.iteration }),
+        );
+        if (gated) {
+          const paused = transitionState(state, {
+            meta: {
+              ...state.meta,
+              awaitingApprovalFor: {
+                gateId: crypto.randomUUID(),
+                toolName: gated.name,
+                args: gated.arguments,
+              },
+            },
+          });
+          return terminate(paused, {
+            reason: "awaiting-approval",
+            deliverable: sentinelDeliverable("awaiting human approval"),
+          });
+        }
+      }
+
       const newToolsUsed = new Set(state.toolsUsed);
       let allSteps = [...state.steps];
       // Meta-tool dedup tracking — updated per tool call, written to state at the end.

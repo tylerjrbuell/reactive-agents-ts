@@ -28,6 +28,36 @@ export type ToolElaborationInjectionConfig = {
   readonly maxHintsPerTool?: number;
 };
 
+// ── Durable HITL approval gate (Phase D) ──────────────────────────────────────
+
+/**
+ * Resolved approval-gate config threaded onto `KernelInput.approvalPolicy`. The
+ * runtime merges all three feeders into this single shape at config-assembly
+ * time: per-tool `requiresApproval` flags and the builder `tools` list are
+ * unioned into `tools`; the builder/compose predicate becomes `requireFor`. The
+ * kernel therefore stays pure — no tool-definition lookup needed here.
+ */
+export interface ApprovalGateConfig {
+  readonly tools: ReadonlySet<string>;
+  readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+}
+
+/**
+ * True when a pending tool call must pause for human approval. ORs the two
+ * resolved feeders: the merged tool-name set and the predicate. Pure — no
+ * Effect, no IO. (The per-tool `requiresApproval` flag is folded into
+ * `policy.tools` by the runtime before this is called.)
+ */
+export function shouldGate(
+  toolName: string,
+  policy: ApprovalGateConfig,
+  ctx: { iteration: number },
+): boolean {
+  if (policy.tools.has(toolName)) return true;
+  if (policy.requireFor?.({ toolName, iteration: ctx.iteration })) return true;
+  return false;
+}
+
 export type NextMovesPlanningConfig = {
   readonly enabled?: boolean;
   readonly maxBatchSize?: number;

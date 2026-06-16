@@ -572,6 +572,19 @@ export interface KernelInput {
     readonly reason?: string;
   };
   /**
+   * Durable HITL (Phase D): resolved approval-gate policy. The runtime merges the
+   * three feeders (per-tool `requiresApproval` flags, builder `tools` list,
+   * builder/compose predicate) into this single shape at config assembly. In
+   * `mode:"detach"` the act capability pauses the run (terminatedBy
+   * `awaiting-approval`) before executing any gated call. Absent / `mode:"block"`
+   * → no durable pause (the in-process gate handles approval). See `shouldGate`.
+   */
+  readonly approvalPolicy?: {
+    readonly mode: "detach" | "block";
+    readonly tools: ReadonlySet<string>;
+    readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
+  };
+  /**
    * Output-synthesis configuration — consumed by the terminal output assembly
    * phase in `kernel/loop/runner.ts` (output-synthesis.ts), NOT by ICS guidance.
    * Despite the historical name, this configures how the final answer is
