@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-import { Steps, Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Steps, Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 <Aside type="tip" title="Bun recommended — Node.js 22.5+ also supported">
 Bun ≥1.0.0 gives optimal performance (native SQLite, subprocess, HTTP). **Node.js 22.5+** is fully supported via `@reactive-agents/runtime-shim` — use `npm install reactive-agents` or `npx tsx` if you prefer the Node.js ecosystem. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
@@ -56,14 +56,28 @@ Bun ≥1.0.0 gives optimal performance (native SQLite, subprocess, HTTP). **Node
 
 The easiest way to get started is with the `reactive-agents` meta-package, which bundles everything:
 
-```bash
-bun add reactive-agents
-```
-
-```bash
-# or with npm (Node.js 22.5+)
-npm install reactive-agents
-```
+<Tabs syncKey="pkg">
+  <TabItem label="bun">
+  ```bash
+  bun add reactive-agents
+  ```
+  </TabItem>
+  <TabItem label="npm">
+  ```bash
+  npm install reactive-agents
+  ```
+  </TabItem>
+  <TabItem label="pnpm">
+  ```bash
+  pnpm add reactive-agents
+  ```
+  </TabItem>
+  <TabItem label="yarn">
+  ```bash
+  yarn add reactive-agents
+  ```
+  </TabItem>
+</Tabs>
 
 :::note[Effect dependency]
 `effect` ships as a dependency of `reactive-agents` and is installed automatically. When you write hooks, tools, or tests, import helpers explicitly — e.g. `import { Effect } from "effect"` — then use **`Effect.succeed`**, **`Effect.fail`**, **`Effect.gen`**, **`Effect.runPromise`**, etc. See the [Effect-TS primer](/concepts/effect-ts/) for a cheat sheet. Add `effect` to your app’s `package.json` only if you import from it outside `reactive-agents`’ bundled usage.
@@ -91,7 +105,7 @@ The framework is modular — install only the packages you need:
 
 | Package                          | Description                                                               |
 | -------------------------------- | ------------------------------------------------------------------------- |
-| `@reactive-agents/reasoning`     | 6 strategies (ReAct, Plan-Execute, Reflexion, ToT, Adaptive) + composable kernel |
+| `@reactive-agents/reasoning`     | 6 strategies (ReAct, Plan-Execute, Reflexion, ToT, Adaptive, Code-Action) + composable kernel |
 | `@reactive-agents/memory`        | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite    |
 | `@reactive-agents/tools`         | Tool registry, sandbox, MCP client, healing pipeline                      |
 | `@reactive-agents/prompts`       | Template engine, version-controlled prompt library                        |
@@ -156,14 +170,28 @@ The framework is modular — install only the packages you need:
 | -------------------------------- | ------------------------------------------------------------------------- |
 | `@reactive-agents/cortex`        | Cortex Studio (Beacon, Thalamus, Lab, living skills) — `bunx @reactive-agents/cortex` |
 
-```bash
-bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
-```
-
-```bash
-# or with npm
-npm install @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
-```
+<Tabs syncKey="pkg">
+  <TabItem label="bun">
+  ```bash
+  bun add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
+  ```
+  </TabItem>
+  <TabItem label="npm">
+  ```bash
+  npm install @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
+  ```
+  </TabItem>
+  <TabItem label="pnpm">
+  ```bash
+  pnpm add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
+  ```
+  </TabItem>
+  <TabItem label="yarn">
+  ```bash
+  yarn add @reactive-agents/core @reactive-agents/runtime @reactive-agents/llm-provider
+  ```
+  </TabItem>
+</Tabs>
 
 ## Environment Variables
 
