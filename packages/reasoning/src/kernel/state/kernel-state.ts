@@ -139,6 +139,13 @@ export interface KernelMeta {
     readonly toolName: string;
     readonly args: unknown;
   };
+  /**
+   * Durable HITL (Phase D): transient one-shot flag set by the runner's resume
+   * re-entry while it executes an already-approved call via the act capability.
+   * Tells the act gate to skip gating for that single pass (the human already
+   * decided). Cleared immediately after. Never serialized in a paused checkpoint.
+   */
+  readonly approvalBypass?: boolean;
   readonly redirectCount?: number;
   /** Temperature override dispatched by the intervention dispatcher — kernel-runner applies on next iteration. */
   readonly dispatchedTemperature?: number;

@@ -79,6 +79,8 @@ import {
   type IterationCarrier,
   type IterationConfig,
 } from "./iterate-pass.js";
+import { handleActing } from "../capabilities/act/act.js";
+import { makeStep } from "../capabilities/sense/step-utils.js";
 
 // Re-export the public helper surface so external imports of
 // `kernel/loop/runner.js` remain unchanged.
@@ -94,6 +96,37 @@ export {
   resolveMaxSameTool,
 } from "./runner-helpers/tier-guards.js";
 export type { TierGuardConfig } from "./runner-helpers/tier-guards.js";
+
+// ── Durable HITL resume re-entry (Phase D) ────────────────────────────────────
+
+/** How a resumed run re-enters at a pending approval gate. */
+export interface ApprovalReentry {
+  readonly action: "execute" | "observe" | "none";
+  readonly call?: { readonly name: string; readonly arguments: unknown };
+  readonly observation?: string;
+}
+
+/**
+ * Map a stored approval gate + the human's decision to a re-entry action. Pure:
+ * approved → execute the EXACT stored call (no LLM re-think, so the executed call
+ * is the one the human saw — spec §7 determinism); denied → observe the denial so
+ * the next think reacts; gateId mismatch → no-op (fall through to normal think).
+ */
+export function resolveApprovalReentry(
+  gate: { readonly gateId: string; readonly toolName: string; readonly args: unknown },
+  decision: { readonly gateId: string; readonly status: "approved" | "denied"; readonly reason?: string } | undefined,
+): ApprovalReentry {
+  if (!decision || decision.gateId !== gate.gateId) return { action: "none" };
+  if (decision.status === "approved") {
+    return { action: "execute", call: { name: gate.toolName, arguments: gate.args } };
+  }
+  return {
+    action: "observe",
+    observation: `Action ${gate.toolName} was denied by a human${
+      decision.reason ? `: ${decision.reason}` : ""
+    }.`,
+  };
+}
 
 // ── Main entry point ──────────────────────────────────────────────────────────
 
@@ -376,6 +409,49 @@ export function runKernel(
         if (!aborted) {
           state = commitDeliverable(state, passthroughOutputDeliverable(state.output));
         }
+      }
+    }
+
+    // ── Durable HITL resume re-entry (Phase D) ───────────────────────────────
+    // When resuming a checkpoint that paused at an approval gate, apply the
+    // human's stored decision HERE — before the loop — so the gated step is
+    // resolved without re-calling the LLM (spec §7 determinism). Approved:
+    // execute the exact stored call once via the act capability, with
+    // `approvalBypass` set so the gate does not re-pause it. Denied: append a
+    // denial observation so the next think reacts. No-op on a normal run (both
+    // fields undefined → zero cost).
+    if (state.meta.awaitingApprovalFor && effectiveInput.approvalDecision) {
+      const reentry = resolveApprovalReentry(
+        state.meta.awaitingApprovalFor,
+        effectiveInput.approvalDecision,
+      );
+      if (reentry.action !== "none") {
+        state = transitionState(state, {
+          meta: { ...state.meta, awaitingApprovalFor: undefined },
+        });
+      }
+      if (reentry.action === "execute" && reentry.call) {
+        state = transitionState(state, {
+          meta: {
+            ...state.meta,
+            approvalBypass: true,
+            pendingNativeToolCalls: [
+              {
+                id: crypto.randomUUID(),
+                name: reentry.call.name,
+                arguments: (reentry.call.arguments ?? {}) as Record<string, unknown>,
+              },
+            ],
+          },
+        });
+        state = yield* handleActing(state, currentContext);
+        state = transitionState(state, {
+          meta: { ...state.meta, approvalBypass: undefined },
+        });
+      } else if (reentry.action === "observe" && reentry.observation) {
+        state = transitionState(state, {
+          steps: [...state.steps, makeStep("observation", reentry.observation)],
+        });
       }
     }
 

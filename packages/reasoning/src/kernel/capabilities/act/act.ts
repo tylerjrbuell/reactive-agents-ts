@@ -195,7 +195,7 @@ export function handleActing(
       // call is stored on meta.awaitingApprovalFor and serialized into the
       // checkpoint; the engine persists `awaiting-approval` and returns control.
       const approvalPolicy = input.approvalPolicy;
-      if (approvalPolicy?.mode === "detach") {
+      if (approvalPolicy?.mode === "detach" && !state.meta.approvalBypass) {
         const gated = normalizedPendingCalls.find((c) =>
           shouldGate(c.name, approvalPolicy, { iteration: state.iteration }),
         );
