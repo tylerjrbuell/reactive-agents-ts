@@ -238,6 +238,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withChannels(config)`               | Wire `@reactive-agents/channels` sender-policy access control (`ChannelsConfig`). See [Messaging Channels](/guides/messaging-channels/).                                                                                                                                                                                                                                                                      |
 | `withOutputSchema(schema, options?)` | **Typed structured output.** Attach any Standard Schema (Zod / Valibot / ArkType) or Effect Schema; the result carries a typed `result.object` (or `result.objectError` on parse failure). Options: `{ mode?: "auto" \| "grounded", onParseFail?: "lenient" \| "throw" }`. Builder-only — set before `.build()`. See [Typed Structured Output](/guides/structured-output/).                                       |
 | `withDurableRuns(options?)`          | Persist run state so a crashed or paused run can resume from its last checkpoint. Exposes `agent.resumeRun(runId)` and `agent.listRuns({ status? })`. Config hash = system prompt + provider. See [Durable Execution](/guides/durable-execution/).                                                                                                                                                            |
+| `withApprovalPolicy(policy)`         | Durable human-in-the-loop. `{ tools?, requireFor?, mode? }` — gated tool calls pause the run (`mode: "detach"`, default with durable runs) and persist `awaiting-approval`. Exposes `agent.approveRun`/`denyRun`/`listPendingApprovals`. `detach` requires `.withDurableRuns()`. See [Durable HITL](/guides/durable-hitl/).                                                                                  |
 
 #### ToolsOptions
 
@@ -610,6 +611,18 @@ Resume a crashed or paused durable run from its last checkpoint. Requires `.with
 ### `listRuns(filter?: { status? }): Promise<readonly RunRecord[]>`
 
 List persisted durable runs, optionally filtered by lifecycle status (e.g. `{ status: "running" }`). Requires `.withDurableRuns()`.
+
+### `listPendingApprovals(): Promise<readonly PendingApproval[]>`
+
+List runs paused awaiting a human decision, each with the pending action (`runId`, `gateId`, `toolName`, `args`, `task`). Requires `.withDurableRuns()`. See [Durable HITL](/guides/durable-hitl/).
+
+### `approveRun(runId, opts?): Promise<AgentResult>`
+
+Approve a paused run and resume it to completion — the agent executes the gated call. Callable from any process. Throws `ApprovalStateError` if the run has no pending approval.
+
+### `denyRun(runId, reason): Promise<AgentResult>`
+
+Deny a paused run's action and resume to completion — the agent observes the denial and continues without running the call.
 
 ### Dynamic tools & RAG (runtime)
 

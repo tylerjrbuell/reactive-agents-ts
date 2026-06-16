@@ -86,7 +86,6 @@ You'd reinvent: provider adapters (6 LLM providers), guardrails, verification, s
 
 We try to be honest about gaps. Things on the roadmap that aren't shipped:
 
-- **Durable human-in-the-loop** — crash-resume (`.withDurableRuns()`) ships; approval gates that survive process death (approve/deny from a new process) are still being wired.
 - **Multi-session memory transfer** — episodic recall works within a process. Cross-process / cross-machine transfer is being designed.
 - **Sub-agent delegation effectiveness metrics** — the test harness exists; we haven't measured whether delegation beats inline execution on multi-step tasks.
 - **`v1.0` tag** — API is stable since 0.9; we'll tag 1.0 once the items above ship and the calibration store has 1k+ runs across community models.

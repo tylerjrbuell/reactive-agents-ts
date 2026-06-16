@@ -1,0 +1,114 @@
+---
+title: Durable Human-in-the-Loop
+description: Pause an agent on a high-risk tool call, persist it, and approve or deny from any process — approval gates that survive process death.
+sidebar:
+  order: 27
+---
+
+Some actions need a human's sign-off before they run — a shell command, a file
+write, a payment. **Durable human-in-the-loop (HITL)** lets an agent *pause* on
+those calls, persist the pause to disk, and hand control back so the process can
+exit. A human then approves or denies from **any** process — a CLI, a web
+dashboard, a different worker — and the run resumes from its checkpoint to
+completion.
+
+It is built on the same durable RunStore as [crash-resume](/guides/durable-execution/):
+the decision and the paused checkpoint live in SQLite, so approve/deny works
+across process and machine boundaries.
+
+## Enabling it
+
+`.withApprovalPolicy()` names which tool calls require approval. `mode: "detach"`
+(the default once `.withDurableRuns()` is set) makes a gated call pause durably.
+
+```ts
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withTools({ tools: [/* ... */] })
+  .withDurableRuns()
+  .withApprovalPolicy({
+    tools: ["shell-execution", "file-write"], // names that must pause
+    mode: "detach",                           // durable pause (default with durable runs)
+  })
+  .build();
+```
+
+You can also gate by predicate instead of (or in addition to) a name list:
+
+```ts
+.withApprovalPolicy({
+  requireFor: ({ toolName, iteration }) => toolName.startsWith("delete-") || iteration > 10,
+  mode: "detach",
+})
+```
+
+> `mode: "detach"` requires `.withDurableRuns()` — a detached pause needs a
+> durable store to persist it. `build()` throws if it is missing. Use
+> `mode: "block"` for the in-process approval gate (no durable pause).
+
+## Pausing
+
+Durable pauses ride the **`runStream()`** path (where durable persistence lives).
+When the agent hits a gated call, the run pauses and the stream completes with a
+`pendingApproval` descriptor:
+
+```ts
+let pending: { runId: string; gateId: string; toolName: string; args: unknown } | undefined;
+for await (const event of agent.runStream("clean up the temp files")) {
+  if (event._tag === "StreamCompleted" && event.pendingApproval) {
+    pending = event.pendingApproval;
+  }
+}
+// The process can now exit. The pause is persisted under pending.runId.
+```
+
+## Approving or denying — from any process
+
+A fresh process (or the same one) lists what is waiting and decides:
+
+```ts
+const waiting = await agent.listPendingApprovals();
+// → [{ runId, gateId, toolName, args, task, updatedAt }]
+
+// Approve → the agent executes the gated call, then runs to completion:
+const result = await agent.approveRun(waiting[0].runId);
+
+// Deny → the agent observes the denial and continues WITHOUT running the call:
+await agent.denyRun(waiting[0].runId, "not allowed in production");
+```
+
+`approveRun` resumes from the exact checkpoint and executes **the same call the
+human reviewed** — no fresh LLM step is taken for the gated action, so what is
+approved is what runs. `denyRun` injects the denial as an observation and lets the
+agent react on the next step.
+
+Calling `approveRun`/`denyRun` on a run with no pending approval throws
+`ApprovalStateError` (already decided, completed, or never paused).
+
+## Lifecycle
+
+```
+run (stream) ──▶ gated call ──▶ status: awaiting-approval ──▶ process may exit
+                                          │
+              approveRun / denyRun  ◀──────┘   (any process)
+                     │
+                     ▼
+              resume from checkpoint ──▶ status: completed
+```
+
+## Scope notes (v0.12)
+
+- Durable pauses are surfaced on the `runStream()` path. `approveRun`/`denyRun`
+  resume to completion via the same checkpoint mechanism as `resumeRun`.
+- Gate triggers are the explicit `tools` list and the `requireFor` predicate. The
+  per-tool `requiresApproval` flag does not auto-feed the durable gate yet — list
+  the tool names explicitly.
+- One pending gate at a time: if a single step proposes several gated calls, the
+  first pauses; the rest re-surface after the resume.
+
+## See also
+
+- [Durable Execution](/guides/durable-execution/) — crash-resume, the foundation HITL builds on.
+- [Builder API](/reference/builder-api/) — `withApprovalPolicy`, `approveRun`, `denyRun`, `listPendingApprovals`.

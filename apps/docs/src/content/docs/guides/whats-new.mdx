@@ -66,6 +66,25 @@ const result = await agent.resumeRun(runs[0].runId);        // continue from las
 
 Run state is persisted on a content-addressed config hash (system prompt + provider), so a resumed run reattaches to the correct configuration. Verified cross-process with a hard-kill end-to-end test. See [Durable Execution](/guides/durable-execution/).
 
+### Durable human-in-the-loop — approval gates that survive process death
+
+Name the tool calls that require sign-off. A gated call **pauses** the run on the `runStream()` path, persists `awaiting-approval` plus the pending action, and completes the stream with `pendingApproval` — so the process can exit. A human approves or denies from **any** process; the run resumes from its checkpoint to completion.
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withDurableRuns()
+  .withApprovalPolicy({ tools: ["shell-execution", "file-write"], mode: "detach" })
+  .build();
+
+// In any process:
+const pending = await agent.listPendingApprovals();
+await agent.approveRun(pending[0].runId);          // resume + execute the call
+// or: await agent.denyRun(pending[0].runId, "not allowed");  // resume, skip the call
+```
+
+Built on the same durable RunStore as crash-resume — the decision and the paused checkpoint live in SQLite, so approve/deny works across process and machine boundaries.
+
 ### Developer experience — Effect-free where it counts
 
 - **Plain-function hooks** — `.withHook()` handlers now accept ordinary sync/async functions; the Effect form still works. No `Effect.gen` required to tap the lifecycle. See [Lifecycle Hooks](/guides/hooks/).
