@@ -1664,3 +1664,54 @@ nav a[data-ra-new='true']::before {
 [data-theme='light'] .ra-sub-input:focus {
     border-color: rgba(124, 58, 237, 0.6);
 }
+
+/* Right-sidebar (TOC) subscribe card — narrow, stacked, on every page */
+.ra-sidebar-subscribe {
+    margin-top: 1.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(139, 92, 246, 0.18);
+}
+
+.ra-sub-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.ra-sub-side-label {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--sl-color-white);
+}
+
+.ra-sub-form--side {
+    flex-direction: column;
+    gap: 0.45rem;
+    max-width: none;
+    width: 100%;
+}
+
+.ra-sub-form--side .ra-sub-input {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.82rem;
+}
+
+.ra-sub-btn--side {
+    width: 100%;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.82rem;
+}
+
+.ra-sub-side .ra-sub-msg {
+    font-size: 0.78rem;
+    min-height: 0;
+}
+
+.ra-sub-side-fine {
+    margin: 0;
+    font-size: 0.7rem;
+    color: var(--sl-color-gray-3);
+}

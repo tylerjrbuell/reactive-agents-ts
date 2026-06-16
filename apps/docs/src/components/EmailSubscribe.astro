@@ -1,19 +1,42 @@
 ---
 /**
- * Full-width email subscription form.
- * POSTs to https://api.reactiveagents.dev/v1/subscribe (double opt-in).
+ * Email subscription form. POSTs to
+ * https://api.reactiveagents.dev/v1/subscribe (double opt-in).
  *
- * Props:
- *   compact — strip panel chrome, render as an inline strip (for Footer use)
+ * Variants:
+ *   default  — full-width panel with header copy (landing-page CTA)
+ *   compact  — inline strip (legacy footer use)
+ *   sidebar  — narrow stacked card for the right (TOC) sidebar, shown on
+ *              every docs page. Distinct formId to avoid duplicate-ID
+ *              collisions when more than one variant renders on a page.
  */
 interface Props {
     compact?: boolean;
+    sidebar?: boolean;
 }
-const { compact = false } = Astro.props;
-const formId = compact ? "ra-sub-footer" : "ra-sub-main";
+const { compact = false, sidebar = false } = Astro.props;
+const formId = sidebar ? "ra-sub-sidebar" : compact ? "ra-sub-footer" : "ra-sub-main";
 ---
 
-{compact ? (
+{sidebar ? (
+    <div class="ra-sub-side">
+        <p class="ra-sub-side-label">📬 New releases, in your inbox</p>
+        <form id={formId} class="ra-sub-form ra-sub-form--side" novalidate>
+            <input
+                type="email"
+                name="email"
+                class="ra-sub-input"
+                placeholder="you@example.com"
+                autocomplete="email"
+                required
+                aria-label="Email address"
+            />
+            <button type="submit" class="ra-sub-btn ra-sub-btn--side">Subscribe</button>
+        </form>
+        <p class="ra-sub-msg" aria-live="polite"></p>
+        <p class="ra-sub-side-fine">No spam. One-click unsubscribe.</p>
+    </div>
+) : compact ? (
     <div class="ra-sub-strip">
         <p class="ra-sub-strip-label">Get notified on new releases</p>
         <form id={formId} class="ra-sub-form ra-sub-form--inline" novalidate>

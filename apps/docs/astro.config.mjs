@@ -136,18 +136,59 @@ export default defineConfig({
       components: {
         PageTitle: "./src/components/PageTitle.astro",
         Footer: "./src/components/Footer.astro",
+        // Append the release-subscribe form under the right-hand TOC on every page.
+        PageSidebar: "./src/components/PageSidebar.astro",
       },
+      // Curated, progressive information architecture. The onboarding path
+      // ("Start Here") is ordered, not alphabetical, so a new reader is never
+      // dropped into a flat A–Z dump. Headline v0.12 surfaces carry a "New"
+      // badge; the new-page-indicator plugin adds date-based badges on top.
       sidebar: [
         {
-          label: "Rax CLI",
+          label: "Start Here",
           items: [
-            { label: "Meet Rax CLI", link: "guides/cli-artisan/" },
-            { label: "Command Reference", link: "reference/cli/" },
+            { label: "Introduction", link: "guides/introduction/" },
+            { label: "Installation", link: "guides/installation/" },
+            { label: "Quickstart", link: "guides/quickstart/" },
+            { label: "Your First Agent", link: "guides/your-first-agent/" },
+            { label: "Choosing a Stack", link: "guides/choosing-a-stack/" },
           ],
         },
         {
-          label: "Getting Started",
-          autogenerate: { directory: "guides" },
+          label: "Core Guides",
+          items: [
+            { label: "Reasoning Strategies", link: "guides/reasoning/" },
+            { label: "Choosing a Strategy", link: "guides/choosing-strategies/" },
+            { label: "Tools", link: "guides/tools/" },
+            { label: "Memory", link: "guides/memory/" },
+            {
+              label: "Typed Structured Output",
+              link: "guides/structured-output/",
+              badge: { text: "New", variant: "tip" },
+            },
+            { label: "Lifecycle Hooks", link: "guides/hooks/" },
+            { label: "Interaction Modes", link: "guides/interaction-modes/" },
+            { label: "Context Engineering", link: "guides/context-engineering/" },
+            {
+              label: "Durable Execution",
+              link: "guides/durable-execution/",
+              badge: { text: "New", variant: "tip" },
+            },
+            { label: "Sub-Agents", link: "guides/sub-agents/" },
+            { label: "Agent Skills", link: "guides/agent-skills/" },
+            { label: "Local Models", link: "guides/local-models/" },
+            { label: "Messaging Channels", link: "guides/messaging-channels/" },
+            { label: "Web Integration", link: "guides/web-integration/" },
+          ],
+        },
+        {
+          label: "Ship to Production",
+          items: [
+            { label: "Production Checklist", link: "guides/production-checklist/" },
+            { label: "Cost Optimization", link: "guides/cost-optimization/" },
+            { label: "Guardrails", link: "guides/guardrails/" },
+            { label: "Security Hardening", link: "guides/security-hardening/" },
+          ],
         },
         {
           label: "Features",
@@ -164,6 +205,29 @@ export default defineConfig({
         {
           label: "API Reference",
           autogenerate: { directory: "reference" },
+        },
+        {
+          label: "Rax CLI",
+          items: [
+            { label: "Meet Rax CLI", link: "guides/cli-artisan/" },
+            { label: "Command Reference", link: "reference/cli/" },
+          ],
+        },
+        {
+          label: "Help & More",
+          items: [
+            { label: "FAQ", link: "guides/faq/" },
+            { label: "Troubleshooting", link: "guides/troubleshooting/" },
+            { label: "Migrating from LangChain", link: "guides/migrating-from-langchain/" },
+            { label: "Examples Catalog", link: "guides/examples/" },
+            { label: "Interactive Playground", link: "guides/playground/" },
+            {
+              label: "What's New",
+              link: "guides/whats-new/",
+              badge: { text: "v0.12", variant: "success" },
+            },
+            { label: "Contributing", link: "guides/contributing/" },
+          ],
         },
       ],
     }),

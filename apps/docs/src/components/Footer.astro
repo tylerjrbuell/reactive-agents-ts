@@ -1,10 +1,9 @@
 ---
+// The release-subscribe form now lives in the right-hand page sidebar
+// (see PageSidebar.astro), shown on every page, so the footer no longer
+// duplicates it. Footer falls through to Starlight's default.
 import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/Footer.astro";
-import EmailSubscribe from "./EmailSubscribe.astro";
 ---
 
-<div class="ra-footer-subscribe">
-    <EmailSubscribe compact />
-</div>
 <Default {...Astro.props}><slot /></Default>
