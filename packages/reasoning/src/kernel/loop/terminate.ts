@@ -108,6 +108,12 @@ function applyTerminalPostConditionGate(
   state: KernelState,
   opts: TerminateOptions,
 ): KernelState | null {
+  // Durable HITL (Phase D): an approval pause is NOT a failure. The run is
+  // intentionally suspended before its post-conditions could be met; demoting it
+  // to `status:"failed"` would mislabel a resumable pause as a dead run. Pass
+  // through to the normal terminal transition so the engine sees a clean
+  // `terminatedBy:"awaiting-approval"`.
+  if (opts.reason === "awaiting-approval") return null;
   const conditions = state.meta.postConditions;
   if (!conditions || conditions.length === 0) return null;
 

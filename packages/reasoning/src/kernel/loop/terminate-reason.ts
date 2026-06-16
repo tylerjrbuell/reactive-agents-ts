@@ -32,4 +32,10 @@ export type TerminateReason =
   // User-initiated stop via the RunController checkpoint (P1 mission 2B —
   // routed through terminate() so the stop-checkpoint path stops bypassing the
   // single-owner termination + output-writer invariants).
-  | "stop_requested";
+  | "stop_requested"
+  // Durable HITL (Phase D): the act capability gated a flagged tool call and
+  // paused the run for human approval. A NON-FAILURE terminal reason — the
+  // terminal post-condition gate passes it through (a paused run has
+  // intentionally not met its post-conditions and must not be demoted to
+  // `failed`). The engine detects this reason to persist `awaiting-approval`.
+  | "awaiting-approval";

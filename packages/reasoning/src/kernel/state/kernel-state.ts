@@ -128,6 +128,17 @@ export interface KernelMeta {
   readonly previousTerminatedBy?: string;
   /** Optional structured rationale for the termination (v0.11.x). Surfaced via KernelStateSnapshotEvent.terminationRationale. */
   readonly terminationRationale?: import("@reactive-agents/core").Rationale;
+  /**
+   * Durable HITL (Phase D): set when the act capability gates a flagged pending
+   * tool call in durable detach mode. Serialized into the checkpoint so the
+   * paused call survives a crash; consumed by the runner's resume re-entry to
+   * either execute (approved) or skip-and-observe (denied) the stored call.
+   */
+  readonly awaitingApprovalFor?: {
+    readonly gateId: string;
+    readonly toolName: string;
+    readonly args: unknown;
+  };
   readonly redirectCount?: number;
   /** Temperature override dispatched by the intervention dispatcher — kernel-runner applies on next iteration. */
   readonly dispatchedTemperature?: number;
@@ -548,6 +559,18 @@ export interface KernelInput {
    * `initialMessages` (which only seeds the conversation thread of a fresh state).
    */
   readonly resumeState?: KernelState;
+  /**
+   * Durable HITL (Phase D): a human's approval decision threaded in on a resumed
+   * run by `ReactiveAgent.approveRun`/`denyRun` (via the `ApprovalDecisionRef`
+   * FiberRef, read + forwarded in `reasoning-think.ts`). Read by the runner at
+   * loop top together with `state.meta.awaitingApprovalFor`: approved → execute
+   * the stored call without re-thinking; denied → observe the denial + continue.
+   */
+  readonly approvalDecision?: {
+    readonly gateId: string;
+    readonly status: "approved" | "denied";
+    readonly reason?: string;
+  };
   /**
    * Output-synthesis configuration — consumed by the terminal output assembly
    * phase in `kernel/loop/runner.ts` (output-synthesis.ts), NOT by ICS guidance.
