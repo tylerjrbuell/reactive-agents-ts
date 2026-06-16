@@ -161,12 +161,20 @@ const generateAlerts = (
 ): readonly DashboardAlert[] => {
   const alerts: DashboardAlert[] = [];
 
-  // Check for slow phases
+  // Check for slow phases. Only the `think` phase is unambiguously LLM-bound;
+  // attributing "LLM latency" to other phases (e.g. memory-flush = memory I/O,
+  // act = tool execution) is misleading. Name the likely cause per phase.
+  const phaseCause: Record<string, string> = {
+    think: " (LLM latency)",
+    verify: " (verification — may be LLM)",
+    "memory-flush": " (memory persistence/extraction)",
+    act: " (tool execution)",
+  };
   for (const phase of phases) {
     if (phase.duration >= 10000) {
       alerts.push({
         level: "warning",
-        message: `${phase.name} phase blocked ≥10s (LLM latency)`,
+        message: `${phase.name} phase blocked ≥10s${phaseCause[phase.name] ?? ""}`,
       });
     }
   }
