@@ -61,6 +61,8 @@ export function cortexRunsPostBody(
         }
       : {}),
     ...(cfg.strategySwitching != null ? { strategySwitching: cfg.strategySwitching } : {}),
+    // Reasoning kernel is the default; only send when the user opted into inline-think.
+    ...(cfg.useReasoning === false ? { useReasoning: false as const } : {}),
     ...(cfg.memory ? { memory: cfg.memory } : {}),
     ...(cfg.contextSynthesis ? { contextSynthesis: cfg.contextSynthesis } : {}),
     ...(cfg.guardrails?.enabled ? { guardrails: cfg.guardrails } : {}),

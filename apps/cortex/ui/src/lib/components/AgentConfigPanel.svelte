@@ -835,6 +835,20 @@
         </div>
         <div class="flex items-center justify-between">
           <div>
+            <div class="font-mono text-[10px] text-on-surface/70">Reasoning kernel</div>
+            <div class="font-mono text-[9px] text-outline/40">Full RA agent (calibration, healing, strategy, durable). Off = lighter inline-think.</div>
+          </div>
+          <button type="button" onclick={() => (config = { ...config, useReasoning: !config.useReasoning })}
+            aria-label="Toggle reasoning kernel"
+            aria-pressed={config.useReasoning}
+            class="flex-shrink-0 w-10 h-5 rounded-full border-0 cursor-pointer relative transition-colors duration-200
+                   {config.useReasoning ? 'bg-primary' : 'bg-surface-container-highest'}">
+            <span class="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ease-out
+                         {config.useReasoning ? 'translate-x-5' : 'translate-x-0'}"></span>
+          </button>
+        </div>
+        <div class="flex items-center justify-between">
+          <div>
             <div class="font-mono text-[10px] text-on-surface/70">Auto-switch strategy</div>
             <div class="font-mono text-[9px] text-outline/40">Switch strategy if agent gets stuck</div>
           </div>

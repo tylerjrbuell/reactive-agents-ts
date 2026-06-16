@@ -66,6 +66,7 @@ export const RunConfigBody = t.Object({
   ),
   variables: t.Optional(t.Array(t.Unknown())),
   variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
+  useReasoning: t.Optional(t.Boolean()),
   durableRuns: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -144,6 +145,7 @@ export const runsRouter = (
             ...(b.contextSynthesis ? { contextSynthesis: b.contextSynthesis } : {}),
             ...(b.guardrails ? { guardrails: b.guardrails } : {}),
             ...(b.persona ? { persona: b.persona } : {}),
+            ...(typeof b.useReasoning === "boolean" ? { useReasoning: b.useReasoning } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
           });
         });

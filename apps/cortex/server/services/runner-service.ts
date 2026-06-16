@@ -80,6 +80,11 @@ export interface LaunchParams {
   /** Persona config; wires `.withPersona()` when enabled. */
   readonly persona?: { enabled?: boolean; role?: string; tone?: string; traits?: string; responseStyle?: string };
   /**
+   * Run the full reasoning kernel (default true). `false` → lighter inline-think
+   * path. Durable runs force it on. UI "Reasoning kernel" toggle.
+   */
+  readonly useReasoning?: boolean;
+  /**
    * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
    * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
    * wires `.withApprovalPolicy(...)` so the run pauses (`awaiting-approval`) on
@@ -220,6 +225,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.contextSynthesis ? { contextSynthesis: params.contextSynthesis } : {}),
                 ...(params.guardrails ? { guardrails: params.guardrails } : {}),
                 ...(params.persona ? { persona: params.persona } : {}),
+                ...(params.useReasoning !== undefined ? { useReasoning: params.useReasoning } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),

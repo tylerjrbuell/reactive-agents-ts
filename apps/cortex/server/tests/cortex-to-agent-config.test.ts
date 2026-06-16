@@ -316,3 +316,18 @@ describe("numCtx mapping", () => {
     expect((cfg as { numCtx?: number }).numCtx).toBe(8192);
   });
 });
+
+describe("cortexParamsToAgentConfig — reasoning kernel default", () => {
+  it("enables reasoning by default (standard RA agent)", () => {
+    const c = cortexParamsToAgentConfig({ provider: "test" });
+    expect((c.features as { reasoning?: boolean } | undefined)?.reasoning).toBe(true);
+  });
+  it("useReasoning:false opts into inline-think", () => {
+    const c = cortexParamsToAgentConfig({ provider: "test", useReasoning: false });
+    expect((c.features as { reasoning?: boolean }).reasoning).toBe(false);
+  });
+  it("durable runs force reasoning on even when useReasoning:false", () => {
+    const c = cortexParamsToAgentConfig({ provider: "test", useReasoning: false, durableRuns: { enabled: true } });
+    expect((c.features as { reasoning?: boolean }).reasoning).toBe(true);
+  });
+});

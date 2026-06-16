@@ -18,6 +18,7 @@ export const ChatSessionConfigBody = t.Object({
   strategySwitching: t.Optional(t.Boolean()),
   runtimeVerification: t.Optional(t.Boolean()),
   auditRationale: t.Optional(t.Boolean()),
+  useReasoning: t.Optional(t.Boolean()),
   verificationStep: t.Optional(t.Union([t.Literal("none"), t.Literal("reflect")])),
   contextSynthesis: t.Optional(
     t.Union([t.Literal("auto"), t.Literal("template"), t.Literal("llm"), t.Literal("none")]),
@@ -127,6 +128,7 @@ export const chatRouter = (svc: ChatSessionService) =>
                 ? { strategy: body.strategy.trim() }
                 : {}),
               ...(body.strategySwitching != null ? { strategySwitching: body.strategySwitching } : {}),
+              ...(typeof body.useReasoning === "boolean" ? { useReasoning: body.useReasoning } : {}),
               ...(body.runtimeVerification != null ? { runtimeVerification: body.runtimeVerification } : {}),
               ...(body.verificationStep ? { verificationStep: body.verificationStep } : {}),
               ...(body.contextSynthesis ? { contextSynthesis: body.contextSynthesis } : {}),
@@ -229,6 +231,7 @@ export const chatRouter = (svc: ChatSessionService) =>
             ...(body.strategySwitching !== undefined
               ? { strategySwitching: body.strategySwitching }
               : {}),
+            ...(body.useReasoning !== undefined ? { useReasoning: body.useReasoning } : {}),
             ...(body.runtimeVerification !== undefined
               ? { runtimeVerification: body.runtimeVerification }
               : {}),

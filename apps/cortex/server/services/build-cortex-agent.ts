@@ -124,6 +124,14 @@ export interface BuildCortexAgentParams {
   /** When true, enables streaming mode for TextDelta event emission. */
   readonly streaming?: boolean;
   /**
+   * Run the full reasoning kernel (calibration, tool-call healing, strategy
+   * selection, durable checkpoint + approval gate). Default `true` — cortex
+   * agents behave like a standard Reactive Agent. Set `false` for the lighter
+   * inline-think path (single-loop, no kernel features). Durable runs always
+   * force this on regardless. UI: "Reasoning kernel" toggle.
+   */
+  readonly useReasoning?: boolean;
+  /**
    * Durable execution (v0.12) — opt-in crash-resume via SQLite RunStore.
    * When `enabled`, wires `.withDurableRuns(...)` so the run checkpoints and can
    * be resumed by id (`agent.resumeRun`) after a process death. `approvalPolicy`
@@ -165,17 +173,6 @@ export async function buildCortexAgent(
   // Legacy parity: always enable the memory layer when the desk did not map memory tiers.
   if (!agentConfig.memory) {
     b = b.withMemory();
-  }
-
-  // Durable execution (checkpoint seam + the HITL approval gate) lives ONLY in
-  // the reasoning kernel — the engine's inline-think fallback (used when no
-  // ReasoningService is present) has neither. Cortex only enables reasoning when
-  // a strategy/synthesis/audit option is set, so a durable run launched without
-  // those would silently run inline and never checkpoint or pause for approval.
-  // Force reasoning on whenever durable runs are requested. A later
-  // `.withReasoning({...})` (synthesis/audit block below) refines these defaults.
-  if (params.durableRuns?.enabled) {
-    b = b.withReasoning();
   }
 
   if (params.observabilityVerbosity && params.observabilityVerbosity !== "off") {
