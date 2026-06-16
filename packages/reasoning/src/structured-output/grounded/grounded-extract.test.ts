@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Schema } from "effect";
+import { z } from "zod";
 import { groundedExtract } from "./grounded-extract.js";
 import { toSchemaContract } from "../schema-contract.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
@@ -170,5 +171,70 @@ describe("groundedExtract", () => {
     );
     expect(r.object).toBeUndefined();
     expect(r.objectError).toMatch(/vendor/);
+  });
+});
+
+describe("groundedExtract — Zod Standard Schema", () => {
+  /**
+   * Test 7 — Zod contract: field requirements are derived from JSON Schema, not
+   * the Effect AST (which returns [] for Zod bridges).
+   *
+   * Proves the fix via abstention: `total` (required, grounded) must NOT be
+   * abstained; `note` (optional, ungrounded ~0.4 conf) MUST be abstained.
+   * Before the fix, reqs=[] meant all fields had isRequired=false → required
+   * fields could incorrectly be dropped by abstention.
+   */
+  it("correctly identifies required vs optional Zod fields via JSON Schema (abstention test)", async () => {
+    const zodSchema = z.object({ total: z.number(), note: z.string().optional() });
+    const contract = toSchemaContract(zodSchema);
+
+    // Both fields returned; `total` is in corpus (grounded, high conf);
+    // `note` is NOT in corpus (ungrounded, ~0.4 conf < abstainBelow 0.5).
+    const llm = TestLLMServiceLayer([{ json: { total: 42, note: "extra" } }]);
+    const r = await Effect.runPromise(
+      groundedExtract({
+        contract,
+        finalAnswer: "total is 42, note extra",
+        evidenceCorpus: "total=42",
+        onParseFail: "degrade",
+        abstainBelow: 0.5,
+      }).pipe(Effect.provide(llm)),
+    );
+    // total: required + grounded (high conf) -> present, not abstained
+    expect(r.object).toBeDefined();
+    expect((r.object as Record<string, unknown>)?.total).toBe(42);
+    expect(r.abstained?.total).toBeUndefined();
+    // note: optional + ungrounded (low conf) -> abstained
+    // Without the fix reqs=[] -> isRequired always false for all fields, so
+    // this would still work here, BUT required fields like `total` could also
+    // be incorrectly dropped. The JSON-Schema path provides correct flags.
+    expect(r.abstained?.note).toBeDefined();
+  });
+
+  /**
+   * Test 8 — Zod contract: toJsonSchema() returns a real JSON Schema with
+   * properties + required, and fieldRequirementsFromJsonSchema produces the
+   * correct FieldRequirement array. This is the unit-level proof that the
+   * grounded engine's `reqs` source is non-empty for Zod contracts.
+   *
+   * Before the fix: fieldRequirementsFromSchema on a Zod bridge (Schema.declare)
+   * returned [] — no field requirements at all.
+   * After the fix: fieldRequirementsFromJsonSchema on the zod-to-json-schema
+   * output correctly identifies `total` as required and `note` as optional.
+   */
+  it("toJsonSchema() for a Zod contract yields non-empty field requirements with correct required flags", () => {
+    const zodSchema = z.object({ total: z.number(), note: z.string().optional() });
+    const contract = toSchemaContract(zodSchema);
+
+    const js = contract.toJsonSchema();
+    expect(js).toBeDefined();
+    // The JSON Schema must have properties with both fields
+    const props = (js as Record<string, unknown>)?.["properties"];
+    expect(props).toBeDefined();
+    expect(Object.keys(props as Record<string, unknown>).sort()).toEqual(["note", "total"]);
+    // required array must include `total` but not `note`
+    const required = (js as Record<string, unknown>)?.["required"] as string[] | undefined;
+    expect(required).toContain("total");
+    expect(required ?? []).not.toContain("note");
   });
 });

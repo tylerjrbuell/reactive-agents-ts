@@ -32,6 +32,7 @@ import type { SchemaContract } from "../schema-contract.js";
 import { toSchemaContract } from "../schema-contract.js";
 import {
   fieldRequirementsFromSchema,
+  fieldRequirementsFromJsonSchema,
   missingRequiredFields,
 } from "./field-requirements.js";
 import { groundFields } from "./field-provenance.js";
@@ -136,7 +137,10 @@ export const groundedExtract = <A>(
   input: GroundedInput<A>,
 ): Effect.Effect<GroundedOutput<A>, never, LLMService> =>
   Effect.gen(function* () {
-    const reqs = fieldRequirementsFromSchema(input.contract.effectSchema as unknown as Schema.Schema<unknown>);
+    const js = input.contract.toJsonSchema();
+    const reqs = js
+      ? fieldRequirementsFromJsonSchema(js)
+      : fieldRequirementsFromSchema(input.contract.effectSchema as unknown as Schema.Schema<unknown>);
 
     // ── Phase A: Initial extraction via partial schema ────────────────────
     // Using Schema.partial so the pipeline accepts a partial object — avoids
