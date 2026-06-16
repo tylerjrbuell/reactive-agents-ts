@@ -70,3 +70,21 @@ export const RunControllerRef = FiberRef.unsafeMake<RunControllerLike | null>(nu
  * Null for normal runs, so non-resume executions pay zero cost.
  */
 export const ResumeStateRef = FiberRef.unsafeMake<string | null>(null);
+
+/**
+ * A human's approval decision for a paused durable run, carried into a resumed
+ * pipeline by `ReactiveAgent.approveRun`/`denyRun` (via `Effect.locally`). Read
+ * by the reasoning THINK phase (`reasoning-think.ts`) and forwarded as
+ * `KernelInput.approvalDecision`, where the runner applies it at the gate instead
+ * of re-thinking. Null on every normal run, so non-resume executions pay zero
+ * cost. Mirrors `ResumeStateRef`. Durable HITL (Phase D).
+ */
+export interface ApprovalDecision {
+  readonly gateId: string;
+  readonly status: "approved" | "denied";
+  readonly reason?: string;
+}
+
+export const ApprovalDecisionRef = FiberRef.unsafeMake<ApprovalDecision | null>(
+  null,
+);

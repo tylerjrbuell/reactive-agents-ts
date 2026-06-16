@@ -164,6 +164,18 @@ export class DurableConfigMismatchError extends Data.TaggedError(
 }> {}
 
 /**
+ * Thrown by `agent.approveRun`/`denyRun` when the target run is not awaiting an
+ * approval decision (no pending approval row) — e.g. already decided, already
+ * completed, or never paused. Durable HITL (Phase D).
+ */
+export class ApprovalStateError extends Data.TaggedError("ApprovalStateError")<{
+  /** The run id whose approval could not be applied. */
+  readonly runId: string;
+  /** Human-readable reason (e.g. "no pending approval"). */
+  readonly detail: string;
+}> {}
+
+/**
  * Union of all runtime error types that can be thrown by `agent.run()`.
  *
  * Use this as the error type in Effect pipelines or when calling `agent.run()`
@@ -176,7 +188,8 @@ export type RuntimeErrors =
   | GuardrailViolationError
   | KillSwitchTriggeredError
   | BehavioralContractViolationError
-  | BudgetExceededError;
+  | BudgetExceededError
+  | ApprovalStateError;
 
 /** Context and remediation suggestion for a runtime error. */
 export interface ErrorContext {
