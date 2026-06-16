@@ -68,6 +68,70 @@ if (result.object) {
 ```
 
   </TabItem>
+  <TabItem label="Valibot">
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import * as v from "valibot";
+
+const InvoiceSchema = v.object({
+  vendor: v.string(),
+  total: v.number(),
+  currency: v.string(),
+  lineItems: v.array(
+    v.object({ description: v.string(), amount: v.number() })
+  ),
+});
+
+const agent = await ReactiveAgents.create()
+  .withName("invoice-extractor")
+  .withSystemPrompt("You extract structured data from documents.")
+  .withTools({ builtins: ["read-file"] })
+  .withOutputSchema(InvoiceSchema)
+  .build();
+
+const result = await agent.run(
+  "Extract the invoice details from invoice.pdf"
+);
+
+if (result.object) {
+  // result.object is typed as v.InferOutput<typeof InvoiceSchema>
+  console.log(`${result.object.vendor}: ${result.object.total} ${result.object.currency}`);
+}
+```
+
+  </TabItem>
+  <TabItem label="ArkType">
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { type } from "arktype";
+
+const InvoiceSchema = type({
+  vendor: "string",
+  total: "number",
+  currency: "string",
+  lineItems: type({ description: "string", amount: "number" }).array(),
+});
+
+const agent = await ReactiveAgents.create()
+  .withName("invoice-extractor")
+  .withSystemPrompt("You extract structured data from documents.")
+  .withTools({ builtins: ["read-file"] })
+  .withOutputSchema(InvoiceSchema)
+  .build();
+
+const result = await agent.run(
+  "Extract the invoice details from invoice.pdf"
+);
+
+if (result.object) {
+  // result.object is typed as typeof InvoiceSchema.infer
+  console.log(`${result.object.vendor}: ${result.object.total} ${result.object.currency}`);
+}
+```
+
+  </TabItem>
   <TabItem label="Effect Schema">
 
 ```typescript
@@ -106,11 +170,13 @@ if (result.object) {
 `.withOutputSchema()` accepts any [Standard Schema v1](https://standardschema.dev/)
 validator (Zod 3.24+, Valibot, ArkType) **or** an Effect `Schema.Schema<A>`
 imported from `"effect"` (not `"@effect/schema"`). The returned builder is
-re-typed so `result.object` is `A` at compile time.
+re-typed so `result.object` is `A` at compile time. Reactive Agents supports
+all four of these schema libraries out of the box — most frameworks support only
+one or two.
 
 ### Top-level arrays
 
-Both Zod and Effect Schema support top-level array schemas directly:
+All four schema libraries support top-level array schemas directly:
 
 <Tabs syncKey="schema-lib">
   <TabItem label="Zod">
@@ -121,6 +187,46 @@ import { z } from "zod";
 const LineItemList = z.array(
   z.object({ description: z.string(), amount: z.number() })
 );
+
+const agent = await ReactiveAgents.create()
+  .withOutputSchema(LineItemList)
+  .build();
+
+const result = await agent.run("List all line items from the invoice");
+// result.object is typed as Array<{ description: string; amount: number }>
+if (result.object) {
+  result.object.forEach((item) => console.log(item.description, item.amount));
+}
+```
+
+  </TabItem>
+  <TabItem label="Valibot">
+
+```typescript
+import * as v from "valibot";
+
+const LineItemList = v.array(
+  v.object({ description: v.string(), amount: v.number() })
+);
+
+const agent = await ReactiveAgents.create()
+  .withOutputSchema(LineItemList)
+  .build();
+
+const result = await agent.run("List all line items from the invoice");
+// result.object is typed as Array<{ description: string; amount: number }>
+if (result.object) {
+  result.object.forEach((item) => console.log(item.description, item.amount));
+}
+```
+
+  </TabItem>
+  <TabItem label="ArkType">
+
+```typescript
+import { type } from "arktype";
+
+const LineItemList = type({ description: "string", amount: "number" }).array();
 
 const agent = await ReactiveAgents.create()
   .withOutputSchema(LineItemList)
