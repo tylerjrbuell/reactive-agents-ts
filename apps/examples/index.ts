@@ -268,6 +268,13 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/advanced/snapshot-replay-determinism.ts',
     },
+    {
+        num: 'A22',
+        label: 'durable-hitl',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/durable-hitl.ts',
+    },
     // NOTE: with-lean-harness.ts is intentionally NOT registered. Witness
     // requires verifier/RI prompts to observe a delta, but the test provider
     // returns canned responses (no verifier prompt is generated). When

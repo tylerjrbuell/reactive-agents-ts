@@ -908,7 +908,18 @@ export function runIterationPass(
       // ── Required tools guard (in-loop) ─────────────────────────────────
       // When the kernel declares "done" but required tools haven't been called,
       // redirect back to "thinking" with a feedback step — up to the retry limit.
-      if (state.status === "done" && requiredTools.length > 0) {
+      //
+      // Durable HITL (Phase D): an `awaiting-approval` pause is NOT a missing
+      // required tool — the gated tool WAS requested and the run is intentionally
+      // suspended before executing it. Without this exemption the auto-required-
+      // tools redirect re-thinks the gated call every iteration (the gate re-fires,
+      // the tool never "executes") and the run loops to max_iterations instead of
+      // pausing. Resume executes the approved call, satisfying the requirement.
+      if (
+        state.status === "done" &&
+        requiredTools.length > 0 &&
+        state.meta.terminatedBy !== "awaiting-approval"
+      ) {
         const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
         if (missingTools.length > 0) {
           requiredToolRedirects++;

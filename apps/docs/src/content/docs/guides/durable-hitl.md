@@ -108,6 +108,17 @@ run (stream) ──▶ gated call ──▶ status: awaiting-approval ──▶ 
 - One pending gate at a time: if a single step proposes several gated calls, the
   first pauses; the rest re-surface after the resume.
 
+## Runnable example
+
+A complete, runnable demo lives at
+[`apps/examples/src/advanced/durable-hitl.ts`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/durable-hitl.ts).
+With a provider key it drives the real gate (pause → approve → deny); offline it
+shows the policy wiring and the detach-requires-durable guard.
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... bun run apps/examples/src/advanced/durable-hitl.ts
+```
+
 ## See also
 
 - [Durable Execution](/guides/durable-execution/) — crash-resume, the foundation HITL builds on.

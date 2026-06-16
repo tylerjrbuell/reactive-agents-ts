@@ -216,7 +216,7 @@ export type ExecutionReasoningResult = {
   status: string;
   strategy?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string };
+  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown } };
 };
 
 export function normalizeReasoningResult(
@@ -255,6 +255,12 @@ export function normalizeReasoningResult(
       llmCalls: typeof md.llmCalls === "number" ? md.llmCalls : undefined,
       terminatedBy: typeof md.terminatedBy === "string" ? md.terminatedBy : undefined,
       rawTerminatedBy: typeof md.rawTerminatedBy === "string" ? md.rawTerminatedBy : undefined,
+      // Durable HITL (Phase D): preserve the paused-gate descriptor through
+      // normalization so the engine can surface pendingApproval + persist.
+      awaitingApprovalFor:
+        typeof md.awaitingApprovalFor === "object" && md.awaitingApprovalFor !== null
+          ? (md.awaitingApprovalFor as { gateId: string; toolName: string; args: unknown })
+          : undefined,
     },
   };
 }

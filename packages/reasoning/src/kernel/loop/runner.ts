@@ -527,6 +527,16 @@ export function runKernel(
     currentInput = iterationCarrier.currentInput;
     currentOptions = iterationCarrier.currentOptions;
 
+    // Durable HITL (Phase D): a run paused for human approval is a clean terminal
+    // state (status:"done", terminatedBy:"awaiting-approval", a sentinel output,
+    // and meta.awaitingApprovalFor carrying the gated call). The post-loop
+    // finalization blocks below (required-tools failure, harness-deliverable
+    // promotion, §9.0 verifier, quality gate, output synthesis) all assume the
+    // run was trying to ANSWER and would mangle the pause — e.g. the gated tool
+    // looks "required but uncalled" and the run is failed. Skip them entirely when
+    // paused; resume executes the approved call and runs finalization then.
+    const isAwaitingApproval = state.meta.terminatedBy === "awaiting-approval";
+
     // Fire 'complete' phase hooks once after loop exits normally.
     yield* Effect.promise(() =>
       runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'complete', state.iteration, state)
@@ -536,7 +546,7 @@ export function runKernel(
     // Final safety net: if the loop exited without failure but required quotas
     // are still missing, fail with a deterministic missing_required_tool error.
     // This applies uniformly across all non-failed exits.
-    if (state.status !== "failed" && requiredTools.length > 0) {
+    if (state.status !== "failed" && requiredTools.length > 0 && !isAwaitingApproval) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
       if (missingTools.length > 0) {
@@ -680,7 +690,7 @@ export function runKernel(
       iteration: state.iteration,
     });
 
-    if (state.status === "done" && state.output) {
+    if (state.status === "done" && state.output && !isAwaitingApproval) {
       // availableUserTools — pass through the user-registered tool list
       // so the verifier can run classifier-independent "agent-took-action"
       // checks (rejects parrots / hallucinated answers / meta-tool dumps
@@ -860,7 +870,7 @@ export function runKernel(
     // Route all successful outputs through the canonical finalization pipeline.
     // Validates format, optionally synthesizes when LLM is available.
     // Harness-assembled output (raw tool artifacts) always attempts synthesis.
-    if (state.status === "done" && state.output) {
+    if (state.status === "done" && state.output && !isAwaitingApproval) {
       // `harness_synthesis` (introduced when assembleDeliverable picks a
       // substantive model thought) is treated as a MODEL output here — the
       // text was authored by the LLM, not concatenated from raw tool JSON.

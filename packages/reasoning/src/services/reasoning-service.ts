@@ -86,6 +86,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Durable resume (v0.12.0 Phase C): fully-restored KernelState from a checkpoint;
        *  spread through to the strategy's `resumeState`. */
       readonly resumeState?: import("../kernel/state/kernel-state.js").KernelState;
+      /** Durable HITL (Phase D): resolved approval-gate policy; spread through to the kernel. */
+      readonly approvalPolicy?: import("../kernel/state/kernel-state.js").KernelInput["approvalPolicy"];
+      /** Durable HITL (Phase D): human's approve/deny decision on a resumed run; spread through to the kernel. */
+      readonly approvalDecision?: import("../kernel/state/kernel-state.js").KernelInput["approvalDecision"];
       readonly synthesisConfig?: SynthesisConfig;
       /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
       readonly observationSummary?: boolean | "auto";

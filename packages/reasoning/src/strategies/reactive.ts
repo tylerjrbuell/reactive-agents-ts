@@ -92,6 +92,10 @@ interface ReactiveInput {
    *  When present, the runner uses it as base state instead of building fresh —
    *  forwarded into `kernelInput.resumeState`. */
   readonly resumeState?: KernelState;
+  /** Durable HITL (Phase D): resolved approval-gate policy → `kernelInput.approvalPolicy`. */
+  readonly approvalPolicy?: KernelInput["approvalPolicy"];
+  /** Durable HITL (Phase D): human's approve/deny decision → `kernelInput.approvalDecision`. */
+  readonly approvalDecision?: KernelInput["approvalDecision"];
   /** Intelligent Context Synthesis — from .withReasoning({ synthesis: ... }) */
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
@@ -205,6 +209,8 @@ export const executeReactive = (
       briefResolvedSkills: input.briefResolvedSkills,
       initialMessages: input.initialMessages,
       resumeState: input.resumeState,
+      approvalPolicy: input.approvalPolicy,
+      approvalDecision: input.approvalDecision,
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
       auditRationale: input.auditRationale,
@@ -297,6 +303,13 @@ export const executeReactive = (
         llmCalls: state.llmCalls ?? 0,
         ...(state.meta.finalAnswerCapture !== undefined
           ? { finalAnswerCapture: state.meta.finalAnswerCapture }
+          : {}),
+        // Durable HITL (Phase D): surface the paused-gate descriptor so the
+        // runtime engine can persist `awaiting-approval` + the pending approval
+        // row and populate AgentResult.pendingApproval. Present only on a paused
+        // run (terminatedBy === "awaiting-approval").
+        ...(state.meta.awaitingApprovalFor !== undefined
+          ? { awaitingApprovalFor: state.meta.awaitingApprovalFor }
           : {}),
         ...(state.meta.lastDialectObserved !== undefined
           ? { lastDialectObserved: state.meta.lastDialectObserved }
