@@ -5,6 +5,8 @@ sidebar:
   order: 15
 ---
 
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
 Reactive Agents includes first-class support for streaming agent output into React, Vue, and Svelte applications. The pattern is consistent across frameworks:
 
 1. **Server** — A route handler calls `AgentStream.toSSE()` and returns a standard `Response`
@@ -14,79 +16,78 @@ Reactive Agents includes first-class support for streaming agent output into Rea
 
 The server-side is identical regardless of which client framework you use. `AgentStream.toSSE()` returns a standard Web API `Response`, making it compatible with any framework that accepts one.
 
-### Next.js App Router
+<Tabs syncKey="server">
+  <TabItem label="Next.js">
+  ```typescript
+  // app/api/agent/route.ts
+  import { ReactiveAgents, AgentStream } from "reactive-agents";
 
-```typescript
-// app/api/agent/route.ts
-import { ReactiveAgents, AgentStream } from "reactive-agents";
+  export async function POST(req: Request) {
+    const { prompt } = await req.json();
 
-export async function POST(req: Request) {
-  const { prompt } = await req.json();
+    const agent = await ReactiveAgents.create()
+      .withProvider("anthropic")
+      .withReasoning()
+      .withTools()
+      .build();
 
-  const agent = await ReactiveAgents.create()
-    .withProvider("anthropic")
-    .withReasoning()
-    .withTools()
-    .build();
+    return AgentStream.toSSE(agent.runStream(prompt));
+  }
+  ```
+  </TabItem>
+  <TabItem label="SvelteKit">
+  ```typescript
+  // src/routes/api/agent/+server.ts
+  import { ReactiveAgents, AgentStream } from "reactive-agents";
+  import type { RequestHandler } from "./$types";
 
-  return AgentStream.toSSE(agent.runStream(prompt));
-}
-```
+  export const POST: RequestHandler = async ({ request }) => {
+    const { prompt } = await request.json();
 
-### SvelteKit
+    const agent = await ReactiveAgents.create()
+      .withProvider("anthropic")
+      .withTools()
+      .build();
 
-```typescript
-// src/routes/api/agent/+server.ts
-import { ReactiveAgents, AgentStream } from "reactive-agents";
-import type { RequestHandler } from "./$types";
+    return AgentStream.toSSE(agent.runStream(prompt));
+  };
+  ```
+  </TabItem>
+  <TabItem label="Nuxt / H3">
+  ```typescript
+  // server/api/agent.post.ts
+  import { ReactiveAgents, AgentStream } from "reactive-agents";
 
-export const POST: RequestHandler = async ({ request }) => {
-  const { prompt } = await request.json();
+  export default defineEventHandler(async (event) => {
+    const { prompt } = await readBody(event);
 
-  const agent = await ReactiveAgents.create()
-    .withProvider("anthropic")
-    .withTools()
-    .build();
+    const agent = await ReactiveAgents.create()
+      .withProvider("anthropic")
+      .withTools()
+      .build();
 
-  return AgentStream.toSSE(agent.runStream(prompt));
-};
-```
-
-### Nuxt / H3
-
-```typescript
-// server/api/agent.post.ts
-import { ReactiveAgents, AgentStream } from "reactive-agents";
-
-export default defineEventHandler(async (event) => {
-  const { prompt } = await readBody(event);
-
-  const agent = await ReactiveAgents.create()
-    .withProvider("anthropic")
-    .withTools()
-    .build();
-
-  // Return the Web API Response directly — h3 handles it
-  return AgentStream.toSSE(agent.runStream(prompt));
-});
-```
-
-### Bun.serve / Hono / Fastify
-
-```typescript
-// Bun.serve
-Bun.serve({
-  port: 3000,
-  async fetch(req) {
-    if (req.method === "POST" && new URL(req.url).pathname === "/agent") {
-      const { prompt } = await req.json();
-      const agent = await ReactiveAgents.create().withProvider("anthropic").withTools().build();
-      return AgentStream.toSSE(agent.runStream(prompt));
-    }
-    return new Response("Not found", { status: 404 });
-  },
-});
-```
+    // Return the Web API Response directly — h3 handles it
+    return AgentStream.toSSE(agent.runStream(prompt));
+  });
+  ```
+  </TabItem>
+  <TabItem label="Bun / Hono / Fastify">
+  ```typescript
+  // Bun.serve
+  Bun.serve({
+    port: 3000,
+    async fetch(req) {
+      if (req.method === "POST" && new URL(req.url).pathname === "/agent") {
+        const { prompt } = await req.json();
+        const agent = await ReactiveAgents.create().withProvider("anthropic").withTools().build();
+        return AgentStream.toSSE(agent.runStream(prompt));
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+  ```
+  </TabItem>
+</Tabs>
 
 ## React
 
