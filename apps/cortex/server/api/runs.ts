@@ -66,6 +66,19 @@ export const RunConfigBody = t.Object({
   ),
   variables: t.Optional(t.Array(t.Unknown())),
   variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
+  durableRuns: t.Optional(
+    t.Object({
+      enabled: t.Optional(t.Boolean()),
+      checkpointEvery: t.Optional(t.Number()),
+      dir: t.Optional(t.String()),
+      approvalPolicy: t.Optional(
+        t.Object({
+          tools: t.Optional(t.Array(t.String())),
+          mode: t.Optional(t.Union([t.Literal("detach"), t.Literal("block")])),
+        }),
+      ),
+    }),
+  ),
 });
 
 export const runsRouter = (
@@ -131,6 +144,7 @@ export const runsRouter = (
             ...(b.contextSynthesis ? { contextSynthesis: b.contextSynthesis } : {}),
             ...(b.guardrails ? { guardrails: b.guardrails } : {}),
             ...(b.persona ? { persona: b.persona } : {}),
+            ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
           });
         });
         try {

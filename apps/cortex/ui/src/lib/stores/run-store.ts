@@ -401,11 +401,39 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     }
   }
 
+  // ── Durable HITL (Phase E) ── approve/deny a run paused on an approval gate.
+  async function approve(reason?: string) {
+    try {
+      await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reason ? { reason } : {}),
+      });
+      state.update((s) => (s.status === "completed" || s.status === "failed" ? s : { ...s, status: "live" }));
+    } catch {
+      /* network / server error */
+    }
+  }
+
+  async function deny(reason: string) {
+    try {
+      await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/deny`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+    } catch {
+      /* network / server error */
+    }
+  }
+
   return {
     subscribe: state.subscribe,
     pause,
     resume,
     stop,
+    approve,
+    deny,
     deleteRun,
     destroy: () => {
       unsubMsg?.();

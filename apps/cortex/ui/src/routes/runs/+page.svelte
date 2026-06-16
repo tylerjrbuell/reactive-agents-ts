@@ -3,6 +3,7 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
+  import ApprovalPanel from "$lib/components/ApprovalPanel.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
 
@@ -423,6 +424,11 @@
         <span class="material-symbols-outlined text-sm">arrow_back</span> Beacon
       </a>
     </div>
+  </div>
+
+  <!-- Durable HITL — runs paused awaiting approval (Phase E) -->
+  <div class="flex-shrink-0 rounded-lg border border-[var(--cortex-border)] bg-white/70 px-4 py-3 backdrop-blur-sm dark:bg-surface-container-low/40">
+    <ApprovalPanel />
   </div>
 
   {#if !loading && !error}

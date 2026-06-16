@@ -511,3 +511,49 @@ describe("Durable HITL endpoints (Phase E)", () => {
     expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
   });
 });
+
+describe("POST /api/runs — durableRuns passthrough (Phase E)", () => {
+  it("forwards durableRuns + approvalPolicy to the runner", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)));
+
+    await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: "do a risky thing",
+          provider: "test",
+          durableRuns: {
+            enabled: true,
+            checkpointEvery: 2,
+            approvalPolicy: { tools: ["shell-execute"], mode: "detach" },
+          },
+        }),
+      }),
+    );
+
+    expect(captured.params?.durableRuns?.enabled).toBe(true);
+    expect(captured.params?.durableRuns?.checkpointEvery).toBe(2);
+    expect(captured.params?.durableRuns?.approvalPolicy?.tools).toEqual(["shell-execute"]);
+  });
+
+  it("omits durableRuns when not enabled", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)));
+
+    await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "plain", provider: "test" }),
+      }),
+    );
+
+    expect(captured.params?.durableRuns).toBeUndefined();
+  });
+});
