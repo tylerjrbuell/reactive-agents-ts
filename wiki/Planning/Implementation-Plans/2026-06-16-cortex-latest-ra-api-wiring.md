@@ -67,3 +67,23 @@ config, no grounding/calibration toggles in `AgentConfigPanel`.
 
 ## Order
 E1 → E2 (durable headline, P0) → S → C. Build server + store + test per phase, then UI panels, then live-verify.
+
+## Status (2026-06-16)
+
+- **Phase E1 + E2 SHIPPED** (commits `9fff4053`, `2ed3235d`, `46f36eec`):
+  - `buildCortexAgent` + LaunchParams + RunConfigBody accept `durableRuns`
+    ({ enabled, checkpointEvery?, dir?, approvalPolicy? }) → `.withDurableRuns()` /
+    `.withApprovalPolicy()`.
+  - Runner retains agents paused at `awaiting-approval` (skips dispose) +
+    `listPendingApprovals`/`approveApproval`/`denyApproval`.
+  - REST: `GET /api/runs/pending-approvals`, `POST /api/runs/:runId/approve|deny`.
+  - UI: `run-store` approve/deny + `ApprovalPanel.svelte` (polls pending, mounted
+    on the Execution-Trace page).
+  - Tests: build-cortex-agent-durable + api-runs durable endpoints/passthrough;
+    cortex suite 402/402. **Live playwright verify of the panel still pending.**
+  - **Follow-up:** cross-restart resume needs per-run launch-config persistence
+    (rebuild a matching durable agent by config-hash); only in-process/live-session
+    approve/deny is wired today.
+
+- **Phase S (structured output) + Phase C (budget/grounding/calibration config
+  surface): NOT STARTED** — next increments.

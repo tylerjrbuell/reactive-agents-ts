@@ -63,7 +63,8 @@ updated: 2026-06-16
 ## What's Next
 
 1. **Push `main` to origin** (~50 commits unpushed) — confirms #194 closed, syncs durable-exec + HITL + docs overhaul.
-2. **v0.12 levers — 3 of 4 SHIPPED 2026-06-16:** ✅ cost-honesty (debrief LLM synth skipped on local tier, `4841be7e`), ✅ strategy-honesty (adaptive→reactive on local tier, `4841be7e`; #195 already closed), ✅ DX-wave (`withObservability` 5→1 fan-out, `0819a645`). **Only durable Phase E (Cortex resume/approval UI) remains** — greenfield (server endpoints + Svelte UI + playwright verify); Cortex has zero durable wiring today. Needs its own session.
+2. **v0.12 levers — ALL 4 SHIPPED 2026-06-16:** ✅ cost-honesty (debrief LLM synth skipped on local tier, `4841be7e`), ✅ strategy-honesty (adaptive→reactive on local tier, `4841be7e`; #195 closed), ✅ DX-wave (`withObservability` 5→1 fan-out, `0819a645`), ✅ **durable Phase E (Cortex)** — durable runs + HITL wired end-to-end (`9fff4053`/`2ed3235d`/`46f36eec`): `.withDurableRuns`/`.withApprovalPolicy` in buildCortexAgent, runner retains paused agents, REST pending-approvals/approve/deny, `ApprovalPanel.svelte` on the runs page. cortex 402/402. **Live playwright verify pending** + cross-restart resume (config persistence) is a follow-up.
+3. **Cortex broader-wiring audit (user ask):** gap matrix in `wiki/Planning/Implementation-Plans/2026-06-16-cortex-latest-ra-api-wiring.md`. Phase E done; **Phase S (structured output `.withOutputSchema`→`result.object` + UI viewer) + Phase C (budget/grounding/calibration config surface) NOT STARTED** — next increments.
 3. **Cut v0.12.0** — bump VERSION, `bun run release:dry 0.12.0` (sole drift gate), tag-driven publish.
 4. **Stale-doc cleanup:** update `wiki/Issues/Running Issues Log.md` (HS-34/HS-35 → cleared).
 5. Team-ownership pilot window ended 2026-06-15 — ablation-warden lift-rule evaluation outstanding.
