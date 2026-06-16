@@ -34,12 +34,14 @@ import { unwrapError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ApprovalDecisionRef } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
     listDurableRuns,
     markRunStatus,
+    decideApprovalRecord,
+    getPendingApprovalAt,
 } from './engine/durable-resume.js'
 import type { RunRecord, RunStatus } from './services/run-store.js'
 import type {
@@ -116,6 +118,15 @@ import { StructuredOutputError } from './errors/structured-output-error.js'
 type ToolServiceTag = import('effect').Context.Tag<any, any>
 const asToolServiceTag = (tag: unknown): ToolServiceTag =>
     tag as unknown as ToolServiceTag
+
+/** Parse stored approval args JSON, falling back to the raw string on malformed input. */
+const safeParseJson = (s: string): unknown => {
+    try {
+        return JSON.parse(s)
+    } catch {
+        return s
+    }
+}
 
 // ── Class ──
 export class ReactiveAgent<TOut = unknown> {
@@ -793,6 +804,121 @@ export class ReactiveAgent<TOut = unknown> {
         }
         const dbPath = join(this._durableResume.dir, 'runs.db')
         return Effect.runPromise(listDurableRuns({ dbPath, status: filter?.status }))
+    }
+
+    /**
+     * Durable HITL (Phase D): approve a run that paused for human approval and
+     * resume it to completion. Callable from ANY process (the decision + the
+     * paused checkpoint live in the durable RunStore). Requires `.withDurableRuns()`.
+     *
+     * @throws Error if the agent was not built with `.withDurableRuns()`.
+     * @throws ApprovalStateError if the run has no pending approval.
+     */
+    async approveRun(runId: string, opts?: { reason?: string }): Promise<AgentResult> {
+        return this.decideAndResumeRun(runId, { status: 'approved', reason: opts?.reason })
+    }
+
+    /**
+     * Durable HITL (Phase D): deny a run's paused action and resume it to
+     * completion (the agent observes the denial and continues). Requires
+     * `.withDurableRuns()`.
+     *
+     * @throws Error if the agent was not built with `.withDurableRuns()`.
+     * @throws ApprovalStateError if the run has no pending approval.
+     */
+    async denyRun(runId: string, reason: string): Promise<AgentResult> {
+        return this.decideAndResumeRun(runId, { status: 'denied', reason })
+    }
+
+    /** Record an approve/deny decision then resume the run from its checkpoint. */
+    private async decideAndResumeRun(
+        runId: string,
+        decision: { status: 'approved' | 'denied'; reason?: string },
+    ): Promise<AgentResult> {
+        if (!this._durableResume) {
+            throw new Error(
+                'approveRun()/denyRun() requires .withDurableRuns() — this agent has no durable run store.',
+            )
+        }
+        const { dir, configHash } = this._durableResume
+        const dbPath = join(dir, 'runs.db')
+
+        // 1. Record the human decision (fails ApprovalStateError if not pending).
+        const { gateId } = await Effect.runPromise(
+            decideApprovalRecord({ dbPath, runId, status: decision.status, reason: decision.reason }),
+        )
+
+        // 2. Load + guard the paused checkpoint, then resume to completion with the
+        //    decision seeded via ApprovalDecisionRef (read in reasoning-think →
+        //    KernelInput.approvalDecision → runner re-entry).
+        const payload = await Effect.runPromise(
+            loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
+        )
+        const pipeline = this.buildRunTaskEffect(payload.run.task, { taskId: runId })
+        try {
+            const result = await this.runtime.runPromise(
+                pipeline.pipe(
+                    Effect.locally(ResumeStateRef, payload.stateJson),
+                    Effect.locally(ApprovalDecisionRef, {
+                        gateId,
+                        status: decision.status,
+                        ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+                    }),
+                ),
+            )
+            await Effect.runPromise(markRunStatus({ dbPath, runId, status: 'completed' }))
+            return result
+        } catch (e) {
+            await Effect.runPromise(markRunStatus({ dbPath, runId, status: 'failed' }))
+            throw unwrapError(e)
+        }
+    }
+
+    /**
+     * Durable HITL (Phase D): list runs paused awaiting a human decision, with the
+     * pending action (tool + args) for each. Requires `.withDurableRuns()`.
+     */
+    async listPendingApprovals(): Promise<
+        readonly {
+            runId: string
+            gateId: string
+            toolName: string
+            args: unknown
+            task: string
+            updatedAt: number
+        }[]
+    > {
+        if (!this._durableResume) {
+            throw new Error('listPendingApprovals() requires .withDurableRuns().')
+        }
+        const dbPath = join(this._durableResume.dir, 'runs.db')
+        const runs = await Effect.runPromise(
+            listDurableRuns({ dbPath, status: 'awaiting-approval' }),
+        )
+        const out: {
+            runId: string
+            gateId: string
+            toolName: string
+            args: unknown
+            task: string
+            updatedAt: number
+        }[] = []
+        for (const run of runs) {
+            const pending = await Effect.runPromise(
+                getPendingApprovalAt({ dbPath, runId: run.runId }),
+            )
+            if (pending) {
+                out.push({
+                    runId: run.runId,
+                    gateId: pending.gateId,
+                    toolName: pending.toolName,
+                    args: safeParseJson(pending.argsJson),
+                    task: run.task,
+                    updatedAt: run.updatedAt,
+                })
+            }
+        }
+        return out
     }
 
     /**

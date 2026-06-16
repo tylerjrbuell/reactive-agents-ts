@@ -348,6 +348,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     grounding: options.grounding,
     // Opt-in durable run persistence. Propagated from `.withDurableRuns()`.
     durableRuns: options.durableRuns,
+    // Opt-in durable HITL approval policy. Propagated from `.withApprovalPolicy()`.
+    approvalPolicy: options.approvalPolicy,
     verifier: options.leanHarness ? leanModeVerifier : undefined,
     harnessPipeline: options.harnessPipeline,
     enableReactiveIntelligence: options.enableReactiveIntelligence,

@@ -19,10 +19,12 @@ import {
   RunStoreService,
   type RunRecord,
   type RunStatus,
+  type ApprovalRecord,
 } from "../services/run-store.js";
 import {
   DurableRunNotFoundError,
   DurableConfigMismatchError,
+  ApprovalStateError,
 } from "../errors.js";
 
 /** The data needed to continue a crashed/paused run from its last checkpoint. */
@@ -92,4 +94,38 @@ export const markRunStatus = (params: {
   Effect.gen(function* () {
     const store = yield* RunStoreService;
     yield* store.setStatus(params.runId, params.status);
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/**
+ * Durable HITL (Phase D): record a human's approve/deny on a run's pending
+ * approval. Fails `ApprovalStateError` when the run has no pending approval (e.g.
+ * already decided, completed, or never paused). Returns the decided gateId so the
+ * caller can seed `ApprovalDecisionRef` for the resumed run.
+ */
+export const decideApprovalRecord = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+  readonly status: "approved" | "denied";
+  readonly reason?: string;
+}): Effect.Effect<{ gateId: string }, ApprovalStateError> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    const pending = yield* store.getPendingApproval(params.runId);
+    if (!pending) {
+      return yield* Effect.fail(
+        new ApprovalStateError({ runId: params.runId, detail: "no pending approval" }),
+      );
+    }
+    yield* store.decideApproval(params.runId, pending.gateId, params.status, params.reason);
+    return { gateId: pending.gateId };
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/** The single pending approval for a run (or undefined). Used by `listPendingApprovals`. */
+export const getPendingApprovalAt = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+}): Effect.Effect<ApprovalRecord | undefined, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    return yield* store.getPendingApproval(params.runId);
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
