@@ -1,6 +1,7 @@
 import { Schema, JSONSchema, ParseResult, Either } from "effect";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { toJsonSchema as valibotToJsonSchema } from "@valibot/to-json-schema";
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -163,6 +164,28 @@ function fromStandardSchema<A>(std: StandardSchemaV1<unknown, A>): SchemaContrac
           return zodToJsonSchema(std as unknown as Parameters<typeof zodToJsonSchema>[0]) as Record<string, unknown>;
         } catch {
           // fall through — degrade to prompt+heal
+        }
+      }
+      // Valibot (Standard Schema vendor) has no JSON-schema emitter on the schema;
+      // convert via the official @valibot/to-json-schema. `std` is the Valibot schema.
+      if (props.vendor === "valibot") {
+        try {
+          return valibotToJsonSchema(
+            std as unknown as Parameters<typeof valibotToJsonSchema>[0],
+          ) as Record<string, unknown>;
+        } catch {
+          // fall through — degrade to prompt+heal
+        }
+      }
+      // ArkType schemas expose a native `.toJsonSchema()` method.
+      if (props.vendor === "arktype") {
+        const at = std as unknown as { toJsonSchema?: () => Record<string, unknown> };
+        if (typeof at.toJsonSchema === "function") {
+          try {
+            return at.toJsonSchema();
+          } catch {
+            // fall through — degrade to prompt+heal
+          }
         }
       }
       // Other vendors without a JSON Schema emitter: fall back to the prompt+heal path.

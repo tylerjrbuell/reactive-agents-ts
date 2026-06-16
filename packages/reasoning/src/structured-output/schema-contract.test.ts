@@ -91,3 +91,26 @@ describe("toSchemaContract — Zod JSON Schema (zod-to-json-schema)", () => {
     expect(s).toContain("lineItems");
   });
 });
+
+import * as vb from "valibot";
+import { type as arkType } from "arktype";
+describe("toSchemaContract — Valibot + ArkType JSON Schema", () => {
+  it("renders JSON schema for a Valibot schema (was undefined → blind)", () => {
+    const s = vb.array(vb.object({ name: vb.string(), price: vb.number() }));
+    const c = toSchemaContract(s as never);
+    const js = JSON.stringify(c.toJsonSchema());
+    expect(c.toJsonSchema()).toBeDefined();
+    expect(js).toContain("name");
+    expect(js).toContain("price");
+    expect(c.validate([{ name: "x", price: 1 }]).ok).toBe(true);
+  });
+  it("renders JSON schema for an ArkType schema (native .toJsonSchema)", () => {
+    const s = arkType({ name: "string", price: "number" }).array();
+    const c = toSchemaContract(s as never);
+    const js = JSON.stringify(c.toJsonSchema());
+    expect(c.toJsonSchema()).toBeDefined();
+    expect(js).toContain("name");
+    expect(js).toContain("price");
+    expect(c.validate([{ name: "x", price: 1 }]).ok).toBe(true);
+  });
+});
