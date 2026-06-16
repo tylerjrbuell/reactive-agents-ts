@@ -127,5 +127,33 @@ E1 → E2 (durable headline, P0) → S → C. Build server + store + test per ph
   - Live-verified (gemma4:e4b): object schema → `{ name:"Ada Lovelace",
     role:"mathematician", born:1815 }` (typed). cortex 416/416.
 
-- **Phase C (budget caps / grounding / calibration config surface): NOT STARTED** —
-  next increment.
+- **✅ Phase C — budget + grounding SHIPPED** (`5276aa89`): `.withBudget({tokenLimit?,
+  costLimit?})` + `.withGrounding({mode})` wired through BOTH launch paths +
+  AgentConfigPanel inputs/select. Calibration is auto in the runtime (no manual
+  surface). Live-verified: budget cap terminates (8859 tok > 2000 → failed @ iter2);
+  grounding warn completes clean.
+
+- **🔴→✅ FIXED — saved-agent (gateway) launch path was fully unwired** (`a1769222`):
+  saved agents trigger via `GatewayProcessManager`, which dropped
+  durableRuns/useReasoning/outputSchema AND disposed paused agents — so a SAVED
+  agent with a durable HITL policy never paused (the reported bug). Root cause also
+  included a shape mismatch (UI `durableRuns.approvalTools` vs build
+  `approvalPolicy.tools`). Fixes: shared `durable-approvals.ts` registry (runner +
+  gateway both register; shared endpoints act on it), gateway field passthrough +
+  pause-retention, `normalizeCortexAgentConfig` persists + converts the v0.12 fields.
+  Live-verified: saved gateway agent → trigger → PAUSES → approve → clears.
+
+## Full live-validation matrix (gemma4:e4b, 2026-06-16)
+
+| Feature | Direct `/api/runs` | Saved-agent trigger |
+|---|---|---|
+| Reasoning kernel default | ✓ ReasoningStepCompleted | ✓ |
+| inline-think (`useReasoning:false`) | ✓ no kernel events | — |
+| Durable HITL (pause→approve→clear) | ✓ | ✓ |
+| Structured output (typed `result.object`) | ✓ `{name,role,born:1815}` | emit wired |
+| Budget cap (terminates when crossed) | ✓ failed @ 8859>2000 tok | wired |
+| Grounding (warn, completes) | ✓ | wired |
+
+**NB:** `bun run server/index.ts` has no watch — a running studio must be restarted
+(`bun start`) to load these server changes. (This is the most likely reason the
+reported durable run "didn't stop" before the fix landed.)
