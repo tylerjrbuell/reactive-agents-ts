@@ -238,3 +238,40 @@ describe("groundedExtract — Zod Standard Schema", () => {
     expect(required ?? []).not.toContain("note");
   });
 });
+
+describe("groundedExtract — top-level array schema", () => {
+  /**
+   * Test 9 — top-level array schema: groundedExtract must NOT mangle the
+   * extracted array into an object. Before the fix the object-centric path
+   * spread the array into `{}` → validation fails with
+   * "Expected array, received object".
+   *
+   * Fix: detect `jsonSchema.type !== "object"` at entry and degrade to plain
+   * extraction (no per-field provenance/confidence/abstention — they're
+   * meaningless for a top-level array).
+   */
+  it("handles a top-level array schema (degrades to plain extraction, no object-mangling)", async () => {
+    const arrContract = toSchemaContract(
+      Schema.Array(Schema.Struct({ price: Schema.Number, currency: Schema.String })),
+    );
+
+    // Confirm the degrade branch will fire: toJsonSchema().type must be "array"
+    const js = arrContract.toJsonSchema();
+    expect(js?.["type"]).toBe("array");
+
+    // TestLLMServiceLayer: native json turn returns the array directly
+    const llm = TestLLMServiceLayer([{ json: [{ price: 1.23, currency: "usd" }] }]);
+
+    const r = await Effect.runPromise(
+      groundedExtract({
+        contract: arrContract as unknown as Parameters<typeof groundedExtract>[0]["contract"],
+        finalAnswer: '[{"price":1.23,"currency":"usd"}]',
+        evidenceCorpus: "",
+        onParseFail: "degrade",
+      }).pipe(Effect.provide(llm)),
+    );
+
+    expect(r.object).toEqual([{ price: 1.23, currency: "usd" }]);
+    expect(r.objectError).toBeUndefined();
+  });
+});

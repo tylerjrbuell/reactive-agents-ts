@@ -138,6 +138,27 @@ export const groundedExtract = <A>(
 ): Effect.Effect<GroundedOutput<A>, never, LLMService> =>
   Effect.gen(function* () {
     const js = input.contract.toJsonSchema();
+
+    // ── Non-object top-level schemas (arrays, primitives, etc.) ──────────────
+    // The object-centric phases below (spread, Object.entries, per-field
+    // provenance/confidence/abstention) are meaningless for top-level arrays
+    // or other non-object shapes. Degrade to plain extraction + validation.
+    const isTopLevelObject = !js || js["type"] === "object";
+    if (!isTopLevelObject) {
+      const r = yield* extractStructuredOutput<A>({
+        contract: input.contract,
+        prompt: `Extract the data described by the schema from the following result.\n\n${input.finalAnswer}`,
+      }).pipe(
+        Effect.map((res) => ({ object: res.data } as GroundedOutput<A>)),
+        Effect.catchAll((e) =>
+          Effect.succeed({
+            objectError: e instanceof Error ? e.message : String(e),
+          } as GroundedOutput<A>),
+        ),
+      );
+      return r;
+    }
+
     const reqs = js
       ? fieldRequirementsFromJsonSchema(js)
       : fieldRequirementsFromSchema(input.contract.effectSchema as unknown as Schema.Schema<unknown>);
