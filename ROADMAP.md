@@ -31,9 +31,9 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 | **DX wave** | Effect-free lifecycle hooks (no `Effect.succeed` required), builder consolidation (observability 5 methods → 1; one canonical hook route; documented config precedence), plain-Error mapping at promise boundaries. | **Effect-free hooks shipped** (`.withHook()` accepts plain sync/async fns). Builder consolidation (observability 5→1) remaining. |
 | **Memory default OFF** | Breaking-ish: stateless by default, one-line `.withMemory()` opt-in. No more surprise SQLite writes in CI. | **Shipped** (memory default-OFF; `balanced()`/`intelligent()` opt in explicitly). |
 | **Cost honesty** | Tier-aware debrief synthesis (skip/template on local — the single largest per-run overhead), meta-tool prompt audit per tier. | **Partial** — debrief forked off the critical path (~46% faster `run()`); tier-aware skip/template fallback in place, full per-tier policy remaining. |
-| **Strategy honesty** | Adaptive routing defaults to reactive on local tier; heavy strategies documented per the parity data. | **Core landed** — Compose hooks/killswitches/calibration now thread through all heavy strategies (#195); remaining: `tool_call` batch-emit sub-gap + adaptive-routing local-tier default. |
+| **Strategy honesty** | Adaptive routing defaults to reactive on local tier; heavy strategies documented per the parity data. | **Hook-drop fixed (#195 closed)** — Compose hooks/killswitches/calibration now thread through all 5 strategies incl. code-action sandbox path; observation.tool-result fires on single + batch. Remaining: adaptive-routing local-tier default. |
 
-Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. Open v0.12 issue: #195 (strategy-honesty sub-gap). Slipped during 2026-06-16 triage: #188/#47/#35 → v0.13, #43 → v0.14.
+Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. **v0.12 milestone issue queue is empty** (#195 closed 2026-06-16). Slipped during 2026-06-16 triage: #188/#47/#35 → v0.13, #43 → v0.14.
 
 ---
 

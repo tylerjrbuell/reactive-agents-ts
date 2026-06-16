@@ -21,8 +21,9 @@ updated: 2026-06-16
 
 **This session's work:**
 1. **PR #194 closed (NOT merged, NOT pushed).** Its commits (`abfabc93`, `a7bf8bc6`, merge `3e808cb7`) are already in local `main`; the branch went stale (−1916 docs lines that landed after) so merging would regress live docs. Closed with a reconcile comment; will land on origin with the next `main` push.
-2. **v0.12 issue triage (milestone #6):** KEEP `#195` (P1 strategy-honesty — core hook/killswitch/calibration threading already fixed across 4 heavy strategies; narrowed to the `tool_call` batch-emit sub-gap). SLIPPED `#188`→v0.13 (AgentStreamEvent re-export arch-debt), `#47`→v0.13 (tool-result paging feature), `#35`→v0.13 (code-action runPromise bug, experimental-scope), `#43`→v0.14 (memory multi-session — conflicts with memory-default-OFF). Each got a triage comment.
-3. **ROADMAP.md v0.12 table refreshed** — status column now reflects shipped vs remaining (was all "Planned").
+2. **v0.12 issue triage (milestone #6):** SLIPPED `#188`→v0.13 (AgentStreamEvent re-export arch-debt), `#47`→v0.13 (tool-result paging feature), `#35`→v0.13 (code-action runPromise bug, experimental-scope), `#43`→v0.14 (memory multi-session — conflicts with memory-default-OFF). Each got a triage comment.
+3. **#195 CLOSED (fae561d4)** — finished the last strategy in the field-drop matrix: code-action runs tools in the Worker sandbox (not kernel act), so it needed its own emit. `CodeActionInput` now carries `harnessPipeline` (populated via the existing StrategyFn-input spread — no registry change) and emits `observation.tool-result` per sandbox tool call. RED→GREEN `code-action-compose-tags.test.ts`; #195 cluster 62/62, reasoning build+DTS green. **v0.12 milestone issue queue now EMPTY.** (E2 verifier/memory symmetry stays opt-in behind `RA_TOOL_OBSERVE_SYMMETRY` — separate ablation-gated change, not part of the hook-drop bug.)
+4. **ROADMAP.md v0.12 table refreshed** — status column now reflects shipped vs remaining (was all "Planned").
 
 **⚠️ The real outstanding action: local `main` is ~50 commits ahead of origin and has NEVER been pushed.** Push syncs durable-exec + docs overhaul + HITL and auto-confirms #194's closure on origin.
 
@@ -62,7 +63,7 @@ updated: 2026-06-16
 ## What's Next
 
 1. **Push `main` to origin** (~50 commits unpushed) — confirms #194 closed, syncs durable-exec + HITL + docs overhaul.
-2. **Finish v0.12 remaining levers:** `#195` `tool_call` batch-emit sub-gap; DX-wave builder consolidation (observability 5→1); cost-honesty full per-tier debrief policy; strategy-honesty adaptive-routing local-tier default; durable Phase E (Cortex UI).
+2. **Finish v0.12 remaining levers:** DX-wave builder consolidation (observability 5→1); cost-honesty full per-tier debrief policy; strategy-honesty adaptive-routing local-tier default; durable Phase E (Cortex UI). (#195 strategy-honesty hook-drop DONE.)
 3. **Cut v0.12.0** — bump VERSION, `bun run release:dry 0.12.0` (sole drift gate), tag-driven publish.
 4. **Stale-doc cleanup:** update `wiki/Issues/Running Issues Log.md` (HS-34/HS-35 → cleared).
 5. Team-ownership pilot window ended 2026-06-15 — ablation-warden lift-rule evaluation outstanding.
