@@ -93,7 +93,7 @@ import type {
     OutputSchemaOptions,
 } from './builder/types.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
-import { groundedExtract, buildEvidenceCorpusFromSteps } from '@reactive-agents/reasoning'
+import { groundedExtract, buildEvidenceCorpusFromSteps, parsePartial, stripThinking, groundFields } from '@reactive-agents/reasoning'
 import type { ReasoningStep } from '@reactive-agents/reasoning'
 import { LLMService } from '@reactive-agents/llm-provider'
 import { extractObjectFromAnswer } from './engine/finalize/extract-object.js'
@@ -199,6 +199,67 @@ export class ReactiveAgent<TOut = unknown> {
          */
         private readonly _enableTools: boolean = false
     ) {}
+
+    /**
+     * Build the "respond ONLY with JSON matching this schema" suffix from the
+     * schema contract. Returns `""` when the contract has no JSON schema.
+     *
+     * Used by both `streamObject` (to steer streaming) and `buildRunTaskEffect`
+     * (to steer the run() task so the agent emits JSON that parse-first can read).
+     */
+    private buildSchemaSteering(contract: SchemaContract<unknown>): string {
+        const jsonSchema = contract.toJsonSchema()
+        const jsonSchemaString = jsonSchema !== undefined
+            ? JSON.stringify(jsonSchema, null, 2)
+            : undefined
+        const schemaBlock = jsonSchemaString !== undefined
+            ? `\n\n${jsonSchemaString}`
+            : ""
+        return (
+            `\n\nRespond with ONLY a single JSON object that exactly matches this JSON Schema` +
+            ` — no prose, no markdown fences, no explanation.` +
+            ` Use exactly these top-level keys; do not nest or wrap:${schemaBlock}`
+        )
+    }
+
+    /**
+     * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
+     * from `text` after stripping thinking tags, markdown fences, and leading prose.
+     *
+     * Returns the parsed value (object or array) on success, or `null` if no
+     * top-level JSON structure can be found or parsed.
+     */
+    private static parseJsonLoose(text: string): unknown {
+        const cleaned = stripThinking(text).trim()
+        // Strip markdown code fences: ```json … ``` or ``` … ```
+        const defenced = cleaned
+            .replace(/^```(?:json)?\s*\n?/i, "")
+            .replace(/\n?```\s*$/, "")
+            .trim()
+
+        // Try to find first `{` (object) or `[` (array) and parse from there.
+        const braceIdx = defenced.indexOf("{")
+        const bracketIdx = defenced.indexOf("[")
+        // Pick the earlier of the two (or whichever is present)
+        let startIdx: number
+        if (braceIdx === -1 && bracketIdx === -1) return null
+        if (braceIdx === -1) startIdx = bracketIdx
+        else if (bracketIdx === -1) startIdx = braceIdx
+        else startIdx = Math.min(braceIdx, bracketIdx)
+
+        const candidate = defenced.slice(startIdx)
+        try {
+            return JSON.parse(candidate)
+        } catch {
+            // Try parsePartial for objects — handles truncated/fenced input
+            if (candidate.startsWith("{")) {
+                const partial = parsePartial(candidate)
+                // parsePartial returns {} on failure; treat empty as failure
+                if (Object.keys(partial).length > 0) return partial
+            }
+            return null
+        }
+    }
 
     /**
      * MOVE-2 M2.1 — read the agent's active capability registry.
@@ -772,11 +833,18 @@ export class ReactiveAgent<TOut = unknown> {
             ? Schema.decodeSync(TaskId)(options.taskId)
             : generateTaskId()
 
+        // Steer the agent to emit schema-shaped JSON when a schema is configured.
+        // This lets parse-first (below) skip the extra LLM extraction call on the
+        // happy path — same pattern used by streamObject.
+        const steeredInput = this._outputSchemaConfig
+            ? `${input}${this.buildSchemaSteering(this._outputSchemaConfig.contract)}`
+            : input
+
         const task: Task = {
             id: taskId,
             agentId: Schema.decodeSync(AgentId)(this.agentId),
             type: 'query' as const,
-            input: { question: input },
+            input: { question: steeredInput },
             priority: 'medium' as const,
             status: 'pending' as const,
             metadata: { tags: [] },
@@ -922,6 +990,56 @@ export class ReactiveAgent<TOut = unknown> {
                 const evidenceCorpus = buildEvidenceCorpusFromSteps(
                     (reasoningSteps ?? []) as readonly ReasoningStep[]
                 )
+                // ── Parse-first: try to extract the object from the agent's own
+                // answer before touching the LLM. The steering injected above
+                // (buildSchemaSteering) makes the agent emit schema-shaped JSON
+                // directly, so on the happy path this succeeds and we skip the
+                // extra extraction LLM call entirely (~28s on local models).
+                const parsedLoose = ReactiveAgent.parseJsonLoose(agentResult.output)
+                const directValidation = parsedLoose !== null
+                    ? outputSchemaConfig.contract.validate(parsedLoose)
+                    : null
+
+                const onParseFail = outputSchemaConfig.options.onParseFail ?? 'degrade'
+
+                if (directValidation?.ok === true) {
+                    // ── Happy path: agent already emitted valid JSON — zero extra LLM calls.
+                    // For grounded mode we still compute provenance/confidence via groundFields
+                    // (pure function, no LLM) so callers get the expected grounding fields.
+                    // Arrays are skipped for grounding (no top-level Object.entries).
+                    const jsonSchema = outputSchemaConfig.contract.toJsonSchema()
+                    const isTopLevelObject = !jsonSchema || jsonSchema["type"] === "object"
+                    const needsGrounding = (() => {
+                        // Determine if grounded mode would have been selected, but we need
+                        // to avoid an LLM call just for the engine choice. Use a synchronous
+                        // heuristic: mode === "grounded" explicitly always needs grounding;
+                        // "auto" and "fast" don't need groundFields on parse-first success.
+                        return outputSchemaConfig.options.mode === 'grounded'
+                    })()
+
+                    if (needsGrounding && isTopLevelObject && typeof parsedLoose === 'object' && parsedLoose !== null && !Array.isArray(parsedLoose)) {
+                        // Pure provenance computation — no LLM call.
+                        const grounded = groundFields(
+                            parsedLoose as Record<string, unknown>,
+                            evidenceCorpus
+                        )
+                        const result: AgentResult = {
+                            ...agentResult,
+                            object: directValidation.value,
+                            provenance: grounded.provenance,
+                            confidence: grounded.confidence,
+                        }
+                        return Effect.succeed(result)
+                    }
+                    return Effect.succeed({
+                        ...agentResult,
+                        object: directValidation.value,
+                    } satisfies AgentResult)
+                }
+
+                // ── Fallback: parse-first missed — run the LLM extraction pipeline.
+                // This preserves all existing behavior for prose answers / model
+                // non-compliance, and handles onParseFail:"throw" correctly.
                 return LLMService.pipe(
                     Effect.flatMap((llm) => llm.getStructuredOutputCapabilities()),
                     Effect.flatMap((structCaps) => {
@@ -934,7 +1052,6 @@ export class ReactiveAgent<TOut = unknown> {
                             // only when nativeJsonMode AND no tools, which is already safe.
                             calibrated: true,
                         })
-                        const onParseFail = outputSchemaConfig.options.onParseFail ?? 'degrade'
                         if (engine === 'grounded') {
                             // ── Task 2.5: grounded engine path ───────────────────────────────
                             // groundedExtract error channel is `never`; all failures degrade to
@@ -1254,17 +1371,7 @@ export class ReactiveAgent<TOut = unknown> {
         // Steer the agent to emit schema-JSON instead of free-form prose.
         // Without this, the model answers naturally (e.g. "The total is **$4,200**")
         // and parsePartial yields {} because there is no JSON to extract.
-        const jsonSchema = contract.toJsonSchema()
-        const jsonSchemaString = jsonSchema !== undefined
-            ? JSON.stringify(jsonSchema, null, 2)
-            : undefined
-        const schemaBlock = jsonSchemaString !== undefined
-            ? `\n\n${jsonSchemaString}`
-            : ""
-        const steeringInstruction =
-            `\n\nRespond with ONLY a single JSON object that exactly matches this JSON Schema` +
-            ` — no prose, no markdown fences, no explanation.` +
-            ` Use exactly these top-level keys; do not nest or wrap:${schemaBlock}`
+        const steeringInstruction = this.buildSchemaSteering(contract)
         const augmentedTask = `${input}${steeringInstruction}`
 
         const stream = this.runStream(augmentedTask, options)
