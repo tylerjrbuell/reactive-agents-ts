@@ -102,13 +102,19 @@ E1 → E2 (durable headline, P0) → S → C. Build server + store + test per ph
   > **NOTE for the live dev server:** `bun run server/index.ts` has NO watch — a
   > running studio must be restarted (`bun start`) to pick up these server fixes.
 
-- **⚠️ BROADER FINDING (not yet fixed): cortex agents default to inline-think.**
-  Unless strategy/synthesis/audit is set, cortex agents skip the reasoning kernel
-  entirely — so they miss per-model calibration, 4-stage tool-call healing,
-  strategy selection/switching, and the durable seam. For an "agent studio" this
-  is a significant "not taking full advantage" gap. Recommend: enable reasoning by
-  default for cortex runs (or expose a clear toggle). Bigger behavior/perf
-  decision — flagged, not done.
+- **✅ RESOLVED — reasoning kernel ON by default + toggle** (`ebd29cd9`):
+  `cortexParamsToAgentConfig` now sets `features.reasoning = true` by default, so
+  cortex agents run as standard Reactive Agents (calibration, healing, strategy,
+  durable seam). `useReasoning: false` opts into inline-think; durable runs force
+  reasoning on. Threaded through runs + chat bodies (drift parity) + an
+  AgentConfigPanel "Reasoning kernel" toggle. Live-verified (gemma4:e4b): a
+  default run emits ReasoningStepCompleted; `useReasoning:false` does not.
 
-- **Phase S (structured output) + Phase C (budget/grounding/calibration config
-  surface): NOT STARTED** — next increments.
+- **✅ DONE — durable runs launchable from the UI** (`282ce5b8`): config panel
+  "Durable execution" toggle + per-tool approval-gate chips →
+  `durableRuns`/`approvalPolicy` in the run body. Full UI-shape E2E live-verified:
+  launch → pause on gated tool → Approval panel → approve → resume → clear.
+
+- **Phase S (structured output `.withOutputSchema`→`result.object` + UI viewer) +
+  Phase C (budget/grounding/calibration config surface): NOT STARTED** — next
+  increments.
