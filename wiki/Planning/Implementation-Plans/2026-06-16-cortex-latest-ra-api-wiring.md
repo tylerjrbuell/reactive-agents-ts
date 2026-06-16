@@ -85,5 +85,30 @@ E1 → E2 (durable headline, P0) → S → C. Build server + store + test per ph
     (rebuild a matching durable agent by config-hash); only in-process/live-session
     approve/deny is wired today.
 
+- **Phase E LIVE-VERIFIED + 2 BUGS FIXED** (`65b7ffde`, ollama gemma4:e4b end-to-end):
+  launch durable run → pauses on the gated tool (NOT executed) → ApprovalPanel /
+  listPendingApprovals shows it → approve → resume executes the tool → pending
+  clears. Bugs found only via live run (deterministic tests passed but the engine
+  path differed):
+  1. **Cortex ran inline-think, not the reasoning kernel.** Cortex enabled
+     reasoning only when strategy/synthesis/audit was set; otherwise the engine
+     used the inline-think fallback, which has NEITHER the durable checkpoint seam
+     NOR the approval gate (both live only in the reasoning kernel). Fix: force
+     `.withReasoning()` whenever `durableRuns.enabled`.
+  2. **Pending-approval key mismatch.** Runner retained the paused agent keyed by
+     the cortex taskId, but listPendingApprovals/approve/deny use the DURABLE runId
+     (runDurable mints its own). Fix: key `pendingRef` by `pendingApproval.runId`.
+
+  > **NOTE for the live dev server:** `bun run server/index.ts` has NO watch — a
+  > running studio must be restarted (`bun start`) to pick up these server fixes.
+
+- **⚠️ BROADER FINDING (not yet fixed): cortex agents default to inline-think.**
+  Unless strategy/synthesis/audit is set, cortex agents skip the reasoning kernel
+  entirely — so they miss per-model calibration, 4-stage tool-call healing,
+  strategy selection/switching, and the durable seam. For an "agent studio" this
+  is a significant "not taking full advantage" gap. Recommend: enable reasoning by
+  default for cortex runs (or expose a clear toggle). Bigger behavior/perf
+  decision — flagged, not done.
+
 - **Phase S (structured output) + Phase C (budget/grounding/calibration config
   surface): NOT STARTED** — next increments.
