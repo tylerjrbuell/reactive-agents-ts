@@ -67,6 +67,8 @@ export const RunConfigBody = t.Object({
   variables: t.Optional(t.Array(t.Unknown())),
   variableValues: t.Optional(t.Record(t.String(), t.Union([t.String(), t.Number()]))),
   useReasoning: t.Optional(t.Boolean()),
+  outputSchema: t.Optional(t.Record(t.String(), t.Unknown())),
+  outputSchemaOnParseFail: t.Optional(t.Union([t.Literal("degrade"), t.Literal("throw")])),
   durableRuns: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -146,6 +148,8 @@ export const runsRouter = (
             ...(b.guardrails ? { guardrails: b.guardrails } : {}),
             ...(b.persona ? { persona: b.persona } : {}),
             ...(typeof b.useReasoning === "boolean" ? { useReasoning: b.useReasoning } : {}),
+            ...(b.outputSchema && Object.keys(b.outputSchema).length > 0 ? { outputSchema: b.outputSchema } : {}),
+            ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
           });
         });

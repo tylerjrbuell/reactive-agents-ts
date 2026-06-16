@@ -30,6 +30,7 @@ import {
   type CortexSkillsConfig,
 } from "./cortex-agent-config.js";
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
+import { jsonSchemaToStandardSchema } from "./json-schema-output.js";
 
 export interface BuildCortexAgentParams {
   readonly agentName?: string;
@@ -131,6 +132,14 @@ export interface BuildCortexAgentParams {
    * force this on regardless. UI: "Reasoning kernel" toggle.
    */
   readonly useReasoning?: boolean;
+  /**
+   * Typed structured output (v0.12): a JSON Schema the run's answer is extracted
+   * into. Wires `.withOutputSchema(...)` → `result.object` (+ `objectError` on a
+   * lenient parse-fail). UI: "Structured output" schema editor.
+   */
+  readonly outputSchema?: Record<string, unknown>;
+  /** Parse-fail behaviour for {@link outputSchema}: "degrade" (default, lenient) or "throw". */
+  readonly outputSchemaOnParseFail?: "degrade" | "throw";
   /**
    * Durable execution (v0.12) — opt-in crash-resume via SQLite RunStore.
    * When `enabled`, wires `.withDurableRuns(...)` so the run checkpoints and can
@@ -316,6 +325,15 @@ export async function buildCortexAgent(
 
   if (params.streaming === true) {
     b = b.withStreaming();
+  }
+
+  // Typed structured output (v0.12) — extract the answer into the user's JSON
+  // Schema. Lenient by default (objectError on parse-fail, never throws).
+  if (params.outputSchema && Object.keys(params.outputSchema).length > 0) {
+    b = b.withOutputSchema(
+      jsonSchemaToStandardSchema(params.outputSchema),
+      params.outputSchemaOnParseFail === "throw" ? { onParseFail: "throw" } : {},
+    ) as typeof b;
   }
 
   // Durable execution (v0.12) — opt-in crash-resume + durable HITL. Must be

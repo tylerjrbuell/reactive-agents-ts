@@ -84,6 +84,10 @@ export interface LaunchParams {
    * path. Durable runs force it on. UI "Reasoning kernel" toggle.
    */
   readonly useReasoning?: boolean;
+  /** Typed structured output — JSON Schema the answer is extracted into (`result.object`). */
+  readonly outputSchema?: Record<string, unknown>;
+  /** Parse-fail behaviour for {@link outputSchema}. */
+  readonly outputSchemaOnParseFail?: "degrade" | "throw";
   /**
    * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
    * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
@@ -226,6 +230,8 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.guardrails ? { guardrails: params.guardrails } : {}),
                 ...(params.persona ? { persona: params.persona } : {}),
                 ...(params.useReasoning !== undefined ? { useReasoning: params.useReasoning } : {}),
+                ...(params.outputSchema ? { outputSchema: params.outputSchema } : {}),
+                ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
@@ -331,6 +337,29 @@ export const CortexRunnerServiceLive = Layer.effect(
                       } as any,
                     })
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:248", tag: errorTag(err) }))),
+                );
+              }
+              // Typed structured output (v0.12): surface result.object / objectError
+              // so the desk can render the extracted typed value. Emitted as a
+              // synthetic event (the framework has no StructuredOutput event yet);
+              // the live message carries the _tag string + payload verbatim.
+              const ro = result as { object?: unknown; objectError?: string };
+              if (ro.object !== undefined || ro.objectError !== undefined) {
+                Effect.runFork(
+                  ingest
+                    .handleEvent(agentId, runId, {
+                      v: 1,
+                      agentId,
+                      runId,
+                      event: {
+                        _tag: "StructuredOutputExtracted" as const,
+                        taskId: runId,
+                        agentId,
+                        ...(ro.object !== undefined ? { object: ro.object } : {}),
+                        ...(ro.objectError !== undefined ? { objectError: ro.objectError } : {}),
+                      } as any,
+                    })
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:structured-output", tag: errorTag(err) }))),
                 );
               }
             })

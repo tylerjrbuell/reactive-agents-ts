@@ -18,7 +18,17 @@ import { RunConfigBody } from "../api/runs.js";
 //   `name`), so it is not carried as a config field.
 // - durableRuns: durable crash-resume + HITL is a run-launch concept (Phase E);
 //   chat sessions are interactive and not durably resumed.
-const RUN_ONLY = new Set(["prompt", "variables", "variableValues", "agentName", "durableRuns"]);
+// - outputSchema / outputSchemaOnParseFail: one-shot typed extraction of a run's
+//   answer; chat is conversational, not a single structured result.
+const RUN_ONLY = new Set([
+  "prompt",
+  "variables",
+  "variableValues",
+  "agentName",
+  "durableRuns",
+  "outputSchema",
+  "outputSchemaOnParseFail",
+]);
 
 const keysOf = (schema: { properties: Record<string, unknown> }): string[] =>
   Object.keys(schema.properties);
