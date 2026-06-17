@@ -32,7 +32,7 @@ const echoTool = {
     requiresApproval: false,
     source: "function" as const,
   },
-  handler: (args: { input: string }) => Effect.succeed(`echoed: ${args.input}`),
+  handler: (args: Record<string, unknown>) => Effect.succeed(`echoed: ${String(args["input"])}`),
 };
 
 describe("durable runs — crash-resume e2e", () => {

@@ -57,12 +57,17 @@ function makeDeps(tier: "local" | "mid" | "large" | undefined): DebriefSynthesis
   const ctx = {
     taskId: "t-1" as never,
     agentId: "a-1" as never,
+    sessionId: "s-1",
+    phase: "complete" as const,
     iteration: 3,
+    maxIterations: 10,
     tokensUsed: 100,
     cost: 0,
     startedAt: new Date(),
     agentState: "running",
     selectedStrategy: "reactive",
+    messages: [],
+    toolResults: [],
     metadata: {
       taskComplexity: "complex",
       reasoningResult: { output: LONG_OUTPUT, status: "completed", metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, terminatedBy: "end_turn" } },

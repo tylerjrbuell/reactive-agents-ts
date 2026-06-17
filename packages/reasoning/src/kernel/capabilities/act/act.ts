@@ -212,7 +212,7 @@ export function handleActing(
           });
           return terminate(paused, {
             reason: "awaiting-approval",
-            deliverable: sentinelDeliverable("awaiting human approval"),
+            deliverable: sentinelDeliverable("awaiting_approval"),
           });
         }
       }

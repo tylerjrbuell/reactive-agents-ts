@@ -20,9 +20,26 @@ import type { ReasoningStep } from "../../types/index.js";
 // runtime callers don't need to change in lockstep; it will be deleted in the
 // follow-up cleanup commit.
 
-/** Subset of EntropyScore — avoids cross-package dependency on reactive-intelligence. */
+/** Subset of EntropyScore — avoids cross-package dependency on reactive-intelligence.
+ *  Carries `composite` + `trajectory` (the shape the reactive-controller's
+ *  evaluate() contract requires) plus the richer optional fields the
+ *  reactive-observer reads off live RI scores (sources/token/…/modelTier). */
 export interface EntropyScoreLike {
   readonly composite: number;
+  readonly trajectory: {
+    readonly shape: string;
+    readonly derivative: number;
+    readonly momentum: number;
+  };
+  readonly token?: number;
+  readonly structural?: number;
+  readonly semantic?: number;
+  readonly behavioral?: number;
+  readonly modelTier?: string;
+  readonly sources?: {
+    readonly contextPressure?: number;
+    readonly behavioral?: number;
+  };
 }
 
 export interface OutputAssemblyContext {

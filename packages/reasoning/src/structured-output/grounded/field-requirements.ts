@@ -29,7 +29,7 @@ export interface FieldRequirement {
  *   - `PropertySignature.name: PropertyKey`
  */
 export function fieldRequirementsFromSchema(
-  schema: Schema.Schema<unknown>,
+  schema: Schema.Schema.AnyNoContext,
 ): ReadonlyArray<FieldRequirement> {
   const ast = schema.ast;
   if (ast._tag !== "TypeLiteral") return [];

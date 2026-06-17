@@ -18,10 +18,10 @@ export interface PromptRow {
 }
 
 export interface PromptInput {
-  name?: string;
+  name?: string | undefined;
   body: string;
-  type?: PromptType;
-  tags?: string[];
+  type?: PromptType | undefined;
+  tags?: string[] | undefined;
 }
 
 type RawRow = {

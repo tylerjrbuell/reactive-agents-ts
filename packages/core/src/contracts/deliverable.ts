@@ -114,7 +114,7 @@ export type Deliverable =
     }
   | {
       readonly source: "sentinel";
-      readonly reason: "no_substantive_output" | "max_iterations_no_artifacts";
+      readonly reason: "no_substantive_output" | "max_iterations_no_artifacts" | "awaiting_approval";
     };
 
 /**
@@ -133,9 +133,14 @@ export function deliverableToContent(d: Deliverable): string {
     case "harness_synthesis":
       return d.synthesized ?? d.assembled.map((o) => o.content).join("\n\n");
     case "sentinel":
-      return d.reason === "max_iterations_no_artifacts"
-        ? "Task did not converge within the iteration budget."
-        : "Task complete.";
+      switch (d.reason) {
+        case "max_iterations_no_artifacts":
+          return "Task did not converge within the iteration budget.";
+        case "awaiting_approval":
+          return "Run paused — awaiting human approval.";
+        default:
+          return "Task complete.";
+      }
   }
 }
 
@@ -185,7 +190,7 @@ export function harnessSynthesisDeliverable(
  * substantive output (e.g., max-iterations exhausted with no tool artifacts).
  */
 export function sentinelDeliverable(
-  reason: "no_substantive_output" | "max_iterations_no_artifacts",
+  reason: "no_substantive_output" | "max_iterations_no_artifacts" | "awaiting_approval",
 ): Deliverable {
   return { source: "sentinel", reason };
 }

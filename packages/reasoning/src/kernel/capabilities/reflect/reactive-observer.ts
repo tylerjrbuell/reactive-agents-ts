@@ -10,7 +10,7 @@
 import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
-import { transitionState } from "../../../kernel/state/kernel-state.js";
+import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
 import type { KernelState, KernelRunOptions, MaybeService, EventBusInstance } from "../../../kernel/state/kernel-state.js";
 import type { StrategyServices } from "../../../kernel/utils/service-utils.js";
 import type { EntropyScoreLike } from "../../../kernel/loop/output-assembly.js";
@@ -92,7 +92,7 @@ export function runReactiveObserver(
             temperature: s.meta.entropy?.temperature ?? 0,
             priorThought,
             logprobs: s.meta.entropy?.lastLogprobs,
-            kernelState: s,
+            kernelState: asKernelStateLike(s),
             taskCategory: s.meta.entropy?.taskCategory,
           })
           .pipe(
@@ -308,7 +308,7 @@ export function runReactiveObserver(
               semantic?: number; behavioral?: number;
               sources?: { contextPressure?: number };
             } | undefined;
-            const modelTier = (latestScore as Record<string, unknown>)?.modelTier as string | undefined;
+            const modelTier = latestScore?.modelTier;
             // W3 FIX-23: read accumulated RI budget from KernelState.meta.riBudget so
             // suppression gates at dispatcher.ts:69-76 can actually trip. Prior to W3
             // this was hardcoded to {0,0} every iteration → gates unreachable.
