@@ -44,6 +44,23 @@
     },
     "@reactive-agents/docs#build": {
       "cache": false
+    },
+    "@reactive-agents/cortex#build": {
+      "dependsOn": ["^build", "@reactive-agents/cortex-ui#build"],
+      "inputs": ["server/**", "tsup.config.*", "tsconfig.json", "package.json"],
+      "outputs": ["dist/**"]
+    },
+    "@reactive-agents/cortex-ui#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "static/**",
+        "vite.config.*",
+        "svelte.config.*",
+        "tsconfig.json",
+        "package.json"
+      ],
+      "outputs": ["build/**", ".svelte-kit/**"]
     }
   }
 }

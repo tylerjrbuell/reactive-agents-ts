@@ -50,7 +50,7 @@
     "dev:server": "bun run server/index.ts",
     "dev:ui": "cd ui && bun run dev",
     "start": "bun run scripts/dev-stack.ts",
-    "build": "tsup && cd ui && bun run build",
+    "build": "tsup",
     "build:ui": "cd ui && bun run build",
     "test": "bun test server/tests --timeout 15000",
     "typecheck": "tsc --noEmit -p tsconfig.json"
