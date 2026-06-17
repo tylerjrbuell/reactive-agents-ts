@@ -12,7 +12,7 @@ Works on local Ollama models (4B+) through frontier APIs — **same code, same f
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
-| **35 total**                 | 30 packages + 5 apps — exactly what you need, no hidden coupling |
+| **35 published**             | 35 packages + 6 apps in the monorepo — exactly what you need, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
 | **6 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
 | **5,300+ tests · 600+ files** | Production-grade confidence (verified `bun test` on every PR)    |
@@ -802,7 +802,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (5,320 tests / 603 files, ~65s)
+bun test                 # Run full test suite (~6,380 tests / 783 files, ~70s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
