@@ -3,7 +3,7 @@ title: Reactive Agents
 description: The open-source agent framework built for control, not magic. Type-safe, observable, and composable.
 template: splash
 hero:
-    tagline: 'A transparent agent harness for TypeScript — every prompt, tool call, and reasoning step is a typed event you can subscribe to. 12-phase pipeline with before/after/on-error hooks at every stage; raw provider clients ship standalone. MCP-native, type-safe with Effect-TS. The healing pipeline recovers 86.7% of tool-call errors so local Ollama (4B+) runs the same code as Claude, GPT, and Gemini.'
+    tagline: 'The composable TypeScript agent harness built for control, not magic. Steer every reasoning step as a typed event, run one codebase from local 4B Ollama to frontier APIs, and ship agents that actually finish.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -386,10 +386,10 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         every service boundary honest on every PR.
     </Card>
     <Card title="Composable Layer Architecture" icon="puzzle">
-        **30 packages, 13 capability layers.** Each is an independent Effect
+        **13 capability layers, every one opt-in.** Each is an independent Effect
         `Layer` with explicit dependencies. Memory without guardrails? Reasoning
         without cost tracking? Just stream tokens? Pick exactly what you need —
-        no hidden coupling, no wasted resources.
+        no hidden coupling, no surprise state, no wasted resources.
     </Card>
     <Card title="Observable Execution Engine" icon="magnifier">
         **12-phase deterministic lifecycle** with `before` / `after` /
@@ -397,10 +397,14 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         EventBus events. You see what your agent decided, why, in what order, at
         what cost — no manual instrumentation required.
     </Card>
-    <Card title="6 Reasoning Strategies" icon="star">
-        **ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action** (@experimental) — plus automatic strategy switching when entropy detects the agent is stuck.
-        Register your own strategies. ToT outer-loop early-stop and 8-action
-        reactive controller ship out of the box.
+    <Card title="Reasoning, Honestly Scoped" icon="star">
+        **ReAct is the default** — it wins on cost and reliability across every
+        tier. Reflexion, Plan-Execute, Tree-of-Thought, and Code-Action
+        (@experimental) are there for frontier/niche work, not sold as a default
+        win (heavy strategies trade real cost for parity, and we document them
+        that way). Adaptive routes to reactive on local tiers automatically, and
+        strategy-switching kicks in when entropy detects a stuck agent. Register
+        your own.
     </Card>
     <Card title="Local Models That Actually Work" icon="setting">
         **+80pp accuracy** on Ollama 4B+ vs. naive prompting. The 4-stage
@@ -456,9 +460,11 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
     </Card>
     <Card title="vs. Vercel AI SDK" icon="document">
         Great for streaming and tool calling, but stops there. Reactive Agents
-        adds **5 reasoning strategies**, persistent **4-tier memory**,
-        guardrails, verification, cost routing, and a **12-phase execution
-        engine** with full observability — same TypeScript ergonomics.
+        adds the **reliability harness** — tool-call healing, context curation,
+        termination oracle — plus opt-in **4-tier memory**, guardrails,
+        verification, cost routing, and a **12-phase execution engine** with
+        full observability. Same TypeScript ergonomics; the parts that break at
+        scale are handled.
     </Card>
     <Card title="vs. AutoGen / CrewAI" icon="document">
         Multi-agent-first frameworks. Reactive Agents takes the
@@ -601,11 +607,11 @@ Shape any agent signal — system prompts, tool results, nudges, lifecycle event
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## Snapshot & Replay
+## Flight Recorder — Snapshot, Replay & Diagnose
 
-Re-run any recorded trace deterministically with prompt or model overrides — tool results held constant. Auditable-by-demo: no other framework lets you replay a decision.
+Every run is a recording. Re-run any recorded trace **deterministically** with prompt or model overrides — tool results held constant — so you can prove *what* your agent did and *why*, then bisect a regression against the exact same inputs. `rax-diagnose` reads the structured trace and root-causes failures from data, not log-spelunking. Local-first and RA-native: the receipts live with you, not in a vendor's funnel.
 
-→ [Snapshot & Replay](/features/snapshot-replay)
+→ [Snapshot & Replay](/features/snapshot-replay) · [rax CLI](/reference/cli)
 
   </div>
 </div>

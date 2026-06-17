@@ -160,7 +160,10 @@ const main = () => {
       !name.endsWith(".spec.ts") &&
       !name.includes("prompts") &&
       !name.includes("registry") &&
-      !name.includes("kernel"),
+      !name.includes("kernel") &&
+      // `direct` is a no-op passthrough (no reasoning loop), not a reasoning
+      // strategy — excluding it keeps the count honest at the marketed 6.
+      !name.includes("direct"),
   );
   const providers = countDirectoryEntries(
     "packages/llm-provider/src/providers",

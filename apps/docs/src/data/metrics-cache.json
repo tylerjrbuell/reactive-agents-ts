@@ -1,5 +1,5 @@
 {
-  "tests": 5294,
-  "updated": "2026-05-15",
+  "tests": 6558,
+  "updated": "2026-06-17",
   "_note": "Latest bun test snapshot. Refreshed by CI on PR merge to main; safe to manually update if you just ran tests locally and want the docs to reflect the new count."
 }

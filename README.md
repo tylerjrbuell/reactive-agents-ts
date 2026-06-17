@@ -4,18 +4,18 @@
 
 # Reactive Agents — TypeScript AI Agent Framework
 
-**Built for control, not magic.** A composable TypeScript agent framework with end-to-end Effect-TS type safety, a deterministic 12-phase execution engine, and a live local studio. See every decision your agent makes — why, when, and at what cost.
+**Built for control, not magic.** A composable TypeScript agent harness with end-to-end Effect-TS type safety, a deterministic 12-phase execution engine, and a live local studio. Every prompt, tool call, and reasoning step is a typed event you can steer, observe, and compose — see every decision your agent makes, why, when, and at what cost.
 
-Run your first agent in 60 seconds. Scale up by composing layers — add reasoning loops, persistent 4-tier memory, production guardrails, cost routing, and reactive intelligence one `.with()` call at a time.
+That same harness engineering is what makes agents **reliable**: tool-call healing, context curation, and a single-owner termination oracle are why **local Ollama models (4B+) run the exact same code as frontier APIs** — same features, measurable lift, no model lock-in.
 
-Works on local Ollama models (4B+) through frontier APIs — **same code, same features**. Strict TypeScript with schema-validated service boundaries and explicit tagged errors.
+Run your first agent in 60 seconds. Scale up by composing layers — add reasoning loops, opt-in 4-tier memory, production guardrails, cost routing, and reactive intelligence one `.with()` call at a time. Strict TypeScript with schema-validated boundaries and explicit tagged errors.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
-| **35 published**             | 35 packages + 6 apps in the monorepo — exactly what you need, no hidden coupling |
+| **40 packages & apps**       | 35 packages + 5 apps — 35 published to npm, all opt-in, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
 | **6 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
-| **5,300+ tests · 600+ files** | Production-grade confidence (verified `bun test` on every PR)    |
+| **6,558 tests · 804 files**  | Production-grade confidence (verified `bun test` on every PR)    |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -122,7 +122,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **5,300+ tests** across 600+ files — verified `bun test` on every PR
+- **6,558 tests** across 804 files — verified `bun test` on every PR
 - **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -370,7 +370,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   5,300+ tests  |      --      |      --       |   --    |
+| Test suite                    |   6,558 tests   |      --      |      --       |   --    |
 
 <sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-06. `--` means we found no first-party equivalent, not that none exists. Corrections welcome — [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
@@ -802,7 +802,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (~6,380 tests / 783 files, ~70s)
+bun test                 # Run full test suite (6,558 tests / 804 files, ~95s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
