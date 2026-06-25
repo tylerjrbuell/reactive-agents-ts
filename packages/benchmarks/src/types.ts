@@ -2,7 +2,10 @@
 /**
  * Benchmark types — task definitions, run results, and report shape.
  */
-import type { ToolRequirement, PreFlightViolation } from "@reactive-agents/core";
+import type { ToolRequirement, PreFlightViolation, QualityDimension, DimensionScore } from "@reactive-agents/core";
+
+// Canonical quality taxonomy now lives in @reactive-agents/core (2026-06-25 unification).
+export type { QualityDimension, DimensionScore };
 
 /** Complexity tier for benchmark tasks. */
 export type Tier = "trivial" | "simple" | "moderate" | "complex" | "expert" | "real-world";
@@ -93,25 +96,6 @@ export interface MultiModelReport {
 }
 
 // ── v2: Multi-dimensional scoring + session types ─────────────────────────────
-
-export type QualityDimension =
-  | "accuracy"
-  | "reasoning"
-  | "tool-mastery"
-  | "memory-fidelity"
-  | "loop-intelligence"
-  | "resilience"
-  | "efficiency"
-  | "reliability"
-  | "scope-discipline"
-  | "honest-uncertainty"
-
-export interface DimensionScore {
-  readonly dimension: QualityDimension;
-  /** Normalized score 0–1 (1.0 = excellent). */
-  readonly score: number;
-  readonly evidence?: string;
-}
 
 export interface RunScore {
   readonly runIndex: number;

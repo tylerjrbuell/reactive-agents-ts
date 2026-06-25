@@ -52,6 +52,9 @@ export {
   formatViolations,
 } from "./contracts/preflight.js";
 
+export type { QualityDimension, DimensionScore } from "./contracts/score-contract.js";
+export { CANONICAL_QUALITY_DIMENSIONS } from "./contracts/score-contract.js";
+
 // ─── Types (pure type-only exports) ───
 export type { Agent, AgentDefinition, Capability } from "./types/agent.js";
 export type { Task, TaskConfig, TaskMetadata } from "./types/task.js";
