@@ -44,6 +44,7 @@ export function withConfigEnv(env: Readonly<Record<string, string>> | undefined)
   };
 }
 import { scoreTask, computeReliability } from "./judge.js"
+import { diagnoseRun, formatDiagnosisLine } from "./diagnose.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
 
@@ -579,6 +580,7 @@ async function runInternal(
   config: HarnessConfig,
   tmpDir: string,
   timeoutMs: number,
+  traceDir?: string,
 ): Promise<TaskRunResult> {
   const start = performance.now()
   try {
@@ -638,6 +640,8 @@ async function runInternal(
       ;(builder as unknown as Record<string, () => void>)["withMemory"]!()
     }
 
+    if (traceDir) builder.withTracing({ dir: traceDir })
+
     const _log = console.log; console.log = () => {}
     const agent = await builder.build()
     console.log = _log
@@ -685,6 +689,7 @@ async function runInternal(
         durationMs: performance.now() - start,
         iterations: result.metadata.stepsCount ?? 0,
         status: "pass",
+        ...(traceDir ? { traceId: result.taskId } : {}),
       }
     } finally {
       await agent.dispose()
@@ -733,6 +738,7 @@ async function dispatch(
   variant: HarnessVariant,
   tmpDir: string,
   timeoutMs: number,
+  traceDir?: string,
 ): Promise<TaskRunResult> {
   if (variant.type === "competitor") {
     const runner = COMPETITOR_RUNNERS[variant.framework]
@@ -747,11 +753,11 @@ async function dispatch(
   if (task.id === "rw-9") {
     const { url, stop } = await startFlakyPriceServer()
     const modifiedTask = { ...task, prompt: task.prompt.replace("INJECT_MOCK_URL", url) }
-    try { return await runInternal(modifiedTask, model, effectiveConfig, tmpDir, timeoutMs) }
+    try { return await runInternal(modifiedTask, model, effectiveConfig, tmpDir, timeoutMs, traceDir) }
     finally { stop() }
   }
 
-  return runInternal(task, model, effectiveConfig, tmpDir, timeoutMs)
+  return runInternal(task, model, effectiveConfig, tmpDir, timeoutMs, traceDir)
 }
 
 export function aggregateRuns(
@@ -1003,7 +1009,7 @@ export async function runSession(
               process.stdout.write = (() => true) as any;
 
               try {
-                result = await dispatch(task, model, variant, tmpDir, timeoutMs)
+                result = await dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir)
               } finally {
                 console.log = consoleLog;
                 console.error = consoleError;
@@ -1013,9 +1019,12 @@ export async function runSession(
                 process.stdout.write = stdoutWrite;
               }
             } else {
-              result = await dispatch(task, model, variant, tmpDir, timeoutMs)
+              result = await dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir)
             }
             const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations)
+            const diagnosis = session.traceDir && result.traceId
+              ? await diagnoseRun(session.traceDir, result.traceId)
+              : undefined
             runScores.push({
               runIndex: i,
               dimensions,
@@ -1023,7 +1032,13 @@ export async function runSession(
               durationMs: result.durationMs,
               status: result.status,
               output: result.output,
+              ...(result.traceId ? { traceId: result.traceId } : {}),
+              ...(diagnosis ? { diagnosis } : {}),
             })
+            if (diagnosis) {
+              const diagLine = formatDiagnosisLine(diagnosis);
+              if (diagLine) log(`     ${diagLine}`);
+            }
           } finally {
             rmSync(tmpDir, { recursive: true, force: true })
           }

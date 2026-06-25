@@ -97,6 +97,14 @@ export interface MultiModelReport {
 
 // ── v2: Multi-dimensional scoring + session types ─────────────────────────────
 
+/** Slim "why" projected from trace analyzeRun — attached to each scored run. */
+export interface RunDiagnosis {
+  readonly honestyLabel: string;
+  readonly honestyEvidence: string;
+  readonly failureModes: ReadonlyArray<{ readonly mode: string; readonly evidence: string }>;
+  readonly blindSpots: ReadonlyArray<string>;
+}
+
 export interface RunScore {
   readonly runIndex: number;
   readonly dimensions: ReadonlyArray<DimensionScore>;
@@ -105,6 +113,7 @@ export interface RunScore {
   readonly status: "pass" | "fail" | "error";
   readonly output: string;
   readonly traceId?: string;
+  readonly diagnosis?: RunDiagnosis;
 }
 
 export interface TaskVariantReport {
