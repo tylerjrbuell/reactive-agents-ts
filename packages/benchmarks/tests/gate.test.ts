@@ -200,3 +200,27 @@ describe("evaluateLiftGate", () => {
     expect(v.decision).toBe("opt-in");
   });
 });
+
+import { formatGateReceipt } from "../src/gate/receipt.js";
+
+describe("formatGateReceipt", () => {
+  it("renders the decision, a per-tier row, and the variant ids", () => {
+    const v = evaluateLiftGate(
+      makeReport([
+        tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+        tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.66, meanTokens: 1010 }),
+        tvr({ modelVariantId: "frontier", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+        tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: 0.66, meanTokens: 1010 }),
+      ]),
+      "base",
+      "cand",
+    );
+    const out = formatGateReceipt(v);
+    expect(out).toContain("LIFT GATE");
+    expect(out).toContain("DEFAULT-ON");
+    expect(out).toContain("local");
+    expect(out).toContain("frontier");
+    expect(out).toContain("base");
+    expect(out).toContain("cand");
+  });
+});
