@@ -5,6 +5,13 @@ import { JudgeRequest, type ReproducibilityMetadata } from "./contract.js";
 import { handleJudgeRequest } from "./handler.js";
 import { buildJudgeLayer, resolveLiveLayerConfig } from "./live-layer.js";
 
+export type {
+  JudgeRequest,
+  JudgeResponse,
+  JudgeLayerResult,
+  ReproducibilityMetadata,
+} from "./contract.js";
+
 /**
  * Stub layer used in tests and for HTTP-shape validation without a live provider.
  * Returns a structured "passing" judgment so HTTP tests can exercise the full path

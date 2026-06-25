@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process"
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
+import type { JudgeLayerResult, JudgeRequest, JudgeResponse } from "@reactive-agents/judge-server"
 
 // ── Deliverable collection (grading-channel fix) ─────────────────────────────
 //
@@ -77,39 +78,6 @@ export function collectJudgeDeliverable(
   if (blocks.length === 0) return text
   return `${text}${blocks.join("")}`.slice(0, TOTAL_CAP)
 }
-// Local mirror of `@reactive-agents/judge-server`'s wire contract. We re-declare
-// rather than import because the judge-server package's `exports` map only
-// surfaces `.` (no `./src/contract.js`), and Task 8 must not modify files outside
-// `packages/benchmarks/`. The shape mirrors `packages/judge-server/src/contract.ts`
-// — keep in sync if the contract evolves.
-interface JudgeRequest {
-  taskId: string
-  sutResponse: string
-  taskInput: unknown
-  sutModel: string
-  runId: string
-  taskCriteria?: string
-}
-
-interface JudgeLayerResult {
-  layerName: string
-  score: number
-  passed: boolean
-  details?: string
-}
-
-interface JudgeResponse {
-  taskId: string
-  passed: boolean
-  overallScore: number
-  recommendation: "accept" | "review" | "reject"
-  layerResults: ReadonlyArray<JudgeLayerResult>
-  reproducibility: {
-    judgeModelSha: string
-    judgeCodeSha: string
-  }
-}
-
 /**
  * Default judge-server URL when neither callsite nor env supplies one.
  * Matches the default port the server binds to in `src/index.ts`.
