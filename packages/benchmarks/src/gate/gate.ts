@@ -115,9 +115,10 @@ export function evaluateLiftGate(
   );
   const partial = perTier.some((t) => t.inconclusive);
   const tiersCovered = perTier.length;
+  const conclusive = perTier.filter((t) => !t.inconclusive);
   const aggregate = {
-    liftPp: mean(perTier.map((t) => t.liftPp)),
-    tokenOverheadPct: mean(perTier.map((t) => t.tokenOverheadPct)),
+    liftPp: mean(conclusive.map((t) => t.liftPp)),
+    tokenOverheadPct: mean(conclusive.map((t) => t.tokenOverheadPct)),
     tiersCovered,
   };
 

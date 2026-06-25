@@ -6,6 +6,8 @@ import type {
 } from "../src/types.js";
 import { evaluateLiftGate, projectTierEvidence } from "../src/gate/gate.js";
 import { DEFAULT_LIFT_POLICY } from "../src/gate/types.js";
+import { formatGateReceipt } from "../src/gate/receipt.js";
+import * as benchmarks from "../src/index.js";
 
 // ── fixture builders ─────────────────────────────────────────────
 function scores(accuracy: number): DimensionScore[] {
@@ -199,9 +201,20 @@ describe("evaluateLiftGate", () => {
     const v = evaluateLiftGate(twoTier(0.6, 0.66, 1000, 0.10), "base", "cand"); // 6pp < 10pp noise
     expect(v.decision).toBe("opt-in");
   });
-});
 
-import { formatGateReceipt } from "../src/gate/receipt.js";
+  it("excludes inconclusive tiers from the aggregate lift", () => {
+    const report = makeReport([
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.66, meanTokens: 1000 }),
+      tvr({ modelVariantId: "frontier", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+      tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: 0.0, meanTokens: 1000, inconclusive: true }),
+    ]);
+    const v = evaluateLiftGate(report, "base", "cand");
+    expect(v.partial).toBe(true);
+    // aggregate reflects only the conclusive "local" tier (+6pp), not the inconclusive frontier tier
+    expect(v.aggregate.liftPp).toBeCloseTo(6.0, 5);
+  });
+});
 
 describe("formatGateReceipt", () => {
   it("renders the decision, a per-tier row, and the variant ids", () => {
@@ -224,8 +237,6 @@ describe("formatGateReceipt", () => {
     expect(out).toContain("cand");
   });
 });
-
-import * as benchmarks from "../src/index.js";
 
 describe("package export", () => {
   it("exposes evaluateLiftGate from the package entrypoint", () => {
