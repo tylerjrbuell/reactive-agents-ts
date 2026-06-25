@@ -44,7 +44,7 @@ export function withConfigEnv(env: Readonly<Record<string, string>> | undefined)
   };
 }
 import { scoreTask, computeReliability } from "./judge.js"
-import { diagnoseRun } from "./diagnose.js"
+import { diagnoseRun, formatDiagnosisLine } from "./diagnose.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
 
@@ -1035,6 +1035,10 @@ export async function runSession(
               ...(result.traceId ? { traceId: result.traceId } : {}),
               ...(diagnosis ? { diagnosis } : {}),
             })
+            if (diagnosis) {
+              const diagLine = formatDiagnosisLine(diagnosis);
+              if (diagLine) log(`     ${diagLine}`);
+            }
           } finally {
             rmSync(tmpDir, { recursive: true, force: true })
           }
