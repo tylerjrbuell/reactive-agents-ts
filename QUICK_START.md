@@ -8,9 +8,9 @@
 
 **Reactive Agents** — TypeScript/Effect-TS framework for building reliable, observable AI agents with composable strategies, adaptive provider selection, and explicit control.
 
-**Current version:** v0.10.0 (release-ready, gating on frozen-judge rule validation)
-**Architecture:** 28 packages + 5 apps, monorepo via Bun + Turborepo
-**Quality bar:** 4,730+ tests, Effect-TS patterns, no raw `throw`/`await`, types-first
+**Current version:** v0.12.0 (released 2026-06-17)
+**Architecture:** 35 packages + 6 apps, monorepo via Bun + Turborepo
+**Quality bar:** 6,558 tests, Effect-TS patterns, no raw `throw`/`await`, types-first
 
 ---
 

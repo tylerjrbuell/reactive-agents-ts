@@ -9,7 +9,7 @@ argument-hint: <feature-description-or-package-list>
 
 ## Overview
 
-This skill guides the **team lead** in organizing and delegating cross-cutting work across the 22-package Reactive Agents monorepo (2,194 tests across 288 files). All initial packages are built and shipping — this skill is for **incremental features, refactors, and cross-package changes** rather than building from scratch.
+This skill guides the **team lead** in organizing and delegating cross-cutting work across the 35-package Reactive Agents monorepo (6,558 tests across 804 files). All initial packages are built and shipping — this skill is for **incremental features, refactors, and cross-package changes** rather than building from scratch.
 
 ## Team Structure
 

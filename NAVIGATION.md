@@ -127,7 +127,7 @@ reactive-agents-ts/
 │   ├── _Templates/ ..................... templates for new notes
 │   └── .obsidian/ ...................... Obsidian config (do not edit by hand)
 │
-├── packages/ ............................. 29 packages (28 published, 1 private: benchmarks)
+├── packages/ ............................. 35 packages (33 published, 2 private: benchmarks, judge-server)
 │   ├── core/ ............................ EventBus, AgentService, TaskService, types
 │   ├── llm-provider/ .................... 6 LLM providers + adapter hooks
 │   ├── memory/ .......................... 4-layer memory system

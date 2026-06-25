@@ -6,7 +6,7 @@ argument-hint: <package-name>
 
 # Add New Package: $ARGUMENTS
 
-All 22 core packages exist. Use this skill only when creating a genuinely new package.
+All 35 packages exist. Use this skill only when creating a genuinely new package.
 
 ## Step 1: Determine the layer
 

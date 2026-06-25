@@ -669,7 +669,7 @@ Canonical project skills live in `.agents/skills/`:
 
 ---
 
-## Current Framework Snapshot (v0.11.0)
+## Current Framework Snapshot (v0.12.0)
 
 - Monorepo scale: **35 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz)
 - Verified quality: **6,558 tests / 804 files, 0 fail** (2026-06-17 v0.12.0 release baseline) — run `bun test` for the authoritative count before release

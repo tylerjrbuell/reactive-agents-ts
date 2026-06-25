@@ -1,6 +1,6 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-06-16 (v0.12 mid-flight: durable exec A–D + HITL landed, memory default-OFF + effect-free hooks shipped)
+> **Last updated:** 2026-06-17 (v0.12.0 "Durable & Honest" published to npm — durable exec A–E + HITL, typed structured output, memory default-OFF, effect-free hooks)
 > **The open-source agent framework built for control, not magic.**
 
 This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` + `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`. When they disagree, the decision doc wins and this doc is out of date — open an issue.
@@ -9,9 +9,9 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 
 ---
 
-## Where we are today (v0.11.2 published)
+## Where we are today (v0.12.0 published)
 
-- **v0.11.2** on npm (2026-06-10): all 35 packages, 2026-06 model lineup, zero retiring defaults, guard tests pinning every default to the capability table. 6,200+ tests green.
+- **v0.12.0** on npm (2026-06-17): all 35 packages, "Durable & Honest" — crash-resumable runs, durable human-in-the-loop approval gates, typed structured output across every provider, and honesty defaults (memory off, grounding opt-in, debrief off the critical path).
 - **v0.11 line shipped:** Compose API (7 chokepoints, killswitches), Snapshot/Replay, `rax-diagnose`, OTel exporter (`@reactive-agents/observe`), `create-reactive-agent`, code-action strategy, skill persistence, gateway chat, Cortex studio with parameterized runs.
 - **Architecture:** canonical kernel (capability-grouped, acyclic, single termination owner, unified `project()` context assembly). Independent audit grade: structurally healthy.
 
@@ -21,19 +21,19 @@ This roadmap is the public-facing milestone tracker. The internal authoritative 
 
 ---
 
-## v0.12 — "Durable & Honest"
+## v0.12 — "Durable & Honest" ✅ Released 2026-06-17
 
 **Goal:** close the one 2026 table-stakes gap, and make the surface match the quality of the internals. One migration event for users.
 
 | Track | Contents | Status |
 |---|---|---|
-| **Durable execution** | Crash-resume: opt-in `.withDurableRuns()`, SQLite RunStore, checkpoint-every-N, `agent.resume(runId)`. Durable human-in-the-loop: approval requests survive process death (`approve`/`deny` from a new process). Acceptance: SIGKILL mid-run → resume → identical output. | **Phases A–D shipped** (checkpoint seam + state codec, SQLite RunStore + `.withDurableRuns()`, `resumeRun()`, durable HITL via `.withApprovalPolicy`/`approveRun`/`denyRun` on both `run()` and `runStream()` paths). Phase E (Cortex UI) remaining. |
+| **Durable execution** | Crash-resume: opt-in `.withDurableRuns()`, SQLite RunStore, checkpoint-every-N, `agent.resume(runId)`. Durable human-in-the-loop: approval requests survive process death (`approve`/`deny` from a new process). Acceptance: SIGKILL mid-run → resume → identical output. | **Shipped A–E** (checkpoint seam + state codec, SQLite RunStore + `.withDurableRuns()`, `resumeRun()`, durable HITL via `.withApprovalPolicy`/`approveRun`/`denyRun` on both `run()` and `runStream()` paths, plus Cortex UI: launch durable runs + approval gates from the config panel with an app-wide approval-toast prompt). |
 | **DX wave** | Effect-free lifecycle hooks (no `Effect.succeed` required), builder consolidation (observability 5 methods → 1; one canonical hook route; documented config precedence), plain-Error mapping at promise boundaries. | **Shipped** — effect-free hooks (`.withHook()` plain fns) + observability consolidation: `.withObservability({ cortex, telemetry, logging, tracing, health, audit, costs })` fans out to one canonical route (dedicated methods retained, last-call-wins precedence documented). |
 | **Memory default OFF** | Breaking-ish: stateless by default, one-line `.withMemory()` opt-in. No more surprise SQLite writes in CI. | **Shipped** (memory default-OFF; `balanced()`/`intelligent()` opt in explicitly). |
 | **Cost honesty** | Tier-aware debrief synthesis (skip/template on local — the single largest per-run overhead), meta-tool prompt audit per tier. | **Shipped** — debrief forked off the critical path (~46% faster `run()`) + LLM debrief synthesis now skipped on the local tier (deterministic fallback kept; local synth failed ~52% at ~825 tok/~6s). |
 | **Strategy honesty** | Adaptive routing defaults to reactive on local tier; heavy strategies documented per the parity data. | **Shipped** — adaptive defaults to reactive on the local tier (heavy-strategy parity; skips the analysis LLM call) + #195 closed (Compose hooks/killswitches/calibration thread through all 5 strategies, single+batch emit). |
 
-Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. **v0.12 milestone issue queue is empty** (#195 closed 2026-06-16). Slipped during 2026-06-16 triage: #188/#47/#35 → v0.13, #43 → v0.14. **Only remaining v0.12 item: durable Phase E (Cortex resume/approval UI)** — greenfield server endpoints + Svelte UI; Cortex currently has zero durable wiring.
+Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. **v0.12 milestone complete** — all five durable phases + the DX/honesty tracks shipped in v0.12.0 (2026-06-17). Slipped during 2026-06-16 triage to later lines: #188/#47/#35 → v0.13, #43 → v0.14.
 
 ---
 
@@ -72,14 +72,13 @@ Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. *
 The framework's defensible value, per empirical evidence:
 
 - **Local-first reliability** — per-model runtime calibration, capability-signal tool routing, 4-stage healing pipeline, tier-adaptive context. The same agent code runs on a 4B Ollama model and a frontier model.
-- **Control** — every harness primitive is developer-overridable via `.compose(harness)`; killswitches; `RunHandle` pause/resume/stop/terminate; (v0.12) durable resume.
+- **Control** — every harness primitive is developer-overridable via `.compose(harness)`; killswitches; `RunHandle` pause/resume/stop/terminate; durable resume (v0.12).
 - **Observability** — default-on traces/metrics/logs, OTel exporter, deterministic replay + diagnosis CLI — all local, no SaaS coupling.
 - **Honesty** — we publish our own overhead numbers and negative results (heavy-strategy parity, falsified optimizations). Claims scope per `01-RESEARCH-DISCIPLINE.md` Rule 11.
 
 What we do **not** yet have:
 - Public third-party benchmark (v0.13 gate)
 - Production case studies / named users
-- Durable execution story complete (v0.12, in flight)
 
 ---
 

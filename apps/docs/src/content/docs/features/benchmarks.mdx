@@ -53,7 +53,7 @@ cd packages/benchmarks
 bun run src/run.ts --provider anthropic --output report.json
 
 # Run with a specific model
-bun run src/run.ts --provider anthropic --model claude-opus-4-5 --output report.json
+bun run src/run.ts --provider anthropic --model claude-opus-4-8 --output report.json
 
 # Run only trivial + simple tiers (quick sanity check)
 bun run src/run.ts --provider anthropic --tier trivial,simple
@@ -62,7 +62,7 @@ bun run src/run.ts --provider anthropic --tier trivial,simple
 bun run src/run.ts --provider openai --model gpt-4o --output report.json
 
 # Gemini
-bun run src/run.ts --provider gemini --model gemini-2.0-flash --output report.json
+bun run src/run.ts --provider gemini --model gemini-2.5-flash --output report.json
 ```
 
 ### CLI Options
@@ -80,7 +80,7 @@ bun run src/run.ts --provider gemini --model gemini-2.0-flash --output report.js
 |----------|--------------|-----------|
 | `anthropic` | `claude-haiku-4-5` | Fast, cost-efficient, strong reasoning |
 | `openai` | `gpt-4o-mini` | Cost-efficient with strong benchmark performance |
-| `gemini` | `gemini-2.0-flash` | Fast inference, competitive pricing |
+| `gemini` | `gemini-2.5-flash` | Fast inference, competitive pricing |
 | `ollama` | `llama3.2` | Local inference, no API cost |
 
 ## Updating the Displayed Results

@@ -12,7 +12,7 @@ Run your first agent in 60 seconds. Scale up by composing layers — add reasoni
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
-| **40 packages & apps**       | 35 packages + 5 apps — 35 published to npm, all opt-in, no hidden coupling |
+| **41 packages & apps**       | 35 packages + 6 apps — 33 published to npm, all opt-in, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
 | **6 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
 | **6,558 tests · 804 files**  | Production-grade confidence (verified `bun test` on every PR)    |

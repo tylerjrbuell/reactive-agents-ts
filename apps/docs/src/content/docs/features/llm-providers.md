@@ -11,7 +11,7 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 
 | Provider          | Models                                                  | Tool Calling | Streaming | Embeddings      | Prompt Caching  |
 | ----------------- | ------------------------------------------------------- | :----------: | :-------: | :-------------: | :-------------: |
-| **Anthropic**     | Claude Haiku 4.5, Claude Sonnet 4.6, Claude Opus 4.7    |     Yes      |    Yes    | No (use OpenAI) | Yes (explicit)  |
+| **Anthropic**     | Claude Haiku 4.5, Claude Sonnet 4.6, Claude Opus 4.8    |     Yes      |    Yes    | No (use OpenAI) | Yes (explicit)  |
 | **OpenAI**        | GPT-4o, GPT-4o-mini                                     |     Yes      |    Yes    |       Yes       | Yes (automatic) |
 | **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Flash, Gemini 2.5 Pro      |     Yes      |    Yes    |       No        | Yes (automatic) |
 | **Ollama**        | Any locally hosted model — see [Local Models Guide](/guides/local-models/) |     Yes      |    Yes    |       Yes       | No              |
