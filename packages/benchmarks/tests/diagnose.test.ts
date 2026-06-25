@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { RunAnalysis } from "@reactive-agents/trace";
 import {
+  diagnoseRun,
   formatDiagnosisLine,
   projectDiagnosis,
 } from "../src/diagnose.js";
@@ -81,5 +82,19 @@ describe("formatDiagnosisLine", () => {
     const line = formatDiagnosisLine(d);
     expect(line).not.toBeNull();
     expect(line!).toContain("nudge-loop");
+  });
+});
+
+describe("diagnoseRun (best-effort)", () => {
+  it("returns undefined when traceDir is undefined", async () => {
+    expect(await diagnoseRun(undefined, "t1")).toBeUndefined();
+  });
+
+  it("returns undefined when traceDir is empty string", async () => {
+    expect(await diagnoseRun("", "t1")).toBeUndefined();
+  });
+
+  it("returns undefined (never throws) when the trace file does not exist", async () => {
+    expect(await diagnoseRun("/nonexistent-dir-xyz-12345", "no-such-task")).toBeUndefined();
   });
 });
