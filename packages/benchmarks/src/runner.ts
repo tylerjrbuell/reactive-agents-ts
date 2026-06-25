@@ -1022,7 +1022,9 @@ export async function runSession(
               result = await dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir)
             }
             const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations)
-            const diagnosis = await diagnoseRun(session.traceDir ?? "", result.traceId ?? "")
+            const diagnosis = session.traceDir && result.traceId
+              ? await diagnoseRun(session.traceDir, result.traceId)
+              : undefined
             runScores.push({
               runIndex: i,
               dimensions,
