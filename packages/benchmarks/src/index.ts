@@ -87,3 +87,9 @@ export { localModelsSession }          from "./sessions/local-models.js"
  */
 export type { CompetitorRunner } from "./competitors/types.js"
 export { COMPETITOR_RUNNERS }    from "./competitors/index.js"
+
+/**
+ * v2 lift gate (canonical evaluation system, layer Lg).
+ * @unstable See v2 Benchmark Surface section above.
+ */
+export * from "./gate/index.js"

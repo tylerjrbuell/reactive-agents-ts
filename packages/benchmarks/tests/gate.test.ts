@@ -224,3 +224,13 @@ describe("formatGateReceipt", () => {
     expect(out).toContain("cand");
   });
 });
+
+import * as benchmarks from "../src/index.js";
+
+describe("package export", () => {
+  it("exposes evaluateLiftGate from the package entrypoint", () => {
+    expect(typeof (benchmarks as { evaluateLiftGate?: unknown }).evaluateLiftGate).toBe(
+      "function",
+    );
+  });
+});
