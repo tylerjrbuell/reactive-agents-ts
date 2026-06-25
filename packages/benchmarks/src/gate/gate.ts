@@ -2,6 +2,8 @@
 import type { SessionReport, TaskVariantReport } from "../types.js";
 import {
   DEFAULT_LIFT_POLICY,
+  type GateDecision,
+  type GateVerdict,
   type LiftPolicy,
   type TierEvidence,
 } from "./types.js";
@@ -82,4 +84,64 @@ export function projectTierEvidence(
   }
 
   return evidence;
+}
+
+function buildRationale(
+  decision: GateDecision,
+  aggregate: GateVerdict["aggregate"],
+  partial: boolean,
+  policy: LiftPolicy,
+): string {
+  const lift = aggregate.liftPp.toFixed(1);
+  const tok = aggregate.tokenOverheadPct.toFixed(1);
+  const base = `${decision.toUpperCase()} · ${aggregate.tiersCovered} tier(s) · ${lift}pp lift · ${tok}% tok`;
+  if (decision === "reject") return `${base} — a tier significantly regresses`;
+  if (decision === "default-on") return `${base} — clears ≥${policy.minLiftPp}pp ∧ ≤${policy.maxTokenOverheadPct}% on all tiers`;
+  if (partial) return `${base} — inconclusive tier blocks promotion`;
+  return `${base} — below the promotion bar`;
+}
+
+export function evaluateLiftGate(
+  report: SessionReport,
+  baselineVariantId: string,
+  candidateVariantId: string,
+  policy: LiftPolicy = DEFAULT_LIFT_POLICY,
+): GateVerdict {
+  const perTier = projectTierEvidence(
+    report,
+    baselineVariantId,
+    candidateVariantId,
+    policy,
+  );
+  const partial = perTier.some((t) => t.inconclusive);
+  const tiersCovered = perTier.length;
+  const aggregate = {
+    liftPp: mean(perTier.map((t) => t.liftPp)),
+    tokenOverheadPct: mean(perTier.map((t) => t.tokenOverheadPct)),
+    tiersCovered,
+  };
+
+  let decision: GateDecision;
+  if (perTier.some((t) => t.regresses)) {
+    decision = "reject";
+  } else if (
+    !partial &&
+    tiersCovered >= policy.minTiers &&
+    perTier.length > 0 &&
+    perTier.every((t) => t.passes)
+  ) {
+    decision = "default-on";
+  } else {
+    decision = "opt-in";
+  }
+
+  return {
+    decision,
+    perTier,
+    aggregate,
+    partial,
+    rationale: buildRationale(decision, aggregate, partial, policy),
+    baselineVariantId,
+    candidateVariantId,
+  };
 }

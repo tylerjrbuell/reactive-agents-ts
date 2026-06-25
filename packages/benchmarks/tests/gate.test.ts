@@ -4,7 +4,7 @@ import type {
   SessionReport,
   TaskVariantReport,
 } from "../src/types.js";
-import { projectTierEvidence } from "../src/gate/gate.js";
+import { evaluateLiftGate, projectTierEvidence } from "../src/gate/gate.js";
 import { DEFAULT_LIFT_POLICY } from "../src/gate/types.js";
 
 // ── fixture builders ─────────────────────────────────────────────
@@ -127,5 +127,76 @@ describe("projectTierEvidence", () => {
     const ev = projectTierEvidence(report, "base", "cand", DEFAULT_LIFT_POLICY);
     expect(ev[0]!.regresses).toBe(true);
     expect(ev[0]!.passes).toBe(false);
+  });
+});
+
+describe("evaluateLiftGate", () => {
+  function twoTier(
+    baseAcc: number,
+    candAcc: number,
+    candTokens = 1000,
+    variance = 0,
+  ): SessionReport {
+    return makeReport([
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: baseAcc, meanTokens: 1000, variance }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: candAcc, meanTokens: candTokens, variance }),
+      tvr({ modelVariantId: "frontier", variantId: "base", accuracy: baseAcc, meanTokens: 1000, variance }),
+      tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: candAcc, meanTokens: candTokens, variance }),
+    ]);
+  }
+
+  it("promotes default-on on a clear two-tier win", () => {
+    const v = evaluateLiftGate(twoTier(0.6, 0.66), "base", "cand");
+    expect(v.decision).toBe("default-on");
+    expect(v.aggregate.tiersCovered).toBe(2);
+    expect(v.partial).toBe(false);
+  });
+
+  it("returns opt-in when lift is positive but below the threshold", () => {
+    const v = evaluateLiftGate(twoTier(0.6, 0.615), "base", "cand"); // 1.5pp
+    expect(v.decision).toBe("opt-in");
+  });
+
+  it("rejects when a tier significantly regresses", () => {
+    const report = makeReport([
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.6 }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.66 }),
+      tvr({ modelVariantId: "frontier", variantId: "base", accuracy: 0.9 }),
+      tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: 0.8 }), // -10pp
+    ]);
+    const v = evaluateLiftGate(report, "base", "cand");
+    expect(v.decision).toBe("reject");
+  });
+
+  it("blocks default-on when any tier is inconclusive (partial)", () => {
+    const report = makeReport([
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.6 }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.66 }),
+      tvr({ modelVariantId: "frontier", variantId: "base", accuracy: 0.6 }),
+      tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: 0.66, inconclusive: true }),
+    ]);
+    const v = evaluateLiftGate(report, "base", "cand");
+    expect(v.partial).toBe(true);
+    expect(v.decision).toBe("opt-in");
+  });
+
+  it("returns opt-in when only one tier is covered (below minTiers)", () => {
+    const report = makeReport([
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.6 }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.66 }),
+    ]);
+    const v = evaluateLiftGate(report, "base", "cand");
+    expect(v.decision).toBe("opt-in");
+    expect(v.aggregate.tiersCovered).toBe(1);
+  });
+
+  it("returns opt-in when lift clears the threshold but token overhead exceeds the cap", () => {
+    const v = evaluateLiftGate(twoTier(0.6, 0.66, 1200), "base", "cand"); // +6pp, +20% tokens
+    expect(v.decision).toBe("opt-in");
+  });
+
+  it("returns opt-in when lift is real but within the noise floor", () => {
+    const v = evaluateLiftGate(twoTier(0.6, 0.66, 1000, 0.10), "base", "cand"); // 6pp < 10pp noise
+    expect(v.decision).toBe("opt-in");
   });
 });
