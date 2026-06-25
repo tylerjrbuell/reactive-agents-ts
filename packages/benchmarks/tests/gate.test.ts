@@ -77,6 +77,7 @@ describe("projectTierEvidence", () => {
     expect(ev[0]!.tokenOverheadPct).toBeCloseTo(1.0, 5);
     expect(ev[0]!.passes).toBe(true);
     expect(ev[0]!.regresses).toBe(false);
+    expect(ev[0]!.significant).toBe(true);
   });
 
   it("skips a model not covered by both variants", () => {
@@ -115,6 +116,16 @@ describe("projectTierEvidence", () => {
     // liftPp = 4.0; noise = significanceK(1) × variance(0.10) × 100 = 10pp → not significant.
     const ev = projectTierEvidence(report, "base", "cand", DEFAULT_LIFT_POLICY);
     expect(ev[0]!.significant).toBe(false);
+    expect(ev[0]!.passes).toBe(false);
+  });
+
+  it("flags a significant negative lift as regresses", () => {
+    const report = makeReport([
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.9, meanTokens: 1000 }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.8, meanTokens: 1000 }),
+    ]);
+    const ev = projectTierEvidence(report, "base", "cand", DEFAULT_LIFT_POLICY);
+    expect(ev[0]!.regresses).toBe(true);
     expect(ev[0]!.passes).toBe(false);
   });
 });

@@ -10,6 +10,10 @@ function mean(xs: readonly number[]): number {
   return xs.length === 0 ? 0 : xs.reduce((a, b) => a + b, 0) / xs.length;
 }
 
+function maxOf(xs: readonly number[]): number {
+  return xs.reduce((m, x) => (x > m ? x : m), 0);
+}
+
 function metricScore(r: TaskVariantReport, metric: string): number | undefined {
   return r.meanScores.find((s) => s.dimension === metric)?.score;
 }
@@ -48,11 +52,10 @@ export function projectTierEvidence(
     const tokenOverheadPct =
       baseTokens === 0 ? 0 : ((candTokens - baseTokens) / baseTokens) * 100;
 
-    const variance = Math.max(
-      0,
+    const variance = maxOf([
       ...base.map((r) => r.variance),
       ...cand.map((r) => r.variance),
-    );
+    ]);
     const noisePp = policy.significanceK * variance * 100;
     const significant = Math.abs(liftPp) > noisePp;
 
@@ -63,6 +66,7 @@ export function projectTierEvidence(
       tokenOverheadPct <= policy.maxTokenOverheadPct;
     const regresses = !inconclusive && significant && liftPp < 0;
 
+    // NOTE: when `inconclusive` is true, the numeric fields below are not meaningful — consumers MUST gate on `inconclusive` before reading liftPp/tokenOverheadPct.
     evidence.push({
       tier: model,
       baselineMetric,
