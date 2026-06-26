@@ -33,6 +33,17 @@ bun run rax:diagnose diff <runIdA> <runIdB>   # structural diff: stats, kinds, v
 
 If you're going to remember one thing: **`rax:diagnose replay <runId> --only=kernel-state-snapshot,harness-signal-injected,verifier-verdict`** tells the failure narrative of any run at a glance.
 
+### The eval system — primary probe + diagnosis substrate (2026-06, canonical)
+
+Since the canonical evaluation system shipped (Phases 1–4b — see `wiki/Architecture/Design-Specs/2026-06-24-canonical-evaluation-system.md`), the **benchmark bench is the primary probe**, and it carries diagnosis + verdict + ledger inline. You no longer hand-roll a probe script for most sweeps:
+
+- **Probe** = a 2-variant benchmark session (`bare-llm` vs `ra-full`) over real-world tasks, run cross-tier. `runSession` writes a `SessionReport` (per-cell scores, ablation `harnessLift`, per-run `RunDiagnosis`).
+- **Diagnosis** = `RunDiagnosis` on every run (honesty label, failure modes, blind spots) — the "why" is attached to each score; aggregate across the report. Drill into a specific failing trace with `rax:diagnose` as before.
+- **Verdict** = `rax eval gate --report <r.json> --baseline bare-llm --candidate ra-full` applies the project lift rule (≥3pp ∧ ≤15%tok ∧ ≥2 tiers) → `default-on | opt-in | reject`.
+- **Ledger** = `--ledger <path>` records the weakness→hypothesis→verdict chain (`wiki/Research/Harness-Reports/improvement-ledger.json`); `rax eval ledger` lists it.
+
+The old probe scripts (Phase 2) remain valid for targeting a single subsystem the bench tasks don't exercise, but the bench is the default for a weakness sweep.
+
 ---
 
 ## Phase 1 — Orient (5 minutes, do not skip)
@@ -89,6 +100,32 @@ Also check `git log --oneline -20` so you know what shipped recently and aren't 
 
 The probe is a small TypeScript script that exercises the harness via the public builder API. The point is to surface a failure mode in a real run, not to construct a synthetic test fixture.
 
+### Primary probe — the eval bench (cross-tier weakness sweep)
+
+For a broad weakness/failure-mode map, run a **2-variant cross-tier benchmark session** instead of a single probe script. One run surfaces harness lift, regressions, honesty, and failure modes across tiers.
+
+**Setup (once):**
+
+1. Start the frozen judge with a **NON-SUT** model (Rule 4 — judge ≠ any model under test):
+   ```bash
+   JUDGE_LAYER=live JUDGE_PROVIDER=ollama JUDGE_MODEL=gemma4:12b \
+   JUDGE_MODEL_SHA=gemma4:12b JUDGE_CODE_SHA=dev PORT=8910 \
+   bun run packages/judge-server/src/index.ts &
+   # smoke: curl -s localhost:8910/version  then POST a /judge request
+   ```
+2. **Use CALIBRATED models only.** The bench's preflight honesty guard marks any model NOT in `STATIC_CAPABILITIES` (`packages/llm-provider/src/capability.ts`) as `inconclusive` (2048 fallback ctx) and **refuses to score it** — you get 0 measured cells, 0 dishonest numbers (guard working as designed). Calibrated local set (2026-06): `qwen3:14b`, `cogito:14b`, `qwen3.5:latest`, `gemma4:latest`; frontier models are calibrated. (To bench an uncalibrated model intentionally: `RA_BENCH_ALLOW_FALLBACK=1` — but scores are at fallback ctx, flagged, not representative. Better: add it to `STATIC_CAPABILITIES` with its real `numCtx`.)
+
+**Run** a session (calibrated models, `bare-llm` + `ra-full` variants, `traceDir` set so `RunDiagnosis` is captured, **`runs≥3`** for the gate's variance/significance):
+```bash
+JUDGE_URL=http://127.0.0.1:8910 \
+bun run apps/cli/src/index.ts bench --session <session> --output report.json
+```
+Or a one-off runner that builds the session inline via `runSession` + `getVariant("bare-llm")`/`getVariant("ra-full")` — **run it from inside the repo** so the `@reactive-agents/benchmarks` workspace import resolves (a script under `/tmp` will not).
+
+`runs:1` makes the gate hair-trigger (variance 0 → any negative tier reads as a significant regression). Use **`runs≥3`** for an authoritative verdict.
+
+### Legacy probes (single-subsystem targeting)
+
 **Existing probes** (`.agents/skills/harness-improvement-loop/scripts/`):
 
 | Script | Purpose |
@@ -113,6 +150,17 @@ The probe writes a JSON summary under `wiki/Research/Harness-Reports/`. Tracing 
 ## Phase 3 — Diagnose (use the trace, not the source)
 
 This is the phase where the new tooling pays off. The trace JSONL has already captured every state transition, verifier verdict, harness signal, and (when wired) LLM exchange. You don't have to read kernel source to know what happened — read the trace.
+
+### Eval-bench diagnosis — aggregate the SessionReport first
+
+When the probe was an eval-bench run, the diagnosis is already in the report — aggregate it before drilling into individual traces:
+
+- **Ablation** (`report.ablation[].harnessLift`): per (task × model) `ra-full − bare-llm`. Positive = harness helps; **negative = harness REGRESSES** (a prime root-cause target — e.g. an adversarial "nothing to optimize" task where ra-full over-engineers a false change).
+- **Honesty** (`RunDiagnosis.honestyLabel` across runs): a high rate of `dishonest-success-suspected` / `claimed-success (unverified)` = models claiming success without verified deliverables — the dominant local-tier failure mode (≈95% of runs in the 2026-06 14b sweep).
+- **Failure modes** (`RunDiagnosis.failureModes`): overlap-storm / nudge-loop / recall-loop / runaway-tokens / max-iter-no-progress, tallied across cells.
+- **Token overhead**: `ra-full` mean tokens vs `bare-llm` — the harness tax (the 14b sweep saw +200–900%). A lift that fails the ≤15%tok gate is a real cost finding, not just a win.
+
+THEN take a specific failing cell's `traceId` (from `RunScore.traceId`) and drill with `rax:diagnose replay` below.
 
 ### Default first move
 
@@ -235,6 +283,16 @@ If a test that was passing now fails, three options in priority order:
 1. The test reveals a real regression — fix the regression
 2. The test was asserting a behavior the fix legitimately changes — update the test with a comment explaining why the new behavior is correct
 3. (Rare) The test depends on something tangential to the fix — split the unrelated change out of this commit
+
+**(C) For a harness-mechanism change: the fix passes the gate's lift rule.** Re-run the same cross-tier bench with the fix as the `ra-full` candidate (or a dedicated candidate `HarnessVariant`) and gate it:
+
+```bash
+rax eval gate --report after.json --baseline bare-llm --candidate ra-full \
+  --ledger wiki/Research/Harness-Reports/improvement-ledger.json \
+  --weakness "<the failure mode>" --hypothesis "<the structural fix>"
+```
+
+`default-on` (≥3pp ∧ ≤15%tok across ≥2 tiers) = the fix earns default-on; `opt-in` = positive but gated; `reject` = no lift or a tier regresses. The ledger records the verdict so the improvement chain is auditable (`rax eval ledger`). Note: a trace-level fix can be structurally *correct* yet `reject` on lift — both facts matter, and the ledger entry should say so.
 
 ### When to call advisor() again
 
@@ -417,9 +475,10 @@ Produces `wiki/Research/Harness-Reports/_rollups/<period>.md` summaries while pr
 1. ORIENT       Read kernel + recent commits.
                 → claude-obsidian:wiki-query "<symptom + tier + subsystem>"
                 → If unfamiliar: claude-obsidian:autoresearch "<topic>"
-2. PROBE        Pick a probe script; pick a model; run.
-                → traces written to ~/.reactive-agents/traces/<runId>.jsonl
-                → JSON summary lands in wiki/Research/Harness-Reports/
+2. PROBE        Primary: a 2-variant (bare-llm vs ra-full) cross-tier bench session,
+                calibrated models, runs≥3, traceDir set, judge-server live (non-SUT).
+                → rax bench --session <s> --output report.json   (SessionReport + RunDiagnosis)
+                Legacy: a probe script for a single subsystem the tasks miss.
 3. DIAGNOSE     bun run rax:diagnose replay latest --only=...
                 bun run --silent rax:diagnose grep latest "<predicate>"
                 Identify failure mode + mechanism from trace evidence.
@@ -427,8 +486,8 @@ Produces `wiki/Research/Harness-Reports/_rollups/<period>.md` summaries while pr
                 Call advisor() if non-trivial. No band-aids.
 5. FIX          One coordinated change. Rebuild affected packages.
 6. VERIFY       Re-run same probe. bun run rax:diagnose diff <before> <after>.
-                bun test → no net new regressions.
-                Call advisor() to confirm.
+                Harness change → rax eval gate (lift rule) + record to --ledger.
+                bun test → no net new regressions. Call advisor() to confirm.
 7. COMMIT       Evidence in the message. No Co-Authored-By.
                 → claude-obsidian:save findings as debrief / FM / decision (if significant)
                 → Update wiki/Issues/Running Issues Log.md if new blocker
