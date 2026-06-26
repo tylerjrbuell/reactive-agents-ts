@@ -151,6 +151,7 @@ export default defineConfig({
           label: "Start Here",
           items: [
             { label: "Introduction", link: "guides/introduction/" },
+            { label: "Build AI Agents in TypeScript", link: "guides/build-ai-agents-typescript/" },
             { label: "Installation", link: "guides/installation/" },
             { label: "Quickstart", link: "guides/quickstart/" },
             { label: "Your First Agent", link: "guides/your-first-agent/" },
