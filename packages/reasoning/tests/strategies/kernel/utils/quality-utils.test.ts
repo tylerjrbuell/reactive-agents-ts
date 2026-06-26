@@ -1,5 +1,37 @@
 import { describe, it, expect } from "bun:test";
-import { isSatisfied, isCritiqueStagnant, parseScore, sanitizeAgentOutput } from "../../../../src/kernel/capabilities/verify/quality-utils.js";
+import { isSatisfied, isCritiqueStagnant, parseScore, sanitizeAgentOutput, detectContinuationIntent } from "../../../../src/kernel/capabilities/verify/quality-utils.js";
+
+describe("detectContinuationIntent", () => {
+  it("flags an output ending on 'Let me X:' (trailing colon, nothing delivered)", () => {
+    const r = detectContinuationIntent("I can see the file was read but truncated. Let me analyze the complete data by reading it again and processing it carefully:");
+    expect(r.isContinuation).toBe(true);
+    expect(r.reason).toContain("continuation-intent");
+  });
+
+  it("flags an output cut off mid-action verb", () => {
+    expect(detectContinuationIntent("Now I'll read the configuration file to determine the settings").isContinuation).toBe(true);
+  });
+
+  it("does NOT flag a delivered answer that merely contains 'let me' earlier", () => {
+    expect(detectContinuationIntent("Let me summarize the findings.\nThe top 3 databases are Postgres, MySQL, and SQLite. Each handles the workload well.").isContinuation).toBe(false);
+  });
+
+  it("does NOT flag a 'Let me summarize:' header followed by real content", () => {
+    expect(detectContinuationIntent("Let me summarize:\n- Postgres: best for OLTP\n- SQLite: best for embedded").isContinuation).toBe(false);
+  });
+
+  it("does NOT flag a polite closing", () => {
+    expect(detectContinuationIntent("The answer is 42. Let me know if you need anything else.").isContinuation).toBe(false);
+  });
+
+  it("does NOT flag a normal completed answer", () => {
+    expect(detectContinuationIntent("The capital of France is Paris.").isContinuation).toBe(false);
+  });
+
+  it("returns false for empty/whitespace output", () => {
+    expect(detectContinuationIntent("   ").isContinuation).toBe(false);
+  });
+});
 
 describe("isSatisfied", () => {
   it("returns true for SATISFIED: prefix", () => {

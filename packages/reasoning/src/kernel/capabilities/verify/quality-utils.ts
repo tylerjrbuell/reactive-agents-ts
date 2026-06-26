@@ -26,6 +26,46 @@ export function isSatisfied(text: string): boolean {
 }
 
 /**
+ * Detects "continuation-intent" output — a final answer that PROMISES future
+ * action instead of DELIVERING a result. W1 (2026-06-26 cross-tier weakness
+ * sweep): ~95% of runs shipped a mid-reasoning continuation as the final
+ * answer (e.g. "Let me analyze the complete data by reading it again:") and
+ * passed every other verifier check, scoring accuracy=0 with honesty label
+ * `claimed-success (unverified)`.
+ *
+ * Detection is intentionally narrow (high precision) to avoid rejecting valid
+ * answers: it inspects only the LAST non-empty line and flags it only when
+ * that line ENDS on a continuation clause — either a "Let me X:" trailing
+ * colon with nothing delivered after, or a cut-off mid-action verb phrase.
+ * This means "Let me summarize:\n- real content" (continuation is NOT the
+ * last line) and polite closings ("let me know if you need anything") do NOT
+ * match — only output that genuinely terminates on a promise to act.
+ */
+export function detectContinuationIntent(text: string): {
+  readonly isContinuation: boolean;
+  readonly reason?: string;
+} {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return { isContinuation: false };
+  const lastLine = trimmed.split(/\n/).map((l) => l.trim()).filter(Boolean).pop() ?? "";
+
+  const TERMINAL_INTENT: ReadonlyArray<RegExp> = [
+    // "Let me X:" / "I'll now Y:" — trailing colon, nothing delivered after it.
+    /\b(let me|let['’]?s|i['’]?ll|i will|i['’]?m going to|now i['’]?ll|now i will|next,?\s+i['’]?ll|i['’]?ll now|i['’]?ll go ahead and)\b[^.!?]{0,160}:\s*$/i,
+    // Ends mid-action: a continuation verb with no terminal punctuation after.
+    /\b(let me|i['’]?ll|i will|now i['’]?ll|i need to|i should|i'?m going to)\s+(re-?)?(analy[sz]e|read|process|check|examine|look(?:\s+at)?|review|compute|calculate|continue|proceed|investigate|gather|explore|verify|confirm|inspect|parse|fetch|retrieve|search|run|execute|implement|write|create|build)\b[^.!?]*$/i,
+  ];
+
+  if (TERMINAL_INTENT.some((p) => p.test(lastLine))) {
+    return {
+      isContinuation: true,
+      reason: `output ends on a continuation-intent ("${lastLine.slice(0, 80)}${lastLine.length > 80 ? "…" : ""}") rather than a delivered result`,
+    };
+  }
+  return { isContinuation: false };
+}
+
+/**
  * Detects stagnant critiques — if the new critique is substantially the same
  * as the most recent previous one, further retries won't improve the response.
  * Uses normalized substring matching (no heavy Levenshtein needed).
