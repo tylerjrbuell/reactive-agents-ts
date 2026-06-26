@@ -334,7 +334,11 @@ export const AnthropicProviderLive = Layer.effect(
                   totalTokens:
                     msg.usage.input_tokens + msg.usage.output_tokens,
                   estimatedCost: calculateCost(
-                    msg.usage.input_tokens,
+                    // `input_tokens` excludes cache pools; re-add them so
+                    // calculateCost's base-token subtraction is correct.
+                    msg.usage.input_tokens +
+                      (msg.usage.cache_read_input_tokens ?? 0) +
+                      (msg.usage.cache_creation_input_tokens ?? 0),
                     msg.usage.output_tokens,
                     model,
                     {
@@ -634,7 +638,12 @@ const mapAnthropicResponse = (
       totalTokens:
         response.usage.input_tokens + response.usage.output_tokens,
       estimatedCost: calculateCost(
-        response.usage.input_tokens,
+        // Anthropic's `input_tokens` already EXCLUDES cache read/creation, but
+        // calculateCost expects the total input (it subtracts cache pools to get
+        // the base). Re-add them so the accounting is correct (not negative).
+        response.usage.input_tokens +
+          (response.usage.cache_read_input_tokens ?? 0) +
+          (response.usage.cache_creation_input_tokens ?? 0),
         response.usage.output_tokens,
         model,
         {

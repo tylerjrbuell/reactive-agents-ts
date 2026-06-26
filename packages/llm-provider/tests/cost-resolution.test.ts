@@ -59,6 +59,19 @@ describe("Cost Tracking & Resolution", () => {
       expect(cost).toBe(1.75);
     });
 
+    it("should never return a negative cost (Anthropic input_tokens already excludes cache)", () => {
+      // Anthropic's API reports `input_tokens` as the NON-cached input; cache
+      // read/creation are separate, additive pools. If a caller passes that
+      // base count with a large cache_read, the internal base-token subtraction
+      // must not drive the cost negative. Regression for the $-0.0179 bug.
+      const model = "claude-3-5-sonnet-20241022";
+      const cost = calculateCost(120, 60, model, {
+        cache_read_input_tokens: 100_000,
+        cache_creation_input_tokens: 0,
+      });
+      expect(cost).toBeGreaterThanOrEqual(0);
+    });
+
     it("should apply Gemini context caching discount (25%)", () => {
       const model = "gemini-1.5-pro"; // $1.25 base input
       const inputTokens = 1_000_000;
