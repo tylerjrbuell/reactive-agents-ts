@@ -4,7 +4,35 @@ import {
   diagnoseRun,
   formatDiagnosisLine,
   projectDiagnosis,
+  trustVerdict,
 } from "../src/diagnose.js";
+
+describe("trustVerdict (score-aware)", () => {
+  it("claimed-success (unverified) + high accuracy → verified-correct", () => {
+    expect(trustVerdict("claimed-success (unverified)", 1.0)).toBe("verified-correct");
+    expect(trustVerdict("claimed-success (unverified)", 0.5)).toBe("verified-correct");
+  });
+  it("claimed-success (unverified) + low accuracy → claimed-but-wrong (overconfidence)", () => {
+    expect(trustVerdict("claimed-success (unverified)", 0.2)).toBe("claimed-but-wrong");
+    expect(trustVerdict("claimed-success (unverified)", 0)).toBe("claimed-but-wrong");
+  });
+  it("dishonest-success-suspected → dishonest (regardless of score)", () => {
+    expect(trustVerdict("dishonest-success-suspected", 1.0)).toBe("dishonest");
+  });
+  it("honest-failure → honest-failure", () => {
+    expect(trustVerdict("honest-failure", 0)).toBe("honest-failure");
+  });
+  it("unverified with no score → unknown", () => {
+    expect(trustVerdict("claimed-success (unverified)", undefined)).toBe("unknown");
+  });
+  it("no honesty label → unknown", () => {
+    expect(trustVerdict(undefined, 1.0)).toBe("unknown");
+  });
+  it("respects a custom threshold", () => {
+    expect(trustVerdict("claimed-success (unverified)", 0.6, 0.7)).toBe("claimed-but-wrong");
+    expect(trustVerdict("claimed-success (unverified)", 0.8, 0.7)).toBe("verified-correct");
+  });
+});
 
 // Minimal RunAnalysis fixture — only the fields projectDiagnosis reads.
 function analysis(p: {

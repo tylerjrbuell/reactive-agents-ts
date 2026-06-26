@@ -105,6 +105,19 @@ export interface RunDiagnosis {
   readonly blindSpots: ReadonlyArray<string>;
 }
 
+/**
+ * Score-aware trust verdict — the trace honesty label combined with the judge
+ * accuracy. The honesty label alone over-flags correct text answers as
+ * `claimed-success (unverified)` (no deliverable FILE); the judge score
+ * disambiguates correct-vs-wrong. See `trustVerdict` in diagnose.ts.
+ */
+export type TrustVerdict =
+  | "verified-correct"
+  | "claimed-but-wrong"
+  | "dishonest"
+  | "honest-failure"
+  | "unknown";
+
 export interface RunScore {
   readonly runIndex: number;
   readonly dimensions: ReadonlyArray<DimensionScore>;
@@ -114,6 +127,7 @@ export interface RunScore {
   readonly output: string;
   readonly traceId?: string;
   readonly diagnosis?: RunDiagnosis;
+  readonly trust?: TrustVerdict;
 }
 
 export interface TaskVariantReport {
