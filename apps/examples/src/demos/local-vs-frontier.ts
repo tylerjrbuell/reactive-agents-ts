@@ -37,7 +37,32 @@ const c = {
   gray: "\x1b[38;5;245m",
   white: "\x1b[97m",
 };
-const line = (s = "") => console.log(s);
+// Write our own output via stdout directly so it survives the console-silencing
+// we do around build()/run() (which hides framework logs — incl. the API-key
+// preflight line — so the recording stays clean and leaks nothing).
+const line = (s = "") => process.stdout.write(s + "\n");
+
+// Silence ALL framework output during build()/run() — both console.* and the
+// reporters that write straight to process.stdout/stderr (tool logs, phase
+// reporter, the API-key preflight line). We print our own lines outside this
+// window, so the recording shows only the banner + result + verdict.
+function silenceConsole(): () => void {
+  const c = { log: console.log, info: console.info, warn: console.warn, error: console.error };
+  const so = process.stdout.write.bind(process.stdout);
+  const se = process.stderr.write.bind(process.stderr);
+  const noop = () => {};
+  console.log = noop;
+  console.info = noop;
+  console.warn = noop;
+  console.error = noop;
+  process.stdout.write = (() => true) as typeof process.stdout.write;
+  process.stderr.write = (() => true) as typeof process.stderr.write;
+  return () => {
+    Object.assign(console, c);
+    process.stdout.write = so;
+    process.stderr.write = se;
+  };
+}
 const rule = () => line(`${c.gray}${"─".repeat(64)}${c.reset}`);
 
 // The single tool-using task both models must complete.
@@ -51,25 +76,30 @@ async function runAgent(label: string, provider: string, model: string, tint: st
   line(`${c.bold}${tint}▶ ${label}${c.reset}  ${c.gray}${provider} · ${model}${c.reset}`);
   rule();
 
-  const agent = await ReactiveAgents.create()
-    .withName("portability-demo")
-    .withProvider(provider as "ollama" | "anthropic")
-    .withModel(model)
-    .withReasoning()
-    .withTools()
-    .withMaxIterations(6)
-    .build();
-
+  const restore = silenceConsole();
   const t0 = Date.now();
-  const result = await agent.run(TASK);
+  let result;
+  try {
+    const agent = await ReactiveAgents.create()
+      .withName("portability-demo")
+      .withProvider(provider as "ollama" | "anthropic")
+      .withModel(model)
+      .withReasoning()
+      .withTools()
+      .withReactiveIntelligence({ telemetry: false }) // no telemetry notice in the recording
+      .withMaxIterations(6)
+      .build();
+    result = await agent.run(TASK);
+  } finally {
+    restore();
+  }
   const ms = Date.now() - t0;
 
   line(`${c.white}${result.output.trim()}${c.reset}`);
   line(
-    `${c.gray}  steps ${result.metadata.stepsCount} · ` +
+    `${c.gray}  ${result.metadata.stepsCount} steps · ` +
       `${(ms / 1000).toFixed(1)}s · ` +
-      `${result.metadata.tokensUsed} tokens · ` +
-      `$${result.metadata.cost.toFixed(4)}${c.reset}`,
+      `${result.metadata.tokensUsed.toLocaleString()} tokens${c.reset}`,
   );
   line(`${result.success ? `${c.green}  ✔ completed` : "  ✗ failed"}${c.reset}`);
   line();

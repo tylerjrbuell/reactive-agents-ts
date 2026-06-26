@@ -30,6 +30,7 @@ import TerminalReplay from '../../components/TerminalReplay.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
 import ScrollReveal from '../../components/ScrollReveal.astro'
 import metrics from '../../data/metrics.json'
+import demoGif from '../../assets/local-vs-frontier.gif'
 
 {/*
   Scroll-reveal scripts (both the inline FOUC-prevention class signal
@@ -69,6 +70,23 @@ import metrics from '../../data/metrics.json'
             <span class="ra-stat-label">Execution Phases</span>
         </div>
     </div>
+</div>
+
+<div class="ra-section-card ra-panel">
+  <div class="ra-panel-inner" style="text-align:center">
+
+## Same code. Local 4B model → frontier API.
+
+The **same** agent builder runs on a 4B Ollama model on your laptop and on Claude — one line changes. Both finish the same tool-using task.
+
+<img
+  src={demoGif.src}
+  alt="The same Reactive Agents code completing a tool-using task on a local 4B Ollama model and on Claude — only the provider/model line changes"
+  loading="lazy"
+  style="border-radius:12px;max-width:100%;box-shadow:0 10px 50px rgba(124,58,237,0.3)"
+/>
+
+  </div>
 </div>
 
 <div class="ra-section-card ra-panel">
