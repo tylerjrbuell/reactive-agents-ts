@@ -23,12 +23,13 @@ export async function runBench(argv: string[]) {
 
   if (sessionId) {
     // V2 API: Run a session
-    const { runSession, regressionGateSession, realWorldFullSession, localModelsSession, competitorComparisonSession } = benchmarks;
+    const { runSession, regressionGateSession, realWorldFullSession, localModelsSession, competitorComparisonSession, frontierSpotCheckSession } = benchmarks;
     const sessions: Record<string, any> = {
       "regression-gate": regressionGateSession,
       "real-world-full": realWorldFullSession,
       "local-models": localModelsSession,
       "competitor-comparison": competitorComparisonSession,
+      "frontier-spot-check": frontierSpotCheckSession,
     };
 
     const session = sessions[sessionId];
