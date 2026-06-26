@@ -1,5 +1,6 @@
 ---
 import Default from "@astrojs/starlight/components/Head.astro";
+import { siteVerification } from "../site-verification";
 
 // Custom <head> override: layers social-preview images and JSON-LD
 // structured data on top of Starlight's defaults. Two audiences:
@@ -120,6 +121,17 @@ const jsonLd = [
 ---
 
 <Default><slot /></Default>
+
+{
+  siteVerification.google && (
+    <meta name="google-site-verification" content={siteVerification.google} />
+  )
+}
+{
+  siteVerification.bing && (
+    <meta name="msvalidate.01" content={siteVerification.bing} />
+  )
+}
 
 <meta property="og:image" content={ogImage} />
 <meta property="og:image:width" content="1200" />
