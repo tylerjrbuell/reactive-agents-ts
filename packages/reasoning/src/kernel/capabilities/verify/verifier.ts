@@ -30,7 +30,7 @@
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../../types/index.js";
 import type { ObservationResult } from "../../../types/observation.js";
-import { isSatisfied } from "./quality-utils.js";
+import { isSatisfied, detectContinuationIntent } from "./quality-utils.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateNumericGrounding,
@@ -511,6 +511,25 @@ export const defaultVerifier: Verifier = {
           severity: "pass",
         });
       }
+
+      // ── Check 3e: output-not-continuation-intent ──────────────────────
+      // W1 (2026-06-26 cross-tier weakness sweep): ~95% of runs across both
+      // local and frontier tiers shipped a mid-reasoning continuation as the
+      // FINAL answer (e.g. "Let me analyze the complete data by reading it
+      // again:") and passed every other check — scoring accuracy=0 with
+      // honesty label `claimed-success (unverified)`. A final answer must
+      // DELIVER a result, not promise future action. Detection is terminal-only
+      // (last line ends on a continuation clause), so legitimate answers and
+      // "Let me summarize:\n<content>" do not trip it. Severity: reject — the
+      // kernel suppresses the mid-thought (→ honest failure / bounded retry)
+      // instead of shipping it as success.
+      const continuation = detectContinuationIntent(ctx.content);
+      checks.push({
+        name: "output-not-continuation-intent",
+        passed: !continuation.isContinuation,
+        severity: continuation.isContinuation ? "reject" : "pass",
+        reason: continuation.isContinuation ? continuation.reason : undefined,
+      });
 
       // Check 4: completion-claim
       // If the model's content includes "satisfied" / completion language,

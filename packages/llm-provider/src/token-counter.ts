@@ -217,8 +217,14 @@ export const calculateCost = (
   const openaiCached = usage?.cached_tokens ?? 0;
   const geminiCached = usage?.cached_content_token_count ?? 0;
 
-  // Base input tokens = total minus all cached/special tokens
-  const baseInputTokens = inputTokens - anthropicCacheRead - anthropicCacheWrite - openaiCached - geminiCached;
+  // Base input tokens = total minus all cached/special tokens. Clamp at 0:
+  // Anthropic's `input_tokens` already excludes cache read/creation, so a
+  // caller that passes that base count must never drive the base (and thus the
+  // total cost) negative.
+  const baseInputTokens = Math.max(
+    0,
+    inputTokens - anthropicCacheRead - anthropicCacheWrite - openaiCached - geminiCached,
+  );
 
   const inputCost = (baseInputTokens / 1_000_000) * costs.input;
   const outputCost = (outputTokens / 1_000_000) * costs.output;

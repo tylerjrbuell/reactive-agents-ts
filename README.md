@@ -35,6 +35,18 @@ Run your first agent in 60 seconds. Scale up by composing layers — add reasoni
 
 ---
 
+<div align="center">
+
+### Same code. Local 4B model → frontier API.
+
+<img src="apps/docs/src/assets/local-vs-frontier.gif" alt="The same Reactive Agents builder code completing a tool-using task on a local 4B Ollama model and on Claude — only the provider/model line changes" width="820" />
+
+<em>One builder. The only line that changes is the model — and a 4B local model and Claude both finish the same tool task. <a href="apps/examples/src/demos/local-vs-frontier.ts">See the demo source</a>.</em>
+
+</div>
+
+---
+
 ## Why Reactive Agents?
 
 Most AI agent frameworks are dynamically typed, monolithic, and opaque. They assume you're using GPT-4, break when you try smaller models, and hide every decision behind abstractions you can't inspect. **Reactive Agents** takes a fundamentally different approach:
