@@ -80,6 +80,7 @@ export { regressionGateSession }      from "./sessions/regression-gate.js"
 export { realWorldFullSession }        from "./sessions/real-world-full.js"
 export { competitorComparisonSession } from "./sessions/competitor-comparison.js"
 export { localModelsSession }          from "./sessions/local-models.js"
+export { frontierSpotCheckSession }    from "./sessions/frontier-spot-check.js"
 
 /**
  * v2 competitor runner port — adapter for non-harness baselines.
