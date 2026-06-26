@@ -23,8 +23,9 @@
 // Delete this line if you'd rather show the agent "thinking" step by step.
 process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE ??= "1";
 
-import { unlinkSync } from "node:fs";
 import { ReactiveAgents } from "reactive-agents";
+import { ToolBuilder } from "@reactive-agents/tools";
+import { Effect } from "effect";
 
 // ─── tiny ANSI helpers (GIF-friendly, no deps) ───
 const c = {
@@ -37,38 +38,74 @@ const c = {
   gray: "\x1b[38;5;245m",
   white: "\x1b[97m",
 };
-// Write our own output via stdout directly so it survives the console-silencing
-// we do around build()/run() (which hides framework logs — incl. the API-key
-// preflight line — so the recording stays clean and leaks nothing).
-const line = (s = "") => process.stdout.write(s + "\n");
+// Capture the REAL stdout/stderr writers ONCE, before any silencing. Our own
+// output — banner, LIVE tool narration (from a hook during the run), result —
+// goes through these, so it survives the silencing we apply around build()/run()
+// that hides framework logs (incl. the API-key preflight line). Clean recording,
+// zero leaks, but the agent's tool calls still narrate so the GIF tells a story.
+const realOut = process.stdout.write.bind(process.stdout);
+const realErr = process.stderr.write.bind(process.stderr);
+const line = (s = "") => realOut(s + "\n");
 
-// Silence ALL framework output during build()/run() — both console.* and the
-// reporters that write straight to process.stdout/stderr (tool logs, phase
-// reporter, the API-key preflight line). We print our own lines outside this
-// window, so the recording shows only the banner + result + verdict.
-function silenceConsole(): () => void {
-  const c = { log: console.log, info: console.info, warn: console.warn, error: console.error };
-  const so = process.stdout.write.bind(process.stdout);
-  const se = process.stderr.write.bind(process.stderr);
-  const noop = () => {};
-  console.log = noop;
-  console.info = noop;
-  console.warn = noop;
-  console.error = noop;
+function silenceFramework(): () => void {
+  const saved = { log: console.log, info: console.info, warn: console.warn, error: console.error };
+  console.log = console.info = console.warn = console.error = (() => {}) as typeof console.log;
   process.stdout.write = (() => true) as typeof process.stdout.write;
   process.stderr.write = (() => true) as typeof process.stderr.write;
   return () => {
-    Object.assign(console, c);
-    process.stdout.write = so;
-    process.stderr.write = se;
+    Object.assign(console, saved);
+    process.stdout.write = realOut;
+    process.stderr.write = realErr;
   };
 }
+
+// One-line hints for the live narration (deterministic tools → known results).
+const TOOL_HINTS: Record<string, string> = {
+  get_service_health: "DEGRADED · 8.2% errors · p99 1840ms (5.7× normal)",
+  get_recent_deploys: "deploy 12m ago — \"feat: rewrite refund flow\"",
+};
 const rule = () => line(`${c.gray}${"─".repeat(64)}${c.reset}`);
 
-// The single tool-using task both models must complete.
+// Two custom tools (deterministic mock data) — the agent must call BOTH and
+// correlate the results to reach a non-obvious conclusion. That's the agentic
+// part: not a lookup, but "investigate → correlate → recommend".
+const healthTool = ToolBuilder.create("get_service_health")
+  .description("Get current health metrics for a service (status, error rate, latency).")
+  .param("service", "string", "Service name, e.g. 'payments-api'", { required: true })
+  .handler((args) =>
+    Effect.succeed(
+      JSON.stringify({
+        service: args.service,
+        status: "DEGRADED",
+        errorRate: "8.2%",
+        p99LatencyMs: 1840,
+        normalP99Ms: 320,
+      }),
+    ),
+  )
+  .build();
+
+const deploysTool = ToolBuilder.create("get_recent_deploys")
+  .description("Get recent deployments for a service (when, what, who).")
+  .param("service", "string", "Service name, e.g. 'payments-api'", { required: true })
+  .handler((args) =>
+    Effect.succeed(
+      JSON.stringify({
+        service: args.service,
+        lastDeployMinutesAgo: 12,
+        lastCommit: "feat: rewrite refund flow",
+        deployedBy: "ci-bot",
+        previousDeployDaysAgo: 6,
+      }),
+    ),
+  )
+  .build();
+
+// The agentic task both models must complete (same code, both providers).
 const TASK =
-  "Write a one-line haiku about TypeScript to ./demo-haiku.txt using the " +
-  "file-write tool, then read it back with file-read and tell me what it says.";
+  "The payments-api service is alerting. Use get_service_health and " +
+  "get_recent_deploys to investigate, then reply in EXACTLY two short lines, " +
+  "nothing else:\nCause: <one sentence>\nAction: <one sentence>";
 
 // THE SHARED CODE. Only `provider` + `model` differ between runs.
 async function runAgent(label: string, provider: string, model: string, tint: string) {
@@ -76,7 +113,11 @@ async function runAgent(label: string, provider: string, model: string, tint: st
   line(`${c.bold}${tint}▶ ${label}${c.reset}  ${c.gray}${provider} · ${model}${c.reset}`);
   rule();
 
-  const restore = silenceConsole();
+  line(`${c.gray}  investigating the alert…${c.reset}`);
+  line();
+
+  let narrated = 0;
+  const restore = silenceFramework();
   const t0 = Date.now();
   let result;
   try {
@@ -85,9 +126,26 @@ async function runAgent(label: string, provider: string, model: string, tint: st
       .withProvider(provider as "ollama" | "anthropic")
       .withModel(model)
       .withReasoning()
-      .withTools()
+      .withTools({ tools: [healthTool, deploysTool] })
       .withReactiveIntelligence({ telemetry: false }) // no telemetry notice in the recording
-      .withMaxIterations(6)
+      .withMaxIterations(8)
+      // Narrate each tool call live (via the captured realOut, so it shows in
+      // the recording even though framework logs are silenced) — this is the
+      // story: the agent calling tools and correlating, not just a final blob.
+      .withHook({
+        phase: "act",
+        timing: "after",
+        handler: (ctx) => {
+          const results = ctx.toolResults ?? [];
+          for (let i = narrated; i < results.length; i++) {
+            const e = results[i] as { toolName?: string; name?: string };
+            const n = e.toolName ?? e.name ?? "tool";
+            line(`  ${c.cyan}→ ${n}${c.reset}  ${c.gray}${TOOL_HINTS[n] ?? ""}${c.reset}`);
+          }
+          narrated = results.length;
+          return ctx;
+        },
+      })
       .build();
     result = await agent.run(TASK);
   } finally {
@@ -95,6 +153,8 @@ async function runAgent(label: string, provider: string, model: string, tint: st
   }
   const ms = Date.now() - t0;
 
+  line();
+  line(`${c.bold}${tint}  recommendation${c.reset}`);
   line(`${c.white}${result.output.trim()}${c.reset}`);
   line(
     `${c.gray}  ${result.metadata.stepsCount} steps · ` +
@@ -117,9 +177,11 @@ async function main() {
   line(`${c.dim}  await ReactiveAgents.create()`);
   line(`    .withProvider("ollama").withModel("${localModel}")        ${c.purple}// local, on your laptop${c.dim}`);
   line(`    .withProvider("anthropic").withModel("${frontierModel}")  ${c.purple}// frontier — same code${c.dim}`);
-  line(`    .withReasoning().withTools().build()${c.reset}`);
+  line(`    .withReasoning().withTools({ tools: [healthTool, deploysTool] }).build()${c.reset}`);
   line();
-  line(`${c.cyan}  task:${c.reset} ${c.gray}${TASK}${c.reset}`);
+  line(
+    `${c.cyan}  task:${c.reset} ${c.gray}the payments-api is alerting — investigate with two tools and recommend a fix.${c.reset}`,
+  );
   line();
 
   let ok = true;
@@ -130,13 +192,6 @@ async function main() {
   line(`${c.bold}${ok ? c.green : c.gray}  Same code. Two models. ${ok ? "Both completed. ✔" : "(see above)"}${c.reset}`);
   rule();
   line();
-
-  // Tidy up the file the agent wrote, so re-running the demo stays clean.
-  try {
-    unlinkSync("./demo-haiku.txt");
-  } catch {
-    /* not created — fine */
-  }
   process.exit(ok ? 0 : 1);
 }
 
