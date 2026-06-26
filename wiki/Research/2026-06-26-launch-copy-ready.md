@@ -3,17 +3,22 @@
 **Date:** 2026-06-26 · Research basis: `2026-06-26` landscape/positioning pass. Post from your **personal/founder** account. ~16 stars, v0.12.0, MIT, early access.
 
 ## The spine (use everywhere)
-**Tone: confident conviction, not me-too deferral.** State the differentiators as fact (they're true). Mention "early" ONCE, as confidence ("the core is real and testable today"), never as repeated apology. Do NOT point at LangChain/Mastra as the grown-ups in every paragraph. The honesty that earns credibility is "no production-ready claims / no fabricated benchmarks" — NOT self-deprecation.
+**Tone: confident conviction, not me-too deferral.** State the pillars as fact (they're true). Mention "early" ONCE, as confidence ("the core is real and testable today"), never as repeated apology. Don't point at LangChain/Mastra as the grown-ups in every paragraph. The honesty that earns credibility is "no production-ready claims / no fabricated benchmarks" — NOT self-deprecation.
 
-**The positioning, stated plainly:** Most TS agent frameworks are either dynamically-typed wrappers (LangChain) or thin SDK helpers (Vercel AI SDK). Reactive Agents made three different architectural bets — and they're the lead:
+**The positioning — three pillars (lead with these everywhere):** Reactive Agents is a TypeScript agent harness built around the three things production agents actually need, and most frameworks skip:
 
-1. **The runtime IS a typed effect system (Effect-TS).** Not "we added types" (Mastra validates Zod at boundaries — table stakes). The *execution model itself* is typed end to end: errors are values in an explicit channel, concurrency is structured, every reasoning step is a composable, deterministic, inspectable phase. Different architecture, not a feature checkbox.
-2. **One codebase, local to frontier.** The same agent runs on a 4B Ollama model on your laptop and on Claude — one line changes. The ecosystem's stated position is "don't put a <7B model in an agent loop." We built the context-adaptation + tool-call healing that makes small models actually complete it. Nobody else claims this.
-3. **Observable by construction, no SaaS tether.** A 12-phase deterministic lifecycle with hooks on every phase, inspectable locally — not a graph you wire yourself, not a LangSmith subscription.
+1. **🛡️ Reliable on every model tier.** The hard part of agents isn't the prompt — it's getting the loop to *finish* without mangling a tool call, hallucinating, or looping forever. Reactive Agents ships the harness engineering that fixes that: tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle. The proof: the *same code* completes the agent loop on a 4B local Ollama model **and** on Claude/GPT/Gemini. No model lock-in, no "GPT-4-only."
+2. **🔍 Transparent.** A deterministic 12-phase execution engine with `before`/`after`/`on-error` hooks on every phase. Every prompt, tool call, and decision is a typed event you can inspect, steer, and replay — locally, with no SaaS dashboard or vendor tether. Built on Effect-TS, so failures are typed values in an explicit channel, not 2am thrown surprises (and you write plain async — no Effect required).
+3. **🧩 Composable.** Opt-in layers via a typed builder. Start with a model; add reasoning, memory, guardrails, cost routing, durability **one `.with()` call at a time** — enable exactly what you need, nothing you don't. MIT, one install.
 
-**Lead with #2's demo** (contrarian + testable in 5 min), back it with #1 (the architectural moat) and #3. The integrated whole — typed effect runtime + local-frontier parity + deterministic observable engine + MCP-native + durable + HITL, MIT, one package — is the differentiator. No one else has all of it.
+**Lead with reliability** (the thing production buyers want), **prove it with the cross-tier demo** (contrarian + testable in 5 min), and let transparency + composability close. The integrated whole — reliability harness + typed/observable runtime + compose-what-you-need + local-to-frontier, MIT — is the differentiator. No one else ships all of it.
 
-**Honesty guardrails (keep, but as confidence):** NO "production-ready / battle-tested / beats X". Word parity as *same code completes the loop*, not *same quality*. ONE line on stage: "early — v0.12, MIT, fewer integrations than LangChain today; the architecture is the bet and it's real now." Evidence (the demo) over adjectives.
+**Per-audience lead** (don't use one hook everywhere):
+- **Show HN / senior devs** → transparency + reliability ("typed runtime, agents that actually finish, no black box").
+- **r/LocalLLaMA** → the cross-tier reliability proof (4B finishes the loop) — its home turf.
+- **"Ship to production" / LinkedIn** → durability + reliability (resume-on-crash, verification, HITL).
+
+**Honesty guardrails (keep, as confidence):** NO "production-ready / battle-tested / beats X". Word the cross-tier claim as *same code finishes the loop*, not *same quality*. ONE line on stage: "early — v0.12, MIT, fewer integrations than LangChain today; the architecture is the bet and it's real now." Evidence (the demo) over adjectives.
 
 **Centerpiece demo** (the reproducible artifact every channel links to):
 ```typescript
@@ -23,10 +28,13 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama").withModel("qwen3:4b")              // runs on your laptop
   // .withProvider("anthropic").withModel("claude-sonnet-4-6") // frontier — same code, one line
   .withReasoning()
-  .withTools()
+  .withTools({ tools: [getServiceHealth, getRecentDeploys] })
   .build();
 
-const result = await agent.run("Find the 3 largest files in ./src and summarize each.");
+// Same code finishes on a 4B local model and on Claude:
+const result = await agent.run(
+  "The payments-api is alerting. Investigate with the tools, then tell me the cause and the fix."
+);
 console.log(result.output);
 ```
 
@@ -34,46 +42,47 @@ console.log(result.output);
 
 ## 1. Hacker News — Show HN (your single highest-leverage shot; one-time)
 
-**Title** (plain, no adjectives/version/hype):
-`Show HN: Reactive Agents – TypeScript AI agents that run on local or frontier models`
+**Title** (plain, concrete, no hype):
+`Show HN: Reactive Agents – TypeScript agents that finish the loop, local 4B to frontier`
 
 **Body:**
 ```
-Hi HN — I built Reactive Agents, a TypeScript framework for AI agents, around
-three bets the popular frameworks didn't make.
+Hi HN — I built Reactive Agents, a TypeScript agent framework built around three
+things I kept fighting in other frameworks: reliability, transparency, and
+composability.
 
-1. The same agent code runs on a 4B local model and on Claude — one line changes.
+1. Reliability — getting the loop to actually finish.
 
-The common wisdom is "don't put a small model in an agent loop" — it mangles
-tool calls and the loop dies, so most frameworks quietly assume a frontier model.
-I didn't accept that. Model-adaptive context profiles + a tool-call "healing" pass
-(it normalizes malformed tool names/params/paths before execution) make the small-
-model path actually complete. A 4B model isn't as smart as Claude — but the same
-code finishes the task, so you develop and test locally and privately, then swap
-to a frontier model for the hard runs with no rewrite:
+The hard part of agents isn't the prompt, it's the loop: a mangled tool call, a
+hallucinated step, or an agent that never terminates. Reactive Agents ships the
+harness for that — tool-call healing (normalizes malformed tool names/params/paths
+before execution), output verification, durable crash-resume, and a single-owner
+termination oracle.
+
+The proof I like best: the SAME agent code finishes the loop on a 4B local Ollama
+model and on Claude. The common wisdom is "don't put a small model in an agent
+loop"; the healing + context adaptation are what make it complete. A 4B model
+isn't as smart as Claude, but the same code finishes — so you develop and test
+locally/privately, then swap one line to a frontier model:
 
   const agent = await ReactiveAgents.create()
     .withProvider("ollama").withModel("qwen3:4b")   // ← or .withProvider("anthropic")
-    .withReasoning().withTools().build();
-  const result = await agent.run("Find the 3 largest files in ./src and summarize each.");
+    .withReasoning().withTools({ tools }).build();
 
-2. The runtime is a typed effect system, not a dynamically-typed wrapper.
-
-It's built on Effect-TS, so this isn't "we added some types at the edges" — the
-execution model itself is typed end to end. An LLM or tool failure is a value in
-an explicit error channel, not a thrown surprise; concurrency is structured;
-retries and fallbacks compose. The builder and hooks are plain async, so you get
-those guarantees without writing Effect yourself.
-
-3. Observable by construction, with no SaaS tether.
+2. Transparency — no black box.
 
 Every run is a deterministic 12-phase lifecycle (bootstrap → guardrail →
 think/act/observe → verify → … → complete) with before/after/error hooks on every
 phase. You inspect and steer each step locally — no graph to wire by hand, no
-hosted dashboard to subscribe to.
+hosted dashboard to subscribe to. It's built on Effect-TS, so an LLM or tool
+failure is a typed value in an explicit error channel, not a 2am thrown surprise —
+and the builder/hooks are plain async, so you don't write Effect to get that.
 
-On top: MCP-native tools, A2A multi-agent, durable crash-resume, human-in-the-loop,
-6 reasoning strategies — MIT, one install.
+3. Composability — enable exactly what you need.
+
+Opt-in layers via a typed builder. Start with a model; add reasoning, memory,
+guardrails, cost routing, durability one .with() call at a time. MCP-native tools,
+A2A multi-agent, HITL, 6 reasoning strategies — MIT, one install.
 
 It's early — v0.12.0, ~6,500 tests, fewer integrations than LangChain today. The
 architecture is the bet, and it's real and testable now. Docs have honest
@@ -81,9 +90,8 @@ side-by-side comparisons with LangGraph/Mastra/Vercel AI SDK.
 
 Repo: https://github.com/tylerjrbuell/reactive-agents-ts
 Docs: https://docs.reactiveagents.dev
-Local-model walkthrough: https://docs.reactiveagents.dev/cookbook/local-agent-ollama/
 
-Feedback very welcome — especially on the local-model path and the typed-runtime
+Feedback very welcome — especially on the reliability harness and the typed-runtime
 ergonomics.
 ```
 **Posting rules:** Tue–Thu ~8–10am ET. First 30 min velocity decides it. NO deleting/resubmitting if it stalls (= spam flag; wait months). Be in the comments all day, humble; answer "why not LangGraph/Mastra" by conceding maturity and pointing at the one testable difference. Author tone > the post itself.
@@ -94,52 +102,49 @@ ergonomics.
 
 **Hook (post 1):**
 ```
-Common wisdom: "don't put a 4B model in an agent loop — it mangles tool calls."
+The hard part of AI agents isn't the prompt — it's getting the loop to *finish*:
+a mangled tool call, a hallucinated step, an agent that never stops.
 
-So I built a TypeScript agent framework where the same code runs on a 4B local
-model *and* on Claude. One line changes.
+I built a TypeScript agent framework focused on exactly that. Proof: the same
+code finishes the same agentic task on a 4B local model AND on Claude 👇
+```
+**2** (the demo — attach the GIF):
+```
+Watch it work an incident: call two tools, correlate a recent deploy with the
+degradation, recommend a rollback — and finish on gemma 4B and on Claude.
 
-Here's the same script, two models, both finishing a tool task 👇
+The only line that changes is the model. [GIF]
 ```
-**2** (the demo — attach a screen-recording/GIF of both runs):
+**3** (pillar 1 — reliability):
 ```
-Same builder. The only diff is the provider/model line:
+What makes the loop finish (even on a 4B): tool-call healing (fixes malformed
+tool calls before they run), output verification, durable crash-resume, and a
+single-owner termination oracle.
 
-  .withProvider("ollama").withModel("qwen3:4b")
-  // .withProvider("anthropic").withModel("claude-sonnet-4-6")
+It's the harness doing the work, not the model.
+```
+**4** (pillar 2 — transparency):
+```
+And you can see all of it. A deterministic 12-phase engine with hooks on every
+phase — inspect and steer each step locally, no SaaS dashboard.
 
-Develop locally + privately on a 4B model, swap to frontier for the hard runs.
-No rewrite.
+Built on Effect-TS: failures are typed values, not 2am surprises. (You still
+write plain async.)
 ```
-**3** (why it works — credibility):
+**5** (pillar 3 — composability):
 ```
-Two things make the small-model path actually complete:
-• model-adaptive context profiles (lean prompts, aggressive compaction)
-• a "healing" pass that fixes malformed tool names/params/paths before they run
+Composable by design: start with a model, then add reasoning / memory /
+guardrails / cost control / durability one .with() at a time. Enable what you
+need, nothing else.
 
-Small models break on tool-call formatting; this recovers most of it.
-```
-**4** (the backbone):
-```
-Underneath: a deterministic 12-phase execution engine with before/after/error
-hooks on every phase. You can inspect and steer each step — locally, no SaaS
-dashboard required. Less "magic box," more "typed state machine."
-```
-**5** (the architectural moat):
-```
-This isn't a dynamically-typed wrapper with types bolted on. The runtime IS a
-typed effect system (Effect-TS): LLM/tool failures are values in an explicit
-error channel, concurrency is structured, retries + fallbacks compose.
-
-You get the guarantees. You write plain async.
+MCP-native tools, A2A multi-agent, HITL. MIT, one install.
 ```
 **6** (confident close + CTA):
 ```
-Typed effect runtime + local↔frontier portability + deterministic observable
-engine + MCP-native + durable + HITL. MIT, one install. No other TS framework
-ships that combination.
+Reliable on every tier · transparent · composable. No other TS framework ships
+that combination.
 
-Early (v0.12), but the core is real and testable today:
+Early (v0.12), but real and testable today:
 https://github.com/tylerjrbuell/reactive-agents-ts
 ```
 **Notes:** the GIF in post 2 carries the thread. Build-in-public tone (early, MIT) converts better than polished-launch tone at 16 stars. Soft-launch this BEFORE Show HN to get a few engaged eyes.

@@ -10,11 +10,11 @@ cover_image: https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/m
 
 > **Note for publishing:** upload `ra-demo.gif` to Dev.to directly (drag-drop in the editor) for the inline embed, or keep the GitHub raw URL below. Set `published: true` when ready.
 
-Most TypeScript agent frameworks quietly assume you're on a frontier model. The common wisdom is blunt: *don't put a 4B model in an agent loop* — it mangles the tool-call format, one bad call breaks the chain, and the loop falls apart.
+The hard part of building AI agents isn't the prompt — it's getting the **loop to actually finish**. A mangled tool call, a hallucinated step, an agent that never terminates. Most TypeScript frameworks paper over this by assuming a frontier model and hoping for the best.
 
-I didn't want to accept that. I wanted to develop and test an agent **locally and privately** on a small model, then swap to Claude for the hard runs — with no rewrite. So I built [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) around that constraint.
+I built [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) around three things instead: **reliability** (the loop finishes), **transparency** (you can see and steer every step), and **composability** (you enable exactly what you need). It's the *harness* — tool-call healing, output verification, durable crash-resume, a single-owner termination oracle — not the model, that does the work.
 
-Here's the same agent code finishing the same tool-using task on a 4B Ollama model and on Claude. The only line that changes is the model:
+Here's the sharpest proof of that reliability: the **same agent code** finishing the **same agentic task** — investigate an incident, call two tools, correlate the data, recommend a fix — on a **4B local Ollama model** and on **Claude**. The ecosystem's stated position is "don't put a small model in an agent loop." The harness is why it completes anyway. The only line that changes is the model:
 
 ![Same builder code completing a tool task on a local 4B Ollama model and on Claude](https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/local-vs-frontier.gif)
 

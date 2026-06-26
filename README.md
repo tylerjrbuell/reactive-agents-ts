@@ -2,13 +2,15 @@
 
 <img src="./apps/docs/src/assets/logo-light.svg" alt="Reactive Agents" width="280" />
 
-# Reactive Agents — TypeScript AI Agent Framework
+# Reactive Agents — Reliable, Transparent, Composable TypeScript AI Agents
 
-**Built for control, not magic.** A composable TypeScript agent harness with end-to-end Effect-TS type safety, a deterministic 12-phase execution engine, and a live local studio. Every prompt, tool call, and reasoning step is a typed event you can steer, observe, and compose — see every decision your agent makes, why, when, and at what cost.
+**Built for control, not magic.** A TypeScript agent harness designed around the three things production agents actually need — and that most frameworks skip:
 
-That same harness engineering is what makes agents **reliable**: tool-call healing, context curation, and a single-owner termination oracle are why **local Ollama models (4B+) run the exact same code as frontier APIs** — same features, measurable lift, no model lock-in.
+- 🛡️ **Reliable on every model tier.** Tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle are why the *same code* finishes the agent loop on a local 4B Ollama model **and** on Claude / GPT / Gemini. No model lock-in, no "works on GPT-4 only."
+- 🔍 **Transparent.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay — locally, with no SaaS dashboard or vendor tether.
+- 🧩 **Composable.** Opt-in layers via a typed builder. Start with a model; add reasoning, 4-tier memory, guardrails, cost routing, and durability **one `.with()` call at a time** — enable exactly what you need, nothing you don't.
 
-Run your first agent in 60 seconds. Scale up by composing layers — add reasoning loops, opt-in 4-tier memory, production guardrails, cost routing, and reactive intelligence one `.with()` call at a time. Strict TypeScript with schema-validated boundaries and explicit tagged errors.
+Built on Effect-TS end to end — schema-validated boundaries, tagged errors, no untyped throws. Run your first agent in 60 seconds.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
@@ -37,11 +39,11 @@ Run your first agent in 60 seconds. Scale up by composing layers — add reasoni
 
 <div align="center">
 
-### Same code. Local 4B model → frontier API.
+### Reliable on every tier — see it for yourself
 
-<img src="apps/docs/src/assets/local-vs-frontier.gif" alt="The same Reactive Agents builder code completing a tool-using task on a local 4B Ollama model and on Claude — only the provider/model line changes" width="820" />
+<img src="apps/docs/src/assets/local-vs-frontier.gif" alt="The same Reactive Agents code investigating an incident with two tools and recommending a fix — completing on a local 4B Ollama model and on Claude, only the provider/model line changes" width="820" />
 
-<em>One builder. The only line that changes is the model — and a 4B local model and Claude both finish the same tool task. <a href="apps/examples/src/demos/local-vs-frontier.ts">See the demo source</a>.</em>
+<em>The same agent investigates an incident, calls two tools, correlates the data, and recommends a fix — and <strong>finishes the job on a 4B local model just like on Claude</strong>. One builder, the only line that changes is the model. <a href="apps/examples/src/demos/local-vs-frontier.ts">Demo source</a>.</em>
 
 </div>
 

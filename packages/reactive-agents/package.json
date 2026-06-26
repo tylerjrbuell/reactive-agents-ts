@@ -8,7 +8,7 @@
     "rax": "bin/rax.js",
     "reactive-agents": "bin/rax.js"
   },
-  "description": "The composable AI agent framework built on Effect-TS — install everything with one package",
+  "description": "Reliable, transparent, composable TypeScript AI agents on Effect-TS — the same code finishes the agent loop on local 4B models and frontier APIs. Install everything with one package.",
   "keywords": [
     "ai",
     "agents",
