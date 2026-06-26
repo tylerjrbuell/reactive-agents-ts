@@ -23,6 +23,17 @@ export async function runEvalGate(args: string[]): Promise<void> {
     return i >= 0 && i + 1 < args.length ? args[i + 1] : undefined;
   };
 
+  const num = (flag: string): number | undefined => {
+    const raw = get(flag);
+    if (raw === undefined) return undefined;
+    const n = Number(raw);
+    if (Number.isNaN(n)) {
+      console.error(fail(`${flag} must be a number, got "${raw}"`));
+      process.exit(1);
+    }
+    return n;
+  };
+
   const reportPath = get("--report");
   const baseline = get("--baseline");
   const candidate = get("--candidate");
@@ -60,12 +71,15 @@ export async function runEvalGate(args: string[]): Promise<void> {
     process.exit(1);
   }
 
+  const minLift = num("--min-lift");
+  const maxTok = num("--max-tok");
+  const minTiers = num("--min-tiers");
   const policy: LiftPolicy = {
     ...DEFAULT_LIFT_POLICY,
     ...(get("--metric") ? { metric: get("--metric") as LiftPolicy["metric"] } : {}),
-    ...(get("--min-lift") ? { minLiftPp: Number(get("--min-lift")) } : {}),
-    ...(get("--max-tok") ? { maxTokenOverheadPct: Number(get("--max-tok")) } : {}),
-    ...(get("--min-tiers") ? { minTiers: Number(get("--min-tiers")) } : {}),
+    ...(minLift !== undefined ? { minLiftPp: minLift } : {}),
+    ...(maxTok !== undefined ? { maxTokenOverheadPct: maxTok } : {}),
+    ...(minTiers !== undefined ? { minTiers } : {}),
   };
 
   // evaluateLiftGate is pure; report shape is the SessionReport written by `rax bench --output`.
