@@ -44,7 +44,7 @@ export function withConfigEnv(env: Readonly<Record<string, string>> | undefined)
   };
 }
 import { scoreTask, computeReliability } from "./judge.js"
-import { diagnoseRun, formatDiagnosisLine } from "./diagnose.js"
+import { diagnoseRun, formatDiagnosisLine, trustVerdict } from "./diagnose.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
 
@@ -1025,6 +1025,14 @@ export async function runSession(
             const diagnosis = session.traceDir && result.traceId
               ? await diagnoseRun(session.traceDir, result.traceId)
               : undefined
+            // Score-aware trust verdict: combine the trace honesty label with
+            // the judge accuracy so a correct text answer isn't mislabeled
+            // "unverified" and an overconfident wrong answer surfaces as
+            // "claimed-but-wrong" (2026-06-26 sweep reframe).
+            const accuracyScore = dimensions.find((d) => d.dimension === "accuracy")?.score
+            const trust = diagnosis
+              ? trustVerdict(diagnosis.honestyLabel, accuracyScore)
+              : undefined
             runScores.push({
               runIndex: i,
               dimensions,
@@ -1034,6 +1042,7 @@ export async function runSession(
               output: result.output,
               ...(result.traceId ? { traceId: result.traceId } : {}),
               ...(diagnosis ? { diagnosis } : {}),
+              ...(trust ? { trust } : {}),
             })
             if (diagnosis) {
               const diagLine = formatDiagnosisLine(diagnosis);
