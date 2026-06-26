@@ -15,6 +15,15 @@ export class ToolBuilder {
     this._name = name;
   }
 
+  /**
+   * Fluent entry point — `ToolBuilder.create("name")` reads better than
+   * `new ToolBuilder("name")` in a builder chain, and is the form used
+   * throughout the docs. Equivalent to the constructor.
+   */
+  static create(name: string): ToolBuilder {
+    return new ToolBuilder(name);
+  }
+
   description(desc: string): this {
     this._description = desc;
     return this;
