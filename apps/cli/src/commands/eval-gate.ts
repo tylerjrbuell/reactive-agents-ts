@@ -4,7 +4,8 @@ import { fail, info } from "../ui.js";
 
 const GATE_USAGE =
   "Usage: rax eval gate --report <SessionReport.json> --baseline <variantId> --candidate <variantId> " +
-  "[--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>]";
+  "[--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>] " +
+  "[--ledger <path> --weakness <t> --hypothesis <t> --weakness-ref <id>]";
 
 /**
  * Pure exit-code mapping for a gate verdict.
@@ -53,7 +54,8 @@ export async function runEvalGate(args: string[]): Promise<void> {
     );
     process.exit(1);
   }
-  const { evaluateLiftGate, formatGateReceipt, DEFAULT_LIFT_POLICY } = benchmarks;
+  const { evaluateLiftGate, formatGateReceipt, DEFAULT_LIFT_POLICY, recordGateOutcome, loadLedger, saveLedger } =
+    benchmarks;
 
   let reportText: string;
   try {
@@ -89,6 +91,21 @@ export async function runEvalGate(args: string[]): Promise<void> {
     console.error(
       info(`No comparable tiers for "${baseline}" vs "${candidate}" — check the variant ids exist in the report.`),
     );
+  }
+  const ledgerPath = get("--ledger");
+  if (ledgerPath) {
+    const ledger = await loadLedger(ledgerPath);
+    const updated = recordGateOutcome(ledger, {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      weakness: get("--weakness") ?? `${candidate} vs ${baseline}`,
+      ...(get("--weakness-ref") ? { weaknessRef: get("--weakness-ref") as string } : {}),
+      hypothesis: get("--hypothesis") ?? candidate,
+      metric: policy.metric,
+      verdict,
+    });
+    await saveLedger(ledgerPath, updated);
+    console.log(info(`Recorded to improvement ledger: ${ledgerPath} (${updated.entries.length} entries)`));
   }
   process.exit(decideExitCode(verdict));
 }
