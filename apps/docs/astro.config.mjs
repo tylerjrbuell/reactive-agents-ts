@@ -215,6 +215,9 @@ export default defineConfig({
             { label: "FAQ", link: "guides/faq/" },
             { label: "Troubleshooting", link: "guides/troubleshooting/" },
             { label: "Migrating from LangChain", link: "guides/migrating-from-langchain/" },
+            { label: "vs LangGraph", link: "guides/reactive-agents-vs-langgraph/" },
+            { label: "vs Mastra", link: "guides/reactive-agents-vs-mastra/" },
+            { label: "vs Vercel AI SDK", link: "guides/reactive-agents-vs-vercel-ai-sdk/" },
             { label: "Examples Catalog", link: "guides/examples/" },
             { label: "Interactive Playground", link: "guides/playground/" },
             {
