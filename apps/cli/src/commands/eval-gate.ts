@@ -1,5 +1,11 @@
 // File: apps/cli/src/commands/eval-gate.ts
-import type { GateVerdict, LiftPolicy } from "@reactive-agents/benchmarks";
+// Type-only references via inline `import()` so the benchmarks package
+// stays a dev/repo-only optional import (loaded at runtime via the guarded
+// dynamic import below). A static top-level import would trip the CLI
+// external-deps gate, which requires a runtime dependency for any
+// statically-imported workspace package — but benchmarks is private.
+type GateVerdict = import("@reactive-agents/benchmarks").GateVerdict;
+type LiftPolicy = import("@reactive-agents/benchmarks").LiftPolicy;
 import { fail, info } from "../ui.js";
 
 const GATE_USAGE =
