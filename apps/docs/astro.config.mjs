@@ -134,6 +134,9 @@ export default defineConfig({
         },
       ],
       components: {
+        // Adds per-page og:image/twitter:image + Schema.org JSON-LD on top of
+        // Starlight's default head (SEO rich snippets + AEO answer-engine grounding).
+        Head: "./src/components/Head.astro",
         PageTitle: "./src/components/PageTitle.astro",
         Footer: "./src/components/Footer.astro",
         // Append the release-subscribe form under the right-hand TOC on every page.
