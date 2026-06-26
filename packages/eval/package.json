@@ -46,6 +46,20 @@
     }
   },
   "description": "Evaluation framework for Reactive Agents — LLM-as-judge scoring, regression detection, dataset loading",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "evaluation",
+    "llm-as-judge",
+    "benchmark",
+    "regression-testing",
+    "scoring",
+    "eval"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

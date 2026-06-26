@@ -44,6 +44,20 @@
     }
   },
   "description": "Interaction modes for Reactive Agents — 5 autonomy modes, checkpoints, and human collaboration",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "human-in-the-loop",
+    "hitl",
+    "approval",
+    "autonomy",
+    "checkpoint",
+    "human-collaboration"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

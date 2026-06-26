@@ -42,6 +42,20 @@
     }
   },
   "description": "Safety guardrails for Reactive Agents — prompt injection detection, PII scanning, and toxicity filtering",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "guardrails",
+    "prompt-injection",
+    "pii",
+    "toxicity",
+    "ai-safety",
+    "llm-security"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

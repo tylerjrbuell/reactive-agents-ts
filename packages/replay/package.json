@@ -2,6 +2,20 @@
   "name": "@reactive-agents/replay",
   "version": "0.10.6",
   "description": "Deterministic re-run of recorded reactive-agent traces with prompt/model overrides",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "replay",
+    "trace",
+    "deterministic",
+    "snapshot",
+    "testing",
+    "debugging"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsup --config ../../tsup.config.base.ts",

@@ -5,6 +5,21 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "description": "External channel layer — webhooks, bot transports, triggers, and session bridging for the gateway",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "channels",
+    "webhooks",
+    "bot",
+    "messaging",
+    "gateway",
+    "slack",
+    "transport"
+  ],
   "scripts": {
     "build": "tsup --config ../../tsup.config.base.ts",
     "typecheck": "tsc --noEmit",

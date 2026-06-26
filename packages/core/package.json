@@ -41,6 +41,19 @@
     }
   },
   "description": "Core services for Reactive Agents — EventBus, AgentService, TaskService, and shared types",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "eventbus",
+    "pubsub",
+    "agent-lifecycle",
+    "state-machine",
+    "core"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

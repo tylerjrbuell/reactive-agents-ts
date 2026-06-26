@@ -1,6 +1,20 @@
 {
   "name": "@reactive-agents/testing",
   "version": "0.10.6",
+  "description": "Testing utilities for Reactive Agents — mock services, assertion helpers, and deterministic fixtures",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "testing",
+    "mock",
+    "test-fixtures",
+    "deterministic",
+    "assertions"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

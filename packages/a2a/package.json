@@ -57,5 +57,20 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "a2a",
+    "agent-to-agent",
+    "agent-protocol",
+    "json-rpc",
+    "agent-card",
+    "multi-agent",
+    "sse"
+  ]
 }

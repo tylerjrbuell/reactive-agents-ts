@@ -1,6 +1,20 @@
 {
   "name": "@reactive-agents/scenarios",
   "version": "0.10.6",
+  "description": "Pre-built test scenarios and fixtures for Reactive Agents",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "testing",
+    "scenarios",
+    "fixtures",
+    "mock",
+    "test-fixtures"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

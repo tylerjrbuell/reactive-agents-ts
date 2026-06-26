@@ -2,6 +2,20 @@
   "name": "@reactive-agents/svelte",
   "version": "0.10.6",
   "description": "Svelte stores for Reactive Agents — agentStream, agentRun",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "svelte",
+    "svelte-store",
+    "stores",
+    "streaming",
+    "ai-ui",
+    "agent-ui"
+  ],
   "type": "module",
   "exports": {
     ".": {

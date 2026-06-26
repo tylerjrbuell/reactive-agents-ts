@@ -41,6 +41,18 @@
     }
   },
   "description": "Prompt management for Reactive Agents — template engine and built-in prompt library",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "prompts",
+    "prompt-engineering",
+    "templates",
+    "prompt-management"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

@@ -2,6 +2,20 @@
   "name": "@reactive-agents/vue",
   "version": "0.10.6",
   "description": "Vue composables for Reactive Agents — useAgentStream, useAgent",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "vue",
+    "vue3",
+    "composables",
+    "streaming",
+    "ai-ui",
+    "agent-ui"
+  ],
   "type": "module",
   "exports": {
     ".": {

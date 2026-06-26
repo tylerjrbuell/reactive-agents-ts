@@ -47,6 +47,20 @@
     }
   },
   "description": "Cost management for Reactive Agents — complexity routing and budget enforcement",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "cost-tracking",
+    "budget",
+    "model-routing",
+    "complexity-routing",
+    "token-cost",
+    "llm-cost"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

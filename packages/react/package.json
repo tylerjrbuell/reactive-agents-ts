@@ -2,6 +2,20 @@
   "name": "@reactive-agents/react",
   "version": "0.10.6",
   "description": "React hooks for Reactive Agents — useAgentStream, useAgent",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "react",
+    "react-hooks",
+    "useagent",
+    "streaming",
+    "ai-ui",
+    "agent-ui"
+  ],
   "type": "module",
   "exports": {
     ".": {
