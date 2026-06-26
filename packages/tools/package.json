@@ -47,6 +47,20 @@
     }
   },
   "description": "Tool system for Reactive Agents — registry, sandboxed execution, and MCP client",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "tools",
+    "mcp",
+    "model-context-protocol",
+    "function-calling",
+    "tool-use",
+    "sandbox"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

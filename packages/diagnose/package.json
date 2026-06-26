@@ -1,6 +1,21 @@
 {
   "name": "@reactive-agents/diagnose",
   "version": "0.10.6",
+  "description": "Forensic CLI for recorded Reactive Agents traces — replay, grep, diff, and debrief agent runs",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "tracing",
+    "debugging",
+    "forensics",
+    "replay",
+    "cli",
+    "observability"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

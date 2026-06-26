@@ -1,0 +1,138 @@
+---
+import Default from "@astrojs/starlight/components/Head.astro";
+
+// Custom <head> override: layers social-preview images and JSON-LD
+// structured data on top of Starlight's defaults. Two audiences:
+//   1. Humans sharing links  -> og:image / twitter:image (per-page cards)
+//   2. Search + answer engines -> Schema.org JSON-LD (rich SERP snippets,
+//      AEO grounding for ChatGPT / Perplexity / Google AI Overviews)
+const route = Astro.locals.starlightRoute;
+const entry = route.entry;
+const data = entry.data;
+
+const site = Astro.site ?? new URL("https://docs.reactiveagents.dev");
+const isHome = (entry.id || "index") === "index";
+
+const canonical = new URL(route.slug ? `/${route.slug}/` : "/", site).href;
+const ogImage = new URL("/og-default.png", site).href;
+
+const title = data.title ?? "Reactive Agents";
+const description =
+  data.description ??
+  "TypeScript AI agent framework built on Effect-TS — type-safe, composable, observable.";
+
+const publisher = {
+  "@type": "Organization",
+  name: "Reactive Agents",
+  url: "https://reactiveagents.dev",
+  logo: "https://docs.reactiveagents.dev/favicon.svg",
+};
+
+// Breadcrumb trail from the URL segments — surfaces site structure in SERPs.
+const segments = (route.slug ?? "").split("/").filter(Boolean);
+const breadcrumb = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Docs", item: site.href },
+    ...segments.map((seg: string, i: number) => ({
+      "@type": "ListItem",
+      position: i + 2,
+      name: seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      item: new URL(`/${segments.slice(0, i + 1).join("/")}/`, site).href,
+    })),
+  ],
+};
+
+// Every doc page is a TechArticle — the schema answer engines prefer for
+// developer documentation when grounding generated answers.
+const article = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  headline: title,
+  description,
+  url: canonical,
+  image: ogImage,
+  inLanguage: "en",
+  isPartOf: { "@type": "WebSite", name: "Reactive Agents Docs", url: site.href },
+  author: publisher,
+  publisher,
+  ...(route.lastUpdated
+    ? { dateModified: new Date(route.lastUpdated).toISOString() }
+    : {}),
+};
+
+// Home page additionally describes the software itself.
+const software = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Reactive Agents",
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Cross-platform (Node.js, Bun)",
+  description:
+    "Composable TypeScript AI agent framework built on Effect-TS. Type-safe, observable, 12-phase execution engine, 6 reasoning strategies, runs the same code on local Ollama and frontier APIs.",
+  url: "https://reactiveagents.dev",
+  downloadUrl: "https://www.npmjs.com/package/reactive-agents",
+  softwareVersion: "0.12.0",
+  programmingLanguage: "TypeScript",
+  license: "https://opensource.org/licenses/MIT",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  author: publisher,
+  publisher,
+};
+
+const website = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Reactive Agents Docs",
+  url: site.href,
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: `${site.href}?q={search_term_string}`,
+    },
+    "query-input": "required name=search_term_string",
+  },
+};
+
+// FAQPage — pages that declare a `faq` array in frontmatter emit Q&A
+// structured data (Google featured snippets + answer-engine grounding).
+const faqEntries = (data as { faq?: { q: string; a: string }[] }).faq;
+const faqPage =
+  faqEntries && faqEntries.length > 0
+    ? {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqEntries.map((item) => ({
+          "@type": "Question",
+          name: item.q,
+          acceptedAnswer: { "@type": "Answer", text: item.a },
+        })),
+      }
+    : null;
+
+const jsonLd = [
+  ...(isHome ? [website, software] : [article]),
+  breadcrumb,
+  ...(faqPage ? [faqPage] : []),
+];
+---
+
+<Default><slot /></Default>
+
+<meta property="og:image" content={ogImage} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:image" content={ogImage} />
+<meta name="twitter:card" content="summary_large_image" />
+
+{
+  jsonLd.map((schema) => (
+    <script
+      type="application/ld+json"
+      set:html={JSON.stringify(schema)}
+      is:inline
+    />
+  ))
+}

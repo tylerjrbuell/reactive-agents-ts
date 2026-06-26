@@ -2,6 +2,19 @@
   "name": "@reactive-agents/compose",
   "version": "0.10.6",
   "description": "Prebuilt killswitch compositions for reactive agents",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "composition",
+    "harness",
+    "killswitch",
+    "builder",
+    "agent-composition"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsup --config ../../tsup.config.base.ts",

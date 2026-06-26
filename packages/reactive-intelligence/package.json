@@ -47,6 +47,20 @@
     }
   },
   "description": "Reactive Intelligence layer for Reactive Agents — entropy sensing, adaptive control, and learning",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "metacognition",
+    "entropy",
+    "adaptive-control",
+    "bandit",
+    "self-improving",
+    "reactive-intelligence"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

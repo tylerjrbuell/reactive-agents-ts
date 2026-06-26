@@ -45,6 +45,20 @@
     }
   },
   "description": "Multi-agent orchestration for Reactive Agents — workflow engine and agent coordination",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "orchestration",
+    "multi-agent",
+    "workflow",
+    "map-reduce",
+    "pipeline",
+    "agent-coordination"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

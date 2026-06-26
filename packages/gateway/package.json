@@ -1,6 +1,21 @@
 {
   "name": "@reactive-agents/gateway",
   "version": "0.10.6",
+  "description": "Persistent autonomous gateway for Reactive Agents — adaptive heartbeats, cron scheduling, webhook ingestion, and policy engine",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "gateway",
+    "autonomous",
+    "cron",
+    "webhooks",
+    "heartbeat",
+    "scheduler"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

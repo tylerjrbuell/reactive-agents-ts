@@ -1,0 +1,42 @@
+# Reactive Agents documentation — https://docs.reactiveagents.dev
+# We WANT to be indexed by search engines AND ingested by AI answer engines.
+# The docs are designed to ground LLM answers (see /llms.txt + /llms-full.txt).
+
+User-agent: *
+Allow: /
+
+# --- AI training / answer-engine crawlers (explicitly welcomed for AEO) ---
+# OpenAI
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+# Anthropic
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-Web
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+# Google (Gemini / AI Overviews) — Google-Extended governs AI use
+User-agent: Google-Extended
+Allow: /
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+User-agent: Perplexity-User
+Allow: /
+# Common Crawl (feeds many LLM training sets)
+User-agent: CCBot
+Allow: /
+# Apple, Amazon, Meta, Bytespider
+User-agent: Applebot-Extended
+Allow: /
+User-agent: Amazonbot
+Allow: /
+User-agent: meta-externalagent
+Allow: /
+
+Sitemap: https://docs.reactiveagents.dev/sitemap-index.xml

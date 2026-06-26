@@ -23,6 +23,11 @@ export const collections = {
       extend: z.object({
         isNew: z.boolean().optional(),
         newUntil: z.string().optional(),
+        // Curated Q&A -> Schema.org FAQPage JSON-LD (AEO: featured snippets,
+        // answer-engine grounding). Emitted by src/components/Head.astro.
+        faq: z
+          .array(z.object({ q: z.string(), a: z.string() }))
+          .optional(),
       }),
     }),
   }),

@@ -50,6 +50,20 @@
     }
   },
   "description": "Observability for Reactive Agents — distributed tracing, metrics, and structured logging",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "observability",
+    "tracing",
+    "opentelemetry",
+    "metrics",
+    "logging",
+    "otlp"
+  ],
   "homepage": "https://docs.reactiveagents.dev/",
   "bugs": {
     "url": "https://github.com/tylerjrbuell/reactive-agents-ts/issues"

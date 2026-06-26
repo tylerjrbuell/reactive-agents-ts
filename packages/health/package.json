@@ -1,6 +1,20 @@
 {
   "name": "@reactive-agents/health",
   "version": "0.10.6",
+  "description": "Health checks and readiness probes for Reactive Agents production deployments",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "health-check",
+    "readiness",
+    "liveness",
+    "probe",
+    "production"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

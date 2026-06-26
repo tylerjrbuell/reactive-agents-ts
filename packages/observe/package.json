@@ -2,6 +2,21 @@
   "name": "@reactive-agents/observe",
   "version": "0.10.6",
   "description": "OpenInference-compliant OpenTelemetry tracing for reactive-agents — maps AgentEvent stream to semantic spans",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "opentelemetry",
+    "openinference",
+    "tracing",
+    "otlp",
+    "spans",
+    "observability",
+    "llm-observability"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsup --config ../../tsup.config.base.ts",

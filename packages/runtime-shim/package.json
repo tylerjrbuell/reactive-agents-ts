@@ -3,6 +3,19 @@
   "version": "0.10.6",
   "type": "module",
   "description": "Cross-runtime adapter — unified API for Bun and Node.js fast paths",
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "llm",
+    "effect-ts",
+    "typescript",
+    "nodejs",
+    "bun",
+    "cross-runtime",
+    "polyfill",
+    "adapter"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
