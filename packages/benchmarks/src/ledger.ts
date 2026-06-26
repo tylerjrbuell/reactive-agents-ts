@@ -10,7 +10,8 @@
 // loop-state.json `knownWeakness.id` via `weaknessRef`.
 // Pure core (recordGateOutcome / formatLedger) takes `id` + `createdAt` as
 // inputs so it stays deterministic; load/save are the only fs functions.
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { GateDecision, GateVerdict } from "./gate/types.js";
 
 export const LEDGER_VERSION = 1;
@@ -134,5 +135,6 @@ export async function loadLedger(path: string): Promise<ImprovementLedger> {
 }
 
 export async function saveLedger(path: string, ledger: ImprovementLedger): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(ledger, null, 2), "utf8");
 }

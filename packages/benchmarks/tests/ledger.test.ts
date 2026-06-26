@@ -116,4 +116,13 @@ describe("loadLedger / saveLedger", () => {
     expect(l.version).toBeGreaterThan(0);
     await rm(dir, { recursive: true, force: true });
   });
+
+  it("creates the parent directory if it does not exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ledger-deep-"));
+    const path = join(dir, "nested", "sub", "improvement-ledger.json");
+    await saveLedger(path, recordGateOutcome(emptyLedger(), params("default-on", 4)));
+    const loaded = await loadLedger(path);
+    expect(loaded.entries.length).toBe(1);
+    await rm(dir, { recursive: true, force: true });
+  });
 });
