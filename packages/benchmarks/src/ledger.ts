@@ -118,11 +118,16 @@ export function formatLedger(ledger: ImprovementLedger): string {
 export async function loadLedger(path: string): Promise<ImprovementLedger> {
   try {
     const text = await readFile(path, "utf8");
-    const parsed = JSON.parse(text) as ImprovementLedger;
-    if (typeof parsed?.version !== "number" || !Array.isArray(parsed?.entries)) {
+    const parsed: unknown = JSON.parse(text);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      typeof (parsed as { version?: unknown }).version !== "number" ||
+      !Array.isArray((parsed as { entries?: unknown }).entries)
+    ) {
       return emptyLedger();
     }
-    return parsed;
+    return parsed as ImprovementLedger;
   } catch {
     return emptyLedger();
   }

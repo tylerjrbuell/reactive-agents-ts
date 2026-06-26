@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { GateVerdict } from "../src/gate/types.ts";
@@ -104,6 +104,16 @@ describe("loadLedger / saveLedger", () => {
     const loaded = await loadLedger(path);
     expect(loaded.entries.length).toBe(1);
     expect(loaded.entries[0]!.status).toBe("adopted");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("returns an empty ledger on malformed JSON (never throws)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ledger-bad-"));
+    const path = join(dir, "bad.json");
+    await writeFile(path, "{not valid json", "utf8");
+    const l = await loadLedger(path);
+    expect(l.entries.length).toBe(0);
+    expect(l.version).toBeGreaterThan(0);
     await rm(dir, { recursive: true, force: true });
   });
 });
