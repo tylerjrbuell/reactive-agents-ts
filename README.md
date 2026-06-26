@@ -47,6 +47,16 @@ Built on Effect-TS end to end — schema-validated boundaries, tagged errors, no
 
 </div>
 
+<div align="center">
+
+### …and survives a crash mid-run
+
+<img src="apps/docs/src/assets/durable-resume.gif" alt="An agent checkpointing each step to disk, getting killed mid-run, then a fresh process reconstructing the run from its last checkpoint and finishing the job" width="820" />
+
+<em>Durable execution: kill the process mid-run, and a <strong>fresh process reconstructs the run from its last on-disk checkpoint and finishes the job</strong> — completed tools never re-run. <a href="apps/examples/src/demos/durable-resume.ts">Demo source</a>.</em>
+
+</div>
+
 ---
 
 ## Why Reactive Agents?

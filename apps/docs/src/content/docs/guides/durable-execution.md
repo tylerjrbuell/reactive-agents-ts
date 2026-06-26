@@ -10,6 +10,10 @@ deploy rolls the process. **Durable execution** lets an agent survive that: ever
 iteration is checkpointed to disk, and a fresh process can reconstruct the run
 from its last checkpoint and finish it — without re-doing completed tool work.
 
+![An agent checkpointing each step to disk, getting killed mid-run, then a fresh process reconstructing the run from its last checkpoint and finishing the job](../../../assets/durable-resume.gif)
+
+*Process A checkpoints each step, then is killed mid-run. Process B — a fresh process, same agent, same store — finds the crashed run on disk and finishes it. [Demo source](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/durable-resume.ts).*
+
 ## Enabling durable runs
 
 Opt in with `.withDurableRuns()`. Absent this call there is zero overhead: no
