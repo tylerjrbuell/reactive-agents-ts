@@ -96,7 +96,27 @@ const website = {
   },
 };
 
-const jsonLd = isHome ? [website, software, breadcrumb] : [article, breadcrumb];
+// FAQPage — pages that declare a `faq` array in frontmatter emit Q&A
+// structured data (Google featured snippets + answer-engine grounding).
+const faqEntries = (data as { faq?: { q: string; a: string }[] }).faq;
+const faqPage =
+  faqEntries && faqEntries.length > 0
+    ? {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqEntries.map((item) => ({
+          "@type": "Question",
+          name: item.q,
+          acceptedAnswer: { "@type": "Answer", text: item.a },
+        })),
+      }
+    : null;
+
+const jsonLd = [
+  ...(isHome ? [website, software] : [article]),
+  breadcrumb,
+  ...(faqPage ? [faqPage] : []),
+];
 ---
 
 <Default><slot /></Default>
