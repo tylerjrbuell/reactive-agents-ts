@@ -219,6 +219,7 @@ export default defineConfig({
             { label: "vs LangGraph", link: "guides/reactive-agents-vs-langgraph/" },
             { label: "vs Mastra", link: "guides/reactive-agents-vs-mastra/" },
             { label: "vs Vercel AI SDK", link: "guides/reactive-agents-vs-vercel-ai-sdk/" },
+            { label: "vs Agent SDKs (OpenAI/Claude)", link: "guides/reactive-agents-vs-agent-sdks/" },
             { label: "Examples Catalog", link: "guides/examples/" },
             { label: "Interactive Playground", link: "guides/playground/" },
             {
