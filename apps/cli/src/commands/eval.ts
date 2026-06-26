@@ -16,16 +16,21 @@ import {
 } from "@reactive-agents/llm-provider";
 import { section, info, success, fail, kv, spinner, muted } from "../ui.js";
 import { runEvalGate } from "./eval-gate.js";
+import { runEvalLedger } from "./eval-ledger.js";
 
 const USAGE =
   "Usage:\n" +
   "  rax eval run --suite <path> [--provider anthropic|openai|test] [--agent <name>]\n" +
-  "  rax eval gate --report <SessionReport.json> --baseline <variantId> --candidate <variantId> [--metric|--min-lift|--max-tok|--min-tiers]";
+  "  rax eval gate --report <SessionReport.json> --baseline <variantId> --candidate <variantId> [--metric|--min-lift|--max-tok|--min-tiers]\n" +
+  "  rax eval ledger [--path <improvement-ledger.json>]";
 
 export async function runEval(args: string[]): Promise<void> {
   const subcommand = args[0];
   if (subcommand === "gate") {
     return runEvalGate(args);
+  }
+  if (subcommand === "ledger") {
+    return runEvalLedger(args);
   }
   if (subcommand !== "run") {
     console.error(fail(USAGE));

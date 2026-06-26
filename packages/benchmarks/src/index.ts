@@ -94,3 +94,10 @@ export { COMPETITOR_RUNNERS }    from "./competitors/index.js"
  * @unstable See v2 Benchmark Surface section above.
  */
 export * from "./gate/index.js"
+
+/**
+ * v2 @unstable: improvement ledger (L4) — gate-driven improvement chain
+ * (weakness → hypothesis → gate verdict → regression-baseline).
+ * @unstable See v2 Benchmark Surface section above.
+ */
+export * from "./ledger.js"
