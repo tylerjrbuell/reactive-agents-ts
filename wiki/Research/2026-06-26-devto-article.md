@@ -27,16 +27,17 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama").withModel("qwen3:4b")              // runs on your laptop
   // .withProvider("anthropic").withModel("claude-sonnet-4-6") // frontier — same code, one line
   .withReasoning()
-  .withTools()
+  .withTools({ tools: [getServiceHealth, getRecentDeploys] }) // two custom tools
   .build();
 
 const result = await agent.run(
-  "Write a haiku about TypeScript to ./haiku.txt with the file-write tool, then read it back."
+  "The payments-api is alerting. Investigate with the health and recent-deploys " +
+  "tools, then tell me the likely cause and what to do."
 );
 console.log(result.output);
 ```
 
-That's it. No separate "local mode," no second code path. The agent runs the think → act → observe loop, calls the `file-write` and `file-read` tools, and returns. On a 4B model **and** on Claude.
+That's it. No separate "local mode," no second code path. The agent runs the think → act → observe loop, calls `get_service_health` and `get_recent_deploys`, correlates the recent deploy with the degradation, and recommends a rollback. On a 4B model **and** on Claude. (The two tools are plain `ToolBuilder.create(...)` definitions — see the [demo source](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/local-vs-frontier.ts).)
 
 To be clear about the honest part: a 4B model isn't as *smart* as Claude. The claim isn't quality parity — it's that the **same code completes the loop**, which is what lets you use a small local model for development, offline work, and privacy-sensitive tasks, then move to a frontier model when you need the reasoning.
 
@@ -52,7 +53,7 @@ Two things make the small-model path actually finish.
 
 **2. A tool-call healing pass.** This is the real unlock. Small models emit *almost*-valid tool calls: a slightly wrong tool name, a parameter alias, a path that needs normalizing. One malformed call and a naive loop dies. The healing pipeline normalizes tool names, parameter aliases, paths, and types **before** execution, so a near-miss becomes a successful call instead of a dead loop.
 
-You don't configure any of this for the happy path — it's what `.withTools()` does. It's also why the demo's 4B run completes the file write/read round-trip that would otherwise fail.
+You don't configure any of this for the happy path — it's what `.withTools()` does. It's also why the demo's 4B run completes the two-tool investigation and reaches the same rollback recommendation as Claude, instead of mangling a tool call and stalling.
 
 ## The part that isn't about local models: a typed runtime
 
