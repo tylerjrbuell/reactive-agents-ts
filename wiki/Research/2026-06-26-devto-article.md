@@ -5,7 +5,7 @@ published: false
 description: "I kept losing agents to the loop, not the model. So I built a TypeScript framework around making the loop finish — on a 4B local model or Claude, and even after the process dies mid-run. Here's how it works."
 tags: typescript, ai, llm, webdev
 canonical_url: https://docs.reactiveagents.dev/guides/build-ai-agents-typescript/
-cover_image: https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/local-vs-frontier.gif
+cover_image: https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/devto-cover.png
 ---
 
 > **Note for publishing:** drag-drop `ra-demo.gif` and `ra-durable.gif` into the Dev.to editor for native embeds, or keep the GitHub raw URLs below. Flip `published: true` when you're ready.
