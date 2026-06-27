@@ -20,7 +20,8 @@
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/reasoning": "workspace:*",
     "@reactive-agents/runtime": "workspace:*",
-    "@reactive-agents/runtime-shim": "workspace:*"
+    "@reactive-agents/runtime-shim": "workspace:*",
+    "@reactive-agents/tools": "workspace:*"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^1.0",

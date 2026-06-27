@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .bench-run-*/
+# Benchmark/eval ephemeral trace dirs + per-run ledger (auto-swept; ignored as safety net)
+*-traces/
+benchmark-traces/
+wiki/Research/Harness-Reports/improvement-ledger.json
 bun.lockb
 .env
 .env.local
