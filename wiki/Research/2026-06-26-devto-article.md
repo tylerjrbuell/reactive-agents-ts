@@ -2,23 +2,31 @@
 # Dev.to front matter — paste into the editor's front matter, or set via the UI.
 title: "Reliable TypeScript AI agents: the same code finishes on a 4B model or Claude — and survives a crash mid-run"
 published: false
-description: "The ecosystem says don't put a small model in an agent loop. Here's how I made the same agent code finish a tool task on a 4B Ollama model and on Claude — and the typed-effect runtime underneath."
+description: "I kept losing agents to the loop, not the model. So I built a TypeScript framework around making the loop finish — on a 4B local model or Claude, and even after the process dies mid-run. Here's how it works."
 tags: typescript, ai, llm, webdev
 canonical_url: https://docs.reactiveagents.dev/guides/build-ai-agents-typescript/
 cover_image: https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/local-vs-frontier.gif
 ---
 
-> **Note for publishing:** upload `ra-demo.gif` to Dev.to directly (drag-drop in the editor) for the inline embed, or keep the GitHub raw URL below. Set `published: true` when ready.
+> **Note for publishing:** drag-drop `ra-demo.gif` and `ra-durable.gif` into the Dev.to editor for native embeds, or keep the GitHub raw URLs below. Flip `published: true` when you're ready.
 
-The hard part of building AI agents isn't the prompt — it's getting the **loop to actually finish**. A mangled tool call, a hallucinated step, an agent that never terminates. Most TypeScript frameworks paper over this by assuming a frontier model and hoping for the best.
+Every agent framework demo works. You wire up a couple of tools, point it at a frontier model, ask it something, and it nails it. Looks great in a tweet.
 
-I built [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) around three things instead: **reliability** (the loop finishes), **transparency** (you can see and steer every step), and **composability** (you enable exactly what you need). It's the *harness* — tool-call healing, output verification, durable crash-resume, a single-owner termination oracle — not the model, that does the work.
+Then you point it at a real task with a smaller model and watch it fall apart on the third tool call.
 
-Here's the sharpest proof of that reliability: the **same agent code** finishing the **same agentic task** — investigate an incident, call two tools, correlate the data, recommend a fix — on a **4B local Ollama model** and on **Claude**. The ecosystem's stated position is "don't put a small model in an agent loop." The harness is why it completes anyway. The only line that changes is the model:
+That was most of my spring. I'd get an agent working nicely against Claude, swap in a local model to stop paying per token, and it would emit a tool call that was *almost* right — a tool named `getServiceHealth` instead of `get_service_health`, a param called `svc` instead of `service`, a path with a stray quote — and the loop would just die. Re-prompt, retry, burn through iterations doing nothing, give up. The model could do the task. The harness around it couldn't keep the loop alive long enough to find out.
 
-![Same builder code completing a tool task on a local 4B Ollama model and on Claude](https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/local-vs-frontier.gif)
+So I stopped trying to fix the model and built the harness. It's called [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts), and it's organized around three things I kept wishing the other frameworks did:
 
-## The same builder, two models
+- **Reliability** — the loop actually finishes.
+- **Transparency** — I can see and steer every step instead of guessing at a black box.
+- **Composability** — I add what I need and skip what I don't.
+
+Reliability is the part I'm proudest of, so let me show you instead of telling you. Here's the same agent — investigate a service alert, call two tools, correlate the data, recommend a fix — running on a 4B local model *and* on Claude. The only thing that changes between the two runs is one line:
+
+![The same agent completing a tool-using investigation on a local 4B Ollama model and on Claude](https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/local-vs-frontier.gif)
+
+## Same builder, two models
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -27,7 +35,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("ollama").withModel("qwen3:4b")              // runs on your laptop
   // .withProvider("anthropic").withModel("claude-sonnet-4-6") // frontier — same code, one line
   .withReasoning()
-  .withTools({ tools: [getServiceHealth, getRecentDeploys] }) // two custom tools
+  .withTools({ tools: [getServiceHealth, getRecentDeploys] })
   .build();
 
 const result = await agent.run(
@@ -37,35 +45,31 @@ const result = await agent.run(
 console.log(result.output);
 ```
 
-That's it. No separate "local mode," no second code path. The agent runs the think → act → observe loop, calls `get_service_health` and `get_recent_deploys`, correlates the recent deploy with the degradation, and recommends a rollback. On a 4B model **and** on Claude. (The two tools are plain `ToolBuilder.create(...)` definitions — see the [demo source](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/local-vs-frontier.ts).)
+No `if (local)` branch. No second code path. The agent runs the same think → act → observe loop, calls `get_service_health` and `get_recent_deploys`, notices that the degradation lines up with a deploy from twelve minutes ago, and says: roll it back. On a 4B model and on Claude. (The two tools are plain `ToolBuilder.create(...)` definitions — [here's the demo source](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/local-vs-frontier.ts).)
 
-To be clear about the honest part: a 4B model isn't as *smart* as Claude. The claim isn't quality parity — it's that the **same code completes the loop**, which is what lets you use a small local model for development, offline work, and privacy-sensitive tasks, then move to a frontier model when you need the reasoning.
+Let me be straight about what this is and isn't. A 4B model is not as smart as Claude, and I'm not pretending it is. The claim is narrower and a lot more useful: the *same code finishes the loop*. So I build and test locally, on my own hardware, for free, and swap one line to a frontier model when the task actually needs the horsepower.
 
-## Why small models usually break — and what fixes it
+## Why the small-model loop usually dies — and what keeps it alive
 
-Two things make the small-model path actually finish.
+Two things do most of the work.
 
-**1. Model-adaptive context profiles.** Small models have small effective context and get lost in verbose prompts. Reactive Agents tunes prompt construction and compaction per model tier — lean prompts, aggressive truncation, earlier compaction for the local tier:
+First, context profiles. Small models have a small effective context and drown in verbose prompts. So the local tier gets leaner prompts and more aggressive compaction:
 
 ```typescript
 .withContextProfile({ tier: "local" })   // lean prompts, aggressive compaction
 ```
 
-**2. A tool-call healing pass.** This is the real unlock. Small models emit *almost*-valid tool calls: a slightly wrong tool name, a parameter alias, a path that needs normalizing. One malformed call and a naive loop dies. The healing pipeline normalizes tool names, parameter aliases, paths, and types **before** execution, so a near-miss becomes a successful call instead of a dead loop.
+Second — and this is the one that actually moved the needle — a healing pass on tool calls. Remember the `getServiceHealth`-instead-of-`get_service_health` problem from the top? A naive loop sees "invalid tool" and gives up. The healing pipeline fixes the obvious near-misses — tool names, param aliases, paths, types — *before* the call runs, so "almost right" becomes "ran." That one pass is the whole difference between the 4B run in that GIF finishing and stalling.
 
-You don't configure any of this for the happy path — it's what `.withTools()` does. It's also why the demo's 4B run completes the two-tool investigation and reaches the same rollback recommendation as Claude, instead of mangling a tool call and stalling.
+You don't turn any of this on. It's just what `.withTools()` does.
 
-## The part that isn't about local models: a typed runtime
+## The part I actually trust in production: a typed runtime
 
-The local-to-frontier story is the hook, but the reason I trust the thing in production is underneath it.
+The local-model thing is the fun demo. The reason I'd run this on something that matters is underneath it.
 
-Reactive Agents is built on [Effect-TS](https://effect.website), so this isn't "types bolted onto a dynamic core." The **execution model itself** is typed end to end:
+It's built on [Effect-TS](https://effect.website), which usually makes people groan, so let me get ahead of it: **you don't write Effect to use this.** The builder and hooks are plain async functions.
 
-- An LLM or tool failure is a **value in an explicit error channel**, not a thrown exception you find out about in prod.
-- Concurrency is structured; retries and fallbacks compose.
-- Structured output is schema-validated before it reaches you.
-
-And — because this is the first question every Effect-skeptic asks — **you don't write Effect to use it.** The builder and hooks are plain async:
+What you get for free is a runtime that's typed end to end. A failed tool call or a model timeout is a typed value in an explicit error channel — not an exception you meet for the first time in prod at 2am. Retries and fallbacks compose. Structured output is schema-checked before it lands in your hands.
 
 ```typescript
 .withHook({
@@ -74,14 +78,14 @@ And — because this is the first question every Effect-skeptic asks — **you d
   handler: (ctx) => {
     const last = ctx.toolResults.at(-1);
     console.log("tool:", last?.toolName);
-    return ctx;            // plain async, no Effect in your code
+    return ctx;            // that's the whole hook contract. no Effect.
   },
 })
 ```
 
-## Observable by construction, no SaaS tether
+## You can see what it's doing
 
-Every run is a deterministic **12-phase lifecycle** — `bootstrap → guardrail → cost-route → think → act → observe → verify → … → complete` — with `before` / `after` / `on-error` hooks on every phase. You can inspect and steer each step locally. No graph to wire by hand, no hosted dashboard subscription to see what your agent did.
+This is the thing I missed most everywhere else. Every run is a fixed 12-phase lifecycle — bootstrap, guardrail, cost-route, think, act, observe, verify, and so on — and every phase has `before` / `after` / `on-error` hooks. I can watch and steer any step, locally, without shipping my traces off to someone's dashboard.
 
 ```typescript
 import { ReactiveAgents, HarnessProfile } from "reactive-agents";
@@ -94,36 +98,38 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-MCP-native tools, A2A multi-agent, durable crash-resume, and human-in-the-loop are all opt-in layers on the same engine.
+Memory, MCP tools, multi-agent, durable resume — opt-in layers on the same engine. Add the ones you want.
 
-## And when it crashes mid-run, it resumes
+## When the process dies mid-run, it picks up where it left off
 
-Reliability isn't just small models finishing — it's surviving the things that kill long-running agents: a reboot, a rescheduled container, a deploy that rolls the process. With `.withDurableRuns()`, every iteration is checkpointed to disk. Kill the process mid-run, and a **fresh process reconstructs the run from its last checkpoint and finishes the job** — without re-running the tools that already completed.
+Here's the other half of reliability, and honestly the feature I'd lead with for anything long-running: agents crash. The box reboots, the container gets rescheduled, a deploy rolls your process. Usually that means starting the entire run over — and re-paying for every tool call and token you already spent.
+
+With `.withDurableRuns()`, every iteration is checkpointed to disk. Kill the process mid-run, and a fresh one picks up the exact run from its last checkpoint and finishes it. The tools that already ran don't run again.
 
 ![An agent checkpointing each step, getting killed mid-run, then a fresh process reconstructing the run from its last checkpoint and finishing it](https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/durable-resume.gif)
 
 ```typescript
-// Process A — works, checkpoints each step, then is hard-killed.
+// Process A — works, checkpoints each step, then gets hard-killed.
 const a = await build();                       // .withDurableRuns({ dir })
 for await (const _ of a.runStream(task)) { /* ...process dies mid-run... */ }
 
 // Process B — a fresh start, same agent, same dir.
 const b = await build();
 const runId = (await b.listRuns({ status: "running" }))[0].runId;
-const result = await b.resumeRun(runId);       // reconstructs + completes
+const result = await b.resumeRun(runId);       // reconstructs + finishes
 ```
 
-The same checkpoint machinery powers durable human-in-the-loop: a gated tool call pauses the run, persists it, and a human approves or denies from any process to resume from the exact checkpoint.
+The same checkpoint machinery is what makes human-in-the-loop durable too: a gated tool call pauses the run, saves it, and someone can approve or deny it from a completely different process to pick it back up.
 
-## When *not* to reach for this
+## When you should *not* use this
 
-I'll save you the trouble:
+Let me save you some time.
 
-- **You're committed to one provider and your loop is simple.** Use that vendor's Agent SDK. A framework is overhead.
-- **You need the largest ecosystem today.** LangChain and Mastra have far more integrations and tutorials. Reactive Agents is early.
-- **You want a battle-tested, widely-deployed framework right now.** This is early access (v0.12, MIT, ~6,500 tests). The architecture is the bet, and it's real and testable today — but it's young, and I'd rather tell you that than have you find out.
+- **One provider, a simple loop?** Use that vendor's Agent SDK. You don't need a harness, and I won't be offended.
+- **Want the biggest ecosystem and the most tutorials today?** That's LangChain or Mastra, not me. This is early.
+- **Need something that's been battle-tested across a thousand production deployments right now?** It isn't that yet — v0.12, MIT, ~6,500 tests. I'd rather say that out loud than have you find out three weeks in.
 
-There are honest [side-by-side comparisons](https://docs.reactiveagents.dev/guides/build-ai-agents-typescript/) in the docs (vs LangGraph, Mastra, the Vercel AI SDK, and the vendor Agent SDKs) if you're evaluating.
+If you're comparing, the docs have honest side-by-sides with LangGraph, Mastra, the Vercel AI SDK, and the vendor Agent SDKs.
 
 ## Try it
 
@@ -136,4 +142,4 @@ bun add reactive-agents
 - Docs: https://docs.reactiveagents.dev
 - The exact demo above: [`apps/examples/src/demos/local-vs-frontier.ts`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/local-vs-frontier.ts)
 
-If you try the local-model path, I'd genuinely like to hear what model you ran and whether the healing pass held up — that's the part I'm most curious to stress-test. Feedback and issues welcome.
+If you run the local-model path, I'd love to know which model you tried and whether the healing held up — that's the bit I most want people to throw real workloads at. Issues and feedback welcome; I read all of them.

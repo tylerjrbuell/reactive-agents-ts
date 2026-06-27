@@ -123,7 +123,14 @@ single-owner termination oracle.
 
 It's the harness doing the work, not the model.
 ```
-**4** (pillar 2 — transparency):
+**4** (reliability, part 2 — durability; attach the durable-resume GIF):
+```
+Reliability isn't just small models finishing — it's surviving a crash.
+
+Kill the process mid-run and a fresh one resumes from the last on-disk
+checkpoint and finishes the job. The tools that already ran don't run again. [GIF]
+```
+**5** (pillar 2 — transparency):
 ```
 And you can see all of it. A deterministic 12-phase engine with hooks on every
 phase — inspect and steer each step locally, no SaaS dashboard.
@@ -131,7 +138,7 @@ phase — inspect and steer each step locally, no SaaS dashboard.
 Built on Effect-TS: failures are typed values, not 2am surprises. (You still
 write plain async.)
 ```
-**5** (pillar 3 — composability):
+**6** (pillar 3 — composability):
 ```
 Composable by design: start with a model, then add reasoning / memory /
 guardrails / cost control / durability one .with() at a time. Enable what you
@@ -139,7 +146,7 @@ need, nothing else.
 
 MCP-native tools, A2A multi-agent, HITL. MIT, one install.
 ```
-**6** (confident close + CTA):
+**7** (confident close + CTA):
 ```
 Reliable on every tier · transparent · composable. No other TS framework ships
 that combination.
