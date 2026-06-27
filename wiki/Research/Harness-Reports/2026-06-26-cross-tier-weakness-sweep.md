@@ -78,10 +78,14 @@ gpt-4o-mini ra-full clears only 36%. The harness is necessary but not sufficient
   trust claimed-but-wrong → **honest-failure** (2 runs); 21/21 detector+resolver tests;
   reasoning 1767/0. Accuracy stays 0 — the adversarial task is a model-capability limit;
   the fix converts a confident lie into an honest failure (correct, non-metric-gamed).
-- **Side-finding (NEW, unfixed):** `.withGrounding()` config is dropped by
-  `reasoning-service` — grounding never reaches the react kernel (appears in NO strategy
-  crossCutting). Shipped-but-dead for the runtime path. Worth its own fix (would also
-  enable a real `.withFabricationGuard()` builder method).
+- **Side-finding (NEW) — ✅ FIXED 2026-06-27 (`0dd5df8b`):** `.withGrounding()` config was
+  dropped by `reasoning-service` (ReactiveInput never declared `grounding`; reactive.ts
+  built KernelInput without it) — shipped-but-dead for the react path. Repaired the full
+  builder→verifier config rail for BOTH grounding and the fabrication guard, and added the
+  **`.withFabricationGuard("off"|"warn"|"block")`** builder method (default block; env
+  `RA_FABRICATION_GUARD` still honored, method wins). Verified via a deterministic
+  test-provider integration test (default rejects fabricated metrics; `off` ships). The
+  same fix resurrects `.withGrounding()`. runtime 1012/0, reasoning 1767/0.
 
 ### W3 — Harness token tax 2–9×  **[P2 — known cost]**
 - ra-full vs bare-llm mean tokens: +305% (haiku), +558% (gpt-4o-mini), +207–901% (local).
