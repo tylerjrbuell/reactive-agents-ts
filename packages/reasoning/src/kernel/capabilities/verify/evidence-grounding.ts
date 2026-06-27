@@ -97,6 +97,20 @@ function extractNumericValues(text: string): number[] {
 export type FabricationGuardMode = "off" | "warn" | "block";
 
 /**
+ * Resolve the active fabrication-guard mode. Precedence: an explicit per-run
+ * value (e.g. a strategy/kernel caller's `ctx.fabricationGuard`) wins; else the
+ * `RA_FABRICATION_GUARD` env killswitch (project convention — cf. RA_LAZY_TOOLS,
+ * RA_RECITE); else the always-on default `block`. An unrecognised env value is
+ * ignored (falls through to default) so a typo never silently disables the guard.
+ */
+export function resolveFabricationGuardMode(explicit?: FabricationGuardMode): FabricationGuardMode {
+  if (explicit === "off" || explicit === "warn" || explicit === "block") return explicit;
+  const env = typeof process !== "undefined" ? process.env?.RA_FABRICATION_GUARD : undefined;
+  if (env === "off" || env === "warn" || env === "block") return env;
+  return "block";
+}
+
+/**
  * Pull every numeric value out of arbitrary text (units stripped). Distinct
  * from {@link extractNumericValues} — this keeps SMALL numbers (e.g. 40, 90)
  * because a fabricated benchmark like "90 ms" must corroborate against a "90"

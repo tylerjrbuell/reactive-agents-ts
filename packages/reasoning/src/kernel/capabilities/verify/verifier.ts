@@ -35,6 +35,7 @@ import {
   buildEvidenceCorpusFromSteps,
   validateNumericGrounding,
   detectFabricatedMeasurement,
+  resolveFabricationGuardMode,
   type FabricationGuardMode,
 } from "./evidence-grounding.js";
 import { detectScaffoldLeak } from "./scaffold-leak.js";
@@ -574,7 +575,7 @@ export const defaultVerifier: Verifier = {
       // measurements (timings/throughput/%-speedup) that no tool observation
       // produced, so it is high-precision (counts, $ figures, Big-O ignored)
       // and safe to leave on by default. Configurable via .withFabricationGuard().
-      const fabMode: FabricationGuardMode = ctx.fabricationGuard ?? "block";
+      const fabMode: FabricationGuardMode = resolveFabricationGuardMode(ctx.fabricationGuard);
       if (fabMode !== "off") {
         const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps, ctx.scratchpad);
         const fab = detectFabricatedMeasurement(ctx.content, corpus);

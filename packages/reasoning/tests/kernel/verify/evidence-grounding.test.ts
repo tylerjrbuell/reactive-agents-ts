@@ -1,10 +1,35 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, afterEach } from "bun:test";
 import {
   validateNumericGrounding,
   buildEvidenceCorpusFromSteps,
   detectFabricatedMeasurement,
+  resolveFabricationGuardMode,
 } from "../../../src/kernel/capabilities/verify/evidence-grounding.js";
 import type { ReasoningStep } from "../../../src/types/index.js";
+
+describe("resolveFabricationGuardMode (explicit > env > default)", () => {
+  const prev = process.env.RA_FABRICATION_GUARD;
+  afterEach(() => {
+    if (prev === undefined) delete process.env.RA_FABRICATION_GUARD;
+    else process.env.RA_FABRICATION_GUARD = prev;
+  });
+  it("defaults to block when nothing is set", () => {
+    delete process.env.RA_FABRICATION_GUARD;
+    expect(resolveFabricationGuardMode()).toBe("block");
+  });
+  it("explicit value wins over env", () => {
+    process.env.RA_FABRICATION_GUARD = "off";
+    expect(resolveFabricationGuardMode("warn")).toBe("warn");
+  });
+  it("env killswitch applies when no explicit value (RA_FABRICATION_GUARD=off)", () => {
+    process.env.RA_FABRICATION_GUARD = "off";
+    expect(resolveFabricationGuardMode()).toBe("off");
+  });
+  it("ignores an unrecognised env value (falls back to default, never silently off)", () => {
+    process.env.RA_FABRICATION_GUARD = "nonsense";
+    expect(resolveFabricationGuardMode()).toBe("block");
+  });
+});
 
 describe("detectFabricatedMeasurement (always-on fabrication guard)", () => {
   it("flags fabricated before/after benchmark timings (W2 rw-6 failure)", () => {
