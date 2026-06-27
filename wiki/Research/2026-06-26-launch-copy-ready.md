@@ -214,3 +214,73 @@ High-quality audience, strict etiquette. Self-promo must be a minority of activi
 6. Lobste.rs later, only with history.
 
 Star/download bumps from this unlock the held awesome-lists (kyrolabs, steven2358) + Product Hunt for v0.13.
+
+---
+
+## LIVE — Dev.to article (link this everywhere)
+https://dev.to/tylerjrbuell/reliable-typescript-ai-agents-the-same-code-finishes-on-a-4b-model-or-claude-and-survives-a-5985
+
+Published 2026-06-27. Append it to the X thread close, the newsletter pitch, and link it from every post below.
+
+## 6. Reddit — r/LocalLLaMA (best fit; build-story tone, NOT an ad)
+**Title:** `Got a 4B local model to reliably finish multi-step agent tasks (tool-call healing + checkpointing)`
+```
+Most agent frameworks assume a frontier model — point them at a small local one
+and the loop dies on the first malformed tool call. I've been building a TS
+framework focused on keeping the loop alive on small models.
+
+Two things made the difference:
+- a healing pass that fixes near-miss tool calls (wrong tool name, param alias,
+  bad path) before they run — small models produce a LOT of these
+- model-adaptive context profiles (lean prompts, aggressive compaction) for the
+  local tier
+
+Same agent code runs on a 4B Ollama model and on Claude — one line changes. Runs
+are also checkpointed to disk, so a crash mid-run resumes instead of restarting.
+
+Writeup with the demos (4B vs frontier, and crash → resume):
+https://dev.to/tylerjrbuell/reliable-typescript-ai-agents-the-same-code-finishes-on-a-4b-model-or-claude-and-survives-a-5985
+Repo: https://github.com/tylerjrbuell/reactive-agents-ts
+
+Curious which models you'd throw at the healing pass — that's the part I most
+want stress-tested.
+```
+Flair as Resources/Tutorial. Reply to every comment; never argue.
+
+## 7. Reddit — r/typescript (typed-runtime angle)
+**Title:** `Reactive Agents — a TS AI agent framework where the runtime is typed end to end (Effect-TS)`
+```
+A TS agent framework built on Effect-TS, so failures are typed values in an
+explicit error channel instead of thrown exceptions you meet in prod. You don't
+have to write Effect to use it — the builder and hooks are plain async.
+
+Beyond types: a deterministic 12-phase execution engine you can hook into,
+durable crash-resume, and the same code runs on local Ollama models and frontier
+APIs.
+
+Writeup + demos:
+https://dev.to/tylerjrbuell/reliable-typescript-ai-agents-the-same-code-finishes-on-a-4b-model-or-claude-and-survives-a-5985
+Repo: https://github.com/tylerjrbuell/reactive-agents-ts
+
+Early access, MIT. Feedback on the builder API + error-channel ergonomics welcome.
+```
+Also fits r/LLMDevs.
+
+## 8. LinkedIn (production / durability angle)
+```
+Most AI agent demos work. Then you ship one — and it dies on a malformed tool
+call, or the container gets rescheduled mid-run and you start the whole thing
+over, re-paying for every token.
+
+I've been building Reactive Agents, a TypeScript agent framework focused on
+reliability:
+• the same code finishes the loop on a local 4B model or a frontier API
+• runs are checkpointed to disk — a crash mid-run resumes from the last
+  checkpoint instead of restarting
+• every step is a typed, inspectable event — no black box, no SaaS tether
+
+Writeup with live demos:
+https://dev.to/tylerjrbuell/reliable-typescript-ai-agents-the-same-code-finishes-on-a-4b-model-or-claude-and-survives-a-5985
+
+MIT, early access · https://github.com/tylerjrbuell/reactive-agents-ts
+```
