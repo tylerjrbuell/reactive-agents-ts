@@ -718,6 +718,7 @@ export function runKernel(
         availableUserTools,
         terminal: true,
         grounding: effectiveInput.grounding,
+        fabricationGuard: effectiveInput.fabricationGuard,
         scratchpad: state.scratchpad,
       });
       let verdict = yield* verifyAndEmit({

@@ -34,6 +34,8 @@ import { isSatisfied, detectContinuationIntent } from "./quality-utils.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateNumericGrounding,
+  detectFabricatedMeasurement,
+  type FabricationGuardMode,
 } from "./evidence-grounding.js";
 import { detectScaffoldLeak } from "./scaffold-leak.js";
 import { emitVerifierVerdict } from "../../utils/diagnostics.js";
@@ -101,6 +103,14 @@ export interface VerificationContext {
   readonly terminatedBy?: string;
   /** Opt-in grounding config. Absent ⇒ numeric grounding does NOT run. */
   readonly grounding?: import("../../state/kernel-state.js").GroundingConfig;
+  /**
+   * Fabricated-measurement guard mode. ALWAYS-ON by default (absent ⇒ `block`):
+   * the high-precision fabrication check polices invented empirical
+   * measurements (benchmark timings, % speed-ups) that no tool produced. Set
+   * `"warn"` for advisory-only or `"off"` to disable. Configurable end-to-end
+   * via `.withFabricationGuard()`.
+   */
+  readonly fabricationGuard?: FabricationGuardMode;
   /** Scratchpad for resolving storedKey→full tool data in the grounding corpus. */
   readonly scratchpad?: ReadonlyMap<string, string>;
 }
@@ -555,6 +565,26 @@ export const defaultVerifier: Verifier = {
         severity: scaffoldLeak.leaked ? "reject" : "pass",
         reason: scaffoldLeak.leaked ? scaffoldLeak.reason : undefined,
       });
+
+      // Check 4c: fabricated-measurement guard (ALWAYS-ON, default block).
+      // The over-action failure mode W2 (trace 01KW372HEJSGT80YYK3MCJFDPY): a
+      // model pushed to "provide before/after benchmarks" with no execution
+      // tool invents empirical numbers ("150 ms → 90 ms, 40% faster"). This is
+      // distinct from opt-in numeric grounding — it polices ONLY perf
+      // measurements (timings/throughput/%-speedup) that no tool observation
+      // produced, so it is high-precision (counts, $ figures, Big-O ignored)
+      // and safe to leave on by default. Configurable via .withFabricationGuard().
+      const fabMode: FabricationGuardMode = ctx.fabricationGuard ?? "block";
+      if (fabMode !== "off") {
+        const corpus = buildEvidenceCorpusFromSteps(ctx.priorSteps, ctx.scratchpad);
+        const fab = detectFabricatedMeasurement(ctx.content, corpus);
+        checks.push({
+          name: "output-not-fabricated-measurement",
+          passed: fab.ok,
+          severity: fab.ok ? "pass" : fabMode === "block" ? "reject" : "warn",
+          reason: fab.ok ? undefined : fab.violations.join("; "),
+        });
+      }
 
       // Check 5: numeric evidence-grounding (OPT-IN). Runs ONLY when the user
       // enabled grounding via .withGrounding(). Severity follows mode:
