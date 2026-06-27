@@ -87,6 +87,30 @@ gpt-4o-mini ra-full clears only 36%. The harness is necessary but not sufficient
   test-provider integration test (default rejects fabricated metrics; `off` ships). The
   same fix resurrects `.withGrounding()`. runtime 1012/0, reasoning 1767/0.
 
+### W2b — Bench file-write leak → repo-root pollution + depressed write-task accuracy  **[P1] — ✅ FIXED 2026-06-27 (`0a1a33e9`)**
+- **Found while adding bench artifact auto-cleanup.** `file-read`/`file-write` hardcoded
+  `allowedBase = process.cwd()`, so a model-invented relative write (`report.md`,
+  `generate.ts`, `prices.md`) resolved to the REPO ROOT, not the per-cell temp dir.
+- **Accuracy impact:** `scoreTask`/`collectJudgeDeliverable` + `verifiable` commands read
+  deliverables from the temp dir. rw-8's `bun run generate.ts && validate.ts` (cwd=tmpDir)
+  → "Module not found" → **guaranteed acc=0** because the files leaked to root. (rw-3/rw-9
+  survived only because their deliverable text was ALSO in the answer the judge graded.)
+- **Fix:** AsyncLocalStorage file-root in tools (`withFileRoot`/`getFileRoot`, default cwd,
+  concurrency-safe through Effect fibers); bench wraps each cell in `withFileRoot(tmpDir)`;
+  `cleanupStaleBenchDirs()` sweep at session start; `.gitignore` trace dirs + ledger.
+  tools 830/0 (+5 sandbox tests), benchmarks 126/0, root verified clean on re-run.
+
+### W2c — Accuracy gap is largely MODEL-CAPABILITY, not structural  **[diagnosed 2026-06-27]**
+- gpt-4o-mini ra-full × rw-2/3/8/9: harness lifts big where the model is capable
+  (rw-3 0→0.9, rw-9 0→1.0, verified-correct). Genuine residual gaps:
+  **rw-2** (0.2, claimed-but-wrong) — blamed the 15% discount red herring instead of the
+  ELEC-4K-TV-001 out-of-stock real cause; CSV is ~45 rows (no compaction) so NOT
+  harness-data-hiding → model SKU-aggregation depth. **rw-8** — was the write-leak (now
+  fixed); residual is model emitting the exact required files.
+- **Verdict:** beyond the write-leak, claimed-but-wrong on hard tasks is model overconfidence,
+  not a harness bug. Lever = stronger models / task-specific verification — NOT a generic
+  harness change (would be task-specific hacking / metric-gaming).
+
 ### W3 — Harness token tax 2–9×  **[P2 — known cost]**
 - ra-full vs bare-llm mean tokens: +305% (haiku), +558% (gpt-4o-mini), +207–901% (local).
 - Not a bug — the cost of the lift. Relevant because the **gate rejects** even a real
