@@ -654,6 +654,12 @@ export interface KernelInput {
   };
   /** Opt-in evidence-grounding config. Absent ⇒ grounding off (default). */
   readonly grounding?: GroundingConfig;
+  /**
+   * Fabricated-measurement guard mode. Absent ⇒ `block` (always-on). Polices
+   * invented empirical measurements (benchmark timings / % speed-ups) absent
+   * from the tool-observation corpus. Set via `.withFabricationGuard()`.
+   */
+  readonly fabricationGuard?: import("../capabilities/verify/evidence-grounding.js").FabricationGuardMode;
   /** Task ID for EventBus correlation */
   readonly taskId?: string;
   /** Name of the calling strategy (for event tagging) */
