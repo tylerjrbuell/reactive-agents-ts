@@ -1,9 +1,30 @@
 import { Effect } from "effect";
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+
+// ─── File-root sandbox (AsyncLocalStorage) ──────────────────────────────────
+// file-read / file-write resolve RELATIVE paths against — and confine them to —
+// this root. Default (no root set) is `process.cwd()`, preserving prior
+// behaviour. Callers that run untrusted/ephemeral agents (the benchmark harness
+// per-task temp dir; future sandboxed runs) wrap execution in `withFileRoot()`
+// so model-invented writes land inside the sandbox instead of polluting the
+// repo root. ALS is concurrency-safe and propagates through Effect fibers, so
+// parallel agents each see their own root with no global-state races.
+const fileRootStore = new AsyncLocalStorage<string>();
+
+/** Run `fn` with file-read/file-write rooted at (and confined to) `root`. */
+export function withFileRoot<T>(root: string, fn: () => T): T {
+  return fileRootStore.run(path.resolve(root), fn);
+}
+
+/** The active file root for relative-path resolution + traversal confinement. */
+export function getFileRoot(): string {
+  return fileRootStore.getStore() ?? process.cwd();
+}
 
 export const fileReadTool: ToolDefinition = {
   name: "file-read",
@@ -54,9 +75,13 @@ export const fileReadHandler = (
         throw new Error("path parameter must be a non-empty string");
       }
 
-      // Security: resolve path and check it's within allowed directory
-      const resolved = path.resolve(filePath);
-      const allowedBase = process.cwd();
+      // Security: resolve RELATIVE paths against the active file root (default
+      // process.cwd(); the bench/sandbox sets a temp dir via withFileRoot) and
+      // confine the result to it.
+      const allowedBase = getFileRoot();
+      const resolved = path.isAbsolute(filePath)
+        ? path.resolve(filePath)
+        : path.resolve(allowedBase, filePath);
       const normalizedBase = path.normalize(allowedBase);
       const normalizedResolved = path.normalize(resolved);
 
@@ -151,9 +176,14 @@ export const fileWriteHandler = (
         );
       }
 
-      const resolved = path.resolve(filePath);
-      const allowedBase = process.cwd();
-      if (!resolved.startsWith(allowedBase)) {
+      // Resolve RELATIVE paths against the active file root (default cwd; the
+      // bench/sandbox sets a temp dir via withFileRoot) and confine writes to
+      // it — so a model-invented "report.md" lands in the sandbox, not the cwd.
+      const allowedBase = getFileRoot();
+      const resolved = path.isAbsolute(filePath)
+        ? path.resolve(filePath)
+        : path.resolve(allowedBase, filePath);
+      if (!path.normalize(resolved).startsWith(path.normalize(allowedBase))) {
         throw new Error(`Path traversal detected: ${filePath}`);
       }
 

@@ -91,6 +91,8 @@ export {
   fileReadHandler,
   fileWriteTool,
   fileWriteHandler,
+  withFileRoot,
+  getFileRoot,
 } from "./skills/file-operations.js";
 export { httpGetTool, httpGetHandler } from "./skills/http-client.js";
 // Overhaul — pure result renderer (shared by reasoning ContextManager + write-result-to-file).

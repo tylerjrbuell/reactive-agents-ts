@@ -11,10 +11,11 @@ import { BENCHMARK_TASKS } from "./task-registry.js";
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
 import type { RuntimeOptions } from "@reactive-agents/runtime";
-import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { execSync } from "node:child_process"
 import { serve } from "@reactive-agents/runtime-shim"
+import { withFileRoot } from "@reactive-agents/tools"
 import type {
   BenchmarkSession, HarnessVariant, ModelVariant,
   TaskVariantReport, AblationResult, SessionReport, RunScore,
@@ -861,10 +862,39 @@ export function summarizeDimensions(
   })
 }
 
+/**
+ * Remove leftover `.bench-run-*` temp dirs from prior killed/crashed runs.
+ * Best-effort — swallows all errors so cleanup never aborts a benchmark.
+ */
+export function cleanupStaleBenchDirs(baseDir: string = process.cwd()): number {
+  let removed = 0
+  try {
+    for (const entry of readdirSync(baseDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && entry.name.startsWith(".bench-run-")) {
+        try {
+          rmSync(join(baseDir, entry.name), { recursive: true, force: true })
+          removed++
+        } catch {
+          /* ignore a single dir we can't remove (in-use by a live run, perms) */
+        }
+      }
+    }
+  } catch {
+    /* readdir failed (cwd gone?) — nothing to sweep */
+  }
+  return removed
+}
+
 export async function runSession(
   session: BenchmarkSession,
   outputPath?: string,
 ): Promise<SessionReport> {
+  // ── Stale-artifact sweep ───────────────────────────────────────────────────
+  // Per-cell temp dirs are removed in a `finally`, but a killed/crashed run
+  // (SIGKILL, timeout, Ctrl-C) skips it and leaks `.bench-run-*` into the cwd.
+  // Sweep leftovers from prior runs at session start so the working tree never
+  // accumulates clutter. Best-effort: never let cleanup abort a benchmark.
+  cleanupStaleBenchDirs()
   // ── Rule-4 guard (Phase 0 Task 9) ─────────────────────────────────────────
   // Per docs/spec/docs/00-RESEARCH-DISCIPLINE.md Rule 4: the judge model MUST
   // be a separately-versioned, model-pinned artifact distinct from the System
@@ -1009,7 +1039,13 @@ export async function runSession(
               process.stdout.write = (() => true) as any;
 
               try {
-                result = await dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir)
+                // Root file-read/file-write at the per-cell temp dir so
+                // model-invented writes (report.md, generate.ts) land in the
+                // sandbox — not the repo root — where scoreTask reads them and
+                // the per-cell `finally` cleans them up. Concurrency-safe (ALS).
+                result = await withFileRoot(tmpDir, () =>
+                  dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir),
+                )
               } finally {
                 console.log = consoleLog;
                 console.error = consoleError;
@@ -1019,7 +1055,9 @@ export async function runSession(
                 process.stdout.write = stdoutWrite;
               }
             } else {
-              result = await dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir)
+              result = await withFileRoot(tmpDir, () =>
+                dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir),
+              )
             }
             const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations)
             const diagnosis = session.traceDir && result.traceId

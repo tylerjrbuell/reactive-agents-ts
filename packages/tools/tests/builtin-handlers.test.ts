@@ -8,6 +8,8 @@ import { httpGetHandler } from "../src/skills/http-client.js";
 import {
   fileReadHandler,
   fileWriteHandler,
+  withFileRoot,
+  getFileRoot,
 } from "../src/skills/file-operations.js";
 import { webSearchHandler } from "../src/skills/web-search.js";
 import { codeExecuteHandler } from "../src/skills/code-execution.js";
@@ -327,5 +329,61 @@ describe("codeExecuteHandler — subprocess isolation", () => {
     const { codeExecuteTool } = await import("../src/skills/code-execution.js");
     expect(codeExecuteTool.requiresApproval).toBe(true);
     expect(codeExecuteTool.riskLevel).toBe("critical");
+  });
+});
+
+describe("withFileRoot sandbox (file-read / file-write confinement)", () => {
+  let root: string;
+  beforeAll(async () => {
+    root = await fs.mkdtemp(path.join(process.cwd(), ".filed-root-test-"));
+  });
+  afterAll(async () => {
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it("getFileRoot defaults to process.cwd() outside a withFileRoot scope", () => {
+    expect(getFileRoot()).toBe(process.cwd());
+  });
+
+  it("file-write resolves a RELATIVE path inside the active root, not cwd", async () => {
+    await withFileRoot(root, () =>
+      Effect.runPromise(fileWriteHandler({ path: "nested/out.txt", content: "hello" })),
+    );
+    // Lands in the sandbox…
+    expect(await fs.readFile(path.join(root, "nested/out.txt"), "utf-8")).toBe("hello");
+    // …and NOT in the repo root.
+    await expect(fs.readFile(path.join(process.cwd(), "nested/out.txt"))).rejects.toBeDefined();
+  });
+
+  it("file-read resolves a RELATIVE path inside the active root", async () => {
+    await fs.writeFile(path.join(root, "in.txt"), "payload");
+    const out = await withFileRoot(root, () =>
+      Effect.runPromise(fileReadHandler({ path: "in.txt" })),
+    );
+    expect(out).toBe("payload");
+  });
+
+  it("blocks traversal outside the active root", async () => {
+    await expect(
+      withFileRoot(root, () =>
+        Effect.runPromise(fileWriteHandler({ path: "../escape.txt", content: "x" })),
+      ),
+    ).rejects.toBeDefined();
+  });
+
+  it("is concurrency-safe: parallel roots do not bleed (ALS isolation)", async () => {
+    const rootA = await fs.mkdtemp(path.join(process.cwd(), ".filed-A-"));
+    const rootB = await fs.mkdtemp(path.join(process.cwd(), ".filed-B-"));
+    try {
+      await Promise.all([
+        withFileRoot(rootA, () => Effect.runPromise(fileWriteHandler({ path: "f.txt", content: "A" }))),
+        withFileRoot(rootB, () => Effect.runPromise(fileWriteHandler({ path: "f.txt", content: "B" }))),
+      ]);
+      expect(await fs.readFile(path.join(rootA, "f.txt"), "utf-8")).toBe("A");
+      expect(await fs.readFile(path.join(rootB, "f.txt"), "utf-8")).toBe("B");
+    } finally {
+      await fs.rm(rootA, { recursive: true, force: true });
+      await fs.rm(rootB, { recursive: true, force: true });
+    }
   });
 });
