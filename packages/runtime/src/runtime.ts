@@ -348,6 +348,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     grounding: options.grounding,
     // Fabrication guard mode. Propagated from `.withFabricationGuard()`.
     fabricationGuard: options.fabricationGuard,
+    // Stall/no-progress policy. Propagated from `.withStallPolicy()`.
+    stallPolicy: options.stallPolicy,
     // Opt-in durable run persistence. Propagated from `.withDurableRuns()`.
     durableRuns: options.durableRuns,
     // Opt-in durable HITL approval policy. Propagated from `.withApprovalPolicy()`.

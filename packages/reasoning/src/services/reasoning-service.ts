@@ -123,6 +123,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly grounding?: import("../kernel/state/kernel-state.js").GroundingConfig;
       /** Fabrication-guard mode (.withFabricationGuard) — spread to the strategy → KernelInput.fabricationGuard. */
       readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
+      /** Stall/no-progress policy (.withStallPolicy) — spread to the strategy → KernelInput.stallPolicy. */
+      readonly stallPolicy?: import("../kernel/state/kernel-state.js").StallPolicy;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

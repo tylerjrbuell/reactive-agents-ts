@@ -244,6 +244,8 @@ export { groundFields } from "./structured-output/grounded/field-provenance.js";
 export type { GroundResult } from "./structured-output/grounded/field-provenance.js";
 export { buildEvidenceCorpusFromSteps, detectFabricatedMeasurement, resolveFabricationGuardMode } from "./kernel/capabilities/verify/evidence-grounding.js";
 export type { FabricationGuardMode } from "./kernel/capabilities/verify/evidence-grounding.js";
+export { DEFAULT_STALL_POLICY } from "./kernel/state/kernel-state.js";
+export type { StallPolicy } from "./kernel/state/kernel-state.js";
 export { parsePartial } from "./structured-output/partial-parse.js";
 export { stripThinking } from "./kernel/utils/stream-parser.js";
 

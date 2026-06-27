@@ -33,6 +33,7 @@ import { makeStep } from "../../../kernel/capabilities/sense/step-utils.js";
 import { terminate } from "../terminate.js";
 import {
   transitionState,
+  DEFAULT_STALL_POLICY,
   type KernelState,
   type KernelInput,
   type KernelRunOptions,
@@ -54,6 +55,31 @@ import {
 
 /** Outcome of the stall / harness-deliverable phase-step. */
 export type StallOutcome = "break" | "next" | "proceed";
+
+/**
+ * Build the required-tool nudge. The first nudge is the plain reminder; repeats
+ * ESCALATE (count-aware, stronger directive) when `escalate` is true — a
+ * verbatim repeat the model already ignored is wasted effort (StallPolicy C).
+ */
+export function buildRequiredToolNudge(
+  missing: readonly string[],
+  nudgeCount: number,
+  ignoredStreak: number,
+  escalate: boolean,
+): string {
+  const tools = missing.join(", ");
+  const base =
+    `Required tool quota not met: ${tools}. ` +
+    `Continue calling the missing required tool(s) before attempting completion.`;
+  if (!escalate || nudgeCount <= 1) return base;
+  return (
+    `You have NOT called the required tool(s) [${tools}] despite ${nudgeCount} reminders` +
+    (ignoredStreak > 0 ? ` (${ignoredStreak} ignored in a row)` : "") +
+    `. Call ${tools} NOW with concrete arguments — do NOT call meta-tools ` +
+    `(brief/pulse/find/discover-tools) or attempt a final answer until you have. ` +
+    `Continuing to ignore this will fail the task.`
+  );
+}
 
 export interface StallStepArgs {
   readonly state: KernelState;
@@ -121,9 +147,32 @@ export function runStallDeliverableStep(
 
     if (missingRequiredByCount.length > 0) {
       requiredToolNudgeCount++;
-      if (requiredToolNudgeCount > maxRequiredToolNudges) {
-        if (totalArtifacts > 0) {
-          yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudge budget exhausted (${maxRequiredToolNudges}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
+      // ── Compliance tracking (StallPolicy A) ──────────────────────────────
+      // A nudge is "ignored" when the still-missing required set did NOT shrink
+      // since the previous nudge (the model made no progress toward it). A model
+      // that ignores the same nudge repeatedly will keep ignoring it — so after
+      // `ignoredNudgeTolerance` consecutive ignored nudges, fast-escalate
+      // (deliver-or-fail) instead of burning iterations up to the full cap.
+      // Counters persist across iterations via state.meta (no carrier change).
+      const policy = { ...DEFAULT_STALL_POLICY, ...(currentInput.stallPolicy ?? {}) };
+      const prevMissing = (state.meta.lastMissingRequiredCount as number | undefined) ?? -1;
+      const ignored = prevMissing >= 0 && missingRequiredByCount.length >= prevMissing;
+      const consecutiveIgnoredNudges = ignored
+        ? ((state.meta.consecutiveIgnoredNudges as number | undefined) ?? 0) + 1
+        : 0;
+      const fastEscalate = consecutiveIgnoredNudges >= policy.ignoredNudgeTolerance;
+
+      if (requiredToolNudgeCount > maxRequiredToolNudges || fastEscalate) {
+        const escReason = fastEscalate
+          ? `${consecutiveIgnoredNudges} consecutive ignored nudges (no progress on ${missingRequiredByCount.join(", ")})`
+          : `${maxRequiredToolNudges} nudge attempts`;
+        // Fast-escalation means the model is STUCK on a mandatory tool with no
+        // progress — delivering partial artifacts would ship a result that
+        // skipped a required tool. Fail honestly. The cap-exhaustion path keeps
+        // its deliver-if-artifacts fallback (a longer run that may have made
+        // other real progress before the budget ran out).
+        if (totalArtifacts > 0 && !fastEscalate) {
+          yield* emitLog({ _tag: "warning", message: `[harness-deliverable] Required-tool nudges escalated (${escReason}) — delivering ${totalArtifacts} artifacts`, timestamp: new Date() });
           const d = assembleDeliverable(state);
           yield* emitGuardFired({
             taskId: currentOptions.taskId ?? state.taskId,
@@ -131,7 +180,7 @@ export function runStallDeliverableStep(
             guard: "stall_deliverable",
             outcome: "terminate",
             reason: deliverableTerminationReason(d),
-            metadata: { totalArtifacts, trigger: "required_tool_nudge_exhausted" },
+            metadata: { totalArtifacts, trigger: fastEscalate ? "ignored_nudge_escalation" : "required_tool_nudge_exhausted", consecutiveIgnoredNudges },
           });
           state = terminate(state, {
             reason: deliverableTerminationReason(d),
@@ -141,25 +190,34 @@ export function runStallDeliverableStep(
         }
         state = transitionState(state, {
           status: "failed",
-          error: `Required tool quota not met after ${maxRequiredToolNudges} nudge attempts: ${missingRequiredByCount.join(", ")}`,
+          error: `Required tool quota not met after ${escReason}: ${missingRequiredByCount.join(", ")}`,
         });
         return { outcome: "break", state, requiredToolNudgeCount, failureRecoveryRedirects };
       }
-      const guidance =
-        `Required tool quota not met: ${missingRequiredByCount.join(", ")}. ` +
-        `Continue calling the missing required tool(s) before attempting completion.`;
+      // ── Nudge content escalation (StallPolicy C) ─────────────────────────
+      const guidance = buildRequiredToolNudge(
+        missingRequiredByCount,
+        requiredToolNudgeCount,
+        consecutiveIgnoredNudges,
+        policy.escalateNudgeContent,
+      );
       yield* emitHarnessSignalInjected({
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
         signalKind: "nudge",
         origin: "runner.ts:875",
         content: guidance,
-        metadata: { missingTools: missingRequiredByCount, nudgeCount: requiredToolNudgeCount },
+        metadata: { missingTools: missingRequiredByCount, nudgeCount: requiredToolNudgeCount, ignoredStreak: consecutiveIgnoredNudges },
       });
       state = transitionState(state, {
         status: "thinking",
         steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
         pendingGuidance: { requiredToolsPending: missingRequiredByCount, errorRecovery: guidance },
+        meta: {
+          ...state.meta,
+          consecutiveIgnoredNudges,
+          lastMissingRequiredCount: missingRequiredByCount.length,
+        } as KernelState["meta"],
       });
       return { outcome: "next", state, requiredToolNudgeCount, failureRecoveryRedirects };
     }

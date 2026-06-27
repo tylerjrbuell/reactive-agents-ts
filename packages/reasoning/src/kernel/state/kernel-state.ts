@@ -450,6 +450,35 @@ export interface GroundingConfig {
   readonly maxRetries?: number;
 }
 
+/**
+ * Stall / no-progress policy — bounds wasted iterations when the model ignores
+ * required-tool nudges. A nudge is "ignored" when the set of still-missing
+ * required tools did not shrink since the previous nudge (the model made no
+ * progress toward the requirement). Tunable via `.withStallPolicy()`; sensible
+ * defaults apply when unset.
+ */
+export interface StallPolicy {
+  /**
+   * Consecutive IGNORED required-tool nudges tolerated before the harness
+   * fast-escalates (delivers accumulated artifacts, else fails) instead of
+   * repeating the nudge up to the full `maxRequiredToolNudges` cap. Default 2.
+   * A model that ignores the same nudge twice will keep ignoring it — escalate.
+   */
+  readonly ignoredNudgeTolerance?: number;
+  /**
+   * When true (default), a repeated nudge ESCALATES its wording (stronger,
+   * count-aware directive) instead of repeating verbatim — a verbatim repeat the
+   * model already ignored is wasted. When false, the nudge text is stable.
+   */
+  readonly escalateNudgeContent?: boolean;
+}
+
+/** Defaults for {@link StallPolicy} — applied when the field or sub-fields are unset. */
+export const DEFAULT_STALL_POLICY: Required<StallPolicy> = {
+  ignoredNudgeTolerance: 2,
+  escalateNudgeContent: true,
+};
+
 export interface KernelInput {
   readonly task: string;
   readonly systemPrompt?: string;
@@ -660,6 +689,12 @@ export interface KernelInput {
    * from the tool-observation corpus. Set via `.withFabricationGuard()`.
    */
   readonly fabricationGuard?: import("../capabilities/verify/evidence-grounding.js").FabricationGuardMode;
+  /**
+   * Stall / no-progress policy — bounds wasted iterations on ignored
+   * required-tool nudges. Absent ⇒ {@link DEFAULT_STALL_POLICY}. Set via
+   * `.withStallPolicy()`.
+   */
+  readonly stallPolicy?: StallPolicy;
   /** Task ID for EventBus correlation */
   readonly taskId?: string;
   /** Name of the calling strategy (for event tagging) */

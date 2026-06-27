@@ -395,6 +395,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
     /** Fabrication-guard mode. Absent = "block" (always-on default). */
     private _fabricationGuard: import('@reactive-agents/reasoning').FabricationGuardMode | undefined = undefined
+    /** Stall/no-progress policy override. Absent = sensible defaults. */
+    private _stallPolicy: import('@reactive-agents/reasoning').StallPolicy | undefined = undefined
     /** Opt-in typed structured output config. Absent = off (default). */
     private _outputSchemaConfig:
         | { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions }
@@ -894,6 +896,30 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withFabricationGuard(mode: import('@reactive-agents/reasoning').FabricationGuardMode = 'block'): this {
         this._fabricationGuard = mode
+        return this
+    }
+
+    /**
+     * Tune the stall / no-progress policy — how the harness reacts when the
+     * model ignores required-tool nudges (makes no progress toward a required
+     * tool across consecutive nudges).
+     *
+     * Sensible defaults apply when unset: tolerate **2** consecutive ignored
+     * nudges before fast-escalating (deliver accumulated artifacts, else fail)
+     * instead of looping to the full nudge cap, and **escalate** the nudge
+     * wording on repeats rather than repeating verbatim. This bounds wasted
+     * iterations/tokens on stuck runs while keeping legitimately-progressing
+     * runs untouched (progress resets the ignored streak).
+     *
+     * @example
+     * ```typescript
+     * agent.withStallPolicy({ ignoredNudgeTolerance: 1 })   // escalate fast
+     * agent.withStallPolicy({ escalateNudgeContent: false }) // stable wording
+     * ```
+     * @returns `this` for chaining
+     */
+    withStallPolicy(policy: import('@reactive-agents/reasoning').StallPolicy): this {
+        this._stallPolicy = policy
         return this
     }
 

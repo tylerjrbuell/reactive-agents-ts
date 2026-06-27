@@ -889,6 +889,10 @@ describe("runKernel — required tools guard", () => {
       runKernel(lowDeltaKernel, {
         task: "must call web-search first",
         requiredTools: ["web-search"],
+        // Disable fast ignored-nudge escalation so this test exercises the
+        // original max-iterations path (the new StallPolicy fast-escalate has
+        // its own coverage in stall-nudge.test.ts).
+        stallPolicy: { ignoredNudgeTolerance: 999 },
       }, {
         maxIterations: 5,
         strategy: "test",
@@ -954,6 +958,9 @@ describe("runKernel — required tools guard", () => {
           { name: "web-search", description: "", parameters: [] },
           { name: "shell-execute", description: "", parameters: [] },
         ],
+        // Disable fast ignored-nudge escalation so this exercises the original
+        // max-iterations path (StallPolicy fast-escalate covered separately).
+        stallPolicy: { ignoredNudgeTolerance: 999 },
       }, {
         maxIterations: 6,
         strategy: "test",
@@ -964,6 +971,45 @@ describe("runKernel — required tools guard", () => {
     expect(result.status).toBe("failed");
     expect(result.error).toContain("missing_required_tool");
     expect(result.error).toContain("terminatedBy=max_iterations");
+  });
+
+  it("StallPolicy: fast-escalates (fails) when required-tool nudges are ignored — bounds wasted iterations", async () => {
+    // Kernel makes NO progress on the required tool (only thinks) — every nudge
+    // is ignored. With the default policy (tolerate 2 ignored nudges) the run
+    // must FAIL via fast-escalation WELL BEFORE the 20-iteration cap, instead of
+    // looping. This is the efficiency win: don't burn iterations re-nudging a
+    // model that is provably stuck.
+    let callCount = 0;
+    const stuckKernel: ThoughtKernel = (state) => {
+      callCount++;
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: state.iteration + 1,
+          steps: [...state.steps, makeStep("thought", `stuck-${callCount}`)],
+        }),
+      );
+    };
+
+    const result = await Effect.runPromise(
+      runKernel(stuckKernel, {
+        task: "must call shell-execute",
+        requiredTools: ["shell-execute"],
+        availableToolSchemas: [{ name: "shell-execute", description: "", parameters: [] }],
+        // default stallPolicy (ignoredNudgeTolerance: 2)
+      }, {
+        maxIterations: 20,
+        strategy: "test",
+        kernelType: "test",
+        loopDetection: { maxConsecutiveThoughts: 999, maxRepeatedThoughts: 999, maxSameToolCalls: 999 },
+      }).pipe(Effect.provide(testLayer)),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("ignored nudges");
+    expect(result.error).toContain("shell-execute");
+    // Fast-escalated well short of the 20-iteration cap (no partial deliver).
+    expect(callCount).toBeLessThan(12);
   });
 
   it("nudges alternate tool paths before harness deliverable after a failed tool path", async () => {

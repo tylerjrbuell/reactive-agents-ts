@@ -174,6 +174,8 @@ export interface BuilderRuntimeStateView {
   readonly _groundingConfig: import("../types.js").GroundingOptions | undefined;
   /** Fabrication-guard mode. Absent = "block" (always-on default). */
   readonly _fabricationGuard: import("@reactive-agents/reasoning").FabricationGuardMode | undefined;
+  /** Stall/no-progress policy override. Absent = sensible defaults. */
+  readonly _stallPolicy: import("@reactive-agents/reasoning").StallPolicy | undefined;
   /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
   readonly _durableRuns: import("../types.js").DurableRunsOptions | undefined;
   /** Opt-in durable HITL approval policy (Phase D). Absent = off (default). */
@@ -459,6 +461,7 @@ export const buildBaseRuntimeAndEngine = (
       budgetLimits: state._budgetLimits,
       grounding: state._groundingConfig,
       fabricationGuard: state._fabricationGuard,
+      stallPolicy: state._stallPolicy,
       durableRuns: state._durableRuns,
       approvalPolicy: state._approvalPolicy
         ? {

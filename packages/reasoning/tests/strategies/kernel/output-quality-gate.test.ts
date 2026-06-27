@@ -255,6 +255,9 @@ describe("output quality gate", () => {
           task: "Fetch XRP, XLM, ETH, BTC prices",
           requiredTools: ["web-search"],
           requiredToolQuantities: { "web-search": 4 },
+          // Original max-iterations path (fast ignored-nudge escalation off here;
+          // covered separately in stall-nudge.test.ts).
+          stallPolicy: { ignoredNudgeTolerance: 999 },
         },
         { ...defaultOptions, maxIterations: 5 },
       ),

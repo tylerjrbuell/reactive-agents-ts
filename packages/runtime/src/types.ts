@@ -580,6 +580,16 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
    */
   fabricationGuard: Schema.optional(Schema.Literal("off", "warn", "block")),
   /**
+   * Stall/no-progress policy. Absent ⇒ defaults. Populated by
+   * `.withStallPolicy()`; threaded into `KernelInput.stallPolicy`.
+   */
+  stallPolicy: Schema.optional(
+    Schema.Struct({
+      ignoredNudgeTolerance: Schema.optional(Schema.Number),
+      escalateNudgeContent: Schema.optional(Schema.Boolean),
+    })
+  ),
+  /**
    * Opt-in durable run persistence (Phase B). Absent ⇒ off (zero overhead).
    * Populated by `.withDurableRuns()`; when set, the runtime persists a
    * serialized kernel-state snapshot to a SQLite RunStore every
