@@ -263,6 +263,8 @@ export const runReasoningThink = (
       grounding: config.grounding,
       // Fabrication guard mode. Propagated from `.withFabricationGuard()`.
       fabricationGuard: config.fabricationGuard,
+      // Stall/no-progress policy. Propagated from `.withStallPolicy()`.
+      stallPolicy: config.stallPolicy,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

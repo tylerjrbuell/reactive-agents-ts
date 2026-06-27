@@ -120,6 +120,8 @@ interface ReactiveInput {
   readonly grounding?: import("../kernel/state/kernel-state.js").GroundingConfig;
   /** Fabrication-guard mode (.withFabricationGuard) → KernelInput.fabricationGuard. Absent ⇒ block. */
   readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
+  /** Stall/no-progress policy (.withStallPolicy) → KernelInput.stallPolicy. Absent ⇒ defaults. */
+  readonly stallPolicy?: import("../kernel/state/kernel-state.js").StallPolicy;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -237,6 +239,7 @@ export const executeReactive = (
       // the terminal verifier gate. Now forwarded so both knobs take effect.
       grounding: input.grounding,
       fabricationGuard: input.fabricationGuard,
+      stallPolicy: input.stallPolicy,
     };
 
     const pass = yield* runPass(reactKernel, kernelInput, {

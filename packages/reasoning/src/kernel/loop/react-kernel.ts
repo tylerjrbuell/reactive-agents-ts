@@ -210,6 +210,7 @@ export const executeReActKernel = (
           budgetLimits: input.budgetLimits,
           grounding: input.grounding,
           fabricationGuard: input.fabricationGuard,
+          stallPolicy: input.stallPolicy,
         },
         {
           task: input.task,

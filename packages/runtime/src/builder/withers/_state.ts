@@ -118,6 +118,8 @@ export interface BuilderState {
   _groundingConfig: GroundingOptions | undefined;
   /** Fabrication-guard mode. Absent = "block" (always-on default). */
   _fabricationGuard: import("@reactive-agents/reasoning").FabricationGuardMode | undefined;
+  /** Stall/no-progress policy override. Absent = sensible defaults. */
+  _stallPolicy: import("@reactive-agents/reasoning").StallPolicy | undefined;
   /** Opt-in durable run persistence. Absent = off (zero overhead, default). */
   _durableRuns: DurableRunsOptions | undefined;
   _executionTimeoutMs?: number;

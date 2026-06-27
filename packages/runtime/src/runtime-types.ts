@@ -213,6 +213,14 @@ export interface RuntimeOptions {
   fabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
 
   /**
+   * Stall / no-progress policy — bounds wasted iterations when the model
+   * ignores required-tool nudges. Absent ⇒ sensible defaults
+   * (tolerate 2 ignored nudges, escalate nudge wording). Set via
+   * `.withStallPolicy()`; threaded into `KernelInput.stallPolicy`.
+   */
+  stallPolicy?: import("@reactive-agents/reasoning").StallPolicy;
+
+  /**
    * Opt-in durable run persistence. Absent ⇒ off (zero overhead, default).
    * Populated by `.withDurableRuns()`; threaded into
    * `ReactiveAgentsConfig.durableRuns`. When set, the runtime persists a

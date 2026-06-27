@@ -260,6 +260,13 @@ export const AgentConfigSchema = Schema.Struct({
   grounding: Schema.optional(GroundingConfigSchema),
   /** Fabrication-guard mode. Absent = "block" (always-on). */
   fabricationGuard: Schema.optional(Schema.Literal("off", "warn", "block")),
+  /** Stall/no-progress policy. Absent = defaults (tolerate 2 ignored nudges, escalate wording). */
+  stallPolicy: Schema.optional(
+    Schema.Struct({
+      ignoredNudgeTolerance: Schema.optional(Schema.Number),
+      escalateNudgeContent: Schema.optional(Schema.Boolean),
+    })
+  ),
   /**
    * Behavioural options for typed structured output (mode, onParseFail, abstainBelow).
    *
@@ -499,6 +506,11 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   // Fabrication guard (always-on by default; declarative override)
   if (config.fabricationGuard) {
     builder = builder.withFabricationGuard(config.fabricationGuard);
+  }
+
+  // Stall/no-progress policy (defaults apply; declarative override)
+  if (config.stallPolicy) {
+    builder = builder.withStallPolicy(config.stallPolicy);
   }
 
   // Execution
