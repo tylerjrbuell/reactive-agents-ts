@@ -116,6 +116,8 @@ export interface BuilderState {
   _budgetLimits: BudgetLimits | undefined;
   /** Opt-in numeric evidence-grounding. Absent = grounding off (default). */
   _groundingConfig: GroundingOptions | undefined;
+  /** Fabrication-guard mode. Absent = "block" (always-on default). */
+  _fabricationGuard: import("@reactive-agents/reasoning").FabricationGuardMode | undefined;
   /** Opt-in durable run persistence. Absent = off (zero overhead, default). */
   _durableRuns: DurableRunsOptions | undefined;
   _executionTimeoutMs?: number;

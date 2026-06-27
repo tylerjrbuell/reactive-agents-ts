@@ -205,6 +205,14 @@ export interface RuntimeOptions {
   grounding?: import("./builder/types.js").GroundingOptions;
 
   /**
+   * Fabrication-guard mode. Absent ⇒ `"block"` (always-on). Populated by
+   * `.withFabricationGuard()`; threaded into `KernelInput.fabricationGuard`.
+   * The verifier rejects (or warns on) empirical performance measurements
+   * (benchmark timings / % speed-ups) absent from the tool-observation corpus.
+   */
+  fabricationGuard?: import("@reactive-agents/reasoning").FabricationGuardMode;
+
+  /**
    * Opt-in durable run persistence. Absent ⇒ off (zero overhead, default).
    * Populated by `.withDurableRuns()`; threaded into
    * `ReactiveAgentsConfig.durableRuns`. When set, the runtime persists a

@@ -575,6 +575,11 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
     })
   ),
   /**
+   * Fabrication-guard mode. Absent ⇒ "block" (always-on). Populated by
+   * `.withFabricationGuard()`; threaded into `KernelInput.fabricationGuard`.
+   */
+  fabricationGuard: Schema.optional(Schema.Literal("off", "warn", "block")),
+  /**
    * Opt-in durable run persistence (Phase B). Absent ⇒ off (zero overhead).
    * Populated by `.withDurableRuns()`; when set, the runtime persists a
    * serialized kernel-state snapshot to a SQLite RunStore every

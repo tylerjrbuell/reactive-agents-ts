@@ -116,6 +116,10 @@ interface ReactiveInput {
   readonly taskClassification?: import("../kernel/capabilities/comprehend/task-classification.js").TaskClassification;
   /** Budget limits (HS-128 / Audit G-A). Threaded to KernelInput.budgetLimits. */
   readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
+  /** Opt-in numeric evidence-grounding config (.withGrounding) → KernelInput.grounding. */
+  readonly grounding?: import("../kernel/state/kernel-state.js").GroundingConfig;
+  /** Fabrication-guard mode (.withFabricationGuard) → KernelInput.fabricationGuard. Absent ⇒ block. */
+  readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -227,6 +231,12 @@ export const executeReactive = (
         (process.env.REACTIVE_AGENTS_NOOP_VERIFIER === "1" ? noopVerifier : undefined),
       harnessPipeline: input.harnessPipeline,
       budgetLimits: input.budgetLimits,
+      // Opt-in numeric evidence-grounding (.withGrounding) + always-on
+      // fabrication guard (.withFabricationGuard). Previously DROPPED here —
+      // ReactiveInput never declared them, so the runtime config never reached
+      // the terminal verifier gate. Now forwarded so both knobs take effect.
+      grounding: input.grounding,
+      fabricationGuard: input.fabricationGuard,
     };
 
     const pass = yield* runPass(reactKernel, kernelInput, {

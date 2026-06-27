@@ -242,7 +242,8 @@ export { groundedExtract } from "./structured-output/grounded/grounded-extract.j
 export type { GroundedInput, GroundedOutput } from "./structured-output/grounded/grounded-extract.js";
 export { groundFields } from "./structured-output/grounded/field-provenance.js";
 export type { GroundResult } from "./structured-output/grounded/field-provenance.js";
-export { buildEvidenceCorpusFromSteps } from "./kernel/capabilities/verify/evidence-grounding.js";
+export { buildEvidenceCorpusFromSteps, detectFabricatedMeasurement, resolveFabricationGuardMode } from "./kernel/capabilities/verify/evidence-grounding.js";
+export type { FabricationGuardMode } from "./kernel/capabilities/verify/evidence-grounding.js";
 export { parsePartial } from "./structured-output/partial-parse.js";
 export { stripThinking } from "./kernel/utils/stream-parser.js";
 
