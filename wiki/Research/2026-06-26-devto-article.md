@@ -1,6 +1,6 @@
 ---
 # Dev.to front matter — paste into the editor's front matter, or set via the UI.
-title: "I built a TypeScript agent framework where the same code runs on a 4B local model and on Claude"
+title: "Reliable TypeScript AI agents: the same code finishes on a 4B model or Claude — and survives a crash mid-run"
 published: false
 description: "The ecosystem says don't put a small model in an agent loop. Here's how I made the same agent code finish a tool task on a 4B Ollama model and on Claude — and the typed-effect runtime underneath."
 tags: typescript, ai, llm, webdev
@@ -95,6 +95,25 @@ const agent = await ReactiveAgents.create()
 ```
 
 MCP-native tools, A2A multi-agent, durable crash-resume, and human-in-the-loop are all opt-in layers on the same engine.
+
+## And when it crashes mid-run, it resumes
+
+Reliability isn't just small models finishing — it's surviving the things that kill long-running agents: a reboot, a rescheduled container, a deploy that rolls the process. With `.withDurableRuns()`, every iteration is checkpointed to disk. Kill the process mid-run, and a **fresh process reconstructs the run from its last checkpoint and finishes the job** — without re-running the tools that already completed.
+
+![An agent checkpointing each step, getting killed mid-run, then a fresh process reconstructing the run from its last checkpoint and finishing it](https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/durable-resume.gif)
+
+```typescript
+// Process A — works, checkpoints each step, then is hard-killed.
+const a = await build();                       // .withDurableRuns({ dir })
+for await (const _ of a.runStream(task)) { /* ...process dies mid-run... */ }
+
+// Process B — a fresh start, same agent, same dir.
+const b = await build();
+const runId = (await b.listRuns({ status: "running" }))[0].runId;
+const result = await b.resumeRun(runId);       // reconstructs + completes
+```
+
+The same checkpoint machinery powers durable human-in-the-loop: a gated tool call pauses the run, persists it, and a human approves or denies from any process to resume from the exact checkpoint.
 
 ## When *not* to reach for this
 
