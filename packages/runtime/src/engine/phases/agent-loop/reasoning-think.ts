@@ -261,6 +261,8 @@ export const runReasoningThink = (
       budgetLimits: config.budgetLimits,
       // Opt-in numeric evidence-grounding. Propagated from `.withGrounding()`.
       grounding: config.grounding,
+      // Fabrication guard mode. Propagated from `.withFabricationGuard()`.
+      fabricationGuard: config.fabricationGuard,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

@@ -346,6 +346,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     budgetLimits: options.budgetLimits,
     // Opt-in numeric evidence-grounding. Propagated from `.withGrounding()`.
     grounding: options.grounding,
+    // Fabrication guard mode. Propagated from `.withFabricationGuard()`.
+    fabricationGuard: options.fabricationGuard,
     // Opt-in durable run persistence. Propagated from `.withDurableRuns()`.
     durableRuns: options.durableRuns,
     // Opt-in durable HITL approval policy. Propagated from `.withApprovalPolicy()`.

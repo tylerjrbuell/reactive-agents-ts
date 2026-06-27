@@ -208,6 +208,8 @@ export const executeReActKernel = (
           calibration: input.calibration,
           harnessPipeline: input.harnessPipeline,
           budgetLimits: input.budgetLimits,
+          grounding: input.grounding,
+          fabricationGuard: input.fabricationGuard,
         },
         {
           task: input.task,

@@ -119,6 +119,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
        * when computed BudgetSignal crosses any declared limit.
        */
       readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
+      /** Opt-in numeric evidence-grounding (.withGrounding) — spread to the strategy → KernelInput.grounding. */
+      readonly grounding?: import("../kernel/state/kernel-state.js").GroundingConfig;
+      /** Fabrication-guard mode (.withFabricationGuard) — spread to the strategy → KernelInput.fabricationGuard. */
+      readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

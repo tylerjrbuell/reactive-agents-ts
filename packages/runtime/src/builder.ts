@@ -393,6 +393,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _budgetLimits: BudgetLimits | undefined = undefined
     /** Opt-in numeric evidence-grounding config. Absent = off (default). */
     private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
+    /** Fabrication-guard mode. Absent = "block" (always-on default). */
+    private _fabricationGuard: import('@reactive-agents/reasoning').FabricationGuardMode | undefined = undefined
     /** Opt-in typed structured output config. Absent = off (default). */
     private _outputSchemaConfig:
         | { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions }
@@ -872,6 +874,26 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
         this._groundingConfig = options
+        return this
+    }
+
+    /**
+     * Configure the fabrication guard — the always-on verifier check that
+     * rejects invented empirical performance measurements (benchmark timings,
+     * % speed-ups) absent from the tool-observation corpus.
+     *
+     * On by default (`"block"`) — no call needed for protection. Use this only
+     * to soften (`"warn"`, advisory) or disable (`"off"`). High-precision: only
+     * perf measurements are policed; counts, prices, Big-O are ignored, and a
+     * claim grounded by a real benchmark/execution tool always passes.
+     *
+     * Also settable via the `RA_FABRICATION_GUARD` env var (this method wins).
+     *
+     * @param mode - `"block"` (default) | `"warn"` | `"off"`
+     * @returns `this` for chaining
+     */
+    withFabricationGuard(mode: import('@reactive-agents/reasoning').FabricationGuardMode = 'block'): this {
+        this._fabricationGuard = mode
         return this
     }
 

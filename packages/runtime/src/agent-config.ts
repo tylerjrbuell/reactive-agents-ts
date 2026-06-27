@@ -258,6 +258,8 @@ export const AgentConfigSchema = Schema.Struct({
   verification: Schema.optional(VerificationConfigSchema),
   /** Opt-in numeric evidence-grounding. Absent = off (default). */
   grounding: Schema.optional(GroundingConfigSchema),
+  /** Fabrication-guard mode. Absent = "block" (always-on). */
+  fabricationGuard: Schema.optional(Schema.Literal("off", "warn", "block")),
   /**
    * Behavioural options for typed structured output (mode, onParseFail, abstainBelow).
    *
@@ -492,6 +494,11 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   // Grounding
   if (config.grounding) {
     builder = builder.withGrounding(config.grounding);
+  }
+
+  // Fabrication guard (always-on by default; declarative override)
+  if (config.fabricationGuard) {
+    builder = builder.withFabricationGuard(config.fabricationGuard);
   }
 
   // Execution
