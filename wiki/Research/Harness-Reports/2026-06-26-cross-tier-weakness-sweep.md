@@ -57,16 +57,31 @@ gpt-4o-mini ra-full clears only 36%. The harness is necessary but not sufficient
 - **Controllability:** HIGH (a verifier check in the kernel). **Highest leverage** —
   one fix addresses the dominant cross-tier failure AND part of W2.
 
-### W2 — Harness over-action on adversarial "no-op" tasks  **[P1]**
+### W2 — Harness over-action on adversarial "no-op" tasks  **[P1] — ✅ ROOT-CAUSED + FIXED 2026-06-26**
 - **Prevalence:** systemic regression on **rw-6** ("nothing to optimize") across
   multiple models: cogito:14b **−100pp**, gpt-4o-mini **−50pp**. Also rw-2@claude-haiku −50pp.
-- **Root cause (trace output):** ra-full pushes the model to *produce an action* even
-  when the correct answer is "no change needed" — gpt-4o-mini invented a merge-sort
-  optimization (*"we can focus on reducing memory allocations…"*) on a task whose answer
-  is "already optimal." Intertwined with W1 (it ships the intent-to-optimize as the answer).
-- **FM mapping:** scope-discipline / over-action failure (FM-C family, honest-uncertainty
-  dimension). Partly subsumed by the W1 fix; residual = the harness's bias-to-act.
-- **Controllability:** MEDIUM-HIGH (harness prompt + the W1 verifier check).
+- **Root cause (trace-verified, `01KW372HEJSGT80YYK3MCJFDPY`):** the original "harness
+  pushes over-action" hypothesis was **FALSIFIED** — the Conductor system prompt is
+  neutral and **0 harness signals** fired. The real, harness-addressable bug: the
+  agent had **no code-execution tool** (file-read/find/pulse/recall only) yet shipped
+  *"Original 150 ms → Optimized 90 ms, 40% improvement"* — **fabricated empirical
+  measurements** that passed all 7 terminal verifier checks (accuracy=0,
+  trust=claimed-but-wrong). The numbers could not have been measured; nothing in the
+  verifier policed claimed measurements absent from the tool-observation corpus.
+- **FM mapping:** fabrication / honest-uncertainty failure (the model's bias-to-act
+  on an adversarial prompt is model-side; the harness's job is to *not ship* the lie).
+- **Fix (merged local main):** always-on `output-not-fabricated-measurement` verifier
+  check + `detectFabricatedMeasurement` (high-precision: perf timings/throughput/%-speedup
+  only, grounded against the corpus; counts/$/Big-O ignored). Configurable via
+  `RA_FABRICATION_GUARD` env (`.withFabricationGuard()` deferred — builder→verifier rail
+  is broken; `.withGrounding()` has the same dead-plumbing). **Verified:** rw-6 ra-full
+  trust claimed-but-wrong → **honest-failure** (2 runs); 21/21 detector+resolver tests;
+  reasoning 1767/0. Accuracy stays 0 — the adversarial task is a model-capability limit;
+  the fix converts a confident lie into an honest failure (correct, non-metric-gamed).
+- **Side-finding (NEW, unfixed):** `.withGrounding()` config is dropped by
+  `reasoning-service` — grounding never reaches the react kernel (appears in NO strategy
+  crossCutting). Shipped-but-dead for the runtime path. Worth its own fix (would also
+  enable a real `.withFabricationGuard()` builder method).
 
 ### W3 — Harness token tax 2–9×  **[P2 — known cost]**
 - ra-full vs bare-llm mean tokens: +305% (haiku), +558% (gpt-4o-mini), +207–901% (local).
