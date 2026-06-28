@@ -210,3 +210,33 @@ describe("act symmetry — E2 single path gated by RA_TOOL_OBSERVE_SYMMETRY", ()
     }
   });
 });
+
+describe("act batch healing — batch members get arg-repair (tier parity with single path)", () => {
+  it("heals a typo'd tool name in a parallel batch member → it executes (was bypassing healing)", async () => {
+    const { pipeline, steps, ctxs } = recordingPipeline("observation.tool-result");
+    const layer = TestLLMServiceLayer();
+
+    await Effect.runPromise(
+      handleActing(
+        // Second call's tool name is a typo ("web-serch") that fuzzy-matches the
+        // real "web-search" schema. Pre-fix: batch bypassed healing → guard
+        // rejected the unknown tool → only 1 result. Post-fix: healed → executes.
+        baseState([
+          { id: "h1", name: "http-get", arguments: { url: "https://x" } },
+          { id: "h2", name: "web-serch", arguments: { query: "btc" } },
+        ]),
+        baseContext(pipeline, { batch: true }),
+      ).pipe(Effect.provide(layer)),
+    );
+
+    // Both executed (the typo'd member was healed, not rejected).
+    expect(steps.length).toBe(2);
+    const byTool = ctxs.map((c) => c.toolName).sort();
+    expect(byTool).toEqual(["http-get", "web-search"]);
+    // The healed member reports healed=true; the clean one false.
+    const healed = ctxs.find((c) => c.toolName === "web-search");
+    expect(healed?.healed).toBe(true);
+    const clean = ctxs.find((c) => c.toolName === "http-get");
+    expect(clean?.healed).toBe(false);
+  });
+});
