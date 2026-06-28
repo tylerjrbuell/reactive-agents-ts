@@ -94,6 +94,7 @@ export const CostTrackingConfigSchema = Schema.Struct({
 
 export const ExecutionConfigSchema = Schema.Struct({
   maxIterations: Schema.optional(Schema.Number),
+  minIterations: Schema.optional(Schema.Number),
   timeoutMs: Schema.optional(Schema.Number),
   retryPolicy: Schema.optional(
     Schema.Struct({
@@ -217,11 +218,57 @@ export const OutputSchemaOptionsSchema = Schema.Struct({
   abstainBelow: Schema.optional(Schema.Number),
 });
 
+/** Tools that must be called before the agent may declare success. */
+export const RequiredToolsConfigSchema = Schema.Struct({
+  tools: Schema.optional(Schema.Array(Schema.String)),
+  adaptive: Schema.optional(Schema.Boolean),
+  maxRetries: Schema.optional(Schema.Number),
+});
+
+/**
+ * Declarative budget caps enforced by the Arbitrator's pre-intent guard.
+ * At least one of `tokenLimit` / `costLimit` must be present for the builder
+ * to accept it (mirrors `withBudget()` validation).
+ */
+export const BudgetConfigSchema = Schema.Struct({
+  tokenLimit: Schema.optional(Schema.Number),
+  costLimit: Schema.optional(Schema.Number),
+  warningRatio: Schema.optional(Schema.Number),
+});
+
+/**
+ * Circuit-breaker override. `false` disables the default-on breaker;
+ * an object pins the trip thresholds.
+ */
+export const CircuitBreakerConfigSchema = Schema.Union(
+  Schema.Literal(false),
+  Schema.Struct({
+    failureThreshold: Schema.optional(Schema.Number),
+    cooldownMs: Schema.optional(Schema.Number),
+    halfOpenRequests: Schema.optional(Schema.Number),
+  }),
+);
+
+/** Outbound LLM request rate-limiting thresholds (sliding window). */
+export const RateLimitingConfigSchema = Schema.Struct({
+  requestsPerMinute: Schema.optional(Schema.Number),
+  tokensPerMinute: Schema.optional(Schema.Number),
+  maxConcurrent: Schema.optional(Schema.Number),
+});
+
+/** Durable run persistence (crash-resume) configuration. */
+export const DurableRunsConfigSchema = Schema.Struct({
+  dir: Schema.optional(Schema.String),
+  checkpointEvery: Schema.optional(Schema.Number),
+});
+
 // ─── Root AgentConfig Schema ──────────────────────────────────────────────────
 
 export const AgentConfigSchema = Schema.Struct({
   /** Agent display name. Required. */
   name: Schema.String,
+  /** Stable agent identifier (used for durable-run db paths, identity). */
+  agentId: Schema.optional(Schema.String),
   /** LLM provider. Required. */
   provider: ProviderNameSchema,
   /** LLM model identifier (e.g. "claude-opus-4-20250514"). */
@@ -275,6 +322,18 @@ export const AgentConfigSchema = Schema.Struct({
    * allows config files to carry the options so they round-trip without error.
    */
   outputSchemaOptions: Schema.optional(OutputSchemaOptionsSchema),
+  /** Tools that must be called before the agent may declare success. */
+  requiredTools: Schema.optional(RequiredToolsConfigSchema),
+  /** Declarative spend caps (USD). */
+  budget: Schema.optional(BudgetConfigSchema),
+  /** Circuit-breaker override (`false` disables; object pins thresholds). */
+  circuitBreaker: Schema.optional(CircuitBreakerConfigSchema),
+  /** Outbound LLM rate-limiting thresholds. */
+  rateLimiting: Schema.optional(RateLimitingConfigSchema),
+  /** Persist evolved skills across runs. */
+  skillPersistence: Schema.optional(Schema.Boolean),
+  /** Durable run persistence (crash-resume) configuration. */
+  durableRuns: Schema.optional(DurableRunsConfigSchema),
   /** Model parameters: thinking mode, temperature, max tokens. */
   thinking: Schema.optional(Schema.Boolean),
   temperature: Schema.optional(Schema.Number),
@@ -369,6 +428,10 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   let builder = ReactiveAgents.create()
     .withName(config.name)
     .withProvider(config.provider);
+
+  if (config.agentId) {
+    builder = builder.withAgentId(config.agentId);
+  }
 
   // Model / model params — params apply independently of `model` so a config
   // that sets temperature/maxTokens/thinking/numCtx without an explicit model
@@ -517,6 +580,9 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   if (config.execution?.maxIterations !== undefined) {
     builder = builder.withMaxIterations(config.execution.maxIterations);
   }
+  if (config.execution?.minIterations !== undefined) {
+    builder = builder.withMinIterations(config.execution.minIterations);
+  }
   if (config.execution?.timeoutMs !== undefined) {
     builder = builder.withTimeout(config.execution.timeoutMs);
   }
@@ -565,6 +631,42 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   if (config.features?.selfImprovement) builder = builder.withSelfImprovement();
   if (config.features?.healthCheck) builder = builder.withHealthCheck();
   if (config.features?.streaming) builder = builder.withStreaming();
+
+  // Required tools
+  if (config.requiredTools) {
+    builder = builder.withRequiredTools({
+      ...(config.requiredTools.tools ? { tools: config.requiredTools.tools } : {}),
+      ...(config.requiredTools.adaptive !== undefined ? { adaptive: config.requiredTools.adaptive } : {}),
+      ...(config.requiredTools.maxRetries !== undefined ? { maxRetries: config.requiredTools.maxRetries } : {}),
+    });
+  }
+
+  // Budget caps
+  if (config.budget) {
+    builder = builder.withBudget(config.budget);
+  }
+
+  // Circuit breaker (default-on; `false` disables, object pins thresholds)
+  if (config.circuitBreaker === false) {
+    builder = builder.withoutCircuitBreaker();
+  } else if (config.circuitBreaker) {
+    builder = builder.withCircuitBreaker(config.circuitBreaker);
+  }
+
+  // Rate limiting
+  if (config.rateLimiting) {
+    builder = builder.withRateLimiting(config.rateLimiting);
+  }
+
+  // Skill persistence
+  if (config.skillPersistence !== undefined) {
+    builder = builder.withSkillPersistence(config.skillPersistence);
+  }
+
+  // Durable runs (crash-resume)
+  if (config.durableRuns) {
+    builder = builder.withDurableRuns(config.durableRuns);
+  }
 
   // Pricing registry
   if (config.pricingRegistry) {

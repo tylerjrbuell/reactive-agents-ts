@@ -80,6 +80,27 @@ export interface BuilderStateForSerialization {
   _enableHealthCheck: boolean;
   _streamDensity?: string;
   _pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>;
+  _groundingConfig?: { mode: "block" | "warn"; tolerance?: number; maxRetries?: number };
+  _fabricationGuard?: "off" | "warn" | "block";
+  _stallPolicy?: { ignoredNudgeTolerance?: number; escalateNudgeContent?: boolean };
+  _taskContext?: Record<string, string>;
+  _outputSchemaConfig?: {
+    options?: {
+      mode?: "auto" | "fast" | "grounded";
+      onParseFail?: "degrade" | "throw";
+      abstainBelow?: number;
+    };
+  };
+  _stableAgentId?: string;
+  _minIterations?: number;
+  _requiredToolsConfig?: { tools?: readonly string[]; adaptive?: boolean; maxRetries?: number };
+  _budgetLimits?: { tokenLimit?: number; costLimit?: number; warningRatio?: number };
+  _circuitBreakerConfig?:
+    | { failureThreshold?: number; cooldownMs?: number; halfOpenRequests?: number }
+    | false;
+  _rateLimiterConfig?: { requestsPerMinute?: number; tokensPerMinute?: number; maxConcurrent?: number };
+  _skillPersistence?: boolean;
+  _durableRuns?: { dir?: string; checkpointEvery?: number };
 }
 
 /**
@@ -94,6 +115,8 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     name: state._name,
     provider: state._provider,
   };
+
+  if (state._stableAgentId) config["agentId"] = state._stableAgentId;
 
   if (state._model) config["model"] = state._model;
   if (state._thinking !== undefined) config["thinking"] = state._thinking;
@@ -111,6 +134,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (ro?.enableStrategySwitching !== undefined) r["enableStrategySwitching"] = ro.enableStrategySwitching;
     if (ro?.maxStrategySwitches !== undefined) r["maxStrategySwitches"] = ro.maxStrategySwitches;
     if (ro?.fallbackStrategy) r["fallbackStrategy"] = ro.fallbackStrategy;
+    if (ro?.auditRationale !== undefined) r["auditRationale"] = ro.auditRationale;
     config["reasoning"] = r;
   }
 
@@ -119,6 +143,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     const t: Record<string, unknown> = {};
     const to = state._toolsOptions;
     if (to?.allowedTools) t["allowedTools"] = [...to.allowedTools];
+    if (to?.focusedTools) t["focusedTools"] = [...to.focusedTools];
     if (to?.adaptive !== undefined) t["adaptive"] = to.adaptive;
     if (to?.terminal !== undefined) {
       t["terminal"] =
@@ -197,6 +222,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Execution
   const exec: Record<string, unknown> = {};
   if (state._maxIterations !== undefined) exec["maxIterations"] = state._maxIterations;
+  if (state._minIterations !== undefined) exec["minIterations"] = state._minIterations;
   if (state._executionTimeoutMs !== undefined) exec["timeoutMs"] = state._executionTimeoutMs;
   if (state._retryPolicy) exec["retryPolicy"] = { ...state._retryPolicy };
   if (state._cacheTimeoutMs !== undefined) exec["cacheTimeoutMs"] = state._cacheTimeoutMs;
@@ -244,6 +270,72 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   if (state._pricingRegistry && Object.keys(state._pricingRegistry).length > 0) {
     config["pricingRegistry"] = state._pricingRegistry;
   }
+
+  // Grounding (opt-in; absent = off)
+  if (state._groundingConfig) {
+    const gr: Record<string, unknown> = { mode: state._groundingConfig.mode };
+    if (state._groundingConfig.tolerance !== undefined) gr["tolerance"] = state._groundingConfig.tolerance;
+    if (state._groundingConfig.maxRetries !== undefined) gr["maxRetries"] = state._groundingConfig.maxRetries;
+    config["grounding"] = gr;
+  }
+
+  // Fabrication guard (always-on by default; serialize explicit override)
+  if (state._fabricationGuard !== undefined) config["fabricationGuard"] = state._fabricationGuard;
+
+  // Stall/no-progress policy
+  if (state._stallPolicy) {
+    const sp: Record<string, unknown> = {};
+    if (state._stallPolicy.ignoredNudgeTolerance !== undefined) sp["ignoredNudgeTolerance"] = state._stallPolicy.ignoredNudgeTolerance;
+    if (state._stallPolicy.escalateNudgeContent !== undefined) sp["escalateNudgeContent"] = state._stallPolicy.escalateNudgeContent;
+    config["stallPolicy"] = sp;
+  }
+
+  // Structured-output behavioural options. The schema object itself is not
+  // JSON-serializable, but the options round-trip OUT so a config snapshot is
+  // lossless; re-applying them requires `.withOutputSchema(schema, options)` in
+  // code (see agent-config.ts roundtrip note).
+  if (state._outputSchemaConfig?.options) {
+    const o = state._outputSchemaConfig.options;
+    const oso: Record<string, unknown> = {};
+    if (o.mode !== undefined) oso["mode"] = o.mode;
+    if (o.onParseFail !== undefined) oso["onParseFail"] = o.onParseFail;
+    if (o.abstainBelow !== undefined) oso["abstainBelow"] = o.abstainBelow;
+    if (Object.keys(oso).length > 0) config["outputSchemaOptions"] = oso;
+  }
+
+  // Task context (background data injected into reasoning memory)
+  if (state._taskContext && Object.keys(state._taskContext).length > 0) {
+    config["taskContext"] = { ...state._taskContext };
+  }
+
+  // Required tools
+  if (state._requiredToolsConfig) {
+    const rt: Record<string, unknown> = {};
+    const rtc = state._requiredToolsConfig;
+    if (rtc.tools) rt["tools"] = [...rtc.tools];
+    if (rtc.adaptive !== undefined) rt["adaptive"] = rtc.adaptive;
+    if (rtc.maxRetries !== undefined) rt["maxRetries"] = rtc.maxRetries;
+    config["requiredTools"] = rt;
+  }
+
+  // Budget caps
+  if (state._budgetLimits) config["budget"] = { ...state._budgetLimits };
+
+  // Circuit breaker (`false` = disabled; object pins thresholds)
+  if (state._circuitBreakerConfig === false) {
+    config["circuitBreaker"] = false;
+  } else if (state._circuitBreakerConfig) {
+    config["circuitBreaker"] = { ...state._circuitBreakerConfig };
+  }
+
+  // Rate limiting
+  if (state._rateLimiterConfig) config["rateLimiting"] = { ...state._rateLimiterConfig };
+
+  // Skill persistence
+  if (state._skillPersistence !== undefined) config["skillPersistence"] = state._skillPersistence;
+
+  // Durable runs (crash-resume)
+  if (state._durableRuns) config["durableRuns"] = { ...state._durableRuns };
 
   return config as AgentConfig;
 }
