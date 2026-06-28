@@ -38,7 +38,7 @@ const cover = pick("cover_image");
 const article = {
   title,
   body_markdown: body,
-  published: false, // DRAFT — review + publish from the Dev.to editor
+  published: pick("published") === "true", // honor front matter (true keeps a live article published)
   tags,
   ...(canonical ? { canonical_url: canonical } : {}),
   ...(cover ? { main_image: cover } : {}),

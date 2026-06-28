@@ -1,14 +1,12 @@
 ---
 # Dev.to front matter — paste into the editor's front matter, or set via the UI.
-title: "Reliable TypeScript AI agents: the same code finishes on a 4B model or Claude — and survives a crash mid-run"
-published: false
-description: "I kept losing agents to the loop, not the model. So I built a TypeScript framework around making the loop finish — on a 4B local model or Claude, and even after the process dies mid-run. Here's how it works."
+title: "Reliable LLM agents in TypeScript: one harness you fully control, from a local 4B model to Claude"
+published: true
+description: "I kept losing agents to the loop, not the model. So I built Reactive Agents — a composable TypeScript framework for building reliable LLM agents on a harness you fully control. The same code runs from a local 4B model to Claude, and resumes after a crash. Here's how it works."
 tags: typescript, ai, llm, webdev
 canonical_url: https://docs.reactiveagents.dev/guides/build-ai-agents-typescript/
 cover_image: https://raw.githubusercontent.com/tylerjrbuell/reactive-agents-ts/main/apps/docs/src/assets/devto-cover.png
 ---
-
-> **Note for publishing:** drag-drop `ra-demo.gif` and `ra-durable.gif` into the Dev.to editor for native embeds, or keep the GitHub raw URLs below. Flip `published: true` when you're ready.
 
 Every agent framework demo works. You wire up a couple of tools, point it at a frontier model, ask it something, and it nails it. Looks great in a tweet.
 
@@ -16,7 +14,7 @@ Then you point it at a real task with a smaller model and watch it fall apart on
 
 That was most of my spring. I'd get an agent working nicely against Claude, swap in a local model to stop paying per token, and it would emit a tool call that was *almost* right — a tool named `getServiceHealth` instead of `get_service_health`, a param called `svc` instead of `service`, a path with a stray quote — and the loop would just die. Re-prompt, retry, burn through iterations doing nothing, give up. The model could do the task. The harness around it couldn't keep the loop alive long enough to find out.
 
-So I stopped trying to fix the model and built the harness. It's called [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts), and it's organized around three things I kept wishing the other frameworks did:
+So I stopped trying to fix the model and built the harness. It's called [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — a composable TypeScript framework for building reliable LLM agents on a harness you fully control. It's organized around three things I kept wishing the other frameworks did:
 
 - **Reliability** — the loop actually finishes.
 - **Transparency** — I can see and steer every step instead of guessing at a black box.
