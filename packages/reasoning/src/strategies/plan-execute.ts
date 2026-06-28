@@ -41,6 +41,7 @@ import type { StrategyServices } from "../kernel/utils/service-utils.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
+import { resolveProfile } from "../context/profile-resolver.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
@@ -201,11 +202,16 @@ export const executePlanExecute = (
     yield* emitLog({ _tag: "phase_started", phase: "plan-execute:plan", timestamp: new Date() });
 
     // ── PLAN: Generate initial structured plan ──
+    // Tier-aware planning prompt (was hardcoded "mid" — frontier/large models
+    // got the small-model planner verbosity, local lost its tighter treatment).
+    // Derive the real tier from the model id so the planner prompt matches the
+    // model's actual capability across all tiers.
+    const planTier = resolveProfile(input.modelId ?? "mid").tier;
     const planPrompt = buildPlanGenerationPrompt({
       goal,
       tools: toolSummaries,
       pastPatterns: [],
-      modelTier: "mid",
+      modelTier: planTier,
       requiredToolQuantities: input.requiredToolQuantities,
     });
 
