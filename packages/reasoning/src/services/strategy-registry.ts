@@ -20,6 +20,7 @@ import { executeTreeOfThought } from "../strategies/tree-of-thought.js";
 import { executeAdaptive } from "../strategies/adaptive.js";
 import { executeDirect } from "../strategies/direct.js";
 import { executeCodeAction } from "../strategies/code-action.js";
+import { executeBlueprint } from "../strategies/blueprint.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 
 // ─── Strategy function type ───
@@ -160,6 +161,10 @@ export const StrategyRegistryLive = Layer.effect(
         ["direct", asStrategyFn(executeDirect)],
         /** Code generation strategy — LLM writes an IIFE, runs in Worker sandbox. */
         ["code-action", asStrategyFn(executeCodeAction)],
+        /** ReWOO-style plan→verify→execute(0-LLM,parallel)→solve — cheap, decomposable/tool-heavy domain. */
+        ["blueprint", executeBlueprint],
+        /** Literature alias for blueprint (Reasoning WithOut Observation). */
+        ["rewoo", executeBlueprint],
       ]),
     );
 

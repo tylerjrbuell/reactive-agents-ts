@@ -37,6 +37,11 @@ export const ReasoningStrategy = Schema.Literal(
   /** Generates executable TypeScript code that composes tools, runs in a
    * Worker sandbox. Phase D strategy for complex multi-tool orchestration. */
   "code-action",
+  /** ReWOO-style PLAN → VERIFY → EXECUTE (0-LLM, parallel DAG worker) → SOLVE.
+   * Single-pass DAG plan-execute that beats ReAct on tool tasks at ~2 LLM
+   * calls; the deterministic plan-verify gate carries small/local-model
+   * planning across all tiers. See strategies/blueprint.ts. */
+  "blueprint",
 );
 export type ReasoningStrategy = typeof ReasoningStrategy.Type;
 
