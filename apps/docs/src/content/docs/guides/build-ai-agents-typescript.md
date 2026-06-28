@@ -44,7 +44,7 @@ A toy agent is one LLM call. A production agent needs more, and each piece is a 
 
 ### A reasoning loop
 
-The think → act → observe cycle. Reactive Agents ships six strategies — ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, and Code-Action — and switches between them when a task calls for it. Add it with `.withReasoning()`.
+The think → act → observe cycle. Reactive Agents ships seven strategies — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, and Code-Action — and switches between them when a task calls for it. Add it with `.withReasoning()`.
 → [Reasoning Strategies](/guides/reasoning/) · [Choosing a Strategy](/guides/choosing-strategies/)
 
 ### Tools and tool calling

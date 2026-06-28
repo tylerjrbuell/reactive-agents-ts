@@ -154,7 +154,7 @@ The runner handles nine steps internally:
 
 ### Using the built-in ReAct kernel
 
-The built-in `reactKernel` implements the Think → Act → Observe loop and is the default kernel used by all five strategies:
+The built-in `reactKernel` implements the Think → Act → Observe loop and is the default kernel used by all strategies:
 
 ```typescript
 import { runKernel } from "./kernel/loop/runner.js";

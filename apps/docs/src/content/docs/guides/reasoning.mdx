@@ -1,13 +1,13 @@
 ---
 title: Reasoning
-description: 5 reasoning strategies — ReAct, Reflexion, Plan-Execute, Tree-of-Thought, and Adaptive meta-strategy.
+description: Reasoning strategies — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, and the Adaptive meta-strategy.
 sidebar:
   order: 8
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The reasoning layer provides structured thinking strategies that go beyond simple LLM completions. Each strategy shapes how the agent breaks down and approaches a task. With 5 built-in strategies and support for custom ones, you can match the reasoning approach to the problem.
+The reasoning layer provides structured thinking strategies that go beyond simple LLM completions. Each strategy shapes how the agent breaks down and approaches a task. With 7 built-in strategies and support for custom ones, you can match the reasoning approach to the problem.
 
 <Aside type="tip" title="Default is ReAct — that's the right choice 80% of the time">
 `.withReasoning()` with no args activates ReAct (Think → Act → Observe loop). Switch via `.withReasoning({ defaultStrategy: "tree-of-thought" })`. **Strategy switching** (the agent picks a different strategy mid-run when entropy detects it's stuck) is opt-in: `enableStrategySwitching: true`. See [Choosing a Reasoning Strategy](../choosing-strategies/) for the full decision tree.
@@ -44,6 +44,30 @@ const result = await agent.run("What happened in AI this week?");
 ```
 
 When `.withTools()` is added, the ReAct strategy passes tool definitions to the LLM via the API's native function calling parameter. The model returns structured `tool_use` blocks — no text parsing required. Tool results are fed back as `tool_result` messages. Without ToolService, the agent degrades gracefully — returning descriptive messages instead of tool results.
+
+### Blueprint
+
+A ReWOO-style **Plan → Verify → Execute → Solve** strategy for static, decomposable, tool-heavy tasks — the efficient counterpart to Plan-Execute-Reflect.
+
+1. **Plan** (1 LLM call) — emit the entire tool plan as a dependency graph (DAG) with `#E1/#E2` evidence references; schema/grammar-enforced so small local models produce a valid plan
+2. **Verify** (no LLM) — validate the DAG, repair fixable gaps, or **degrade to ReAct** if unusable
+3. **Execute** (no LLM) — run tools in dependency order, independent steps in parallel
+4. **Solve** (1 LLM call, skipped when a step already produced the deliverable)
+
+**Best for:** multi-file/artifact generation, static pipelines, independent parallel subtasks — where the plan is knowable up front. **~2 LLM calls total** (≈20× cheaper than plan-execute on its domain). Validated on both frontier and local (qwen3:14b) models.
+
+**Tradeoff:** no mid-course observation — can't react to surprises. For flaky I/O, debug-until-passing, or fetch-then-decide, use Plan-Execute-Reflect or ReAct.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning({ defaultStrategy: "blueprint" }) // alias: "rewoo"
+  .withTools()
+  .build();
+
+const result = await agent.run("Create types.ts, generate.ts, and validate.ts for the schema");
+// Plan (1 call) → Verify DAG → Execute 3 file-writes (no LLM) → Solve/short-circuit
+```
 
 ### Reflexion
 
@@ -297,7 +321,7 @@ When both `.withReasoning()` and `.withTools()` are enabled, tools are wired dir
 
 This means agents can genuinely interact with the world during reasoning — search the web, query databases, run calculations — and incorporate real results into their thinking.
 
-All five strategies support tool integration. Tree-of-Thought uses tools in its execution phase (Phase 2), while ReAct, Plan-Execute, and Reflexion use them throughout their loops.
+All tool-using strategies support tool integration. Tree-of-Thought uses tools in its execution phase (Phase 2), while ReAct, Plan-Execute, and Reflexion use them throughout their loops.
 
 ## Strategy Configuration
 
@@ -517,7 +541,7 @@ This means plan state survives agent restarts and can be inspected for debugging
 
 ## Adaptive Strategy — Sub-Strategy Reporting
 
-When using `defaultStrategy: "adaptive"`, the framework selects a concrete sub-strategy at runtime (ReAct, Plan-Execute, or Reflexion). `agentResult.metadata.strategyUsed` now reports the **actual sub-strategy that produced the output**, not `"adaptive"`:
+When using `defaultStrategy: "adaptive"`, the framework selects a concrete sub-strategy at runtime (ReAct, Blueprint, Plan-Execute, Reflexion, or Tree-of-Thought). `agentResult.metadata.strategyUsed` now reports the **actual sub-strategy that produced the output**, not `"adaptive"`:
 
 ```typescript
 const result = await agent.run("Research and write a report");

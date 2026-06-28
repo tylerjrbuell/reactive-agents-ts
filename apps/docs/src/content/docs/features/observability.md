@@ -359,7 +359,7 @@ When `output: "file"` is configured:
 
 ## ThoughtTracer
 
-`ThoughtTracer` captures reasoning steps from all 5 strategies automatically via the EventBus. Add it via `ThoughtTracerLive`:
+`ThoughtTracer` captures reasoning steps from all strategies automatically via the EventBus. Add it via `ThoughtTracerLive`:
 
 ```typescript
 import { ThoughtTracerService, ThoughtTracerLive } from "@reactive-agents/observability";

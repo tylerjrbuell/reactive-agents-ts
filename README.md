@@ -16,7 +16,7 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 | ---------------------------- | ---------------------------------------------------------------- |
 | **41 packages & apps**       | 35 packages + 6 apps — 33 published to npm, all opt-in, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
-| **6 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
+| **7 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
 | **6,558 tests · 804 files**  | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
@@ -69,7 +69,7 @@ Most AI agent frameworks are dynamically typed, monolithic, and opaque. They ass
 | **Monolithic**            | 13 independent layers -- enable only what you need                                                                  |
 | **Opaque decisions**      | 12-phase execution engine with before/after/error hooks on every phase                                              |
 | **Model lock-in**         | Model-adaptive context profiles (4 tiers: local, mid, large, frontier) help smaller models punch above their weight |
-| **Single reasoning mode** | 6 strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action @experimental)                 |
+| **Single reasoning mode** | 7 strategies (ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action @experimental)                 |
 | **Unsafe by default**     | Guardrails block injection/PII/toxicity before the LLM sees input                                                   |
 | **No cost control**       | Complexity router picks the cheapest capable model; budget enforcement at 4 levels                                  |
 | **Poor DX**               | Builder API chains capabilities in one place                                                                        |
@@ -95,7 +95,7 @@ A full-featured local studio for live debugging — start it with `.withCortex()
 Grouped by capability. **Every layer is opt-in** — call `.with*()` only for what you need.
 
 ### 🧠 Reasoning & Cognition
--   **6 reasoning strategies** + adaptive meta-strategy: ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action (@experimental)
+-   **7 reasoning strategies** + adaptive meta-strategy: ReAct, Blueprint (efficient static-decomposable), Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action (@experimental)
 -   **Intelligent context synthesis** — fast-template or deep-LLM transcript shaping per iteration (`ContextSynthesized` on EventBus)
 -   **Reactive intelligence** — 5-source entropy sensor + 8-action controller (early-stop, compress, switch strategy, adjust temp, inject tool, activate skill, redirect on failure, stall-detect) + Thompson Sampling bandit
 -   **Adaptive calibration** — three-tier live learning (shipped prior → community profile → local posterior) with per-run observations and classifier bypass
@@ -556,7 +556,7 @@ gauge in Cortex Studio.
 | [`@reactive-agents/runtime`](packages/runtime)                             | 12-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()` layer composer                                                                                                          |
 | [`@reactive-agents/llm-provider`](packages/llm-provider)                   | Unified LLM interface for Anthropic, OpenAI, Gemini, Ollama, LiteLLM, and Test providers                                                                                                  |
 | [`@reactive-agents/memory`](packages/memory)                               | 4-layer memory (working, semantic, episodic, procedural) on bun:sqlite; ExperienceStore cross-agent learning; background consolidation + decay                                            |
-| [`@reactive-agents/reasoning`](packages/reasoning)                         | 6 strategies (ReAct, Reflexion, Plan-Execute, ToT, Adaptive, Code-Action @experimental) with composable kernel architecture                                                               |
+| [`@reactive-agents/reasoning`](packages/reasoning)                         | 7 strategies (ReAct, Blueprint, Reflexion, Plan-Execute, ToT, Adaptive, Code-Action @experimental) with composable kernel architecture                                                               |
 | [`@reactive-agents/tools`](packages/tools)                                 | Tool registry with sandboxed execution, MCP client, agent-as-tool adapter, dynamic sub-agent spawning                                                                                     |
 | [`@reactive-agents/guardrails`](packages/guardrails)                       | Pre-LLM safety: injection detection, PII filtering, toxicity blocking                                                                                                                     |
 | [`@reactive-agents/verification`](packages/verification)                   | Post-LLM quality: semantic entropy, fact decomposition, NLI hallucination detection                                                                                                       |
@@ -846,7 +846,7 @@ LLM_DEFAULT_MODEL=claude-sonnet-4-6
 Full documentation at **[docs.reactiveagents.dev](https://docs.reactiveagents.dev/)**
 
 -   [Getting Started](https://docs.reactiveagents.dev/guides/quickstart/) -- Build an agent in 5 minutes
--   [Reasoning Strategies](https://docs.reactiveagents.dev/guides/choosing-strategies/) -- All 6 strategies explained
+-   [Reasoning Strategies](https://docs.reactiveagents.dev/guides/choosing-strategies/) -- All 7 strategies explained
 -   [Architecture](https://docs.reactiveagents.dev/concepts/architecture/) -- Layer system deep dive
 -   [Cookbook](https://docs.reactiveagents.dev/cookbook/testing-agents/) -- Testing, multi-agent patterns, production deployment
 

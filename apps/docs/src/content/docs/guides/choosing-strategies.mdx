@@ -7,7 +7,7 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-Reactive Agents ships five reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.
+Reactive Agents ships seven reasoning strategies. Picking the right one has a significant impact on token usage, latency, and answer quality. This guide helps you make that choice systematically.
 
 <Aside type="tip" title="If you don't want to think about it">
 Use **Adaptive** — it auto-selects per task: `.withReasoning({ defaultStrategy: "adaptive" })`. Or use the default **ReAct** — it works for ~80% of agent workloads. Only switch to one of the others when you have a specific reason from the decision tree below.
@@ -25,7 +25,13 @@ What kind of task are you running?
 │   └─ ReAct (default)
 │       .withReasoning()
 │
-├─ Needs a structured step-by-step plan
+├─ Decomposable, tool-heavy task whose full plan is knowable UP FRONT
+│  (multi-file generation, static pipelines — no mid-course adaptation)
+│   └─ Blueprint  ← cheapest: plan once → run tools (no LLM in loop) → solve
+│       .withReasoning({ defaultStrategy: "blueprint" })
+│
+├─ Multi-step plan that must ADAPT mid-course (react to results, retry on
+│  failure, fetch-then-decide, debug-until-passing)
 │   └─ Plan-Execute-Reflect
 │       .withReasoning({ defaultStrategy: "plan-execute-reflect" })
 │
@@ -51,10 +57,19 @@ What kind of task are you running?
 | Strategy | Avg Tokens | Latency | Iterations | Best For | Min Model Size |
 |---|---|---|---|---|---|
 | ReAct | Low–Med | Fast | 3–10 | Tool-use tasks, API calls, lookups | 4B+ |
-| Plan-Execute-Reflect | Med–High | Medium | 5–15 | Structured workflows, multi-file tasks | 14B+ |
+| Blueprint | **Low** | **Fast** | ~2 LLM calls | Static decomposable tasks (multi-file gen, parallel subtasks) | 4B+ (local-verified) |
+| Plan-Execute-Reflect | Med–High | Medium | 5–15 | Observation-driven workflows that adapt mid-course | 14B+ |
 | Reflexion | Medium | Medium | 3–8 | Factual Q&A, accuracy-critical | 8B+ |
 | Tree-of-Thought | High | Slow | 5–20 | Creative writing, ambiguous problems | 14B+ |
 | Adaptive | Varies | Varies | Varies | Mixed workloads, changing task types | 8B+ |
+
+> **Blueprint vs Plan-Execute-Reflect:** both decompose, but blueprint plans the
+> whole tool-DAG once and executes it with **no LLM in the loop** (≈2 calls total,
+> ~20× cheaper on its domain) — so it can't react to surprises. Use blueprint when
+> the plan is knowable up front (generate these files, fetch these N independent
+> sources); use plan-execute when steps depend on observing earlier results
+> (debug-until-passing, branch-on-result, flaky I/O). Adaptive routes between them
+> automatically.
 
 ## Strategy Deep Dives
 
@@ -68,6 +83,27 @@ The default strategy. Each iteration follows: Think → Act (tool call) → Obse
 - Best fit for tool-heavy tasks (API calls, file operations, lookups)
 
 **Requirements:** Tools must be registered via `.withTools()`.
+
+---
+
+### Blueprint
+
+A ReWOO-style strategy for **static, decomposable, tool-heavy tasks** whose full plan is knowable up front. Three phases:
+
+1. **Plan** (1 LLM call) — produce the entire tool plan as a dependency graph (DAG) with `#E1/#E2` evidence references between steps. Schema/grammar-enforced so even small local models emit a valid plan.
+2. **Verify** (no LLM) — validate the DAG (no cycles, required tools present, references resolve); repair fixable gaps; **degrade to ReAct** if the plan is unusable.
+3. **Execute** (no LLM) — run the tools in dependency order, independent steps in parallel; then **Solve** (1 LLM call, skipped when a step already produced the deliverable).
+
+**Strengths:**
+- **~2 LLM calls total vs ~9 for plan-execute** — measured ~20× cheaper on its domain.
+- Tier-portable: validated on both frontier (Claude Haiku) and local (qwen3:14b) — the plan-verification gate + schema-enforced planning carry small models.
+- Parallel tool execution for independent steps.
+
+**Tradeoff:** plans once with **no mid-course observation** — it can't react to surprises (tool failures, results that change the plan). For those, use Plan-Execute-Reflect or ReAct.
+
+**Best for:** multi-file/artifact generation, static pipelines, independent parallel subtasks. **Avoid for:** flaky network I/O, debug-until-passing, fetch-then-decide.
+
+**Requirements:** Tools via `.withTools()`. `.withReasoning({ defaultStrategy: "blueprint" })` (alias: `"rewoo"`).
 
 ---
 
@@ -118,6 +154,8 @@ Selects the most appropriate strategy per-iteration based on observed task chara
 - Handles mixed workloads where task complexity shifts mid-run
 - Routes simple steps to fast strategies, reducing unnecessary overhead
 - No single-strategy lock-in
+
+**Routing by task characteristics:** trivial/short → ReAct; static local artifact generation → **Blueprint**; observation-driven or network/fetch tasks → Plan-Execute-Reflect; compare/explore → Tree-of-Thought; critique/refine → Reflexion. On the local tier it defaults to ReAct (heavy strategies show no quality lift there); Blueprint auto-routes on mid/large/frontier and is available opt-in on local.
 
 **Requirements:** Must explicitly set `adaptive: { enabled: true }` in the reasoning options. An 8B+ model is recommended.
 
@@ -226,7 +264,7 @@ ReAct and Reflexion are both viable. Plan-Execute-Reflect is experimental — it
 
 ### 14B models (e.g., qwen3-14b, phi-4-14b)
 
-All five strategies are viable. Plan-Execute-Reflect produces reliable structured plans at this tier. This is the recommended minimum for production use with complex workflows.
+All strategies are viable (including Blueprint). Plan-Execute-Reflect produces reliable structured plans at this tier. This is the recommended minimum for production use with complex workflows.
 
 ### 70B+ models (e.g., llama-3.3-70b, qwen3-72b)
 
@@ -241,6 +279,13 @@ All strategies work at their best. Tree-of-Thought and Plan-Execute-Reflect are 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
+  .build();
+
+// Blueprint — static decomposable tasks (plan once → execute → solve)
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools()
+  .withReasoning({ defaultStrategy: "blueprint" }) // alias: "rewoo"
   .build();
 
 // Plan-Execute-Reflect

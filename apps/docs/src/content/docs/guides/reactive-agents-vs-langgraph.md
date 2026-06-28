@@ -14,7 +14,7 @@ sidebar:
 | Primary language | TypeScript-first (Effect-TS) | Python-first; mature TS port (LangGraph.js) |
 | Core model | Composable typed harness + builder | Explicit graph state machine (`StateGraph`) |
 | Compile-time type safety | End-to-end: typed errors, schema-validated boundaries | TypeScript types on state via annotations |
-| Prebuilt agent loop | `.withReasoning()` + 6 strategies | `createReactAgent` prebuilt |
+| Prebuilt agent loop | `.withReasoning()` + 7 strategies | `createReactAgent` prebuilt |
 | Reasoning strategies built in | ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action | ReAct prebuilt; others authored as custom graphs |
 | Custom control flow | 12-phase engine + per-phase hooks | Arbitrary node/edge graphs (very flexible) |
 | Local model parity | First-class (Ollama 4B+, same code as frontier) | Via provider integrations (e.g. `ChatOllama`) |

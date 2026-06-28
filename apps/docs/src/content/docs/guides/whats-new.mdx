@@ -348,4 +348,4 @@ None. All existing `ReactiveAgents.create().with*()` builder chains keep working
 - **Agent-as-tool pattern** — wrap any local or remote A2A agent as a callable tool with `createAgentTool()` / `createRemoteAgentTool()` — see [Sub-agents](/guides/sub-agents)
 - **Live observability streaming** — `withObservability({ live: true, verbosity })` writes structured phase logs to stdout as each step fires — see [Observability](/features/observability)
 - **`rax serve`** — expose any agent as an A2A-compliant HTTP server with a single CLI command — see [CLI](/reference/cli)
-- **EventBus reasoning events** — all 5 strategies publish `ReasoningStepCompleted`; subscribe with `agent.on()` for custom monitoring — see [Observability](/features/observability)
+- **EventBus reasoning events** — all strategies publish `ReasoningStepCompleted`; subscribe with `agent.on()` for custom monitoring — see [Observability](/features/observability)
