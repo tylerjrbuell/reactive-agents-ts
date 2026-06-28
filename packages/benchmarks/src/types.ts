@@ -19,7 +19,7 @@ export interface BenchmarkTask {
   /** Optional expected output pattern (regex or substring with | separators). */
   readonly expected?: string;
   /** Reasoning strategy to test (undefined = single-shot). */
-  readonly strategy?: "react" | "plan-execute" | "tree-of-thought";
+  readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "blueprint";
   /** Industry benchmark this task is aligned with. */
   readonly benchmark?: string;
   /** Whether tools are required. */
@@ -247,7 +247,7 @@ export interface HarnessConfig {
   readonly reactiveIntelligence?: boolean;
   readonly memory?: boolean;
   readonly guardrails?: boolean;
-  readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "adaptive";
+  readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "adaptive" | "blueprint";
   /**
    * Verifier override for ablation runs. `"noop"` swaps the terminal §9.0
    * verifier gate inside the kernel for `noopVerifier`, which approves every
