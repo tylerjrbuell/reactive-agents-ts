@@ -18,6 +18,7 @@ import { executeReactive } from "./reactive.js";
 import { executeReflexion } from "./reflexion.js";
 import { executePlanExecute } from "./plan-execute.js";
 import { executeTreeOfThought } from "./tree-of-thought.js";
+import { executeBlueprint } from "./blueprint.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import {
@@ -99,7 +100,8 @@ type SubStrategy =
   | "reactive"
   | "reflexion"
   | "plan-execute-reflect"
-  | "tree-of-thought";
+  | "tree-of-thought"
+  | "blueprint";
 
 export const executeAdaptive = (
   input: AdaptiveInput,
@@ -163,9 +165,16 @@ export const executeAdaptive = (
       });
     } else {
     // ── Analyze task to select strategy ──
+    const strategyMenu =
+      "You are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of:\n" +
+      "- REACTIVE: most tasks; direct tool use; Q&A; short/simple.\n" +
+      "- BLUEPRINT: decomposable, tool-heavy tasks whose full plan is knowable UP FRONT and does NOT depend on observing intermediate results — independent/parallel subtasks, multi-file/artifact generation, static pipelines (cheapest for these).\n" +
+      "- PLAN_EXECUTE: multi-step tasks that DO need to adapt mid-course — react to tool failures, branch on results, debug-until-passing, investigate (pick over BLUEPRINT whenever observation drives the plan).\n" +
+      "- TREE_OF_THOUGHT: explore/compare alternatives, brainstorm, pros-and-cons.\n" +
+      "- REFLEXION: iterative critique/refine to a quality bar.";
     const classifyDefaultFallback = input.systemPrompt
-      ? `${input.systemPrompt}\n\nYou are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT`
-      : "You are a task analyzer. Classify the task and recommend the best reasoning strategy. Respond with ONLY one of: REACTIVE, REFLEXION, PLAN_EXECUTE, TREE_OF_THOUGHT";
+      ? `${input.systemPrompt}\n\n${strategyMenu}`
+      : strategyMenu;
 
     const classifySystemPrompt = yield* compilePromptOrFallback(
       promptServiceOpt,
@@ -369,9 +378,14 @@ Strategy options:
   return prompt;
 }
 
-function parseStrategySelection(text: string): SubStrategy {
+export function parseStrategySelection(text: string): SubStrategy {
   const normalized = text.trim().toUpperCase();
 
+  // BLUEPRINT before PLAN_EXECUTE — both are decomposition strategies; blueprint
+  // is the static/observation-free variant, so match it first when named.
+  if (normalized.includes("BLUEPRINT")) {
+    return "blueprint";
+  }
   if (normalized.includes("PLAN_EXECUTE") || normalized.includes("PLAN-EXECUTE")) {
     return "plan-execute-reflect";
   }
@@ -400,6 +414,8 @@ function dispatchStrategy(
       return executePlanExecute(input);
     case "tree-of-thought":
       return executeTreeOfThought(input);
+    case "blueprint":
+      return executeBlueprint(input);
     case "reactive":
     default:
       return executeReactive(input);
@@ -488,7 +504,7 @@ export function costAwareAdjustment(
  * HS-cleanup-2: classification is supplied by the caller (computed once
  * upstream per agent run) rather than re-derived here.
  */
-function heuristicClassify(
+export function heuristicClassify(
   input: AdaptiveInput,
   classification: TaskClassification,
 ): SubStrategy | null {
@@ -506,7 +522,27 @@ function heuristicClassify(
   // Short tasks with no tools → reactive (Q&A, simple lookup)
   if (wordCount <= 15 && !hasTools) return "reactive";
 
-  // Plan patterns → plan-execute
+  // Blueprint domain → static, decomposable, LOCAL artifact generation whose
+  // full plan is knowable up front and does NOT need mid-course observation.
+  // Cheapest for these (plan once → execute tools with no LLM → solve).
+  // GUARDS (route AWAY from blueprint, toward plan-execute/reactive):
+  //   - observationDriven: needs to react to results (debug/investigate/branch).
+  //   - networkIO: fetch/api/http is failure-prone → needs adaptation/retry,
+  //     which blueprint (observation-free) can't do. Proof-gate evidence
+  //     (2026-06-28): rw-9 flaky-fetch routed to blueprint → acc=0; plan-execute
+  //     handled it. So network tasks stay on plan-execute/reactive.
+  const observationDriven =
+    /\b(debug|until|retry|investigat|diagnos|based on|depend(s|ing) on|if .* then|explore|find (the )?(cause|bug|root)|troubleshoot|recover|fix (and |then )?(verify|test|check))\b/i.test(task);
+  const networkIO = /\b(fetch|https?:|api\b|download|scrape|crawl|web[- ]?search|url)\b/i.test(task);
+  const staticGen =
+    /\b(generate|create|write|build|scaffold|implement|produce|refactor)\b/i.test(task) &&
+    /\b(files?|components?|modules?|classes?|functions?|tests?|endpoints?|schemas?|types?|pipeline|each|multiple|several)\b/i.test(task);
+  if (hasTools && staticGen && !observationDriven && !networkIO && wordCount > 8) {
+    return "blueprint";
+  }
+
+  // Plan patterns → plan-execute (the adaptive/observation-driven decomposition
+  // sibling; static-local decomposition was already routed to blueprint above).
   const planPatterns = /\b(step[- ]by[- ]step|plan|phases?|stages?|pipeline|workflow|sequenc|first .* then|implement .* with .* and)\b/i;
   if (planPatterns.test(task) && wordCount > 10) return "plan-execute-reflect";
 
