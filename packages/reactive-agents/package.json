@@ -8,7 +8,7 @@
     "rax": "bin/rax.js",
     "reactive-agents": "bin/rax.js"
   },
-  "description": "Reliable, transparent, composable TypeScript AI agents on Effect-TS — the same code finishes the agent loop on local 4B models and frontier APIs. Install everything with one package.",
+  "description": "A composable TypeScript framework for building reliable, custom LLM agents on a harness you fully control. The same code runs the full agent loop on every model tier — local 4B to frontier — with tool-call healing, output verification, and durable crash-resume, on a typed 12-phase engine where every step emits an event you can hook into, inspect, and steer. Built on Effect-TS, MCP-native, MIT.",
   "keywords": [
     "ai",
     "agents",

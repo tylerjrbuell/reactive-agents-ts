@@ -1,16 +1,16 @@
 ---
 title: Introduction
-description: What is Reactive Agents and why should you use it?
+description: A composable TypeScript framework for building reliable LLM agents on a harness you fully control — the same code from a local 4B model to frontier APIs, on a typed, observable 12-phase engine.
 sidebar:
   order: 1
 ---
 
 import { Aside, Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Reactive Agents is a TypeScript framework for building autonomous AI agents. It's built on [Effect-TS](https://effect.website) — giving you type-safe, composable, and observable agent systems from day one.
+Reactive Agents is a composable TypeScript framework for building reliable LLM agents on a harness you fully control. It's built on [Effect-TS](https://effect.website), so the runtime is type-safe, observable, and composable end to end.
 
-<Aside type="tip" title="The one thing to know">
-Every prompt, tool call, and reasoning step is a **typed event you can subscribe to**. No hidden prompts, no proprietary loop. A self-healing tool layer recovers **86.7% of tool-call errors**, so a local 4B Ollama model runs the *same code* as Claude, GPT, and Gemini.
+<Aside type="tip" title="At a glance">
+Every prompt, tool call, and reasoning step is a **typed event you can subscribe to** — no hidden prompts, no proprietary loop. A self-healing tool layer recovers **86.7% of tool-call errors**, so the *same code* runs on a local 4B Ollama model and on Claude, GPT, or Gemini.
 </Aside>
 
 ## The Problem
@@ -18,8 +18,8 @@ Every prompt, tool call, and reasoning step is a **typed event you can subscribe
 Building production AI agents is hard:
 
 - **No type safety** — Most agent frameworks are dynamically typed. Errors surface at runtime, often in production.
-- **Monolithic** — You get everything or nothing. Want memory but not guardrails? Too bad.
-- **Opaque** — Agent decisions are black boxes. When something goes wrong, good luck debugging.
+- **Monolithic** — You get everything or nothing; opting into memory but not guardrails is rarely supported.
+- **Opaque** — Agent decisions are black boxes, which makes them hard to debug, audit, or steer.
 - **Unsafe** — Prompt injection, PII leaks, and runaway costs are afterthoughts.
 
 ## The Solution
@@ -36,16 +36,16 @@ Reactive Agents solves each of these with a layered, composable architecture:
 ## What makes it different
 
 <CardGrid>
-  <Card title="🔍 Transparent harness" icon="magnifier">
+  <Card title="Transparent harness" icon="magnifier">
     Every one of the 12 phases emits typed events with `before` / `after` / `on-error` hooks. System prompts are readable templates, not buried strings. Raw provider clients ship standalone — skip the harness entirely if you want.
   </Card>
-  <Card title="🩹 Local models that work" icon="setting">
-    A 4-stage healing pipeline recovers malformed tool calls on the fly (**+80pp accuracy**, 10× cheaper than an LLM reprompt). Local Ollama models hit **91–94%** on the same suite where frontier APIs hit 100%.
+  <Card title="Reliable on local models" icon="setting">
+    A 4-stage healing pipeline recovers malformed tool calls on the fly (**+80pp accuracy**, 10× cheaper than an LLM reprompt). Local Ollama models reach **91–94%** on the same suite where frontier APIs reach 100%.
   </Card>
-  <Card title="🧱 Typed structured output" icon="seti:typescript">
+  <Card title="Typed structured output" icon="seti:typescript">
     Attach a Zod / Valibot / ArkType / Effect schema and read a fully-typed `result.object` — streaming field-by-field if you want. No prompt engineering, no manual parsing. *(New in v0.12)*
   </Card>
-  <Card title="💾 Durable by design" icon="random">
+  <Card title="Durable by design" icon="random">
     Opt a run into a durable store and resume it from its last checkpoint after a crash, restart, or pause — across process boundaries. *(New in v0.12)*
   </Card>
 </CardGrid>

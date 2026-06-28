@@ -2,22 +2,22 @@
 
 <img src="./apps/docs/src/assets/logo-light.svg" alt="Reactive Agents" width="280" />
 
-# Reactive Agents — Reliable, Transparent, Composable TypeScript AI Agents
+# Reactive Agents
 
-**Built for control, not magic.** A TypeScript agent harness designed around the three things production agents actually need — and that most frameworks skip:
+A composable TypeScript framework for building reliable LLM agents on a harness you fully control. It wraps the agent loop — think, call a tool, observe, repeat — and keeps the loop finishing across model tiers while exposing every step as a typed event you can hook into. Three things it's built around:
 
-- 🛡️ **Reliable on every model tier.** Tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle are why the *same code* finishes the agent loop on a local 4B Ollama model **and** on Claude / GPT / Gemini. No model lock-in, no "works on GPT-4 only."
-- 🔍 **Transparent.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay — locally, with no SaaS dashboard or vendor tether.
-- 🧩 **Composable.** Opt-in layers via a typed builder. Start with a model; add reasoning, 4-tier memory, guardrails, cost routing, and durability **one `.with()` call at a time** — enable exactly what you need, nothing you don't.
+- 🛡️ **Reliable on every model tier.** Tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the *same code* finish the agent loop on a local 4B Ollama model and on Claude / GPT / Gemini.
+- 🔍 **Transparent.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay — locally, no SaaS dashboard required.
+- 🧩 **Composable.** A typed builder of opt-in layers. Start with a model; add reasoning, 4-tier memory, guardrails, cost routing, and durability one `.with()` call at a time.
 
-Built on Effect-TS end to end — schema-validated boundaries, tagged errors, no untyped throws. Run your first agent in 60 seconds.
+Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped throws.
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
 | **41 packages & apps**       | 35 packages + 6 apps — 33 published to npm, all opt-in, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
 | **6 reasoning strategies**   | ReAct · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
-| **6,558 tests · 804 files**  | Production-grade confidence (verified `bun test` on every PR)    |
+| **6,558 tests · 804 files**  | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |

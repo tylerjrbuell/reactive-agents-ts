@@ -16,7 +16,7 @@ export default defineConfig({
     starlight({
       title: "Reactive Agents",
       description:
-        "Build autonomous AI agents with Effect-TS. Type-safe, composable, observable.",
+        "A composable TypeScript framework for building reliable LLM agents on a harness you fully control. The same code runs the full agent loop from a local 4B model to frontier APIs, on a typed, observable 12-phase engine. Built on Effect-TS.",
       social: [
         {
           icon: "github",

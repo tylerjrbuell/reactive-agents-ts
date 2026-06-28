@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: The open-source agent framework built for control, not magic. Type-safe, observable, and composable.
+description: A TypeScript framework for building LLM agents on Effect-TS — typed, observable, and composable, with the same code running on local and frontier models.
 template: splash
 hero:
-    tagline: 'The reliable, transparent, composable TypeScript agent harness. Agents that finish the job on every model tier — from a local 4B model to frontier APIs — with every decision a typed event you can inspect, steer, and compose.'
+    tagline: 'A composable TypeScript framework for building reliable LLM agents on a harness you fully control. The same code runs the full agent loop on a local 4B model or a frontier API, and every step is a typed event you can hook into, inspect, and steer.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -124,7 +124,7 @@ One package. Composable layers. Enable exactly what you need — skip everything
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## ✨ New in v0.12 — Durable & Honest
+## New in v0.12
 
 Two headline capabilities just landed: **typed structured output** and **durable crash-resume**.
 
@@ -153,11 +153,11 @@ Two headline capabilities just landed: **typed structured output** and **durable
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## Why use a framework? Why not just write the loop?
+## Why a framework instead of a hand-rolled loop?
 
-You can. An agent is a loop — LLM → tool → observe → repeat. Hand-rolling works fine for prototypes, and we'd never tell you otherwise.
+An agent is a loop — LLM → tool → observe → repeat. Hand-rolling it works well for prototypes.
 
-It breaks when reality arrives. On our 35-task benchmark, a bare ReAct loop (LLM in a `while` with tools) tops out at **85%**. The same models inside this harness hit **100%**. That gap is everything that isn't the loop:
+The gap shows up under real workloads. On our 35-task benchmark, a bare ReAct loop (an LLM in a `while` with tools) reaches **85%**. The same models inside this harness reach **100%**. That difference is everything that isn't the loop itself:
 
 - Tool calls returning malformed JSON, wrong types, or hallucinated tool names
 - Loops that don't terminate — or terminate too early
@@ -170,10 +170,10 @@ This is **harness engineering**, and there are three honest paths:
 
 <CardGrid>
     <Card title="Build it yourself" icon="warning">
-        Doable. It's also months of work and a permanent maintenance tax — every new provider, every new model quirk, every edge case you missed in v1 is yours to chase. Most teams underestimate this by 3×.
+        Workable, but it's an ongoing maintenance cost — every new provider, model quirk, and edge case missed in v1 is yours to chase. It's easy to underestimate.
     </Card>
     <Card title="Use a black-box harness" icon="warning">
-        Fast to start. Opaque to debug, audit, or override. When the magic breaks at 2am, you're reading framework internals — without source-level control over the parts that actually matter to your agent.
+        Fast to start, but hard to debug, audit, or override. When something breaks, you're reading framework internals — without source-level control over the parts that matter to your agent.
     </Card>
 </CardGrid>
 
@@ -206,7 +206,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
 
 <div class="ra-lab-grid">
     <div class="ra-readout">
-        <p class="ra-readout-label">Tool calls that recover themselves</p>
+        <p class="ra-readout-label">Self-healing tool calls</p>
         <p class="ra-readout-value">
             +80<span class="unit">pp accuracy</span>
         </p>
@@ -227,7 +227,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         </ul>
     </div>
     <div class="ra-readout">
-        <p class="ra-readout-label">Long runs stay cheap</p>
+        <p class="ra-readout-label">Compact context on long runs</p>
         <p class="ra-readout-value">
             38.6<span class="unit">% tokens saved</span>
         </p>
@@ -248,7 +248,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         </ul>
     </div>
     <div class="ra-readout">
-        <p class="ra-readout-label">Won't leak your secrets</p>
+        <p class="ra-readout-label">Secret-leak detection</p>
         <p class="ra-readout-value">
             100<span class="unit">% catch rate</span>
         </p>
@@ -269,7 +269,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         </ul>
     </div>
     <div class="ra-readout">
-        <p class="ra-readout-label">Always finishes, never stuck</p>
+        <p class="ra-readout-label">Guaranteed termination</p>
         <p class="ra-readout-value">
             12<span class="unit">/12 phases</span>
         </p>
@@ -424,7 +424,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         strategy-switching kicks in when entropy detects a stuck agent. Register
         your own.
     </Card>
-    <Card title="Local Models That Actually Work" icon="setting">
+    <Card title="Reliable on Local Models" icon="setting">
         **+80pp accuracy** on Ollama 4B+ vs. naive prompting. The 4-stage
         Healing Pipeline recovers from **86.7% of tool-call errors** — 90%
         cheaper than LLM reprompt. Model-adaptive context tunes prompts and
@@ -447,7 +447,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
         Bare LLM only achieves 85% on the same harness — a measurable lift from
         the framework, not the model.
     </Card>
-    <Card title="Great DX" icon="rocket">
+    <Card title="Developer Experience" icon="rocket">
         **60 seconds to first agent.** Progressive disclosure — start with 3
         lines, add reasoning, memory, guardrails, and observability as you need
         them. The builder API reads like a sentence. `rax` CLI scaffolds, runs,
@@ -565,7 +565,7 @@ agent.start(); // Runs forever, Ctrl+C to stop
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## 🚀 Launch Pad
+## Next steps
 
 Pick the path that matches where you are.
 
