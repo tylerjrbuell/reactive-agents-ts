@@ -105,9 +105,43 @@ Ranked; each is a separate scoped effort. These raise the floor for every strate
 - **[MEMORY] Episodic injection has NO tier budget** (15×600 same local+frontier, `reasoning-think.ts:88`) — token-bloat risk on small local context. Any new recall MUST add a tier cap.
 - **[TOOLS] Result compression + scratchpad offload already exist** (`compressToolResult`, `tool-execution.ts:704`) — Worker must route results through it, pass only compressed previews to the Solver.
 
-## Revised sequence (warden-informed)
+## RESEARCH-SHARPENED DESIGN — "blueprint" strategy (2026-06-28)
 
-1. **Parallel-tool Worker helper** (reasoning-side `Effect.all` over `executeToolAndObserve` + `isParallelBatchSafeTool` + healing + fail-on-unresolved-ref). Reused by ReWOO and reactive batch.
-2. **ReWOO strategy** (Planner→Worker→Solver; capability/calibration-gated structure; plan-time required-tools; self-budget). Proof gate: vs plan-execute on rw-8/rw-9 across tiers — tokens/calls/accuracy.
-3. **Memory P0 rewire** (severed ExperienceSummary→toolGuidance) — cheap correctness+efficiency win, RED-tested.
-4. **Skip-synthesis-when-last-step-is-deliverable** + tier-aware compression — lifts all strategies.
+Named **blueprint** (was "ReWOO"). Research validates the pattern AND surfaces the tier-portability fix.
+
+**Research basis (web, 2026-06-28):**
+- ["Beyond ReAct" Planner-Centric DAG framework](https://arxiv.org/html/2511.10037v1) (Nov 2025): single-pass DAG plan-execute **beats GPT-4 ReAct 59.8% vs 48.2% on StableToolBench at 2.29 avg steps** — DAG plan-execute is efficiency AND accuracy on tool tasks. blueprint = the inference-only version (they fine-tune via SFT+GRPO; we can't — BYOK/local — so we take the design, not the training).
+- blueprint is the canonical 4th single-agent pattern (ReAct / Plan-Execute / **ReWOO** / Reflexion) — we have the other 3.
+- **Hard caveat for our #1 requirement (all tiers):** "SLMs are unreliable as standalone multi-step planners" ([SLM-future](https://arxiv.org/pdf/2506.02153), [PACT](https://arxiv.org/html/2606.16995)). One-shot DAG + no mid-course observation = garbage-in-garbage-out on weak models. The literature's fix (PACT): plan → **VERIFY** → execute. Prompt structure alone lifts small models materially (numbered steps: qwen3.5 81→88%).
+
+**Design: blueprint = PLAN → VERIFY → EXECUTE (0-LLM, parallel) → SOLVE.**
+
+### Small-model planning leverage stack (the differentiator — our thesis: engineer max reasoning out of small models)
+blueprint's PLAN step is NOT a naive `llm.complete("make a plan")`. It pours the framework's existing leverage systems into planning so small/local models produce a RELIABLE DAG:
+1. **Schema/grammar-enforced generation** — plan via `extractStructuredOutput(LLMPlanOutputSchema)` (structured-output/pipeline.ts). On local, `jsonSchemaEnforcement`/grammar (local.ts:963) FORCES a valid DAG shape — a weak model can't freeform a graph but CAN fill a constrained schema. This is the single biggest small-model planning lever.
+2. **Calibration-driven prompt + channel** — `steeringCompliance` (system vs user) places the plan schema where the specific model obeys it; `systemPromptAttention:weak` → re-state the schema; numbered-step structure (research-proven small-model lift).
+3. **Experience-reuse injection** — inject prior successful plans/tips (the just-wired `appendExperienceTips` + PlanStore recall) so the planner bootstraps from what worked before on similar tasks — tier-capped (tight on local).
+4. **Plan VERIFICATION gate** (the PACT fix, mostly deterministic = cheap, tier-scaled):
+   - deterministic: valid DAG (no cycles via computeWaves), every required tool present (reuse plan-execute.ts:299-380 synthetic injection), all referenced tools exist, no unresolved `#E`/self-refs, args schema-shaped.
+   - heal the plan (runHealingPipeline on tool names/params).
+   - local-tier optional: ONE bounded critique-refine pass (cheap; only when deterministic checks flag gaps) — NOT a reflexion loop.
+   - On unfixable invalid plan → degrade to **reactive** (don't execute a broken observation-free plan).
+5. **Capability/calibration tier branch** — `parallelCallCapability` + `toolCallDialect`: capable → parallel DAG worker; weak/`partial` → cap fan-out / linearize; `dialect!=="native-fc"||source==="fallback"` → text-parsed sequential plan.
+6. **Healing in the Worker** — runHealingPipeline per tool call (weak-model arg errors the direct-dispatch path otherwise hard-fails).
+
+### Tier matrix (planner)
+- **local:** schema-grammar-FORCED plan + experience-tips + numbered-step prompt on the calibrated channel + deterministic verify + optional 1 critique-refine + linearized/sequential worker. Degrade→reactive if plan invalid.
+- **mid/large:** schema plan + deterministic verify + parallel worker.
+- **frontier:** richer DAG, light verify, parallel worker, optional re-plan-once on wave failure.
+
+Anti-goal reaffirmed: no fine-tuning-dependent variants (PACT/PilotRL/GRPO) — design only. (Chain-of-Draft terser reasoning = orthogonal cross-cutting lever, parked — our tax is input-dominated.)
+
+## Build sequence (research-sharpened)
+
+✅ DONE: Memory P0 (experienceTips wired) + tier-aware plan prompt (merged local main 2026-06-28).
+
+1. **Parallel-tool Worker helper** — reasoning-side `Effect.all` over `executeToolAndObserve` + `isParallelBatchSafeTool` (writes sequential) + `runHealingPipeline` per call + fail-on-unresolved-`#E`. Tier-scaled concurrency. Reused by blueprint AND reactive batch.
+2. **Plan-verification helper** — pure deterministic checks (valid DAG / required-tools present / tools exist / no unresolved refs) + heal; returns ok|repaired|invalid. Reusable.
+3. **`blueprint.ts`** — PLAN (schema/grammar-enforced via extractStructuredOutput + calibration channel + experience-tips + numbered-step prompt) → VERIFY (helper #2; degrade→reactive if invalid) → EXECUTE (helper #1) → SOLVE. Capability/calibration tier branch (parallel-DAG vs linear/text-parse). Self-budget. Register as `"blueprint"` (+ alias `"rewoo"`?).
+4. **Proof gate** — blueprint vs plan-execute on rw-8/rw-9 across local+frontier: tokens / LLM-call count / accuracy. Adopt for static-decomposable domain only if ≈equal accuracy at materially fewer calls (~9→~3) AND local-tier accuracy holds (the plan-verify gate is what makes this pass).
+5. Cross-cutting (later): skip-synthesis-when-last-step-is-deliverable; scratchpad-offload; episodic tier-budget.
