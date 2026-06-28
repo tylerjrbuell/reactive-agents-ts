@@ -168,6 +168,28 @@ export function handleActing(
     // Full registry — used for HealingPipeline so fuzzy name matching works even when a tool was pruned from context
     const allHealingSchemas = (input.allToolSchemas ?? input.availableToolSchemas ?? []) as typeof filteredToolSchemas;
 
+    // Shared healer — repairs fuzzy tool names, param aliases, paths, types.
+    // Applied on EVERY call (single-call path AND parallel-batch members) so a
+    // weak model's batched calls get the same arg-repair single calls do.
+    const healCall = (rawTc: ToolCallSpec) =>
+      runHealingPipeline(
+        rawTc,
+        allHealingSchemas.map((s) => ({
+          name: s.name,
+          description: s.description,
+          parameters: s.parameters.map((p) => ({
+            name: p.name,
+            type: p.type,
+            description: p.description,
+            required: p.required,
+          })),
+        })),
+        FILE_TOOL_NAMES,
+        process.cwd(),
+        {},
+        {},
+      );
+
     let pendingCalls: readonly ToolCallSpec[];
     if (context.toolCallingDriver.mode === "text-parse") {
       const lastAssistantText = getLastAssistantText(state.messages);
@@ -257,23 +279,7 @@ export function handleActing(
         // M7-E (spike): Apply calibration's knownToolAliases for auto-correction
         // NOTE: calibration data would come from state.calibration when Phase 2 wires it in.
         // For now, use empty dicts to indicate no calibrated aliases available.
-        const healResult = runHealingPipeline(
-          rawTc,
-          allHealingSchemas.map((s) => ({
-            name: s.name,
-            description: s.description,
-            parameters: s.parameters.map((p) => ({
-              name: p.name,
-              type: p.type,
-              description: p.description,
-              required: p.required,
-            })),
-          })),
-          FILE_TOOL_NAMES,
-          process.cwd(),
-          {},  // M7-E: calibrated tool aliases (not yet wired from calibration state)
-          {},  // M7-E: calibrated param aliases (not yet wired from calibration state)
-        );
+        const healResult = healCall(rawTc);
         const tc = healResult.succeeded ? healResult.call : rawTc;
 
         // HS-112 — lit the `nudge.healing-failure` Compose tag. The healer
@@ -470,8 +476,14 @@ export function handleActing(
         if (plannedBatch && plannedBatch.length > 1) {
           const guardCheck = checkToolCall(defaultGuards);
           const executableCalls: ToolCallSpec[] = [];
+          const healedByCallId = new Map<string, boolean>();
 
-          for (const batchCall of plannedBatch) {
+          for (const rawBatchCall of plannedBatch) {
+            // Heal each batch member (parity with the single-call path) — a weak
+            // model's batched calls otherwise bypass arg-repair and hard-fail.
+            const bHeal = healCall(rawBatchCall);
+            const batchCall = bHeal.succeeded ? bHeal.call : rawBatchCall;
+            healedByCallId.set(batchCall.id, bHeal.actions.length > 0);
             const guardOutcome = guardCheck(
               batchCall,
               transitionState(state, { steps: allSteps, lastMetaToolCall, consecutiveMetaToolCount }),
@@ -670,9 +682,8 @@ export function handleActing(
             // path fires (via the primitive), so parallel tool-results are visible
             // to .on()/.tap() observers. Without this, batch (>=2 parallel calls)
             // tool-results were silently invisible to observers — the #195 bug
-            // class for parallel turns. healed:false is advisory-correct here:
-            // per-call heal linkage isn't tracked through the batch result map
-            // (out of scope for this surgical add).
+            // class for parallel turns. `healed` is now tracked per call (batch
+            // members are healed for tier parity, same as the single path).
             yield* emitToCompose(pipeline, "observation.tool-result", obsStep, {
               iteration: state.iteration,
               phase: "act",
@@ -680,7 +691,7 @@ export function handleActing(
               strategy: state.strategy ?? "react",
               toolName: result.toolName,
               callId: result.callId,
-              healed: false,
+              healed: healedByCallId.get(result.callId) ?? false,
               durationMs: result.durationMs,
             });
             if (!result.execResult.success) {
@@ -792,7 +803,7 @@ export function handleActing(
             callId: tc.id,
             // Healing already ran upstream (act.ts HealingPipeline). Pass the
             // precomputed flag rather than re-healing inside the primitive.
-            healed: healResult.succeeded && healResult.call !== rawTc,
+            healed: healResult.actions.length > 0,
           },
           {
             compression,

@@ -178,6 +178,12 @@ export interface KernelMeta {
   readonly recoveryFailedTools?: readonly string[];
   readonly recoveryAlternativeCandidates?: readonly string[];
 
+  // ── StallPolicy compliance tracking (persisted across iterations) ──
+  /** Consecutive required-tool nudges the model ignored (no progress on missing set). */
+  readonly consecutiveIgnoredNudges?: number;
+  /** Missing-required-tool count at the previous nudge (compliance delta). */
+  readonly lastMissingRequiredCount?: number;
+
   // ── Kernel identity / pass ──
   readonly kernelPass?: string;
 

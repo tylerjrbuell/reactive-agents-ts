@@ -147,15 +147,14 @@ describe("kernel act single-call path — golden master", () => {
     // ── ctx fields on the tag ─────────────────────────────────────────────────
     expect(tagCtx.toolName).toBe(TOOL_NAME);
     expect(tagCtx.callId).toBe(CALL_ID);
-    // `healed`: the current single path computes
-    //   `healed: healResult.succeeded && healResult.call !== rawTc`.
-    // runHealingPipeline returns a NEW call object on success even when name+args
-    // are unchanged (verified: ref-equal=false, name/args identical), so the
-    // reference-inequality makes this `true` here. The migration passes the
-    // IDENTICAL expression as ctx.healed → this value must stay `true`
-    // byte-for-byte. (The reference-equality semantics are a latent quirk, not in
-    // scope for the byte-identical Phase B migration.)
-    expect(tagCtx.healed).toBe(true);
+    // `healed` now computes `healResult.actions.length > 0` — true only when the
+    // healer ACTUALLY repaired something. This call is clean (name+args
+    // unchanged), so healed is false. (Fixed 2026-06-28: the prior
+    // `healResult.call !== rawTc` reference-inequality reported `true` for clean
+    // calls because runHealingPipeline always returns a new object — the latent
+    // quirk this test previously documented. Same fix applied to the parallel
+    // batch path, which now also heals its members.)
+    expect(tagCtx.healed).toBe(false);
     expect(tagCtx.phase).toBe("act");
     expect(tagCtx.strategy).toBe("react-kernel");
     expect(typeof tagCtx.durationMs).toBe("number");
