@@ -32,6 +32,27 @@ import type { ReasoningServiceLike } from "../../types-reasoning.js";
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
 
+/**
+ * Append cross-run experience tips to the memory context, capped + tier-aware.
+ * Pure. Tight cap on `local` (small context budget); a touch wider elsewhere.
+ * No-op when there are no tips — preserves the prior prompt byte-for-byte.
+ *
+ * Wires the previously-severed loop: `experienceTips` are produced in bootstrap
+ * (skill-postprocess) — tier-aware, confidence≥0.5, occurrences≥2 — but were
+ * written to metadata and never injected. Exported for unit testing.
+ */
+export function appendExperienceTips(
+  memCtx: string,
+  tips: readonly string[] | undefined,
+  tier: string | undefined,
+): string {
+  if (!tips || tips.length === 0) return memCtx;
+  const cap = tier === "local" ? 1 : 3;
+  const shown = tips.slice(0, cap);
+  if (shown.length === 0) return memCtx;
+  return `${memCtx}\n\n--- Learned from prior runs ---\n${shown.map((t) => `- ${t}`).join("\n")}`;
+}
+
 export interface ReasoningThinkDeps {
   readonly config: ReactiveAgentsConfig;
   readonly task: Task;
@@ -111,6 +132,17 @@ export const runReasoningThink = (
         }
       }
     }
+
+    // ── Experience tips (cross-run, confidence-filtered) — wire the severed loop ──
+    // `experienceTips` are computed in bootstrap (skill-postprocess.ts, gated on
+    // enableExperienceLearning: tier-aware query, confidence≥0.5 + occurrences≥2)
+    // but were NEVER injected — written to metadata and discarded. Inject them
+    // capped + tier-aware (see appendExperienceTips).
+    memCtx = appendExperienceTips(
+      memCtx,
+      (c.metadata as { experienceTips?: readonly string[] } | undefined)?.experienceTips,
+      config.contextProfile?.tier,
+    );
 
     // ── Task context injection ──
     if (config.taskContext && Object.keys(config.taskContext).length > 0) {
