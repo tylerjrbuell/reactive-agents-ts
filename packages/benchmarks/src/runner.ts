@@ -112,6 +112,7 @@ const runTask = async (
         "react": "reactive" as const,
         "plan-execute": "plan-execute-reflect" as const,
         "tree-of-thought": "tree-of-thought" as const,
+        "blueprint": "blueprint" as const,
       };
       builder.withReasoning({ defaultStrategy: strategyMap[task.strategy] });
     }
@@ -626,6 +627,7 @@ async function runInternal(
         "plan-execute": "plan-execute-reflect" as const,
         "tree-of-thought": "tree-of-thought" as const,
         "adaptive": "adaptive" as const,
+        "blueprint": "blueprint" as const,
       }
       type StrategyKey = keyof typeof strategyMap
       const taskStrategy = task.strategy as StrategyKey | undefined
