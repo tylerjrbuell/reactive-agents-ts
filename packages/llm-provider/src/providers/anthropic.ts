@@ -215,7 +215,30 @@ export const AnthropicProviderLive = Layer.effect(
             catch: (error) => toEffectError(error, "anthropic"),
           });
 
-          return mapAnthropicResponse(response as AnthropicRawResponse, model, config.pricingRegistry);
+          const mapped = mapAnthropicResponse(
+            response as AnthropicRawResponse,
+            model,
+            config.pricingRegistry,
+          );
+          // Cluster B parity (mirrors gemini.ts): don't paper over a non-OK
+          // stop with empty content. Anthropic otherwise returns success+empty
+          // when the output budget is exhausted (max_tokens) or the model
+          // refuses — indistinguishable to the agent from a clean finish.
+          const rawStop = (response as AnthropicRawResponse).stop_reason;
+          const hasContent =
+            (mapped.content?.length ?? 0) > 0 || (mapped.toolCalls?.length ?? 0) > 0;
+          if ((rawStop === "max_tokens" || rawStop === "refusal") && !hasContent) {
+            return yield* Effect.fail(
+              new LLMError({
+                provider: "anthropic",
+                message:
+                  rawStop === "max_tokens"
+                    ? "Anthropic response ended with stop_reason=max_tokens and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens."
+                    : "Anthropic response ended with stop_reason=refusal and no content. The model declined to respond.",
+              }),
+            );
+          }
+          return mapped;
         }).pipe(
           Effect.retry(retryPolicy),
           Effect.timeout("30 seconds"),
@@ -323,6 +346,29 @@ export const AnthropicProviderLive = Layer.effect(
                     emitToolUseDelta(emit, JSON.stringify(tc.arguments));
                   }
                 }
+              }
+
+              // Cluster B parity (mirrors gemini.ts stream guard): a non-OK
+              // stop with no content must surface as a failure, not a silent
+              // empty content_complete the kernel reads as a clean finish.
+              const hasToolUse = msg.content.some(
+                (b: { type: string }) => b.type === "tool_use",
+              );
+              if (
+                (msg.stop_reason === "max_tokens" || msg.stop_reason === "refusal") &&
+                content.length === 0 &&
+                !hasToolUse
+              ) {
+                emit.fail(
+                  new LLMError({
+                    provider: "anthropic",
+                    message:
+                      msg.stop_reason === "max_tokens"
+                        ? "Anthropic stream ended with stop_reason=max_tokens and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens."
+                        : "Anthropic stream ended with stop_reason=refusal and no content. The model declined to respond.",
+                  }),
+                );
+                return;
               }
 
               emit.single({ type: "content_complete", content });

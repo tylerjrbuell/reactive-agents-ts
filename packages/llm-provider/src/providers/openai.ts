@@ -271,7 +271,29 @@ export const OpenAIProviderLive = Layer.effect(
             catch: (error) => toEffectError(error, "openai"),
           });
 
-          return mapOpenAIResponse(response as OpenAIRawResponse, model, config.pricingRegistry);
+          const mapped = mapOpenAIResponse(
+            response as OpenAIRawResponse,
+            model,
+            config.pricingRegistry,
+          );
+          // Cluster B parity (mirrors gemini.ts): surface a non-OK finish with
+          // empty content as an error rather than a silent empty-success the
+          // agent can't tell apart from a clean finish.
+          const rawFinish = (response as OpenAIRawResponse).choices[0]?.finish_reason;
+          const hasContent =
+            (mapped.content?.length ?? 0) > 0 || (mapped.toolCalls?.length ?? 0) > 0;
+          if ((rawFinish === "length" || rawFinish === "content_filter") && !hasContent) {
+            return yield* Effect.fail(
+              new LLMError({
+                provider: "openai",
+                message:
+                  rawFinish === "length"
+                    ? "OpenAI response ended with finish_reason=length and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens."
+                    : "OpenAI response ended with finish_reason=content_filter and no content. The response was blocked by the content filter.",
+              }),
+            );
+          }
+          return mapped;
         }).pipe(
           Effect.retry(retryPolicy),
           Effect.timeout("30 seconds"),
@@ -438,6 +460,26 @@ export const OpenAIProviderLive = Layer.effect(
                           emitToolUseDelta(emit, JSON.stringify(tc.arguments));
                         }
                       }
+                    }
+                    // Cluster B parity (mirrors gemini.ts stream guard): a
+                    // non-OK finish with no content must fail, not emit an
+                    // empty content_complete the kernel reads as a clean finish.
+                    const fr = chunk.choices[0].finish_reason;
+                    if (
+                      (fr === "length" || fr === "content_filter") &&
+                      fullContent.length === 0 &&
+                      toolCallAccum.size === 0
+                    ) {
+                      emit.fail(
+                        new LLMError({
+                          provider: "openai",
+                          message:
+                            fr === "length"
+                              ? "OpenAI stream ended with finish_reason=length and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens."
+                              : "OpenAI stream ended with finish_reason=content_filter and no content. The response was blocked by the content filter.",
+                        }),
+                      );
+                      return;
                     }
                     emit.single({
                       type: "content_complete",

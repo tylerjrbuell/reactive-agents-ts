@@ -133,6 +133,54 @@ describe("GeminiProviderLive", () => {
     );
   });
 
+  // ─── Thinking-budget starvation fix (Cluster A) ───
+  // Gemini 2.5 thinks by default with a *dynamic* budget that expands to consume
+  // the whole maxOutputTokens → the visible answer is starved (finishReason=
+  // MAX_TOKENS, empty/truncated content). The adapter must bound thinkingBudget
+  // and raise maxOutputTokens so the harness-requested answer budget survives.
+  it("complete() bounds thinkingBudget and raises maxOutputTokens for thinking-capable models", async () => {
+    await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          model: { provider: "gemini", model: "gemini-2.5-pro" },
+          messages: [{ role: "user", content: "Solve the puzzle." }],
+          maxTokens: 4000,
+        });
+      }),
+    );
+
+    const cfg = (
+      mockGenerateContent.mock.calls.at(-1)?.[0] as {
+        config: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number };
+      }
+    ).config;
+    expect(cfg.thinkingConfig?.thinkingBudget).toBeGreaterThan(0);
+    // The requested 4000 answer budget must survive ON TOP of the thinking reserve.
+    expect(cfg.maxOutputTokens).toBeGreaterThan(4000);
+  });
+
+  it("complete() does NOT set thinkingConfig for non-thinking models, preserving maxOutputTokens", async () => {
+    await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          model: { provider: "gemini", model: "gemini-2.5-flash-lite" },
+          messages: [{ role: "user", content: "Hi" }],
+          maxTokens: 4000,
+        });
+      }),
+    );
+
+    const cfg = (
+      mockGenerateContent.mock.calls.at(-1)?.[0] as {
+        config: { thinkingConfig?: unknown; maxOutputTokens?: number };
+      }
+    ).config;
+    expect(cfg.thinkingConfig).toBeUndefined();
+    expect(cfg.maxOutputTokens).toBe(4000);
+  });
+
   it("complete() excludes system messages from contents array", async () => {
     await run(
       Effect.gen(function* () {

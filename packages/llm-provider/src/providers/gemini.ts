@@ -20,6 +20,46 @@ import { retryPolicy } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
+import { resolveCapability } from "../capability-resolver.js";
+
+// ─── Thinking-budget reserve (Cluster A fix) ───
+//
+// Gemini 2.5 models think BY DEFAULT with a *dynamic* thinkingBudget (-1) that
+// expands to consume nearly the entire `maxOutputTokens`. When the harness caps
+// output by tier (think.ts:584 — mid=2000, frontier=4000), hidden thinking eats
+// the whole budget and the visible answer is starved (finishReason=MAX_TOKENS,
+// empty/truncated content). Empirical: gemini-2.5-pro @4000 → 3837 thinking /
+// 143 visible tokens → truncated mid-answer. Local models (thinking OFF) get the
+// same 2000-4000 as pure answer — which is why "Gemini struggles where local
+// models crush".
+//
+// Fix: treat the harness `maxTokens` as the ANSWER budget. For thinking-capable
+// models, reserve a bounded thinking budget ON TOP (not carved from it) and
+// raise maxOutputTokens to answer + thinking so the answer always has room.
+const GEMINI_THINKING_MIN = 1024;
+// flash honours thinkingBudget as a hard cap; 2.5-pro treats it as advisory and
+// overshoots ~40% on hard tasks (empirical: 11509 thinking tokens against an 8192
+// budget). The ceiling must therefore sit at/above the model's natural appetite
+// so reasoning completes *before* the answer reserve, rather than being truncated
+// mid-thought. 16384 is comfortably above the observed pro appetite while staying
+// well under the model's 32768 thinking ceiling.
+const GEMINI_THINKING_MAX = 16384;
+
+/**
+ * Bounded thinking reserve for a thinking-capable Gemini model, or undefined
+ * when the model does not support thinking (e.g. flash-lite) — in which case
+ * the caller leaves maxOutputTokens untouched and sets no thinkingConfig.
+ */
+const geminiThinkingBudget = (
+  model: string,
+  answerBudget: number,
+): number | undefined => {
+  const cap = resolveCapability("gemini", model);
+  if (!cap.supportsThinkingMode) return undefined;
+  // Scale with the answer budget but clamp so it can neither starve the answer
+  // nor run away unboundedly.
+  return Math.min(Math.max(answerBudget * 4, GEMINI_THINKING_MIN), GEMINI_THINKING_MAX);
+};
 
 // ─── Gemini Message Conversion Helpers ───
 
@@ -281,6 +321,7 @@ export const GeminiProviderLive = Layer.effect(
     };
 
     const buildGeminiConfig = (opts: {
+      model?: string;
       maxTokens?: number;
       temperature?: number;
       systemPrompt?: string;
@@ -289,10 +330,20 @@ export const GeminiProviderLive = Layer.effect(
       responseMimeType?: string;
       responseSchema?: Record<string, unknown>;
     }) => {
+      const answerBudget = opts.maxTokens ?? config.defaultMaxTokens;
+      // Reserve a bounded thinking budget ON TOP of the answer budget for
+      // thinking-capable models so hidden reasoning can't starve the answer.
+      const thinkingBudget = opts.model
+        ? geminiThinkingBudget(opts.model, answerBudget)
+        : undefined;
       const cfg: Record<string, unknown> = {
-        maxOutputTokens: opts.maxTokens ?? config.defaultMaxTokens,
+        maxOutputTokens:
+          thinkingBudget !== undefined ? answerBudget + thinkingBudget : answerBudget,
         temperature: opts.temperature ?? config.defaultTemperature,
       };
+      if (thinkingBudget !== undefined) {
+        cfg.thinkingConfig = { thinkingBudget };
+      }
       const sys = opts.systemPrompt;
       if (sys) cfg.systemInstruction = sys;
       if (opts.stopSequences?.length) cfg.stopSequences = [...opts.stopSequences];
@@ -325,6 +376,7 @@ export const GeminiProviderLive = Layer.effect(
                 model,
                 contents,
                 config: buildGeminiConfig({
+                  model,
                   maxTokens: request.maxTokens,
                   temperature: request.temperature,
                   systemPrompt,
@@ -396,6 +448,7 @@ export const GeminiProviderLive = Layer.effect(
               try {
                 const client = await getClient();
                 const cfg = buildGeminiConfig({
+                  model,
                   maxTokens: request.maxTokens,
                   temperature: request.temperature,
                   systemPrompt,
@@ -635,6 +688,7 @@ export const GeminiProviderLive = Layer.effect(
                   model,
                   contents: toGeminiContents(msgs),
                   config: buildGeminiConfig({
+                    model,
                     maxTokens: request.maxTokens,
                     temperature: request.temperature,
                     systemPrompt: request.systemPrompt,
