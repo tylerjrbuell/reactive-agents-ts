@@ -14,6 +14,7 @@ import { contextStressSession } from "./sessions/context-stress.js"
 import { recitationAblationSession } from "./sessions/recitation-ablation.js"
 import { docsReceiptsSession } from "./sessions/docs-receipts.js"
 import { clusterAGateSession } from "./sessions/cluster-a-gate.js"
+import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
 import type { BenchmarkSession, SessionReport } from "./types.js"
 
@@ -128,6 +129,7 @@ const SESSIONS: Record<string, BenchmarkSession> = {
   "recitation-ablation":   recitationAblationSession,
   "docs-receipts":         docsReceiptsSession,
   "cluster-a-gate":        clusterAGateSession,
+  "cross-tier-stress":     crossTierStressSession,
 }
 
 export interface CliArgs {

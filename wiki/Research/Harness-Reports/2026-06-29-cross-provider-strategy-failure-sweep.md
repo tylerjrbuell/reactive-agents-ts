@@ -158,6 +158,47 @@ Then Cluster B strategy-side (output-ownership invariant) and D (sub-kernel cost
 A proper Cluster-A lift number needs a HARD deterministic reasoning task (zebra-puzzle, exact-match)
 added to the bench so the moderate-cell inconclusiveness is replaced by a discriminating cell.
 
+## Cross-tier stress map + output-ownership invariant (2026-06-29, follow-up 2)
+
+Ran a `cross-tier-stress` map: 7 models across all 4 providers/tiers × 5 challenging tasks spanning
+react / plan-execute / tree-of-thought, deterministic scoring, ra-full. The harness is broadly healthy
+post-fixes — most cells pass. Failures concentrated and ALL shared one signature: **empty final output**.
+
+| cell | strategy | status | tokens | output |
+|------|----------|--------|--------|--------|
+| gpt-4o-mini / c4-db-decomposition | react | done/pass | **22418** | **`""`** |
+| sonnet / c4-db-decomposition | react | done/pass | 696 | `""` |
+| qwen3:14b / e3-logic-fallacy | tree-of-thought | error | 0 | `""` (300s cell timeout) |
+| gemini-2.5-pro / e3-logic-fallacy | tree-of-thought | error | 0 | `""` (300s cell timeout) |
+
+The gpt-4o-mini case is the tell: **22418 tokens of real work, status=done, output empty** — the harness
+threw the answer away. Cross-cutting (react + ToT, 4 providers).
+
+**Root cause (trace-confirmed).** Empty-output runs terminate via
+`terminatedBy="controller_early_stop:dispatcher_early_stop"` (set by `arbitrator.ts:937`,
+`controller_early_stop:<reason>`). The harness-deliverable synthesis (`runner.ts §8.5`) keys off a
+NARROW terminatedBy whitelist that contains the hyphenated sentinel `"dispatcher-early-stop"` (set by a
+*different* producer, `reactive-observer.ts:390`) — **not** the arbitrator's `controller_early_stop:*`
+value. String-format mismatch → §8.5 never assembles → the run reaches the verifier with empty output
+despite substantive artifacts. (The max-iter stall path works — it stamps `harness_deliverable` — which
+is why only the arbitrator early-stop leaked.)
+
+**Fix (output-ownership invariant, `runner.ts §8.8`).** Rather than patch the brittle string, added a
+GENERAL fallback immune to terminatedBy drift: `status==="done" && !state.output &&
+countDeliverableCandidates(state) > 0 → commitDeliverable(assembleDeliverable(state))`. Additive (fires
+only when output is empty, so it can't override a path that produced output); routes through the
+single-writer `commitDeliverable` + existing `assembleDeliverable` synthesis chain (lastThought →
+validated observations → concatenated). Establishes the invariant: **a done run with deliverable
+artifacts never ships empty output.**
+
+**Verification:** RED test reproducing the arbitrator early-stop empty-output (output len 0) → GREEN
+after the fix (output synthesized from the observation). reasoning suite **1808/0**. Empirical c4 re-run
+pending (gpt-4o-mini + sonnet → non-empty output).
+
+The two e3 ToT 0-output cells are a SEPARATE cause (external 300s cell timeout kills the process before
+synthesis) — needs the ToT wall-clock budget (the §8.8 invariant can't help when the process is killed
+mid-work). Tracked, deprioritized per "framework over niche-strategy" steer.
+
 ## Probe artifact
 `.claude/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts`
 (stream path, RA_GEMINI_DEBUG=1 prints per-chunk thoughts/visible/finishReason; PROBE_MODEL + PROBE_BUDGETS env).

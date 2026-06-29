@@ -653,6 +653,26 @@ export function runKernel(
       }
     }
 
+    // ── 8.8. Output-ownership invariant — never ship empty output when work
+    // was done. §8.5's harness-deliverable assembly keys off a NARROW
+    // terminatedBy whitelist (end_turn/dispatcher-early-stop/...). But the
+    // arbitrator's early-stop stamps terminatedBy="controller_early_stop:<reason>"
+    // (arbitrator.ts) and other done-terminations fall outside the set too, so a
+    // `done` run could reach the verifier with state.output empty despite
+    // substantive tool artifacts — the 2026-06-29 cross-tier sweep saw gpt-4o-mini
+    // (22418 tok) and sonnet ship output="" with status=done on exactly this path.
+    // This general fallback assembles a deliverable from the accumulated work
+    // whenever a done run has empty output but deliverable candidates exist —
+    // immune to terminatedBy string drift, and additive (fires ONLY on empty
+    // output, so it can never override a path that already produced output).
+    if (
+      state.status === "done" &&
+      !state.output &&
+      countDeliverableCandidates(state) > 0
+    ) {
+      state = commitDeliverable(state, assembleDeliverable(state));
+    }
+
     // ── 9.0. Sprint 3.5 — Verifier gate before shipping any output ───────────
     // Per North Star §3 (Verify capability) — the harness MUST verify the
     // final output satisfies the task before declaring success. Without this,

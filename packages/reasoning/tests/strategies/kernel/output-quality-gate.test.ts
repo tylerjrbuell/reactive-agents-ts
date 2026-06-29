@@ -634,3 +634,70 @@ describe("Drift S11 — synthesis-gate provenance", () => {
     expect(state.output).toBe(synthTable);
   });
 });
+
+// ── Output-ownership invariant: never ship empty output when work was done ────
+// Regression for the 2026-06-29 cross-tier sweep: react runs on gpt-4o-mini /
+// sonnet did 22418 / 696 tokens of work then shipped output="" with status=done.
+// Root cause: the harness-deliverable synthesis (runner.ts §8.5) keyed off a
+// narrow terminatedBy whitelist containing "dispatcher-early-stop", but the
+// arbitrator's early-stop sets terminatedBy="controller_early_stop:<reason>"
+// (arbitrator.ts:937) — a string-format mismatch — so artifacts were never
+// assembled. The invariant: status=done + deliverable artifacts ⟹ non-empty
+// output, regardless of the terminatedBy string.
+
+/** Kernel that gathers a tool observation, then exits via an arbitrator-style
+ * controller_early_stop with NO output and an empty final thought. */
+function makeEarlyStopAfterToolKernel(toolOutput: string): ThoughtKernel {
+  return (state, _ctx) => {
+    const nextIter = state.iteration + 1;
+    if (nextIter === 1) {
+      return Effect.succeed(
+        transitionState(state, {
+          status: "thinking",
+          iteration: nextIter,
+          toolsUsed: new Set([...state.toolsUsed, "web-search"]),
+          steps: [
+            ...state.steps,
+            makeStep("thought", "Let me look that up"),
+            makeStep("action", "web-search"),
+            makeStep("observation", toolOutput, {
+              observationResult: {
+                success: true,
+                toolName: "web-search",
+                displayText: "search results",
+                category: "web-search" as const,
+                resultKind: "data" as const,
+                preserveOnCompaction: false,
+              },
+            }),
+          ],
+        }),
+      );
+    }
+    // Arbitrator-style early-stop exit: done, no output committed, empty final
+    // thought, terminatedBy outside the §8.5 whitelist.
+    return Effect.succeed(
+      transitionState(state, {
+        status: "done",
+        iteration: nextIter,
+        meta: { ...state.meta, terminatedBy: "controller_early_stop:dispatcher_early_stop" },
+        steps: [...state.steps, makeStep("thought", "")],
+      }),
+    );
+  };
+}
+
+describe("output-ownership invariant (cross-tier sweep regression)", () => {
+  it("synthesizes from artifacts on a controller_early_stop termination (no empty output despite work)", async () => {
+    const kernel = makeEarlyStopAfterToolKernel(
+      "Validated source: the database should be split into orders, users, and inventory services.",
+    );
+    const state = await runWithTestLLM(
+      runKernel(kernel, { task: "decompose the monolithic database" }, defaultOptions),
+    );
+    expect(state.status).toBe("done");
+    // The invariant: work was done (a validated observation exists), so the
+    // final output MUST NOT be empty.
+    expect((state.output ?? "").trim().length).toBeGreaterThan(0);
+  });
+});
