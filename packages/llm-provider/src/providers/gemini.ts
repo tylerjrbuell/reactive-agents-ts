@@ -405,13 +405,18 @@ export const GeminiProviderLive = Layer.effect(
           return mapGeminiResponse(response, model, config.pricingRegistry);
         }).pipe(
           Effect.retry(retryPolicy),
-          Effect.timeout("30 seconds"),
+          // G2: 30s was too tight for thinking-mode models — a single
+          // reasoning-heavy complete() (e.g. tree-of-thought expansion on
+          // gemini-2.5-pro) routinely needs >30s once the answer isn't being
+          // truncated, so the tight cap killed the very requests the
+          // thinking-budget fix is meant to let finish. Match local's 120s.
+          Effect.timeout("120 seconds"),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "gemini",
-                timeoutMs: 30_000,
+                timeoutMs: 120_000,
               }),
             ),
           ),

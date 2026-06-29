@@ -288,13 +288,14 @@ export const LiteLLMProviderLive = Layer.effect(
           );
         }).pipe(
           Effect.retry(retryPolicy),
-          Effect.timeout("30 seconds"),
+          // G2: match local 120s — thinking/reasoning models exceed 30s.
+          Effect.timeout("120 seconds"),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "litellm",
-                timeoutMs: 30_000,
+                timeoutMs: 120_000,
               }),
             ),
           ),

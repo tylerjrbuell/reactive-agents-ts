@@ -128,6 +128,36 @@ invariant); Cluster C (red-herring/grounding, separate track); G2 30s cloud time
 is a behavior change needing its own ablation — the budget math is now correct-when-enabled). Validate
 Cluster A with the cross-tier bench gate (incl. a Gemini cell) as the next step.
 
+## Bench gate + G2 (2026-06-29, follow-up)
+
+Gated Cluster A with a cross-tier `ra-full` bench (`cluster-a-gate` session: gemini-2.5-flash,
+gemini-2.5-pro, claude-haiku-4-5 control; deterministic regex-scored reasoning tasks).
+
+- **Moderate cells (m2-word-problem, m3-sql-injection) = inconclusive.** Both 100% BEFORE (pre-fix
+  gemini.ts) and AFTER. These tasks don't induce enough thinking to trip the starvation at the 2000/
+  4000 cap — same as the easy-prompt probe. The fix's benefit is real but lives on HARD reasoning,
+  which the moderate cells don't exercise. (Lesson: a gate task must be hard enough to make a thinking
+  model actually think near the budget, or it can't discriminate the fix.)
+- **Hard cells surfaced two COUPLED bugs, not starvation:**
+  - `e1-lis-optimization` (strategy=tree-of-thought) → `ExecutionError: Expansion failed at depth 1`.
+    Root: ToT expansion uses `llm.complete()`, which had a hard **30s timeout (G2)**. Letting Gemini
+    think longer (the Cluster A fix) pushed the expansion past 30s → the fix's own benefit was being
+    killed by the tight timeout. pro durations 36-38s confirm the 30s cap firing.
+  - `e3-logic-fallacy` → 240s **cell** timeout (pro thinking × harness iterations); stream path has no
+    per-call timeout so it ran to the cell bound. Separate efficiency issue (see below).
+
+**G2 FIXED + verified.** Raised cloud `complete()` timeout 30s → 120s (matching local) across
+gemini/anthropic/openai/litellm. Re-ran e1 on gemini-2.5-pro: **"Tree-of-thought completed
+successfully"** (338s, 26698 tok) where it previously crashed at the expansion. llm-provider 292/292
+green, build clean. G2 is the latency-coupled companion to Cluster A: without it, completing answers
+on hard tasks just trades truncation for a timeout.
+
+**Still open (prioritized next):** e3-style runaway — slow thinking models (pro) burn the whole cell
+budget on iterations; needs a per-call stream timeout and/or tighter iteration economy for slow tiers.
+Then Cluster B strategy-side (output-ownership invariant) and D (sub-kernel cost/tier propagation).
+A proper Cluster-A lift number needs a HARD deterministic reasoning task (zebra-puzzle, exact-match)
+added to the bench so the moderate-cell inconclusiveness is replaced by a discriminating cell.
+
 ## Probe artifact
 `.claude/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts`
 (stream path, RA_GEMINI_DEBUG=1 prints per-chunk thoughts/visible/finishReason; PROBE_MODEL + PROBE_BUDGETS env).

@@ -296,13 +296,15 @@ export const OpenAIProviderLive = Layer.effect(
           return mapped;
         }).pipe(
           Effect.retry(retryPolicy),
-          Effect.timeout("30 seconds"),
+          // G2: match local's 120s — 30s was too tight for thinking/reasoning
+          // models whose complete() calls (e.g. strategy expansions) exceed 30s.
+          Effect.timeout("120 seconds"),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "openai",
-                timeoutMs: 30_000,
+                timeoutMs: 120_000,
               }),
             ),
           ),

@@ -12,6 +12,8 @@ import { frontierSpotCheckSession } from "./sessions/frontier-spot-check.js"
 import { m3AblationSession } from "./sessions/m3-ablation.js"
 import { contextStressSession } from "./sessions/context-stress.js"
 import { recitationAblationSession } from "./sessions/recitation-ablation.js"
+import { docsReceiptsSession } from "./sessions/docs-receipts.js"
+import { clusterAGateSession } from "./sessions/cluster-a-gate.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
 import type { BenchmarkSession, SessionReport } from "./types.js"
 
@@ -124,6 +126,8 @@ const SESSIONS: Record<string, BenchmarkSession> = {
   "m3-ablation":           m3AblationSession,
   "context-stress":        contextStressSession,
   "recitation-ablation":   recitationAblationSession,
+  "docs-receipts":         docsReceiptsSession,
+  "cluster-a-gate":        clusterAGateSession,
 }
 
 export interface CliArgs {
@@ -136,6 +140,7 @@ export interface CliArgs {
   timeoutSec?: number
   // v2 flags
   session?: string
+  modelIds?: string[]
   runs?: number
   saveBaseline?: boolean
   ci?: boolean
@@ -157,6 +162,7 @@ export function parseArgs(argv: string[]): CliArgs {
       case "--output":       args.output = next; i++; break
       case "--timeout":      args.timeoutSec = next ? parseInt(next, 10) : undefined; i++; break
       case "--session":      args.session = next; i++; break
+      case "--models":       args.modelIds = next?.split(","); i++; break
       case "--runs":         args.runs = next ? parseInt(next, 10) : undefined; i++; break
       case "--save-baseline":args.saveBaseline = true; break
       case "--ci":           args.ci = true; break
@@ -183,6 +189,18 @@ async function main() {
     if (args.taskIds?.length) session = { ...session, taskIds: args.taskIds, tiers: undefined } as typeof session
     if (args.verbose) session = { ...session, logLevel: "verbose" } as typeof session
     if (args.judgeUrl) session = { ...session, judgeUrl: args.judgeUrl } as typeof session
+    // Filter the session's models to a subset (by id or model string), keeping
+    // each model's declared contextTier — e.g. run frontier tiers now and add
+    // the local tier later (results accumulate via the merge-by-cell writer).
+    if (args.modelIds?.length) {
+      const want = args.modelIds
+      const models = session.models.filter(m => want.includes(m.id) || want.includes(m.model))
+      if (models.length === 0) {
+        console.error(`--models matched nothing. Session "${session.id}" has: ${session.models.map(m => m.id).join(", ")}`)
+        process.exit(1)
+      }
+      session = { ...session, models } as typeof session
+    }
     // Allow swapping the session's model via CLI: `--provider gemini --model gemini-2.5-pro`
     // Useful for spot-checking a session against a single non-default provider
     // without authoring a new session config.
