@@ -120,3 +120,39 @@ describe("HS-110 — ToT cost gate skips BFS for trivial tasks", () => {
     expect(bfsExpansionSteps.length).toBe(1);
   });
 });
+
+// ── Explore wall-clock guard (graceful degradation) ──────────────────────────
+// 2026-06-29 cross-tier sweep: ToT explore on slow thinking models ran 270s+,
+// leaving no time for Phase 2 before the external timeout killed the run → 0
+// output (gemini-2.5-pro / qwen3:14b on e3-logic-fallacy). The explore phase
+// must self-bound on wall-clock so Phase 2 always runs and emits best-so-far.
+describe("ToT explore wall-clock guard (graceful degradation)", () => {
+  it("bounds exploration on the wall-clock budget and still executes the best path", async () => {
+    const prev = process.env.RA_TOT_EXPLORE_BUDGET_MS;
+    process.env.RA_TOT_EXPLORE_BUDGET_MS = "0"; // budget exhausted immediately
+    try {
+      const layer = TestLLMServiceLayer([
+        { match: "Generate exactly", text: "1. approach A\n2. approach B" },
+        { match: "Rate each", text: "0.8" },
+        { match: "Selected Approach", text: "FINAL ANSWER: bounded but answered." },
+      ]);
+      const result = await Effect.runPromise(
+        executeTreeOfThought({
+          taskDescription: "Compare the trade-offs between eventual and strong consistency.",
+          taskType: "analysis",
+          memoryContext: "",
+          availableTools: [],
+          config: defaultReasoningConfig,
+        }).pipe(Effect.provide(layer)),
+      );
+      // The wall-clock guard must have fired...
+      const marker = result.steps.find((s) => s.content.includes("Wall-clock guard"));
+      expect(marker).toBeDefined();
+      // ...and Phase 2 must still have produced output (graceful degradation, not 0).
+      expect((result.output ?? "").length).toBeGreaterThan(0);
+    } finally {
+      if (prev === undefined) delete process.env.RA_TOT_EXPLORE_BUDGET_MS;
+      else process.env.RA_TOT_EXPLORE_BUDGET_MS = prev;
+    }
+  });
+});

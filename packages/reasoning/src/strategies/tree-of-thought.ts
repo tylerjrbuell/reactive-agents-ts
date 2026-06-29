@@ -172,6 +172,13 @@ export const executeTreeOfThought = (
     const maxCost = input.config.strategies.treeOfThought.maxCost;
     const steps: ReasoningStep[] = [];
     const start = Date.now();
+    // Explore wall-clock budget (graceful degradation). The BFS explore phase
+    // makes many serial expansion+scoring LLM calls; on slow thinking models it
+    // can run minutes and starve Phase 2 (the react execute) of time before an
+    // external timeout kills the run with 0 output. Bounding explore on the
+    // wall-clock leaves room for Phase 2 to always emit a best-so-far answer.
+    // Env-overridable; default 120s sits comfortably under typical run timeouts.
+    const exploreBudgetMs = Number(process.env.RA_TOT_EXPLORE_BUDGET_MS ?? 120_000);
     let totalTokens = 0;
     let totalCost = 0;
 
@@ -323,6 +330,15 @@ export const executeTreeOfThought = (
       // Budget guard: abort exploration if cost exceeds limit
       if (maxCost !== undefined && totalCost >= maxCost) {
         steps.push(makeStep("observation", `[TOT] Budget guard: cost $${totalCost.toFixed(4)} reached limit $${maxCost.toFixed(4)}. Stopping exploration.`, { frameworkInstrumentation: "tot-marker" }));
+        break;
+      }
+
+      // Wall-clock guard: stop exploring once the explore budget is spent so
+      // Phase 2 (best-path execution) still runs and emits a best-so-far answer
+      // instead of the whole run being killed mid-explore with 0 output.
+      const exploreElapsed = Date.now() - start;
+      if (exploreElapsed >= exploreBudgetMs) {
+        steps.push(makeStep("observation", `[TOT] Wall-clock guard: explore phase ${Math.round(exploreElapsed / 1000)}s reached budget ${Math.round(exploreBudgetMs / 1000)}s. Stopping exploration; executing best path so far.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
 

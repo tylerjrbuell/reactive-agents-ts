@@ -196,8 +196,29 @@ after the fix (output synthesized from the observation). reasoning suite **1808/
 pending (gpt-4o-mini + sonnet → non-empty output).
 
 The two e3 ToT 0-output cells are a SEPARATE cause (external 300s cell timeout kills the process before
-synthesis) — needs the ToT wall-clock budget (the §8.8 invariant can't help when the process is killed
-mid-work). Tracked, deprioritized per "framework over niche-strategy" steer.
+synthesis) — see the ToT wall-clock fix below.
+
+## ToT explore wall-clock guard + non-bug rule-outs (2026-06-29, follow-up 3)
+
+Re-scanned the full map. Two suspected failures were ruled out as NON-bugs:
+- **e6-guardrail-injection** showed 0 tok / 0s / acc=1 across all 7 models — NOT a false-positive: the
+  input guardrail correctly blocks the injection prompt pre-LLM (`"Prompt injection detected: Instruction
+  override attempt"`), a successful defense → legitimate pass.
+- **sonnet / c4 empty output (690 tok)** — NOT the output-ownership bug: trace shows `tokenDelta=0` for 6
+  consecutive iterations and `artifactsAvailable=0` — sonnet was genuinely stuck (looping on brief/find
+  tools, emitting no new text), so low_delta_guard correctly terminated it and there was no synthesizable
+  work. Honest empty; §8.8 правильно skipped (no candidates).
+
+The one real remaining failure was **ToT 0-output on the e3 timeouts** (gemini-2.5-pro, qwen3:14b). ToT
+splits into explore (serial BFS expansion+scoring LLM calls — 270s+ on slow thinking models) → Phase 2
+execute (react sub-kernel that produces the answer). With no wall-clock bound, explore consumed the whole
+budget and the external timeout killed the run before Phase 2 → 0 output.
+
+**Fix (`tree-of-thought.ts`):** added a wall-clock guard to the BFS explore loop (beside the existing
+maxCost guard) — `Date.now() - start >= exploreBudgetMs → break`. `exploreBudgetMs` is env-overridable
+(`RA_TOT_EXPLORE_BUDGET_MS`, default 120s). On break, the existing bestLeaf selection + Phase 2 execute
+still run, so the strategy always emits a best-so-far answer instead of 0 — graceful degradation. RED→GREEN
+test (budget=0 → guard fires + Phase 2 output non-empty); reasoning suite 1809/0.
 
 ## Probe artifact
 `.claude/skills/harness-improvement-loop/scripts/gemini-thinking-starve-probe.ts`
