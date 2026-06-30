@@ -2,6 +2,10 @@
 
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
+## ▶ Release-Readiness for 0.13.0 (2026-06-30)
+
+Current ver = **0.12.0** (tag-driven; source package.json uniformly 0.10.6 = baseline, `scripts/release.ts` stamps the target; NO drift, `release:dry 0.13.0` PASSES). Full build GREEN. **2 BLOCKERS FOUND+CLEARED:** (1) 6 red suite tests = dead-end docs-bench remnants — `rw-bp1` made REAL_WORLD_TASKS=11 vs count-tests expecting 10 + docs-receipts session referenced never-committed rw-d* tasks. User confirmed DEAD END → PURGED (rw-bp1 + docs-receipts + run.ts wiring; suite green, zero test edits). `8bdae46c`. (2) `withVerificationStep({mode:"loop"})` = documented public option that was a SILENT NO-OP → REMOVED "loop" from union (5 type spots + JSDoc + dead warning branches). `157453e9`. **POLISH:** drafted 0.13.0 CHANGELOG (50 commits since v0.12.0; DRAFT — user finalizes version/theme) + fixed stale README "## 6 Reasoning Strategies" (registry=7). `06b54dcd`. **REMAINING (non-blocking):** checkMultiSource neutral-0.5 placeholder w/o TAVILY_API_KEY (doc-note); `as unknown as` AT the 76 cast-ceiling (zero headroom); 106 `as any` in runtime god-files. Full suite 6699/0. **VERDICT: release-ready once CHANGELOG version/theme finalized.**
+
 ## ▶ Test-Suite Health Audit + E2E Verification (2026-06-30)
 
 **FINDING #1 RETRACTED — FALSE ALARM.** Earlier claim ".withFabricationGuard/.withStallPolicy absent from the built package" was WRONG: the probe ran from `/tmp` (outside the repo), so `import "reactive-agents"` resolved to bun's GLOBAL install cache = the stale PUBLISHED v0.12.0 tarball, not the workspace. From inside the repo both methods are present + callable; they're simply UNRELEASED (runtime src 0.10.6; committed June 27). **Durable rule: probe/verify ONLY from inside the repo — a /tmp probe silently tests the last published package.**
