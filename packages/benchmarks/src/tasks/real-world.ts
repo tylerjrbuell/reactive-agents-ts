@@ -618,12 +618,59 @@ Here is everything we have: users sign up, confirm email, and are shown a dashbo
     optimalHarnessConfig: { tools: true, reasoning: true, reactiveIntelligence: true, strategy: "react" },
     tags: ["adversarial", "scope", "ambiguity"],
   },
+  // ── Blueprint proof-gate task ─────────────────────────────────────────────────
 
-  // ── Abstention-trap tasks (ab-trap-*) ────────────────────────────────────────
-  // These tasks have no correct concrete answer. The correct agent behaviour
-  // is to abstain (terminatedBy === "abstained"). Any fabricated answer scores 0.
-  // Keep them grouped so solvable-task accuracy can be reported separately.
+  {
+    id: "rw-bp1",
+    tier: "real-world",
+    name: "Static multi-file generation (blueprint domain)",
+    domain: "execution",
+    strategy: "blueprint",
+    // STATIC, decomposable, LOCAL, solvable — the canonical blueprint-domain task:
+    // the full plan (3 independent file-writes) is knowable up front, no
+    // mid-course observation needed. Deterministically verified (no judge).
+    prompt: `Create exactly three text files in the working directory:
+- greeting.txt containing exactly the text: hello
+- count.txt containing exactly the text: 42
+- status.txt containing exactly the text: ok
+Write all three files. No other output is required.`,
+    requiresTools: true,
+    maxIterations: 12,
+    fixtures: [
+      {
+        path: "check.mjs",
+        content: `import { readFileSync } from "node:fs";
+const want = { "greeting.txt": "hello", "count.txt": "42", "status.txt": "ok" };
+try {
+  for (const [f, v] of Object.entries(want)) {
+    if (readFileSync(f, "utf8").trim() !== v) { console.error("mismatch: " + f); process.exit(1); }
+  }
+  process.exit(0);
+} catch (e) { console.error(String(e)); process.exit(1); }
+`,
+      },
+    ],
+    successCriteria: {
+      type: "verifiable",
+      command: "node check.mjs",
+    },
+    primaryDimensions: ["accuracy", "efficiency"],
+    dimensionRubrics: [
+      {
+        dimension: "efficiency",
+        rubric: "Did the agent create the three files directly without redundant iterations or re-reading?",
+      },
+    ],
+    optimalHarnessConfig: { tools: true, reasoning: true, strategy: "blueprint" },
+    tags: ["static-decomposable", "blueprint", "multi-file"],
+  },
+]
 
+// ── Abstention-trap tasks (ab-trap-*) ────────────────────────────────────────
+// No correct concrete answer; correct behaviour is to abstain. Kept OUT of
+// REAL_WORLD_TASKS (they intentionally lack successCriteria/2+ dims). Used by
+// the deferred cross-tier abstention proof-gate.
+export const ABSTENTION_TRAP_TASKS: readonly BenchmarkTask[] = [
   {
     id: "ab-trap-1",
     tier: "real-world",
@@ -684,51 +731,5 @@ Here is everything we have: users sign up, confirm email, and are shown a dashbo
     ],
     tags: ["adversarial", "abstention-trap", "underspecified"],
   },
-
-  // ── Blueprint proof-gate task ─────────────────────────────────────────────────
-
-  {
-    id: "rw-bp1",
-    tier: "real-world",
-    name: "Static multi-file generation (blueprint domain)",
-    domain: "execution",
-    strategy: "blueprint",
-    // STATIC, decomposable, LOCAL, solvable — the canonical blueprint-domain task:
-    // the full plan (3 independent file-writes) is knowable up front, no
-    // mid-course observation needed. Deterministically verified (no judge).
-    prompt: `Create exactly three text files in the working directory:
-- greeting.txt containing exactly the text: hello
-- count.txt containing exactly the text: 42
-- status.txt containing exactly the text: ok
-Write all three files. No other output is required.`,
-    requiresTools: true,
-    maxIterations: 12,
-    fixtures: [
-      {
-        path: "check.mjs",
-        content: `import { readFileSync } from "node:fs";
-const want = { "greeting.txt": "hello", "count.txt": "42", "status.txt": "ok" };
-try {
-  for (const [f, v] of Object.entries(want)) {
-    if (readFileSync(f, "utf8").trim() !== v) { console.error("mismatch: " + f); process.exit(1); }
-  }
-  process.exit(0);
-} catch (e) { console.error(String(e)); process.exit(1); }
-`,
-      },
-    ],
-    successCriteria: {
-      type: "verifiable",
-      command: "node check.mjs",
-    },
-    primaryDimensions: ["accuracy", "efficiency"],
-    dimensionRubrics: [
-      {
-        dimension: "efficiency",
-        rubric: "Did the agent create the three files directly without redundant iterations or re-reading?",
-      },
-    ],
-    optimalHarnessConfig: { tools: true, reasoning: true, strategy: "blueprint" },
-    tags: ["static-decomposable", "blueprint", "multi-file"],
-  },
 ]
+
