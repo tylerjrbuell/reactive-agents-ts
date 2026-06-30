@@ -1,4 +1,5 @@
-import { Layer, Effect, Context, Schedule, Duration, Ref } from "effect";
+import { Layer, Effect, Context, Ref } from "effect";
+import { applyRetryToLlmService } from "./llm-retry.js";
 import { LifecycleHookRegistryLive } from "./hooks.js";
 import { ExecutionEngineLive } from "./execution-engine.js";
 import { CapabilityRegistryLive } from "./capabilities/registry.js";
@@ -497,8 +498,11 @@ export const createRuntime = (options: RuntimeOptions) => {
         )
       : (llmLayer as Layer.Layer<LLMService>);
 
-  // Apply retry policy: wrap complete() with Effect.retry so transient LLM
-  // failures (rate limits, network errors) automatically back off and retry.
+  // Apply retry policy: wrap complete() / stream() / completeStructured() with
+  // Effect.retry so transient LLM failures (rate limits, network errors) back
+  // off and retry. Wrapping ALL three matters — the reactive kernel runs through
+  // stream(), so a complete()-only wrap left withRetryPolicy dead for the main
+  // path (see applyRetryToLlmService).
   const finalLlmLayer: Layer.Layer<LLMService> =
     options.retryPolicy
       ? Layer.effect(
@@ -507,14 +511,7 @@ export const createRuntime = (options: RuntimeOptions) => {
             const svc = yield* LLMService.pipe(
               Effect.provide(effectiveLlmLayer as Layer.Layer<LLMService, never, never>),
             );
-            const retrySchedule = Schedule.recurs(options.retryPolicy!.maxRetries).pipe(
-              Schedule.intersect(Schedule.spaced(Duration.millis(options.retryPolicy!.backoffMs))),
-            );
-            return {
-              ...svc,
-              complete: (req: Parameters<typeof svc.complete>[0]) =>
-                svc.complete(req).pipe(Effect.retry(retrySchedule)),
-            } as Context.Tag.Service<LLMService>;
+            return applyRetryToLlmService(svc, options.retryPolicy!);
           }),
         )
       : effectiveLlmLayer;

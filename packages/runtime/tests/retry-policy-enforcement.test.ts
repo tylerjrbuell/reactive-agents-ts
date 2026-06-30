@@ -1,190 +1,110 @@
-/**
- * Retry Policy Enforcement Tests
- *
- * Verifies that the retry policy layer composition works correctly at the
- * Effect layer level — mirrors what createRuntime() does with finalLlmLayer.
- */
-
+// Run: bun test packages/runtime/tests/retry-policy-enforcement.test.ts --timeout 15000
+//
+// Retry-policy enforcement. These tests drive the ACTUAL production wrapper
+// (`applyRetryToLlmService`, used by createRuntime's finalLlmLayer) — NOT a
+// reimplementation. The previous version of this file defined its own
+// `wrapWithRetry` and asserted on the copy, so it stayed green even though
+// production wrapped only `complete()` and left `stream()` /
+// `completeStructured()` unretried — and the reactive kernel runs through
+// `stream()`, so `withRetryPolicy` was dead for the primary run path.
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Schedule, Duration } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { LLMService, LLMError } from "@reactive-agents/llm-provider";
+import { applyRetryToLlmService } from "../src/llm-retry.js";
 
-// ─── Helper: LLM that fails `failCount` times then succeeds ───────────────────
-
-function makeFlakeyLLM(failCount: number): {
-  layer: Layer.Layer<LLMService>;
-  svc: ReturnType<typeof LLMService.of>;
-  getCallCount: () => number;
-} {
-  let calls = 0;
-  const svc = LLMService.of({
-    complete: () => {
-      calls++;
-      if (calls <= failCount) {
-        return Effect.fail(
-          new LLMError({ message: "transient error", provider: "anthropic" }),
-        );
-      }
-      return Effect.succeed({
-        content: "success",
-        stopReason: "end_turn" as const,
-        model: "test",
-        usage: {
-          inputTokens: 10,
-          outputTokens: 10,
-          totalTokens: 20,
-          estimatedCost: 0,
-        },
-      });
-    },
-    stream: () =>
-      Effect.fail(
-        new LLMError({ message: "not used", provider: "anthropic" }),
-      ) as any,
-    completeStructured: () =>
-      Effect.fail(
-        new LLMError({ message: "not used", provider: "anthropic" }),
-      ) as any,
-    embed: (texts: readonly string[]) => Effect.succeed(texts.map(() => [] as number[])),
-    countTokens: () => Effect.succeed(0),
-    getModelConfig: () =>
-      Effect.succeed({ provider: "anthropic" as const, model: "test" }),
-    getStructuredOutputCapabilities: () =>
-      Effect.succeed({
-        nativeJsonMode: false,
-        jsonSchemaEnforcement: false,
-        prefillSupport: false,
-        grammarConstraints: false,
-      }),
-  } as unknown as LLMService["Type"]);
-  const layer = Layer.succeed(LLMService, svc);
-  return { layer, svc, getCallCount: () => calls };
-}
-
-// ─── Helper: wrap a service with retry policy ─────────────────────────────────
-// Build a Layer that wraps the svc's complete() with Effect.retry.
-// This matches the pattern in createRuntime() finalLlmLayer.
-
-function wrapWithRetry(
-  baseSvc: ReturnType<typeof LLMService.of>,
-  maxRetries: number,
-  backoffMs = 0,
-): Layer.Layer<LLMService> {
-  const retrySchedule = Schedule.recurs(maxRetries).pipe(
-    Schedule.intersect(Schedule.spaced(Duration.millis(backoffMs))),
-  );
-  const wrappedSvc = LLMService.of({
-    ...baseSvc,
-    // Effect.suspend ensures the function is called fresh on each retry attempt.
-    // Without suspend, the same Effect value would be retried (not re-executing the function).
-    complete: (req: Parameters<typeof baseSvc.complete>[0]) =>
-      Effect.suspend(() => baseSvc.complete(req)).pipe(Effect.retry(retrySchedule)),
-  });
-  return Layer.succeed(LLMService, wrappedSvc);
-}
-
-const testRequest = {
-  messages: [{ role: "user" as const, content: "test" }],
+const ok = {
+  content: "success",
+  stopReason: "end_turn" as const,
+  model: "test",
+  usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20, estimatedCost: 0 },
 };
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+/** A service that fails the first `failCount` calls of EACH method, then succeeds.
+ *  Separate counters per method so each call site can be asserted independently. */
+function makeFlakeyLLM(failCount: number) {
+  const calls = { complete: 0, stream: 0, completeStructured: 0 };
+  const transient = () => new LLMError({ message: "transient error", provider: "anthropic" });
+  // Effect.suspend models a REAL provider: the side effect (the "API call",
+  // here the counter + fail/succeed decision) runs INSIDE the Effect, so each
+  // retry re-executes it. Incrementing outside the Effect would freeze the
+  // outcome and make retry a no-op (a mock artifact, not the code under test).
+  const svc = {
+    complete: () =>
+      Effect.suspend(() => {
+        calls.complete++;
+        return calls.complete <= failCount ? Effect.fail(transient()) : Effect.succeed(ok);
+      }),
+    stream: () =>
+      Effect.suspend(() => {
+        calls.stream++;
+        return calls.stream <= failCount ? Effect.fail(transient()) : Effect.succeed(Stream.empty);
+      }),
+    completeStructured: () =>
+      Effect.suspend(() => {
+        calls.completeStructured++;
+        return calls.completeStructured <= failCount ? Effect.fail(transient()) : Effect.succeed({ ok: true });
+      }),
+    embed: (texts: readonly string[]) => Effect.succeed(texts.map(() => [] as number[])),
+    countTokens: () => Effect.succeed(0),
+    getModelConfig: () => Effect.succeed({ provider: "anthropic" as const, model: "test" }),
+    getStructuredOutputCapabilities: () =>
+      Effect.succeed({ nativeJsonMode: false, jsonSchemaEnforcement: false, prefillSupport: false, grammarConstraints: false }),
+  } as unknown as Context_Service;
+  return { svc, calls };
+}
+type Context_Service = Parameters<typeof applyRetryToLlmService>[0];
 
-describe("Retry policy layer composition", () => {
-  it("succeeds after N failures when maxRetries >= failCount", async () => {
-    const { svc: baseSvc, getCallCount } = makeFlakeyLLM(2);
-    const wrappedLayer = wrapWithRetry(baseSvc, 2);
+const req = { messages: [{ role: "user" as const, content: "test" }] } as never;
 
-    const result = await Effect.runPromise(
-      LLMService.pipe(
-        Effect.flatMap((svc) => svc.complete(testRequest)),
-        Effect.provide(wrappedLayer),
-        Effect.either,
-      ),
+function layerWithRetry(svc: Context_Service, maxRetries: number) {
+  return Layer.succeed(LLMService, applyRetryToLlmService(svc, { maxRetries, backoffMs: 0 }));
+}
+
+describe("applyRetryToLlmService — production retry wrapper", () => {
+  it("retries complete() until success when maxRetries >= failCount", async () => {
+    const { svc, calls } = makeFlakeyLLM(2);
+    const r = await Effect.runPromise(
+      LLMService.pipe(Effect.flatMap((s) => s.complete(req)), Effect.provide(layerWithRetry(svc, 2)), Effect.either),
     );
-
-    expect(result._tag).toBe("Right");
-    expect(getCallCount()).toBe(3); // 2 failures + 1 success
+    expect(r._tag).toBe("Right");
+    expect(calls.complete).toBe(3); // 2 failures + 1 success
   });
 
-  it("fails immediately with no retry when failCount=1 and no retry wrap", async () => {
-    const { svc: baseSvc, getCallCount } = makeFlakeyLLM(1);
-    const baseLayer = Layer.succeed(LLMService, baseSvc);
-
-    const result = await Effect.runPromise(
-      LLMService.pipe(
-        Effect.flatMap((svc) => svc.complete(testRequest)),
-        Effect.provide(baseLayer),
-        Effect.either,
-      ),
+  it("retries stream() — the path the reactive kernel actually uses", async () => {
+    const { svc, calls } = makeFlakeyLLM(2);
+    const r = await Effect.runPromise(
+      LLMService.pipe(Effect.flatMap((s) => s.stream(req)), Effect.provide(layerWithRetry(svc, 2)), Effect.either),
     );
-
-    expect(result._tag).toBe("Left");
-    expect(getCallCount()).toBe(1);
+    expect(r._tag).toBe("Right");
+    expect(calls.stream).toBe(3);
   });
 
-  it("still fails after exhausting all retries when failCount > maxRetries", async () => {
-    const { svc: baseSvc, getCallCount } = makeFlakeyLLM(5);
-    const wrappedLayer = wrapWithRetry(baseSvc, 2); // 2 retries = 3 total attempts
-
-    const result = await Effect.runPromise(
-      LLMService.pipe(
-        Effect.flatMap((svc) => svc.complete(testRequest)),
-        Effect.provide(wrappedLayer),
-        Effect.either,
-      ),
+  it("retries completeStructured() — the structured-output path", async () => {
+    const { svc, calls } = makeFlakeyLLM(2);
+    const r = await Effect.runPromise(
+      LLMService.pipe(Effect.flatMap((s) => s.completeStructured(req as never)), Effect.provide(layerWithRetry(svc, 2)), Effect.either),
     );
-
-    expect(result._tag).toBe("Left"); // still fails after 3 attempts
-    expect(getCallCount()).toBe(3); // 1 initial + 2 retries
+    expect(r._tag).toBe("Right");
+    expect(calls.completeStructured).toBe(3);
   });
 
-  it("maxRetries=0 means single attempt only", async () => {
-    const { svc: baseSvc, getCallCount } = makeFlakeyLLM(1);
-    const wrappedLayer = wrapWithRetry(baseSvc, 0);
-
-    const result = await Effect.runPromise(
-      LLMService.pipe(
-        Effect.flatMap((svc) => svc.complete(testRequest)),
-        Effect.provide(wrappedLayer),
-        Effect.either,
-      ),
-    );
-
-    expect(result._tag).toBe("Left");
-    expect(getCallCount()).toBe(1); // no retries
+  it("still fails after exhausting retries (failCount > maxRetries) on each path", async () => {
+    const { svc, calls } = makeFlakeyLLM(5);
+    const layer = layerWithRetry(svc, 2); // 2 retries = 3 attempts
+    const rc = await Effect.runPromise(LLMService.pipe(Effect.flatMap((s) => s.complete(req)), Effect.provide(layer), Effect.either));
+    const rs = await Effect.runPromise(LLMService.pipe(Effect.flatMap((s) => s.stream(req)), Effect.provide(layer), Effect.either));
+    expect(rc._tag).toBe("Left");
+    expect(rs._tag).toBe("Left");
+    expect(calls.complete).toBe(3);
+    expect(calls.stream).toBe(3);
   });
 
-  it("succeeds on first attempt when LLM never fails", async () => {
-    const { svc: baseSvc, getCallCount } = makeFlakeyLLM(0); // never fails
-    const wrappedLayer = wrapWithRetry(baseSvc, 3);
-
-    const result = await Effect.runPromise(
-      LLMService.pipe(
-        Effect.flatMap((svc) => svc.complete(testRequest)),
-        Effect.provide(wrappedLayer),
-        Effect.either,
-      ),
-    );
-
-    expect(result._tag).toBe("Right");
-    expect(getCallCount()).toBe(1); // no retries needed
-  });
-
-  it("error from LLM is an LLMError with correct tag", async () => {
-    const { svc: baseSvc } = makeFlakeyLLM(10); // always fails
-    const baseLayer = Layer.succeed(LLMService, baseSvc);
-
-    const result = await Effect.runPromise(
-      LLMService.pipe(
-        Effect.flatMap((svc) => svc.complete(testRequest)),
-        Effect.provide(baseLayer),
-        Effect.either,
-      ),
-    );
-
-    expect(result._tag).toBe("Left");
-    const err = (result as any).left;
-    expect(err._tag).toBe("LLMError");
-    expect(err.message).toBe("transient error");
+  it("maxRetries=0 means a single attempt per path", async () => {
+    const { svc, calls } = makeFlakeyLLM(1);
+    const layer = layerWithRetry(svc, 0);
+    await Effect.runPromise(LLMService.pipe(Effect.flatMap((s) => s.complete(req)), Effect.provide(layer), Effect.either));
+    await Effect.runPromise(LLMService.pipe(Effect.flatMap((s) => s.stream(req)), Effect.provide(layer), Effect.either));
+    expect(calls.complete).toBe(1);
+    expect(calls.stream).toBe(1);
   });
 });
