@@ -31,9 +31,20 @@ for f in "${ALLOWED_FILES[@]}"; do
 done
 
 # Search for any direct status:"done" or status:'done' transition.
+#
+# Filter to REAL code transitions only:
+#  - drop the authorized owner files (terminate.ts / arbitrator.ts)
+#  - drop *.test.ts / *.spec.ts (they assert ABOUT terminal state, never perform it)
+#  - drop comment lines: where the code (after `path:lineno:`) begins with
+#    `//`, `*`, or `/*`, or where `//` precedes the `status:"done"` match
+#    (inline comment). These mention the string in prose, not as a transition.
 HITS="$(grep -rn -E 'status:\s*"done"|status:\s*'\''done'\''' \
   --include='*.ts' "$SEARCH_DIR" 2>/dev/null \
-  | grep -E -v "$EXCLUDE" || true)"
+  | grep -E -v "$EXCLUDE" \
+  | grep -E -v '\.(test|spec)\.ts:' \
+  | awk -F: '{ code=$0; sub(/^[^:]*:[0-9]+:/, "", code); gsub(/^[ \t]+/, "", code);
+              if (code !~ /^(\/\/|\*|\/\*)/ && code !~ /\/\/.*status:[ \t]*["'\'']done/) print $0 }' \
+  || true)"
 
 if [ -n "$HITS" ]; then
   echo "❌ Termination invariant violated. Direct status:'done' transitions outside the helpers:"

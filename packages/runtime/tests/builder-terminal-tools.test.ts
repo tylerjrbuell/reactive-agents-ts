@@ -2,7 +2,26 @@
 import { Effect, Layer } from "effect";
 import { describe, it, expect } from "bun:test";
 import { ReactiveAgents } from "../src/index.js";
-import { shellExecuteTool } from "@reactive-agents/tools";
+import { shellExecuteTool, ToolService } from "@reactive-agents/tools";
+
+/**
+ * Introspect the SAME ToolService the agent's runtime uses: resolves true only
+ * if `getTool(name)` succeeds (tool registered), false on ToolNotFoundError.
+ */
+async function toolPresent(
+  agent: { runtime: { runPromise: <A>(e: Effect.Effect<A, never, never>) => Promise<A> } },
+  name: string,
+): Promise<boolean> {
+  return agent.runtime.runPromise(
+    Effect.gen(function* () {
+      const ts = yield* ToolService;
+      return yield* ts.getTool(name).pipe(
+        Effect.map(() => true),
+        Effect.catchAll(() => Effect.succeed(false)),
+      );
+    }) as unknown as Effect.Effect<boolean, never, never>,
+  );
+}
 
 describe("builder terminal tools integration", () => {
   it("should enable shell-execute tool when .withTerminalTools() is called", async () => {
@@ -11,12 +30,10 @@ describe("builder terminal tools integration", () => {
       .withTerminalTools()
       .build();
 
-    const toolNames = await agent.run("list available tools").then((r) => {
-      // Tools should be available in capabilities
-      return Promise.resolve(true); // Simplified for now
-    });
+    // shell-execute must be registered in the resolved tool registry.
+    expect(await toolPresent(agent, "shell-execute")).toBe(true);
 
-    expect(toolNames).toBe(true);
+    await agent.dispose();
   }, 15000);
 
   it("should enable shell-execute tool when .withTools({ terminal: true }) is called", async () => {
@@ -25,8 +42,10 @@ describe("builder terminal tools integration", () => {
       .withTools({ terminal: true })
       .build();
 
-    // Agent should have shell-execute available
-    expect(agent).toBeDefined();
+    // shell-execute must be registered when terminal:true is set.
+    expect(await toolPresent(agent, "shell-execute")).toBe(true);
+
+    await agent.dispose();
   }, 15000);
 
   it("should NOT enable shell-execute by default", async () => {
@@ -35,8 +54,10 @@ describe("builder terminal tools integration", () => {
       .withTools() // No terminal: true
       .build();
 
-    // shell-execute should not be in default tools without explicit opt-in
-    expect(agent).toBeDefined();
+    // shell-execute must be ABSENT without explicit terminal opt-in.
+    expect(await toolPresent(agent, "shell-execute")).toBe(false);
+
+    await agent.dispose();
   }, 15000);
 
   it("should execute shell-execute when terminal tools are enabled", async () => {

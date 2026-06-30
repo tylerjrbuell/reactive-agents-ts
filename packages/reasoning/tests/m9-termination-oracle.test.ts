@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "bun:test";
+import { resolve } from "node:path";
 import type { KernelState, KernelInput, KernelContext } from "../src/kernel/state/kernel-state.js";
 import { initialKernelState, transitionState } from "../src/kernel/state/kernel-state.js";
 import { terminate } from "../src/kernel/loop/terminate.js";
@@ -424,22 +425,22 @@ describe("M9 — Termination Oracle Validation", () => {
       expect(state.meta.terminatedBy).toBe("dispatcher-early-stop");
     });
 
-    it("should ensure every callable terminate() site is in runner.ts or terminate.ts", () => {
-      // This is a meta-test documenting the constraint:
-      // Only two locations should call terminate():
-      // 1. runner.ts (imperative paths: low_delta, harness_deliverable, etc.)
-      // 2. Other kernel pieces must use transitionState (arbitrator, etc.)
-
-      // The CI lint check (scripts/check-termination-paths.sh) enforces this.
-      // This test documents what we're validating.
-
-      const expectedCallers = [
-        "packages/reasoning/src/kernel/loop/runner.ts",
-      ];
-
-      expect(expectedCallers).toContain(
-        "packages/reasoning/src/kernel/loop/runner.ts"
+    it("enforces the single-owner termination invariant via the lint script (no stray status:'done')", () => {
+      // REAL guard (was a tautology asserting an array contained its own
+      // literal). The single-owner invariant is enforced by
+      // scripts/check-termination-paths.sh, which fails if any direct
+      // `status:"done"` transition appears in packages/reasoning/src outside the
+      // two authorized owners (terminate.ts / arbitrator.ts). Run it for real
+      // and assert it passes — a new scattered termination site turns this RED.
+      const repoRoot = resolve(import.meta.dir, "..", "..", "..");
+      const proc = Bun.spawnSync(
+        ["bash", "scripts/check-termination-paths.sh"],
+        { cwd: repoRoot, stdout: "pipe", stderr: "pipe" },
       );
+      const out = proc.stdout.toString() + proc.stderr.toString();
+      // Surface the offending lines if the invariant is violated.
+      expect(out).toContain("Termination invariant holds");
+      expect(proc.exitCode).toBe(0);
     });
   });
 

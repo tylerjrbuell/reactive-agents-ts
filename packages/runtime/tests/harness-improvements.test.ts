@@ -141,17 +141,21 @@ describe("withMinIterations", () => {
   });
 
   it("does not terminate before N iterations when using fast-path", async () => {
+    // The test LLM returns a final-looking answer on the FIRST call, which would
+    // normally let the loop terminate at iteration 1. withMinIterations(3) must
+    // block that early exit and keep consulting the LLM until at least N
+    // iterations have run. We count LLM calls as a proxy for iterations.
+    const { layer, callCount } = makeCountingLLM("FINAL ANSWER: done");
+
     const config = defaultReactiveAgentsConfig("min-iter-agent", {
       maxIterations: 10,
       minIterations: 3,
     });
 
-    // Basic smoke: run completes without error when minIterations is set
-    const result = await runTask(
-      config,
-      makeSequentialLLM(["thinking...", "still thinking...", "thinking more...", "FINAL ANSWER: done"]),
-    );
-    expect(result).toBeDefined();
+    await runTask(config, layer);
+
+    // Gutting withMinIterations to a no-op would make this 1 call → RED.
+    expect(callCount()).toBeGreaterThanOrEqual(3);
   });
 });
 

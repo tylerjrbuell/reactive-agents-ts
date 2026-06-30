@@ -675,34 +675,24 @@ describe("M2 Strategy Switching Validation", () => {
   });
 
   describe("FUTURE: Model-specific validation (qwen3:14B + frontier)", () => {
-    it("should validate switching effectiveness on qwen3:14B [SKIP]", () => {
-      // When running with qwen3:14B:
-      //   - Expect higher baseline failure rate on verify-loop patterns (FM-B2)
-      //   - Verify that switching helps recover from verification failures
-      //   - Measure: accuracy improvement vs Claude-3.5-Sonnet baseline
-    });
-
-    it("should validate switching effectiveness on frontier models [SKIP]", () => {
-      // When running with claude-sonnet-4-6, claude-haiku-4-5:
-      //   - Expect lower baseline failure rate
-      //   - Verify that switching provides incremental benefit
-      //   - Measure: cost-benefit (10% accuracy lift worth <15% token increase?)
-    });
+    // it.todo (not an empty it()): these report as PENDING, not as passing
+    // coverage. An empty it() runs green and falsely inflates the "validated"
+    // count for a behavior that was never tested.
+    it.todo("should validate switching effectiveness on qwen3:14B");
+    //   - Expect higher baseline failure rate on verify-loop patterns (FM-B2)
+    //   - Verify that switching helps recover from verification failures
+    //   - Measure: accuracy improvement vs Claude-3.5-Sonnet baseline
+    it.todo("should validate switching effectiveness on frontier models");
+    //   - Expect lower baseline failure rate; incremental benefit
+    //   - Measure: cost-benefit (10% accuracy lift worth <15% token increase?)
   });
 
   describe("FUTURE: Failure mode validation", () => {
-    it("should validate FM-B2 recovery: verify-loop stall [SKIP]", () => {
-      // Design a task where the initial strategy enters a verify loop
-      // (e.g., high complexity + conflicting evidence sources)
-      // Measure: does switching to a different verification approach converge?
-      // Metric: max iterations before completion
-    });
-
-    it("should validate FM-D2 recovery: strategy switch succeeds [SKIP]", () => {
-      // Design a task where the initial strategy fails but a secondary strategy succeeds
-      // (e.g., tool-heavy task that ReAct can't structure)
-      // Measure: does the new strategy actually produce correct output?
-      // Metric: accuracy before/after switch
-    });
+    it.todo("should validate FM-B2 recovery: verify-loop stall");
+    //   - Initial strategy enters a verify loop (high complexity + conflicting
+    //     evidence); measure whether switching converges (max iterations)
+    it.todo("should validate FM-D2 recovery: strategy switch succeeds");
+    //   - Initial strategy fails, secondary succeeds (tool-heavy task ReAct
+    //     can't structure); measure accuracy before/after switch
   });
 });

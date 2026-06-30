@@ -14,16 +14,70 @@ describe("Tool Filtering — allowedTools", () => {
   });
 
   it("should restrict visible tools to only allowedTools", async () => {
-    // Build an agent with only "file-read" allowed
+    // Behavioral proof: two custom tools are REGISTERED, but only one is in
+    // allowedTools. The model (scripted) calls BOTH. The allowedTools execution
+    // gate must let the allowed one run and BLOCK the other — gutting the gate
+    // to a no-op would let `blocked-probe` run and turn this test RED.
+    let allowedRan = false;
+    let blockedRan = false;
+
     const agent = await ReactiveAgents.create()
       .withName("restricted-agent")
-      .withTools({ allowedTools: ["file-read"] })
-      .withTestScenario([{ text: "Done." }])
+      .withProvider("test")
+      .withTools({
+        tools: [
+          {
+            definition: {
+              name: "allowed-probe",
+              description: "An allowed probe tool",
+              parameters: [],
+              source: "function",
+              requiresApproval: false,
+              riskLevel: "low",
+              timeoutMs: 5000,
+            } as any,
+            handler: () =>
+              Effect.sync(() => {
+                allowedRan = true;
+                return { ok: "allowed-ran" };
+              }),
+          },
+          {
+            definition: {
+              name: "blocked-probe",
+              description: "A disallowed probe tool",
+              parameters: [],
+              source: "function",
+              requiresApproval: false,
+              riskLevel: "low",
+              timeoutMs: 5000,
+            } as any,
+            handler: () =>
+              Effect.sync(() => {
+                blockedRan = true;
+                return { ok: "blocked-ran" };
+              }),
+          },
+        ],
+        // Only the allowed probe is permitted.
+        allowedTools: ["allowed-probe"],
+      })
+      .withTestScenario([
+        { toolCall: { name: "allowed-probe", args: {} } },
+        { toolCall: { name: "blocked-probe", args: {} } },
+        { text: "Done." },
+      ])
+      .withMaxIterations(4)
       .build();
 
-    // Run a task — the agent should work fine
-    const result = await agent.run("Read a file");
+    const result = await agent.run("Use both probes");
+
+    // The allowed tool actually executed; the disallowed tool was gated.
+    expect(allowedRan).toBe(true);
+    expect(blockedRan).toBe(false);
     expect(result.success).toBe(true);
+
+    await agent.dispose();
   });
 
   it("no allowedTools = all built-in tools available (backward compat)", async () => {

@@ -155,10 +155,14 @@ export const runReasoningHarnessHooks = (
       }
     }
 
-    // withMinIterations: re-run if fewer iterations than required
+    // withMinIterations: re-run until the required floor is reached.
+    // Loop (not a lone `if`): a single continuation only ever yields 2 total
+    // passes regardless of minIterations. Each continuation counts as one more
+    // iteration; iterationsDone strictly increases so the loop terminates, and
+    // a failed / un-normalizable continuation breaks early.
     if (config.minIterations && !cacheHit && reasoningOpt._tag === "Some") {
-      const iterationsDone = ctx.iteration - 1;
-      if (iterationsDone < config.minIterations) {
+      let iterationsDone = ctx.iteration - 1;
+      while (iterationsDone < config.minIterations) {
         const continuationOutcome = yield* Effect.exit(
           reasoningOpt.value.execute(buildExecuteRequest([
             { role: "user" as const, content: extractTaskText(task.input) },
@@ -166,21 +170,20 @@ export const runReasoningHarnessHooks = (
             { role: "user" as const, content: "Continue — ensure thoroughness before finalizing." },
           ])),
         );
-        if (continuationOutcome._tag === "Success") {
-          const contResult = normalizeReasoningResult(continuationOutcome.value);
-          if (contResult) {
-            ctx = {
-              ...ctx,
-              cost: ctx.cost + (contResult.metadata.cost ?? 0),
-              tokensUsed: ctx.tokensUsed + (contResult.metadata.tokensUsed ?? 0),
-              metadata: {
-                ...ctx.metadata,
-                lastResponse: String(contResult.output ?? ""),
-                reasoningResult: contResult,
-              },
-            };
-          }
-        }
+        if (continuationOutcome._tag !== "Success") break;
+        const contResult = normalizeReasoningResult(continuationOutcome.value);
+        if (!contResult) break;
+        ctx = {
+          ...ctx,
+          cost: ctx.cost + (contResult.metadata.cost ?? 0),
+          tokensUsed: ctx.tokensUsed + (contResult.metadata.tokensUsed ?? 0),
+          metadata: {
+            ...ctx.metadata,
+            lastResponse: String(contResult.output ?? ""),
+            reasoningResult: contResult,
+          },
+        };
+        iterationsDone++;
       }
     }
 

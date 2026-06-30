@@ -88,17 +88,21 @@ export const runInlineHarnessHooks = (
     }
 
     // withMinIterations (direct-LLM)
+    // Loop (not a lone `if`) until the required floor is reached — a single
+    // retry only ever yields 2 total passes regardless of minIterations. Each
+    // continuation counts as one more iteration; itersDone strictly increases
+    // so the loop terminates, and a null (failed) retry breaks early.
     if (config.minIterations && !cacheHit && llmHookOpt._tag === "Some") {
-      const itersDone = (ctx.iteration - 1);
-      if (itersDone < config.minIterations) {
+      let itersDone = (ctx.iteration - 1);
+      while (itersDone < config.minIterations) {
         const newContent = yield* callLLMForRetry([
           { role: "user", content: extractTaskText(task.input) },
           { role: "assistant", content: String(ctx.metadata.lastResponse ?? "") },
           { role: "user", content: "Continue — ensure thoroughness before finalizing." },
         ]);
-        if (newContent !== null) {
-          ctx = { ...ctx, metadata: { ...ctx.metadata, lastResponse: newContent } };
-        }
+        if (newContent === null) break;
+        ctx = { ...ctx, metadata: { ...ctx.metadata, lastResponse: newContent } };
+        itersDone++;
       }
     }
 
