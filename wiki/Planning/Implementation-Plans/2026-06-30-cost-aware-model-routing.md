@@ -109,10 +109,15 @@ export function selectCapableModel(
 Run: `bun test packages/cost/tests/routing/capability-rail.test.ts --timeout 15000`
 Expected: PASS (3 tests). If `resolveCapability` requires options, call `resolveCapability(provider, model, {})`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Export from the cost barrel + commit**
 
+Add to `packages/cost/src/index.ts` (alongside the existing `complexity-router` exports):
+```ts
+export { selectCapableModel } from "./routing/capability-rail.js";
+```
+Then:
 ```bash
-git add packages/cost/src/routing/capability-rail.ts packages/cost/tests/routing/capability-rail.test.ts
+git add packages/cost/src/routing/capability-rail.ts packages/cost/tests/routing/capability-rail.test.ts packages/cost/src/index.ts
 git commit -m "feat(cost): capability rail — cheapest model whose window covers the prompt"
 ```
 
@@ -257,10 +262,11 @@ Expected: FAIL — current `skip` keys on `enableCostTracking`; current code is 
 
 - [ ] **Step 3: Implement** (replace the body of `cost-route.ts`)
 
+`analyzeComplexity`, `getModelCostConfig`, and `selectCapableModel` are all exported from the `@reactive-agents/cost` barrel as **pure functions** — no `CostService` / `Effect.serviceOption` needed. `analyzeComplexity` returns an `Effect<ComplexityAnalysis, RoutingError>`; run it and degrade on error.
+
 ```ts
 import { Effect } from "effect";
-import { CostService } from "@reactive-agents/cost";
-import { selectCapableModel } from "@reactive-agents/cost/routing/capability-rail"; // or the package's export path
+import { analyzeComplexity, selectCapableModel } from "@reactive-agents/cost";
 import { extractTaskText } from "../util.js";
 import type { Phase } from "../phase.js";
 
@@ -275,29 +281,25 @@ export const costRoute: Phase = {
     Effect.gen(function* () {
       const provider = deps.config.provider;
       const fallback = { ...ctx, selectedModel: deps.config.defaultModel };
-      const costOpt = yield* Effect.serviceOption(CostService).pipe(
-        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
-      );
-      if (costOpt._tag !== "Some") return fallback;
 
       const taskText = extractTaskText(deps.task.input);
-      const analysis = yield* costOpt.value
-        .analyzeComplexity(taskText)
-        .pipe(Effect.catchAll(() => Effect.succeed(null)));
-      if (!analysis) return fallback;
+      const analysis = yield* analyzeComplexity(taskText).pipe(
+        Effect.catchAll(() => Effect.succeed(null)),
+      );
+      if (!analysis) return fallback; // advisory: degrade to defaultModel
 
       const minTier = asTier(deps.config.modelRouting?.minTier);
       const startIdx = Math.max(TIERS.indexOf(asTier(analysis.recommendedTier)), TIERS.indexOf(minTier));
       const startTier = TIERS[startIdx]!;
       const estPromptTokens = Math.ceil(taskText.length / 4);
 
-      const routed = selectCapableModel(provider, startTier, estPromptTokens);
       const override = deps.config.modelRouting?.tierModels?.[startTier];
-      return { ...ctx, selectedModel: override ?? routed ?? deps.config.defaultModel };
+      const routed = override ?? selectCapableModel(provider, startTier, estPromptTokens);
+      return { ...ctx, selectedModel: routed ?? deps.config.defaultModel };
     }),
 };
 ```
-(If `CostService` does not expose `analyzeComplexity` directly, import `analyzeComplexity`/`routeToModel` from `@reactive-agents/cost` and call it without the service — verify the export. The key change is: provider-agnostic, rail-gated, `modelRouting`-gated, no `as any`.)
+The key changes: provider-agnostic (no Anthropic gate), rail-gated, `modelRouting`-gated, pure-fn import (no `CostService`), no `as any`. Verify `analyzeComplexity`'s return field is `recommendedTier` (per `ComplexityAnalysisSchema`); adjust if the field name differs.
 
 - [ ] **Step 4: Run to verify it passes**
 
