@@ -1,3 +1,32 @@
+## [Unreleased] — 0.13.0
+
+<!-- DRAFT — finalize version number, date, and theme line before tagging. -->
+
+**Robustness & honesty.** A new efficiency-first reasoning strategy (Blueprint), two harness guards that stop the framework wasting tokens or inventing numbers (StallPolicy, FabricationGuard), a gate-driven evaluation CLI, and a sweep of correctness fixes — including cross-provider tool-call parsing, retry coverage, and the removal of an advertised-but-unimplemented option.
+
+### Added
+
+- **Blueprint strategy — plan once, execute in parallel, zero extra LLM calls.** For static, decomposable tasks the whole plan is knowable up front: Blueprint generates a plan, verifies it, executes independent steps in parallel with no per-step LLM call, then solves. Adaptive routing sends static-decomposable tasks to Blueprint automatically. This is the 7th reasoning strategy.
+- **`.withStallPolicy(...)` — fail fast on ignored nudges.** When the model ignores required-tool nudges and makes no progress across consecutive iterations, the harness escalates and delivers accumulated artifacts (or fails) instead of looping to the full nudge cap — bounding wasted iterations/tokens on stuck runs while leaving progressing runs untouched. Sensible defaults apply when unset.
+- **`.withFabricationGuard(mode)` — reject invented measurements.** An always-on verifier check (default `"block"`) that rejects empirical performance numbers (benchmark timings, % speed-ups) absent from the tool-observation corpus; high-precision (only perf measurements are policed). Softenable to `"warn"` or `"off"`, also via the `RA_FABRICATION_GUARD` env var.
+- **Evaluation gate CLI.** `rax eval gate` runs the project lift rule over a benchmark report (`default-on | opt-in | reject`); `--ledger` appends a weakness→hypothesis→verdict chain and `rax eval ledger` reads it. Benchmark runs capture a per-run `RunDiagnosis` (honesty label, failure modes) when a trace dir is set.
+- **`ToolBuilder.create()` static factory.** A convenience entry point for the tool builder.
+- **Packaging & discoverability.** npm keywords + descriptions added to 31 published packages; docs SEO/AEO foundation (JSON-LD, sitemap, AI-crawler robots).
+
+### Fixed
+
+- **`withRetryPolicy` now retries the path the kernel actually uses.** It previously wrapped only `complete()`; the reactive kernel runs through `stream()` (and structured output through `completeStructured()`), so a transient failure during a normal run was never retried despite the configured policy. All three call sites are now retried.
+- **`withMinIterations(N)` enforces the full floor.** It previously forced only a single extra pass regardless of N (a lone `if`, not a loop). It now loops to the configured minimum.
+- **Cross-provider tool-call arguments are never dropped.** Tool-call arguments arriving as a JSON string (some Ollama models) were silently dropped to `{}` at the resolver; they are now coerced, so every adapter delivers parsed arguments.
+- **`withVerificationStep({ mode: "loop" })` removed.** The `"loop"` mode was documented but unimplemented (it skipped verification with a log-only warning). `"reflect"` is the only supported mode; the false option is gone.
+- **Thinking-mode models no longer starve their own answer.** Gemini (thinking-on by default) consumed the entire output budget with hidden reasoning, truncating the answer; thinking budget is now bounded and reserved on top of the answer budget. Cloud `complete()` timeout raised 30s→120s for thinking models. A non-OK empty-success guard was ported to Anthropic/OpenAI for parity.
+- **Output-ownership invariant.** A run that did real work never ships an empty final answer (terminal synthesis assembles a deliverable when the output is empty but candidates exist).
+- **Tree-of-Thought degrades gracefully under a wall-clock budget** instead of being killed mid-exploration on slow thinking models.
+- **Parallel-batch tool calls are healed** with the same tier-parity pipeline as single calls; the `healed` flag is corrected.
+- Negative cost on Anthropic prompt-cache hits; agent-config serialization drift closed with an AST-driven anti-drift guard; the severed experience-tips loop re-wired; the verifier rejects terminal continuation-intent as a final answer.
+
+---
+
 ## [0.12.0] — 2026-06-17
 
 **v0.12.0 — "Durable & Honest."** Crash-resumable runs, human-in-the-loop approval gates, typed structured output across every provider, and a set of honesty defaults (memory off, grounding opt-in, debrief off the critical path) that stop the framework from over-promising or silently spending tokens.

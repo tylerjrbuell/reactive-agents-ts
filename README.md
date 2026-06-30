@@ -460,7 +460,7 @@ Verify --> Memory Flush --> Cost Track --> Audit --> Complete
 
 Every phase supports `before`, `after`, and `on-error` lifecycle hooks. When observability is enabled, every phase emits trace spans and metrics.
 
-## 6 Reasoning Strategies
+## Reasoning Strategies
 
 | Strategy                | How It Works                               | Best For                           |
 | ----------------------- | ------------------------------------------ | ---------------------------------- |
