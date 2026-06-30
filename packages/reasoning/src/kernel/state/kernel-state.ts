@@ -190,6 +190,10 @@ export interface KernelMeta {
   // ── Final answer ──
   readonly finalAnswerCapture?: FinalAnswerCapture;
 
+  // ── O3: abstention ──
+  /** Present when terminatedBy === "abstained". Surfaced via ReActKernelResult.abstention. */
+  readonly abstention?: { readonly reason: string; readonly missing: readonly string[] };
+
   // ── Resolver dialect telemetry ──
   /** Which resolver dialect tier fired for the most recent tool call (if any). */
   readonly lastDialectObserved?: string;
@@ -1068,8 +1072,8 @@ export interface ReActKernelResult {
   toolsUsed: string[];
   /** Number of iterations completed */
   iterations: number;
-  /** How the loop terminated (narrowed to closed 5-value enum) */
-  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error";
+  /** How the loop terminated (narrowed to closed enum) */
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained";
   /**
    * Raw `state.meta.terminatedBy` preserved verbatim as an open string channel.
    *
@@ -1087,6 +1091,8 @@ export interface ReActKernelResult {
   rawTerminatedBy?: string;
   /** Captured final-answer tool payload — present when terminatedBy === "final_answer_tool" */
   finalAnswerCapture?: FinalAnswerCapture;
+  /** O3: present when terminatedBy === "abstained" — model's honest decline. */
+  abstention?: { readonly reason: string; readonly missing: readonly string[] };
 }
 
 // ─── Phase Pipeline Types ─────────────────────────────────────────────────────

@@ -23,6 +23,7 @@ import {
   buildPulseResponse,
   type PulseInput,
   type ToolCallSpec,
+  type ToolCallResult,
   activateSkillHandler,
 } from "@reactive-agents/tools";
 import type {
@@ -136,12 +137,11 @@ function handleActivateSkillTool(
 
 export const ABSTAIN_TOOL_NAME = "abstain";
 
-/** Terminal intent produced when the model calls `abstain`. Consumed by the runner (Task 6). */
-export interface AbstainIntent {
-    readonly _tag: "abstained";
-    readonly reason: string;
-    readonly missing: string[];
-}
+/**
+ * Terminal intent produced when the model calls `abstain`.
+ * Derived from the resolver-result union so the two definitions can never drift.
+ */
+export type AbstainIntent = Extract<ToolCallResult, { _tag: "abstained" }>;
 
 /** Pure mapping from abstain tool args to the terminal intent. */
 export function handleAbstain(args: { reason: string; missing?: string[] }): AbstainIntent {

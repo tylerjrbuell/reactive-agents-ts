@@ -68,6 +68,7 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
+import { terminate } from "../../../kernel/loop/terminate.js";
 import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
@@ -81,7 +82,8 @@ import {
 import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, sentinelDeliverable } from "@reactive-agents/core";
+import { ABSTAIN_TOOL_NAME } from "../act/meta-tool-handlers.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 
@@ -287,9 +289,30 @@ export function handleThinking(
       hasNonMetaToolCalled: hasAnyToolWork,
     });
 
+    // O3: abstain tool schema — offered only when metaTools.abstain === true.
+    // Do NOT offer at iteration 0; the model should attempt the task first.
+    const abstainToolSchema: ToolSchema = {
+      name: ABSTAIN_TOOL_NAME,
+      description:
+        "Decline to answer when you cannot ground a response in available evidence or a " +
+        "required tool/input is unavailable. State the reason and what was missing. " +
+        "Do NOT use this to skip work you can still attempt.",
+      parameters: [
+        { name: "reason", type: "string", description: "Why you cannot answer", required: true },
+        {
+          name: "missing",
+          type: "array",
+          description: "Tool names or inputs that were needed but unavailable (e.g. 'tool:web-search')",
+          required: false,
+          items: { type: "string" },
+        },
+      ],
+    };
+
     const augmentedToolSchemas: readonly ToolSchema[] = [
       ...(input.availableToolSchemas ?? []),
       ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
+      ...(input.metaTools?.abstain === true && state.iteration > 0 ? [abstainToolSchema] : []),
     ] as readonly ToolSchema[];
 
     // ── Context pressure hard gate ───────────────────────────────────────────
@@ -1133,6 +1156,28 @@ export function handleThinking(
             requiredTools: input.requiredTools,
           }),
         );
+      } else if (resolverResult._tag === "abstained") {
+        // O3: model honestly declined — terminate with abstention surface.
+        // O3: legitimacy gate (Task 5) + forced-abstention (Task 6) extend this branch.
+        const stateWithAbstention = transitionState(state, {
+          steps: newSteps,
+          tokens: newTokens,
+          inputTokens: newInputTokens,
+          outputTokens: newOutputTokens,
+          cost: newCost,
+          iteration: state.iteration + 1,
+          meta: {
+            ...state.meta,
+            abstention: {
+              reason: resolverResult.reason,
+              missing: resolverResult.missing,
+            },
+          },
+        });
+        return terminate(stateWithAbstention, {
+          reason: "abstained",
+          deliverable: sentinelDeliverable("model-abstained"),
+        });
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
         const reqTools = input.requiredTools ?? [];

@@ -18,7 +18,10 @@ export interface ToolCallSpec {
 export type ToolCallResult =
   | { readonly _tag: "tool_calls"; readonly calls: readonly ToolCallSpec[]; readonly thinking?: string }
   | { readonly _tag: "final_answer"; readonly content: string }
-  | { readonly _tag: "thinking"; readonly content: string };
+  | { readonly _tag: "thinking"; readonly content: string }
+  // O3: abstain — model honestly declines when it cannot ground a response.
+  // Terminal: mirrors final_answer but signals inability rather than an answer.
+  | { readonly _tag: "abstained"; readonly reason: string; readonly missing: readonly string[] };
 
 /** Minimal LLM response shape the resolver needs */
 export interface ResolverInput {
