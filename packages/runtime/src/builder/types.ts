@@ -416,6 +416,20 @@ export interface ApprovalPolicyConfig {
     readonly mode?: "detach" | "block";
 }
 
+/**
+ * Options for `.withModelRouting()` — opt-in cost-aware model routing.
+ *
+ * When enabled, each run is routed to the cheapest capable model for the
+ * configured provider, selected by task complexity. Stays within the
+ * provider's tiers; degrades to the configured model on any routing error.
+ */
+export interface ModelRoutingOptions {
+    /** Override the model IDs used for each tier (e.g. pin haiku to a specific version). */
+    readonly tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>;
+    /** Minimum tier to consider — never route below this tier. */
+    readonly minTier?: 'haiku' | 'sonnet' | 'opus';
+}
+
 export interface VerificationOptions {
     /** Enable semantic entropy estimation. Default: true */
     readonly semanticEntropy?: boolean

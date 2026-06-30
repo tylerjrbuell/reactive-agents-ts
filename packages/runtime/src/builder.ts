@@ -397,6 +397,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _fabricationGuard: import('@reactive-agents/reasoning').FabricationGuardMode | undefined = undefined
     /** Stall/no-progress policy override. Absent = sensible defaults. */
     private _stallPolicy: import('@reactive-agents/reasoning').StallPolicy | undefined = undefined
+    /** Opt-in cost-aware model routing. Absent = off (default). */
+    private _modelRouting: import('./builder/types.js').ModelRoutingOptions | undefined = undefined
     /** Opt-in typed structured output config. Absent = off (default). */
     private _outputSchemaConfig:
         | { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions }
@@ -920,6 +922,18 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withStallPolicy(policy: import('@reactive-agents/reasoning').StallPolicy): this {
         this._stallPolicy = policy
+        return this
+    }
+
+    /**
+     * Opt in to cost-aware model routing (off by default). Routes each run to
+     * the cheapest CAPABLE model of the configured provider, picked by task
+     * complexity. Stays within the provider's tiers; degrades to the configured
+     * model on any routing error.
+     * @returns `this` for chaining
+     */
+    withModelRouting(options: import('./builder/types.js').ModelRoutingOptions = {}): this {
+        this._modelRouting = options
         return this
     }
 
@@ -2330,6 +2344,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     outputValidator: self._outputValidator,
                     outputValidatorOptions: self._outputValidatorOptions,
                     customTermination: self._customTermination,
+                    modelRouting: self._modelRouting,
                 },
                 // Phase C: when durable runs are enabled, resolve the same
                 // checkpoint dir + identity configHash execute-stream computes

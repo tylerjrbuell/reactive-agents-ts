@@ -63,6 +63,7 @@ export interface AgentInstantiationDeps {
     outputValidator?: (output: string) => { valid: boolean; feedback?: string };
     outputValidatorOptions?: { maxRetries?: number };
     customTermination?: (state: { output: string }) => boolean;
+    modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' };
   };
   /**
    * Durable resume context (Phase C). Present only when `.withDurableRuns()`

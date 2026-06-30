@@ -41,6 +41,7 @@ import type {
   ObservabilityOptions,
   A2AOptions,
   GatewayOptions,
+  ModelRoutingOptions,
 } from "../types.js";
 
 /**
@@ -176,6 +177,8 @@ export interface BuilderRuntimeStateView {
   readonly _fabricationGuard: import("@reactive-agents/reasoning").FabricationGuardMode | undefined;
   /** Stall/no-progress policy override. Absent = sensible defaults. */
   readonly _stallPolicy: import("@reactive-agents/reasoning").StallPolicy | undefined;
+  /** Opt-in cost-aware model routing. Absent = off (default). */
+  readonly _modelRouting: ModelRoutingOptions | undefined;
   /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
   readonly _durableRuns: import("../types.js").DurableRunsOptions | undefined;
   /** Opt-in durable HITL approval policy (Phase D). Absent = off (default). */
@@ -462,6 +465,7 @@ export const buildBaseRuntimeAndEngine = (
       grounding: state._groundingConfig,
       fabricationGuard: state._fabricationGuard,
       stallPolicy: state._stallPolicy,
+      modelRouting: state._modelRouting,
       durableRuns: state._durableRuns,
       approvalPolicy: state._approvalPolicy
         ? {
