@@ -256,7 +256,9 @@ Rules:
   Prefer a SHORTER required list. When in doubt, put the tool in "relevant" instead.
   Example: "fetch prices for X, Y, Z then render markdown table" → required: [web-search×3].
   code-execute, file-write, etc. are NOT required unless the task explicitly asks to
-  run code or save a file to disk.
+  run code or write/save/output content to a file (e.g. "write to ./out.md", "write into
+  a file", "save results to disk", "output to a file"). "Write to a file" or "write into
+  a file" → file-write IS required.
 - **Factual knowledge questions need NO tools.** If the task asks "what is X?",
   "explain Y", "define Z", "who/when/where", or otherwise requests information the
   model already knows (history, science facts, definitions, common knowledge) AND
