@@ -87,6 +87,7 @@ import { ABSTAIN_TOOL_NAME } from "../act/meta-tool-handlers.js";
 import { shouldOfferAbstain } from "./abstain-gate.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
+import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -1163,26 +1164,99 @@ export function handleThinking(
           }),
         );
       } else if (resolverResult._tag === "abstained") {
-        // O3: model honestly declined — terminate with abstention surface.
-        // O3: legitimacy gate (Task 5) + forced-abstention (Task 6) extend this branch.
-        const stateWithAbstention = transitionState(state, {
-          steps: newSteps,
+        // O3: legitimacy gate (Task 5) — distinguish earned abstentions from
+        // premature bails. Derive inputs from available kernel state; conservative
+        // fallbacks noted inline where a signal isn't cleanly available.
+
+        // taskRequiresTools: true when explicit required tools OR any data tool is wired.
+        const hasDataTools = (input.availableToolSchemas ?? []).some(
+          (ts) => !META_TOOL_SET.has(ts.name),
+        );
+        const legitimacyRequiredToolsList = input.requiredTools ?? [];
+        const taskRequiresTools = legitimacyRequiredToolsList.length > 0 || hasDataTools;
+
+        // requiredToolsAttempted: at least one required tool was called (or any
+        // non-meta tool when no explicit required list is set).
+        const requiredToolsAttempted =
+          legitimacyRequiredToolsList.length > 0
+            ? legitimacyRequiredToolsList.some((t) => state.toolsUsed.has(t))
+            : [...state.toolsUsed].some((t) => !META_TOOL_SET.has(t));
+
+        // requiredToolUnavailable: a declared required tool is not in the registered
+        // schema set. Fallback: false (conservative — assume available unless proven missing).
+        const availableToolNames = new Set([
+          ...(input.availableToolSchemas ?? []).map((ts) => ts.name),
+          ...(input.allToolSchemas ?? []).map((ts) => ts.name),
+        ]);
+        const requiredToolUnavailable =
+          legitimacyRequiredToolsList.length > 0 &&
+          legitimacyRequiredToolsList.some((t) => !availableToolNames.has(t));
+
+        // ungroundedSynthesisRejections: sum of Arbitrator synthesis retries +
+        // block-mode grounding retries. Fallback: 0 when counters are absent.
+        const ungroundedSynthesisRejections =
+          (state.meta.synthesisRetryCount ?? 0) + (state.meta.groundingBlockRetry ?? 0);
+
+        // iterationsRemaining: budget left this run (clamped ≥ 0).
+        const iterationsRemaining = Math.max(
+          0,
+          ((state.meta.maxIterations as number) ?? 10) - state.iteration,
+        );
+
+        const legitimacyVerdict = checkAbstentionLegitimacy({
+          taskRequiresTools,
+          requiredToolsAttempted,
+          requiredToolUnavailable,
+          ungroundedSynthesisRejections,
+          iterationsRemaining,
+        });
+
+        if (legitimacyVerdict.legitimate) {
+          // Earned abstention — emit pass diagnostic step, then terminate.
+          const passMsg = "abstention-legitimacy: legitimate — earned abstention accepted";
+          const legitimacyPassStep = makeStep("observation", passMsg, {
+            observationResult: makeObservationResult("abstention-legitimacy", true, passMsg),
+          });
+          const stateWithAbstention = transitionState(state, {
+            steps: [...newSteps, legitimacyPassStep],
+            tokens: newTokens,
+            inputTokens: newInputTokens,
+            outputTokens: newOutputTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+            meta: {
+              ...state.meta,
+              abstention: {
+                reason: resolverResult.reason,
+                missing: resolverResult.missing,
+              },
+            },
+          });
+          return terminate(stateWithAbstention, {
+            reason: "abstained",
+            deliverable: sentinelDeliverable("model-abstained"),
+          });
+        }
+
+        // Illegitimate abstention — DO NOT terminate. Emit reject diagnostic step,
+        // inject nudge via pendingGuidance, and let the loop continue.
+        const nudgeMsg =
+          legitimacyVerdict.nudge ??
+          "You have not yet attempted the tools needed to ground an answer. Try them before abstaining.";
+        const legitimacyRejectStep = makeStep("observation", nudgeMsg, {
+          observationResult: makeObservationResult("abstention-legitimacy", false, nudgeMsg),
+        });
+        return transitionState(state, {
+          steps: [...newSteps, legitimacyRejectStep],
           tokens: newTokens,
           inputTokens: newInputTokens,
           outputTokens: newOutputTokens,
           cost: newCost,
+          status: "thinking",
           iteration: state.iteration + 1,
-          meta: {
-            ...state.meta,
-            abstention: {
-              reason: resolverResult.reason,
-              missing: resolverResult.missing,
-            },
+          pendingGuidance: {
+            errorRecovery: nudgeMsg,
           },
-        });
-        return terminate(stateWithAbstention, {
-          reason: "abstained",
-          deliverable: sentinelDeliverable("model-abstained"),
         });
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
