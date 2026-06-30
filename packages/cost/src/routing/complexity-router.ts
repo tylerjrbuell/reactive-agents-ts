@@ -1,10 +1,6 @@
 import { Effect } from "effect";
-import type { ModelTier, ModelCostConfig, ComplexityAnalysis } from "../types.js";
+import type { ModelTier, ModelCostConfig, ComplexityAnalysis, Provider } from "../types.js";
 import { RoutingError } from "../errors.js";
-
-// ─── Provider type ───
-
-type Provider = "anthropic" | "openai" | "gemini" | "ollama" | "litellm";
 
 // ─── Model cost configurations per provider ───
 // Each provider maps haiku/sonnet/opus to its light/mid/heavy model.

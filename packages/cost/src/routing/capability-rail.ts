@@ -13,7 +13,7 @@ export function selectCapableModel(
   estimatedPromptTokens: number,
 ): string {
   const start = Math.max(0, TIER_ORDER.indexOf(startTier));
-  let lastModel = getModelCostConfig(TIER_ORDER[start]!, provider).model;
+  let lastModel: string = "";
   for (let i = start; i < TIER_ORDER.length; i++) {
     const model = getModelCostConfig(TIER_ORDER[i]!, provider).model;
     lastModel = model;
