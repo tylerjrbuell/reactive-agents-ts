@@ -33,6 +33,7 @@ export {
   estimateCost,
 } from "./routing/complexity-router.js";
 export type { RoutingContext } from "./routing/complexity-router.js";
+export { selectCapableModel } from "./routing/capability-rail.js";
 
 // ─── Caching ───
 export { makeSemanticCache } from "./caching/semantic-cache.js";

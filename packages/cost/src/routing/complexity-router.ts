@@ -244,7 +244,7 @@ export interface RoutingContext {
   readonly toolReliabilityThreshold?: number;
 }
 
-const TIER_ORDER: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
+export const TIER_ORDER: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
 
 /**
  * Walk the tier ladder from `start` upward, returning the first tier whose
