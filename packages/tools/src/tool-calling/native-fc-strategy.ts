@@ -532,9 +532,26 @@ function normalizeArgumentsForResolvedTool(
     toolName: string,
     rawInput: unknown
 ): Record<string, unknown> {
+    // Coerce stringified-JSON args before the object check. Cloud adapters
+    // JSON.parse tool-call arguments (OpenAI/LiteLLM) or deliver objects
+    // natively (Anthropic/Gemini), but the local/Ollama adapter passes the raw
+    // value through — and some models emit `arguments` as a JSON STRING. Without
+    // this, a string slips past the `typeof === 'object'` check and the args are
+    // silently dropped to `{}`, calling the tool with no input.
+    let normalizedInput = rawInput
+    if (typeof rawInput === 'string') {
+        const trimmed = rawInput.trim()
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try {
+                normalizedInput = JSON.parse(trimmed) as unknown
+            } catch {
+                // leave as-is; falls through to the `{}` default below
+            }
+        }
+    }
     const args =
-        typeof rawInput === 'object' && rawInput !== null
-            ? { ...(rawInput as Record<string, unknown>) }
+        typeof normalizedInput === 'object' && normalizedInput !== null && !Array.isArray(normalizedInput)
+            ? { ...(normalizedInput as Record<string, unknown>) }
             : {}
 
     if (toolName === 'web-search') {
