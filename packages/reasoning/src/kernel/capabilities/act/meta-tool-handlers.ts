@@ -132,6 +132,22 @@ function handleActivateSkillTool(
   );
 }
 
+// ─── Abstain meta-tool ────────────────────────────────────────────────────────
+
+export const ABSTAIN_TOOL_NAME = "abstain";
+
+/** Terminal intent produced when the model calls `abstain`. Consumed by the runner (Task 6). */
+export interface AbstainIntent {
+    readonly _tag: "abstained";
+    readonly reason: string;
+    readonly missing: string[];
+}
+
+/** Pure mapping from abstain tool args to the terminal intent. */
+export function handleAbstain(args: { reason: string; missing?: string[] }): AbstainIntent {
+    return { _tag: "abstained", reason: args.reason, missing: args.missing ?? [] };
+}
+
 /**
  * Open registry — new inline meta-tools are a one-line addition.
  * Tools that go through ToolService (recall, find) are NOT in this registry.

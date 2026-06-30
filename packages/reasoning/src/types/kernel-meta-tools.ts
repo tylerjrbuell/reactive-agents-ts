@@ -35,6 +35,10 @@ export const KernelMetaToolsSchema = Schema.Struct({
    *  data. Replaces the marker-copy / transcription path. */
   writeResultToFile: Schema.optional(Schema.Boolean),
   checkpoint: Schema.optional(Schema.Boolean),
+  /** Earned-abstention action: model declines instead of fabricating when it
+   *  cannot ground an answer / required input is unavailable. Availability is
+   *  gated in think.ts (never offered on iter-0 of a solvable task). */
+  abstain: Schema.optional(Schema.Boolean),
   staticBriefInfo: Schema.optional(StaticBriefInfoSchema),
   harnessContent: Schema.optional(Schema.String),
 });
