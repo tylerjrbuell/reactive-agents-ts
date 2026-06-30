@@ -145,7 +145,7 @@ export type AbstainIntent = Extract<ToolCallResult, { _tag: "abstained" }>;
 
 /** Pure mapping from abstain tool args to the terminal intent. */
 export function handleAbstain(args: { reason: string; missing?: string[] }): AbstainIntent {
-    return { _tag: "abstained", reason: args.reason, missing: args.missing ?? [] };
+    return { _tag: "abstained" as const, reason: args.reason, missing: args.missing ?? [] };
 }
 
 /**
