@@ -5,7 +5,6 @@ import type {
     ToolCallSpec,
     ResolverInput,
     ResolverToolHint,
-    AbstainArgs,
 } from './types.js'
 
 export type DialectObserved =
@@ -139,11 +138,17 @@ export class NativeFCStrategy implements ToolCallResolver {
                 // O3: abstain is a terminal tool — intercept before bundling as tool_calls.
                 const abstainSpec = specs.find(s => s.name === 'abstain')
                 if (abstainSpec) {
-                    const args = abstainSpec.arguments as AbstainArgs
+                    // arguments is Record<string, unknown>; extract defensively
+                    // (no cast — keeps the `as unknown as` ceiling + validates at runtime).
+                    const rawArgs = abstainSpec.arguments
+                    const reason = typeof rawArgs.reason === 'string' ? rawArgs.reason : ''
+                    const missing = Array.isArray(rawArgs.missing)
+                        ? rawArgs.missing.filter((m): m is string => typeof m === 'string')
+                        : []
                     return {
                         _tag: 'abstained' as const,
-                        reason: args.reason,
-                        missing: args.missing ?? [],
+                        reason,
+                        missing,
                     }
                 }
                 return {
