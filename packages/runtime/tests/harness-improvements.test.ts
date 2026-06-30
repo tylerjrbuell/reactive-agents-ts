@@ -117,6 +117,51 @@ async function runTask(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Composition precedence: minIterations × customTermination × verificationStep
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// All three controls gate completion. Their interaction was undefined-by-test
+// (each was only tested in isolation). This pins the precedence CONTRACT so a
+// regression that reorders the controls — letting an early customTermination
+// skip the minIterations floor, or dropping the verification pass — goes RED.
+// Verified behavior: the minIterations floor OVERRIDES an early customTermination
+// stop, and verificationStep runs a reflect pass ON TOP of the floor.
+
+describe("composition precedence (minIterations × customTermination × verificationStep)", () => {
+  const sawDone = (state: unknown) => String((state as { output?: unknown }).output ?? "").includes("DONE");
+
+  it("minIterations floor overrides an early customTermination; verification runs on top", async () => {
+    // The LLM says "DONE" on call 1, so customTermination is satisfied immediately
+    // (alone it would stop at 1 call — see the withCustomTermination suite).
+    const floorOnly = makeCountingLLM("DONE");
+    await runTask(
+      defaultReactiveAgentsConfig("compose-floor", {
+        maxIterations: 10,
+        minIterations: 3,
+        customTermination: sawDone,
+      }),
+      floorOnly.layer,
+    );
+
+    const floorPlusVerify = makeCountingLLM("DONE");
+    await runTask(
+      defaultReactiveAgentsConfig("compose-floor-verify", {
+        maxIterations: 10,
+        minIterations: 3,
+        customTermination: sawDone,
+        verificationStep: { mode: "reflect" },
+      }),
+      floorPlusVerify.layer,
+    );
+
+    // Precedence 1: the floor wins over the early stop (≥3, not 1).
+    expect(floorOnly.callCount()).toBeGreaterThanOrEqual(3);
+    // Precedence 2: verificationStep adds a pass ON TOP of the floor.
+    expect(floorPlusVerify.callCount()).toBeGreaterThan(floorOnly.callCount());
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 1. withMinIterations
 // ─────────────────────────────────────────────────────────────────────────────
 
