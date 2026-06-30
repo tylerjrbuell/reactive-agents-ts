@@ -1,4 +1,4 @@
-// File: src/strategies/plan-execute/output-utils.ts
+// File: src/strategies/planning/plan-text.ts
 /**
  * Output utilities for the plan-execute-reflect strategy.
  *

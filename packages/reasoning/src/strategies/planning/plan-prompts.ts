@@ -10,7 +10,7 @@
  * All functions are pure (no Effect, no LLM calls) — string template assembly only.
  */
 
-import type { PlanStep } from "../types/plan.js";
+import type { PlanStep } from "../../types/plan.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,6 +19,18 @@ export type ModelTier = "frontier" | "large" | "mid" | "local";
 export interface ToolSummary {
   name: string;
   signature: string;
+  /** Tool-level description — what the tool does. Lets the planner pick the
+   *  right tool and (for free-form tools like CLIs) shape valid arguments. */
+  description?: string;
+  /** Per-parameter detail (type/required/description). The param descriptions
+   *  often carry example invocations weak planners need to avoid inventing
+   *  invalid argument shapes. */
+  params?: ReadonlyArray<{
+    name: string;
+    type: string;
+    required?: boolean;
+    description?: string;
+  }>;
 }
 
 export interface PlanGenerationInput {
@@ -87,6 +99,71 @@ const PLAN_STEP_EXAMPLE = `{
   ]
 }`;
 
+/**
+ * Render an `AVAILABLE TOOLS` block with tool descriptions + per-param detail.
+ * Shared by the plan generator and the patch (recovery) prompt so neither path
+ * is tool-blind — a name+signature alone forces weak models to invent argument
+ * shapes from priors (the gh-cli "--limit"/"commit" hallucinations).
+ */
+function renderToolLines(tools: ToolSummary[]): string {
+  return tools
+    .map((t) => {
+      let line = `- ${t.name}${t.signature}`;
+      if (t.description) line += ` — ${t.description}`;
+      if (t.params && t.params.length > 0) {
+        const paramLines = t.params
+          .map((p) => {
+            const flags = p.required ? "required" : "optional";
+            const desc = p.description ? `: ${p.description}` : "";
+            return `    • ${p.name} (${p.type}, ${flags})${desc}`;
+          })
+          .join("\n");
+        line += `\n${paramLines}`;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+/**
+ * Build the few-shot example for the planner. When real tools are available it
+ * anchors the example on the FIRST actual tool (real name + real param names)
+ * so a weak model copies a valid call shape — the hardcoded fictional example
+ * (`github/list_commits({owner, repo, perPage})`) taught arg shapes that don't
+ * exist on the real tools, and weak planners cargo-culted them (the gh-cli
+ * owner/repo leak). Placeholder values stay abstract (`<value>`) so no specific
+ * (and possibly wrong) argument content is suggested. Falls back to the generic
+ * structure-only example when no tools are available.
+ */
+function buildPlanExample(tools: ToolSummary[]): string {
+  const first = tools[0];
+  if (!first) return PLAN_STEP_EXAMPLE;
+
+  const toolArgs =
+    first.params && first.params.length > 0
+      ? `{ ${first.params.map((p) => `"${p.name}": "<value>"`).join(", ")} }`
+      : "{}";
+
+  return `{
+  "steps": [
+    {
+      "title": "Fetch the needed data",
+      "instruction": "Call ${first.name} to get the data the goal requires",
+      "type": "tool_call",
+      "toolName": "${first.name}",
+      "toolArgs": ${toolArgs},
+      "rationale": { "why": "Need this data before it can be analyzed or formatted", "confidence": 0.9 }
+    },
+    {
+      "title": "Produce the final answer",
+      "instruction": "Analyze the data from the previous step and write the final answer",
+      "type": "analysis",
+      "dependsOn": ["s1"]
+    }
+  ]
+}`;
+}
+
 // ── buildPlanGenerationPrompt ────────────────────────────────────────────────
 
 /**
@@ -112,12 +189,13 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
     `GOAL:\n${input.goal}`,
   );
 
-  // Section 2: Available Tools
+  // Section 2: Available Tools — render description + per-param detail when
+  // available so the planner sees tool semantics (not just a bare signature).
+  // A name+signature alone forces weak models to invent argument shapes from
+  // priors (the gh-cli "--limit" hallucination); descriptions + param examples
+  // anchor them on a valid invocation.
   if (input.tools.length > 0) {
-    const toolLines = input.tools
-      .map((t) => `- ${t.name}${t.signature}`)
-      .join("\n");
-    sections.push(`AVAILABLE TOOLS:\n${toolLines}`);
+    sections.push(`AVAILABLE TOOLS:\n${renderToolLines(input.tools)}`);
   } else {
     sections.push(`AVAILABLE TOOLS:\nNone — use "analysis" type steps only.`);
   }
@@ -154,7 +232,7 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
   schemaSection += `- Example: s3 with {"message": "{{from_step:s2}}"} passes s2's result as the "message" argument\n`;
 
   if (isSmallModel) {
-    schemaSection += `\nEXAMPLE:\n${PLAN_STEP_EXAMPLE}\n`;
+    schemaSection += `\nEXAMPLE:\n${buildPlanExample(input.tools)}\n`;
     schemaSection += `\nJSON only, no explanation:`;
   }
 
@@ -168,14 +246,28 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
 /**
  * Shows completed steps, failed step (with error), and pending steps.
  * Asks the LLM to rewrite only the failed/remaining portion of the plan.
+ *
+ * `tools` (optional) renders the same enriched AVAILABLE TOOLS block the planner
+ * sees. Without it the recovery is tool-blind — the model re-invents tool names
+ * and arg envelopes (e.g. patching to `gh`/`endpoint` instead of the real
+ * `gh-cli`/`command`), so the patch fails for the SAME root cause it's meant to
+ * fix. When provided, the few-shot example is also anchored on a real tool.
  */
-export function buildPatchPrompt(goal: string, steps: PlanStep[]): string {
+export function buildPatchPrompt(
+  goal: string,
+  steps: PlanStep[],
+  tools: ToolSummary[] = [],
+): string {
   const sections: string[] = [];
 
   sections.push(`GOAL: ${goal}`);
   sections.push(
     `The plan encountered a failure. Review the step statuses below and rewrite the failed and remaining steps.\n`,
   );
+
+  if (tools.length > 0) {
+    sections.push(`AVAILABLE TOOLS:\n${renderToolLines(tools)}`);
+  }
 
   const stepLines = steps.map((s) => {
     const icon =
@@ -198,7 +290,7 @@ export function buildPatchPrompt(goal: string, steps: PlanStep[]): string {
     `Keep completed steps as-is. Respond with a JSON object containing a "steps" array ` +
     `(only the replacement steps, not the completed ones).\n\n` +
     `Each step MUST use this exact schema:\n${PLAN_STEP_SCHEMA}\n\n` +
-    `EXAMPLE:\n${PLAN_STEP_EXAMPLE}\n\n` +
+    `EXAMPLE:\n${buildPlanExample(tools)}\n\n` +
     `JSON only, no explanation.`,
   );
 

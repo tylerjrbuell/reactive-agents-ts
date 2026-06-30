@@ -40,8 +40,8 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { LLMPlanOutputSchema, hydratePlan } from "../types/plan.js";
 import type { Plan } from "../types/plan.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
-import { buildPlanGenerationPrompt } from "./plan-prompts.js";
-import type { ToolSummary } from "./plan-prompts.js";
+import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
+import type { ToolSummary } from "./planning/plan-prompts.js";
 import {
   resolveStrategyServices,
   publishReasoningStep,
@@ -51,13 +51,15 @@ import {
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
-import { extractGoalText } from "./plan-execute/output-utils.js";
+import { extractGoalText } from "./planning/plan-text.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { withEnvContext } from "../context/context-engine.js";
 import { executeBlueprintWorker } from "./blueprint/worker.js";
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
+import { patchPlan } from "./planning/plan-mutation.js";
+import { formatPlanListing } from "./blueprint/progress-format.js";
 
 const STRATEGY = "blueprint" as const;
 
@@ -159,6 +161,20 @@ export const executeBlueprint = (
       (t) => ({
         name: t.name,
         signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
+        // Carry tool + param semantics through to the planner. Without these the
+        // planner sees only `name(params)` and invents argument shapes from
+        // priors — the root of the gh-cli invalid-command failure.
+        ...(t.description ? { description: t.description } : {}),
+        ...(t.parameters.length > 0
+          ? {
+              params: t.parameters.map((p) => ({
+                name: p.name,
+                type: p.type,
+                ...(p.required !== undefined ? { required: p.required } : {}),
+                ...(p.description ? { description: p.description } : {}),
+              })),
+            }
+          : {}),
       }),
     );
 
@@ -230,7 +246,9 @@ export const executeBlueprint = (
       strategy: STRATEGY,
       step: steps.length,
       totalSteps: plan.steps.length,
-      thought: `[PLAN] Generated ${plan.steps.length} steps`,
+      // Surface the WHOLE plan live so the user sees every step the agent
+      // intends to take, not just a count.
+      thought: `[PLAN] ${plan.steps.length}-step plan:\n${formatPlanListing(plan)}`,
       kernelPass: "blueprint:plan",
     });
 
@@ -296,24 +314,93 @@ export const executeBlueprint = (
 
     const concurrency = resolveWorkerConcurrency(input);
 
-    const workerResult = yield* executeBlueprintWorker(
+    const workerCtx = {
+      taskId,
+      // Carry goal + system prompt so the worker can execute intermediate
+      // analysis steps inline (a downstream tool depending on an analysis step's
+      // output via {{from_step}}).
+      taskDescription: input.taskDescription,
+      ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+      ...(input.agentId ? { agentId: input.agentId } : {}),
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input.availableToolSchemas
+        ? { availableToolSchemas: input.availableToolSchemas }
+        : {}),
+      ...(input.resultCompression
+        ? { resultCompression: input.resultCompression }
+        : {}),
+      ...(input.harnessPipeline ? { harnessPipeline: input.harnessPipeline } : {}),
+      emitLog,
+    };
+
+    let workerResult = yield* executeBlueprintWorker(
       plan,
       services,
-      {
-        taskId,
-        ...(input.agentId ? { agentId: input.agentId } : {}),
-        ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-        ...(input.availableToolSchemas
-          ? { availableToolSchemas: input.availableToolSchemas }
-          : {}),
-        ...(input.resultCompression
-          ? { resultCompression: input.resultCompression }
-          : {}),
-        ...(input.harnessPipeline ? { harnessPipeline: input.harnessPipeline } : {}),
-        emitLog,
-      },
+      workerCtx,
       { concurrency },
     );
+
+    // ── PATCH RETRY (bounded, on execution failure) ───────────────────────────
+    // A structurally-valid plan can still fail at EXECUTE when the tool ARGS are
+    // wrong (the tool errors, not the plan shape — VERIFY can't catch that). Feed
+    // the failure back through the EXISTING patchPlan helper ONCE and re-run the
+    // (idempotent) worker, instead of silently shipping empty output. The happy
+    // path is untouched — this branch only runs when a step failed; a failure
+    // costs at most +1 LLM call before degrading. Mirrors plan-execute's inline
+    // patch; the worker's completed-step guard keeps the re-run from re-executing
+    // (or double-charging) steps that already succeeded.
+    if (!workerResult.allSucceeded) {
+      const statusById = new Map(workerResult.steps.map((s) => [s.id, s]));
+      const statusSteps = plan.steps.map((s) => statusById.get(s.id) ?? s);
+      const firstFailedIdx = statusSteps.findIndex((s) => s.status === "failed");
+
+      if (firstFailedIdx >= 0) {
+        const statusPlan: Plan = { ...plan, steps: statusSteps };
+        const patch = yield* patchPlan(
+          statusPlan,
+          firstFailedIdx,
+          {
+            taskDescription: input.taskDescription,
+            // Enrich the recovery prompt with tool schemas so the patch isn't
+            // tool-blind (else it re-invents tool names/arg shapes — the same
+            // root cause the retry exists to fix).
+            ...(input.availableToolSchemas
+              ? { availableToolSchemas: input.availableToolSchemas }
+              : {}),
+          },
+          llm,
+          totalTokens,
+        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+        if (patch) {
+          totalTokens += patch.tokens;
+          llmCalls += 1;
+          const preservedCompleted = workerResult.steps.filter(
+            (s) => s.status === "completed" && s.result !== undefined,
+          );
+          const retryPlan: Plan = {
+            ...plan,
+            steps: [...preservedCompleted, ...patch.steps],
+            version: plan.version + 1,
+          };
+          yield* publishReasoningStep(eventBus, {
+            _tag: "ReasoningStepCompleted",
+            taskId,
+            strategy: STRATEGY,
+            step: steps.length,
+            totalSteps: retryPlan.steps.length,
+            thought: `[PATCH] Retrying ${patch.steps.length} step(s) after execution error`,
+            kernelPass: "blueprint:patch",
+          });
+          workerResult = yield* executeBlueprintWorker(
+            retryPlan,
+            services,
+            workerCtx,
+            { concurrency },
+          );
+        }
+      }
+    }
 
     for (const s of workerResult.steps) {
       steps.push(
@@ -340,6 +427,31 @@ export const executeBlueprint = (
     const completed = workerResult.steps.filter(
       (s) => s.status === "completed" && (s.fullResult ?? s.result),
     );
+
+    // Degrade: if EXECUTE (after the bounded patch retry) produced zero usable
+    // step results, there is nothing to solve over — fall back to reactive,
+    // which has mid-course observation, on the SAME input rather than ship empty
+    // output. (A partial result — some steps completed — still goes to SOLVE.)
+    if (completed.length === 0 && workerResult.steps.length > 0) {
+      yield* emitLog({
+        _tag: "metric",
+        name: "blueprint_degraded_to_reactive",
+        value: 1,
+        unit: "count",
+        timestamp: new Date(),
+      });
+      yield* publishReasoningStep(eventBus, {
+        _tag: "ReasoningStepCompleted",
+        taskId,
+        strategy: STRATEGY,
+        step: steps.length,
+        totalSteps: workerResult.steps.length,
+        thought: `[DEGRADE] Execution produced no usable results after patch retry — falling back to reactive`,
+        kernelPass: "blueprint:degrade",
+      });
+      return yield* executeReactive(input);
+    }
+
     const stepResultTexts = completed.map(
       (s, idx) => `Step ${idx + 1} (${s.title}): ${s.fullResult ?? s.result}`,
     );
@@ -348,12 +460,22 @@ export const executeBlueprint = (
     // Single-substantive-step short-circuit (mirrors plan-execute.ts:415): when
     // exactly one step succeeded its result already IS the answer; skip the
     // extra solver LLM call.
+    //
+    // BUT only when the plan didn't declare synthesis work. A plan with an
+    // analysis/composite step (e.g. "format the commits into a numbered list")
+    // is explicitly asking for the raw tool result to be TRANSFORMED — the tool
+    // output is NOT the final answer. Honour the plan: run SOLVE so the declared
+    // synthesis actually happens, instead of shipping raw tool JSON.
     let finalOutput: string | null = null;
 
     const overBudget =
       tokenLimit !== undefined && totalTokens >= tokenLimit;
 
-    if (completed.length === 1) {
+    const planDeclaredSynthesis = plan.steps.some(
+      (s) => s.type === "analysis" || s.type === "composite",
+    );
+
+    if (completed.length === 1 && !planDeclaredSynthesis) {
       finalOutput = completed[0]!.fullResult ?? completed[0]!.result ?? null;
       steps.push(makeStep("thought", `[SOLVE] single-step short-circuit`));
     } else if (stepResultTexts.length > 0 && !overBudget) {

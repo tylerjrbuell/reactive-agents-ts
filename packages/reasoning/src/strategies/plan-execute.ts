@@ -28,8 +28,8 @@ import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
   buildReflectionPrompt,
-} from "./plan-prompts.js";
-import type { ToolSummary, StepResult } from "./plan-prompts.js";
+} from "./planning/plan-prompts.js";
+import type { ToolSummary, StepResult } from "./planning/plan-prompts.js";
 import type { LogEvent } from "@reactive-agents/observability";
 import {
   resolveStrategyServices,
@@ -55,17 +55,17 @@ import { withEnvContext } from "../context/context-engine.js";
 
 // ── WS-6 Phase 3 — output utilities bucket (B) ──────────────────────────────
 // Goal text extraction, FINAL ANSWER stripping, action-tool sanitization.
-// See ./plan-execute/output-utils.ts for the moved implementations.
-import { extractGoalText } from "./plan-execute/output-utils.js";
+// See ./planning/plan-text.ts for the moved implementations.
+import { extractGoalText } from "./planning/plan-text.js";
 
 // ── WS-6 Phase 3 — plan mutation bucket (A) ─────────────────────────────────
 // patchPlan + augmentPlan helpers (both swallow LLM extraction failures into
 // Effect.succeed(null) so the refinement loop can fall through). See
-// ./plan-execute/plan-mutation.ts for the moved implementations.
+// ./planning/plan-mutation.ts for the moved implementations.
 import {
   patchPlan,
   augmentPlan,
-} from "./plan-execute/plan-mutation.js";
+} from "./planning/plan-mutation.js";
 
 // ── WS-6 Phase 3 — step executor bucket (C) ─────────────────────────────────
 // Single-step dispatch (tool_call / analysis / composite). StepExecResult is
@@ -1228,13 +1228,13 @@ export const executePlanExecute = (
 //
 // `patchPlan` (rewrite failed + pending steps) and `augmentPlan` (append
 // supplementary steps to fill goal gaps) were extracted to
-// ./plan-execute/plan-mutation.ts in WS-6 Phase 3 bucket A. Both helpers
+// ./planning/plan-mutation.ts in WS-6 Phase 3 bucket A. Both helpers
 // take a narrowed input shape (PatchInput/AugmentInput) so they don't
 // re-import the full `PlanExecuteInput` type from this module.
 
 // ─── Utility Helpers ───
 //
 // Output utilities (extractGoalText, stripFinalAnswerPrefix, sanitizeToolOutput,
-// ACTION_TOOL_PATTERNS) were extracted to ./plan-execute/output-utils.ts in
+// ACTION_TOOL_PATTERNS) were extracted to ./planning/plan-text.ts in
 // WS-6 Phase 3 bucket B so step-executor and plan-mutation helpers can import
 // without circular dependency. Import added at top of file.

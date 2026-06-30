@@ -172,6 +172,33 @@ describe("blueprint — happy path", () => {
     expect(calls.map((c) => c.toolName).sort()).toEqual(["web-fetch", "web-search"]);
   });
 
+  it("runs the solver to synthesize when the plan declares an analysis step (no short-circuit)", async () => {
+    // One tool_call + one analysis step: the planner explicitly asked for the
+    // raw tool result to be transformed (e.g. "list them in a numbered list").
+    // blueprint must NOT short-circuit on the single tool result — it must run
+    // SOLVE so the declared synthesis actually happens.
+    const { layer: toolLayer } = makeRecordingToolService();
+    const { layer: llmLayer, counts } = countingLLMLayer([
+      planTurn([
+        { title: "fetch", type: "tool_call", toolName: "web-search", toolArgs: { query: "commits" } },
+        { title: "format", type: "analysis", dependsOn: ["s1"] },
+      ]),
+      { text: "1. commit-a\n2. commit-b" },
+    ]);
+
+    const result = await Effect.runPromise(
+      executeBlueprint(baseInput()).pipe(
+        Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
+      ),
+    );
+
+    expect(result.status).toBe("completed");
+    // SOLVE ran — the synthesized list is the output, NOT the raw tool result.
+    expect(counts.complete).toBe(1);
+    expect(result.output).toBe("1. commit-a\n2. commit-b");
+    expect(result.output).not.toContain("result-of-web-search");
+  });
+
   it("skips the solver when a single step already produced the answer (short-circuit)", async () => {
     const { layer: toolLayer } = makeRecordingToolService();
     const { layer: llmLayer, counts } = countingLLMLayer([
@@ -307,5 +334,99 @@ describe("blueprint — required-tool repair", () => {
     // The injected synthetic file-write step was actually dispatched.
     expect(calls.some((c) => c.toolName === "file-write")).toBe(true);
     expect(calls.some((c) => c.toolName === "web-search")).toBe(true);
+  });
+});
+
+// ── (e) execution-failure patch retry ───────────────────────────────────────
+//
+// The planner can emit a structurally-valid plan whose tool ARGUMENTS are wrong
+// (the gh-cli "--limit" failure). VERIFY passes it (shape is fine); the tool
+// errors at execution. blueprint must feed that error back via the existing
+// patchPlan helper, re-run the (idempotent) worker once, and recover — instead
+// of silently shipping empty output.
+
+/** Tool service that FAILS when an arg value contains "bad", succeeds otherwise. */
+function makeArgSensitiveToolService() {
+  const calls: Array<{ toolName: string; args: Record<string, unknown> }> = [];
+  const layer = Layer.succeed(
+    ToolService,
+    ToolService.of({
+      execute: (req: { toolName: string; arguments?: Record<string, unknown> }) =>
+        Effect.gen(function* () {
+          const args = req.arguments ?? {};
+          calls.push({ toolName: req.toolName, args });
+          const bad = Object.values(args).some(
+            (v) => typeof v === "string" && v.includes("bad"),
+          );
+          if (bad) {
+            return { success: false, result: `tool ${req.toolName} failed: invalid argument` };
+          }
+          return { success: true, result: `result-of-${req.toolName}` };
+        }),
+      getTool: (name: string) =>
+        Effect.succeed({ name, description: "t", parameters: [{ name: "query", type: "string", required: true }] }),
+      register: () => Effect.void,
+      listTools: () => Effect.succeed([]),
+      deregister: () => Effect.void,
+    } as unknown as Parameters<typeof ToolService.of>[0]),
+  );
+  return { calls, layer };
+}
+
+describe("blueprint — execution-failure patch retry", () => {
+  it("patches a failed tool step's args and recovers (no empty output)", async () => {
+    const { layer: toolLayer, calls } = makeArgSensitiveToolService();
+    const { layer: llmLayer, counts } = countingLLMLayer([
+      // initial plan — args are wrong, the tool will error.
+      planTurn([
+        { title: "search", type: "tool_call", toolName: "web-search", toolArgs: { query: "bad-args" } },
+      ]),
+      // patch — corrected args (no "bad" marker) → tool succeeds.
+      planTurn([
+        { title: "search-fixed", type: "tool_call", toolName: "web-search", toolArgs: { query: "good-args" } },
+      ]),
+    ]);
+
+    const result = await Effect.runPromise(
+      executeBlueprint(baseInput()).pipe(
+        Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
+      ),
+    );
+
+    // Recovered — NOT an empty-output partial failure.
+    expect(result.status).toBe("completed");
+    expect(result.output).toBe("result-of-web-search");
+    // Tool dispatched twice: the failing original + the patched retry.
+    expect(calls.length).toBe(2);
+    expect(calls[0]!.args.query).toBe("bad-args");
+    expect(calls[1]!.args.query).toBe("good-args");
+    // Two structured calls: the initial plan + one patch. Bounded — not a loop.
+    expect(counts.completeStructured).toBe(2);
+  });
+
+  it("degrades to reactive when the patch retry still fails (zero completed)", async () => {
+    const { layer: toolLayer } = makeArgSensitiveToolService();
+    const { layer: llmLayer } = countingLLMLayer([
+      // initial plan — bad args.
+      planTurn([
+        { title: "search", type: "tool_call", toolName: "web-search", toolArgs: { query: "bad-1" } },
+      ]),
+      // patch — STILL bad args → tool errors again, zero completed.
+      planTurn([
+        { title: "search", type: "tool_call", toolName: "web-search", toolArgs: { query: "bad-2" } },
+      ]),
+      // reactive fallback final answer.
+      { text: "FINAL ANSWER: reactive recovered." },
+    ]);
+
+    const result = await Effect.runPromise(
+      executeBlueprint(baseInput()).pipe(
+        Effect.provide(Layer.mergeAll(toolLayer, llmLayer)),
+      ),
+    );
+
+    // After bounded patch-retry produced nothing usable, degrade to reactive.
+    expect(result.strategy).toBe("reactive");
+    expect(result.output).toContain("reactive recovered");
   });
 });

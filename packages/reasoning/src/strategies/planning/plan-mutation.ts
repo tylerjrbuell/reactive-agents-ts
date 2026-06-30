@@ -1,4 +1,4 @@
-// File: src/strategies/plan-execute/plan-mutation.ts
+// File: src/strategies/planning/plan-mutation.ts
 /**
  * Plan-mutation helpers for the plan-execute-reflect strategy.
  *
@@ -34,15 +34,34 @@ import { extractStructuredOutput } from "../../structured-output/pipeline.js";
 import {
   buildPatchPrompt,
   buildAugmentPrompt,
-} from "../plan-prompts.js";
-import type { ToolSummary } from "../plan-prompts.js";
+} from "./plan-prompts.js";
+import type { ToolSummary } from "./plan-prompts.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
-import { extractGoalText } from "./output-utils.js";
+import { extractGoalText } from "./plan-text.js";
 
 /** Minimal input shape consumed by `patchPlan`. */
 export interface PatchInput {
   readonly taskDescription: string;
+  /** Tool schemas so the recovery prompt isn't tool-blind (see buildPatchPrompt). */
+  readonly availableToolSchemas?: readonly ToolSchema[];
 }
+
+/** Map a tool schema to the enriched ToolSummary the prompts render. */
+const toToolSummary = (t: ToolSchema): ToolSummary => ({
+  name: t.name,
+  signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
+  ...(t.description ? { description: t.description } : {}),
+  ...(t.parameters.length > 0
+    ? {
+        params: t.parameters.map((p) => ({
+          name: p.name,
+          type: p.type,
+          ...(p.required !== undefined ? { required: p.required } : {}),
+          ...(p.description ? { description: p.description } : {}),
+        })),
+      }
+    : {}),
+});
 
 /** Minimal input shape consumed by `augmentPlan`. */
 export interface AugmentInput {
@@ -64,7 +83,12 @@ export function patchPlan(
   Error,
   LLMService
 > {
-  const patchPrompt = buildPatchPrompt(extractGoalText(input.taskDescription), plan.steps);
+  const patchTools = (input.availableToolSchemas ?? []).map(toToolSummary);
+  const patchPrompt = buildPatchPrompt(
+    extractGoalText(input.taskDescription),
+    plan.steps,
+    patchTools,
+  );
 
   return extractStructuredOutput({
     schema: LLMPlanOutputSchema,
