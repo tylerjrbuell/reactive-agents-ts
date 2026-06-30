@@ -59,7 +59,10 @@ describe("Multi-Source Layer", () => {
     expect(result.layerName).toBe("multi-source");
     expect(result.score).toBe(0.5);
     expect(result.passed).toBe(true);
-    expect(result.details).toContain("not yet implemented");
+    // Honest placeholder: neutral, non-blocking, and tells the user how to get
+    // the real implementation.
+    expect(result.details).toContain("placeholder");
+    expect(result.details).toContain("TAVILY_API_KEY");
   });
 
   test("LLM tier skips when TAVILY_API_KEY is missing", async () => {

@@ -90,11 +90,13 @@ const scoreClaimAgainstResults = (
 };
 
 /**
- * Multi-Source Layer (Tier 1: Heuristic Placeholder)
+ * Multi-Source Layer (Tier 1: heuristic placeholder).
  *
- * Multi-source cross-referencing requires external search APIs.
- * Without an LLM and Tavily API key, returns neutral confidence.
- * Use `checkMultiSourceLLM` for the real implementation.
+ * Real multi-source cross-referencing needs an external search API. This
+ * tier-1 entry is a deliberate NO-OP: it returns a neutral, non-blocking
+ * `score: 0.5, passed: true` so it never fabricates confidence and never fails
+ * a run. To get real cross-referencing, set `TAVILY_API_KEY` and use
+ * {@link checkMultiSourceLLM} instead — this placeholder does not call any API.
  */
 export const checkMultiSource = (
   _text: string,
@@ -103,7 +105,9 @@ export const checkMultiSource = (
     layerName: "multi-source",
     score: 0.5,
     passed: true,
-    details: "Multi-source cross-referencing not yet implemented. Score reflects neutral confidence.",
+    details:
+      "Multi-source cross-referencing is a neutral placeholder (no API call). " +
+      "Set TAVILY_API_KEY and use checkMultiSourceLLM for real cross-referencing.",
   });
 
 /**
