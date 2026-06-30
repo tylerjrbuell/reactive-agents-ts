@@ -21,6 +21,17 @@ How to evolve the suite from "does this function return the right shape for inpu
 - **Built-surface guard** (`runtime/tests/built-surface.test.ts`) — loads built dist, asserts all 83 documented `.with*` survive compilation.
 - **Gut-check on the checker script** — `m9` now runs the real `check-termination-paths.sh` (fixed to ignore comments/test files; falsified both ways).
 
+## Bugs found by this strategy (the proof it works)
+
+Strengthening MOCKED/vacuous tests to assert real behavior found **3 real bugs** — every MOCKED capability hid one:
+1. **`withMinIterations`** — `if` not `while`; only ever 1 extra pass regardless of N. (`de207801`)
+2. **Stringified tool-args dropped to `{}`** — `normalizeArgumentsForResolvedTool` didn't coerce string→JSON; found by a property test the mock couldn't reach. (`679f554b`)
+3. **`withRetryPolicy` dead on the kernel path** — retried only `complete()`, not `stream()` (what the kernel uses) or `completeStructured()`. (`55e0f163`)
+
+Gaps sealed with real tests (verified correct, were untested): built-surface guard, lifecycle-hook firing (`ae9903e1`), composition precedence minIterations×customTermination×verification (`6a9838a7`).
+
+Verified NOT bugs (don't chase): `withMemory` recall→prompt (`iterate-pass.ts:430` is an intentional Phase-1 void seam; recall flows via `bootstrap`→`priorContext`), `withHook` (fires correctly). Design question (not a defect, maintainer call): `fabricationGuard × outputSchema` — the verifier's perf-number guard doesn't inspect structured `object` fields, but structured output has its own `grounded/field-provenance` grounding on the grounded route.
+
 ## Prioritized plan
 
 ### P0 — surfaces production keeps breaking (highest bug-yield/hour)
