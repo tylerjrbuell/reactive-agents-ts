@@ -14,6 +14,12 @@ export interface ToolCallSpec {
   readonly rationale?: Rationale;
 }
 
+/** Arguments accepted by the `abstain` meta-tool. `reason` is schema-required. */
+export interface AbstainArgs {
+  readonly reason: string;
+  readonly missing?: readonly string[];
+}
+
 /** Result of resolving an LLM response into actionable intent */
 export type ToolCallResult =
   | { readonly _tag: "tool_calls"; readonly calls: readonly ToolCallSpec[]; readonly thinking?: string }

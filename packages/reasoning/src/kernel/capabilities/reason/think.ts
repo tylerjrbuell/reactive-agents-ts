@@ -84,6 +84,7 @@ import type { GuidanceContext } from "../../../context/context-manager.js";
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, sentinelDeliverable } from "@reactive-agents/core";
 import { ABSTAIN_TOOL_NAME } from "../act/meta-tool-handlers.js";
+import { shouldOfferAbstain } from "./abstain-gate.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 
@@ -312,7 +313,12 @@ export function handleThinking(
     const augmentedToolSchemas: readonly ToolSchema[] = [
       ...(input.availableToolSchemas ?? []),
       ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
-      ...(input.metaTools?.abstain === true && state.iteration > 0 ? [abstainToolSchema] : []),
+      ...(shouldOfferAbstain({
+        enabled: input.metaTools?.abstain === true,
+        iteration: state.iteration,
+        requiredToolUnavailable: false,
+        toolsAttempted: state.toolsUsed.size,
+      }) ? [abstainToolSchema] : []),
     ] as readonly ToolSchema[];
 
     // ── Context pressure hard gate ───────────────────────────────────────────

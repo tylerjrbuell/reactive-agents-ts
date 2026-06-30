@@ -5,6 +5,7 @@ import type {
     ToolCallSpec,
     ResolverInput,
     ResolverToolHint,
+    AbstainArgs,
 } from './types.js'
 
 export type DialectObserved =
@@ -44,11 +45,11 @@ export class NativeFCStrategy implements ToolCallResolver {
                 return { result, dialect: 'native-fc' }
             }
             // Native calls present but all unresolved — unless it was abstain, which
-        // is also a terminal that exits early rather than falling to text fallbacks.
-        if (result._tag === 'abstained') {
-            return { result, dialect: 'native-fc' }
-        }
-        // Genuinely unresolved → fall through to text fallbacks
+            // is also a terminal that exits early rather than falling to text fallbacks.
+            if (result._tag === 'abstained') {
+                return { result, dialect: 'native-fc' }
+            }
+            // Genuinely unresolved → fall through to text fallbacks
         }
 
         const content = response.content ?? ''
@@ -138,10 +139,10 @@ export class NativeFCStrategy implements ToolCallResolver {
                 // O3: abstain is a terminal tool — intercept before bundling as tool_calls.
                 const abstainSpec = specs.find(s => s.name === 'abstain')
                 if (abstainSpec) {
-                    const args = abstainSpec.arguments as { reason?: string; missing?: string[] }
+                    const args = abstainSpec.arguments as AbstainArgs
                     return {
                         _tag: 'abstained' as const,
-                        reason: args.reason ?? 'Model declined to answer',
+                        reason: args.reason,
                         missing: args.missing ?? [],
                     }
                 }
