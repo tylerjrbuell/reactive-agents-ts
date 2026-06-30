@@ -191,7 +191,7 @@ export class ReactiveAgent<TOut = unknown> {
             minIterations?: number
             taskContext?: Record<string, string>
             progressCheckpoint?: { every: number; autoResume?: boolean }
-            verificationStep?: { mode: 'reflect' | 'loop'; prompt?: string }
+            verificationStep?: { mode: 'reflect'; prompt?: string }
             outputValidator?: (output: string) => {
                 valid: boolean
                 feedback?: string

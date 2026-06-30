@@ -679,8 +679,8 @@ export interface RuntimeOptions {
   /** Save a progress checkpoint every N iterations. */
   progressCheckpoint?: { every: number; autoResume?: boolean };
 
-  /** Verification pass after initial reasoning result. "reflect" = one extra LLM call (cheap); "loop" = re-enters ReAct with tools (thorough). */
-  verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+  /** Verification pass after the initial reasoning result. "reflect" = one extra LLM review call (the only supported mode). */
+  verificationStep?: { mode: "reflect"; prompt?: string };
 
   /** Validate output before accepting — retry with feedback on failure. */
   outputValidator?: (output: string) => { valid: boolean; feedback?: string };

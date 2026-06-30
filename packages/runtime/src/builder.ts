@@ -341,7 +341,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _minIterations?: number
     private _taskContext?: Record<string, string>
     private _progressCheckpoint?: { every: number; autoResume?: boolean }
-    private _verificationStep?: { mode: 'reflect' | 'loop'; prompt?: string }
+    private _verificationStep?: { mode: 'reflect'; prompt?: string }
     private _outputValidator?: (output: string) => {
         valid: boolean
         feedback?: string
@@ -1786,16 +1786,16 @@ export class ReactiveAgentBuilder<TOut = unknown> {
 
     /**
      * Run a verification pass after the initial reasoning result before accepting it.
-     * In "reflect" mode (default), one LLM call reviews the output and confirms
-     * completeness. In "loop" mode, the agent re-enters the ReAct loop with tools.
-     * @param config.mode - "reflect" (default) or "loop"
+     * In "reflect" mode (the only supported mode), one LLM call reviews the output
+     * and confirms completeness.
+     * @param config.mode - "reflect" (default)
      * @param config.prompt - Custom verification prompt (optional)
      * @returns `this` for chaining
      * @see {@link HarnessProfile.balanced} — composable preset with the
      *   verifier default-on; use `.compose(...)` for custom prompts.
      */
     withVerificationStep(
-        config: { mode?: 'reflect' | 'loop'; prompt?: string } = {}
+        config: { mode?: 'reflect'; prompt?: string } = {}
     ): this {
         applyWithVerificationStep(this, config)
         return this

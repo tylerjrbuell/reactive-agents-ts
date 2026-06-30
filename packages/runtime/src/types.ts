@@ -496,8 +496,8 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   })),
   /** Run a verification pass after the initial answer before accepting the result. */
   verificationStep: Schema.optional(Schema.Struct({
-    /** "reflect" = single LLM review call (default); "loop" = re-enter ReAct loop with tools. */
-    mode: Schema.Union(Schema.Literal("reflect"), Schema.Literal("loop")),
+    /** "reflect" = single LLM review call (the only supported mode). */
+    mode: Schema.Literal("reflect"),
     /** Custom verification prompt. Defaults to a standard completeness-check question. */
     prompt: Schema.optional(Schema.String),
   })),
