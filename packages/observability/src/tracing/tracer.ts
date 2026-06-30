@@ -126,6 +126,8 @@ export const makeTracer = Effect.gen(function* () {
         }),
         Effect.tapError((error) => {
           otelSpan.setStatus({ code: otelApi.SpanStatusCode.ERROR, message: String(error) });
+          // cast: Effect error channel (generic E) narrowed to a non-null object;
+          // OTel recordException wants an Error/Exception — no structural overlap to assert directly.
           otelSpan.recordException(typeof error === "object" && error !== null ? error as unknown as Error : new Error(String(error)));
           otelSpan.end();
           return Ref.update(spansRef, (spans) => [

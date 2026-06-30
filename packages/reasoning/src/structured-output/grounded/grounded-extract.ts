@@ -161,7 +161,7 @@ export const groundedExtract = <A>(
 
     const reqs = js
       ? fieldRequirementsFromJsonSchema(js)
-      : fieldRequirementsFromSchema(input.contract.effectSchema as unknown as Schema.Schema<unknown>);
+      : fieldRequirementsFromSchema(input.contract.effectSchema);
 
     // ── Phase A: Initial extraction via partial schema ────────────────────
     // Using Schema.partial so the pipeline accepts a partial object — avoids

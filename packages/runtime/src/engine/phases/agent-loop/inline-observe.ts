@@ -23,6 +23,19 @@ export interface InlineObserveDeps {
   readonly isVerbose: boolean;
 }
 
+/**
+ * Structural view of a tool-result entry. `c.toolResults` is declared
+ * `Schema.Array(Schema.Unknown)` on the ExecutionContext schema, so each
+ * element is `unknown`; this names the fields the OBSERVE phase reads instead
+ * of scattering `as any` accesses.
+ */
+interface ToolResultLike {
+  readonly toolCallId?: string;
+  readonly toolName?: string;
+  readonly result?: unknown;
+  readonly durationMs?: number;
+}
+
 export const runInlineObserve = (
   c: ExecutionContext,
   deps: InlineObserveDeps,
@@ -42,21 +55,22 @@ export const runInlineObserve = (
 
     if (memOpt._tag === "Some") {
       for (const r of recentResults) {
+        const tr = r as ToolResultLike;
         const episodeNow = new Date();
         yield* memOpt.value
           .logEpisode({
             id: crypto.randomUUID().replace(/-/g, ""),
             agentId: c.agentId,
             date: episodeNow.toISOString().slice(0, 10),
-            content: `Tool ${(r as any).toolName}: ${String((r as any).result).slice(0, 300)}`,
+            content: `Tool ${tr.toolName}: ${String(tr.result).slice(0, 300)}`,
             taskId: c.taskId,
             eventType: "tool-call",
             createdAt: episodeNow,
             metadata: {
-              toolName: (r as any).toolName,
-              durationMs: (r as any).durationMs ?? 0,
+              toolName: tr.toolName,
+              durationMs: tr.durationMs ?? 0,
             },
-          } as any)
+          })
           .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/inline-observe.ts:log-tool-episode", tag: errorTag(err) })));
       }
     }
@@ -64,8 +78,9 @@ export const runInlineObserve = (
     // Verbose: log tool results
     if (obs && isVerbose) {
       for (const r of recentResults) {
-        const rToolName = (r as any).toolName as string;
-        const rResult = (r as any).result;
+        const tr = r as ToolResultLike;
+        const rToolName = tr.toolName as string;
+        const rResult = tr.result;
         const isAgentDelegate =
           rToolName === "spawn-agent" ||
           rToolName.startsWith("agent-");
@@ -91,25 +106,27 @@ export const runInlineObserve = (
       }
     }
 
-    const toolResultMessages = recentResults.map(
-      (r: any) => ({
+    const toolResultMessages = recentResults.map((r) => {
+      const tr = r as ToolResultLike;
+      return {
         role: "tool" as const,
-        toolCallId: r.toolCallId,
+        toolCallId: tr.toolCallId,
         content:
-          typeof r.result === "string"
-            ? r.result
-            : JSON.stringify(r.result),
-      }),
-    );
+          typeof tr.result === "string"
+            ? tr.result
+            : JSON.stringify(tr.result),
+      };
+    });
 
     // Aggregate sub-agent tokens/cost if present in tool results
     let subAgentTokens = 0;
     let subAgentCost = 0;
     for (const r of recentResults) {
-      const res = (r as any).result;
+      const res = (r as ToolResultLike).result;
       if (typeof res === "object" && res !== null) {
-        subAgentTokens += (res as any).tokensUsed ?? 0;
-        subAgentCost += (res as any).cost ?? (res as any).estimatedCost ?? 0;
+        const usage = res as { tokensUsed?: number; cost?: number; estimatedCost?: number };
+        subAgentTokens += usage.tokensUsed ?? 0;
+        subAgentCost += usage.cost ?? usage.estimatedCost ?? 0;
       }
     }
 

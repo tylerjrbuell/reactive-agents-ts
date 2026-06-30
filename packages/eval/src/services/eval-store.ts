@@ -146,7 +146,7 @@ function dateReplacer(_key: string, value: unknown): unknown {
 }
 
 function rowToEvalRun(row: DbRow): EvalRun {
-  const results = JSON.parse(row.results_json) as Array<EvalResult & { timestamp: string }>;
+  const results = JSON.parse(row.results_json) as Array<Omit<EvalResult, "timestamp"> & { timestamp: string }>;
   const summary = JSON.parse(row.summary_json) as EvalRunSummary;
 
   return {
@@ -156,7 +156,7 @@ function rowToEvalRun(row: DbRow): EvalRun {
     agentConfig: row.agent_config,
     results: results.map((r) => ({
       ...r,
-      timestamp: new Date(r.timestamp as unknown as string),
+      timestamp: new Date(r.timestamp),
     })),
     summary,
   };

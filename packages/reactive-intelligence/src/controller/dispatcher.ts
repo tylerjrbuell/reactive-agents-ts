@@ -75,7 +75,7 @@ const baseCtxFromState = (
 ): BaseCtx => ({
   iteration: ctx.iteration,
   phase,
-  state: state as unknown as KernelStateLike,
+  state,
   strategy: typeof state.strategy === "string" ? state.strategy : "unknown",
 })
 

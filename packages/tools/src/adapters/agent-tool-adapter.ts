@@ -229,9 +229,9 @@ export const createSubAgentExecutor = (
       const composedSystemPrompt = parts.join("\n\n");
 
       const baseTools = config.tools;
-      const effectiveTools: readonly string[] = baseTools !== undefined
+      const effectiveTools: readonly string[] | undefined = baseTools !== undefined
         ? [...new Set([...baseTools, ...ALWAYS_INCLUDE_TOOLS])]
-        : undefined as unknown as readonly string[];
+        : undefined;
 
       const subAgentDefaults = {
         maxIterations: 3,
