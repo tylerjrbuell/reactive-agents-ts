@@ -875,6 +875,10 @@ describe("runKernel — required tools guard", () => {
     expect(result.meta.abstention?.missing).toContain("tool:shell-execute");
     // Kernel was never called — structural check happened before the loop.
     expect(callCount).toBe(0);
+    // A forced abstention is an honest decline, NOT an error — the stale
+    // "missing_required_tool" error string set by the pre-loop guard must be
+    // cleared so callers reading result.error don't see incoherent state.
+    expect(result.error).toBeFalsy();
   });
 
   it("does not trigger low-delta early exit while required tools are still missing", async () => {

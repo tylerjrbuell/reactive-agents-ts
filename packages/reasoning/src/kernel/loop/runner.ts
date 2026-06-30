@@ -577,6 +577,12 @@ export function runKernel(
       });
 
       if (forced !== null) {
+        // A forced abstention is an honest decline, not a failure. Clear any
+        // stale error string the pre-loop required-tools guard may have set
+        // (status:"failed" + error:"missing_required_tool:...") so callers
+        // reading result.error don't see an incoherent failed-error on a
+        // status:"done"/terminatedBy:"abstained" result.
+        state = transitionState(state, { error: null });
         state = terminate(state, {
           reason: "abstained",
           deliverable: sentinelDeliverable("no_substantive_output"),
