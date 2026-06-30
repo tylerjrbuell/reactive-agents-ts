@@ -3,7 +3,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn } from "@reactive-agents/llm-provider";
+import { TestLLMServiceLayer, TestLLMService, LLMService, type TestTurn, type ProviderQuirk } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 
 /**
@@ -1041,3 +1041,53 @@ describe("PlanExecuteStrategy (Structured Plan Engine)", () => {
     expect(String(result.output)).toContain("|---|---|---|");
   });
 });
+
+// ─── Cross-provider quirk contract (plan family) ──────────────────────────────
+//
+// plan-execute is the executeToolAndObserve family (distinct from the react
+// kernel covered by provider-quirk-contract.test.ts). Its plan and answer arrive
+// as TEXT, so the relevant provider quirk is `think-leak`: a <think>…</think>
+// block leaking into the plan-generation response (qwen3 / reasoning models)
+// must be stripped (extractThinkingSafeContent) BEFORE the plan JSON is parsed,
+// or the plan fails to parse and the run collapses. This pins that the strategy
+// survives the quirk end-to-end and never ships <think> in the answer.
+describe.each<ProviderQuirk | undefined>([undefined, "think-leak"])(
+  "plan-execute survives provider quirk: %s",
+  (quirk) => {
+    it("parses a <think>-leaked plan and ships a clean answer", async () => {
+      const layer = TestLLMServiceLayer(
+        [
+          {
+            match: "planning agent",
+            text: makePlanJson([
+              {
+                title: "Explain indexing trade-offs",
+                instruction: "Explain B-tree, hash, and full-text indexing across three sections",
+                type: "analysis",
+              },
+            ]),
+          },
+          { match: "well-structured final answer", text: "## B-tree\nRange queries.\n## Hash\nExact match." },
+        ],
+        quirk,
+      );
+
+      const result = await Effect.runPromise(
+        executePlanExecute({
+          taskDescription: "Explain database indexing trade-offs",
+          taskType: "explanation",
+          memoryContext: "",
+          availableTools: [],
+          config: defaultReasoningConfig,
+        }).pipe(Effect.provide(layer)),
+      );
+
+      // The <think>-leaked plan still parsed and the run completed.
+      expect(result.status).toBe("completed");
+      expect(result.output).toContain("B-tree");
+      // No reasoning block leaks into the user-facing answer.
+      expect(result.output).not.toContain("<think>");
+      expect(result.output).not.toContain("reason about this step by step");
+    });
+  },
+);
