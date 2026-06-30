@@ -86,6 +86,8 @@ export const TerminatedBy = Schema.Literal(
   "end_turn",
   /** LLM request/stream failed (provider error, invalid tool schema, network, etc.) */
   "llm_error",
+  /** Agent honestly declined — could not ground an answer / required input unavailable. */
+  "abstained",
 );
 export type TerminatedBy = typeof TerminatedBy.Type;
 
