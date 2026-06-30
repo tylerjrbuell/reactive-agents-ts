@@ -130,13 +130,14 @@ function runWorker(
   plan: Plan,
   toolLayer: Layer.Layer<ToolService>,
   concurrency = 4,
+  llmTurns: ReadonlyArray<{ text: string }> = [],
 ) {
   return Effect.runPromise(
     resolveStrategyServices.pipe(
       Effect.flatMap((services) =>
         executeBlueprintWorker(plan, services, ctx, { concurrency }),
       ),
-      Effect.provide(Layer.mergeAll(toolLayer, TestLLMServiceLayer([]))),
+      Effect.provide(Layer.mergeAll(toolLayer, TestLLMServiceLayer([...llmTurns]))),
     ),
   );
 }
@@ -246,6 +247,90 @@ describe("blueprint worker — fail-on-unresolved-ref", () => {
     expect(s2.error).toContain("s1");
     // s2's tool never dispatched (the dependency poisoned the chain).
     expect(calls.some((c) => c.toolName === "web-fetch")).toBe(false);
+  });
+});
+
+// ── (e) already-completed steps are not re-executed (patch-retry idempotency) ─
+
+describe("blueprint worker — completed-step idempotency", () => {
+  it("does not re-dispatch a tool_call step that arrives already completed", async () => {
+    const { calls, layer } = makeRecordingToolService();
+    // s1 arrives pre-completed (as it would on a patch-retry re-run); only the
+    // new s2 should dispatch. s1's preserved result must remain intact and be
+    // resolvable as a dependency.
+    const plan = makePlan([
+      toolStep("s1", 1, "web-search", { query: "seed" }, {
+        status: "completed",
+        result: "preserved-s1-result",
+      }),
+      toolStep("s2", 2, "web-fetch", { url: "{{from_step:s1}}" }),
+    ]);
+
+    const out = await runWorker(plan, layer);
+
+    expect(out.allSucceeded).toBe(true);
+    // s1 was NOT re-run; only s2's tool dispatched.
+    expect(calls.map((c) => c.toolName)).toEqual(["web-fetch"]);
+    // s1's preserved result survived untouched.
+    const s1 = out.steps.find((s) => s.id === "s1")!;
+    expect(s1.result).toBe("preserved-s1-result");
+    expect(s1.status).toBe("completed");
+    // s2 resolved its {{from_step:s1}} against the preserved result.
+    const s2Call = calls.find((c) => c.toolName === "web-fetch")!;
+    expect(s2Call.args.url).toBe("preserved-s1-result");
+  });
+});
+
+// ── (f) intermediate analysis dependency — tool consumes analysis output ─────
+
+describe("blueprint worker — intermediate analysis dependency", () => {
+  it("executes an analysis step inline so a downstream tool consumes its output", async () => {
+    const { calls, layer } = makeRecordingToolService();
+    const summarize: PlanStep = {
+      id: "s2", seq: 2, title: "summarize", instruction: "Summarize the commits",
+      type: "analysis", status: "pending", retries: 0, tokensUsed: 0, dependsOn: ["s1"],
+    };
+    const plan = makePlan([
+      toolStep("s1", 1, "web-search", { query: "commits" }),
+      summarize,
+      // file-write depends on the ANALYSIS output, not a tool output.
+      toolStep("s3", 3, "file-write", { path: "./out.md", content: "{{from_step:s2}}" }, {
+        dependsOn: ["s2"],
+      }),
+    ]);
+
+    // TestLLM answers the analysis step's complete() call with the summary.
+    const out = await runWorker(plan, layer, 4, [{ text: "## Summary\n- did the work" }]);
+
+    expect(out.allSucceeded).toBe(true);
+    // The analysis step ran and produced a result.
+    const s2 = out.steps.find((s) => s.id === "s2")!;
+    expect(s2.status).toBe("completed");
+    expect(s2.result).toContain("did the work");
+    // file-write's {{from_step:s2}} resolved to the ANALYSIS output (not pre-failed).
+    const writeCall = calls.find((c) => c.toolName === "file-write")!;
+    expect(writeCall.args.content).toBe("## Summary\n- did the work");
+  });
+
+  it("does NOT execute a terminal analysis step (no tool depends on it) — left for SOLVE", async () => {
+    const { calls, layer } = makeRecordingToolService();
+    const terminal: PlanStep = {
+      id: "s2", seq: 2, title: "summarize", instruction: "Summarize",
+      type: "analysis", status: "pending", retries: 0, tokensUsed: 0, dependsOn: ["s1"],
+    };
+    const plan = makePlan([
+      toolStep("s1", 1, "web-search", { query: "x" }),
+      terminal,
+    ]);
+
+    // No LLM turns provided — if the worker tried to run the terminal analysis,
+    // the test LLM would have nothing to answer with. It must be left for SOLVE.
+    const out = await runWorker(plan, layer, 4, []);
+
+    expect(out.allSucceeded).toBe(true);
+    // Only the tool step was executed by the worker.
+    expect(out.steps.some((s) => s.id === "s2")).toBe(false);
+    expect(calls.map((c) => c.toolName)).toEqual(["web-search"]);
   });
 });
 

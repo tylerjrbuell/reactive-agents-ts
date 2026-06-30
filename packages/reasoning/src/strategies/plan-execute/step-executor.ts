@@ -29,8 +29,8 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { ExecutionError } from "../../errors/errors.js";
 import { resolveStepReferences } from "../../types/plan.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
-import { buildStepExecutionPrompt } from "../plan-prompts.js";
-import type { ToolSummary } from "../plan-prompts.js";
+import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
+import type { ToolSummary } from "../planning/plan-prompts.js";
 import { executeReActKernel } from "../../kernel/loop/react-kernel.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
@@ -43,7 +43,7 @@ import {
   sanitizeToolOutput,
   stripDeadStorageHints,
   stripFinalAnswerPrefix,
-} from "./output-utils.js";
+} from "../planning/plan-text.js";
 
 export interface StepExecResult {
   output: string;

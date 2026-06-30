@@ -39,11 +39,18 @@ import type { Plan, PlanStep } from "../../types/plan.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import { isParallelBatchSafeTool } from "../../kernel/capabilities/decide/tool-gating.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
+import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
+import { formatStepAttempt } from "./progress-format.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
+import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
 import {
+  extractGoalText,
   sanitizeToolOutput,
   stripDeadStorageHints,
-} from "../plan-execute/output-utils.js";
+  stripFinalAnswerPrefix,
+} from "../planning/plan-text.js";
+import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
+import { withEnvContext } from "../../context/context-engine.js";
 
 /** File tools whose relative paths the healing pipeline resolves (mirrors act.ts / step-executor.ts). */
 const FILE_TOOL_NAMES = new Set([
@@ -65,6 +72,10 @@ export interface BlueprintWorkerContext {
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly resultCompression?: ResultCompressionConfig;
   readonly harnessPipeline?: HarnessPipeline;
+  /** Goal text — used to anchor inline analysis-step prompts on the original task. */
+  readonly taskDescription?: string;
+  /** System prompt forwarded to inline analysis-step LLM calls. */
+  readonly systemPrompt?: string;
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
 }
 
@@ -113,6 +124,7 @@ function executeBlueprintStep(
   completedSteps: readonly PlanStep[],
   ctx: BlueprintWorkerContext,
   services: StrategyServices,
+  totalSteps: number,
 ): Effect.Effect<PlanStep, never, LLMService> {
   const startedAt = new Date().toISOString();
   const { toolService } = services;
@@ -140,6 +152,19 @@ function executeBlueprintStep(
   }
 
   return Effect.gen(function* () {
+    // Announce the step the moment it starts running — the worker is the only
+    // place that knows live dispatch order (parallel-wave steps each announce
+    // themselves). Surfaces the agent's intent, not just the raw tool call.
+    yield* publishReasoningStep(services.eventBus, {
+      _tag: "ReasoningStepCompleted",
+      taskId: ctx.taskId ?? "blueprint",
+      strategy: "blueprint",
+      step: stepIndex + 1,
+      totalSteps,
+      thought: formatStepAttempt(step, totalSteps),
+      kernelPass: `blueprint:step-${stepIndex + 1}:start`,
+    });
+
     const rawArgs = step.toolArgs ?? {};
     const resolvedArgs = resolveStepReferences(rawArgs, [...completedSteps]);
 
@@ -239,10 +264,98 @@ function executeBlueprintStep(
 }
 
 /**
- * Execute a hydrated Plan's `tool_call` steps as a dependency-ordered DAG with
- * NO LLM in the loop. Independent steps run in parallel (capped by
- * `opts.concurrency`); mutating steps run sequentially. Non-tool_call steps
- * (analysis/composite) are skipped — the strategy handles analysis/solve.
+ * Execute an `analysis` step inline — a single tool-less LLM call that turns the
+ * prior step results into this step's output. Reuses plan-execute's analysis
+ * machinery (`buildStepExecutionPrompt`) so the prompt/format is identical. Only
+ * invoked for INTERMEDIATE analysis steps (a downstream tool_call depends on
+ * their output via {{from_step}}); terminal analysis stays deferred to SOLVE.
+ * Returns a NEW PlanStep with status/result set; never mutates the input.
+ */
+function executeAnalysisStep(
+  step: PlanStep,
+  stepIndex: number,
+  plan: Plan,
+  completedSteps: readonly PlanStep[],
+  ctx: BlueprintWorkerContext,
+  services: StrategyServices,
+  totalSteps: number,
+): Effect.Effect<PlanStep, never, LLMService> {
+  const startedAt = new Date().toISOString();
+
+  return Effect.gen(function* () {
+    // Announce the analysis step the moment it starts (parity with tool steps).
+    yield* publishReasoningStep(services.eventBus, {
+      _tag: "ReasoningStepCompleted",
+      taskId: ctx.taskId ?? "blueprint",
+      strategy: "blueprint",
+      step: stepIndex + 1,
+      totalSteps,
+      thought: formatStepAttempt(step, totalSteps),
+      kernelPass: `blueprint:step-${stepIndex + 1}:start`,
+    });
+
+    const priorResults = completedSteps
+      .filter((s) => s.result)
+      .map((s) => ({ stepId: s.id, title: s.title, result: s.result! }));
+
+    const stepPrompt = buildStepExecutionPrompt({
+      goal: extractGoalText(ctx.taskDescription ?? plan.goal),
+      step,
+      stepIndex,
+      totalSteps: plan.steps.length,
+      priorResults,
+      scopedTools: [],
+    });
+
+    const response = yield* services.llm
+      .complete({
+        messages: [{ role: "user", content: stepPrompt }],
+        systemPrompt: withEnvContext(
+          ctx.systemPrompt ??
+            "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
+        ),
+        maxTokens: 4096,
+        temperature: 0.5,
+        ...(ctx.taskId ? { traceContext: { taskId: ctx.taskId } } : {}),
+      })
+      // An LLM failure fails the step (not the whole worker) — downstream
+      // dependents then pre-fail on the unmet dependency, same as a tool error.
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+
+    const completedAt = new Date().toISOString();
+    const output = response
+      ? stripFinalAnswerPrefix(extractThinkingSafeContent(response).content)
+      : "";
+
+    if (!output.trim()) {
+      return {
+        ...step,
+        status: "failed" as const,
+        error: response
+          ? "analysis step produced empty output"
+          : "analysis step LLM call failed",
+        startedAt,
+        completedAt,
+      } satisfies PlanStep;
+    }
+    return {
+      ...step,
+      status: "completed" as const,
+      result: output,
+      fullResult: output,
+      startedAt,
+      completedAt,
+    } satisfies PlanStep;
+  });
+}
+
+/**
+ * Execute a hydrated Plan's tool DAG. `tool_call` steps run with NO LLM in the
+ * loop; INTERMEDIATE `analysis` steps (whose output a downstream tool consumes
+ * via {{from_step}}) are executed inline with one LLM call so the dependency
+ * resolves. Independent steps run in parallel (capped by `opts.concurrency`);
+ * mutating steps run sequentially. Terminal analysis/composite steps (nothing
+ * depends on them) are left for the strategy's SOLVE phase.
  *
  * Waves are computed via `computeWaves` and executed in order. Within each
  * wave, parallel-safe tools fan out via `Effect.all({ concurrency })` while
@@ -256,17 +369,57 @@ export function executeBlueprintWorker(
   opts: BlueprintWorkerOptions,
 ): Effect.Effect<BlueprintWorkerResult, never, LLMService> {
   return Effect.gen(function* () {
-    // Worker is tools-only: only tool_call steps participate in the DAG.
-    const toolSteps = plan.steps.filter((s) => s.type === "tool_call");
+    const byId = new Map<string, PlanStep>(plan.steps.map((s) => [s.id, s]));
 
-    // Wave grouping over the tool DAG. computeWaves only considers dependency
-    // resolution, not parallel-safety — we split each wave further below.
-    const waves = computeWaves(toolSteps, new Set<string>());
+    // The worker executes tool_call steps PLUS any analysis/composite step that a
+    // tool_call step (transitively) depends on — those must run inline so the
+    // tool's {{from_step:sN}} reference resolves. Terminal analysis/composite
+    // steps (nothing downstream consumes them) are left for SOLVE.
+    const toolSteps = plan.steps.filter((s) => s.type === "tool_call");
+    const neededNonTool = new Set<string>();
+    const visit = (stepId: string): void => {
+      const s = byId.get(stepId);
+      if (!s) return;
+      for (const dep of extractDependencies(s)) {
+        const depStep = byId.get(dep);
+        if (!depStep || depStep.type === "tool_call") continue;
+        if (neededNonTool.has(dep)) continue;
+        neededNonTool.add(dep); // an analysis/composite ancestor of a tool step
+        visit(dep); // walk the chain (analysis → analysis → tool)
+      }
+    };
+    for (const t of toolSteps) visit(t.id);
+
+    const executableSteps = plan.steps.filter(
+      (s) => s.type === "tool_call" || neededNonTool.has(s.id),
+    );
 
     // Accumulator of executed steps, keyed for dependency lookup. Both
     // completed AND failed steps go in so dependents can detect a failed dep.
-    const byId = new Map<string, PlanStep>();
+    // Reset byId to only carry EXECUTED results (it was seeded above just for
+    // the dependency walk).
+    byId.clear();
     const ordered: PlanStep[] = [];
+
+    // Idempotency: steps that arrive already completed (with a result) are
+    // pre-seeded, NOT re-executed. This makes a worker re-run after a patch
+    // retry safe — preserved successful steps are never dispatched a second time
+    // (critical for mutating tools), and their results stay resolvable for
+    // downstream {{from_step:sN}} references. computeWaves already excludes
+    // completed steps from its waves and honours the completedIds set for
+    // dependency satisfaction — we just feed it the preserved IDs.
+    const preCompletedIds = new Set<string>();
+    for (const step of executableSteps) {
+      if (step.status === "completed" && step.result !== undefined) {
+        byId.set(step.id, step);
+        ordered.push(step);
+        preCompletedIds.add(step.id);
+      }
+    }
+
+    // Wave grouping over the executable DAG. computeWaves only considers
+    // dependency resolution, not parallel-safety — we split each wave below.
+    const waves = computeWaves(executableSteps, preCompletedIds);
 
     for (const wave of waves) {
       // Snapshot of all steps completed in PRIOR waves — what this wave's
@@ -296,24 +449,20 @@ export function executeBlueprintWorker(
         }
       }
 
-      // Split this wave: parallel-safe tools fan out; parallel-unsafe
-      // (write/delete/create/update/meta) run sequentially.
-      const parallelSafe = dispatchable.filter((s) =>
-        isParallelBatchSafeTool(s.toolName ?? ""),
+      const mkExec = (step: PlanStep) =>
+        step.type === "tool_call"
+          ? executeBlueprintStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length)
+          : executeAnalysisStep(step, step.seq - 1, plan, priorCompleted, ctx, services, executableSteps.length);
+
+      // Split this wave: parallel-safe tools fan out; everything else
+      // (parallel-unsafe tools + analysis LLM calls) runs sequentially. A
+      // non-tool step has no toolName, so it falls to the sequential bucket.
+      const parallelSafe = dispatchable.filter(
+        (s) => s.type === "tool_call" && isParallelBatchSafeTool(s.toolName ?? ""),
       );
       const sequential = dispatchable.filter(
-        (s) => !isParallelBatchSafeTool(s.toolName ?? ""),
+        (s) => !(s.type === "tool_call" && isParallelBatchSafeTool(s.toolName ?? "")),
       );
-
-      const mkExec = (step: PlanStep) =>
-        executeBlueprintStep(
-          step,
-          step.seq - 1,
-          plan,
-          priorCompleted,
-          ctx,
-          services,
-        );
 
       // Parallel-safe bucket — concurrency-capped fan-out.
       const safeResults =
@@ -335,10 +484,10 @@ export function executeBlueprintWorker(
       }
     }
 
-    // Re-order results to match the plan's original tool_call ordering so
-    // downstream solve sees steps in plan order, not wave/bucket order.
+    // Re-order results to match the plan's original step ordering so downstream
+    // solve sees steps in plan order, not wave/bucket order.
     const orderedById = new Map(ordered.map((s) => [s.id, s]));
-    const steps = toolSteps.map((s) => orderedById.get(s.id) ?? s);
+    const steps = executableSteps.map((s) => orderedById.get(s.id) ?? s);
 
     const allSucceeded =
       steps.length > 0 && steps.every((s) => s.status === "completed");

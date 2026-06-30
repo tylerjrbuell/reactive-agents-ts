@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { stripDeadStorageHints } from "../../src/strategies/plan-execute/output-utils.js";
+import { stripDeadStorageHints } from "../../src/strategies/planning/plan-text.js";
 
 /**
  * Dead-hint strip (#2 honesty fix, 2026-05-31).

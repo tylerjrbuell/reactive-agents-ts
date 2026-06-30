@@ -5,7 +5,7 @@ import {
   buildStepExecutionPrompt,
   buildReflectionPrompt,
   buildAugmentPrompt,
-} from "../../src/strategies/plan-prompts.js";
+} from "../../src/strategies/planning/plan-prompts.js";
 import type { PlanStep } from "../../src/types/plan.js";
 
 describe("Plan prompts", () => {
@@ -26,6 +26,75 @@ describe("Plan prompts", () => {
     expect(prompt).toContain('"type"');
     expect(prompt).toContain("tool_call");
     expect(prompt).toContain("JSON");
+  });
+
+  it("buildPlanGenerationPrompt renders tool description and param descriptions when provided", () => {
+    const prompt = buildPlanGenerationPrompt({
+      goal: "Fetch the last 15 commits and list them in a table",
+      tools: [
+        {
+          name: "gh-cli",
+          signature: "(command)",
+          description:
+            "Run any GitHub CLI (gh) command. Pass the subcommand + flags as command, e.g. pr list --state open.",
+          params: [
+            {
+              name: "command",
+              type: "string",
+              required: true,
+              description:
+                'gh subcommand + flags, e.g. "pr list --state open --json number,title,state".',
+            },
+          ],
+        },
+      ],
+      pastPatterns: [],
+      modelTier: "local",
+    });
+
+    // Tool-level description must reach the planner so it knows what gh-cli does.
+    expect(prompt).toContain("Run any GitHub CLI");
+    // Param-level description (the example invocation) must reach the planner so
+    // a weak model copies a valid command shape instead of inventing flags.
+    expect(prompt).toContain("pr list --state open --json");
+    // Param name + type still visible.
+    expect(prompt).toContain("command");
+    expect(prompt).toContain("string");
+  });
+
+  it("buildPlanGenerationPrompt still renders bare signature when no description/params", () => {
+    const prompt = buildPlanGenerationPrompt({
+      goal: "Do a thing",
+      tools: [{ name: "web-search", signature: "(query)" }],
+      pastPatterns: [],
+      modelTier: "mid",
+    });
+
+    expect(prompt).toContain("web-search");
+    expect(prompt).toContain("query");
+  });
+
+  it("buildPlanGenerationPrompt few-shot example references a REAL available tool, not a fictional one", () => {
+    const prompt = buildPlanGenerationPrompt({
+      goal: "Fetch the last 15 commits and list them in a table",
+      tools: [
+        {
+          name: "gh-cli",
+          signature: "(command)",
+          description: "Run any GitHub CLI command.",
+          params: [{ name: "command", type: "string", required: true }],
+        },
+      ],
+      pastPatterns: [],
+      modelTier: "local",
+    });
+
+    // The example must anchor on the actual tool the planner can call...
+    expect(prompt).toContain('"toolName": "gh-cli"');
+    // ...and must NOT teach the fictional tool/arg shape that a weak model
+    // cargo-cults (the owner/repo/perPage leak that broke gh-cli).
+    expect(prompt).not.toContain("github/list_commits");
+    expect(prompt).not.toContain("perPage");
   });
 
   it("buildPlanGenerationPrompt includes past patterns when available", () => {
@@ -53,6 +122,34 @@ describe("Plan prompts", () => {
     expect(prompt).toContain("failed");
     expect(prompt).toContain("Empty response");
     expect(prompt).toContain("pending");
+  });
+
+  it("buildPatchPrompt includes available tools with descriptions so the recovery isn't tool-blind", () => {
+    const steps: PlanStep[] = [
+      { id: "s1", seq: 1, title: "Fetch", instruction: "Get data", type: "tool_call", toolName: "gh-cli", status: "failed", retries: 1, tokensUsed: 50, error: 'unknown command "commit"' },
+    ];
+    const prompt = buildPatchPrompt("Fetch commits", steps, [
+      {
+        name: "gh-cli",
+        signature: "(command)",
+        description: "Run any GitHub CLI command. Pass subcommand as command, e.g. api repos/o/r/commits.",
+        params: [{ name: "command", type: "string", required: true }],
+      },
+    ]);
+
+    expect(prompt).toContain("AVAILABLE TOOLS");
+    // The patch model must see the real tool + how to shape its args, so it
+    // doesn't invent a wrong tool name / arg envelope on the recovery attempt.
+    expect(prompt).toContain("gh-cli");
+    expect(prompt).toContain("api repos/o/r/commits");
+  });
+
+  it("buildPatchPrompt omits AVAILABLE TOOLS when none provided (backward compatible)", () => {
+    const steps: PlanStep[] = [
+      { id: "s1", seq: 1, title: "Fetch", instruction: "Get data", type: "tool_call", status: "failed", retries: 1, tokensUsed: 50, error: "boom" },
+    ];
+    const prompt = buildPatchPrompt("Fetch", steps);
+    expect(prompt).not.toContain("AVAILABLE TOOLS");
   });
 
   it("buildStepExecutionPrompt includes overall goal and step context", () => {
