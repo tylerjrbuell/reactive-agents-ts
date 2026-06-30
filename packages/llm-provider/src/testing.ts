@@ -17,6 +17,33 @@ export interface ToolCallSpec {
   id?: string; // auto-generated "call-<matchedIndex>-<i>" if omitted
 }
 
+/**
+ * Provider-specific output quirks the deterministic provider can simulate, so a
+ * single behavioral contract can be replayed across the shapes real providers
+ * actually emit (which the clean happy-path mock never exercises). The harness
+ * (resolver + healing) must normalize each one.
+ *
+ * - `"stringified-args"`: tool-call arguments arrive as a JSON STRING instead of
+ *   an object (some Ollama models; OpenAI before its adapter JSON.parses).
+ * - `"snake_case-name"`: tool name uses `_` separators (`web_search`) instead of
+ *   the registered `web-search` — must be healed.
+ * - `"think-leak"`: a `<think>…</think>` reasoning block leaks into text content
+ *   (qwen3 / reasoning models) — must be stripped from the final answer.
+ */
+export type ProviderQuirk = "stringified-args" | "snake_case-name" | "think-leak";
+
+function quirkName(name: string, quirk?: ProviderQuirk): string {
+  return quirk === "snake_case-name" ? name.replace(/-/g, "_") : name;
+}
+
+function quirkInput(args: Record<string, unknown>, quirk?: ProviderQuirk): unknown {
+  return quirk === "stringified-args" ? JSON.stringify(args) : args;
+}
+
+function quirkText(text: string, quirk?: ProviderQuirk): string {
+  return quirk === "think-leak" ? `<think>\nLet me reason about this step by step.\n</think>\n${text}` : text;
+}
+
 export type TestTurn =
   | {
       text: string;
@@ -81,11 +108,12 @@ function resolveTurn(
 function buildToolCalls(
   specs: ToolCallSpec[],
   matchedIndex: number,
+  quirk?: ProviderQuirk,
 ): Array<{ id: string; name: string; input: unknown }> {
   return specs.map((spec, i) => ({
     id: spec.id ?? `call-${matchedIndex}-${i}`,
-    name: spec.name,
-    input: spec.args,
+    name: quirkName(spec.name, quirk),
+    input: quirkInput(spec.args, quirk),
   }));
 }
 
@@ -109,6 +137,7 @@ function buildToolCalls(
  */
 export const TestLLMService = (
   scenario: TestTurn[],
+  quirk?: ProviderQuirk,
 ): typeof LLMService.Service => {
   // Mutable cursor — safe because each build() creates a fresh Layer instance
   const callIndex = { value: 0 };
@@ -134,7 +163,7 @@ export const TestLLMService = (
             stopReason: "tool_use" as const,
             usage: fakeUsage(searchText.length, 0),
             model: "test-model",
-            toolCalls: buildToolCalls([turn.toolCall], matchedIndex),
+            toolCalls: buildToolCalls([turn.toolCall], matchedIndex, quirk),
           } satisfies CompletionResponse;
         }
 
@@ -144,11 +173,11 @@ export const TestLLMService = (
             stopReason: "tool_use" as const,
             usage: fakeUsage(searchText.length, 0),
             model: "test-model",
-            toolCalls: buildToolCalls(turn.toolCalls, matchedIndex),
+            toolCalls: buildToolCalls(turn.toolCalls, matchedIndex, quirk),
           } satisfies CompletionResponse;
         }
 
-        const content = "json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "";
+        const content = quirkText("json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "", quirk);
         const logprobs =
           ("text" in turn || "json" in turn) && turn.logprobs
             ? turn.logprobs
@@ -196,7 +225,7 @@ export const TestLLMService = (
             {
               type: "tool_use_start" as const,
               id: spec.id ?? `call-${matchedIndex}-${i}`,
-              name: spec.name,
+              name: quirkName(spec.name, quirk),
             },
             {
               type: "tool_use_delta" as const,
@@ -214,7 +243,7 @@ export const TestLLMService = (
         );
       }
 
-      const content = "json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "";
+      const content = quirkText("json" in turn ? JSON.stringify(turn.json) : "text" in turn ? turn.text : "", quirk);
       const inputTokens = Math.ceil(searchText.length / 4);
       const outputTokens = Math.ceil(content.length / 4);
       const streamLogprobs =
@@ -316,5 +345,7 @@ export const TestLLMService = (
  * Create a test Layer for LLMService with a deterministic turn scenario.
  * Turns are consumed sequentially; the last turn repeats when exhausted.
  */
-export const TestLLMServiceLayer = (scenario: TestTurn[] = [{ text: "" }]) =>
-  Layer.succeed(LLMService, LLMService.of(TestLLMService(scenario)));
+export const TestLLMServiceLayer = (
+  scenario: TestTurn[] = [{ text: "" }],
+  quirk?: ProviderQuirk,
+) => Layer.succeed(LLMService, LLMService.of(TestLLMService(scenario, quirk)));
