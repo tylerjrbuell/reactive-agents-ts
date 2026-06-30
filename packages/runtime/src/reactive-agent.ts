@@ -73,6 +73,14 @@ export const withHistoryBlock = (input: string, history?: readonly ChatMessage[]
     if (!block) return input
     return `${block}\n\n--- Current message ---\n${input}`
 }
+/** Project the run-level abstention surface from a kernel result. */
+export function projectAbstention(
+    r: { terminatedBy?: TerminatedBy; abstention?: { reason: string; missing: readonly string[] } },
+): { reason: string; missing: readonly string[] } | undefined {
+    if (r.terminatedBy !== "abstained" || r.abstention === undefined) return undefined
+    return { reason: r.abstention.reason, missing: r.abstention.missing }
+}
+
 import type { RunHandle } from './run-controller.js'
 import {
     AgentSession,
@@ -1171,6 +1179,9 @@ export class ReactiveAgent<TOut = unknown> {
                         ? { terminatedBy: r.terminatedBy }
                         : {}),
                     goalAchieved: deriveGoalAchieved(r.terminatedBy),
+                    ...(projectAbstention(r) !== undefined
+                        ? { abstention: projectAbstention(r) }
+                        : {}),
                     // Durable HITL (Phase D): when the run paused for human approval,
                     // surface status + the pending action (with the durable runId so
                     // callers can approveRun/denyRun it). durableRunId is threaded by
