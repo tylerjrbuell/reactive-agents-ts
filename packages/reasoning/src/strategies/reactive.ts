@@ -324,6 +324,12 @@ export const executeReactive = (
         ...(state.meta.awaitingApprovalFor !== undefined
           ? { awaitingApprovalFor: state.meta.awaitingApprovalFor }
           : {}),
+        // O3 C1: forward the run-level abstention surface so the engine can
+        // populate AgentResult.abstention. Present only when terminatedBy ===
+        // "abstained" (harness-forced or model-initiated via the abstain tool).
+        ...(state.meta.abstention !== undefined
+          ? { abstention: state.meta.abstention }
+          : {}),
         ...(state.meta.lastDialectObserved !== undefined
           ? { lastDialectObserved: state.meta.lastDialectObserved }
           : {}),

@@ -216,7 +216,7 @@ export type ExecutionReasoningResult = {
   status: string;
   strategy?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
-  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown } };
+  metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }; /** O3 C1: run-level abstention surface — present iff terminatedBy === "abstained". */ abstention?: { reason: string; missing: readonly string[] } };
 };
 
 export function normalizeReasoningResult(
@@ -260,6 +260,13 @@ export function normalizeReasoningResult(
       awaitingApprovalFor:
         typeof md.awaitingApprovalFor === "object" && md.awaitingApprovalFor !== null
           ? (md.awaitingApprovalFor as { gateId: string; toolName: string; args: unknown })
+          : undefined,
+      // O3 C1: preserve the run-level abstention surface through normalization.
+      // Without this, the whitelist-style rebuild above strips abstention before
+      // the engine can forward it onto AgentResult.
+      abstention:
+        typeof md.abstention === "object" && md.abstention !== null
+          ? (md.abstention as { reason: string; missing: readonly string[] })
           : undefined,
     },
   };

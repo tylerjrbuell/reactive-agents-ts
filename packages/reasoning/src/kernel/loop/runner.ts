@@ -534,6 +534,12 @@ export function runKernel(
     // force an `abstained` terminal here — BEFORE finalization blocks — instead
     // of grinding to `max_iterations` or letting fabrication through.
     //
+    // Guard: skip entirely when the state is already abstained (model-initiated
+    // abstention via the abstain meta-tool, or a prior in-loop legitimacy-gate
+    // abstention). Overwriting would replace the model's specific {reason, missing}
+    // with the generic harness-forced message — the earned signal must be preserved.
+    // (O3 I2 fix: guard against forced re-terminate clobbering model abstention.)
+    //
     // Input derivation (conservative fallbacks documented inline):
     //   requiredToolUnavailable: a declared required tool absent from the registered
     //     schema set. False when allKnownTools is empty (no schema provided = unknown).
@@ -550,7 +556,7 @@ export function runKernel(
     // output are set via the canonical path. The post-condition gate in terminate()
     // passes "abstained" through (added in Task 6) — an abstained run cannot
     // honestly meet post-conditions when grounding was structurally impossible.
-    {
+    if (state.meta.terminatedBy !== "abstained") {
       const allKnownToolsForAbstain = (
         currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []
       ).map((t) => t.name);
