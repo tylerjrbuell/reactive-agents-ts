@@ -1,5 +1,10 @@
 import { Schema, type Effect } from "effect";
 
+// ─── Provider ───
+
+export const Provider = Schema.Literal("anthropic", "openai", "gemini", "ollama", "litellm");
+export type Provider = typeof Provider.Type;
+
 // ─── Model Tier ───
 
 export const ModelTier = Schema.Literal("haiku", "sonnet", "opus");

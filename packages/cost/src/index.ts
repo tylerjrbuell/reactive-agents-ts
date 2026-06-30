@@ -10,6 +10,7 @@ export type {
 } from "./types.js";
 export {
   ModelTier,
+  Provider,
   ModelCostConfigSchema,
   CostEntrySchema,
   BudgetLimitsSchema,

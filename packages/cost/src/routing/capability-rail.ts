@@ -1,7 +1,6 @@
 import { resolveCapability } from "@reactive-agents/llm-provider";
-import type { Provider } from "@reactive-agents/core";
 import { getModelCostConfig, TIER_ORDER } from "./complexity-router.js";
-import type { ModelTier } from "../types.js";
+import type { ModelTier, Provider } from "../types.js";
 
 /**
  * Cheapest CAPABLE model for a provider: starting at `startTier`, escalate the
