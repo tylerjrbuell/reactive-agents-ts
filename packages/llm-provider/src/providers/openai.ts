@@ -23,6 +23,8 @@ import { retryPolicy } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
+import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
+import { resolveCapability } from "../capability-resolver.js";
 
 // ─── OpenAI Message Conversion ───
 
@@ -244,9 +246,20 @@ export const OpenAIProviderLive = Layer.effect(
             messages.unshift({ role: "system", content: request.systemPrompt });
           }
 
+          const cap = resolveCapability("openai", model);
+          const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const thinkEnabled = resolveThinkingEnabled("openai", model, config.thinking, cap.supportsThinkingMode);
+          const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: thinkEnabled,
+          });
+          const tokenField = reserve !== undefined
+            ? { max_completion_tokens: answerBudget + reserve, reasoning_effort: config.thinkingOptions?.effort ?? "medium" }
+            : { max_tokens: answerBudget };
+
           const requestBody: Record<string, unknown> = {
                 model,
-                max_tokens: request.maxTokens ?? config.defaultMaxTokens,
+                ...tokenField,
                 temperature: request.temperature ?? config.defaultTemperature,
                 messages,
                 stop: request.stopSequences
@@ -330,13 +343,23 @@ export const OpenAIProviderLive = Layer.effect(
           const useAdapterNormalization =
             typeof streamAdapter.parseToolCalls === "function";
 
+          const streamCap = resolveCapability("openai", model);
+          const streamAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const streamThinkEnabled = resolveThinkingEnabled("openai", model, config.thinking, streamCap.supportsThinkingMode);
+          const streamReserve = reserveThinkingBudget(streamAnswerBudget, streamCap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: streamThinkEnabled,
+          });
+          const streamTokenField = streamReserve !== undefined
+            ? { max_completion_tokens: streamAnswerBudget + streamReserve, reasoning_effort: config.thinkingOptions?.effort ?? "medium" }
+            : { max_tokens: streamAnswerBudget };
+
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
               try {
                 const stream = (await client.chat.completions.create({
                   model,
-                  max_tokens:
-                    request.maxTokens ?? config.defaultMaxTokens,
+                  ...streamTokenField,
                   temperature:
                     request.temperature ?? config.defaultTemperature,
                   messages: (() => {
@@ -540,9 +563,20 @@ export const OpenAIProviderLive = Layer.effect(
 
           // ── Native JSON Schema mode (gpt-4o-2024-08-06+, o-series, gpt-4.1) ──
           // Use response_format with json_schema for strict enforcement.
+          const structuredCap = resolveCapability("openai", model);
+          const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const structuredThinkEnabled = resolveThinkingEnabled("openai", model, config.thinking, structuredCap.supportsThinkingMode);
+          const structuredReserve = reserveThinkingBudget(structuredAnswerBudget, structuredCap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: structuredThinkEnabled,
+          });
+          const structuredTokenField = structuredReserve !== undefined
+            ? { max_completion_tokens: structuredAnswerBudget + structuredReserve, reasoning_effort: config.thinkingOptions?.effort ?? "medium" }
+            : { max_tokens: structuredAnswerBudget };
+
           const requestBody: Record<string, unknown> = {
             model,
-            max_tokens: request.maxTokens ?? config.defaultMaxTokens,
+            ...structuredTokenField,
             temperature: request.temperature ?? config.defaultTemperature,
             response_format: {
               type: "json_schema",

@@ -312,6 +312,23 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // o5-reasoning: OpenAI reasoning model with native reasoning_effort + max_completion_tokens API.
+  // Uses max_completion_tokens (not max_tokens) and reasoning_effort when thinking is enabled.
+  "openai/o5-reasoning": {
+    provider: "openai",
+    model: "o5-reasoning",
+    tier: "frontier",
+    maxContextTokens: 400_000,
+    recommendedNumCtx: 400_000,
+    maxOutputTokens: 128_000,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: true,
+    supportsVision: false,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
 
   // ── Gemini ───────────────────────────────────────────────────────────────
   // Gemini 2.0 Flash/Pro were shut down 2026-06-01. Current stable models per
