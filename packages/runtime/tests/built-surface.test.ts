@@ -56,7 +56,8 @@ describe("built dist public surface", () => {
       ReactiveAgents: { create: () => Record<string, unknown> };
     };
     BuiltReactiveAgents = mod.ReactiveAgents;
-  });
+  }, 120_000); // explicit hook timeout: `bun run build` (tsup ESM+DTS) exceeds the
+  // 5s default under CI resource limits and would SIGTERM without this.
 
   it("exports ReactiveAgents.create() from the built dist", () => {
     expect(typeof BuiltReactiveAgents?.create).toBe("function");
