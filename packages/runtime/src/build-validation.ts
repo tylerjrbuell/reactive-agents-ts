@@ -26,6 +26,54 @@ const PROVIDER_MODEL_PREFIXES: Record<string, string[]> = {
 
 const NO_KEY_PROVIDERS = new Set(["ollama", "test"]);
 
+/**
+ * The SINGLE build-time read path for a provider's API key. Both the
+ * validation gate and `logBuildInfo` read through this so the warning/error
+ * a user sees and the value the build actually acts on can never disagree
+ * (the 2026-07-01 split-brain: the provider layer captured the key at
+ * module-import time via `llmConfigFromEnv`, while validation read
+ * `process.env` at build time — deleting a key produced BOTH a "(missing)"
+ * warning AND a successful paid call). Reading `process.env` here at build
+ * time, combined with `build()` failing fast on a missing key, closes that
+ * gap: a removed key is now seen consistently and no call is issued.
+ */
+export function readProviderApiKey(provider: ProviderName): string | undefined {
+  const keyName = PROVIDER_API_KEY_MAP[provider];
+  return keyName ? process.env[keyName] : undefined;
+}
+
+/** The env var name that supplies this provider's key, or `undefined` for keyless providers. */
+export function providerApiKeyName(provider: ProviderName): string | undefined {
+  if (NO_KEY_PROVIDERS.has(provider)) return undefined;
+  return PROVIDER_API_KEY_MAP[provider];
+}
+
+/**
+ * Whether this provider needs an API key to run. `ollama`/`test` are keyless
+ * (exempt from fail-fast); `custom` has no mapped key so it is also exempt.
+ */
+export function providerRequiresApiKey(provider: ProviderName): boolean {
+  return providerApiKeyName(provider) !== undefined;
+}
+
+/**
+ * Typed error thrown by `build()` when the configuration cannot possibly run
+ * (missing API key, unknown-for-provider model). Carries the individual
+ * failure messages so callers can inspect `error.failures` programmatically
+ * instead of parsing the joined `message`. Opt out with `.withLazyValidation()`.
+ */
+export class BuildValidationError extends Error {
+  readonly _tag = "BuildValidationError" as const;
+  readonly failures: readonly string[];
+  constructor(failures: readonly string[]) {
+    super(
+      `Build validation failed:\n${failures.map((e) => `  • ${e}`).join("\n")}`,
+    );
+    this.name = "BuildValidationError";
+    this.failures = failures;
+  }
+}
+
 export interface BuildValidationResult {
   warnings: string[];
   errors: string[];
@@ -155,6 +203,7 @@ export function validateBuild(
   model: string | undefined,
   defaultModel: string,
   strict: boolean,
+  lazy: boolean,
   taskContract?: TaskContractValidationInput,
 ): BuildValidationResult {
   const warnings: string[] = [];
@@ -162,14 +211,23 @@ export function validateBuild(
   const resolvedModel = model ?? defaultModel;
   let resolvedCapability: Capability | undefined;
 
-  if (!NO_KEY_PROVIDERS.has(provider)) {
-    const keyName = PROVIDER_API_KEY_MAP[provider];
-    if (keyName && !process.env[keyName]) {
-      const msg = `Missing ${keyName} for provider "${provider}". Set it in your environment or .env file.`;
-      if (strict) {
-        errors.push(msg);
-      } else {
+  // `lazy` (via `.withLazyValidation()` or REACTIVE_AGENTS_LAZY_VALIDATION)
+  // demotes the two fail-fast gates below — missing API key and
+  // unknown-for-provider model — back to warnings, restoring the pre-2026-07
+  // "warn then fail later" behavior for environments that want it. Keyless
+  // providers (ollama/test/custom) are always exempt from the key gate.
+  if (providerRequiresApiKey(provider)) {
+    const keyName = providerApiKeyName(provider)!;
+    if (!readProviderApiKey(provider)) {
+      const msg =
+        `Missing ${keyName} for provider "${provider}" — the agent cannot run without it.\n` +
+        `    Fix: set ${keyName} in your environment or .env file, ` +
+        `switch providers (e.g. .withProvider("ollama") for local models or .withProvider("test") for tests), ` +
+        `or call .withLazyValidation() to defer this check to run() time.`;
+      if (lazy) {
         warnings.push(msg);
+      } else {
+        errors.push(msg);
       }
     }
   }
@@ -180,11 +238,17 @@ export function validateBuild(
       const modelLower = model.toLowerCase();
       const matches = prefixes.some((p) => modelLower.startsWith(p));
       if (!matches) {
-        warnings.push(
-          `Model "${model}" may not be compatible with provider "${provider}". ` +
-            `Expected model prefix: ${prefixes.join(", ")}. ` +
-            `The provider's default model will be used if this model is unavailable.`,
-        );
+        const msg =
+          `Model "${model}" is not a recognized model for provider "${provider}" ` +
+          `(expected a model starting with: ${prefixes.join(", ")}).\n` +
+          `    Fix: use a ${provider} model (e.g. one starting with "${prefixes[0]}"), ` +
+          `switch providers with .withProvider(...), ` +
+          `or call .withLazyValidation() to skip this check.`;
+        if (lazy) {
+          warnings.push(msg);
+        } else {
+          errors.push(msg);
+        }
       }
     }
   }
@@ -261,11 +325,10 @@ export async function validateProviderConnection(
 }
 
 export function logBuildInfo(provider: ProviderName, resolvedModel: string): void {
-  const keyName = PROVIDER_API_KEY_MAP[provider];
-  const hasKey = keyName ? !!process.env[keyName] : false;
+  const key = readProviderApiKey(provider);
   const keyDisplay =
-    hasKey && keyName
-      ? `${process.env[keyName]!.slice(0, 8)}...***`
+    key
+      ? `${key.slice(0, 8)}...***`
       : NO_KEY_PROVIDERS.has(provider)
         ? "(not required)"
         : "(missing)";

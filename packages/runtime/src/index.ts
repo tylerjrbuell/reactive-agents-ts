@@ -71,6 +71,14 @@ export {
   deriveGoalAchieved,
 } from "./builder.js";
 export { ReactiveAgent } from "./reactive-agent.js";
+
+// ─── Build validation (fail-fast config errors) ───
+export {
+  BuildValidationError,
+  readProviderApiKey,
+  providerApiKeyName,
+  providerRequiresApiKey,
+} from "./build-validation.js";
 export type {
   AgentResult,
   AgentResultMetadata,

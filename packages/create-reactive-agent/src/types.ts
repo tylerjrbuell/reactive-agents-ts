@@ -2,7 +2,13 @@ export type Provider = "anthropic" | "openai" | "google" | "ollama";
 
 export type PackageManager = "bun" | "npm" | "pnpm" | "yarn";
 
-export type TemplateName = "minimal" | "with-tools" | "streaming";
+export type TemplateName =
+  | "minimal"
+  | "with-tools"
+  | "streaming"
+  | "with-structured-output"
+  | "with-approval-gates"
+  | "with-memory";
 
 export interface ScaffoldOptions {
   readonly dir: string;
@@ -22,6 +28,8 @@ export interface Template {
   readonly name: TemplateName;
   readonly description: string;
   readonly render: (opts: ScaffoldOptions) => readonly TemplateFile[];
+  /** Extra npm dependencies this template needs beyond `reactive-agents`, merged into the generated package.json. */
+  readonly extraDependencies?: Readonly<Record<string, string>>;
 }
 
 export interface ScaffoldResult {

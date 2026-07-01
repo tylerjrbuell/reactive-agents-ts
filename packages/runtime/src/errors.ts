@@ -385,6 +385,45 @@ export function unwrapError(error: unknown): Error {
   return new Error(message);
 }
 
+/** Collapse a possibly multi-line / oversized message to a single concise line. */
+function firstMeaningfulLine(msg: string): string {
+  const line = msg
+    .split("\n")
+    .map((s) => s.trim())
+    .find((s) => s.length > 0);
+  const chosen = line ?? msg.trim();
+  return chosen.length > 300 ? `${chosen.slice(0, 297)}...` : chosen;
+}
+
+/**
+ * Map an already-unwrapped error to the value thrown at the `agent.run()`
+ * boundary. By default this is a plain `Error` with a single-line message and
+ * NO internal runtime stack on the console — the full original is preserved on
+ * `.cause` (with its own stack trimmed to one line so a bare
+ * `console.error(err)` stays concise). Set `RA_DEBUG_ERRORS=1` (or
+ * `REACTIVE_AGENTS_DEBUG=1`) to bypass this and surface the full internal stack.
+ *
+ * Fixes the 2026-07-01 finding where a model-typo 404 dumped duplicated
+ * provider JSON plus a stack straight through `run()`.
+ */
+export function toRunBoundaryError(unwrapped: Error): Error {
+  const debug =
+    process.env.RA_DEBUG_ERRORS === "1" ||
+    process.env.REACTIVE_AGENTS_DEBUG === "1" ||
+    process.env.REACTIVE_AGENTS_DEBUG === "true";
+  if (debug) return unwrapped;
+
+  const oneLine = firstMeaningfulLine(unwrapped.message);
+  const clean = new Error(oneLine);
+  // Preserve the full error for programmatic inspection, but trim its stack to
+  // a single line so the runtime's internal frames don't reach the console
+  // unless debugging is explicitly requested.
+  unwrapped.stack = `${unwrapped.name || "Error"}: ${oneLine}`;
+  (clean as Error & { cause?: unknown }).cause = unwrapped;
+  clean.stack = `${clean.name}: ${clean.message}`;
+  return clean;
+}
+
 function isFiberFailure(error: unknown): boolean {
   if (error == null || typeof error !== "object") return false;
   // Effect marks FiberFailure objects with this symbol key

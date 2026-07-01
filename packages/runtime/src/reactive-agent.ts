@@ -30,7 +30,7 @@ import {
 } from './agent/gateway-runner.js'
 import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
-import { unwrapError } from './errors.js'
+import { unwrapError, toRunBoundaryError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
@@ -776,6 +776,9 @@ export class ReactiveAgent<TOut = unknown> {
             const unwrapped = unwrapError(e)
             if (this._errorHandler) {
                 try {
+                    // The error handler receives the full unwrapped error for
+                    // programmatic inspection; only the console-facing throw is
+                    // slimmed to one line (stack behind RA_DEBUG_ERRORS).
                     this._errorHandler(unwrapped as RuntimeErrors | Error, {
                         taskId: 'unknown',
                         phase: 'execution',
@@ -785,7 +788,7 @@ export class ReactiveAgent<TOut = unknown> {
                     // Handler exceptions are silently ignored — never replace the original error
                 }
             }
-            throw unwrapped
+            throw toRunBoundaryError(unwrapped)
         }) as Promise<AgentResult & { object?: TOut }>
     }
 

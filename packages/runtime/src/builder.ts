@@ -181,12 +181,96 @@ export { ReactiveAgent } from './reactive-agent.js'
  * Entry point for the Reactive Agents builder API.
  *
  */
+/**
+ * Options for {@link ReactiveAgents.quick}. Every field falls back to an
+ * environment variable and then a sensible default, so `quick()` with no
+ * arguments works out of the box.
+ */
+export interface QuickOptions {
+    /** Provider override. Default: `REACTIVE_AGENTS_PROVIDER`, else the first of anthropic/openai/gemini whose key is present, else `ollama`. */
+    readonly provider?: ProviderName
+    /** Model override. Default: `REACTIVE_AGENTS_MODEL`, else the provider's default model. */
+    readonly model?: string
+    /** Kernel iteration cap. Default: `REACTIVE_AGENTS_MAX_ITERATIONS`, else `10`. */
+    readonly maxIterations?: number
+}
+
+const QUICK_KEYED_PROVIDERS: readonly ProviderName[] = [
+    'anthropic',
+    'openai',
+    'gemini',
+]
+
+/**
+ * Resolve a ready-to-build builder from the environment for {@link ReactiveAgents.quick}.
+ * Provider precedence: explicit option → `REACTIVE_AGENTS_PROVIDER` → first
+ * keyed provider with a key present → `ollama` (keyless local fallback).
+ */
+async function resolveQuickBuilder(
+    options?: QuickOptions,
+): Promise<ReactiveAgentBuilder> {
+    const { readProviderApiKey } = await import('./build-validation.js')
+    const envProvider = process.env.REACTIVE_AGENTS_PROVIDER as
+        | ProviderName
+        | undefined
+    const provider: ProviderName =
+        options?.provider ??
+        envProvider ??
+        QUICK_KEYED_PROVIDERS.find((p) => readProviderApiKey(p)) ??
+        'ollama'
+
+    let model = options?.model ?? process.env.REACTIVE_AGENTS_MODEL
+    if (!model) {
+        try {
+            const { getProviderDefaultModel } = await import(
+                '@reactive-agents/llm-provider'
+            )
+            model = getProviderDefaultModel(provider) ?? undefined
+        } catch {
+            // Provider defaults unavailable — leave model unset so the provider
+            // layer resolves its own baked-in default.
+        }
+    }
+
+    const maxIterations =
+        options?.maxIterations ??
+        (process.env.REACTIVE_AGENTS_MAX_ITERATIONS
+            ? Number(process.env.REACTIVE_AGENTS_MAX_ITERATIONS)
+            : 10)
+
+    let builder = new ReactiveAgentBuilder()
+        .withProvider(provider)
+        .withMaxIterations(maxIterations)
+    if (model) builder = builder.withModel(model)
+    return builder
+}
+
 export const ReactiveAgents = {
     /**
      * Create a new agent builder with defaults.
      * All builder methods are optional; no configuration is required at creation time.
      */
     create: (): ReactiveAgentBuilder => new ReactiveAgentBuilder(),
+    /**
+     * Two-line first-touch entry point: resolve provider + model +
+     * maxIterations from the environment (and sensible defaults), then build a
+     * ready-to-run agent.
+     *
+     * ```ts
+     * const agent = await ReactiveAgents.quick()
+     * const result = await agent.run('Say hello')
+     * ```
+     *
+     * Provider is picked from `REACTIVE_AGENTS_PROVIDER`, else the first of
+     * anthropic/openai/gemini with a key in the environment, else `ollama`.
+     * Override any field via {@link QuickOptions}. Because `build()` fails fast,
+     * a misconfigured environment surfaces a typed error here rather than a raw
+     * provider 401/404 at run() time.
+     */
+    quick: async (options?: QuickOptions): Promise<ReactiveAgent> => {
+        const builder = await resolveQuickBuilder(options)
+        return builder.build()
+    },
     /** Reconstruct a builder from an AgentConfig object. */
     fromConfig: reactiveAgentsFromConfig,
     /** Reconstruct a builder from a JSON string containing an AgentConfig. */
@@ -289,6 +373,17 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enableKillSwitch: boolean = false
     private _enableBehavioralContracts: boolean = false
     private _strictValidation: boolean = false
+    /**
+     * When true, `build()` demotes the two fail-fast gates (missing API key,
+     * unknown-for-provider model) back to warnings instead of throwing — the
+     * pre-2026-07 "warn then fail at run() time" behavior. Set by
+     * {@link withLazyValidation} or the `REACTIVE_AGENTS_LAZY_VALIDATION` env
+     * var. Additive: does not affect strict-only checks (capability source,
+     * task contract), which remain governed by {@link withStrictValidation}.
+     */
+    private _lazyValidation: boolean =
+        process.env.REACTIVE_AGENTS_LAZY_VALIDATION === '1' ||
+        process.env.REACTIVE_AGENTS_LAZY_VALIDATION === 'true'
     /**
      * Optional TaskContract declared via {@link withContract}. Enforced at
      * `build()` (build-time): required tools must be exposed, forbidden tools
@@ -1669,6 +1764,27 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
+     * Defer configuration validation to run() time (lazy mode).
+     *
+     * By default `build()` fails fast with a typed {@link BuildValidationError}
+     * when the config cannot possibly run — the chosen provider has no API key,
+     * or the model is unknown-for-provider — so you learn at build time instead
+     * of via a raw provider 401/404 mid-run. Call this to opt out and restore
+     * the "warn now, fail at run() time" behavior (useful when keys are injected
+     * after construction, or in tooling that constructs many configs eagerly).
+     *
+     * Additive — it does NOT weaken {@link withStrictValidation}; the
+     * capability-source and task-contract checks are unaffected. Keyless
+     * providers (`ollama`, `test`) are exempt from the key gate regardless.
+     *
+     * Equivalent env config: `REACTIVE_AGENTS_LAZY_VALIDATION=1`.
+     */
+    withLazyValidation(): this {
+        this._lazyValidation = true
+        return this
+    }
+
+    /**
      * Declare a {@link TaskContract} the agent must satisfy at build time.
      *
      * `build()` validates the contract against the statically-knowable
@@ -2079,8 +2195,12 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         }
 
         // Build-time validation
-        const { validateBuild, validateProviderConnection, logBuildInfo } =
-            await import('./build-validation.js')
+        const {
+            validateBuild,
+            validateProviderConnection,
+            logBuildInfo,
+            BuildValidationError,
+        } = await import('./build-validation.js')
         let defaultModel = 'unknown'
         try {
             const { getProviderDefaultModel } = await import(
@@ -2121,17 +2241,14 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             this._model,
             defaultModel,
             this._strictValidation,
+            this._lazyValidation,
             taskContractInput
         )
         for (const warning of validation.warnings) {
             console.warn(`⚠ ${warning}`)
         }
         if (validation.errors.length > 0) {
-            throw new Error(
-                `Build validation failed:\n${validation.errors
-                    .map((e) => `  • ${e}`)
-                    .join('\n')}`
-            )
+            throw new BuildValidationError(validation.errors)
         }
 
         // Pre-flight connection check for local providers
@@ -2184,19 +2301,24 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         const self = this
 
         return Effect.gen(function* () {
-            // Validate provider API key exists at build time (fast fail in strict mode, warn in non-strict)
-            // Non-strict warnings are already emitted by build() before calling buildEffect().
-            if (self._strictValidation) {
-                const keyMap: Record<string, string | undefined> = {
-                    anthropic: 'ANTHROPIC_API_KEY',
-                    openai: 'OPENAI_API_KEY',
-                    gemini: 'GOOGLE_API_KEY',
-                }
-                const requiredKey = keyMap[self._provider]
-                if (requiredKey && !process.env[requiredKey]) {
+            // Fail fast on a missing API key. `build()` already ran the full
+            // validateBuild gate before reaching here, but buildEffect() is also
+            // a public entry point, so it must independently refuse to construct
+            // a provider layer that cannot run. Routed through the single
+            // build-time read path so the check can never disagree with what the
+            // provider actually sees. `.withLazyValidation()` opts out.
+            if (!self._lazyValidation) {
+                const { providerRequiresApiKey, readProviderApiKey, providerApiKeyName } =
+                    yield* Effect.promise(() => import('./build-validation.js'))
+                if (
+                    providerRequiresApiKey(self._provider) &&
+                    !readProviderApiKey(self._provider)
+                ) {
+                    const keyName = providerApiKeyName(self._provider)
                     return yield* Effect.fail(
                         new Error(
-                            `Missing API key: ${requiredKey} is not set. Provider "${self._provider}" requires it.`
+                            `Missing ${keyName} for provider "${self._provider}" — the agent cannot run without it. ` +
+                                `Set ${keyName}, switch providers, or call .withLazyValidation() to defer this check.`
                         )
                     )
                 }

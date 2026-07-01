@@ -12,7 +12,7 @@
 import { describe, it, expect } from "bun:test";
 import { validateBuild } from "../src/build-validation.js";
 
-const FALLBACK_MODEL = "claude-sonnet-4-5"; // not in STATIC_CAPABILITIES → source=fallback
+const FALLBACK_MODEL = "claude-3-opus-20240229"; // not in current STATIC_CAPABILITIES → source=fallback
 const STATIC_MODEL = "claude-haiku-4-5"; // in STATIC_CAPABILITIES → source=static-table
 
 describe("build-validation capability-source gate", () => {
@@ -22,13 +22,14 @@ describe("build-validation capability-source gate", () => {
       FALLBACK_MODEL,
       "claude-haiku-4-5",
       false,
+      false,
     );
     expect(warnings.some((w) => /fallback/i.test(w) && w.includes(FALLBACK_MODEL))).toBe(true);
     expect(errors.some((e) => /fallback/i.test(e))).toBe(false);
   }, 15000);
 
   it("does NOT emit a capability-source warning for a static-table model", () => {
-    const { warnings } = validateBuild("anthropic", STATIC_MODEL, "claude-haiku-4-5", false);
+    const { warnings } = validateBuild("anthropic", STATIC_MODEL, "claude-haiku-4-5", false, false);
     expect(warnings.some((w) => /capability.*fallback|source.*fallback/i.test(w))).toBe(false);
   }, 15000);
 
@@ -38,6 +39,7 @@ describe("build-validation capability-source gate", () => {
       FALLBACK_MODEL,
       "claude-haiku-4-5",
       true,
+      false,
     );
     expect(errors.some((e) => /fallback/i.test(e) && e.includes(FALLBACK_MODEL))).toBe(true);
     expect(warnings.some((w) => /fallback/i.test(w) && w.includes(FALLBACK_MODEL))).toBe(false);

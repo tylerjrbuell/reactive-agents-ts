@@ -3,7 +3,10 @@ import { providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
 
 const RA_VERSION_FALLBACK = "^0.11.0";
 
-export function renderSharedFiles(opts: ScaffoldOptions): readonly TemplateFile[] {
+export function renderSharedFiles(
+  opts: ScaffoldOptions,
+  extraDependencies: Readonly<Record<string, string>> = {},
+): readonly TemplateFile[] {
   const raVersion = opts.version ?? RA_VERSION_FALLBACK;
 
   const packageJson = JSON.stringify(
@@ -18,6 +21,7 @@ export function renderSharedFiles(opts: ScaffoldOptions): readonly TemplateFile[
       },
       dependencies: {
         "reactive-agents": raVersion,
+        ...extraDependencies,
       },
       devDependencies: {
         typescript: "^5.7.0",

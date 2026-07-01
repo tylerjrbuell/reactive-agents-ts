@@ -56,11 +56,18 @@ describe("provider-config", () => {
 });
 
 describe("templates registry", () => {
-  test("lists three templates", () => {
+  test("lists all templates", () => {
     const list = listTemplates();
-    expect(list.length).toBe(3);
+    expect(list.length).toBe(6);
     const names = list.map((t) => t.name).sort();
-    expect(names).toEqual(["minimal", "streaming", "with-tools"]);
+    expect(names).toEqual([
+      "minimal",
+      "streaming",
+      "with-approval-gates",
+      "with-memory",
+      "with-structured-output",
+      "with-tools",
+    ]);
   });
 
   test("each template has a non-empty description", () => {
@@ -133,7 +140,14 @@ describe("renderTemplate", () => {
 });
 
 describe("template-specific output", () => {
-  const templates: TemplateName[] = ["minimal", "with-tools", "streaming"];
+  const templates: TemplateName[] = [
+    "minimal",
+    "with-tools",
+    "streaming",
+    "with-structured-output",
+    "with-approval-gates",
+    "with-memory",
+  ];
   const providers: Provider[] = ["anthropic", "openai", "google", "ollama"];
 
   for (const t of templates) {
@@ -166,6 +180,33 @@ describe("template-specific output", () => {
     const idx = files.find((f) => f.path === "src/index.ts")!;
     expect(idx.content).not.toContain(".withTools()");
     expect(idx.content).not.toContain("runStream");
+  });
+
+  test("with-structured-output template declares a schema and reads result.object", () => {
+    const files = renderTemplate(baseOpts({ template: "with-structured-output" }));
+    const idx = files.find((f) => f.path === "src/index.ts")!;
+    expect(idx.content).toContain(".withOutputSchema(");
+    expect(idx.content).toContain("result.object");
+    // adds the effect dependency it needs
+    const pkg = JSON.parse(files.find((f) => f.path === "package.json")!.content) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies.effect).toBeDefined();
+  });
+
+  test("with-approval-gates template wires durable runs + approval policy + onApproval", () => {
+    const files = renderTemplate(baseOpts({ template: "with-approval-gates" }));
+    const idx = files.find((f) => f.path === "src/index.ts")!;
+    expect(idx.content).toContain(".withDurableRuns()");
+    expect(idx.content).toContain(".withApprovalPolicy(");
+    expect(idx.content).toContain("onApproval");
+  });
+
+  test("with-memory template calls .withMemory() with a stable agent id", () => {
+    const files = renderTemplate(baseOpts({ template: "with-memory" }));
+    const idx = files.find((f) => f.path === "src/index.ts")!;
+    expect(idx.content).toContain(".withMemory()");
+    expect(idx.content).toContain(".withAgentId(");
   });
 
   test("cloud-provider template includes env-var check", () => {

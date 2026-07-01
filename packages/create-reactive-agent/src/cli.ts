@@ -77,7 +77,7 @@ Usage:
   npm create reactive-agent [dir] -- [options]
 
 Options:
-  --template=<name>     minimal | with-tools | streaming
+  --template=<name>     minimal | with-tools | streaming | with-structured-output | with-approval-gates | with-memory
   --provider=<name>     anthropic | openai | google | ollama
   --pm=<manager>        bun | npm | pnpm | yarn
   --yes                 Accept all defaults, skip prompts
@@ -103,7 +103,7 @@ function detectPackageManager(): PackageManager {
 }
 
 function isValidTemplate(s: string): s is TemplateName {
-  return s === "minimal" || s === "with-tools" || s === "streaming";
+  return listTemplates().some((t) => t.name === s);
 }
 
 function isValidProvider(s: string): s is Provider {
@@ -147,6 +147,9 @@ async function main(): Promise<void> {
             { value: "minimal", label: "minimal — single-file agent, no tools" },
             { value: "with-tools", label: "with-tools — agent with built-in tools" },
             { value: "streaming", label: "streaming — token-by-token streaming" },
+            { value: "with-structured-output", label: "with-structured-output — typed result.object via a schema" },
+            { value: "with-approval-gates", label: "with-approval-gates — human-in-the-loop tool approval" },
+            { value: "with-memory", label: "with-memory — cross-session memory (SQLite)" },
           ],
           "minimal",
         );

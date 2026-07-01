@@ -145,7 +145,7 @@ describe("withContract — modelFloor vs resolved capability (validateBuild)", (
       modelFloor: { window: 999_999_999 },
       success: successOracle,
     };
-    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, {
+    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, false, {
       contract,
       exposedToolNames: exposed,
     });
@@ -159,7 +159,7 @@ describe("withContract — modelFloor vs resolved capability (validateBuild)", (
       modelFloor: { window: 999_999_999 },
       success: successOracle,
     };
-    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", false, {
+    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", false, false, {
       contract,
       exposedToolNames: exposed,
     });
@@ -174,7 +174,7 @@ describe("withContract — modelFloor vs resolved capability (validateBuild)", (
       modelFloor: { thinking: true },
       success: successOracle,
     };
-    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, {
+    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, false, {
       contract,
       exposedToolNames: exposed,
     });
@@ -188,7 +188,7 @@ describe("withContract — modelFloor vs resolved capability (validateBuild)", (
       modelFloor: { window: 1000, nativeFC: true },
       success: successOracle,
     };
-    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, {
+    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, false, {
       contract,
       exposedToolNames: exposed,
     });
