@@ -157,26 +157,34 @@ export const executeBlueprint = (
     const goal = extractGoalText(input.taskDescription);
     const taskId = input.taskId ?? "blueprint";
 
-    const toolSummaries: ToolSummary[] = (input.availableToolSchemas ?? []).map(
-      (t) => ({
-        name: t.name,
-        signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
-        // Carry tool + param semantics through to the planner. Without these the
-        // planner sees only `name(params)` and invents argument shapes from
-        // priors — the root of the gh-cli invalid-command failure.
-        ...(t.description ? { description: t.description } : {}),
-        ...(t.parameters.length > 0
-          ? {
-              params: t.parameters.map((p) => ({
-                name: p.name,
-                type: p.type,
-                ...(p.required !== undefined ? { required: p.required } : {}),
-                ...(p.description ? { description: p.description } : {}),
-              })),
-            }
-          : {}),
-      }),
-    );
+    // blueprint plans the WHOLE tool-DAG up front with NO mid-course tool
+    // discovery — so the planner must see EVERY dispatchable tool, not the
+    // relevance-pruned `availableToolSchemas` subset. Planning over the pruned
+    // set made the model invent tools it never saw. Prefer the full
+    // `allToolSchemas` catalog; fall back to the available subset only when the
+    // full catalog wasn't supplied. Carry tool + param semantics through so the
+    // planner sees real argument shapes (not just `name(params)`) — without these
+    // it invents arg names (e.g. file-write(filename) instead of file-write(path),
+    // the root of the gh-cli invalid-command failure).
+    const planningToolSchemas =
+      input.allToolSchemas && input.allToolSchemas.length > 0
+        ? input.allToolSchemas
+        : (input.availableToolSchemas ?? []);
+    const toolSummaries: ToolSummary[] = planningToolSchemas.map((t) => ({
+      name: t.name,
+      signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
+      ...(t.description ? { description: t.description } : {}),
+      ...(t.parameters.length > 0
+        ? {
+            params: t.parameters.map((p) => ({
+              name: p.name,
+              type: p.type,
+              ...(p.required !== undefined ? { required: p.required } : {}),
+              ...(p.description ? { description: p.description } : {}),
+            })),
+          }
+        : {}),
+    }));
 
     // ── PLAN ──────────────────────────────────────────────────────────────────
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:plan", timestamp: new Date() });
@@ -255,10 +263,20 @@ export const executeBlueprint = (
     // ── VERIFY ────────────────────────────────────────────────────────────────
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:verify", timestamp: new Date() });
 
-    const availableToolNames =
-      input.availableTools.length > 0
-        ? input.availableTools
-        : toolSummaries.map((t) => t.name);
+    // VERIFY must validate against every DISPATCHABLE tool, not the pruned
+    // relevance subset (`input.availableTools`). The planner is shown
+    // `availableToolSchemas` (→ toolSummaries) and the worker dispatches via the
+    // ToolService, which can call ANY registered tool (`allToolSchemas`). Using
+    // only the relevance subset would falsely reject a legitimately-planned tool
+    // (e.g. file-write pruned from the subset) and degrade to reactive. Union all
+    // known sources so verify rejects ONLY genuinely-unknown tools.
+    const availableToolNames = Array.from(
+      new Set<string>([
+        ...input.availableTools,
+        ...toolSummaries.map((t) => t.name),
+        ...(input.allToolSchemas ?? []).map((t) => t.name),
+      ]),
+    );
 
     const verification = verifyPlan(plan, {
       ...(input.requiredTools ? { requiredTools: input.requiredTools } : {}),
@@ -309,7 +327,7 @@ export const executeBlueprint = (
 
     plan = verification.plan;
 
-    // ── EXECUTE (0-LLM parallel DAG worker) ─────────────────────────────────────
+    // ── EXECUTE (parallel DAG worker — tool_calls 0-LLM, analysis/composite via shared executor) ──
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:execute", timestamp: new Date() });
 
     const concurrency = resolveWorkerConcurrency(input);
@@ -323,8 +341,11 @@ export const executeBlueprint = (
       ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
       ...(input.agentId ? { agentId: input.agentId } : {}),
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-      ...(input.availableToolSchemas
-        ? { availableToolSchemas: input.availableToolSchemas }
+      // Full catalog (not the pruned subset) so the worker's healing pass and
+      // any composite sub-kernel know every planned tool's real schema —
+      // e.g. file-write(path, content) for arg-name repair.
+      ...(planningToolSchemas.length > 0
+        ? { availableToolSchemas: planningToolSchemas }
         : {}),
       ...(input.resultCompression
         ? { resultCompression: input.resultCompression }
@@ -361,11 +382,11 @@ export const executeBlueprint = (
           firstFailedIdx,
           {
             taskDescription: input.taskDescription,
-            // Enrich the recovery prompt with tool schemas so the patch isn't
-            // tool-blind (else it re-invents tool names/arg shapes — the same
-            // root cause the retry exists to fix).
-            ...(input.availableToolSchemas
-              ? { availableToolSchemas: input.availableToolSchemas }
+            // Enrich the recovery prompt with the FULL tool catalog so the patch
+            // isn't tool-blind (else it re-invents tool names/arg shapes — the
+            // same root cause the retry exists to fix).
+            ...(planningToolSchemas.length > 0
+              ? { availableToolSchemas: planningToolSchemas }
               : {}),
           },
           llm,
