@@ -2095,11 +2095,11 @@ nav.sidebar a:has(.sl-badge.note)::before {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--sl-color-accent);
+  background: #1cafd9;
   flex-shrink: 0;
   margin-inline-end: 0.45rem;
   vertical-align: middle;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sl-color-accent) 25%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, #1cafd9 25%, transparent);
 }
 
 .ra-changed-sections {
