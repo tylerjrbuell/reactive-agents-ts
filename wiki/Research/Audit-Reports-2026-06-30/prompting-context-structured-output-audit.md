@@ -3,7 +3,7 @@ date: 2026-06-30
 type: audit-report
 scope: prompting + context-management + structured-output
 method: 3 parallel read-only investigators (Explore) → targeted hotspot review
-status: 6 fixed (branch fix/prompt-context-so-audit), 2 verified, rest open
+status: 8 fixed + 1 dedup (branch fix/prompt-context-so-audit); 2 verified, 1 dismissed, rest deferred (need ablation)
 ---
 
 # Audit: Prompting, Context Management & Structured Output
@@ -35,11 +35,37 @@ status: 6 fixed (branch fix/prompt-context-so-audit), 2 verified, rest open
 >   Test added, GREEN.
 > - **SO-4 FIXED** — `partial-parse.ts` bounds the Tier-1 reverse walkback to
 >   `MAX_WALKBACK=64` snapshots; Tier 2/3 still cover the full buffer. Test added.
-> - Reasoning + runtime packages: `tsc --noEmit` clean; 243 reasoning + 10 runtime
->   stream tests GREEN. (observability DTS build failure is pre-existing/unrelated —
->   otlp-exporter opentelemetry drift.)
-> - **Still open:** CM-2 (window size vs count), CM-3 (token estimate),
->   CM-4, CM-5, PR-2 (tool cap), SO-6 (async validators).
+> - **CM-4 FIXED** — `message-window.ts` fold summary now collapses whitespace +
+>   truncates at a word boundary (`briefSnippet`, 80 chars) instead of a raw
+>   `slice(0,60)`.
+> - **CM-3 (partial) DONE** — named the magic constants (`CHARS_PER_TOKEN`,
+>   `COMPACTION_THRESHOLD`) in `message-window.ts`. The behavioral half (real
+>   tokenizer / tighter margin) is DEFERRED — changing WHEN compaction fires is a
+>   default-on behavior change that needs cross-tier ablation, not a blind edit.
+> - **Quality (new, from second-pass hunt)** — `tool-formatting.ts` deduplicated
+>   the `headerOverhead = 220` constant (was defined twice, drift risk) into a
+>   single module-level `HEADER_OVERHEAD`.
+> - **CM-5 DISMISSED (not a defect)** — `extractObservationFacts` is NOT a dead
+>   "falsified lever"; it's an actively-wired, tier-gated observation distiller
+>   (`act.ts:145` `shouldExtract` = opt-in via `observationSummary`, default-on
+>   local/mid, off frontier; only fires an LLM pass on large non-meta results).
+>   The "44% lever falsified" memory note was a perf-experiment result, not dead code.
+> - **Rejected second-pass finding** — a proposed `\b-Infinity` regex tweak would
+>   REGRESS the space-preceded `-Infinity` value case (no boundary between space
+>   and `-`); current pattern is correct.
+> - Reasoning + runtime packages: `tsc --noEmit` clean; 271 reasoning + 10 runtime
+>   tests GREEN. (observability DTS build failure + apps/* type errors are
+>   pre-existing/unrelated — otlp-exporter opentelemetry drift, cold-worktree apps.)
+> - **Deferred — need ablation or architectural tracing, not blind edits:**
+>   - **CM-2** (recent window kept by turn-COUNT not SIZE) — two parallel systems
+>     exist (assembly `project-results`/`compact-history` vs curator
+>     `message-window`); which governs the think path needs tracing before a
+>     defensive per-result cap, else double-compression.
+>   - **PR-2** (no cap on visible tool count) — a tool-visibility cap is a
+>     sensitive default-on change (tool-routing regressions recur here); belongs
+>     behind ablation-warden, not a speculative blind cap.
+>   - **CM-3 margin**, **SO-6** (async validators — would require an async
+>     validation path throughout), **SO-3/SO-4 tier-tuning**.
 
 Read-only review of all prompt-assembly, context-management/compression, and
 structured-output code. 3 parallel investigators mapped the subsystems; hotspot

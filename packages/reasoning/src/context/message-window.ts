@@ -11,6 +11,29 @@ const KEEP_FULL_TURNS_BY_TIER: Record<string, number> = {
 }
 
 /**
+ * Rough chars-per-token used for the compaction trigger estimate. A coarse
+ * heuristic (real BPE varies by content) — matches CHARS_PER_TOKEN in
+ * tool-formatting.ts. Underestimates dense code/JSON, so treat the trigger as a
+ * lower bound, not an exact budget.
+ */
+const CHARS_PER_TOKEN = 4
+
+/** Fraction of maxTokens at which the sliding window begins compacting. */
+const COMPACTION_THRESHOLD = 0.75
+
+/** Max chars of a summarized tool-result snippet in the [Prior: ...] fold. */
+const SUMMARY_SNIPPET_CHARS = 80
+
+/** Collapse whitespace and truncate at a word boundary for the fold summary. */
+function briefSnippet(text: string, max = SUMMARY_SNIPPET_CHARS): string {
+  const oneLine = text.replace(/\s+/g, " ").trim()
+  if (oneLine.length <= max) return oneLine
+  const cut = oneLine.slice(0, max)
+  const lastSpace = cut.lastIndexOf(" ")
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + "…"
+}
+
+/**
  * Sliding message window.
  *
  * Only fires when estimated tokens exceed 75% of maxTokens. When over budget:
@@ -50,10 +73,10 @@ export function applyMessageWindowWithCompact(
   const mutable = [...messages] as KernelMessage[]
   const estimatedTokens = mutable.reduce((sum, m) => {
     const c = m.content ?? ""
-    return sum + Math.ceil((typeof c === "string" ? c : JSON.stringify(c)).length / 4)
+    return sum + Math.ceil((typeof c === "string" ? c : JSON.stringify(c)).length / CHARS_PER_TOKEN)
   }, 0)
 
-  const budget = Math.floor(maxTokens * 0.75)
+  const budget = Math.floor(maxTokens * COMPACTION_THRESHOLD)
   if (estimatedTokens <= budget) {
     return mutable
   }
@@ -80,8 +103,9 @@ export function applyMessageWindowWithCompact(
       const snippet = t.resultIdxs
         .map((i) => {
           const c = mutable[i]?.content ?? ""
-          return typeof c === "string" ? c.slice(0, 60) : ""
+          return typeof c === "string" ? briefSnippet(c) : ""
         })
+        .filter(Boolean)
         .join("; ")
       return toolNames ? `called ${toolNames} → ${snippet}` : ""
     })

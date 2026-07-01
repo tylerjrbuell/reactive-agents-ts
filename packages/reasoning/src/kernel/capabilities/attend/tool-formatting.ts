@@ -8,6 +8,13 @@
 
 // ── Tool Schema Formatting ────────────────────────────────────────────────────
 
+/**
+ * Fixed char overhead of a compressed tool-result header (STORED line + Type +
+ * Preview + coverage hint) used by the try-fit "show all" budget check. Shared
+ * by the commit-array and generic-record renderers so the two paths cannot drift.
+ */
+const HEADER_OVERHEAD = 220;
+
 export interface ToolParamSchema {
   readonly name: string;
   readonly type: string;
@@ -270,8 +277,7 @@ export function compressToolResult(
         // a real recall path but rarely uses it. Showing the full list when
         // it fits is the structural fix.
         const allItems = parsed.map((it, i) => renderCommit(it, i)).join("\n");
-        const headerOverhead = 220; // STORED + Type + Preview + coverage hint
-        const showAll = allItems.length + headerOverhead <= budget;
+        const showAll = allItems.length + HEADER_OVERHEAD <= budget;
 
         if (showAll) {
           const content =
@@ -351,8 +357,7 @@ export function compressToolResult(
       const allItems = (parsed as Array<Record<string, unknown>>)
         .map((it, i) => renderRecord(it, i))
         .join("\n");
-      const headerOverhead = 220;
-      const showAll = allItems.length + headerOverhead <= budget;
+      const showAll = allItems.length + HEADER_OVERHEAD <= budget;
 
       if (showAll) {
         const content =
