@@ -22,7 +22,7 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const DOCS_DIR = join(import.meta.dir, "../src/content/docs");
 const REPO_ROOT = join(import.meta.dir, "../../..");
 const NEW_THRESHOLD_DAYS = 14;
-const UPDATED_THRESHOLD_DAYS = 7;
+const UPDATED_THRESHOLD_DAYS = 15;
 
 
 interface CommitInfo {
@@ -102,6 +102,53 @@ function computeBadge(
   return null;
 }
 
+function getChangedSections(filePath: string, hash: string, repoRoot: string): string[] {
+  try {
+    const diff = execSync(
+      `git -C "${repoRoot}" show ${hash} -- "${filePath}"`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    );
+    const lines = diff.split("\n");
+    const sections: string[] = [];
+    let currentHeading: string | null = null;
+    let hasChanges = false;
+
+    for (const line of lines) {
+      // Context line with a heading (unchanged but surrounding)
+      const contextHeading = line.match(/^ (#{1,3} .+)/);
+      if (contextHeading) {
+        if (hasChanges && currentHeading && !sections.includes(currentHeading)) {
+          sections.push(currentHeading);
+        }
+        currentHeading = contextHeading[1].trim();
+        hasChanges = false;
+        continue;
+      }
+      // Added heading line
+      const addedHeading = line.match(/^\+(#{1,3} .+)/);
+      if (addedHeading) {
+        if (hasChanges && currentHeading && !sections.includes(currentHeading)) {
+          sections.push(currentHeading);
+        }
+        currentHeading = addedHeading[1].trim();
+        hasChanges = true;
+        continue;
+      }
+      // Any added content line (but not diff metadata)
+      if (line.startsWith("+") && !line.startsWith("+++")) {
+        hasChanges = true;
+      }
+    }
+    // Flush last section
+    if (hasChanges && currentHeading && !sections.includes(currentHeading)) {
+      sections.push(currentHeading);
+    }
+    return sections.slice(0, 6); // cap at 6 sections to keep frontmatter small
+  } catch {
+    return [];
+  }
+}
+
 async function main() {
   const { glob } = await import("glob");
   const files = await glob("**/*.{md,mdx}", { cwd: DOCS_DIR, absolute: true });
@@ -124,6 +171,8 @@ async function main() {
     if (hasBadge && !isAutoGenBadge) continue;
 
     const lastCommit = getLastCommit(filePath);
+    const hash = lastCommit?.hash ?? null;
+    const changedSections = hash ? getChangedSections(filePath, hash, REPO_ROOT) : [];
     const firstDate = getFirstCommitDate(filePath);
 
     // Backfill `since` from git tags if missing
@@ -165,6 +214,16 @@ async function main() {
 
       if (hasChanged) {
         updates.lastCommit = newLastCommit;
+      }
+    }
+
+    if (changedSections.length > 0) {
+      const existingChangedSections = data.changedSections as string[] | undefined;
+      const sectionsChanged =
+        !existingChangedSections ||
+        JSON.stringify(existingChangedSections) !== JSON.stringify(changedSections);
+      if (sectionsChanged) {
+        updates.changedSections = changedSections;
       }
     }
 

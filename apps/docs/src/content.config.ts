@@ -34,6 +34,7 @@ export const collections = {
             date: z.string(),
           })
           .optional(),
+        changedSections: z.array(z.string()).optional(),
         // Curated Q&A -> Schema.org FAQPage JSON-LD
         faq: z
           .array(z.object({ q: z.string(), a: z.string() }))

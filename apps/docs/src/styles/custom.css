@@ -2087,28 +2087,34 @@ ol.ra-steps > li:last-child {
   border-left-color: transparent;
 }
 
-/* Sidebar dot indicators for New / Updated pages */
-nav.sidebar a:has(.sl-badge.success)::before {
-  content: '';
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sl-color-green);
-  flex-shrink: 0;
-  margin-inline-end: 0.45rem;
-  vertical-align: middle;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sl-color-green) 25%, transparent);
-}
-
+/* Sidebar dot indicator for recently updated/new pages */
+nav.sidebar a:has(.sl-badge.success)::before,
 nav.sidebar a:has(.sl-badge.note)::before {
   content: '';
   display: inline-block;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--sl-color-blue);
+  background: var(--sl-color-accent);
   flex-shrink: 0;
   margin-inline-end: 0.45rem;
   vertical-align: middle;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sl-color-accent) 25%, transparent);
+}
+
+.ra-changed-sections {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.ra-changed-sections li {
+  font-size: 0.7rem;
+  color: var(--sl-color-gray-3);
+  background: var(--sl-color-gray-6);
+  border-radius: 3px;
+  padding: 0.1em 0.45em;
+  font-family: var(--sl-font-mono, monospace);
 }

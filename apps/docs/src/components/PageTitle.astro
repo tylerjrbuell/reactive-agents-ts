@@ -6,6 +6,8 @@ const lastCommit = data.lastCommit as
   | { subject: string; hash: string; date: string }
   | undefined;
 
+const changedSections = data.changedSections as string[] | undefined;
+
 const badge = data.badge as
   | { text: string; variant: string }
   | undefined;
@@ -57,5 +59,10 @@ const id = route?.entry?.id ?? "";
       {" · "}
       <span class="ra-updated-date">{lastCommit.date}</span>
     </p>
+    {changedSections && changedSections.length > 0 && (
+      <ul class="ra-changed-sections">
+        {changedSections.map(s => <li>{s}</li>)}
+      </ul>
+    )}
   </details>
 )}
