@@ -22,6 +22,13 @@
 
 import { repairJson } from "./json-repair.js";
 
+/**
+ * Cap on how many stable-cut snapshots Tier 1 re-parses (latest-first) before
+ * deferring to the full-buffer tiers. Bounds worst-case work per call to O(K)
+ * parses instead of O(snapshots); large enough to cover realistic nesting.
+ */
+const MAX_WALKBACK = 64;
+
 /** A snapshot of the bracket stack at a stable cut point. */
 interface CutSnapshot {
   /** Exclusive end index into the trimmed buffer. */
@@ -188,8 +195,14 @@ export function parsePartial(buf: string): Record<string, unknown> {
   const { snapshots, finalStack, finalInStr } = walkBuffer(preprocessed);
 
   // --- Tier 1: Try stable cuts from latest to earliest ---
-  // Iterating in reverse gives us the maximum parsed content.
-  for (let i = snapshots.length - 1; i >= 0; i--) {
+  // Iterating in reverse gives us the maximum parsed content. The latest cut
+  // almost always parses on the first attempt; the walk-back only matters when
+  // the tail is unparseable. Bound it to MAX_WALKBACK so a pathological buffer
+  // (O(N) snapshots re-parsed per delta → O(N²)) cannot blow up — deeper cuts
+  // are recovered on the next delta once more structure arrives, and Tier 2/3
+  // below still cover the whole buffer.
+  const lowerBound = Math.max(0, snapshots.length - MAX_WALKBACK);
+  for (let i = snapshots.length - 1; i >= lowerBound; i--) {
     const snap = snapshots[i]!;
     const candidate = buildCandidate(preprocessed, snap.index, snap.stack);
     const parsed = tryParse(candidate);

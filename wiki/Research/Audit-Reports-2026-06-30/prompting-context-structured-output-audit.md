@@ -3,7 +3,7 @@ date: 2026-06-30
 type: audit-report
 scope: prompting + context-management + structured-output
 method: 3 parallel read-only investigators (Explore) → targeted hotspot review
-status: 3 fixed (branch fix/prompt-context-so-audit), 2 verified, rest open
+status: 6 fixed (branch fix/prompt-context-so-audit), 2 verified, rest open
 ---
 
 # Audit: Prompting, Context Management & Structured Output
@@ -24,10 +24,22 @@ status: 3 fixed (branch fix/prompt-context-so-audit), 2 verified, rest open
 >   *intentionally* reinforces guidance via a short one-line recent-turn reminder
 >   (`buildShortGuidanceReminder`, ≤120 chars) alongside the full system-prompt
 >   block. Deliberate dual-channel for weak-model attention; bounded cost. Dismissed.
-> - Reasoning package: `tsc --noEmit` clean; 236 unit tests GREEN. (observability
->   DTS build failure is pre-existing/unrelated — otlp-exporter opentelemetry drift.)
-> - **Still open:** SO-3, SO-4 (stream reparse perf), CM-2, CM-3 (token estimate),
->   CM-4, CM-5, PR-1 (sanitizeToolName collision), PR-2 (tool cap).
+> - **PR-1 FIXED** — `context-utils.ts` adds `buildSanitizedReverseMap` (keeps
+>   first canonical deterministically + reports collisions); `think.ts` uses it
+>   and emits `Effect.logWarning` on collision instead of silently dispatching the
+>   wrong tool. Full statelessly-injective encoding rejected (uglifies every `_`
+>   name); registration-time uniqueness is the future full fix. 3 tests, GREEN.
+> - **SO-3 FIXED** — `stream-object.ts` skips the O(N) reparse+stripThinking on
+>   token-only deltas (gated on structural delimiter `,}]`), removing the O(N²)
+>   per-stream cost. DROP semantics guarantee no value change without a delimiter.
+>   Test added, GREEN.
+> - **SO-4 FIXED** — `partial-parse.ts` bounds the Tier-1 reverse walkback to
+>   `MAX_WALKBACK=64` snapshots; Tier 2/3 still cover the full buffer. Test added.
+> - Reasoning + runtime packages: `tsc --noEmit` clean; 243 reasoning + 10 runtime
+>   stream tests GREEN. (observability DTS build failure is pre-existing/unrelated —
+>   otlp-exporter opentelemetry drift.)
+> - **Still open:** CM-2 (window size vs count), CM-3 (token estimate),
+>   CM-4, CM-5, PR-2 (tool cap), SO-6 (async validators).
 
 Read-only review of all prompt-assembly, context-management/compression, and
 structured-output code. 3 parallel investigators mapped the subsystems; hotspot

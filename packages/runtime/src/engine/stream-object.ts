@@ -20,6 +20,9 @@ import type { AgentStreamEvent } from "../stream-types.js";
 import { StructuredOutputError } from "../errors/structured-output-error.js";
 import type { DeepPartial } from "../builder/types.js";
 
+/** A parsed partial can only change when one of these delimiters lands. */
+const STRUCTURAL_DELIM = /[,}\]]/;
+
 export async function* streamObjectFrom<A>(
     stream: AsyncIterable<AgentStreamEvent>,
     contract: SchemaContract<A>,
@@ -34,6 +37,13 @@ export async function* streamObjectFrom<A>(
     for await (const event of stream) {
         if (event._tag === "TextDelta") {
             buffer += event.text;
+            // Perf: reparsing the whole accumulated buffer on every delta is
+            // O(N²) over a stream. Under DROP semantics a partial can only gain
+            // a new value when a structural delimiter lands — a `,`, `}`, or `]`.
+            // Deltas carrying only in-progress token text cannot change the
+            // parsed object, so skip the reparse (and the O(N) stripThinking).
+            // The final StreamCompleted parse below still validates the full buffer.
+            if (!STRUCTURAL_DELIM.test(event.text)) continue;
             const stripped = stripThinking(buffer);
             const partial = parsePartial(stripped) as DeepPartial<A>;
             const json = JSON.stringify(partial);

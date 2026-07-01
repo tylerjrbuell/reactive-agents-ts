@@ -196,6 +196,32 @@ describe("streamObjectFrom() unit", () => {
     expect(results[0]).toEqual({ city: "Paris" });
   });
 
+  it("does not reparse on token-only deltas but still yields the correct value", async () => {
+    const contract = toSchemaContract(Schema.Struct({ sentence: Schema.String }));
+
+    // A long string value streamed token-by-token: no structural delimiter until
+    // the closing `}`. Only the final delta should produce an emit.
+    const stream = makeStream([
+      { _tag: "TextDelta", text: '{"sentence":"' },
+      { _tag: "TextDelta", text: "the " },
+      { _tag: "TextDelta", text: "quick " },
+      { _tag: "TextDelta", text: "brown " },
+      { _tag: "TextDelta", text: "fox" },
+      { _tag: "TextDelta", text: '"}' }, // closing `}` — first structural delimiter
+      { _tag: "StreamCompleted", output: '{"sentence":"the quick brown fox"}', metadata: dummyMeta },
+    ]);
+
+    const results: Array<Record<string, unknown>> = [];
+    for await (const p of streamObjectFrom(stream, contract, "degrade")) {
+      results.push(p.object as Record<string, unknown>);
+    }
+
+    // Token-only deltas produced no emit; the closing delta yielded the value,
+    // and completion did not re-emit an identical object.
+    expect(results.length).toBe(1);
+    expect(results.at(-1)).toEqual({ sentence: "the quick brown fox" });
+  });
+
   it("throws StructuredOutputError in throw mode when final parse fails", async () => {
     const contract = toSchemaContract(Schema.Struct({ city: Schema.String }));
 

@@ -25,7 +25,7 @@
 
 import { describe, it, expect } from "bun:test";
 import { buildThinkProviderRequest } from "./think.js";
-import { sanitizeToolName } from "../attend/context-utils.js";
+import { sanitizeToolName, buildSanitizedReverseMap } from "../attend/context-utils.js";
 import { initialKernelState } from "../../state/kernel-state.js";
 import { CONTEXT_PROFILES } from "../../../context/context-profile.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
@@ -89,5 +89,29 @@ describe("inbound de-sanitization map — canonical registry lookup is intact", 
     expect(canonicalBySanitized.get(SANITIZED)).toBe(CANONICAL);
     // A name with no special chars is its own sanitized key (idempotent).
     expect(canonicalBySanitized.get("file-write")).toBe("file-write");
+  });
+});
+
+describe("buildSanitizedReverseMap — collision detection", () => {
+  it("builds a collision-free reverse map for distinct sanitized names", () => {
+    const { map, collisions } = buildSanitizedReverseMap([CANONICAL, "file-write"]);
+    expect(collisions).toEqual([]);
+    expect(map.get(SANITIZED)).toBe(CANONICAL);
+    expect(map.get("file-write")).toBe("file-write");
+  });
+
+  it("detects when two DISTINCT canonical names sanitize to the same key", () => {
+    // `a.b` and `a/b` both sanitize to `a_b` — de-sanitization can no longer
+    // recover which tool the model meant. This must be surfaced, not silent.
+    const { map, collisions } = buildSanitizedReverseMap(["a.b", "a/b"]);
+    expect(collisions.length).toBe(1);
+    expect(collisions[0]).toEqual(["a.b", "a/b"]);
+    // First registration wins deterministically (Map-ctor previously kept last).
+    expect(map.get("a_b")).toBe("a.b");
+  });
+
+  it("does not flag exact duplicate registrations as collisions", () => {
+    const { collisions } = buildSanitizedReverseMap(["a/b", "a/b"]);
+    expect(collisions).toEqual([]);
   });
 });
