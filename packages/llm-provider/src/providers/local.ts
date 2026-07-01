@@ -22,6 +22,7 @@ import type { Capability } from '../capability.js'
 import { emitToolCallComplete } from '../streaming-helpers.js'
 import { selectAdapter } from '../adapter.js'
 import { deepClone } from '../schema-utils.js'
+import { resolveThinkingEnabled } from '../thinking/index.js'
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
 // per process. CalibrationStore write-through (cross-process) lands in S2.4.
@@ -255,57 +256,27 @@ async function supportsThinking(
 
 /**
  * Resolve the `think` parameter for Ollama chat calls.
- * - config.thinking === true  → always enable
- * - config.thinking === false → always disable (omit param)
- * - config.thinking === undefined → auto-detect via /api/show
+ *
+ * Delegates the tri-state opt-in decision to the shared `resolveThinkingEnabled`
+ * resolver so all providers share one decision contract. The Ollama-specific
+ * `/api/show` capability probe is preserved as the capability source.
+ *
+ * Return contract (boolean | undefined):
+ *   - true     → pass `think: true` to ollama client
+ *   - undefined → omit the `think` param entirely
+ *
+ * @internal exported for unit testing only.
  */
-/**
- * One-shot tracker so we warn at most once per model when an explicit
- * `thinking: true` config conflicts with the model's actual capability.
- */
-const thinkingMismatchWarned = new Set<string>()
-
-async function resolveThinking(
+export async function resolveThinking(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     client: { show: (opts: { model: string }) => Promise<any> },
     model: string,
     configThinking: boolean | undefined
 ): Promise<boolean | undefined> {
-    // Stage 5 quality fix (FIX-3): thinking is OPT-IN, not auto-enabled by
-    // capability detection.
-    //
-    // Background: prior logic auto-enabled `think: true` for any model whose
-    // /api/show advertised the capability, even when the user didn't request
-    // it. This broke qwen3:14b and similar reasoning models — they emit
-    // content inside <think>...</think> tags only, leaving the assistant
-    // content empty, which the harness saw as "no output produced." The
-    // invariant was: capability ⇒ enable. The reality is: capability is
-    // necessary but not sufficient; only explicit user opt-in should enable.
-    //
-    // Matches the control-pillar discipline (Vision §1 Pillar 1): every
-    // harness behavior must be developer-overridable from inception. Auto-
-    // enabling a feature based on inference is exactly the black-box
-    // anti-pattern the pillar forbids.
-    if (configThinking === undefined) return undefined // default: do not enable
-    if (configThinking === false) return undefined
-    // configThinking === true — verify capability before passing through.
-    // Sending `think: true` to a model that doesn't support it produces an
-    // immediate Ollama error ("granite3.3:latest does not support thinking")
-    // and aborts the entire run.
+    if (configThinking !== true) return undefined // undefined/false → off (opt-in)
     const capable = await supportsThinking(client, model)
-    if (!capable) {
-        if (!thinkingMismatchWarned.has(model)) {
-            thinkingMismatchWarned.add(model)
-            // eslint-disable-next-line no-console
-            console.warn(
-                `[reactive-agents] thinking mode requested for ${model} but the ` +
-                    `model does not advertise the "thinking" capability via /api/show. ` +
-                    `Omitting the think parameter to prevent runtime errors.`
-            )
-        }
-        return undefined
-    }
-    return true
+    // Shared resolver applies the identical opt-in + warn-once discipline.
+    return resolveThinkingEnabled('ollama', model, true, capable) ? true : undefined
 }
 
 // ─── Error Helpers ───
