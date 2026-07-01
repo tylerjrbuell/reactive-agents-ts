@@ -2087,9 +2087,8 @@ ol.ra-steps > li:last-child {
   border-left-color: transparent;
 }
 
-/* Sidebar dot indicator for recently updated/new pages */
-nav.sidebar a:has(.sl-badge.success)::before,
-nav.sidebar a:has(.sl-badge.note)::before {
+/* Sidebar dot — applied via JS (data-ra-updated attribute) */
+a[data-ra-updated]::before {
   content: '';
   display: inline-block;
   width: 7px;
@@ -2100,6 +2099,15 @@ nav.sidebar a:has(.sl-badge.note)::before {
   margin-inline-end: 0.45rem;
   vertical-align: middle;
   box-shadow: 0 0 0 2px color-mix(in srgb, #1cafd9 25%, transparent);
+}
+
+/* TOC section change indicator */
+starlight-toc a[data-ra-changed]::before {
+  content: '●';
+  font-size: 0.5rem;
+  color: #1cafd9;
+  margin-right: 0.35rem;
+  vertical-align: middle;
 }
 
 .ra-changed-sections {

@@ -66,3 +66,33 @@ const id = route?.entry?.id ?? "";
     )}
   </details>
 )}
+
+<script define:vars={{ changedSections: changedSections ?? [] }}>
+  function applyUpdateIndicators() {
+    // Sidebar dots — find ALL <a> elements site-wide that contain a .sl-badge
+    document.querySelectorAll('a').forEach(function(a) {
+      const badge = a.querySelector('.sl-badge');
+      if (badge && (badge.classList.contains('note') || badge.classList.contains('success'))) {
+        a.dataset.raUpdated = '1';
+      }
+    });
+
+    // TOC section dots — find TOC links matching changedSections
+    if (changedSections.length > 0) {
+      const tocLinks = document.querySelectorAll('starlight-toc a');
+      tocLinks.forEach(function(a) {
+        const linkText = a.textContent.trim().toLowerCase();
+        const matched = changedSections.some(function(section) {
+          const clean = section.replace(/^#{1,6}\s*/, '').toLowerCase().trim();
+          return linkText === clean || linkText.includes(clean) || clean.includes(linkText);
+        });
+        if (matched) {
+          a.dataset.raChanged = '1';
+        }
+      });
+    }
+  }
+
+  document.addEventListener('astro:page-load', applyUpdateIndicators);
+  applyUpdateIndicators();
+</script>
