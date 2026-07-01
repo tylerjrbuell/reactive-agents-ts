@@ -657,16 +657,12 @@
             },
             "date": {
               "type": "string"
-            },
-            "daysAgo": {
-              "type": "number"
             }
           },
           "required": [
             "subject",
             "hash",
-            "date",
-            "daysAgo"
+            "date"
           ]
         },
         "faq": {

@@ -5,12 +5,15 @@ description: >-
   and the deprecation policy.
 lastCommit:
   subject: >-
-    fix(docs): subscribe sidebar overflow + stability.md v0.12 + drop manual New
-    badges
-  hash: f3e5eb5
-  date: '2026-06-15'
-  daysAgo: 16
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.10
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 This page is the honest answer to "is this safe to depend on?"

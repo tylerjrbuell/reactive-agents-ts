@@ -7,11 +7,14 @@ sidebar:
   order: 9
 lastCommit:
   subject: >-
-    fix(docs): hard-pin feedback button box + renumber features/cookbook
-    sidebars
-  hash: e44cd6b
-  date: '2026-05-14'
-  daysAgo: 48
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 `agent.chat()` enables multi-turn conversation with automatic routing — simple questions go directly to the LLM, complex tasks spin up the full ReAct loop. `agent.session()` wraps a conversation with persistent context. When **`.withTools()`** is on, the **`recall`** meta-tool (Conductor's Suite) is the supported way for the model to read/write working notes across turns — not legacy note builtins.

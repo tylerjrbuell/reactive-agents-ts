@@ -7,11 +7,14 @@ sidebar:
   order: 11
 lastCommit:
   subject: >-
-    fix(docs): hard-pin feedback button box + renumber features/cookbook
-    sidebars
-  hash: e44cd6b
-  date: '2026-05-14'
-  daysAgo: 48
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 `withObservability()` turns on distributed tracing, the metrics dashboard, and structured logging with a single builder call. This recipe shows how to use each piece.

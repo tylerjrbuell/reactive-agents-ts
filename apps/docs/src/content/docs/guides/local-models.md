@@ -6,10 +6,15 @@ description: >-
 sidebar:
   order: 11
 lastCommit:
-  subject: 'docs(astro): document numCtx override + Cortex rich-trace timeline debugger'
-  hash: 366959f
-  date: '2026-06-06'
-  daysAgo: 25
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 # Local Models Guide

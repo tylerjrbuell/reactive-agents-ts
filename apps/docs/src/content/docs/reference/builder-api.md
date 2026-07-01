@@ -3,11 +3,14 @@ title: ReactiveAgentBuilder
 description: Complete API reference for the ReactiveAgentBuilder.
 lastCommit:
   subject: >-
-    docs(hitl): surface durable HITL across the docs (nav, cheatsheet,
-    whats-new, cross-links)
-  hash: 7819d5a
-  date: '2026-06-16'
-  daysAgo: 15
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The `ReactiveAgentBuilder` is the primary entry point for creating agents. It provides a fluent API for composing capabilities.

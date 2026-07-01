@@ -5,11 +5,14 @@ sidebar:
   order: 6
 lastCommit:
   subject: >-
-    fix(docs): hard-pin feedback button box + renumber features/cookbook
-    sidebars
-  hash: e44cd6b
-  date: '2026-05-14'
-  daysAgo: 48
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The cost layer keeps your AI spending under control. It routes tasks to the cheapest model that can handle them, enforces budget limits, caches responses, and provides detailed cost analytics.

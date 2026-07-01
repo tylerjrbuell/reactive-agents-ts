@@ -6,10 +6,15 @@ description: >-
 sidebar:
   order: 19
 lastCommit:
-  subject: 'docs: fix sidebar IA + add v0.10.x highlights + complete content gaps'
-  hash: b1be28a
-  date: '2026-05-05'
-  daysAgo: 57
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Reactive Agents can send and receive messages on **Signal** and **Telegram** using MCP servers wired through `.withMCP()` and `.withGateway()`. **Signal** ships as a hardened **Docker image** in this repo because there is no maintained third-party MCP with the same behavior. **Telegram** uses the community **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** project — run it with **`uvx`**, a local clone, or your own container; we do **not** publish a Telegram image from this monorepo.

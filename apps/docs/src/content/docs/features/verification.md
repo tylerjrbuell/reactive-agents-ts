@@ -6,10 +6,15 @@ description: >-
 sidebar:
   order: 5
 lastCommit:
-  subject: 'docs(reference): document missing v0.12 API surfaces'
-  hash: 62bdee0
-  date: '2026-06-15'
-  daysAgo: 16
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The verification layer fact-checks agent outputs before they reach the user. It decomposes responses into claims, measures confidence, and flags unreliable content.

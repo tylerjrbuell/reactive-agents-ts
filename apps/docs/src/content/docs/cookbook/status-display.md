@@ -7,12 +7,15 @@ sidebar:
   order: 12
 lastCommit:
   subject: >-
-    fix(docs): hard-pin feedback button box + renumber features/cookbook
-    sidebars
-  hash: e44cd6b
-  date: '2026-05-14'
-  daysAgo: 48
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.9
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 `StatusRenderer` is a terminal UI that replaces scrolling log output with a single updating status line during agent execution. It is designed for interactive terminal sessions where you want a clean, information-dense view of what the agent is doing without a wall of streaming text.

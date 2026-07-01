@@ -7,11 +7,14 @@ sidebar:
   order: 3
 lastCommit:
   subject: >-
-    fix(docs): hard-pin feedback button box + renumber features/cookbook
-    sidebars
-  hash: e44cd6b
-  date: '2026-05-14'
-  daysAgo: 48
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The Agent Gateway turns reactive agents into **persistent, autonomous services**. Instead of waiting for user prompts, gateway-enabled agents respond to heartbeat ticks, cron schedules, webhooks, and other event sources — all governed by a deterministic policy engine that decides what deserves an LLM call and what doesn't.

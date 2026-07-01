@@ -10,10 +10,11 @@ badge:
   variant: success
   __auto: '1'
 lastCommit:
-  subject: 'docs(seo): ''vs Agent SDKs'' comparison page + listicle outreach kit'
-  hash: 2a16f81
-  date: '2026-06-26'
-  daysAgo: 5
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.12
 ---
 

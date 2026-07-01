@@ -4,10 +4,15 @@ description: Intercept and extend the 12-phase execution engine with custom hook
 sidebar:
   order: 16
 lastCommit:
-  subject: 'docs+test(hooks): correct phase table + pin mirror-path discard semantics'
-  hash: d41ee00
-  date: '2026-06-15'
-  daysAgo: 16
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 # Lifecycle Hooks

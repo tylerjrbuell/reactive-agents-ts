@@ -7,12 +7,15 @@ sidebar:
   order: 27
 lastCommit:
   subject: >-
-    feat(hitl): durable HITL on the run() path + onApproval convenience (Tier 1
-    + Tier 2)
-  hash: 7cec56c
-  date: '2026-06-16'
-  daysAgo: 15
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.11
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Some actions need a human's sign-off before they run — a shell command, a file

@@ -4,10 +4,15 @@ description: >-
   The 12-phase execution engine that powers every agent — now fully wired to all
   services.
 lastCommit:
-  subject: 'docs: fix critical v0.10.2 accuracy issues'
-  hash: '4452985'
-  date: '2026-05-05'
-  daysAgo: 57
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Every task an agent processes flows through a deterministic 12-phase lifecycle. This is the core of the ExecutionEngine — and every phase is wired to its corresponding service when enabled.

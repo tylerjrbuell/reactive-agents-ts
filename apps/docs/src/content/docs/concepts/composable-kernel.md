@@ -6,10 +6,15 @@ description: >-
 sidebar:
   order: 5
 lastCommit:
-  subject: 'refactor(reasoning): kernel/loop/ — move loop files (Sprint 3.1 batch 2/4)'
-  hash: 37db893
-  date: '2026-04-26'
-  daysAgo: 66
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The Composable Kernel Architecture separates *how a reasoning step works* (the kernel) from *when and how many times it runs* (the strategy). This makes reasoning algorithms swappable, testable in isolation, and extensible without touching core framework code.

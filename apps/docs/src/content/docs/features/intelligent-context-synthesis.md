@@ -7,12 +7,15 @@ sidebar:
   order: 18
 lastCommit:
   subject: >-
-    fix(docs): hard-pin feedback button box + renumber features/cookbook
-    sidebars
-  hash: e44cd6b
-  date: '2026-05-14'
-  daysAgo: 48
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.8
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 **Intelligent Context Synthesis (ICS)** runs after each thinking step (iteration ≥ 1) when the shared ReAct-style kernel is active. It produces a compact message list for the next LLM call instead of replaying the full raw transcript.

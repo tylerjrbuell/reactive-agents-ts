@@ -11,10 +11,11 @@ badge:
   variant: success
   __auto: '1'
 lastCommit:
-  subject: 'docs(seo): add ''vs LangGraph / Mastra / Vercel AI SDK'' comparison pages'
-  hash: 11be989
-  date: '2026-06-25'
-  daysAgo: 6
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.12
 ---
 

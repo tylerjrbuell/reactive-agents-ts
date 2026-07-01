@@ -8,12 +8,15 @@ sidebar:
   order: 2
 lastCommit:
   subject: >-
-    fix(runtime): purge retired claude-sonnet-4-20250514 from all defaults and
-    docs
-  hash: '4625161'
-  date: '2026-06-10'
-  daysAgo: 21
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.9
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/components";

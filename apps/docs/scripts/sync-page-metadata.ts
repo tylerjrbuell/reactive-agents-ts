@@ -24,8 +24,6 @@ const REPO_ROOT = join(import.meta.dir, "../../..");
 const NEW_THRESHOLD_DAYS = 14;
 const UPDATED_THRESHOLD_DAYS = 7;
 
-// Files whose badge is always set manually — never auto-override
-const MANUAL_BADGE_SENTINEL = "__manual__";
 
 interface CommitInfo {
   subject: string;
@@ -141,8 +139,6 @@ async function main() {
       since,
     );
 
-    const daysAgo = lastCommit ? daysSince(lastCommit.date) : null;
-
     const updates: Record<string, unknown> = {};
 
     if (badge) {
@@ -152,13 +148,24 @@ async function main() {
       updates.badge = undefined;
     }
 
-    if (lastCommit && daysAgo !== null) {
-      updates.lastCommit = {
+    if (lastCommit) {
+      // Only update lastCommit if values have changed
+      const newLastCommit = {
         subject: lastCommit.subject,
         hash: lastCommit.hash.slice(0, 7),
         date: lastCommit.date,
-        daysAgo,
       };
+
+      const existingLastCommit = data.lastCommit as Record<string, unknown> | undefined;
+      const hasChanged =
+        !existingLastCommit ||
+        existingLastCommit.subject !== newLastCommit.subject ||
+        existingLastCommit.hash !== newLastCommit.hash ||
+        existingLastCommit.date !== newLastCommit.date;
+
+      if (hasChanged) {
+        updates.lastCommit = newLastCommit;
+      }
     }
 
     if (since && !data.since) {

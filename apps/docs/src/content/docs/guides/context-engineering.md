@@ -4,10 +4,15 @@ description: 'Model-adaptive context management for efficient, reliable agents.'
 sidebar:
   order: 17
 lastCommit:
-  subject: 'docs: fix sidebar IA + add v0.10.x highlights + complete content gaps'
-  hash: b1be28a
-  date: '2026-05-05'
-  daysAgo: 57
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Context engineering is the practice of **finding the smallest set of high-signal tokens that maximize the likelihood of desired outcomes**. Reactive Agents provides a systematic context engineering system that adapts to your model's capabilities.

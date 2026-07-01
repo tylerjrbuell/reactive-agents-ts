@@ -7,11 +7,14 @@ sidebar:
   order: 8
 lastCommit:
   subject: >-
-    docs(hitl): surface durable HITL across the docs (nav, cheatsheet,
-    whats-new, cross-links)
-  hash: 7819d5a
-  date: '2026-06-16'
-  daysAgo: 15
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Tools give agents the ability to take real-world actions — fetch data, run code, call APIs, write files. This recipe covers both the fluent `ToolBuilder` API and the lower-level `ToolDefinition` format.

@@ -32,7 +32,6 @@ export const collections = {
             subject: z.string(),
             hash: z.string(),
             date: z.string(),
-            daysAgo: z.number(),
           })
           .optional(),
         // Curated Q&A -> Schema.org FAQPage JSON-LD

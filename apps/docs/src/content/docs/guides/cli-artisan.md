@@ -6,10 +6,15 @@ description: >-
 sidebar:
   hidden: true
 lastCommit:
-  subject: 'docs: fix critical v0.10.2 accuracy issues'
-  hash: '4452985'
-  date: '2026-05-05'
-  daysAgo: 57
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 `Rax` stands for **Reactive Agents Executable**.

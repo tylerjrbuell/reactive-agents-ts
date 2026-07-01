@@ -6,10 +6,15 @@ description: >-
 sidebar:
   order: 23
 lastCommit:
-  subject: 'docs: sync docs site to v0.12.0 API surface'
-  hash: abfabc9
-  date: '2026-06-06'
-  daysAgo: 25
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Use this page as a symptom → cause → fix reference when agents fail, hang, or behave unexpectedly.

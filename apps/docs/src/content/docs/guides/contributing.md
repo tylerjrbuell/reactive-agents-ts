@@ -8,10 +8,11 @@ badge:
   variant: note
   __auto: '1'
 lastCommit:
-  subject: 'docs: sync stale docs/skills to v0.12.0 ground truth'
-  hash: b90e0eb
-  date: '2026-06-24'
-  daysAgo: 7
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 ---
 
 ## Setup

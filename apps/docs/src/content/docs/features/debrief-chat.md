@@ -6,10 +6,15 @@ description: >-
 sidebar:
   order: 19
 lastCommit:
-  subject: 'docs(debrief): document debriefRich() + off-critical-path semantics'
-  hash: 787bd50
-  date: '2026-06-14'
-  daysAgo: 17
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 ## Overview

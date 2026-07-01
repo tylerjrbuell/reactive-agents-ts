@@ -7,11 +7,14 @@ sidebar:
   order: 1
 lastCommit:
   subject: >-
-    feat: add LITELLM_API_KEY to .env.example and update documentation and
-    dependencies
-  hash: 7d59c90
-  date: '2026-02-27'
-  daysAgo: 124
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The A2A (Agent-to-Agent) protocol enables agents to discover each other, exchange tasks, and stream results over HTTP. Reactive Agents implements the [A2A specification](https://a2a-protocol.org) with full JSON-RPC 2.0 support.

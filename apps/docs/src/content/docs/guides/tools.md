@@ -7,11 +7,14 @@ sidebar:
   order: 9
 lastCommit:
   subject: >-
-    docs: update CHANGELOG and documentation for rationale auditing and tool
-    scoping
-  hash: 1c74b48
-  date: '2026-06-04'
-  daysAgo: 27
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The tools layer lets agents call external functions, APIs, and MCP servers. Tools integrate directly with the reasoning loop — when an agent thinks it needs information or wants to take an action, it calls a tool and uses the real result.

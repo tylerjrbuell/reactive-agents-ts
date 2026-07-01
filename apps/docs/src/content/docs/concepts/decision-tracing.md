@@ -5,12 +5,15 @@ description: >-
   termination — as typed, queryable rationale across the harness.
 lastCommit:
   subject: >-
-    docs: update CHANGELOG and documentation for rationale auditing and tool
-    scoping
-  hash: 1c74b48
-  date: '2026-06-04'
-  daysAgo: 27
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.10
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 # Decision Tracing (v0.11.x)

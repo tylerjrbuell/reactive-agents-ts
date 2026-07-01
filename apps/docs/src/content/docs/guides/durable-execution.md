@@ -10,10 +10,11 @@ badge:
   variant: note
   __auto: '1'
 lastCommit:
-  subject: 'demo: durable crash-resume GIF (reliability pillar, second proof)'
-  hash: bf2a54d
-  date: '2026-06-26'
-  daysAgo: 5
+  subject: >-
+    docs(badges): unified badge system — sync-page-metadata replaces
+    new-page-indicator
+  hash: 857138c
+  date: '2026-07-01'
 since: v0.11
 ---
 
