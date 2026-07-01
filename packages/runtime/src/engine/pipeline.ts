@@ -283,17 +283,29 @@ export const runObservablePhase = <E>(
 /**
  * Run a single phase wrapped with the lifecycle guard. This is the equivalent of
  * the inline `guardedPhase` helper from the old engine.
+ *
+ * Honors `phase.skip` itself (not only `runPipeline`): several sites call this
+ * directly — pre-loop-dispatch (guardrail/costRoute/strategySelect),
+ * execution-engine (verify/costTrack/audit/complete), verification-quality-gate
+ * (verify-again). A config-gated phase whose feature is off must forward the
+ * context unchanged rather than run its body — otherwise a body that throws on
+ * an inapplicable input becomes an Effect defect and kills the run's fiber (the
+ * cost-route streaming-fiber-kill class). All skip predicates in this codebase
+ * are pure config gates, so a skip that fires here is the same decision the
+ * pipeline would have made.
  */
 export const runGuardedPhase = (
   phase: Phase,
   ctx: ExecutionContext,
   deps: PhaseDeps,
 ): Effect.Effect<ExecutionContext, RuntimeErrors> =>
-  checkLifecycle(ctx.taskId, deps).pipe(
-    Effect.zipRight(
-      runObservablePhase(ctx, phase.name, (c) => phase.run(c, deps), deps),
-    ),
-  ) as Effect.Effect<ExecutionContext, RuntimeErrors>;
+  phase.skip?.(ctx, deps)
+    ? (Effect.succeed(ctx) as Effect.Effect<ExecutionContext, RuntimeErrors>)
+    : (checkLifecycle(ctx.taskId, deps).pipe(
+        Effect.zipRight(
+          runObservablePhase(ctx, phase.name, (c) => phase.run(c, deps), deps),
+        ),
+      ) as Effect.Effect<ExecutionContext, RuntimeErrors>);
 
 /**
  * Compose a sequence of phases into a single execution pipeline.
@@ -303,6 +315,9 @@ export const runGuardedPhase = (
  * 2. Otherwise, the phase is wrapped with the lifecycle guard + observability span
  *    + hook firing + event emission, then run.
  *
+ * Both steps are owned by `runGuardedPhase` (it honors `skip`), so every call
+ * site — pipeline or direct — shares one skip contract.
+ *
  * The reduction stops on the first error.
  */
 export const runPipeline = (
@@ -310,7 +325,6 @@ export const runPipeline = (
   initialCtx: ExecutionContext,
   deps: PhaseDeps,
 ): Effect.Effect<ExecutionContext, RuntimeErrors> =>
-  Effect.reduce(phases, initialCtx, (ctx, phase) => {
-    if (phase.skip?.(ctx, deps)) return Effect.succeed(ctx);
-    return runGuardedPhase(phase, ctx, deps);
-  });
+  Effect.reduce(phases, initialCtx, (ctx, phase) =>
+    runGuardedPhase(phase, ctx, deps),
+  );

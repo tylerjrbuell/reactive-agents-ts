@@ -10,13 +10,6 @@
  *
  * Sets `ctx.selectedModel` for downstream phases.
  *
- * IMPORTANT — belt-and-suspenders guard in run():
- * `runGuardedPhase` (called by `pre-loop-dispatch.ts`) does NOT check `phase.skip`
- * before invoking `phase.run`. The `skip` predicate is only honoured by `runPipeline`.
- * To prevent the run body from executing when model routing is disabled, the first
- * line of `run()` also checks `!deps.config.modelRouting` and returns the fallback
- * immediately. This makes the phase safe regardless of the call site.
- *
  * IMPORTANT — advisory selectCapableModel:
  * `selectCapableModel` maps to a `PROVIDER_CONFIGS` record keyed by known providers.
  * Unknown providers (e.g. the deterministic "test" provider used in unit tests) cause
@@ -49,9 +42,6 @@ export const costRoute: Phase = {
     Effect.gen(function* () {
       const fallback = { ...ctx, selectedModel: deps.config.defaultModel };
 
-      // Belt-and-suspenders: runGuardedPhase bypasses phase.skip; guard here too.
-      if (!deps.config.modelRouting) return fallback;
-
       // T2: unknown providers (e.g. "test") have no tier table; degrade before
       // calling the rail so we never produce a TypeError defect.
       // isRoutableProvider is a type guard that narrows to Provider.
@@ -64,7 +54,9 @@ export const costRoute: Phase = {
       );
       if (!analysis) return fallback; // advisory: degrade to defaultModel
 
-      const minTier = asTier(deps.config.modelRouting.minTier);
+      // Optional-chain: skip() guarantees modelRouting is set here, but the phase
+      // stays crash-free (degrades to defaults) even if run() is reached without it.
+      const minTier = asTier(deps.config.modelRouting?.minTier);
       const startIdx = Math.max(
         TIER_ORDER.indexOf(asTier(analysis.recommendedTier)),
         TIER_ORDER.indexOf(minTier),
@@ -78,7 +70,7 @@ export const costRoute: Phase = {
       const systemPromptChars = deps.config.systemPrompt?.length ?? 0;
       const estPromptTokens = Math.ceil((taskText.length + systemPromptChars) / 4);
 
-      const tierModels = deps.config.modelRouting.tierModels;
+      const tierModels = deps.config.modelRouting?.tierModels;
 
       // Advisory: still wrap in Effect.try as a belt-and-suspenders against any
       // remaining synchronous throws from the rail (e.g. bad PROVIDER_CONFIGS entry).
