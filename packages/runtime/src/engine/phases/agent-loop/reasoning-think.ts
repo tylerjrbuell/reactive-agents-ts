@@ -20,7 +20,7 @@ import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike } from "../../runtime-context.js";
-import { asThinkContext } from "./think-context.js";
+import { asThinkContext, getSelectedModelName } from "./think-context.js";
 import {
   briefResolvedSkillsFromMetadata,
   extractTaskText,
@@ -253,7 +253,7 @@ export const runReasoningThink = (
       maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       strategySwitching: config.strategySwitching,
-      modelId: String(config.defaultModel ?? ""),
+      modelId: String(getSelectedModelName(c.selectedModel) ?? config.defaultModel ?? ""),
       taskCategory,
       temperature: config.contextProfile?.temperature as number | undefined,
       environmentContext: config.environmentContext as Record<string, string> | undefined,

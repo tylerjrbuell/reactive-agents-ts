@@ -610,6 +610,7 @@ export function handleThinking(
 
     const llmStreamEffect = llm.stream({
       messages: conversationMessages,
+      ...(input.modelId ? { model: input.modelId } : {}),
       systemPrompt: systemPromptWithDriver,
       maxTokens: state.maxOutputTokensOverride ?? outputMaxTokens,
       temperature: temp,
