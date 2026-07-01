@@ -295,7 +295,7 @@
   /* ---------- 404 hit ---------- */
   (function () {
     if (
-      location.pathname === "/404/" ||
+      location.pathname.startsWith("/404") ||
       document.querySelector('meta[name="generator"][content*="404"]') ||
       document.title?.includes("404")
     ) {
