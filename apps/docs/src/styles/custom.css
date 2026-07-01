@@ -2086,3 +2086,29 @@ ol.ra-steps > li::before {
 ol.ra-steps > li:last-child {
   border-left-color: transparent;
 }
+
+/* Sidebar dot indicators for New / Updated pages */
+nav.sidebar a:has(.sl-badge.success)::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sl-color-green);
+  flex-shrink: 0;
+  margin-inline-end: 0.45rem;
+  vertical-align: middle;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sl-color-green) 25%, transparent);
+}
+
+nav.sidebar a:has(.sl-badge.note)::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sl-color-blue);
+  flex-shrink: 0;
+  margin-inline-end: 0.45rem;
+  vertical-align: middle;
+}

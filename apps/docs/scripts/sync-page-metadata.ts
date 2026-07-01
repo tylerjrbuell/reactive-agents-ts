@@ -92,7 +92,7 @@ function computeBadge(
 
   if (firstAgeDays !== null && firstAgeDays <= NEW_THRESHOLD_DAYS) {
     const version = since ?? "";
-    return { text: version ? `New in ${version}` : "New", variant: "success" };
+    return { text: "New", variant: "success" };
   }
 
   if (lastAgeDays !== null && lastAgeDays <= UPDATED_THRESHOLD_DAYS) {

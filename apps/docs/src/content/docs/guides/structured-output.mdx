@@ -9,9 +9,9 @@ sidebar:
   order: 27
 lastCommit:
   subject: >-
-    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
-    import
-  hash: 1216d5f
+    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
+    overlap
+  hash: ba99dce
   date: '2026-07-01'
 since: v0.12
 badge:
@@ -21,6 +21,7 @@ badge:
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
+import Since from '../../../components/Since.astro';
 
 Agents produce prose. Sometimes you need a typed object — an invoice, a parsed
 entity, a classification result — not a string. **Typed structured output** gives
@@ -43,7 +44,7 @@ Works across all supported providers and tiers — Anthropic, OpenAI, Gemini,
 and local Ollama models (qwen, gemma, etc.) — making it a practical option
 even on self-hosted infrastructure.
 
-## Quick start
+## Quick start <Since version="v0.12" />
 
 `.withOutputSchema()` is a **builder method** — call it in the builder chain
 before `.build()`, then use `agent.run()` or `agent.streamObject()` on the

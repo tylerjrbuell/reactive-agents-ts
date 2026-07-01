@@ -1,0 +1,27 @@
+---
+interface Props {
+  version?: string;
+  type?: "new" | "updated" | "deprecated";
+}
+const { version, type = "new" } = Astro.props;
+const label = type === "deprecated" ? "Deprecated" : type === "updated" ? "Updated" : version ? `New in ${version}` : "New";
+const color = type === "deprecated" ? "var(--sl-color-red)" : type === "updated" ? "var(--sl-color-blue)" : "var(--sl-color-green)";
+---
+<span class="ra-since" style={`--ra-since-color: ${color}`}>{label}</span>
+<style>
+.ra-since {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ra-since-color);
+  border: 1px solid var(--ra-since-color);
+  border-radius: 3px;
+  padding: 0.05em 0.4em;
+  vertical-align: middle;
+  margin-inline-start: 0.35rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+</style>
