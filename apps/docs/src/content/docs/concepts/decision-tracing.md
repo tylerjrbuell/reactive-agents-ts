@@ -4,10 +4,8 @@ description: >-
   Capture *why* every agent decision is made — tool selection, assumption,
   termination — as typed, queryable rationale across the harness.
 lastCommit:
-  subject: >-
-    docs(badges): unified badge system — sync-page-metadata replaces
-    new-page-indicator
-  hash: 857138c
+  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
+  hash: f625612
   date: '2026-07-01'
 since: v0.10
 badge:

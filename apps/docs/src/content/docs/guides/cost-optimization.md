@@ -6,10 +6,8 @@ description: >-
 sidebar:
   order: 24
 lastCommit:
-  subject: >-
-    docs(badges): unified badge system — sync-page-metadata replaces
-    new-page-indicator
-  hash: 857138c
+  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
+  hash: f625612
   date: '2026-07-01'
 badge:
   text: Updated
@@ -196,6 +194,32 @@ const agent = await ReactiveAgents.create()
 To route simple tasks to cheaper models and reserve the expensive model for hard ones, `@reactive-agents/cost` ships the routing primitives: `analyzeComplexity(task)` scores a task and `routeToModel(task)` returns a `ModelCostConfig` for the recommended tier. Both are Effect-based and also surface on `CostService.routeToModel(task, context)`, so you can decide the model **before** building the agent. Pick the model from the routing result, then pass it to `.withModel(...)`.
 
 For an automatic, builder-level path — fall back to a cheaper or alternate model on error or budget pressure — use [`.withFallbacks()`](/reference/builder-api/), which is wired into the agent loop directly.
+
+### Cost-Aware Model Routing (New in v0.13)
+
+`.withModelRouting()` wires complexity-based routing directly into the agent builder. Define ordered tiers: each tier with a `maxComplexity` threshold is tried in order; the final tier (no `maxComplexity`) is the fallback. The agent scores each task at runtime and picks the cheapest model that meets the complexity threshold.
+
+```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withModelRouting({
+    // Route cheap/simple tasks to haiku, complex to sonnet
+    tiers: [
+      { maxComplexity: 0.4, model: "claude-haiku-4-5" },
+      { model: "claude-sonnet-4-6" },
+    ],
+  })
+  .build()
+```
+
+Tasks scored below `0.4` (on a 0–1 scale) run against `claude-haiku-4-5`; anything harder escalates to `claude-sonnet-4-6`. You can add as many tiers as you need — the router picks the first tier whose `maxComplexity` exceeds the task score.
+
+**When to use:** Mixed workloads where most requests are simple (Q&A, classification, summarization) but occasional tasks need frontier reasoning. Typical savings: 40–70% vs. routing everything to the frontier model.
+
+**Note:** `.withModelRouting()` is provider-agnostic and capability-gated — if the selected model does not support a required capability (e.g., tool use), the router automatically escalates to the next eligible tier.
 
 ### Context Profile Tiers
 

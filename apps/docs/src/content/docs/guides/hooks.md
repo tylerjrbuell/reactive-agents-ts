@@ -4,10 +4,8 @@ description: Intercept and extend the 12-phase execution engine with custom hook
 sidebar:
   order: 16
 lastCommit:
-  subject: >-
-    docs(badges): unified badge system — sync-page-metadata replaces
-    new-page-indicator
-  hash: 857138c
+  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
+  hash: f625612
   date: '2026-07-01'
 badge:
   text: Updated

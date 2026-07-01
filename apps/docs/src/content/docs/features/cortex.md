@@ -7,10 +7,8 @@ description: >-
 sidebar:
   order: 2
 lastCommit:
-  subject: >-
-    docs(badges): unified badge system — sync-page-metadata replaces
-    new-page-indicator
-  hash: 857138c
+  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
+  hash: f625612
   date: '2026-07-01'
 since: v0.9
 badge:
@@ -218,7 +216,7 @@ Configure global Cortex defaults:
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withModel('claude-sonnet-4-6')
-    .withReasoning({ strategy: 'plan-execute' })
+    .withReasoning({ strategy: 'plan-execute-reflect' })
     .withTools()
     .withCortex() // ← connects to http://localhost:4321
     .withCortex('http://my-cortex:4321') // ← or explicit URL

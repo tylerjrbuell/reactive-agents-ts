@@ -6,10 +6,8 @@ description: >-
 sidebar:
   order: 13
 lastCommit:
-  subject: >-
-    docs(badges): unified badge system — sync-page-metadata replaces
-    new-page-indicator
-  hash: 857138c
+  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
+  hash: f625612
   date: '2026-07-01'
 since: v0.9
 badge:
@@ -111,7 +109,7 @@ When entropy trajectory is flat (no improvement), the controller may recommend s
 Local models work best with:
 
 - **`reactive`** (default) — single-pass tool calling with entropy monitoring
-- **`plan-execute`** — explicit planning for complex multi-step tasks
+- **`plan-execute-reflect`** — explicit planning for complex multi-step tasks
 
 More sophisticated strategies (e.g., `tree-of-thought`) may underperform on local models due to increased token overhead.
 

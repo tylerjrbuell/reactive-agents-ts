@@ -4,10 +4,8 @@ description: >-
   SemVer commitments, stability tiers, what's stable vs experimental in v0.12,
   and the deprecation policy.
 lastCommit:
-  subject: >-
-    docs(badges): unified badge system — sync-page-metadata replaces
-    new-page-indicator
-  hash: 857138c
+  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
+  hash: f625612
   date: '2026-07-01'
 since: v0.10
 badge:
