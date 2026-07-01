@@ -305,7 +305,7 @@
 
   /* ---------- Time on page (capped at 10 min) ---------- */
   (function () {
-    const START = Date.now();
+    let START = Date.now();
     const MAX_SEC = 600;
 
     function flush() {
@@ -320,6 +320,8 @@
 
     // Re-arm on Starlight view-transitions
     document.addEventListener("astro:before-preparation", flush);
+    // Reset timer on each client-side page navigation so times don't accumulate across pages
+    document.addEventListener("astro:page-load", () => { START = Date.now(); });
   })();
 
   /* ---------- Pagefind search result click ---------- */

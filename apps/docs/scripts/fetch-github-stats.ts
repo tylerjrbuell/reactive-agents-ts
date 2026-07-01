@@ -7,7 +7,7 @@
  * Writes src/data/github-stats.json.
  */
 
-import { writeFileSync, readFileSync, existsSync } from "fs";
+import { writeFileSync, existsSync } from "fs";
 import { join } from "path";
 
 const OUTPUT = join(import.meta.dir, "../src/data/github-stats.json");

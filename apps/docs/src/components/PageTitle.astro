@@ -7,18 +7,15 @@ const lastCommit = data.lastCommit as
   | undefined;
 
 const badge = data.badge as
-  | { text: string; variant: string; __auto?: string }
+  | { text: string; variant: string }
   | undefined;
 
 const daysAgo = lastCommit
   ? Math.floor((Date.now() - new Date(lastCommit.date + "T00:00:00Z").getTime()) / 86_400_000)
   : null;
 
-// Show "what changed" callout only on Updated/New auto-badge pages
-const showCallout =
-  lastCommit &&
-  badge?.__auto === "1" &&
-  (badge.text.startsWith("New") || badge.text === "Updated");
+// Show "what changed" callout on pages that have a lastCommit and a New/Updated badge
+const showCallout = !!lastCommit && (badge?.text?.startsWith("New") || badge?.text === "Updated");
 
 const commitUrl = lastCommit
   ? `https://github.com/tylerjrbuell/reactive-agents-ts/commit/${lastCommit.hash}`
