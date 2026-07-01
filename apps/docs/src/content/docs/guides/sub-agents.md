@@ -1,8 +1,15 @@
 ---
-title: "Working with Sub-Agents"
-description: "Delegate tasks to specialized sub-agents with persona control and context forwarding"
+title: Working with Sub-Agents
+description: >-
+  Delegate tasks to specialized sub-agents with persona control and context
+  forwarding
 sidebar:
   order: 13
+lastCommit:
+  subject: 'docs: fix sidebar IA + add v0.10.x highlights + complete content gaps'
+  hash: b1be28a
+  date: '2026-05-05'
+  daysAgo: 57
 ---
 
 ## Overview

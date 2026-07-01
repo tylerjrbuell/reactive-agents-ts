@@ -1,8 +1,21 @@
 ---
-title: "Reactive Agents vs Mastra"
-description: "How Reactive Agents and Mastra compare for building TypeScript AI agents — type safety, reasoning strategies, local models, durability, and DX. An honest, sourced breakdown."
+title: Reactive Agents vs Mastra
+description: >-
+  How Reactive Agents and Mastra compare for building TypeScript AI agents —
+  type safety, reasoning strategies, local models, durability, and DX. An
+  honest, sourced breakdown.
 sidebar:
   order: 22
+badge:
+  text: New in v0.12
+  variant: success
+  __auto: '1'
+lastCommit:
+  subject: 'docs(seo): add ''vs LangGraph / Mastra / Vercel AI SDK'' comparison pages'
+  hash: 11be989
+  date: '2026-06-25'
+  daysAgo: 6
+since: v0.12
 ---
 
 Both Reactive Agents and [Mastra](https://mastra.ai) are TypeScript-first frameworks for building AI agents, and both are genuinely good. The core difference is one of emphasis: Reactive Agents leans on **Effect-TS for end-to-end, compile-time type safety**, plus **reasoning-strategy depth** and **local-to-frontier model parity**; Mastra leans on **batteries-included DX** — a mature graph workflow engine, a polished local studio, a broad RAG/vector ecosystem, and a hosted cloud story. If you want maximum type rigor and pluggable reasoning, read on. If you want the fastest path from zero to a running, well-tooled agent app, Mastra is a strong default and we say so plainly below.

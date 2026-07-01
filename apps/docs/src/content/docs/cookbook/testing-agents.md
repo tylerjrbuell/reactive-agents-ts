@@ -1,8 +1,17 @@
 ---
 title: Testing Agents
-description: Patterns for testing agents deterministically with the test provider and Effect layers.
+description: >-
+  Patterns for testing agents deterministically with the test provider and
+  Effect layers.
 sidebar:
   order: 3
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 Reactive Agents is designed for testability. The Layer system lets you swap any service with a test implementation, and the built-in test provider gives deterministic LLM responses.

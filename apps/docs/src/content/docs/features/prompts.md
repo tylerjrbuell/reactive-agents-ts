@@ -1,8 +1,17 @@
 ---
 title: Prompt Templates
-description: Version-controlled prompt templates with variable interpolation and composition.
+description: >-
+  Version-controlled prompt templates with variable interpolation and
+  composition.
 sidebar:
   order: 12
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 The prompts layer provides a template engine for managing, versioning, and composing prompts. Define reusable templates with typed variables, track versions, and compose complex prompts from smaller pieces.

@@ -1,6 +1,16 @@
 ---
 title: API Stability & Versioning
-description: SemVer commitments, stability tiers, what's stable vs experimental in v0.12, and the deprecation policy.
+description: >-
+  SemVer commitments, stability tiers, what's stable vs experimental in v0.12,
+  and the deprecation policy.
+lastCommit:
+  subject: >-
+    fix(docs): subscribe sidebar overflow + stability.md v0.12 + drop manual New
+    badges
+  hash: f3e5eb5
+  date: '2026-06-15'
+  daysAgo: 16
+since: v0.10
 ---
 
 This page is the honest answer to "is this safe to depend on?"

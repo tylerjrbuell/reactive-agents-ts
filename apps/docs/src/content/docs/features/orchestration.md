@@ -1,8 +1,17 @@
 ---
 title: Orchestration
-description: Multi-agent workflows with 5 execution patterns, checkpoints, and event sourcing.
+description: >-
+  Multi-agent workflows with 5 execution patterns, checkpoints, and event
+  sourcing.
 sidebar:
   order: 9
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 The orchestration layer coordinates multiple agents working together on complex tasks. Define workflows with different execution patterns, checkpoint progress for durability, and inspect the full event log.

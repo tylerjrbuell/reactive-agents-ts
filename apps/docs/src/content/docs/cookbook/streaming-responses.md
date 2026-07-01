@@ -1,8 +1,17 @@
 ---
 title: Streaming Responses
-description: Stream tokens in real time, show iteration progress, and handle cancellation with agent.runStream().
+description: >-
+  Stream tokens in real time, show iteration progress, and handle cancellation
+  with agent.runStream().
 sidebar:
   order: 7
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 `agent.runStream()` returns an `AsyncGenerator` of typed events. Use it to show tokens as they arrive, display step progress, or build live UIs.

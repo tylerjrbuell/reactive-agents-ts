@@ -1,8 +1,17 @@
 ---
 title: Error Handling & Resilience
-description: Handle failures gracefully with typed errors, provider fallbacks, retry policies, and execution timeouts.
+description: >-
+  Handle failures gracefully with typed errors, provider fallbacks, retry
+  policies, and execution timeouts.
 sidebar:
   order: 10
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 Reactive Agents uses typed errors throughout so you can distinguish transient failures from configuration problems and handle each appropriately.

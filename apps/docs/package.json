@@ -7,8 +7,8 @@
     "metrics": "bun run scripts/generate-metrics.ts",
     "metrics:sync-readme": "bun run scripts/sync-readme-metrics.ts",
     "metrics:check": "bun run scripts/sync-readme-metrics.ts --check",
-    "predev": "bun run scripts/generate-metrics.ts",
-    "prebuild": "bun run scripts/generate-metrics.ts",
+    "predev": "bun run scripts/generate-metrics.ts && bun run scripts/sync-page-metadata.ts --dry-run",
+    "prebuild": "bun run scripts/generate-metrics.ts && bun run scripts/sync-page-metadata.ts",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview"
@@ -19,6 +19,7 @@
     "@fontsource-variable/geist": "^5.0.0",
     "astro": "6.1.2",
     "astro-skills": "^0.0.5",
+    "glob": "^13.0.6",
     "gray-matter": "^4.0.3",
     "sharp": "^0.33.0"
   },

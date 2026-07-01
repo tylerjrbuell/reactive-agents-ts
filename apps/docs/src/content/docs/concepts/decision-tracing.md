@@ -1,6 +1,16 @@
 ---
 title: Decision Tracing
-description: Capture *why* every agent decision is made — tool selection, assumption, termination — as typed, queryable rationale across the harness.
+description: >-
+  Capture *why* every agent decision is made — tool selection, assumption,
+  termination — as typed, queryable rationale across the harness.
+lastCommit:
+  subject: >-
+    docs: update CHANGELOG and documentation for rationale auditing and tool
+    scoping
+  hash: 1c74b48
+  date: '2026-06-04'
+  daysAgo: 27
+since: v0.10
 ---
 
 # Decision Tracing (v0.11.x)

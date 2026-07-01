@@ -1,8 +1,17 @@
 ---
 title: Security Hardening
-description: Practical hardening checklist for production agents, tools, and MCP transports.
+description: >-
+  Practical hardening checklist for production agents, tools, and MCP
+  transports.
 sidebar:
   order: 22
+lastCommit:
+  subject: >-
+    docs(hitl): surface durable HITL across the docs (nav, cheatsheet,
+    whats-new, cross-links)
+  hash: 7819d5a
+  date: '2026-06-16'
+  daysAgo: 15
 ---
 
 This guide focuses on secure defaults and common mistakes in real deployments.

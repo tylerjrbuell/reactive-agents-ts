@@ -1,8 +1,17 @@
 ---
 title: Contributing
-description: How to develop, test, and release changes to Reactive Agents.
+description: 'How to develop, test, and release changes to Reactive Agents.'
 sidebar:
   order: 99
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
+lastCommit:
+  subject: 'docs: sync stale docs/skills to v0.12.0 ground truth'
+  hash: b90e0eb
+  date: '2026-06-24'
+  daysAgo: 7
 ---
 
 ## Setup

@@ -1,8 +1,15 @@
 ---
 title: Observability
-description: Distributed tracing, metrics, structured logging, and agent state snapshots.
+description: 'Distributed tracing, metrics, structured logging, and agent state snapshots.'
 sidebar:
   order: 8
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 The observability layer gives you full visibility into agent behavior. Every execution phase emits spans, every LLM call records metrics, and every decision is logged with structured context.

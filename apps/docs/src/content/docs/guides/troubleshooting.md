@@ -1,8 +1,15 @@
 ---
 title: Troubleshooting
-description: Fast diagnosis for common Reactive Agents issues in development and production.
+description: >-
+  Fast diagnosis for common Reactive Agents issues in development and
+  production.
 sidebar:
   order: 23
+lastCommit:
+  subject: 'docs: sync docs site to v0.12.0 API surface'
+  hash: abfabc9
+  date: '2026-06-06'
+  daysAgo: 25
 ---
 
 Use this page as a symptom → cause → fix reference when agents fail, hang, or behave unexpectedly.

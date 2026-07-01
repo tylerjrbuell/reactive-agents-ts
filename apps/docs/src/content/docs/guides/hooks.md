@@ -3,6 +3,11 @@ title: Lifecycle Hooks
 description: Intercept and extend the 12-phase execution engine with custom hooks
 sidebar:
   order: 16
+lastCommit:
+  subject: 'docs+test(hooks): correct phase table + pin mirror-path discard semantics'
+  hash: d41ee00
+  date: '2026-06-15'
+  daysAgo: 16
 ---
 
 # Lifecycle Hooks

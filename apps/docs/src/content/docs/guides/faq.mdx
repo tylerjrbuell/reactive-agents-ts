@@ -1,21 +1,61 @@
 ---
 title: FAQ
-description: Honest answers to "should I use this?" — production readiness, gotchas, comparisons, what we don't do well yet.
+description: >-
+  Honest answers to "should I use this?" — production readiness, gotchas,
+  comparisons, what we don't do well yet.
 sidebar:
   order: 22
 faq:
   - q: What is Reactive Agents?
-    a: Reactive Agents is a composable TypeScript AI agent framework built on Effect-TS. It gives you a type-safe, observable agent harness with a 12-phase deterministic execution engine, six reasoning strategies, and opt-in layers for memory, tools, guardrails, and cost control. The same code runs on local Ollama models (4B and up) and on frontier APIs like Claude, GPT, and Gemini.
+    a: >-
+      Reactive Agents is a composable TypeScript AI agent framework built on
+      Effect-TS. It gives you a type-safe, observable agent harness with a
+      12-phase deterministic execution engine, six reasoning strategies, and
+      opt-in layers for memory, tools, guardrails, and cost control. The same
+      code runs on local Ollama models (4B and up) and on frontier APIs like
+      Claude, GPT, and Gemini.
   - q: Is Reactive Agents production-ready?
-    a: It is in early access (v0.12.0) with 6,500+ tests across 800+ files run on every PR, durable crash-resume, and human-in-the-loop approvals. The core execution engine, providers, tools, and memory are stable. APIs can still change between minor versions, so pin a version for production.
+    a: >-
+      It is in early access (v0.12.0) with 6,500+ tests across 800+ files run on
+      every PR, durable crash-resume, and human-in-the-loop approvals. The core
+      execution engine, providers, tools, and memory are stable. APIs can still
+      change between minor versions, so pin a version for production.
   - q: Does Reactive Agents work with local models?
-    a: Yes. Local-to-frontier parity is a core design goal. The same builder code runs on a 4B Ollama model or a frontier API. Model-adaptive context profiles (four tiers) tune prompts, compaction, and truncation so small local models perform well, and a healing pipeline normalizes tool calls before execution.
+    a: >-
+      Yes. Local-to-frontier parity is a core design goal. The same builder code
+      runs on a 4B Ollama model or a frontier API. Model-adaptive context
+      profiles (four tiers) tune prompts, compaction, and truncation so small
+      local models perform well, and a healing pipeline normalizes tool calls
+      before execution.
   - q: How is Reactive Agents different from LangChain or the Vercel AI SDK?
-    a: Reactive Agents is end-to-end type-safe via Effect-TS, with schema-validated boundaries and tagged errors instead of thrown exceptions. It ships a deterministic 12-phase execution engine with hooks, six reasoning strategies, built-in guardrails and cost routing, durable execution, and local-model parity. The Vercel AI SDK is a lower-level toolkit (provider abstraction plus UI streaming); Reactive Agents is a higher-level agent harness and can sit on top of an SDK.
+    a: >-
+      Reactive Agents is end-to-end type-safe via Effect-TS, with
+      schema-validated boundaries and tagged errors instead of thrown
+      exceptions. It ships a deterministic 12-phase execution engine with hooks,
+      six reasoning strategies, built-in guardrails and cost routing, durable
+      execution, and local-model parity. The Vercel AI SDK is a lower-level
+      toolkit (provider abstraction plus UI streaming); Reactive Agents is a
+      higher-level agent harness and can sit on top of an SDK.
   - q: Do I need Bun to use Reactive Agents?
-    a: No. Bun 1.0+ is recommended for best performance, but Node.js 22.5+ is fully supported via the runtime shim. The same code runs on both. Install with "bun add reactive-agents" or "npm install reactive-agents".
+    a: >-
+      No. Bun 1.0+ is recommended for best performance, but Node.js 22.5+ is
+      fully supported via the runtime shim. The same code runs on both. Install
+      with "bun add reactive-agents" or "npm install reactive-agents".
   - q: Is Reactive Agents open source and free?
-    a: Yes. Reactive Agents is MIT licensed and free to use. It is published as 33 packages on npm, install everything with the single "reactive-agents" package.
+    a: >-
+      Yes. Reactive Agents is MIT licensed and free to use. It is published as
+      33 packages on npm, install everything with the single "reactive-agents"
+      package.
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
+lastCommit:
+  subject: 'feat(docs): FAQPage JSON-LD for AEO (featured snippets + answer engines)'
+  hash: df1bae9
+  date: '2026-06-25'
+  daysAgo: 6
+since: v0.10
 ---
 
 import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';

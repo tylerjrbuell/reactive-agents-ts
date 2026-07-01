@@ -1,6 +1,11 @@
 ---
 title: Configuration Reference
-description: Complete reference of all builder methods, defaults, and environment variables
+description: 'Complete reference of all builder methods, defaults, and environment variables'
+lastCommit:
+  subject: 'docs(astro): document numCtx override + Cortex rich-trace timeline debugger'
+  hash: 366959f
+  date: '2026-06-06'
+  daysAgo: 25
 ---
 
 # Configuration Reference

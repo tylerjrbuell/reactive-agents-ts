@@ -1,8 +1,17 @@
 ---
 title: Observability & Metrics
-description: Read the metrics dashboard, export telemetry, subscribe to EventBus events, and wire up external monitoring.
+description: >-
+  Read the metrics dashboard, export telemetry, subscribe to EventBus events,
+  and wire up external monitoring.
 sidebar:
   order: 11
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 `withObservability()` turns on distributed tracing, the metrics dashboard, and structured logging with a single builder call. This recipe shows how to use each piece.

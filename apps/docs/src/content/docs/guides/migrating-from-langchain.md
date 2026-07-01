@@ -1,8 +1,13 @@
 ---
-title: "Migrating from LangChain.js"
-description: "Side-by-side guide for moving agents from LangChain.js to Reactive Agents"
+title: Migrating from LangChain.js
+description: Side-by-side guide for moving agents from LangChain.js to Reactive Agents
 sidebar:
   order: 20
+lastCommit:
+  subject: 'docs: align memory tier API to canonical 2-tier form'
+  hash: 88f7b10
+  date: '2026-05-05'
+  daysAgo: 57
 ---
 
 This guide maps LangChain.js concepts to their Reactive Agents equivalents and shows side-by-side code examples for common patterns.

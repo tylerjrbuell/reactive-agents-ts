@@ -1,8 +1,15 @@
 ---
 title: Debrief & Chat
-description: Structured run artifacts, post-run synthesis, and conversational interaction with agents.
+description: >-
+  Structured run artifacts, post-run synthesis, and conversational interaction
+  with agents.
 sidebar:
   order: 19
+lastCommit:
+  subject: 'docs(debrief): document debriefRich() + off-critical-path semantics'
+  hash: 787bd50
+  date: '2026-06-14'
+  daysAgo: 17
 ---
 
 ## Overview

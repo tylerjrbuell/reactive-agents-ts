@@ -1,8 +1,15 @@
 ---
 title: Local Models Guide
-description: Choose the right local model for your task and configure Reactive Agents for optimal performance
+description: >-
+  Choose the right local model for your task and configure Reactive Agents for
+  optimal performance
 sidebar:
   order: 11
+lastCommit:
+  subject: 'docs(astro): document numCtx override + Cortex rich-trace timeline debugger'
+  hash: 366959f
+  date: '2026-06-06'
+  daysAgo: 25
 ---
 
 # Local Models Guide

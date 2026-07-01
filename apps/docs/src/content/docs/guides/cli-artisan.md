@@ -1,8 +1,15 @@
 ---
 title: Rax CLI
-description: Rax (Reactive Agents Executable) is to Reactive Agents what Artisan is to Laravel.
+description: >-
+  Rax (Reactive Agents Executable) is to Reactive Agents what Artisan is to
+  Laravel.
 sidebar:
-    hidden: true
+  hidden: true
+lastCommit:
+  subject: 'docs: fix critical v0.10.2 accuracy issues'
+  hash: '4452985'
+  date: '2026-05-05'
+  daysAgo: 57
 ---
 
 `Rax` stands for **Reactive Agents Executable**.

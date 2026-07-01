@@ -1,8 +1,17 @@
 ---
 title: Resilience & Caching
-description: Circuit breaker, embedding cache, budget persistence, tool result caching, and Docker sandbox for production-grade reliability.
+description: >-
+  Circuit breaker, embedding cache, budget persistence, tool result caching, and
+  Docker sandbox for production-grade reliability.
 sidebar:
   order: 16
+lastCommit:
+  subject: >-
+    fix(docs): hard-pin feedback button box + renumber features/cookbook
+    sidebars
+  hash: e44cd6b
+  date: '2026-05-14'
+  daysAgo: 48
 ---
 
 Reactive Agents includes multiple resilience layers that protect your agent workflows from provider outages, redundant API calls, and unsafe code execution.

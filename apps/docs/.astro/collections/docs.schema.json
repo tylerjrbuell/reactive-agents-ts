@@ -634,6 +634,41 @@
         "newUntil": {
           "type": "string"
         },
+        "stability": {
+          "type": "string",
+          "enum": [
+            "stable",
+            "unstable",
+            "experimental",
+            "deprecated"
+          ]
+        },
+        "since": {
+          "type": "string"
+        },
+        "lastCommit": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "string"
+            },
+            "hash": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "daysAgo": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "subject",
+            "hash",
+            "date",
+            "daysAgo"
+          ]
+        },
         "faq": {
           "type": "array",
           "items": {

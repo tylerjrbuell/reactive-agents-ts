@@ -3,6 +3,13 @@ title: Interaction Modes
 description: How agents adjust their autonomy level.
 sidebar:
   order: 14
+lastCommit:
+  subject: >-
+    docs(hitl): surface durable HITL across the docs (nav, cheatsheet,
+    whats-new, cross-links)
+  hash: 7819d5a
+  date: '2026-06-16'
+  daysAgo: 15
 ---
 
 Reactive Agents supports 5 interaction modes that control how much autonomy an agent has.
