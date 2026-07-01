@@ -12,12 +12,29 @@ import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/PageSidebar.astro";
 import EmailSubscribe from "./EmailSubscribe.astro";
 import FeedbackButton from "./FeedbackButton.astro";
+import githubStats from "../data/github-stats.json";
+
+const GITHUB_URL = "https://github.com/tylerjrbuell/reactive-agents-ts";
 ---
 
 <Default {...Astro.props}><slot /></Default>
 
 <div class="right-sidebar-panel sl-hidden lg:sl-block ra-sub-panel-wrap">
     <div class="sl-container">
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener"
+          class="ra-star-cta"
+          data-umami-event="github_star_cta"
+          data-umami-event-location="sidebar"
+        >
+          <span class="ra-star-icon">⭐</span>
+          <span class="ra-star-label">Star on GitHub</span>
+          {githubStats.stars > 0 && (
+            <span class="ra-star-count">{githubStats.stars}</span>
+          )}
+        </a>
         <EmailSubscribe sidebar />
         <FeedbackButton />
     </div>

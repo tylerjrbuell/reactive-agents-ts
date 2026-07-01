@@ -7,8 +7,8 @@
     "metrics": "bun run scripts/generate-metrics.ts",
     "metrics:sync-readme": "bun run scripts/sync-readme-metrics.ts",
     "metrics:check": "bun run scripts/sync-readme-metrics.ts --check",
-    "predev": "bun run scripts/generate-metrics.ts && bun run scripts/sync-page-metadata.ts --dry-run",
-    "prebuild": "bun run scripts/generate-metrics.ts && bun run scripts/sync-page-metadata.ts",
+    "predev": "bun run scripts/generate-metrics.ts && bun run scripts/fetch-github-stats.ts && bun run scripts/sync-page-metadata.ts --dry-run",
+    "prebuild": "bun run scripts/generate-metrics.ts && bun run scripts/fetch-github-stats.ts && bun run scripts/sync-page-metadata.ts",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview"
