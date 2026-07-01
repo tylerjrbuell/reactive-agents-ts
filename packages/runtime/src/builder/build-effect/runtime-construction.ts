@@ -57,6 +57,7 @@ export interface BuilderRuntimeStateView {
   readonly _provider: ProviderName;
   readonly _model?: string;
   readonly _thinking?: boolean;
+  readonly _thinkingOptions?: import("@reactive-agents/llm-provider").ThinkingOptions;
   readonly _temperature?: number;
   readonly _maxTokens?: number;
   readonly _numCtx?: number;
@@ -317,6 +318,7 @@ export const buildBaseRuntimeAndEngine = (
       provider: state._provider,
       model: state._model,
       thinking: state._thinking,
+      thinkingOptions: state._thinkingOptions,
       temperature: state._temperature,
       maxTokens: state._maxTokens,
       numCtx: state._numCtx,

@@ -21,45 +21,11 @@ import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
 import { resolveCapability } from "../capability-resolver.js";
-
-// ─── Thinking-budget reserve (Cluster A fix) ───
-//
-// Gemini 2.5 models think BY DEFAULT with a *dynamic* thinkingBudget (-1) that
-// expands to consume nearly the entire `maxOutputTokens`. When the harness caps
-// output by tier (think.ts:584 — mid=2000, frontier=4000), hidden thinking eats
-// the whole budget and the visible answer is starved (finishReason=MAX_TOKENS,
-// empty/truncated content). Empirical: gemini-2.5-pro @4000 → 3837 thinking /
-// 143 visible tokens → truncated mid-answer. Local models (thinking OFF) get the
-// same 2000-4000 as pure answer — which is why "Gemini struggles where local
-// models crush".
-//
-// Fix: treat the harness `maxTokens` as the ANSWER budget. For thinking-capable
-// models, reserve a bounded thinking budget ON TOP (not carved from it) and
-// raise maxOutputTokens to answer + thinking so the answer always has room.
-const GEMINI_THINKING_MIN = 1024;
-// flash honours thinkingBudget as a hard cap; 2.5-pro treats it as advisory and
-// overshoots ~40% on hard tasks (empirical: 11509 thinking tokens against an 8192
-// budget). The ceiling must therefore sit at/above the model's natural appetite
-// so reasoning completes *before* the answer reserve, rather than being truncated
-// mid-thought. 16384 is comfortably above the observed pro appetite while staying
-// well under the model's 32768 thinking ceiling.
-const GEMINI_THINKING_MAX = 16384;
-
-/**
- * Bounded thinking reserve for a thinking-capable Gemini model, or undefined
- * when the model does not support thinking (e.g. flash-lite) — in which case
- * the caller leaves maxOutputTokens untouched and sets no thinkingConfig.
- */
-const geminiThinkingBudget = (
-  model: string,
-  answerBudget: number,
-): number | undefined => {
-  const cap = resolveCapability("gemini", model);
-  if (!cap.supportsThinkingMode) return undefined;
-  // Scale with the answer budget but clamp so it can neither starve the answer
-  // nor run away unboundedly.
-  return Math.min(Math.max(answerBudget * 4, GEMINI_THINKING_MIN), GEMINI_THINKING_MAX);
-};
+import {
+  resolveThinkingEnabled,
+  reserveThinkingBudget,
+  type ThinkingOptions,
+} from "../thinking/index.js";
 
 // ─── Gemini Message Conversion Helpers ───
 
@@ -275,6 +241,75 @@ const mapGeminiResponse = (
   };
 };
 
+// ─── Generation-config builder (exported @internal seam) ─────────────────────
+//
+// Applies the thinking opt-in contract so hidden reasoning can never starve the
+// visible answer (Cluster A fix, now gated behind config.thinking instead of
+// auto-enabled):
+//
+//  • undefined/false → thinkingConfig: { thinkingBudget: 0 } (best-effort
+//    disable). gemini-2.5-pro treats budget 0 as ADVISORY and may still think
+//    internally; the Cluster-B non-OK-empty guard covers that edge case.
+//  • true + capable → reserve = clamp(answerBudget*4, 1024, 16384) ON TOP;
+//    maxOutputTokens = answerBudget + reserve so the answer always has room.
+//
+// The function is a pure config builder with no SDK or Layer dependencies,
+// making it directly unit-testable without Effect or network calls.
+
+type GeminiConfigOpts = {
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  systemPrompt?: string;
+  stopSequences?: readonly string[];
+  tools?: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[];
+  responseMimeType?: string;
+  responseSchema?: Record<string, unknown>;
+};
+
+/**
+ * Build a Gemini generation-config object with tri-state thinking applied.
+ *
+ * @internal – exported for unit testing only; use `GeminiProviderLive` in production.
+ */
+export const buildGenerationConfig = (
+  opts: GeminiConfigOpts,
+  configThinking: boolean | undefined,
+  thinkingOptions: ThinkingOptions | undefined,
+): Record<string, unknown> => {
+  const model = opts.model ?? "";
+  const answerBudget = opts.maxTokens ?? 4096;
+
+  const cap = resolveCapability("gemini", model);
+  const enabled = resolveThinkingEnabled(
+    "gemini",
+    model,
+    configThinking,
+    cap.supportsThinkingMode,
+  );
+  const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
+    ...(thinkingOptions ?? {}),
+    enabled,
+  });
+
+  const cfg: Record<string, unknown> = {
+    maxOutputTokens: reserve !== undefined ? answerBudget + reserve : answerBudget,
+    temperature: opts.temperature,
+  };
+
+  // Always send thinkingConfig so callers can rely on consistent shape.
+  // budget=0 is best-effort disable; for non-thinking models it is a no-op.
+  cfg.thinkingConfig = { thinkingBudget: reserve ?? 0 };
+
+  if (opts.systemPrompt) cfg.systemInstruction = opts.systemPrompt;
+  if (opts.stopSequences?.length) cfg.stopSequences = [...opts.stopSequences];
+  if (opts.tools?.length) cfg.tools = toGeminiTools([...opts.tools]);
+  if (opts.responseMimeType) cfg.responseMimeType = opts.responseMimeType;
+  if (opts.responseSchema) cfg.responseSchema = opts.responseSchema;
+
+  return cfg;
+};
+
 // ─── Gemini Provider Layer ───
 
 const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
@@ -320,40 +355,18 @@ export const GeminiProviderLive = Layer.effect(
       return _clientPromise;
     };
 
-    const buildGeminiConfig = (opts: {
-      model?: string;
-      maxTokens?: number;
-      temperature?: number;
-      systemPrompt?: string;
-      stopSequences?: readonly string[];
-      tools?: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[];
-      responseMimeType?: string;
-      responseSchema?: Record<string, unknown>;
-    }) => {
-      const answerBudget = opts.maxTokens ?? config.defaultMaxTokens;
-      // Reserve a bounded thinking budget ON TOP of the answer budget for
-      // thinking-capable models so hidden reasoning can't starve the answer.
-      const thinkingBudget = opts.model
-        ? geminiThinkingBudget(opts.model, answerBudget)
-        : undefined;
-      const cfg: Record<string, unknown> = {
-        maxOutputTokens:
-          thinkingBudget !== undefined ? answerBudget + thinkingBudget : answerBudget,
-        temperature: opts.temperature ?? config.defaultTemperature,
-      };
-      if (thinkingBudget !== undefined) {
-        cfg.thinkingConfig = { thinkingBudget };
-      }
-      const sys = opts.systemPrompt;
-      if (sys) cfg.systemInstruction = sys;
-      if (opts.stopSequences?.length) cfg.stopSequences = [...opts.stopSequences];
-      if (opts.tools?.length) {
-        cfg.tools = toGeminiTools([...opts.tools]);
-      }
-      if (opts.responseMimeType) cfg.responseMimeType = opts.responseMimeType;
-      if (opts.responseSchema) cfg.responseSchema = opts.responseSchema;
-      return cfg;
-    };
+    // Thin closure wrapper: merges config-level defaults then delegates to the
+    // exported buildGenerationConfig seam which owns the thinking tri-state logic.
+    const buildGeminiConfig = (opts: GeminiConfigOpts) =>
+      buildGenerationConfig(
+        {
+          ...opts,
+          maxTokens: opts.maxTokens ?? config.defaultMaxTokens,
+          temperature: opts.temperature ?? config.defaultTemperature,
+        },
+        config.thinking,
+        config.thinkingOptions,
+      );
 
     return LLMService.of({
       complete: (request) =>

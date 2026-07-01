@@ -643,6 +643,9 @@ async function runInternal(
       ;(builder as unknown as Record<string, () => void>)["withMemory"]!()
     }
 
+    // Cross-tier thinking ablation: explicit enable/disable when set in config.
+    if (config.thinking !== undefined) builder.withThinking(config.thinking)
+
     if (traceDir) builder.withTracing({ dir: traceDir })
 
     const _log = console.log; console.log = () => {}

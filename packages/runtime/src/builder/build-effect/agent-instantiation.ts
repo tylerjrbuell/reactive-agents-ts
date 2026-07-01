@@ -80,6 +80,11 @@ export interface AgentInstantiationDeps {
    * when tools are present (tool results need structured assembly, not prose extraction).
    */
   readonly enableTools: boolean;
+  /**
+   * Plain-object runtime config snapshot (thinking, thinkingOptions, provider, etc.)
+   * Exposed on `ReactiveAgent.config` for tests + diagnostics.
+   */
+  readonly runtimeConfig?: Record<string, unknown>;
 }
 
 /**
@@ -133,5 +138,6 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.durableResume,
     deps.outputSchemaConfig,
     deps.enableTools,
+    deps.runtimeConfig ?? {},
   );
 };

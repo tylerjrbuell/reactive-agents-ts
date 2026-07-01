@@ -212,7 +212,9 @@ export class ReactiveAgent<TOut = unknown> {
          * Forwarded from `AgentInstantiationDeps.enableTools`. Used by the structured-output
          * router (Task 1.5) to prefer the grounded path when tools are present.
          */
-        private readonly _enableTools: boolean = false
+        private readonly _enableTools: boolean = false,
+        /** @internal Runtime configuration snapshot (tests + diagnostics). Not part of the public API. */
+        private readonly config: Record<string, unknown> = {}
     ) {}
 
     /**

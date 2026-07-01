@@ -262,6 +262,13 @@ export interface HarnessConfig {
    * assembly A/B (`{ RA_ASSEMBLY: "0" }`). Generalizes the verifier:"noop" pattern.
    */
   readonly env?: Readonly<Record<string, string>>;
+  /**
+   * Thinking mode toggle for the cross-tier thinking ablation.
+   * `true`  → builder.withThinking()        (enable; let provider choose budget)
+   * `false` → builder.withThinking(false)   (explicit disable)
+   * Omitted → harness default (no call; provider-level default applies).
+   */
+  readonly thinking?: boolean;
 }
 
 export interface InternalVariant {

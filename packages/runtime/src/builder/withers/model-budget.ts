@@ -7,6 +7,7 @@
  */
 import type { ReactiveAgentBuilder, BudgetLimits } from "../../builder.js";
 import type { ModelParamsInput } from "../../types.js";
+import type { ThinkingOptions } from "@reactive-agents/llm-provider";
 import { asBuilderState } from "./_state.js";
 
 /**
@@ -33,6 +34,31 @@ export const applyWithModel = (
     s._maxTokens = modelOrParams.maxTokens;
   if (modelOrParams.numCtx !== undefined)
     s._numCtx = modelOrParams.numCtx;
+};
+
+/**
+ * Apply `.withThinking(options?)` — the rich-config home for thinking mode.
+ * `true`/absent → enable; `false` → disable; object → enable with effort/budget.
+ * Writes both the `_thinking` boolean (quick path parity) and `_thinkingOptions`.
+ */
+export const applyWithThinking = (
+  builder: ReactiveAgentBuilder,
+  options?: boolean | ThinkingOptions,
+): void => {
+  const s = asBuilderState(builder);
+  if (options === false) {
+    s._thinking = false;
+    s._thinkingOptions = { enabled: false };
+    return;
+  }
+  if (options === undefined || options === true) {
+    s._thinking = true;
+    s._thinkingOptions = { enabled: true };
+    return;
+  }
+  const enabled = options.enabled !== false;
+  s._thinking = enabled;
+  s._thinkingOptions = { ...options, enabled };
 };
 
 /**

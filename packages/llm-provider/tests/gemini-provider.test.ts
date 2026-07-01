@@ -50,6 +50,7 @@ import type { Layer as EffectLayer } from "effect";
 let GeminiProviderLive: EffectLayer.Layer<LLMServiceType>;
 let LLMConfig: (typeof import("../src/index.js"))["LLMConfig"];
 let LLMService: (typeof import("../src/index.js"))["LLMService"];
+let buildGenerationConfig: (typeof import("../src/providers/gemini.js"))["buildGenerationConfig"];
 
 beforeAll(async () => {
   // Dynamic import ensures mock is in place when gemini.ts first calls import("@google/genai")
@@ -57,6 +58,10 @@ beforeAll(async () => {
   GeminiProviderLive = mod.GeminiProviderLive as EffectLayer.Layer<LLMServiceType>;
   LLMConfig = mod.LLMConfig;
   LLMService = mod.LLMService;
+
+  // buildGenerationConfig is @internal — import directly from the provider module
+  const geminiMod = await import("../src/providers/gemini.js");
+  buildGenerationConfig = geminiMod.buildGenerationConfig;
 });
 
 // ─── Test helper ───
@@ -133,13 +138,36 @@ describe("GeminiProviderLive", () => {
     );
   });
 
-  // ─── Thinking-budget starvation fix (Cluster A) ───
-  // Gemini 2.5 thinks by default with a *dynamic* budget that expands to consume
-  // the whole maxOutputTokens → the visible answer is starved (finishReason=
-  // MAX_TOKENS, empty/truncated content). The adapter must bound thinkingBudget
-  // and raise maxOutputTokens so the harness-requested answer budget survives.
-  it("complete() bounds thinkingBudget and raises maxOutputTokens for thinking-capable models", async () => {
-    await run(
+  // ─── Thinking opt-in via Layer (Cluster A: now opt-in, not auto-enable) ───
+  // When config.thinking=true, the adapter must bound thinkingBudget and raise
+  // maxOutputTokens so the harness-requested answer budget survives hidden reasoning.
+  it("complete() reserves thinking budget when config.thinking=true for capable models", async () => {
+    const thinkingConfig = LLMConfig.of({
+      defaultProvider: "gemini",
+      defaultModel: "gemini-2.5-pro",
+      googleApiKey: "test-api-key",
+      embeddingConfig: {
+        model: "gemini-embedding-001",
+        dimensions: 4,
+        provider: "openai",
+        batchSize: 100,
+      },
+      supportsPromptCaching: false,
+      maxRetries: 1,
+      timeoutMs: 30_000,
+      defaultMaxTokens: 1024,
+      defaultTemperature: 0.7,
+      thinking: true, // opt-in
+    });
+    const thinkingLayer = GeminiProviderLive.pipe(
+      Layer.provide(Layer.succeed(LLMConfig, thinkingConfig)),
+    );
+    const runThinking = <A>(effect: Effect.Effect<A, unknown, LLMServiceType>) =>
+      Effect.runPromise(
+        effect.pipe(Effect.provide(thinkingLayer as Layer.Layer<LLMServiceType, unknown>)),
+      );
+
+    await runThinking(
       Effect.gen(function* () {
         const llm = yield* LLMService;
         return yield* llm.complete({
@@ -160,7 +188,7 @@ describe("GeminiProviderLive", () => {
     expect(cfg.maxOutputTokens).toBeGreaterThan(4000);
   });
 
-  it("complete() does NOT set thinkingConfig for non-thinking models, preserving maxOutputTokens", async () => {
+  it("complete() sets thinkingBudget=0 for non-thinking models (best-effort disable)", async () => {
     await run(
       Effect.gen(function* () {
         const llm = yield* LLMService;
@@ -174,10 +202,11 @@ describe("GeminiProviderLive", () => {
 
     const cfg = (
       mockGenerateContent.mock.calls.at(-1)?.[0] as {
-        config: { thinkingConfig?: unknown; maxOutputTokens?: number };
+        config: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number };
       }
     ).config;
-    expect(cfg.thinkingConfig).toBeUndefined();
+    // Always emit thinkingConfig; budget=0 is best-effort disable (no-op on non-thinking models).
+    expect(cfg.thinkingConfig?.thinkingBudget).toBe(0);
     expect(cfg.maxOutputTokens).toBe(4000);
   });
 
@@ -319,4 +348,28 @@ describe("GeminiProviderLive", () => {
     expect(result.toolCalls?.length).toBe(1);
     expect(result.toolCalls?.[0]?.name).toBe("search");
   });
+
+  // ─── Thinking opt-in (Task 3) ───────────────────────────────────────────
+  // buildGenerationConfig is an @internal seam tested directly for precision.
+  // These assertions are synchronous — no Layer needed.
+
+  it("gemini: thinking undefined → thinkingBudget 0 (opt-in, disabled)", () => {
+    const cfg = buildGenerationConfig(
+      { model: "gemini-2.5-pro", maxTokens: 2000 },
+      /* configThinking */ undefined,
+      /* thinkingOptions */ undefined,
+    );
+    expect(cfg.maxOutputTokens).toBe(2000); // no reservation
+    expect((cfg.thinkingConfig as { thinkingBudget: number }).thinkingBudget).toBe(0);
+  }, 15000);
+
+  it("gemini: thinking true + capable → reserves budget on top", () => {
+    const cfg = buildGenerationConfig(
+      { model: "gemini-2.5-pro", maxTokens: 2000 },
+      true,
+      { enabled: true },
+    );
+    expect(cfg.maxOutputTokens).toBe(2000 + 8000);
+    expect((cfg.thinkingConfig as { thinkingBudget: number }).thinkingBudget).toBe(8000);
+  }, 15000);
 });

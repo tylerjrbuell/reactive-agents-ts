@@ -462,6 +462,12 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   defaultStrategy: Schema.optional(Schema.String),
   /** Enable/disable thinking mode for thinking-capable models (auto-detect if omitted) */
   thinking: Schema.optional(Schema.Boolean),
+  /** Rich thinking configuration (effort level, explicit budget). Authoritative over `thinking` boolean when present. */
+  thinkingOptions: Schema.optional(Schema.Struct({
+    enabled: Schema.optional(Schema.Boolean),
+    effort: Schema.optional(Schema.Literal("low", "medium", "high")),
+    budgetTokens: Schema.optional(Schema.Number),
+  })),
   /** Override default temperature for LLM requests */
   temperature: Schema.optional(Schema.Number),
   /** Override default maxTokens for LLM requests */

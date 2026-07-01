@@ -130,6 +130,16 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly thinking?: boolean;
 
     /**
+     * Rich thinking configuration (effort level, explicit budget). The
+     * `thinking` boolean remains authoritative for on/off — adapters resolve
+     * enablement from `config.thinking` via `resolveThinkingEnabled`, then
+     * stamp that onto `thinkingOptions.enabled`. `thinkingOptions` carries the
+     * secondary knobs (effort, budgetTokens), not the on/off decision.
+     * Written by `.withThinking()`. See `@reactive-agents/llm-provider` thinking module.
+     */
+    readonly thinkingOptions?: import("./thinking/index.js").ThinkingOptions;
+
+    /**
      * Default maximum output tokens for LLM responses.
      * Used if a CompletionRequest does not specify maxTokens.
      * Set lower for faster responses; higher for longer outputs.

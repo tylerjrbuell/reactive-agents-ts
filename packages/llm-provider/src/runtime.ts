@@ -64,7 +64,7 @@ export const createLLMProviderLayer = (
   provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "anthropic",
   testScenario?: TestTurn[],
   model?: string,
-  modelParams?: { thinking?: boolean; temperature?: number; maxTokens?: number; numCtx?: number },
+  modelParams?: { thinking?: boolean; thinkingOptions?: import("./thinking/index.js").ThinkingOptions; temperature?: number; maxTokens?: number; numCtx?: number },
   circuitBreaker?: Partial<CircuitBreakerConfig> | false,
   pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>,
 ) => {
@@ -78,6 +78,7 @@ export const createLLMProviderLayer = (
   const configOverrides: Record<string, unknown> = {};
   if (model) configOverrides.defaultModel = model;
   if (modelParams?.thinking !== undefined) configOverrides.thinking = modelParams.thinking;
+  if (modelParams?.thinkingOptions !== undefined) configOverrides.thinkingOptions = modelParams.thinkingOptions;
   if (modelParams?.temperature !== undefined) configOverrides.defaultTemperature = modelParams.temperature;
   if (modelParams?.maxTokens !== undefined) configOverrides.defaultMaxTokens = modelParams.maxTokens;
   if (modelParams?.numCtx !== undefined) configOverrides.explicitNumCtx = modelParams.numCtx;

@@ -20,6 +20,12 @@ import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
+import { resolveCapability } from "../capability-resolver.js";
+import {
+  resolveThinkingEnabled,
+  reserveThinkingBudget,
+  buildAnthropicThinkingBody,
+} from "../thinking/index.js";
 
 // ─── Anthropic Message Conversion Helpers ───
 
@@ -197,12 +203,24 @@ export const AnthropicProviderLive = Layer.effect(
             ? request.model
             : request.model?.model ?? config.defaultModel;
 
+          const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const cap = resolveCapability("anthropic", model);
+          const thinkEnabled = resolveThinkingEnabled(
+            "anthropic",
+            model,
+            config.thinking,
+            cap.supportsThinkingMode,
+          );
+          const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: thinkEnabled,
+          });
+
           const response = yield* Effect.tryPromise({
             try: () =>
               client.messages.create({
                 model,
-                max_tokens: request.maxTokens ?? config.defaultMaxTokens,
-                temperature: request.temperature ?? config.defaultTemperature,
+                max_tokens: reserve !== undefined ? answerBudget + reserve : answerBudget,
                 system: buildSystemParam(request.systemPrompt),
                 messages: toAnthropicMessages(request.messages),
                 stop_sequences: request.stopSequences
@@ -210,6 +228,15 @@ export const AnthropicProviderLive = Layer.effect(
                   : undefined,
                 tools: request.tools?.map((t, i) =>
                   toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
+                ),
+                // Thinking-form + temperature: adaptive/enabled shape when
+                // thinking is on (temperature omitted — API rejects ≠1);
+                // plain temperature when off. See buildAnthropicThinkingBody.
+                ...buildAnthropicThinkingBody(
+                  model,
+                  reserve,
+                  config.thinkingOptions?.effort,
+                  request.temperature ?? config.defaultTemperature,
                 ),
               }),
             catch: (error) => toEffectError(error, "anthropic"),
@@ -275,15 +302,40 @@ export const AnthropicProviderLive = Layer.effect(
           const useAdapterNormalization =
             typeof streamAdapter.parseToolCalls === "function";
 
+          const streamAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const streamCap = resolveCapability("anthropic", model);
+          const streamThinkEnabled = resolveThinkingEnabled(
+            "anthropic",
+            model,
+            config.thinking,
+            streamCap.supportsThinkingMode,
+          );
+          const streamReserve = reserveThinkingBudget(
+            streamAnswerBudget,
+            streamCap.supportsThinkingMode,
+            {
+              ...(config.thinkingOptions ?? {}),
+              enabled: streamThinkEnabled,
+            },
+          );
+
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const stream = client.messages.stream({
               model,
-              max_tokens: request.maxTokens ?? config.defaultMaxTokens,
-              temperature: request.temperature ?? config.defaultTemperature,
+              max_tokens:
+                streamReserve !== undefined
+                  ? streamAnswerBudget + streamReserve
+                  : streamAnswerBudget,
               system: buildSystemParam(request.systemPrompt),
               messages: toAnthropicMessages(request.messages),
               tools: request.tools?.map((t, i) =>
                 toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
+              ),
+              ...buildAnthropicThinkingBody(
+                model,
+                streamReserve,
+                config.thinkingOptions?.effort,
+                request.temperature ?? config.defaultTemperature,
               ),
             });
 
@@ -457,18 +509,44 @@ export const AnthropicProviderLive = Layer.effect(
             const anthropicMsgs = toAnthropicMessages(msgs);
             anthropicMsgs.push({ role: "assistant", content: "{" });
 
+            const structuredModel =
+              typeof request.model === "string"
+                ? request.model
+                : (request.model?.model ?? config.defaultModel);
+            const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+            const structuredCap = resolveCapability("anthropic", structuredModel);
+            const structuredThinkEnabled = resolveThinkingEnabled(
+              "anthropic",
+              structuredModel,
+              config.thinking,
+              structuredCap.supportsThinkingMode,
+            );
+            const structuredReserve = reserveThinkingBudget(
+              structuredAnswerBudget,
+              structuredCap.supportsThinkingMode,
+              {
+                ...(config.thinkingOptions ?? {}),
+                enabled: structuredThinkEnabled,
+              },
+            );
+
             const completeResult = yield* Effect.tryPromise({
               try: async () => {
                 const client = await getClient();
                 return client.messages.create({
-                  model: typeof request.model === 'string'
-                    ? request.model
-                    : request.model?.model ?? config.defaultModel,
+                  model: structuredModel,
                   max_tokens:
-                    request.maxTokens ?? config.defaultMaxTokens,
-                  temperature: request.temperature ?? config.defaultTemperature,
+                    structuredReserve !== undefined
+                      ? structuredAnswerBudget + structuredReserve
+                      : structuredAnswerBudget,
                   system: buildSystemParam(request.systemPrompt),
                   messages: anthropicMsgs,
+                  ...buildAnthropicThinkingBody(
+                    structuredModel,
+                    structuredReserve,
+                    config.thinkingOptions?.effort,
+                    request.temperature ?? config.defaultTemperature,
+                  ),
                 });
               },
               catch: (error) => toEffectError(error, "anthropic"),

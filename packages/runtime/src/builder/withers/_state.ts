@@ -70,6 +70,7 @@ export interface BuilderState {
   _provider: ProviderName;
   _model?: string;
   _thinking?: boolean;
+  _thinkingOptions?: import("@reactive-agents/llm-provider").ThinkingOptions;
   _temperature?: number;
   _maxTokens?: number;
   _numCtx?: number;
