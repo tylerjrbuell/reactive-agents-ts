@@ -115,6 +115,17 @@ Already complete. Refactor `resolveThinking` to delegate the tri-state to the sh
 - Modify: `providers/{anthropic,openai,gemini,local}.ts`, `capability.ts` (openai reasoning entry), `llm-config.ts` (`thinkingOptions`), builder (`.withThinking()` wither + `to-config` + `runtime-construction` threading)
 - Create: benchmark ablation session + run script; ledger entry
 
+## Post-implementation correction (2026-07-01, from whole-branch review)
+
+The original **Anthropic** section above assumed the legacy `thinking:{type:"enabled",budget_tokens:N}` shape mirrored from Gemini. Whole-branch review + Anthropic-doc verification found this is **rejected (400) on current models** (Opus 4.7/4.8, Sonnet 5, Fable 5). Corrected, as-shipped design:
+
+- **Model-generation branch** (`thinking/anthropic-form.ts` `anthropicThinkingForm`): current models (Opus 4.6/4.7/4.8, Sonnet 5, Fable, Mythos) use `thinking:{type:"adaptive"}` + a **top-level** `output_config:{effort}` (from `ThinkingOptions.effort`; omitted when unset → API default). Legacy models (≤ Sonnet 4.5 / Haiku 4.5 / Opus 4.5) use `thinking:{type:"enabled",budget_tokens:reserve}`.
+- **`temperature` must be dropped whenever thinking is enabled** — Anthropic (any form) AND OpenAI reasoning both 400 on a non-default `temperature`. Adapters omit it on the thinking path; the OFF path is byte-identical to pre-feature.
+- `max_tokens = answer + reserve` holds for both Anthropic forms (headroom); adaptive has no `budget_tokens` (effort is the knob), enabled keeps `budget_tokens < max_tokens`.
+- OpenAI reasoning: `reasoning_effort` + `max_completion_tokens`, no `temperature` (I1).
+
+**Lesson:** request-capturing mocks pass any payload → per-task green missed a live-API-shape defect on the headline capability; only whole-branch review + real-API-doc verification caught it. The ablation live-run is the empirical proof that thinking actually completes on each tier.
+
 ## Success criteria
 
 1. All four providers honor the tri-state; `undefined`→off everywhere (control-pillar consistent).
