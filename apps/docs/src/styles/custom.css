@@ -2026,3 +2026,44 @@ nav a[data-ra-new='true']::before {
   font-size: 0.7rem;
   color: var(--sl-color-gray-2);
 }
+
+/* ── Numbered steps (Tailwind-style 01 → 02 → ...) ─────────── */
+/* Apply class="ra-steps" to <ol> in guides for numbered steps  */
+ol.ra-steps {
+  counter-reset: ra-step;
+  list-style: none;
+  padding: 0;
+}
+
+ol.ra-steps > li {
+  counter-increment: ra-step;
+  position: relative;
+  padding-left: 3rem;
+  padding-bottom: 1.5rem;
+  border-left: 2px solid var(--sl-color-gray-5);
+  margin-left: 1rem;
+}
+
+ol.ra-steps > li::before {
+  content: counter(ra-step, decimal-leading-zero);
+  position: absolute;
+  left: -1.35rem;
+  top: 0;
+  background: var(--sl-color-bg);
+  border: 2px solid var(--sl-color-accent);
+  color: var(--sl-color-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+ol.ra-steps > li:last-child {
+  border-left-color: transparent;
+}

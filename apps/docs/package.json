@@ -21,7 +21,8 @@
     "astro-skills": "^0.0.5",
     "glob": "^13.0.6",
     "gray-matter": "^4.0.3",
-    "sharp": "^0.33.0"
+    "sharp": "^0.33.0",
+    "starlight-scroll-to-top": "^1.0.1"
   },
   "devDependencies": {
     "starlight-image-zoom": "^0.14.1",

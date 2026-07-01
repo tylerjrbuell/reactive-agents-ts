@@ -4,6 +4,7 @@ import skills from "astro-skills";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightImageZoom from "starlight-image-zoom";
+import starlightScrollToTop from "starlight-scroll-to-top";
 export default defineConfig({
   // Docs now deploy to a custom domain at the root path.
   site: "https://docs.reactiveagents.dev",
@@ -76,7 +77,20 @@ export default defineConfig({
             },
           ],
         }),
+        // Scroll-to-top button — zero-config, appears on long pages
+        starlightScrollToTop(),
       ],
+      expressiveCode: {
+        themes: ["github-dark", "github-light"],
+        defaultProps: {
+          // bash/sh/shell blocks get the terminal frame by default
+          overridesByLang: {
+            bash: { frame: "terminal" },
+            sh: { frame: "terminal" },
+            shell: { frame: "terminal" },
+          },
+        },
+      },
       customCss: ["./src/styles/custom.css"],
       head: [
         // MUST be first + non-deferred: a service worker that injects

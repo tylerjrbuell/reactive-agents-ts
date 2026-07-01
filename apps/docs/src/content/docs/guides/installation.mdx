@@ -4,10 +4,8 @@ description: How to install and configure Reactive Agents.
 sidebar:
   order: 4
 lastCommit:
-  subject: >-
-    docs(badges): unified badge system — sync-page-metadata replaces
-    new-page-indicator
-  hash: 857138c
+  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
+  hash: f625612
   date: '2026-07-01'
 badge:
   text: Updated
@@ -15,7 +13,7 @@ badge:
   __auto: '1'
 ---
 
-import { Steps, Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 <Aside type="tip" title="Bun recommended — Node.js 22.5+ also supported">
 Bun ≥1.0.0 gives optimal performance (native SQLite, subprocess, HTTP). **Node.js 22.5+** is fully supported via `@reactive-agents/runtime-shim` — use `npm install reactive-agents` or `npx tsx` if you prefer the Node.js ecosystem. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
@@ -23,44 +21,60 @@ Bun ≥1.0.0 gives optimal performance (native SQLite, subprocess, HTTP). **Node
 
 ## From zero to running agent
 
-<Steps>
+<ol class="ra-steps">
 
-1. **Install the meta-package.**
+<li>
 
-   ```bash
-   # Bun (recommended)
-   bun add reactive-agents
+**Install the meta-package.**
 
-   # Node.js 22.5+
-   npm install reactive-agents
-   ```
+```bash
+# Bun (recommended)
+bun add reactive-agents
 
-2. **Set at least one provider key** in `.env` (or skip if you're going local).
+# Node.js 22.5+
+npm install reactive-agents
+```
 
-   ```bash
-   echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
-   # or OPENAI_API_KEY, GOOGLE_API_KEY, LITELLM_API_KEY
-   ```
+</li>
 
-3. **Build your first agent** — three lines is enough.
+<li>
 
-   ```typescript
-   import { ReactiveAgents } from "reactive-agents";
-   const agent = await ReactiveAgents.create().withProvider("anthropic").build();
-   console.log((await agent.run("Hello")).output);
-   ```
+**Set at least one provider key** in `.env` (or skip if you're going local).
 
-4. **Run it.**
+```bash
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+# or OPENAI_API_KEY, GOOGLE_API_KEY, LITELLM_API_KEY
+```
 
-   ```bash
-   # Bun
-   bun run src/agent.ts
+</li>
 
-   # Node.js (requires tsx)
-   npx tsx src/agent.ts
-   ```
+<li>
 
-</Steps>
+**Build your first agent** — three lines is enough.
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+const agent = await ReactiveAgents.create().withProvider("anthropic").build();
+console.log((await agent.run("Hello")).output);
+```
+
+</li>
+
+<li>
+
+**Run it.**
+
+```bash
+# Bun
+bun run src/agent.ts
+
+# Node.js (requires tsx)
+npx tsx src/agent.ts
+```
+
+</li>
+
+</ol>
 
 ## Simple Install
 
