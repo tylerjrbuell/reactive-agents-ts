@@ -803,6 +803,19 @@ export type CompletionRequest = {
    */
   readonly numCtx?: number;
   /**
+   * Per-request hard timeout in milliseconds for the underlying provider call.
+   *
+   * Honored by the local (Ollama) provider, where a cold model load or GPU
+   * contention can push a single generation past the default ceiling. On
+   * timeout the in-flight HTTP request is aborted so the server stops
+   * generating. Falls back to `LLMConfig.ollamaTimeoutMs`, then to a
+   * cold-load-tolerant default (see `providers/local.ts`).
+   *
+   * No-op for cloud providers (Anthropic/OpenAI/Gemini/LiteLLM), which apply
+   * their own fixed ceiling.
+   */
+  readonly timeoutMs?: number;
+  /**
    * OBSERVABILITY-ONLY run correlation. Carries the kernel's taskId/iteration
    * so the observable-LLM wrapper can key LLMExchange trace events to the real
    * run instead of a global `llm-direct` placeholder.

@@ -21,11 +21,20 @@ export class LLMRateLimitError extends Data.TaggedError("LLMRateLimitError")<{
 
 /**
  * Request timeout.
+ *
+ * `model` and `elapsedMs` are optional enrichment: local (Ollama) runs can
+ * breach the ceiling under cold-load / GPU contention, and surfacing which
+ * model timed out plus how long it actually ran turns a bare "timed out" into
+ * an actionable line (see providers/local.ts timeout resolution).
  */
 export class LLMTimeoutError extends Data.TaggedError("LLMTimeoutError")<{
   readonly message: string;
   readonly provider: LLMProvider;
   readonly timeoutMs: number;
+  /** Model that timed out (when known). */
+  readonly model?: string;
+  /** Wall-clock ms actually elapsed before the client abandoned the call. */
+  readonly elapsedMs?: number;
 }> {}
 
 /**

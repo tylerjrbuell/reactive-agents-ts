@@ -1,9 +1,10 @@
-import { Effect, Layer, Stream, Schema } from 'effect'
+import { Effect, Layer, Stream, Schema, Duration } from 'effect'
 import { LLMService } from '../llm-service.js'
 import { LLMConfig } from '../llm-config.js'
 import type { ProviderCapabilities } from '../capabilities.js'
-import { LLMError, LLMTimeoutError, LLMParseError } from '../errors.js'
+import { LLMTimeoutError, LLMParseError } from '../errors.js'
 import type { LLMErrors, ParseAttemptError } from '../errors.js'
+import { mapProviderError } from '../provider-error.js'
 import type {
     CompletionResponse,
     StreamEvent,
@@ -282,34 +283,51 @@ export async function resolveThinking(
 // ─── Error Helpers ───
 
 /**
- * Detect Ollama "model not found" errors and produce an actionable message.
- * Ollama returns ResponseError with status 404 and message "model 'X' not found".
+ * Map an Ollama SDK error to a clean, tagged LLM error.
+ *
+ * Delegates to the shared {@link mapProviderError} normalizer so a model-name
+ * typo yields a single actionable line (`Model "X" not found locally. Run:
+ * ollama pull X`) with a one-line string `cause` — never the raw SDK object,
+ * whose inspection would re-print the JSON body and leak an internal stack.
  */
-function ollamaError(error: unknown, model?: string): LLMError {
-    const msg = (error as { message?: string })?.message ?? String(error)
-    const status =
-        (error as { status_code?: number; statusCode?: number })?.status_code ??
-        (error as { status_code?: number; statusCode?: number })?.statusCode
-
-    // Model not found — give the user a clear fix command
-    if (status === 404 || /model\s+['"]?\S+['"]?\s+not found/i.test(msg)) {
-        const modelName =
-            model ??
-            msg.match(/model\s+['"]?(\S+?)['"]?\s+not found/i)?.[1] ??
-            'unknown'
-        return new LLMError({
-            message: `Model "${modelName}" not found locally. Run: ollama pull ${modelName}`,
-            provider: 'ollama',
-            cause: error,
-        })
-    }
-
-    return new LLMError({
-        message: `Ollama request failed: ${msg}`,
-        provider: 'ollama',
-        cause: error,
-    })
+function ollamaError(error: unknown, model?: string): LLMErrors {
+    return mapProviderError(error, 'ollama', model)
 }
+
+// ─── Timeout Resolution ───
+
+/**
+ * Cold-load-tolerant default ceiling (ms) for a single local generation.
+ *
+ * Deliberately far above a hosted call: a cold model load or a GPU swap under
+ * contention can push one Ollama generation past two minutes (observed 2m31s
+ * on a dev box, 2026-07-01, where the OLD hardcoded 120s literal killed the run
+ * mid-generation). 300s gives cold/contended calls room to finish.
+ */
+const DEFAULT_LOCAL_TIMEOUT_MS = 300_000
+
+/**
+ * Resolve the per-call timeout (ms) for the local provider by precedence:
+ * per-request override → provider config → cold-load default.
+ *
+ *   request.timeoutMs      — caller-supplied per-call override
+ *   config.ollamaTimeoutMs — provider-wide override (OLLAMA_TIMEOUT_MS env)
+ *   DEFAULT_LOCAL_TIMEOUT_MS — cold-load-tolerant floor
+ *
+ * NOTE (denied-by-authority follow-up for runtime-warden): the builder's
+ * `.withTimeout()` maps to the execution-engine whole-run timeout, NOT to
+ * `LLMConfig.ollamaTimeoutMs`. Threading `.withTimeout()` (or a dedicated
+ * `.withLlmTimeout()`) into this field is a runtime/builder change outside
+ * llm-provider's authority. Until then the value is reachable via
+ * `request.timeoutMs` or `OLLAMA_TIMEOUT_MS`.
+ */
+function resolveLocalTimeoutMs(
+    request: { readonly timeoutMs?: number },
+    config: { readonly ollamaTimeoutMs?: number },
+): number {
+    return request.timeoutMs ?? config.ollamaTimeoutMs ?? DEFAULT_LOCAL_TIMEOUT_MS
+}
+
 // ─── Ollama / Local Provider Layer ───
 
 export const LocalProviderLive = Layer.effect(
@@ -323,11 +341,28 @@ export const LocalProviderLive = Layer.effect(
                 ? getProviderDefaultModel('ollama') ?? 'cogito:14b'
                 : config.defaultModel
 
-        // Lazy-import the ollama SDK (same pattern as Gemini provider)
-        const getClient = async () => {
+        // Lazy-import the ollama SDK (same pattern as Gemini provider).
+        //
+        // When an AbortSignal is supplied, inject a fetch that forwards it into
+        // every underlying request. On client-side timeout (Effect interruption
+        // fires the signal) the in-flight HTTP request is aborted so the Ollama
+        // server stops generating instead of burning GPU on a response the
+        // client already abandoned (root cause of the 2026-07-01 audit finding).
+        const getClient = async (signal?: AbortSignal) => {
             const { Ollama } = await import('ollama')
+            // ollama's `Config.fetch` is typed as the full global `fetch`
+            // (including its `preconnect` member), so preserve it via
+            // Object.assign rather than a bare arrow (which lacks `preconnect`).
+            const fetchWithSignal: typeof fetch = Object.assign(
+                (
+                    input: Parameters<typeof fetch>[0],
+                    init?: Parameters<typeof fetch>[1],
+                ): Promise<Response> => fetch(input, { ...init, signal }),
+                { preconnect: fetch.preconnect },
+            )
             return new Ollama({
                 host: endpoint,
+                ...(signal ? { fetch: fetchWithSignal } : {}),
                 ...(config.ollamaApiKey
                     ? {
                           headers: {
@@ -340,12 +375,18 @@ export const LocalProviderLive = Layer.effect(
 
         return LLMService.of({
             complete: (request) =>
-                Effect.gen(function* () {
+                // Effect.suspend so `startedAt` is captured at RUN time (not at
+                // Effect-construction time), giving an accurate elapsed figure
+                // for the timeout error.
+                Effect.suspend(() => {
                     const model =
                         typeof request.model === 'string'
                             ? request.model
                             : request.model?.model ?? defaultModel
+                    const timeoutMs = resolveLocalTimeoutMs(request, config)
+                    const startedAt = Date.now()
 
+                    return Effect.gen(function* () {
                     // Resolve capability up-front so we can use its tier for
                     // adapter selection (M12 Hook 1/7) and num_ctx wiring.
                     const capability = yield* Effect.tryPromise({
@@ -364,8 +405,13 @@ export const LocalProviderLive = Layer.effect(
                     )
 
                     const response = yield* Effect.tryPromise({
-                        try: async () => {
-                            const client = await getClient()
+                        // `signal` fires when the fiber is interrupted (e.g. by
+                        // the timeout below) — forwarding it to getClient aborts
+                        // the in-flight Ollama HTTP request so the server stops
+                        // generating instead of finishing a response the client
+                        // has abandoned.
+                        try: async (signal) => {
+                            const client = await getClient(signal)
 
                             const msgs = toOllamaMessages(request.messages)
                             if (request.systemPrompt) {
@@ -519,17 +565,26 @@ export const LocalProviderLive = Layer.effect(
                     } satisfies CompletionResponse
                 }).pipe(
                     Effect.retry(retryPolicy),
-                    Effect.timeout('120 seconds'),
-                    Effect.catchTag('TimeoutException', () =>
-                        Effect.fail(
+                    Effect.timeout(Duration.millis(timeoutMs)),
+                    Effect.catchTag('TimeoutException', () => {
+                        const elapsedMs = Date.now() - startedAt
+                        return Effect.fail(
                             new LLMTimeoutError({
-                                message: 'Local LLM request timed out',
+                                message:
+                                    `Local LLM request for model "${model}" timed out after ` +
+                                    `${elapsedMs}ms (limit ${timeoutMs}ms). The model may be ` +
+                                    `cold-loading or the GPU is contended — warm it first (a ` +
+                                    `single call to load it), raise the timeout via ` +
+                                    `request.timeoutMs / OLLAMA_TIMEOUT_MS, or reduce contention.`,
                                 provider: 'ollama',
-                                timeoutMs: 120_000,
+                                timeoutMs,
+                                model,
+                                elapsedMs,
                             })
                         )
-                    )
-                ),
+                    })
+                )
+                }),
 
             stream: (request) =>
                 Effect.gen(function* () {
@@ -539,6 +594,13 @@ export const LocalProviderLive = Layer.effect(
                             : request.model?.model ?? defaultModel
 
                     return Stream.async<StreamEvent, LLMErrors>((emit) => {
+                        // Track the abortable iterator so stream interruption
+                        // (consumer cancels / scope closes) tears down the
+                        // in-flight Ollama request instead of leaving the server
+                        // generating. `aborted` suppresses the post-abort
+                        // AbortError from surfacing as a spurious stream failure.
+                        let ollamaStream: { abort: () => void } | undefined
+                        let aborted = false
                         const doStream = async () => {
                             try {
                                 const client = await getClient()
@@ -598,6 +660,7 @@ export const LocalProviderLive = Layer.effect(
                                             : {}),
                                     },
                                 })
+                                ollamaStream = stream
 
                                 let fullContent = ''
                                 const accumulatedLogprobs: TokenLogprob[] = []
@@ -754,10 +817,19 @@ export const LocalProviderLive = Layer.effect(
                                     }
                                 }
                             } catch (error) {
-                                emit.fail(ollamaError(error, model))
+                                // Suppress the AbortError that `abort()` raises
+                                // on interruption — it is not a real failure.
+                                if (!aborted) {
+                                    emit.fail(ollamaError(error, model))
+                                }
                             }
                         }
                         void doStream()
+                        // Finalizer: run on stream interruption/scope close.
+                        return Effect.sync(() => {
+                            aborted = true
+                            ollamaStream?.abort()
+                        })
                     })
                 }),
 

@@ -6,9 +6,9 @@ import {
   LLMError,
   LLMTimeoutError,
   LLMParseError,
-  LLMRateLimitError,
 } from "../errors.js";
 import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import { mapProviderError } from "../provider-error.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -95,21 +95,8 @@ export const toOpenAIMessages = (
     };
   });
 
-const toEffectError = (error: unknown, provider: "openai"): LLMErrors => {
-  const err = error as { status?: number; message?: string };
-  if (err.status === 429) {
-    return new LLMRateLimitError({
-      message: err.message ?? "Rate limit exceeded",
-      provider,
-      retryAfterMs: 60_000,
-    });
-  }
-  return new LLMError({
-    message: err.message ?? String(error),
-    provider,
-    cause: error,
-  });
-};
+const toEffectError = (error: unknown, provider: "openai"): LLMErrors =>
+  mapProviderError(error, provider);
 
 // ─── OpenAI Tool Conversion ───
 

@@ -6,10 +6,10 @@ import {
   LLMError,
   LLMTimeoutError,
   LLMParseError,
-  LLMRateLimitError,
 } from "../errors.js";
 import type {
   LLMErrors, ParseAttemptError } from "../errors.js";
+import { mapProviderError } from "../provider-error.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -106,22 +106,11 @@ const toAnthropicTool = (tool: {
   ...(cached ? { cache_control: { type: "ephemeral" as const } } : {}),
 });
 
-const toEffectError = (error: unknown, provider: "anthropic"): LLMErrors => {
-  const err = error as { status?: number; message?: string; headers?: Record<string, string> };
-  if (err.status === 429) {
-    const retryAfter = err.headers?.["retry-after"];
-    return new LLMRateLimitError({
-      message: err.message ?? "Rate limit exceeded",
-      provider,
-      retryAfterMs: retryAfter ? Number(retryAfter) * 1000 : 60_000,
-    });
-  }
-  return new LLMError({
-    message: err.message ?? String(error),
-    provider,
-    cause: error,
-  });
-};
+const toEffectError = (
+  error: unknown,
+  provider: "anthropic",
+  model?: string,
+): LLMErrors => mapProviderError(error, provider, model);
 
 // ── System prompt caching ────────────────────────────────────────────────────
 // Anthropic prompt caching: marking content with cache_control: { type:
@@ -239,7 +228,7 @@ export const AnthropicProviderLive = Layer.effect(
                   request.temperature ?? config.defaultTemperature,
                 ),
               }),
-            catch: (error) => toEffectError(error, "anthropic"),
+            catch: (error) => toEffectError(error, "anthropic", model),
           });
 
           const mapped = mapAnthropicResponse(
@@ -549,7 +538,7 @@ export const AnthropicProviderLive = Layer.effect(
                   ),
                 });
               },
-              catch: (error) => toEffectError(error, "anthropic"),
+              catch: (error) => toEffectError(error, "anthropic", structuredModel),
             });
 
             const response = mapAnthropicResponse(

@@ -6,9 +6,9 @@ import {
   LLMError,
   LLMTimeoutError,
   LLMParseError,
-  LLMRateLimitError,
 } from "../errors.js";
 import type { LLMErrors, ParseAttemptError } from "../errors.js";
+import { mapProviderError } from "../provider-error.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -67,21 +67,8 @@ const toLiteLLMMessages = (
     };
   });
 
-const toEffectError = (error: unknown): LLMErrors => {
-  const err = error as { status?: number; message?: string };
-  if (err.status === 429) {
-    return new LLMRateLimitError({
-      message: err.message ?? "Rate limit exceeded",
-      provider: "litellm",
-      retryAfterMs: 60_000,
-    });
-  }
-  return new LLMError({
-    message: err.message ?? String(error),
-    provider: "litellm",
-    cause: error,
-  });
-};
+const toEffectError = (error: unknown): LLMErrors =>
+  mapProviderError(error, "litellm");
 
 const toLiteLLMTool = (tool: ToolDefinition) => ({
   type: "function" as const,

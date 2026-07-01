@@ -120,6 +120,28 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly timeoutMs: number;
 
     /**
+     * Per-call hard timeout (ms) for the local (Ollama) provider.
+     *
+     * Distinct from {@link timeoutMs} on purpose: local models routinely need
+     * far longer than a hosted call — a cold model load or a GPU swap under
+     * contention can push a single generation past two minutes (observed
+     * 2m31s on a dev box, 2026-07-01). When set, this is the ceiling
+     * `providers/local.ts` applies to `complete()`; on breach the in-flight
+     * Ollama HTTP request is aborted so the server stops generating.
+     *
+     * Precedence (see `providers/local.ts` resolveLocalTimeoutMs):
+     * `request.timeoutMs` → `ollamaTimeoutMs` → cold-load-tolerant default.
+     *
+     * NOTE: the builder's `.withTimeout()` currently maps to the
+     * execution-engine whole-run timeout, NOT to this field — wiring it here is
+     * a runtime-side change outside llm-provider's authority. Set via
+     * `OLLAMA_TIMEOUT_MS` or a config override until that lands.
+     *
+     * @default undefined (local provider falls back to its 300s cold-load default)
+     */
+    readonly ollamaTimeoutMs?: number;
+
+    /**
      * Enable/disable thinking mode for thinking-capable models.
      * - `true` — Always enable thinking (e.g., qwen3.5, DeepSeek-R1)
      * - `false` — Always disable thinking (e.g., cogito:14b that crashes with think:true)
@@ -286,6 +308,9 @@ export const llmConfigFromEnv = LLMConfig.of({
   })(),
   maxRetries: Number(process.env.LLM_MAX_RETRIES ?? 3),
   timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),
+  ...(process.env.OLLAMA_TIMEOUT_MS !== undefined
+    ? { ollamaTimeoutMs: Number(process.env.OLLAMA_TIMEOUT_MS) }
+    : {}),
   defaultMaxTokens: 4096,
   defaultTemperature: Number(process.env.LLM_DEFAULT_TEMPERATURE ?? 0.7),
   ...(process.env.LLM_DEFAULT_NUM_CTX !== undefined
