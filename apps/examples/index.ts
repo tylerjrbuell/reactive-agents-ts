@@ -323,6 +323,17 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/advanced/killswitch-toggle.ts',
     },
+    {
+        // Cost governance: budget + watchdog + approval + timeout killswitches
+        // composed on ONE agent. TEST mode witness = timeoutAfter (deterministic
+        // under the test provider); LIVE mode witness = budgetLimit firing on real
+        // token spend. Prints the framework's own measured governance overhead.
+        num: 'A25',
+        label: 'cost-governance',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/cost-governance.ts',
+    },
     // reasoning — 20 offline
     {
         num: '19',
