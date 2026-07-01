@@ -281,13 +281,13 @@ Run this checklist:
 
 ---
 
-## Team-Ownership Dev Contract (PILOT — expires 2026-06-15)
+## Team-Ownership Dev Contract (STANDING CONVENTION — canonicalized 2026-06-15)
 
-> **Status:** ablation pilot per [`wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`](wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md). Default-revert on 2026-06-15 unless lift threshold met. Do not extend without affirmative evidence.
+> **Status:** canonical. The 2026-05-23 → 2026-06-15 ablation pilot ([`wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md`](wiki/Planning/Implementation-Plans/2026-05-23-team-ownership-dev-contract-pilot.md)) **concluded with a CANONICALIZE verdict (2026-06-15)** — domain-scoped wardens proved useful and are **kept, not reverted**. Warden routing is now the standing convention for domain-scoped edits.
 
-### Forcing function (REQUIRED during pilot window)
+### Forcing function (standing convention)
 
-Between **2026-05-23** and **2026-06-15**, any edit whose primary scope falls in the table below MUST be routed through the listed warden via `Agent` dispatch with a valid MissionBrief. Main-thread direct edits during the pilot window violate the contract and disqualify the task from pilot data.
+Any edit whose primary scope falls in the table below is routed through the listed warden via `Agent` dispatch with a valid MissionBrief (MissionBrief-in → UpwardReport-out). The warden owns its domain; the main thread dispatches, verifies, and integrates.
 
 | Primary scope | Warden |
 |---|---|
@@ -325,17 +325,17 @@ Between **2026-05-23** and **2026-06-15**, any edit whose primary scope falls in
 - ❌ Parent re-prompts warden to "review your own work" — recreates `verifier.ts:217-222` failure mode and M3 verify-retry loop.
 - ❌ Silent retry past `retries-allowed` in MissionBrief.
 - ❌ Warden widens its own authority without parent gate.
-- ❌ New warden role added to the pilot set without `ablation-warden` PASS verdict (≥2 tiers, ≥3pp lift, ≤15% token overhead).
+- ❌ New warden role added to the warden set without `ablation-warden` PASS verdict (≥2 tiers, ≥3pp lift, ≤15% token overhead).
 - ❌ Domain warden patches code outside its authority manifest — must escalate via `denied-by-authority` and let parent dispatch the correct warden.
 - ❌ Harness / ablation / debrief-scribe / release wardens editing `packages/**/src/**` directly. They surface findings; domain wardens fix.
 
 ### Logging requirement
 
-Every pilot-window task routed through any warden: append one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there. Include `warden: <name>` field.
+Every task routed through any warden: append one YAML block to `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` per the format documented there. Include `warden: <name>` field.
 
-### Evaluation
+### Canonicalize verdict (2026-06-15)
 
-**Date:** 2026-06-15. **Owner:** Tyler. **Evaluator:** `ablation-warden` (first real assignment — applies its own lift rule to the pilot as a whole). **Decision:** canonicalize (drop PILOT markers + write any Phase 2 expansion plan) OR revert (single commit removing all pilot files). **Inconclusive → kill** per default — aggregate (across all wardens) must show ≥10 logged tasks AND meet lift threshold.
+The team-ownership contract graduated from pilot to standing convention on **2026-06-15**. **Owner:** Tyler. **Evaluator:** `ablation-warden`, applying its own lift rule to the aggregate. **Decision: canonicalize** — domain-scoped warden routing (MissionBrief-in → UpwardReport-out, dispatcher FSM, anti-patterns) is kept, not reverted. The old pilot / expiry / default-revert framing is retired; the convention above is now standing.
 
 ---
 
@@ -651,7 +651,12 @@ Canonical project skills live in `.agents/skills/`:
 | Orphan prototype | `reasoning/src/overhaul/result-store.ts` (+ test) | `ResultStore` class (put/get/summarize/materialize) had **zero non-test callers** repo-wide — superseded by the wired `assembly/result-store.ts` (content-hash + `preview()`). (Sibling `overhaul/context-projection.ts` is NOT orphaned — it's wired under the `RA_OVERHAUL` gate at `attend/context-utils.ts:16,241`, transitional.) | Low | Med | Fixed (deleted 2026-06-01) — remaining overhaul tests green |
 | Dead config | `reasoning/src/types/config.ts` | `PlanExecuteConfigSchema.patchStrategy` declared + asserted only in `tests/types/plan-config.test.ts`, never read by any source path (siblings `stepRetries`/`planMode`/`reflectionDepth` are all consumed). YAGNI field. | Low | Low | Open |
 | as any | `reasoning/src/kernel/capabilities/reflect/reactive-observer.ts` | 2 of the only 3 `as any` casts in all of reasoning `src` live here (violates project clean-types rule). `KernelState.meta` is otherwise properly typed `KernelMeta` — NOT an open bag. | Low | Low | Open |
-| Stale path banner | `reasoning/src/kernel/capabilities/verify/quality-utils.ts` | File header `// File: src/strategies/kernel/quality-utils.ts` points at the pre-Stage-5 location. | Low | Low | Open |
+| Stale path banner | `reasoning/src/kernel/capabilities/verify/quality-utils.ts` | File header `// File: src/strategies/kernel/quality-utils.ts` points at the pre-Stage-5 location. | Low | Low | Fixed (verified 2026-07-01 audit) |
+| DX crash | `tools/src/define-tool.ts:133` | No options validation — wrong field names (`parameters`/`execute` vs `input`/`handler`) crash with `TypeError: schema.ast` instead of an actionable error; found live 2026-07-01. | Low | High | Open |
+| Tool authoring gap | `tools/src/define-tool.ts` / `define-tool-simple.ts` | No schema + plain-async + inferred-args shape (AI-SDK style); `tool()` args untyped, `defineTool()` requires Effect; own example casts `as never` (`apps/examples/src/tools/healing-malformed-tool-call.ts:171`). | Medium | High | Open |
+| Hardcoded timeout | `llm-provider/src/providers/local.ts` | `Effect.timeout('120 seconds')` not threaded from `.withTimeout()`; bare timeout error (no model/elapsed/hint); server-side request keeps burning GPU after client abandons. Live-reproduced 2026-07-01 under GPU contention. | Low | High | Open |
+| Lazy key failure | `runtime/src/build-validation.ts` + provider config | Missing API key warns but `build()` succeeds → late raw 401; env captured at module-import vs build-time read (split-brain). Fail-fast typed build error needed (opt-out flag). | Medium | High | Open |
+| Provider duplication | `llm-provider/src/providers/*.ts` | 5 adapters × ~800 LOC similar streaming/retry/format logic; shared base would remove ~200 LOC and centralize quirks. (2026-07-01 audit) | Medium | Medium | Open |
 
 ---
 
@@ -690,9 +695,9 @@ Canonical project skills live in `.agents/skills/`:
 10. **Adaptive Tool Calling System** — FC probe → `toolCallDialect` profile → `NativeFCDriver`/`TextParseDriver` routing; `HealingPipeline` (ToolNameHealer, ParamNameHealer, PathResolver, TypeCoercer); `ExperienceSummary` closes ExperienceStore dead loop; StallDetector + HarnessHarmDetector RI handlers; default driver inverted to NativeFCDriver for uncalibrated models
 11. **Gateway chat mode** — per-sender conversation history with SQLite session persistence, history windowing (40 turns / 8 k chars), episodic context injection, and daily compaction; enable with `channels.mode: 'chat'` (default). Two memory bug fixes also landed: `priorContext` now renders in the system prompt; episodic injection no longer gated behind `enableSelfImprovement`. New `pruneEpisodicLog` on `CompactionService`; `chat-turn` event type added to `DailyLogEntry`. Key file: `packages/runtime/src/gateway-chat.ts`.
 
-### In flight (merge pending — not on `main` yet)
+### External channels (shipped — merged to `main`)
 
-Branch **`feat/channels-package`** (see worktree `.worktrees/channels` if used locally) implements **phase 1 external channels**: new package **`@reactive-agents/channels`** (trigger registry, FIFO session bridge, `ChannelService`, optional HMAC webhook adapter), runtime **`.withChannels()`**, and a **breaking rename** of gateway config **`channels` → `accessControl`** (chat/task mode stays nested under the new shape). Authoritative write-up: [`wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`](wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md). Until merged, Starlight and builder examples on `main` still describe the current `GatewayConfig.channels` field.
+The **`@reactive-agents/channels`** package is **merged to `main`** (`packages/channels`). It implements **phase 1 external channels**: trigger registry, FIFO session bridge, `ChannelService`, and an optional HMAC webhook adapter, wired to the runtime via **`.withChannels()`**. It also carried a **breaking rename** of gateway config **`channels` → `accessControl`** (chat/task mode stays nested under the new shape). Authoritative write-up: [`wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md`](wiki/Research/Debriefs/2026-05-03-channels-phase1-development-debrief.md). Starlight and builder examples now describe `.withChannels()` and the `GatewayConfig.accessControl` field.
 
 ### Documentation Cross-Reference Rules
 

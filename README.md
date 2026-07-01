@@ -112,11 +112,15 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Adaptive tool calling** — FC dialect probe routes to `NativeFCDriver` or 3-tier `TextParseDriver` (XML / JSON / pseudo-code)
 -   **HealingPipeline** — normalizes tool-name aliases, param aliases, paths, and type coercion before every execution (86.7% recovery rate, +80pp accuracy on small models)
 -   **Provider fallback chains** — `withFallbacks()` for graceful degradation across providers and models
+-   **Native thinking mode** — `.withThinking({ effort, budgetTokens })` opts into provider-native reasoning across all four cloud/local adapters (off unless enabled); `.withModel({ thinking: true })` is the quick boolean
+-   **Cost-aware model routing** — `.withModelRouting()` (opt-in, off by default) routes each run to the cheapest *capable* model of the configured provider by task complexity, degrading to the configured model on any error
 
 ### 🛡️ Production Safety
 -   **Guardrails** — pre-LLM injection detection, PII filtering, toxicity blocking, kill switch, behavioral contracts
 -   **Ed25519 identity** — real cryptographic agent certificates, RBAC, delegation chains, audit trails
 -   **Verification** — semantic entropy, fact decomposition, NLI hallucination detection
+-   **Fabrication guard** — `.withFabricationGuard()` is **on by default**; rejects invented empirical performance measurements (benchmark timings, % speed-ups) absent from the tool-observation corpus. Soften to `"warn"` or disable with `"off"`
+-   **Stall / no-progress policy** — `.withStallPolicy()` bounds wasted iterations when the model ignores required-tool nudges: fast-escalate after N ignored nudges instead of looping to the full cap (progress resets the streak)
 -   **Cost controls** — 27-signal complexity router, semantic cache, budget enforcement (persists across restarts), dynamic pricing via OpenRouter
 -   **Required tools guard** — ensure critical tools are called before answering, with `maxCallsPerTool` budgets to prevent research loops
 

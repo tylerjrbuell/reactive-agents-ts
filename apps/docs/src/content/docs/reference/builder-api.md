@@ -102,6 +102,7 @@ All chain methods return `this` unless noted.
 | -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-6"`)             |
 | `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens`, `numCtx` |
+| `withThinking` | `(options?: boolean \| ThinkingOptions) => this`                                             | Enable native thinking / reasoning mode with optional effort + budget. The rich-config home for thinking; `.withModel({ thinking })` remains the quick boolean. `true` / absent enables, `false` disables, or pass `{ effort, budgetTokens }`. Off unless enabled. |
 | `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
 
 #### ModelParams
@@ -135,6 +136,30 @@ provider receives. Honored by providers that expose a context-window knob
 (Ollama maps it to `num_ctx`); cloud providers that don't expose one ignore it.
 It is also a first-class [`AgentConfig`](/reference/configuration/) field, so it
 round-trips through `toConfig()` / `fromJSON()` and the config-driven path.
+
+#### ThinkingOptions
+
+`.withThinking()` is the rich-config home for native reasoning mode across all
+providers. `.withModel({ thinking: true })` remains the quick boolean shortcut.
+Thinking stays **off unless explicitly enabled** — `undefined` never
+auto-enables.
+
+```typescript
+interface ThinkingOptions {
+    enabled?: boolean // Tri-state mirror of the thinking flag
+    effort?: "low" | "medium" | "high" // OpenAI reasoning_effort; advisory for other providers
+    budgetTokens?: number // Explicit thinking budget in tokens (still clamped)
+}
+```
+
+```typescript
+// Boolean form — enable / disable
+.withThinking()            // enable
+.withThinking(false)       // disable
+
+// Rich form — effort + budget
+.withThinking({ effort: "high", budgetTokens: 4096 })
+```
 
 ### Memory
 
@@ -200,6 +225,8 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withContract(contract)`             | Declare a `TaskContract`: `{ prompt, tools: ToolRequirement[], fixtures?, modelFloor?, success }`. Required tools become an execute-time gate; forbidden tools are excluded from the tool schema. Validated at `build()`.                                                                                                                                                                                       |
 | `withVerification(options?)`         | Post-output checks — toggles and thresholds: `semanticEntropy`, `factDecomposition`, `multiSource`, `hallucinationDetection`, `passThreshold`, …                                                                                                                                                                                                                                                             |
 | `withGrounding(options)`             | Opt-in numeric evidence-grounding (off by default): `{ mode: "block" \| "warn", tolerance?, maxRetries? }`. Checks figures in the final answer against the full tool data with rounding tolerance. `warn` = advisory; `block` = one corrective retry then degrade to warn (never hard-fails). Scaffold-leak detection (`[STORED:]`/`_tool_result_N` echoed as the answer) is always-on, independent of this. |
+| `withFabricationGuard(mode?)`        | Configure the always-on verifier check that rejects invented empirical performance measurements (benchmark timings, % speed-ups) absent from the tool-observation corpus. **On by default (`"block"`)** — no call needed for protection. Use this only to soften (`"warn"`, advisory) or disable (`"off"`). High-precision: only perf measurements are policed; counts, prices, and Big-O are ignored, and a claim grounded by a real benchmark/execution tool always passes. Also settable via `RA_FABRICATION_GUARD` env var (this method wins). `mode: "block" \| "warn" \| "off"`. |
+| `withStallPolicy(policy)`            | Tune the stall / no-progress policy — how the harness reacts when the model ignores required-tool nudges. Sensible defaults apply when unset: tolerate **2** consecutive ignored nudges before fast-escalating (deliver accumulated artifacts, else fail) instead of looping to the full nudge cap, and **escalate** nudge wording on repeats. Bounds wasted iterations/tokens on stuck runs; legitimately-progressing runs are untouched (progress resets the ignored streak). `{ ignoredNudgeTolerance?, escalateNudgeContent? }`. |
 | `withCostTracking(options?)`         | Budgets in USD: `{ perRequest?, perSession?, daily?, monthly? }` plus cost estimation / analytics                                                                                                                                                                                                                                                                                                            |
 | `withBudget(limits)`                 | Hard in-loop killswitch: `{ tokenLimit?, costLimit? }`. Caps cumulative tokens / USD and stops the loop when hit — distinct from `withCostTracking()` accounting. Also set by `HarnessProfile` budget composition.                                                                                                                                                                                            |
 | `withModelRouting(options?)`         | **Opt-in cost-aware model routing (off by default).** Routes each run to the cheapest *capable* model of the configured provider, picked by task complexity, on both the inline and reasoning paths. Stays within the provider's tiers (`haiku`/`sonnet`/`opus` cost ladder → the provider's models); capability-gated (never routes a large-input task below a model whose context window fits); advisory (degrades to the configured model on any error). `{ tierModels?: Partial<Record<"haiku"\|"sonnet"\|"opus", string>>, minTier? }`. |

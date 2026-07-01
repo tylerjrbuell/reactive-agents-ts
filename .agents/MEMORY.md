@@ -2,6 +2,16 @@
 
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
+## ▶ Comprehensive Framework Review + v0.13 North Star (2026-07-01)
+
+4 parallel audits (arch B+, docs 3-critical-gaps, DX/simplification, plans triage) + live first-touch probes on real providers. Report: `wiki/Research/Audit-Reports-2026-07-01/comprehensive-framework-review-and-v13-north-star.md`; AGENTS.md debt register +6 rows.
+
+- **Cross-tier headline VERIFIED hands-on:** same defineTool+`.withOutputSchema` agent → correct typed object on claude-haiku-4-5 (6.4s/7k tok) AND gemma4:e4b local (20.1s/10.9k tok).
+- **P0 first-touch DX wave (do BEFORE Show-HN, ~1wk):** (1) defineTool crashes `TypeError: schema.ast` on wrong option names — no validation (`define-tool.ts:133`); (2) no schema+plain-async+inferred-args tool shape — own example casts `as never` (healing-malformed-tool-call.ts:171); (3) `local.ts` hardcoded `Effect.timeout('120 seconds')` not threaded from `.withTimeout()`, bare error, server keeps burning GPU post-abandon; (4) missing key warns but build() succeeds → late raw 401 (env module-import capture vs build-time read split-brain); (5) model-typo → duplicated raw 404 + internal stack; (6) docs gaps (builder-api missing withFabricationGuard/withStallPolicy/withThinking entries; README same; Hot.md 15d stale).
+- **North star:** harness = product, receipts = proof, first-touch DX = funnel. v0.13 = Prove (public bench + self-published token-multiplier) / Polish (P0 wave) / Publish (push main — 98 commits ahead of origin, never pushed; merge `feat/o3-abstention-trust-loop` after E2E).
+- **Do-not-build held:** 2026-06-17 orchestration substrate spec (defer to v0.14+ w/ adoption data), Memory v2 (superseded by default-OFF), LATS/GoT. Stale-archive: 2026-03 adoption-strategy + gap-assessment.
+- **Post-launch P2:** kill `compose()` alias, memory/learning single-route (additive facades, NO metric-gaming deprecations), provider adapter base (~5×800 LOC dup), direct/reactive merge, `.quick()` env-default entry.
+
 ## ✅ Cross-Tier Thinking SHIPPED to main (2026-07-01, merge `edc8b33a`, for 0.13.0)
 
 Unified native `thinking` across ALL providers, OPT-IN / off by default (zero behavior change unless `.withThinking()` called). Built via brainstorm→spec→plan→SDD (7 tasks + whole-branch opus review + fix wave + re-review).

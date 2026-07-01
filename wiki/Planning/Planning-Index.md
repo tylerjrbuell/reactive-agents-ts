@@ -39,6 +39,7 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 
 | Date | Plan | Status | Owner |
 |------|------|--------|-------|
+| 2026-07-01 | [[Implementation-Plans/2026-07-01-v13-lift-execution\|v0.13 Lift — Systematic Execution (subagent-parallel)]] | 🔄 Active | Claude Code |
 | 2026-05-05 | [[Implementation-Plans/2026-05-05-documentation-audit-consolidation\|Documentation Audit & Consolidation]] | 🔄 In Progress | Claude Code |
 
 ## Completed Plans (2026)
