@@ -201,7 +201,7 @@ export interface BuilderState {
   _enableHealthCheck: boolean;
   _taskContext?: Record<string, string>;
   _progressCheckpoint?: { every: number; autoResume?: boolean };
-  _verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+  _verificationStep?: { mode: "reflect"; prompt?: string };
   _outputValidator?: (output: string) => {
     valid: boolean;
     feedback?: string;

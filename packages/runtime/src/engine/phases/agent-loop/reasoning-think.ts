@@ -253,7 +253,7 @@ export const runReasoningThink = (
       maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       strategySwitching: config.strategySwitching,
-      modelId: String(getSelectedModelName(c.selectedModel) ?? config.defaultModel ?? ""),
+      modelId: String(getSelectedModelName(asThinkContext(c).selectedModel) ?? config.defaultModel ?? ""),
       taskCategory,
       temperature: config.contextProfile?.temperature as number | undefined,
       environmentContext: config.environmentContext as Record<string, string> | undefined,

@@ -132,7 +132,7 @@ export interface BuilderRuntimeStateView {
   readonly _minIterations?: number;
   readonly _taskContext?: Record<string, string>;
   readonly _progressCheckpoint?: { every: number; autoResume?: boolean };
-  readonly _verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+  readonly _verificationStep?: { mode: "reflect"; prompt?: string };
   readonly _outputValidator?: (output: string) => {
     valid: boolean;
     feedback?: string;

@@ -18,23 +18,29 @@
  * immediately. This makes the phase safe regardless of the call site.
  *
  * IMPORTANT — advisory selectCapableModel:
- * `selectCapableModel` maps to a `PROVIDER_CONFIGS` record keyed by known providers
- * ("anthropic" | "openai" | "gemini" | "ollama" | "litellm"). Unknown providers
- * (e.g. the deterministic "test" provider used in unit tests) cause a synchronous
- * TypeError. If that TypeError escapes into `Effect.gen` as an unhandled throw it
- * becomes a defect that bypasses `Effect.catchAll`, silently kills the daemon fiber
- * in the streaming path, and leaves the stream queue without a terminal event —
- * causing every streaming test to hang until timeout. We wrap the call in
- * `Effect.try` so any provider-lookup failure degrades to `defaultModel` instead.
+ * `selectCapableModel` maps to a `PROVIDER_CONFIGS` record keyed by known providers.
+ * Unknown providers (e.g. the deterministic "test" provider used in unit tests) cause
+ * a synchronous TypeError. We guard explicitly with `isRoutableProvider` (which checks
+ * membership in PROVIDER_CONFIGS dynamically — stays in sync when providers are added)
+ * before calling the rail so that unknown providers degrade to `defaultModel` without
+ * relying on Effect.try to swallow a TypeError defect.
  */
 import { Effect } from "effect";
-import { analyzeComplexity, selectCapableModel } from "@reactive-agents/cost";
+import {
+  analyzeComplexity,
+  selectCapableModel,
+  TIER_ORDER,
+  isRoutableProvider,
+} from "@reactive-agents/cost";
+import type { ModelTier } from "@reactive-agents/cost";
 import { extractTaskText } from "../util.js";
 import type { Phase } from "../phase.js";
 
-const TIERS = ["haiku", "sonnet", "opus"] as const;
-type Tier = (typeof TIERS)[number];
-const asTier = (t: unknown): Tier => (TIERS.includes(t as Tier) ? (t as Tier) : "haiku");
+// Convenience narrow: TIER_ORDER imported from @reactive-agents/cost.
+const asTier = (t: unknown): ModelTier =>
+  (TIER_ORDER as readonly string[]).includes(t as string)
+    ? (t as ModelTier)
+    : "haiku";
 
 export const costRoute: Phase = {
   name: "cost-route",
@@ -46,7 +52,12 @@ export const costRoute: Phase = {
       // Belt-and-suspenders: runGuardedPhase bypasses phase.skip; guard here too.
       if (!deps.config.modelRouting) return fallback;
 
-      const provider = deps.config.provider ?? "anthropic";
+      // T2: unknown providers (e.g. "test") have no tier table; degrade before
+      // calling the rail so we never produce a TypeError defect.
+      // isRoutableProvider is a type guard that narrows to Provider.
+      if (!isRoutableProvider(deps.config.provider)) return fallback;
+      const provider = deps.config.provider; // narrowed to Provider by the guard above
+
       const taskText = extractTaskText(deps.task.input);
       const analysis = yield* analyzeComplexity(taskText).pipe(
         Effect.catchAll(() => Effect.succeed(null)),
@@ -55,17 +66,26 @@ export const costRoute: Phase = {
 
       const minTier = asTier(deps.config.modelRouting.minTier);
       const startIdx = Math.max(
-        TIERS.indexOf(asTier(analysis.recommendedTier)),
-        TIERS.indexOf(minTier),
+        TIER_ORDER.indexOf(asTier(analysis.recommendedTier)),
+        TIER_ORDER.indexOf(minTier),
       );
-      const startTier = TIERS[startIdx]!;
-      const estPromptTokens = Math.ceil(taskText.length / 4);
+      const startTier = TIER_ORDER[startIdx]!;
 
-      const override = deps.config.modelRouting.tierModels?.[startTier];
-      // Advisory: wrap in Effect.try so unknown providers (e.g. "test") degrade
-      // gracefully instead of throwing a defect that would kill the stream daemon.
+      // F1: include system prompt in the prompt-size estimate so the window
+      // check accounts for the full context, not just the task text.
+      // Tool schema text is excluded: deps.tools is opaque (ServiceLike = unknown)
+      // at the phase boundary and cannot be called here without a separate seam.
+      const systemPromptChars = deps.config.systemPrompt?.length ?? 0;
+      const estPromptTokens = Math.ceil((taskText.length + systemPromptChars) / 4);
+
+      const tierModels = deps.config.modelRouting.tierModels;
+
+      // Advisory: still wrap in Effect.try as a belt-and-suspenders against any
+      // remaining synchronous throws from the rail (e.g. bad PROVIDER_CONFIGS entry).
       const routed = yield* Effect.try({
-        try: () => override ?? selectCapableModel(provider, startTier, estPromptTokens),
+        // F2: pass tierModels so overrides are honoured per-tier AND still
+        // window-gated inside selectCapableModel.
+        try: () => selectCapableModel(provider, startTier, estPromptTokens, tierModels),
         catch: () => null,
       }).pipe(Effect.orElseSucceed(() => null));
       return { ...ctx, selectedModel: routed ?? deps.config.defaultModel };
