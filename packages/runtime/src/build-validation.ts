@@ -211,23 +211,26 @@ export function validateBuild(
   const resolvedModel = model ?? defaultModel;
   let resolvedCapability: Capability | undefined;
 
-  // `lazy` (via `.withLazyValidation()` or REACTIVE_AGENTS_LAZY_VALIDATION)
-  // demotes the two fail-fast gates below — missing API key and
-  // unknown-for-provider model — back to warnings, restoring the pre-2026-07
-  // "warn then fail later" behavior for environments that want it. Keyless
-  // providers (ollama/test/custom) are always exempt from the key gate.
+  // Missing API key and unknown-for-provider model are WARNINGS by default
+  // (build succeeds; the run() error boundary surfaces a clean typed failure if
+  // the agent is actually invoked without a key). This preserves the common
+  // "build to inspect config" pattern and keyless CI runs. `.withStrictValidation()`
+  // promotes them to hard build errors for callers who want fail-fast; an
+  // explicit `.withLazyValidation()` always keeps them as warnings even under
+  // strict. Keyless providers (ollama/test/custom) are exempt from the key gate.
+  const failFast = strict && !lazy;
   if (providerRequiresApiKey(provider)) {
     const keyName = providerApiKeyName(provider)!;
     if (!readProviderApiKey(provider)) {
       const msg =
         `Missing ${keyName} for provider "${provider}" — the agent cannot run without it.\n` +
-        `    Fix: set ${keyName} in your environment or .env file, ` +
-        `switch providers (e.g. .withProvider("ollama") for local models or .withProvider("test") for tests), ` +
-        `or call .withLazyValidation() to defer this check to run() time.`;
-      if (lazy) {
-        warnings.push(msg);
-      } else {
+        `    Fix: set ${keyName} in your environment or .env file, or ` +
+        `switch providers (e.g. .withProvider("ollama") for local models or .withProvider("test") for tests). ` +
+        `(.withStrictValidation() makes this a hard build error.)`;
+      if (failFast) {
         errors.push(msg);
+      } else {
+        warnings.push(msg);
       }
     }
   }
@@ -242,12 +245,12 @@ export function validateBuild(
           `Model "${model}" is not a recognized model for provider "${provider}" ` +
           `(expected a model starting with: ${prefixes.join(", ")}).\n` +
           `    Fix: use a ${provider} model (e.g. one starting with "${prefixes[0]}"), ` +
-          `switch providers with .withProvider(...), ` +
-          `or call .withLazyValidation() to skip this check.`;
-        if (lazy) {
-          warnings.push(msg);
-        } else {
+          `or switch providers with .withProvider(...). ` +
+          `(.withStrictValidation() makes this a hard build error.)`;
+        if (failFast) {
           errors.push(msg);
+        } else {
+          warnings.push(msg);
         }
       }
     }

@@ -12,24 +12,32 @@ describe("Build-time validation", () => {
     Object.assign(process.env, originalEnv);
   });
 
-  test("fails fast (throws) on missing API key for anthropic provider by default", async () => {
+  test("warns (does NOT throw) on missing API key by default", async () => {
     delete process.env.ANTHROPIC_API_KEY;
-    await expect(
-      ReactiveAgents.create().withProvider("anthropic").build(),
-    ).rejects.toThrow("ANTHROPIC_API_KEY");
+    const warnings: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (msg: string) => warnings.push(msg);
+
+    // Default is backward-compatible warn-then-succeed so the common
+    // "build to inspect config" pattern and keyless CI runs keep working.
+    const agent = await ReactiveAgents.create().withProvider("anthropic").build();
+
+    console.warn = origWarn;
+    await agent.dispose();
+    expect(warnings.some((w) => w.includes("ANTHROPIC_API_KEY"))).toBe(true);
   });
 
-  test("missing-key error carries fix instructions and is a typed BuildValidationError", async () => {
+  test("under strict, missing-key error carries fix instructions and is a typed BuildValidationError", async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const { BuildValidationError } = await import("../src/build-validation");
     let caught: unknown;
     try {
-      await ReactiveAgents.create().withProvider("anthropic").build();
+      await ReactiveAgents.create().withProvider("anthropic").withStrictValidation().build();
     } catch (e) {
       caught = e;
     }
     expect(caught).toBeInstanceOf(BuildValidationError);
-    expect((caught as Error).message).toContain("withLazyValidation");
+    expect((caught as Error).message).toContain("ANTHROPIC_API_KEY");
     expect((caught as { failures: readonly string[] }).failures.length).toBeGreaterThan(0);
   });
 
@@ -95,11 +103,24 @@ describe("Build-time validation", () => {
     expect(warnings.some((w) => w.includes("API_KEY"))).toBe(false);
   });
 
-  test("fails fast on unknown-for-provider model by default", async () => {
+  test("under strict, fails fast on unknown-for-provider model", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test";
     await expect(
-      ReactiveAgents.create().withProvider("anthropic").withModel("gpt-4o").build(),
+      ReactiveAgents.create().withProvider("anthropic").withModel("gpt-4o").withStrictValidation().build(),
     ).rejects.toThrow(/gpt-4o[\s\S]*anthropic/);
+  });
+
+  test("warns (does NOT throw) on unknown-for-provider model by default", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+    const warnings: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (msg: string) => warnings.push(msg);
+
+    const agent = await ReactiveAgents.create().withProvider("anthropic").withModel("gpt-4o").build();
+
+    console.warn = origWarn;
+    await agent.dispose();
+    expect(warnings.some((w) => w.includes("gpt-4o") && w.includes("anthropic"))).toBe(true);
   });
 
   test("withLazyValidation demotes model/provider mismatch to a warning", async () => {

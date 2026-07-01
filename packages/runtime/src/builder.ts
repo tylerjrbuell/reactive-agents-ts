@@ -263,9 +263,9 @@ export const ReactiveAgents = {
      *
      * Provider is picked from `REACTIVE_AGENTS_PROVIDER`, else the first of
      * anthropic/openai/gemini with a key in the environment, else `ollama`.
-     * Override any field via {@link QuickOptions}. Because `build()` fails fast,
-     * a misconfigured environment surfaces a typed error here rather than a raw
-     * provider 401/404 at run() time.
+     * Override any field via {@link QuickOptions}. A misconfigured environment
+     * (missing key) warns at build and surfaces a clean typed error at run()
+     * time; add {@link withStrictValidation} to fail fast at build instead.
      */
     quick: async (options?: QuickOptions): Promise<ReactiveAgent> => {
         const builder = await resolveQuickBuilder(options)
@@ -374,12 +374,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enableBehavioralContracts: boolean = false
     private _strictValidation: boolean = false
     /**
-     * When true, `build()` demotes the two fail-fast gates (missing API key,
-     * unknown-for-provider model) back to warnings instead of throwing — the
-     * pre-2026-07 "warn then fail at run() time" behavior. Set by
-     * {@link withLazyValidation} or the `REACTIVE_AGENTS_LAZY_VALIDATION` env
-     * var. Additive: does not affect strict-only checks (capability source,
-     * task contract), which remain governed by {@link withStrictValidation}.
+     * When true, keeps the missing-API-key and unknown-for-provider-model gates
+     * as warnings even under {@link withStrictValidation}. These gates warn by
+     * default (build succeeds; run() surfaces a clean typed error), so this is
+     * only meaningful alongside strict mode. Set by {@link withLazyValidation}
+     * or the `REACTIVE_AGENTS_LAZY_VALIDATION` env var.
      */
     private _lazyValidation: boolean =
         process.env.REACTIVE_AGENTS_LAZY_VALIDATION === '1' ||
@@ -1764,18 +1763,16 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Defer configuration validation to run() time (lazy mode).
+     * Force the missing-API-key and unknown-for-provider-model checks to stay
+     * warnings even under {@link withStrictValidation} (lazy mode).
      *
-     * By default `build()` fails fast with a typed {@link BuildValidationError}
-     * when the config cannot possibly run — the chosen provider has no API key,
-     * or the model is unknown-for-provider — so you learn at build time instead
-     * of via a raw provider 401/404 mid-run. Call this to opt out and restore
-     * the "warn now, fail at run() time" behavior (useful when keys are injected
-     * after construction, or in tooling that constructs many configs eagerly).
-     *
-     * Additive — it does NOT weaken {@link withStrictValidation}; the
-     * capability-source and task-contract checks are unaffected. Keyless
-     * providers (`ollama`, `test`) are exempt from the key gate regardless.
+     * By default `build()` already warns (not throws) on a missing key or an
+     * unknown-for-provider model and succeeds — the clean typed failure then
+     * surfaces at run() time. {@link withStrictValidation} promotes those two
+     * gates to hard build errors; call this to keep them as warnings even when
+     * strict is on (useful when keys are injected after construction, or in
+     * tooling that constructs many configs eagerly). Keyless providers
+     * (`ollama`, `test`) are exempt from the key gate regardless.
      *
      * Equivalent env config: `REACTIVE_AGENTS_LAZY_VALIDATION=1`.
      */
@@ -2301,13 +2298,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         const self = this
 
         return Effect.gen(function* () {
-            // Fail fast on a missing API key. `build()` already ran the full
-            // validateBuild gate before reaching here, but buildEffect() is also
-            // a public entry point, so it must independently refuse to construct
-            // a provider layer that cannot run. Routed through the single
-            // build-time read path so the check can never disagree with what the
-            // provider actually sees. `.withLazyValidation()` opts out.
-            if (!self._lazyValidation) {
+            // Under strict validation, fail fast on a missing API key. `build()`
+            // already ran the full validateBuild gate before reaching here, but
+            // buildEffect() is also a public entry point, so it independently
+            // refuses to construct a provider layer that cannot run. Routed
+            // through the single build-time read path so the check can never
+            // disagree with what the provider actually sees. Default (non-strict)
+            // is warn-then-succeed — the run() boundary surfaces a clean typed
+            // failure if the agent is actually invoked without a key.
+            if (self._strictValidation && !self._lazyValidation) {
                 const { providerRequiresApiKey, readProviderApiKey, providerApiKeyName } =
                     yield* Effect.promise(() => import('./build-validation.js'))
                 if (
