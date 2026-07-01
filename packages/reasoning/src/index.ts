@@ -251,7 +251,7 @@ export { stripThinking } from "./kernel/utils/stream-parser.js";
 
 // ─── React Kernel (public entrypoint for callers that drive the kernel directly) ───
 export { executeReActKernel, reactKernel } from "./kernel/loop/react-kernel.js";
-export type { ReActKernelInput, ReActKernelResult } from "./kernel/state/kernel-state.js";
+export type { KernelInput, ReActKernelInput, ReActKernelResult } from "./kernel/state/kernel-state.js";
 
 // ─── Runtime ───
 export { createReasoningLayer } from "./runtime.js";
