@@ -19,4 +19,28 @@ describe("selectCapableModel", () => {
     const huge = selectCapableModel("ollama", "haiku", 10_000_000);
     expect(huge).not.toBe(small); // escalated to a larger-window tier
   });
+
+  // F2: tierModels override — honour per-tier model but still window-gate it.
+  it("uses the tierModels override for the selected tier", () => {
+    // Override haiku to a custom model string; small prompt stays at haiku tier.
+    const m = selectCapableModel("anthropic", "haiku", 1000, { haiku: "my-custom-haiku-model" });
+    expect(m).toBe("my-custom-haiku-model");
+  });
+
+  it("falls back to a higher tier when the override model's window is too small", () => {
+    // Use ollama where windows differ; override the haiku tier with the default
+    // haiku model but then request a huge prompt to force escalation to sonnet.
+    // Because resolveCapability is called on the override model, and that model
+    // has the same capability as the default haiku, it must escalate.
+    const small = selectCapableModel("ollama", "haiku", 10, { haiku: "llama3.2:1b" });
+    const huge = selectCapableModel("ollama", "haiku", 10_000_000, { haiku: "llama3.2:1b" });
+    expect(huge).not.toBe(small); // window check forces escalation past the override
+  });
+
+  it("without tierModels, behaviour is unchanged (regression guard)", () => {
+    // Calling with explicit undefined tierModels must behave identically to no arg.
+    expect(selectCapableModel("anthropic", "haiku", 1000, undefined)).toBe(
+      selectCapableModel("anthropic", "haiku", 1000),
+    );
+  });
 });

@@ -32,6 +32,8 @@ export {
   getModelCostConfig,
   estimateTokens,
   estimateCost,
+  TIER_ORDER,
+  isRoutableProvider,
 } from "./routing/complexity-router.js";
 export type { RoutingContext } from "./routing/complexity-router.js";
 export { selectCapableModel } from "./routing/capability-rail.js";

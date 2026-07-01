@@ -243,6 +243,14 @@ export interface RoutingContext {
 export const TIER_ORDER: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
 
 /**
+ * Returns true iff the given string is a provider that has a tier table in
+ * PROVIDER_CONFIGS. Stays in sync with PROVIDER_CONFIGS automatically — no
+ * separate hardcoded set to drift.
+ */
+export const isRoutableProvider = (p: string | undefined): p is Provider =>
+  p !== undefined && Object.hasOwn(PROVIDER_CONFIGS, p);
+
+/**
  * Walk the tier ladder from `start` upward, returning the first tier whose
  * calibration data either is missing (unknown — assume usable) or meets the
  * threshold. If every tier's calibration is below threshold, return the
