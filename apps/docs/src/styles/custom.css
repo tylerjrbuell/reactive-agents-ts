@@ -1948,3 +1948,46 @@ nav a[data-ra-new='true']::before {
     font-size: 0.7rem;
     color: var(--sl-color-gray-3);
 }
+
+/* ── Updated callout (PageTitle.astro) ──────────────────────── */
+.ra-updated-callout {
+  margin: -0.5rem 0 1.25rem;
+  border-left: 2px solid var(--sl-color-accent);
+  padding: 0.35rem 0.75rem;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--sl-color-accent) 6%, transparent);
+  font-size: 0.8rem;
+  color: var(--sl-color-gray-2);
+}
+
+.ra-updated-callout summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+}
+
+.ra-updated-callout summary::-webkit-details-marker { display: none; }
+
+.ra-updated-icon {
+  font-size: 0.7rem;
+  color: var(--sl-color-accent);
+}
+
+.ra-updated-detail {
+  margin: 0.35rem 0 0;
+  color: var(--sl-color-gray-3);
+  font-size: 0.75rem;
+}
+
+.ra-updated-subject { font-style: italic; }
+
+.ra-updated-hash {
+  font-family: var(--sl-font-mono, monospace);
+  color: var(--sl-color-accent-high);
+  text-decoration: none;
+}
+.ra-updated-hash:hover { text-decoration: underline; }

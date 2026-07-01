@@ -1,45 +1,54 @@
 ---
 const route = Astro.locals.starlightRoute;
 const data = route?.entry?.data ?? {};
-const now = Date.now();
-const newUntilMs =
-  typeof data.newUntil === "string" ? new Date(data.newUntil).getTime() : NaN;
-const isExplicitlyNew =
-  data.isNew === true || (!isNaN(newUntilMs) && newUntilMs > now);
+
+const lastCommit = data.lastCommit as
+  | { subject: string; hash: string; date: string }
+  | undefined;
+
+const badge = data.badge as
+  | { text: string; variant: string; __auto?: string }
+  | undefined;
+
+const daysAgo = lastCommit
+  ? Math.floor((Date.now() - new Date(lastCommit.date + "T00:00:00Z").getTime()) / 86_400_000)
+  : null;
+
+// Show "what changed" callout only on Updated/New auto-badge pages
+const showCallout =
+  lastCommit &&
+  badge?.__auto === "1" &&
+  (badge.text.startsWith("New") || badge.text === "Updated");
+
+const commitUrl = lastCommit
+  ? `https://github.com/tylerjrbuell/reactive-agents-ts/commit/${lastCommit.hash}`
+  : undefined;
+
 const id = route?.entry?.id ?? "";
 ---
 
-<h1
-  id="_top"
-  class:list={["ra-page-title", { "ra-page-title--is-new": isExplicitlyNew }]}
-  data-page-id={id}
->
+<h1 id="_top" class="ra-page-title" data-page-id={id}>
   {data.title}
-  <span class="ra-new-dot" aria-label="Recently added" title="Recently added"></span>
 </h1>
 
-<script is:inline>
-  (function () {
-    var apply = function () {
-      var data = window.__ra_new_pages_data__;
-      if (!Array.isArray(data) || data.length === 0) return;
-      var h = document.querySelector("h1.ra-page-title");
-      if (!h) return;
-      if (h.classList.contains("ra-page-title--is-new")) return;
-      var path = window.location.pathname.replace(/\/$/, "") || "/";
-      for (var i = 0; i < data.length; i++) {
-        var slug = String(data[i]).replace(/\/$/, "") || "/";
-        if (slug === path) {
-          h.classList.add("ra-page-title--is-new");
-          return;
-        }
-      }
-    };
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", apply);
-    } else {
-      apply();
-    }
-    document.addEventListener("astro:page-load", apply);
-  })();
-</script>
+{showCallout && lastCommit && (
+  <details class="ra-updated-callout">
+    <summary>
+      <span class="ra-updated-icon">↑</span>
+      {daysAgo === 0
+        ? "Updated today"
+        : daysAgo === 1
+        ? "Updated yesterday"
+        : `Updated ${daysAgo} days ago`}
+    </summary>
+    <p class="ra-updated-detail">
+      <span class="ra-updated-subject">"{lastCommit.subject}"</span>
+      {" · "}
+      <a href={commitUrl} target="_blank" rel="noopener" class="ra-updated-hash">
+        {lastCommit.hash}
+      </a>
+      {" · "}
+      <span class="ra-updated-date">{lastCommit.date}</span>
+    </p>
+  </details>
+)}
