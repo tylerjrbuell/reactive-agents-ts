@@ -213,12 +213,8 @@ export class ReactiveAgent<TOut = unknown> {
          * router (Task 1.5) to prefer the grounded path when tools are present.
          */
         private readonly _enableTools: boolean = false,
-        /**
-         * Runtime configuration snapshot — a plain-object subset of the
-         * `ReactiveAgentsConfig` built during `.build()`. Useful for tests and
-         * diagnostics; exposed as `agent.config`.
-         */
-        public readonly config: Record<string, unknown> = {}
+        /** @internal Runtime configuration snapshot (tests + diagnostics). Not part of the public API. */
+        private readonly config: Record<string, unknown> = {}
     ) {}
 
     /**
