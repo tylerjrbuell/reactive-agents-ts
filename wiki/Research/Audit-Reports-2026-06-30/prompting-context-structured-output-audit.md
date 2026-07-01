@@ -67,6 +67,64 @@ status: 8 fixed + 1 dedup (branch fix/prompt-context-so-audit); 2 verified, 1 di
 >   - **CM-3 margin**, **SO-6** (async validators — would require an async
 >     validation path throughout), **SO-3/SO-4 tier-tuning**.
 
+## Remaining Levers (ranked — do not lose)
+
+Post-fix grade: prompting **B+**, context management **B/B+**, structured output
+**A−**. These are the levers that move the grades, none shippable as a blind
+patch — each is architectural and/or needs cross-tier ablation. Ranked by
+grade-impact ÷ risk.
+
+1. **Real token accounting** (context → A-track, HIGHEST value).
+   Today: `length/4` heuristic, duplicated as `CHARS_PER_TOKEN`
+   (`message-window.ts`, `tool-formatting.ts`) + inline `*4`
+   (`context-utils.ts:239`). Underestimates code/JSON (~3) and CJK (~1–2) → the
+   sliding window fires LATE → provider-side overflow risk.
+   Lever: per-provider tokenizer or per-provider char-ratio + tune the
+   `COMPACTION_THRESHOLD` (currently 0.75) via ablation. Kills the late-fire
+   failure mode. Weakest link in context management.
+
+2. **Collapse the curator/assembly duality** (context → removes CM-2 + clarity debt).
+   Two parallel context systems: assembly (`assembly/project.ts` →
+   `project-results` per-result cap + `compact-history`) and curator
+   (`context/message-window.ts` via `context-utils.ts:285`). Which governs the
+   think path is ambiguous; `message-window` keeps recent turns by COUNT not
+   SIZE, so one huge tool_result in the kept window can still blow budget unless
+   `project-results` runs in the same path. Trace the live path, then unify to
+   one authoritative compressor. Architectural — needs a design pass.
+
+3. **Bounded tool visibility** (prompting → B+ ceiling, PR-2).
+   `computePromptSchemas` (`think.ts:131-192`) has no upper bound: lazy union =
+   required+relevant+used+discovered+allowed+META. 100 discovered MCP tools →
+   100 rendered. Lever: tier-scaled cap with priority preservation
+   (never drop required/allowed/META; cap the discovered/used tail). Sensitive
+   default-on change — gate behind ablation-warden (≥3pp lift / ≤15% tok), never
+   ship blind (tool-routing regressions recur here).
+
+4. **Tool-name sanitization: prevent, not just warn** (prompting, PR-1 follow-up).
+   `buildSanitizedReverseMap` now DETECTS + warns collisions
+   (`a.b` & `a/b` → `a_b`). Full fix = registration-time uniqueness enforcement
+   in the tool registry (`packages/tools`), or a reversible encoding (rejected
+   here: uglifies every `_` name). Cross-package.
+
+5. **Semantic grounding + graded confidence** (structured output → A ceiling).
+   `field-provenance` grounds by boundary-aware substring + nested recursion, but
+   still substring-presence, not semantic; confidence is a 0.9/0.4 binary. Lever:
+   graded confidence (match-length / uniqueness weighted) + optional embedding
+   check for paraphrased evidence.
+
+6. **Steering reinforcement measurement** (prompting).
+   Hybrid channel (`context-manager.ts:119-156`) intentionally double-injects
+   guidance (full system-prompt block + ≤120-char recent-turn reminder) for
+   local/mid. Deliberate, but UNMEASURED — ablate whether the reminder actually
+   lifts weak-model compliance or just spends tokens.
+
+Low-priority tails: **SO-6** (async Standard-Schema validators hard-fail — needs
+async validation path), **SO-5** (Zod Phase-A leniency effectively off — document
+or build a real partial path), **CM-4/summary quality** (extractedFact is the
+real safety net; the fold summary is a fallback).
+
+---
+
 Read-only review of all prompt-assembly, context-management/compression, and
 structured-output code. 3 parallel investigators mapped the subsystems; hotspot
 files were then read directly for concrete defects. Findings ranked by severity.
