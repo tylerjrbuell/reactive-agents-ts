@@ -1156,6 +1156,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ...((rr?.metadata as Record<string, unknown> | undefined)?.["awaitingApprovalFor"] !== undefined
                     ? { awaitingApprovalFor: (rr!.metadata as Record<string, unknown>)["awaitingApprovalFor"] as { gateId: string; toolName: string; args: unknown } }
                     : {}),
+                  // O3 C1: forward the run-level abstention surface from the
+                  // strategy result so ReactiveAgent.projectAbstention(r) can
+                  // populate AgentResult.abstention. Mirrors awaitingApprovalFor
+                  // above. Only present when terminatedBy === "abstained".
+                  ...((rr?.metadata as Record<string, unknown> | undefined)?.["abstention"] !== undefined
+                    ? { abstention: (rr!.metadata as Record<string, unknown>)["abstention"] as { reason: string; missing: readonly string[] } }
+                    : {}),
                 };
 
                 // Surface the forked rich-debrief fiber on the result (internal,

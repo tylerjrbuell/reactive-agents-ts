@@ -696,6 +696,7 @@ async function runInternal(
         iterations: result.metadata.stepsCount ?? 0,
         status: "pass",
         ...(traceDir ? { traceId: result.taskId } : {}),
+        ...(result.terminatedBy != null ? { terminatedBy: result.terminatedBy } : {}),
       }
     } finally {
       await agent.dispose()
@@ -764,6 +765,19 @@ async function dispatch(
   }
 
   return runInternal(task, model, effectiveConfig, tmpDir, timeoutMs, traceDir)
+}
+
+/** Aggregate trap-only abstention metrics across runs. */
+export function aggregateAbstention(
+  runs: ReadonlyArray<{ abstainExpected: boolean; abstained: boolean }>,
+): { abstentionAccuracy: number; fabricationUnderTrapRate: number } {
+  const traps = runs.filter((r) => r.abstainExpected)
+  if (traps.length === 0) return { abstentionAccuracy: 0, fabricationUnderTrapRate: 0 }
+  const correct = traps.filter((r) => r.abstained).length
+  return {
+    abstentionAccuracy: correct / traps.length,
+    fabricationUnderTrapRate: (traps.length - correct) / traps.length,
+  }
 }
 
 export function aggregateRuns(
@@ -975,6 +989,7 @@ export async function runSession(
   const tasks = resolveTasks(session, ALL_TASKS)
   const gitSha = getGitSha()
   const allVariantReports: TaskVariantReport[] = []
+  const abstentionInputs: Array<{ abstainExpected: boolean; abstained: boolean }> = []
 
   const runCount = session.runs ?? 1
   const timeoutMs = session.timeoutMs ?? 120_000
@@ -1064,7 +1079,11 @@ export async function runSession(
                 dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir),
               )
             }
-            const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations)
+            abstentionInputs.push({
+              abstainExpected: task.abstainExpected ?? false,
+              abstained: result.terminatedBy === "abstained",
+            })
+            const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations, undefined, result.terminatedBy)
             const diagnosis = session.traceDir && result.traceId
               ? await diagnoseRun(session.traceDir, result.traceId)
               : undefined
@@ -1121,6 +1140,9 @@ export async function runSession(
   const ablation = computeAllAblation(measuredReports)
   const dimensionSummary = summarizeDimensions(measuredReports)
 
+  const hasTrapTasks = abstentionInputs.some((r) => r.abstainExpected)
+  const abstentionMetrics = hasTrapTasks ? aggregateAbstention(abstentionInputs) : undefined
+
   const sessionReport: SessionReport = {
     generatedAt: new Date().toISOString(),
     runs: [],
@@ -1133,6 +1155,10 @@ export async function runSession(
     reproducibility,
     inconclusiveCells,
     partialMeasurement: inconclusiveCells.length > 0,
+    ...(abstentionMetrics != null ? {
+      abstentionAccuracy: abstentionMetrics.abstentionAccuracy,
+      fabricationUnderTrapRate: abstentionMetrics.fabricationUnderTrapRate,
+    } : {}),
   }
 
   if (outputPath) {

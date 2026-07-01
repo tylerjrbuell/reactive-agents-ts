@@ -114,7 +114,12 @@ export type Deliverable =
     }
   | {
       readonly source: "sentinel";
-      readonly reason: "no_substantive_output" | "max_iterations_no_artifacts" | "awaiting_approval";
+      readonly reason:
+        | "no_substantive_output"
+        | "max_iterations_no_artifacts"
+        | "awaiting_approval"
+        // O3: model honestly declined (Task 3 — model-initiated abstain path).
+        | "model-abstained";
     };
 
 /**
@@ -187,10 +192,15 @@ export function harnessSynthesisDeliverable(
 
 /**
  * Construct a sentinel deliverable. Used when the harness terminates without
- * substantive output (e.g., max-iterations exhausted with no tool artifacts).
+ * substantive output (e.g., max-iterations exhausted with no tool artifacts,
+ * or the model/harness abstained because grounding was impossible).
  */
 export function sentinelDeliverable(
-  reason: "no_substantive_output" | "max_iterations_no_artifacts" | "awaiting_approval",
+  reason:
+    | "no_substantive_output"
+    | "max_iterations_no_artifacts"
+    | "awaiting_approval"
+    | "model-abstained",
 ): Deliverable {
   return { source: "sentinel", reason };
 }

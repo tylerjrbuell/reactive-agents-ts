@@ -849,6 +849,15 @@ export interface AgentResult {
      */
     readonly goalAchieved?: boolean | null
     /**
+     * Run-level abstention surface — present iff `terminatedBy === "abstained"`.
+     * The agent honestly declined rather than fabricating: `reason` is why,
+     * `missing` lists what was needed (e.g. `"tool:web-search"`, a clarification).
+     *
+     * Distinct from the per-field structured-output `abstained` map below
+     * (`.withOutputSchema({ abstainBelow })`), which is unrelated and may coexist.
+     */
+    readonly abstention?: { readonly reason: string; readonly missing: readonly string[] }
+    /**
      * Structured post-run debrief. This is the INSTANT deterministic fallback —
      * available the moment `run()` returns (no LLM wait). The richer LLM-synthesized
      * debrief is produced off the critical path; await {@link debriefRich} for it.

@@ -16,7 +16,7 @@ import { Effect } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
-import { modelSynthesisDeliverable, harnessSynthesisDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable, harnessSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -50,6 +50,8 @@ import {
   type FinalizedOutput,
 } from "./output-synthesis.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { terminate } from "./terminate.js";
+import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
 
 // ── WS-6 Phase 2 — helper bucket imports ──────────────────────────────────────
 // Tier-aware guard thresholds, deliverable assembly, recovery steering, and
@@ -527,6 +529,76 @@ export function runKernel(
     currentInput = iterationCarrier.currentInput;
     currentOptions = iterationCarrier.currentOptions;
 
+    // ── §7.5 Harness-forced abstention (O3 Task 6) ───────────────────────────
+    // When the model did NOT abstain but grounding is structurally impossible,
+    // force an `abstained` terminal here — BEFORE finalization blocks — instead
+    // of grinding to `max_iterations` or letting fabrication through.
+    //
+    // Guard: skip entirely when the state is already abstained (model-initiated
+    // abstention via the abstain meta-tool, or a prior in-loop legitimacy-gate
+    // abstention). Overwriting would replace the model's specific {reason, missing}
+    // with the generic harness-forced message — the earned signal must be preserved.
+    // (O3 I2 fix: guard against forced re-terminate clobbering model abstention.)
+    //
+    // Input derivation (conservative fallbacks documented inline):
+    //   requiredToolUnavailable: a declared required tool absent from the registered
+    //     schema set. False when allKnownTools is empty (no schema provided = unknown).
+    //   missingRequiredTools: unsatisfied required-tool names (empty array fallback).
+    //   ungroundedSynthesisRejections: synthesisRetryCount + groundingBlockRetry
+    //     (same counters Task 5's legitimacy gate reads). Fallback: 0.
+    //   iterationsRemaining: maxIterations − state.iteration clamped ≥ 0.
+    //     Special case: when a required tool is structurally unavailable AND the
+    //     pre-loop guard fired (iteration=0, status=failed), treat as 0 —
+    //     no iterations can fix a missing tool. Deviation documented in Task 6 report.
+    //   hasDeliverable: countDeliverableCandidates(state) > 0 — never overrides a genuine deliverable.
+    //
+    // Route through terminate() (the single-owner gateway) so terminatedBy +
+    // output are set via the canonical path. The post-condition gate in terminate()
+    // passes "abstained" through (added in Task 6) — an abstained run cannot
+    // honestly meet post-conditions when grounding was structurally impossible.
+    if (state.meta.terminatedBy !== "abstained") {
+      const allKnownToolsForAbstain = (
+        currentInput.allToolSchemas ?? currentInput.availableToolSchemas ?? []
+      ).map((t) => t.name);
+      const knownToolSetForAbstain = new Set(allKnownToolsForAbstain);
+      const unavailableRequired = requiredTools.filter((t) => !knownToolSetForAbstain.has(t));
+      const requiredToolUnavailable =
+        allKnownToolsForAbstain.length > 0 && unavailableRequired.length > 0;
+      // Conservative: structurally-unavailable tool at iteration=0 → treat as
+      // exhausted (the pre-loop guard fired; no iterations could have helped).
+      const iterationsRemainingForAbstain =
+        requiredToolUnavailable && state.iteration === 0
+          ? 0
+          : Math.max(0, currentOptions.maxIterations - state.iteration);
+      const ungroundedSynthesisRejections =
+        (state.meta.synthesisRetryCount ?? 0) + (state.meta.groundingBlockRetry ?? 0);
+      const hasDeliverableForAbstain = countDeliverableCandidates(state) > 0;
+
+      const forced = decideForcedAbstention({
+        requiredToolUnavailable,
+        missingRequiredTools: unavailableRequired,
+        ungroundedSynthesisRejections,
+        iterationsRemaining: iterationsRemainingForAbstain,
+        hasDeliverable: hasDeliverableForAbstain,
+      });
+
+      if (forced !== null) {
+        // A forced abstention is an honest decline, not a failure. Clear any
+        // stale error string the pre-loop required-tools guard may have set
+        // (status:"failed" + error:"missing_required_tool:...") so callers
+        // reading result.error don't see an incoherent failed-error on a
+        // status:"done"/terminatedBy:"abstained" result.
+        state = transitionState(state, { error: null });
+        state = terminate(state, {
+          reason: "abstained",
+          deliverable: sentinelDeliverable("no_substantive_output"),
+          extraMeta: {
+            abstention: { reason: forced.reason, missing: forced.missing },
+          },
+        });
+      }
+    }
+
     // Durable HITL (Phase D): a run paused for human approval is a clean terminal
     // state (status:"done", terminatedBy:"awaiting-approval", a sentinel output,
     // and meta.awaitingApprovalFor carrying the gated call). The post-loop
@@ -536,6 +608,11 @@ export function runKernel(
     // looks "required but uncalled" and the run is failed. Skip them entirely when
     // paused; resume executes the approved call and runs finalization then.
     const isAwaitingApproval = state.meta.terminatedBy === "awaiting-approval";
+    // O3 Task 6: abstained runs are a clean non-failure terminal (status:"done",
+    // terminatedBy:"abstained"). The post-loop finalization blocks (required-tools
+    // failure, verifier, quality gate, output synthesis) must be skipped — the
+    // run honestly declined and there is nothing to verify or synthesize.
+    const isAbstained = state.meta.terminatedBy === "abstained";
 
     // Fire 'complete' phase hooks once after loop exits normally.
     yield* Effect.promise(() =>
@@ -546,7 +623,7 @@ export function runKernel(
     // Final safety net: if the loop exited without failure but required quotas
     // are still missing, fail with a deterministic missing_required_tool error.
     // This applies uniformly across all non-failed exits.
-    if (state.status !== "failed" && requiredTools.length > 0 && !isAwaitingApproval) {
+    if (state.status !== "failed" && requiredTools.length > 0 && !isAwaitingApproval && !isAbstained) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
       if (missingTools.length > 0) {
@@ -710,7 +787,7 @@ export function runKernel(
       iteration: state.iteration,
     });
 
-    if (state.status === "done" && state.output && !isAwaitingApproval) {
+    if (state.status === "done" && state.output && !isAwaitingApproval && !isAbstained) {
       // availableUserTools — pass through the user-registered tool list
       // so the verifier can run classifier-independent "agent-took-action"
       // checks (rejects parrots / hallucinated answers / meta-tool dumps
@@ -891,7 +968,7 @@ export function runKernel(
     // Route all successful outputs through the canonical finalization pipeline.
     // Validates format, optionally synthesizes when LLM is available.
     // Harness-assembled output (raw tool artifacts) always attempts synthesis.
-    if (state.status === "done" && state.output && !isAwaitingApproval) {
+    if (state.status === "done" && state.output && !isAwaitingApproval && !isAbstained) {
       // `harness_synthesis` (introduced when assembleDeliverable picks a
       // substantive model thought) is treated as a MODEL output here — the
       // text was authored by the LLM, not concatenated from raw tool JSON.

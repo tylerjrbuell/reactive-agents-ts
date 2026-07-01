@@ -2,7 +2,7 @@
 title: Abstention + Trust-Loop Closure (O3) — Design Spec
 date: 2026-06-29
 type: design-spec
-status: approved
+status: partially-shipped (harness-forced live + verified; model-initiated dormant/experimental — see 2026-06-30 note)
 tags: [verification, abstention, honesty, trust, eval, kernel, design-spec]
 related:
   - wiki/Research/2026-06-29-agentic-landscape-vs-reactive-agents.md
@@ -226,6 +226,35 @@ feature-JSON `passes:false` flips to done only on a genuine `goalAchieved:true`,
 can terminate `abstained` (flagging *what's missing*) instead of fabricating progress across a long
 run. This keeps the long-horizon harness honest at each step. Out of scope here; recorded so O2 builds
 on the same primitive.
+
+## Verification & scope decision (2026-06-30)
+
+End-to-end verification after implementation changed the shipped scope. Findings:
+
+- **Harness-forced abstention — SHIPPED + VERIFIED.** A run can no longer be cornered into
+  fabricate-or-crash: structural impossibility (required tool unavailable; repeated ungrounded
+  synthesis ≥2) yields a typed `abstained` terminal (`terminatedBy:"abstained"`, `goalAchieved:false`,
+  `result.abstention:{reason,missing}`). Verified by integration + runtime e2e tests (deterministic;
+  short-circuits before the model runs). This is the differentiated, machine-checkable value — the
+  harness catches what the model misses.
+- **Model-initiated abstention — CUT from shipped scope; left dormant/experimental.** Real-model probes
+  (claude-haiku) showed: (1) no public enablement existed (`MetaToolsConfig` had no `abstain`; correct
+  method would be `.withMetaTools`); (2) even when wired, the `abstain` tool did not appear in the
+  model's offered tool list (trace `toolSchemaNames`), confounded by an umbrella dist/build-resolution
+  mismatch + the never-iter-0 availability gate; (3) **the frontier model already declines in honest
+  prose and never fabricated** on the traps. The model-initiated tool is therefore redundant at the top
+  (capable models self-decline) and ineffective at the bottom (weak models fabricate *unconsciously* and
+  won't self-call abstain). It only fires when the model already knows it can't answer — exactly when it
+  would say so anyway. Low value; not shipped as a capability.
+- **"Does it help" lift — UNMEASURED.** Would require local models (which actually fabricate) on
+  multi-step grounding traps. Deferred; only worth running if model-initiated is revived.
+
+**Decision:** the deliverable is *harness-forced honest abstention*. The model-facing pieces (abstain
+tool offering in `think.ts` + the legitimacy gate) are unexposed (no builder enablement) and marked
+experimental; the shared abstain *terminal* + forced path + result contract are the live, verified core.
+**Future work if revived:** add `abstain` to `MetaToolsConfig` + the `.withMetaTools` mapping, fix the
+offering plumbing with a test asserting `abstain` ∈ offered tools, reconsider the iter-0 gate for
+no-tool traps, then run a local-tier proof-gate to measure fabrication reduction.
 
 ## Rollout
 

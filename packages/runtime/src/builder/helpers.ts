@@ -66,6 +66,7 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
             return true
         case "max_iterations":
         case "llm_error":
+        case "abstained":
             return false
         case "end_turn":
         case undefined:

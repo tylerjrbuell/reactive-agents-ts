@@ -840,7 +840,11 @@ describe("runKernel — required tools guard", () => {
     expect(result.error).toContain("send_message");
   });
 
-  it("fails fast when required tools are not available", async () => {
+  it("abstains immediately when required tools are not available (O3 Task 6 — harness-forced abstention)", async () => {
+    // Previously "fails fast with status:failed". Task 6 changes this: when a
+    // required tool is not in the registered schema set, the harness forces an
+    // honest `abstained` terminal (status:"done", terminatedBy:"abstained") instead
+    // of grinding to max_iterations or crashing. The kernel is still never called.
     let callCount = 0;
     const neverCalledKernel: ThoughtKernel = (state, _ctx) => {
       callCount++;
@@ -865,10 +869,16 @@ describe("runKernel — required tools guard", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    expect(result.status).toBe("failed");
-    expect(result.error).toContain("missing_required_tool");
-    expect(result.error).toContain("shell-execute");
+    // Honest decline: non-failure terminal (goalAchieved=false, not a crash).
+    expect(result.status).toBe("done");
+    expect(result.meta.terminatedBy).toBe("abstained");
+    expect(result.meta.abstention?.missing).toContain("tool:shell-execute");
+    // Kernel was never called — structural check happened before the loop.
     expect(callCount).toBe(0);
+    // A forced abstention is an honest decline, NOT an error — the stale
+    // "missing_required_tool" error string set by the pre-loop guard must be
+    // cleared so callers reading result.error don't see incoherent state.
+    expect(result.error).toBeFalsy();
   });
 
   it("does not trigger low-delta early exit while required tools are still missing", async () => {

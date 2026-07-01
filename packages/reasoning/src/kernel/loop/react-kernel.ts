@@ -114,7 +114,7 @@ export const reactKernel: ThoughtKernel = makeKernel();
  * Pure / synchronous / no Effect — exported for unit testability.
  */
 export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; status: KernelState["status"] }): {
-  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error";
+  terminatedBy: "final_answer" | "final_answer_tool" | "max_iterations" | "end_turn" | "llm_error" | "abstained";
   rawTerminatedBy?: string;
 } {
   const rawTerminatedBy =
@@ -124,21 +124,24 @@ export function deriveTerminatedBy(state: { meta: { terminatedBy?: unknown }; st
     | "final_answer_tool"
     | "max_iterations"
     | "end_turn"
-    | "llm_error" =
+    | "llm_error"
+    | "abstained" =
     rawTerminatedBy === "llm_error"
       ? "llm_error"
       : rawTerminatedBy === "final_answer_tool"
         ? "final_answer_tool"
-        : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
-          ? "end_turn"
-          : rawTerminatedBy === "final_answer" ||
-              rawTerminatedBy === "final_answer_regex" ||
-              rawTerminatedBy === "content_stable" ||
-              rawTerminatedBy === "entropy_converged"
-            ? "final_answer"
-            : state.status === "done"
-              ? "end_turn"
-              : "max_iterations";
+        : rawTerminatedBy === "abstained"
+          ? "abstained"
+          : rawTerminatedBy === "end_turn" || rawTerminatedBy === "llm_end_turn"
+            ? "end_turn"
+            : rawTerminatedBy === "final_answer" ||
+                rawTerminatedBy === "final_answer_regex" ||
+                rawTerminatedBy === "content_stable" ||
+                rawTerminatedBy === "entropy_converged"
+              ? "final_answer"
+              : state.status === "done"
+                ? "end_turn"
+                : "max_iterations";
   return rawTerminatedBy !== undefined
     ? { terminatedBy, rawTerminatedBy }
     : { terminatedBy };
@@ -260,6 +263,7 @@ export const executeReActKernel = (
       terminatedBy,
       ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
       finalAnswerCapture: state.meta.finalAnswerCapture as FinalAnswerCapture | undefined,
+      ...(state.meta.abstention !== undefined ? { abstention: state.meta.abstention } : {}),
       llmCalls: state.llmCalls ?? 0,
     };
   });

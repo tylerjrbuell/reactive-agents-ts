@@ -18,6 +18,12 @@ export interface BenchmarkTask {
   readonly prompt: string;
   /** Optional expected output pattern (regex or substring with | separators). */
   readonly expected?: string;
+  /**
+   * When true, the correct agent behaviour is to abstain rather than fabricate.
+   * Scored by `scoreAbstention` — an agent that produces any answer scores 0;
+   * one that terminates with `terminatedBy="abstained"` scores 1.
+   */
+  readonly abstainExpected?: boolean;
   /** Reasoning strategy to test (undefined = single-shot). */
   readonly strategy?: "react" | "plan-execute" | "tree-of-thought" | "blueprint";
   /** Industry benchmark this task is aligned with. */
@@ -231,6 +237,17 @@ export interface SessionReport extends MultiModelReport {
   }>;
   /** True iff any cell is inconclusive. A report with this set is PARTIAL. */
   readonly partialMeasurement?: boolean;
+  /**
+   * Fraction of trap tasks (abstainExpected=true) on which the agent correctly
+   * abstained. Populated by Task-8 aggregation; undefined on sessions without
+   * trap tasks.
+   */
+  readonly abstentionAccuracy?: number;
+  /**
+   * Fraction of trap tasks on which the agent fabricated an answer (i.e. did NOT
+   * abstain). Complement of abstentionAccuracy. Populated by Task-8 aggregation.
+   */
+  readonly fabricationUnderTrapRate?: number;
 }
 
 export interface DriftReport {
@@ -359,4 +376,10 @@ export interface TaskRunResult {
   readonly status: "pass" | "fail" | "error";
   readonly error?: string;
   readonly traceId?: string;
+  /**
+   * How the agent loop terminated. Mirrors `AgentResult.terminatedBy` from the
+   * runtime builder types. Used by `scoreTask` to detect earned abstentions on
+   * trap tasks (`terminatedBy === "abstained"`).
+   */
+  readonly terminatedBy?: string;
 }

@@ -43,7 +43,12 @@ export class NativeFCStrategy implements ToolCallResolver {
             if (result._tag === 'tool_calls') {
                 return { result, dialect: 'native-fc' }
             }
-            // Native calls present but all unresolved → fall through to text fallbacks
+            // Native calls present but all unresolved — unless it was abstain, which
+            // is also a terminal that exits early rather than falling to text fallbacks.
+            if (result._tag === 'abstained') {
+                return { result, dialect: 'native-fc' }
+            }
+            // Genuinely unresolved → fall through to text fallbacks
         }
 
         const content = response.content ?? ''
@@ -130,6 +135,22 @@ export class NativeFCStrategy implements ToolCallResolver {
             }
 
             if (specs.length > 0) {
+                // O3: abstain is a terminal tool — intercept before bundling as tool_calls.
+                const abstainSpec = specs.find(s => s.name === 'abstain')
+                if (abstainSpec) {
+                    // arguments is Record<string, unknown>; extract defensively
+                    // (no cast — keeps the `as unknown as` ceiling + validates at runtime).
+                    const rawArgs = abstainSpec.arguments
+                    const reason = typeof rawArgs.reason === 'string' ? rawArgs.reason : ''
+                    const missing = Array.isArray(rawArgs.missing)
+                        ? rawArgs.missing.filter((m): m is string => typeof m === 'string')
+                        : []
+                    return {
+                        _tag: 'abstained' as const,
+                        reason,
+                        missing,
+                    }
+                }
                 return {
                     _tag: 'tool_calls',
                     calls: specs,

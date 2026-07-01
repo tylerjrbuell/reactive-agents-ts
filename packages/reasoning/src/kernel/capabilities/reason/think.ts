@@ -69,6 +69,7 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
+import { terminate } from "../../../kernel/loop/terminate.js";
 import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
@@ -82,9 +83,12 @@ import {
 import type { GuidanceContext } from "../../../context/context-manager.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, sentinelDeliverable } from "@reactive-agents/core";
+import { ABSTAIN_TOOL_NAME } from "../act/meta-tool-handlers.js";
+import { shouldOfferAbstain } from "./abstain-gate.js";
 import { explainProviderError } from "./provider-error-explain.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
+import { checkAbstentionLegitimacy } from "../verify/abstention-legitimacy.js";
 
 /** Per-tier context pressure thresholds — local models get narrowed earlier. */
 export const CONTEXT_PRESSURE_THRESHOLDS: Record<string, number> = {
@@ -288,9 +292,35 @@ export function handleThinking(
       hasNonMetaToolCalled: hasAnyToolWork,
     });
 
+    // O3: abstain tool schema — offered only when metaTools.abstain === true.
+    // Do NOT offer at iteration 0; the model should attempt the task first.
+    const abstainToolSchema: ToolSchema = {
+      name: ABSTAIN_TOOL_NAME,
+      description:
+        "Decline to answer when you cannot ground a response in available evidence or a " +
+        "required tool/input is unavailable. State the reason and what was missing. " +
+        "Do NOT use this to skip work you can still attempt.",
+      parameters: [
+        { name: "reason", type: "string", description: "Why you cannot answer", required: true },
+        {
+          name: "missing",
+          type: "array",
+          description: "Tool names or inputs that were needed but unavailable (e.g. 'tool:web-search')",
+          required: false,
+          items: { type: "string" },
+        },
+      ],
+    };
+
     const augmentedToolSchemas: readonly ToolSchema[] = [
       ...(input.availableToolSchemas ?? []),
       ...(finalAnswerVisible ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }] : []),
+      ...(shouldOfferAbstain({
+        enabled: input.metaTools?.abstain === true,
+        iteration: state.iteration,
+        requiredToolUnavailable: false,
+        toolsAttempted: state.toolsUsed.size,
+      }) ? [abstainToolSchema] : []),
     ] as readonly ToolSchema[];
 
     // ── Context pressure hard gate ───────────────────────────────────────────
@@ -1143,6 +1173,101 @@ export function handleThinking(
             requiredTools: input.requiredTools,
           }),
         );
+      } else if (resolverResult._tag === "abstained") {
+        // O3: legitimacy gate (Task 5) — distinguish earned abstentions from
+        // premature bails. Derive inputs from available kernel state; conservative
+        // fallbacks noted inline where a signal isn't cleanly available.
+
+        // taskRequiresTools: true when explicit required tools OR any data tool is wired.
+        const hasDataTools = (input.availableToolSchemas ?? []).some(
+          (ts) => !META_TOOL_SET.has(ts.name),
+        );
+        const legitimacyRequiredToolsList = input.requiredTools ?? [];
+        const taskRequiresTools = legitimacyRequiredToolsList.length > 0 || hasDataTools;
+
+        // requiredToolsAttempted: at least one required tool was called (or any
+        // non-meta tool when no explicit required list is set).
+        const requiredToolsAttempted =
+          legitimacyRequiredToolsList.length > 0
+            ? legitimacyRequiredToolsList.some((t) => state.toolsUsed.has(t))
+            : [...state.toolsUsed].some((t) => !META_TOOL_SET.has(t));
+
+        // requiredToolUnavailable: a declared required tool is not in the registered
+        // schema set. Fallback: false (conservative — assume available unless proven missing).
+        const availableToolNames = new Set([
+          ...(input.availableToolSchemas ?? []).map((ts) => ts.name),
+          ...(input.allToolSchemas ?? []).map((ts) => ts.name),
+        ]);
+        const requiredToolUnavailable =
+          legitimacyRequiredToolsList.length > 0 &&
+          legitimacyRequiredToolsList.some((t) => !availableToolNames.has(t));
+
+        // ungroundedSynthesisRejections: sum of Arbitrator synthesis retries +
+        // block-mode grounding retries. Fallback: 0 when counters are absent.
+        const ungroundedSynthesisRejections =
+          (state.meta.synthesisRetryCount ?? 0) + (state.meta.groundingBlockRetry ?? 0);
+
+        // iterationsRemaining: budget left this run (clamped ≥ 0).
+        const iterationsRemaining = Math.max(
+          0,
+          ((state.meta.maxIterations as number) ?? 10) - state.iteration,
+        );
+
+        const legitimacyVerdict = checkAbstentionLegitimacy({
+          taskRequiresTools,
+          requiredToolsAttempted,
+          requiredToolUnavailable,
+          ungroundedSynthesisRejections,
+          iterationsRemaining,
+        });
+
+        if (legitimacyVerdict.legitimate) {
+          // Earned abstention — emit pass diagnostic step, then terminate.
+          const passMsg = "abstention-legitimacy: legitimate — earned abstention accepted";
+          const legitimacyPassStep = makeStep("observation", passMsg, {
+            observationResult: makeObservationResult("abstention-legitimacy", true, passMsg),
+          });
+          const stateWithAbstention = transitionState(state, {
+            steps: [...newSteps, legitimacyPassStep],
+            tokens: newTokens,
+            inputTokens: newInputTokens,
+            outputTokens: newOutputTokens,
+            cost: newCost,
+            iteration: state.iteration + 1,
+            meta: {
+              ...state.meta,
+              abstention: {
+                reason: resolverResult.reason,
+                missing: resolverResult.missing,
+              },
+            },
+          });
+          return terminate(stateWithAbstention, {
+            reason: "abstained",
+            deliverable: sentinelDeliverable("model-abstained"),
+          });
+        }
+
+        // Illegitimate abstention — DO NOT terminate. Emit reject diagnostic step,
+        // inject nudge via pendingGuidance, and let the loop continue.
+        const nudgeMsg =
+          legitimacyVerdict.nudge ??
+          "You have not yet attempted the tools needed to ground an answer. Try them before abstaining.";
+        const legitimacyRejectStep = makeStep("observation", nudgeMsg, {
+          observationResult: makeObservationResult("abstention-legitimacy", false, nudgeMsg),
+        });
+        return transitionState(state, {
+          steps: [...newSteps, legitimacyRejectStep],
+          tokens: newTokens,
+          inputTokens: newInputTokens,
+          outputTokens: newOutputTokens,
+          cost: newCost,
+          status: "thinking",
+          iteration: state.iteration + 1,
+          pendingGuidance: {
+            errorRecovery: nudgeMsg,
+          },
+        });
       } else if (resolverResult._tag === "thinking") {
         const thinkingContent = resolverResult.content.trim();
         const reqTools = input.requiredTools ?? [];

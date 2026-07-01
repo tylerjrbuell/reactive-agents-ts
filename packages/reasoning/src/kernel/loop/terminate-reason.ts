@@ -38,4 +38,8 @@ export type TerminateReason =
   // terminal post-condition gate passes it through (a paused run has
   // intentionally not met its post-conditions and must not be demoted to
   // `failed`). The engine detects this reason to persist `awaiting-approval`.
-  | "awaiting-approval";
+  | "awaiting-approval"
+  // O3: model honestly declined — cannot ground a response or a required input
+  // is unavailable. Non-failure terminal (goalAchieved=false, success=false but
+  // not a crash). Task 5 (legitimacy gate) + Task 6 (forced path) extend this.
+  | "abstained";

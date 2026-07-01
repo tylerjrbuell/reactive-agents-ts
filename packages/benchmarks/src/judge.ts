@@ -105,6 +105,21 @@ function resolveJudgeUrl(opts?: JudgeRpcOptions): string {
 // ── Pure utility functions (testable without LLM) ────────────────────────────
 
 /**
+ * Deterministic abstention scoring (no judge):
+ *  - trap task (abstainExpected): correct iff the agent abstained.
+ *  - solvable task: correct iff it produced the right answer; a premature
+ *    abstain scores 0 (guard against over-abstaining).
+ */
+export function scoreAbstention(i: {
+  abstainExpected: boolean;
+  abstained: boolean;
+  answerCorrect: boolean;
+}): number {
+  if (i.abstainExpected) return i.abstained ? 1 : 0;
+  return i.abstained ? 0 : i.answerCorrect ? 1 : 0;
+}
+
+/**
  * Reliability = 1 - 2*stddev of accuracy scores across runs.
  * 1.0 = perfectly consistent, 0.0 = completely random.
  */
@@ -232,6 +247,11 @@ async function scoreWithJudge(
  * Score a completed task run across all dimensions it exercises.
  * Accuracy is always scored. Other dimensions come from task.dimensionRubrics.
  * Efficiency is computed from token counts. Reliability is session-level (not here).
+ *
+ * @param terminatedBy - How the agent loop terminated (mirrors AgentResult.terminatedBy).
+ *   When `"abstained"`, the agent earned abstention; combined with `task.abstainExpected`
+ *   to route trap tasks through `scoreAbstention`. Optional for backward compatibility
+ *   — omit or pass undefined for non-trap runs; scoring is unchanged.
  */
 export async function scoreTask(
   output: string,
@@ -240,6 +260,7 @@ export async function scoreTask(
   runTokens: number,
   _runIterations: number,
   opts?: JudgeRpcOptions,
+  terminatedBy?: string,
 ): Promise<ReadonlyArray<DimensionScore>> {
   const scores: DimensionScore[] = []
 
@@ -253,6 +274,42 @@ export async function scoreTask(
     tmpDir,
     (task.fixtures ?? []).map((f) => f.path),
   )
+
+  // ── Trap-task abstention routing ─────────────────────────────────────────────
+  // When the task declares abstainExpected OR the agent terminated with an
+  // earned abstention, route accuracy through scoreAbstention (deterministic,
+  // no judge). The existing deterministic answer check (successCriteria regex /
+  // expected pattern) serves as the answerCorrect signal for solvable-task guard.
+  // All non-trap, non-abstained runs fall through to the normal scoring below.
+  const abstained = terminatedBy === "abstained";
+  if (task.abstainExpected === true || abstained) {
+    // Compute answerCorrect using the same deterministic check the normal path
+    // would use — so the solvable-task premature-abstain guard is accurate.
+    let answerCorrect = false;
+    if (task.successCriteria?.type === "regex") {
+      answerCorrect = matchSuccessCriteria(output, task.successCriteria) === 1;
+    } else if (task.successCriteria?.type === "verifiable") {
+      const vs = await scoreVerifiable(
+        task.successCriteria.command,
+        tmpDir,
+        task.successCriteria.partialCredit,
+      );
+      answerCorrect = vs.score === 1;
+    } else if (task.expected) {
+      const patterns = task.expected.split("|");
+      answerCorrect = patterns.some((p) => {
+        try { return new RegExp(p, "i").test(output); }
+        catch { return output.toLowerCase().includes(p.toLowerCase()); }
+      });
+    }
+    const score = scoreAbstention({
+      abstainExpected: task.abstainExpected === true,
+      abstained,
+      answerCorrect,
+    });
+    scores.push({ dimension: "accuracy", score });
+    // Skip the normal accuracy block; continue to efficiency + dimensionRubrics below.
+  } else {
 
   // ── Accuracy ────────────────────────────────────────────────────────────────
   if (task.successCriteria) {
@@ -292,6 +349,8 @@ export async function scoreTask(
     })
     scores.push({ dimension: "accuracy", score: matched ? 1.0 : 0.0 })
   }
+
+  } // end else (non-trap / non-abstained accuracy block)
 
   // ── Efficiency — normalized token usage ─────────────────────────────────────
   if (task.primaryDimensions?.includes("efficiency")) {
