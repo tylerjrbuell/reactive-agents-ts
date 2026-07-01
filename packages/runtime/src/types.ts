@@ -695,6 +695,15 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
     readonly requireFor?: (ctx: { toolName: string; iteration: number }) => boolean;
   };
   readonly synthesisConfig?: SynthesisConfigJson & { readonly synthesisStrategy?: SynthesisStrategy };
+  /**
+   * Opt-in cost-aware model routing. Absent = off (default).
+   * Set via `.withModelRouting()`; the cost-route phase reads this to pick
+   * the cheapest capable model per run. Not schema-serialised (function-free shape).
+   */
+  readonly modelRouting?: {
+    readonly tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>;
+    readonly minTier?: 'haiku' | 'sonnet' | 'opus';
+  };
   /** User-defined predicate called after each reasoning result. If it returns false, the agent re-runs. */
   readonly customTermination?: (state: { output: string }) => boolean;
   /**

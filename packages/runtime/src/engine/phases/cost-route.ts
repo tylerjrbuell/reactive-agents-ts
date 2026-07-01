@@ -1,48 +1,48 @@
 /**
- * COST_ROUTE phase — model selection by complexity router (Anthropic only).
+ * COST_ROUTE phase — provider-agnostic model selection by complexity + capability rail.
  *
- * Optional; gated by `config.enableCostTracking`. Acquires `CostService`
- * lazily. The router returns Anthropic-style model names (e.g. `claude-haiku-*`),
- * so the routed model is only applied when `config.provider === "anthropic"`.
- * For other providers, falls back to `config.defaultModel`.
+ * Gated by `config.modelRouting` (absent = off, zero overhead). When enabled, the
+ * phase picks the cheapest model whose context window covers the estimated prompt,
+ * starting from the complexity-recommended tier for the configured provider.
+ *
+ * Routing is ADVISORY: any error from `analyzeComplexity` or the capability rail
+ * degrades gracefully to `config.defaultModel`; the phase never fails a run.
  *
  * Sets `ctx.selectedModel` for downstream phases.
- *
- * Extracted from `execution-engine.ts:1046-1081` (Phase 3: COST_ROUTE).
  */
 import { Effect } from "effect";
-import { CostService } from "@reactive-agents/cost";
+import { analyzeComplexity, selectCapableModel } from "@reactive-agents/cost";
 import { extractTaskText } from "../util.js";
 import type { Phase } from "../phase.js";
 
+const TIERS = ["haiku", "sonnet", "opus"] as const;
+type Tier = (typeof TIERS)[number];
+const asTier = (t: unknown): Tier => (TIERS.includes(t as Tier) ? (t as Tier) : "haiku");
+
 export const costRoute: Phase = {
   name: "cost-route",
-
-  skip: (_ctx, deps) => !deps.config.enableCostTracking,
-
+  skip: (_ctx, deps) => !deps.config.modelRouting,
   run: (ctx, deps) =>
     Effect.gen(function* () {
-      const costOpt = yield* Effect.serviceOption(CostService).pipe(
-        Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
+      const provider = deps.config.provider ?? "anthropic";
+      const fallback = { ...ctx, selectedModel: deps.config.defaultModel };
+
+      const taskText = extractTaskText(deps.task.input);
+      const analysis = yield* analyzeComplexity(taskText).pipe(
+        Effect.catchAll(() => Effect.succeed(null)),
       );
+      if (!analysis) return fallback; // advisory: degrade to defaultModel
 
-      if (costOpt._tag !== "Some") {
-        return { ...ctx, selectedModel: deps.config.defaultModel };
-      }
+      const minTier = asTier(deps.config.modelRouting?.minTier);
+      const startIdx = Math.max(
+        TIERS.indexOf(asTier(analysis.recommendedTier)),
+        TIERS.indexOf(minTier),
+      );
+      const startTier = TIERS[startIdx]!;
+      const estPromptTokens = Math.ceil(taskText.length / 4);
 
-      const taskDescription = extractTaskText(deps.task.input);
-      const modelConfig = yield* costOpt.value
-        .routeToModel(taskDescription)
-        .pipe(
-          Effect.catchAll(() => Effect.succeed({ model: deps.config.defaultModel })),
-        );
-
-      const routedModel = (modelConfig as any).model as string | undefined;
-      const useRoutedModel = deps.config.provider === "anthropic" && !!routedModel;
-
-      return {
-        ...ctx,
-        selectedModel: useRoutedModel ? routedModel : deps.config.defaultModel,
-      };
+      const override = deps.config.modelRouting?.tierModels?.[startTier];
+      const routed = override ?? selectCapableModel(provider, startTier, estPromptTokens);
+      return { ...ctx, selectedModel: routed ?? deps.config.defaultModel };
     }),
 };
