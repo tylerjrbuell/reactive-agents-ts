@@ -1949,6 +1949,25 @@ nav a[data-ra-new='true']::before {
     color: var(--sl-color-gray-3);
 }
 
+/* ── Last-updated line (PageTitle.astro) — shown on all pages ── */
+.ra-last-updated {
+  font-size: 0.75rem;
+  color: var(--sl-color-gray-3);
+  margin: 0.25rem 0 0.75rem;
+}
+.ra-last-updated a {
+  color: var(--sl-color-gray-3);
+  font-family: var(--sl-font-mono, monospace);
+}
+.ra-last-updated a:hover {
+  color: var(--sl-color-text);
+}
+
+/* ── Push scroll-to-top above the Context7 chat widget ─────── */
+.scroll-to-top-button {
+  bottom: 5rem !important;
+}
+
 /* ── Updated callout (PageTitle.astro) ──────────────────────── */
 .ra-updated-callout {
   margin: -0.5rem 0 1.25rem;

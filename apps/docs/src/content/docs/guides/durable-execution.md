@@ -1,19 +1,22 @@
 ---
 title: Durable Execution
+stability: experimental
 description: >-
   Persist agent runs to disk and resume a crashed or paused run from its last
   checkpoint — kill the process, restart, finish the job.
 sidebar:
   order: 26
 badge:
-  text: Updated
-  variant: note
+  text: Experimental
+  variant: caution
   __auto: '1'
 lastCommit:
-  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
-  hash: f625612
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
   date: '2026-07-01'
-since: v0.11
+since: v0.12
 ---
 
 Long-running agents crash. The machine reboots, the container is rescheduled, a

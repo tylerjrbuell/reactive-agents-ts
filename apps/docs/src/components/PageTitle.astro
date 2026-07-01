@@ -28,6 +28,16 @@ const id = route?.entry?.id ?? "";
   {data.title}
 </h1>
 
+{lastCommit && (
+  <p class="ra-last-updated">
+    Last updated {daysAgo === 0 ? "today" : `${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`}
+    {" · "}
+    <a href={commitUrl} target="_blank" rel="noopener noreferrer">
+      {lastCommit.hash.slice(0, 7)}
+    </a>
+  </p>
+)}
+
 {showCallout && lastCommit && (
   <details class="ra-updated-callout">
     <summary>

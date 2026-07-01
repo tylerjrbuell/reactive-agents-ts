@@ -4,8 +4,10 @@ description: How agents adjust their autonomy level.
 sidebar:
   order: 14
 lastCommit:
-  subject: 'docs(badges): fix daysAgo render-time + remove dead constant'
-  hash: f625612
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
   date: '2026-07-01'
 badge:
   text: Updated

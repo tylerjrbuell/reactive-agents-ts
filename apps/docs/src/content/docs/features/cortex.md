@@ -8,9 +8,9 @@ sidebar:
   order: 2
 lastCommit:
   subject: >-
-    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
-    import
-  hash: 1216d5f
+    docs(revamp): fix callout sentinel, analytics double-count, SPA time reset,
+    minor accuracy
+  hash: 090ed16
   date: '2026-07-01'
 since: v0.9
 badge:
