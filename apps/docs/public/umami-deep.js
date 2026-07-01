@@ -232,8 +232,8 @@
     (ev) => {
       const a = ev.target?.closest?.("a.ra-star-cta");
       if (!a) return;
-      const location = a.dataset.umamiEventLocation || "unknown";
-      track("github_star_cta", { location, from: location.pathname });
+      const position = a.dataset.umamiEventLocation || "unknown";
+      track("github_star_cta", { location: position, from: location.pathname });
     },
     { capture: true, passive: true },
   );
