@@ -20,6 +20,11 @@ import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
+import { resolveCapability } from "../capability-resolver.js";
+import {
+  resolveThinkingEnabled,
+  reserveThinkingBudget,
+} from "../thinking/index.js";
 
 // ─── Anthropic Message Conversion Helpers ───
 
@@ -197,11 +202,24 @@ export const AnthropicProviderLive = Layer.effect(
             ? request.model
             : request.model?.model ?? config.defaultModel;
 
+          const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const cap = resolveCapability("anthropic", model);
+          const thinkEnabled = resolveThinkingEnabled(
+            "anthropic",
+            model,
+            config.thinking,
+            cap.supportsThinkingMode,
+          );
+          const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: thinkEnabled,
+          });
+
           const response = yield* Effect.tryPromise({
             try: () =>
               client.messages.create({
                 model,
-                max_tokens: request.maxTokens ?? config.defaultMaxTokens,
+                max_tokens: reserve !== undefined ? answerBudget + reserve : answerBudget,
                 temperature: request.temperature ?? config.defaultTemperature,
                 system: buildSystemParam(request.systemPrompt),
                 messages: toAnthropicMessages(request.messages),
@@ -211,6 +229,9 @@ export const AnthropicProviderLive = Layer.effect(
                 tools: request.tools?.map((t, i) =>
                   toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
                 ),
+                ...(reserve !== undefined
+                  ? { thinking: { type: "enabled", budget_tokens: reserve } }
+                  : {}),
               }),
             catch: (error) => toEffectError(error, "anthropic"),
           });
@@ -275,16 +296,39 @@ export const AnthropicProviderLive = Layer.effect(
           const useAdapterNormalization =
             typeof streamAdapter.parseToolCalls === "function";
 
+          const streamAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const streamCap = resolveCapability("anthropic", model);
+          const streamThinkEnabled = resolveThinkingEnabled(
+            "anthropic",
+            model,
+            config.thinking,
+            streamCap.supportsThinkingMode,
+          );
+          const streamReserve = reserveThinkingBudget(
+            streamAnswerBudget,
+            streamCap.supportsThinkingMode,
+            {
+              ...(config.thinkingOptions ?? {}),
+              enabled: streamThinkEnabled,
+            },
+          );
+
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const stream = client.messages.stream({
               model,
-              max_tokens: request.maxTokens ?? config.defaultMaxTokens,
+              max_tokens:
+                streamReserve !== undefined
+                  ? streamAnswerBudget + streamReserve
+                  : streamAnswerBudget,
               temperature: request.temperature ?? config.defaultTemperature,
               system: buildSystemParam(request.systemPrompt),
               messages: toAnthropicMessages(request.messages),
               tools: request.tools?.map((t, i) =>
                 toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
               ),
+              ...(streamReserve !== undefined
+                ? { thinking: { type: "enabled", budget_tokens: streamReserve } }
+                : {}),
             });
 
             // Use raw streamEvent for correct ordering of tool_use events.
@@ -457,18 +501,42 @@ export const AnthropicProviderLive = Layer.effect(
             const anthropicMsgs = toAnthropicMessages(msgs);
             anthropicMsgs.push({ role: "assistant", content: "{" });
 
+            const structuredModel =
+              typeof request.model === "string"
+                ? request.model
+                : (request.model?.model ?? config.defaultModel);
+            const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+            const structuredCap = resolveCapability("anthropic", structuredModel);
+            const structuredThinkEnabled = resolveThinkingEnabled(
+              "anthropic",
+              structuredModel,
+              config.thinking,
+              structuredCap.supportsThinkingMode,
+            );
+            const structuredReserve = reserveThinkingBudget(
+              structuredAnswerBudget,
+              structuredCap.supportsThinkingMode,
+              {
+                ...(config.thinkingOptions ?? {}),
+                enabled: structuredThinkEnabled,
+              },
+            );
+
             const completeResult = yield* Effect.tryPromise({
               try: async () => {
                 const client = await getClient();
                 return client.messages.create({
-                  model: typeof request.model === 'string'
-                    ? request.model
-                    : request.model?.model ?? config.defaultModel,
+                  model: structuredModel,
                   max_tokens:
-                    request.maxTokens ?? config.defaultMaxTokens,
+                    structuredReserve !== undefined
+                      ? structuredAnswerBudget + structuredReserve
+                      : structuredAnswerBudget,
                   temperature: request.temperature ?? config.defaultTemperature,
                   system: buildSystemParam(request.systemPrompt),
                   messages: anthropicMsgs,
+                  ...(structuredReserve !== undefined
+                    ? { thinking: { type: "enabled", budget_tokens: structuredReserve } }
+                    : {}),
                 });
               },
               catch: (error) => toEffectError(error, "anthropic"),
