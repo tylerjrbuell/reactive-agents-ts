@@ -19,22 +19,47 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-## Complexity-Based Model Routing
+## Cost-Aware Model Routing
 
-The cost layer analyzes each task and routes it to the optimal model tier:
-
-| Tier | When Used | Examples |
-|------|-----------|---------|
-| **Haiku** | Simple tasks < 50 words, no code, no analysis | "What's 2+2?", "Hello!", greetings |
-| **Sonnet** | Medium complexity — code OR analysis keywords | "Explain recursion", "Review this function" |
-| **Opus** | High complexity — code + multi-step + analysis | "Architect a microservices system with code examples" |
-
-The router uses 27 complexity signals: word count, code blocks, multi-step instructions, analysis keywords, math/logic expressions, constraint satisfaction, creative writing patterns, domain-specific indicators, and more.
+Opt in with `.withModelRouting()` to route each run to the **cheapest _capable_ model** of your configured provider, picked by task complexity. **Off by default** — a bare agent always uses the model you set with `.withModel()`.
 
 ```typescript
-// The execution engine calls routeToModel() during Phase 3 (Cost Route)
-// You don't need to call this manually — it happens automatically
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")   // your ceiling
+  .withModelRouting()               // opt in — simple tasks drop to a cheaper tier
+  .build();
+
+// "What's 2+2?"  → routed down to the haiku-tier model
+// "Architect a microservices system with code" → stays on a capable tier
 ```
+
+The router classifies each task onto a three-step **cost ladder** — cheap → mid → expensive — and maps it to your provider's models (so it is **provider-agnostic**, not Anthropic-only):
+
+| Cost tier | When used | Anthropic | OpenAI |
+|-----------|-----------|-----------|--------|
+| **cheap** (`haiku`) | Simple tasks — short, no code, no analysis | `claude-haiku` | `gpt-4o-mini` |
+| **mid** (`sonnet`)  | Medium — code OR analysis | `claude-sonnet` | `gpt-4o` |
+| **expensive** (`opus`) | High — code + multi-step + analysis | `claude-opus` | provider's top tier |
+
+Routing stays **within your provider's tiers** (only the model name varies per request; cross-provider routing is a separate concern). Two guarantees make cheap-first safe:
+
+- **Capability-gated.** The router never drops to a model whose context window can't fit the run's prompt — it escalates the tier until a capable model is found. This matters most for local/Ollama models, where windows vary widely.
+- **Advisory, never fails.** Any routing/complexity error degrades gracefully to the model you configured — routing can only make a run cheaper, never break it.
+
+Applies on **both** the inline and reasoning (`.withReasoning()`) paths — the routed model reaches the actual LLM call, not just telemetry.
+
+### Options
+
+```typescript
+.withModelRouting({
+  minTier: "sonnet",                        // never route below this tier
+  tierModels: { opus: "claude-opus-4-8" },  // override the model for a tier
+})
+```
+
+- `minTier` — floor tier; a task will never be routed cheaper than this.
+- `tierModels` — override the specific model used for a cost tier (still capability-gated).
 
 ## Budget Enforcement
 

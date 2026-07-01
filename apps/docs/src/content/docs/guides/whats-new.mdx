@@ -16,6 +16,21 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## Unreleased — 0.13.0
+
+### Cost-aware model routing
+
+`.withModelRouting()` (opt-in, off by default) routes each run to the **cheapest _capable_ model** of your configured provider, picked by task complexity — on both the inline and reasoning paths. It stays within the provider's tiers (a `cheap → mid → expensive` ladder mapped to that provider's models, so it's provider-agnostic), is **capability-gated** (never drops below a model whose context window fits the prompt), and is **advisory** (degrades to your configured model on any error — it can only make a run cheaper, never break it). See [Cost-Aware Model Routing](/features/cost-tracking/#cost-aware-model-routing).
+
+```typescript
+ReactiveAgents.create()
+  .withProvider("anthropic").withModel("claude-sonnet-4-6")
+  .withModelRouting()   // simple tasks drop to the haiku tier
+  .build();
+```
+
+---
+
 ## v0.12.0 — Durable & Honest (June 2026)
 
 <Aside type="tip" title="Released on npm">
