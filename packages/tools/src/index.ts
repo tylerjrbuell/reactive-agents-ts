@@ -27,6 +27,7 @@ export {
 export {
   ToolNotFoundError,
   ToolExecutionError,
+  ToolDefinitionError,
   ToolTimeoutError,
   ToolValidationError,
   MCPConnectionError,
@@ -172,7 +173,16 @@ export { ToolBuilder } from "./tool-builder.js";
 
 // ─── Schema-Inferred Tool Factory ───
 export { defineTool } from "./define-tool.js";
-export type { DefineToolOptions, DefinedTool } from "./define-tool.js";
+export type {
+  DefineToolOptions,
+  DefinedTool,
+  ToolSchema,
+  ToolHandler,
+} from "./define-tool.js";
+
+// ─── Standard Schema (Zod / Valibot / ArkType interop) ───
+export { isStandardSchema } from "./standard-schema.js";
+export type { StandardSchemaV1 } from "./standard-schema.js";
 
 // ─── Simple Tool Wrapper ───
 export { tool } from "./define-tool-simple.js";

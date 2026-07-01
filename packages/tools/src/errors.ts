@@ -15,6 +15,23 @@ export class ToolExecutionError extends Data.TaggedError(
   readonly cause?: unknown;
 }> {}
 
+/**
+ * Raised by `defineTool` when the options object is malformed — e.g. the
+ * caller passed intuitive-but-wrong field names (`parameters`/`execute`)
+ * instead of the canonical `input`/`handler`. This replaces the raw
+ * `TypeError: undefined is not an object (evaluating 'schema.ast')` crash
+ * with a typed, actionable error that names the correct fields.
+ */
+export class ToolDefinitionError extends Data.TaggedError(
+  "ToolDefinitionError",
+)<{
+  readonly message: string;
+  /** Tool name if it could be read from the options; otherwise "<unknown>". */
+  readonly toolName: string;
+  /** The option key that was wrong or missing (e.g. "input", "handler"). */
+  readonly field: string;
+}> {}
+
 export class ToolTimeoutError extends Data.TaggedError("ToolTimeoutError")<{
   readonly message: string;
   readonly toolName: string;

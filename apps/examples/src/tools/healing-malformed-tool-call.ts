@@ -31,8 +31,8 @@
 
 import { ReactiveAgents } from "reactive-agents";
 import type { Harness } from "@reactive-agents/core";
-import { runHealingPipeline } from "@reactive-agents/tools";
-import { Effect } from "effect";
+import { runHealingPipeline, defineTool } from "@reactive-agents/tools";
+import { Schema } from "effect";
 
 export interface ExampleResult {
   passed: boolean;
@@ -145,22 +145,16 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     });
   };
 
-  const addTool = {
-    definition: {
-      name: "add",
-      description: "Add two numbers and return their sum.",
-      parameters: [
-        { name: "a", type: "number" as const, description: "First number", required: true },
-        { name: "b", type: "number" as const, description: "Second number", required: true },
-      ],
-      riskLevel: "low" as const,
-      timeoutMs: 5_000,
-      requiresApproval: false,
-      source: "function" as const,
-    },
-    handler: (args: Record<string, unknown>) =>
-      Effect.succeed(`add(${args.a}, ${args.b}) = ${Number(args.a) + Number(args.b)}`),
-  };
+  // Canonical tool shape: schema + a plain async handler with args typed from
+  // the schema (`args` is `{ a: number; b: number }` — no `Record<string,
+  // unknown>`, and no unsafe cast at the `.withTools` call site below).
+  const addTool = defineTool({
+    name: "add",
+    description: "Add two numbers and return their sum.",
+    input: Schema.Struct({ a: Schema.Number, b: Schema.Number }),
+    handler: async (args) => `add(${args.a}, ${args.b}) = ${args.a + args.b}`,
+    timeoutMs: 5_000,
+  });
 
   let b = ReactiveAgents.create()
     .withName("m4-healing-witness")
@@ -168,7 +162,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   if (opts?.model) b = b.withModel(opts.model);
   b = b
     .withReasoning({ defaultStrategy: "reactive" })
-    .withTools({ tools: [addTool] as never })
+    .withTools({ tools: [addTool] })
     .withMaxIterations(4)
     .withHarness(witnessHarness);
 
