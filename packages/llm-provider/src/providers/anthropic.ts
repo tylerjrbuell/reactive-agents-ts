@@ -24,6 +24,7 @@ import { resolveCapability } from "../capability-resolver.js";
 import {
   resolveThinkingEnabled,
   reserveThinkingBudget,
+  buildAnthropicThinkingBody,
 } from "../thinking/index.js";
 
 // ─── Anthropic Message Conversion Helpers ───
@@ -220,7 +221,6 @@ export const AnthropicProviderLive = Layer.effect(
               client.messages.create({
                 model,
                 max_tokens: reserve !== undefined ? answerBudget + reserve : answerBudget,
-                temperature: request.temperature ?? config.defaultTemperature,
                 system: buildSystemParam(request.systemPrompt),
                 messages: toAnthropicMessages(request.messages),
                 stop_sequences: request.stopSequences
@@ -229,9 +229,15 @@ export const AnthropicProviderLive = Layer.effect(
                 tools: request.tools?.map((t, i) =>
                   toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
                 ),
-                ...(reserve !== undefined
-                  ? { thinking: { type: "enabled", budget_tokens: reserve } }
-                  : {}),
+                // Thinking-form + temperature: adaptive/enabled shape when
+                // thinking is on (temperature omitted — API rejects ≠1);
+                // plain temperature when off. See buildAnthropicThinkingBody.
+                ...buildAnthropicThinkingBody(
+                  model,
+                  reserve,
+                  config.thinkingOptions?.effort,
+                  request.temperature ?? config.defaultTemperature,
+                ),
               }),
             catch: (error) => toEffectError(error, "anthropic"),
           });
@@ -320,15 +326,17 @@ export const AnthropicProviderLive = Layer.effect(
                 streamReserve !== undefined
                   ? streamAnswerBudget + streamReserve
                   : streamAnswerBudget,
-              temperature: request.temperature ?? config.defaultTemperature,
               system: buildSystemParam(request.systemPrompt),
               messages: toAnthropicMessages(request.messages),
               tools: request.tools?.map((t, i) =>
                 toAnthropicTool(t, i === (request.tools?.length ?? 0) - 1),
               ),
-              ...(streamReserve !== undefined
-                ? { thinking: { type: "enabled", budget_tokens: streamReserve } }
-                : {}),
+              ...buildAnthropicThinkingBody(
+                model,
+                streamReserve,
+                config.thinkingOptions?.effort,
+                request.temperature ?? config.defaultTemperature,
+              ),
             });
 
             // Use raw streamEvent for correct ordering of tool_use events.
@@ -531,12 +539,14 @@ export const AnthropicProviderLive = Layer.effect(
                     structuredReserve !== undefined
                       ? structuredAnswerBudget + structuredReserve
                       : structuredAnswerBudget,
-                  temperature: request.temperature ?? config.defaultTemperature,
                   system: buildSystemParam(request.systemPrompt),
                   messages: anthropicMsgs,
-                  ...(structuredReserve !== undefined
-                    ? { thinking: { type: "enabled", budget_tokens: structuredReserve } }
-                    : {}),
+                  ...buildAnthropicThinkingBody(
+                    structuredModel,
+                    structuredReserve,
+                    config.thinkingOptions?.effort,
+                    request.temperature ?? config.defaultTemperature,
+                  ),
                 });
               },
               catch: (error) => toEffectError(error, "anthropic"),

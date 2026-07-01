@@ -150,7 +150,7 @@ describe("OpenAI reasoning model thinking (Task 5)", () => {
   it(
     "openai reasoning model + thinking true → reasoning_effort + max_completion_tokens, no max_tokens",
     async () => {
-      // o5-reasoning supportsThinkingMode=true; budget = clamp(4000*4, 1024, 16384) = 16384
+      // o5-reasoning supportsThinkingMode=true; reserve = clamp(4000*4, 1024, 16384) = 16000
       const body = await captureRequestBody({
         provider: "openai",
         model: "o5-reasoning",
@@ -162,6 +162,8 @@ describe("OpenAI reasoning model thinking (Task 5)", () => {
       // reserve = clamp(4000*4=16000, MIN=1024, MAX=16384) = 16000 (not capped — 16000 < 16384)
       expect(body.max_completion_tokens).toBe(4000 + 16000);
       expect(body.max_tokens).toBeUndefined();
+      // I1: reasoning models reject temperature → must be omitted entirely.
+      expect(Object.keys(body)).not.toContain("temperature");
     },
     15000,
   );
@@ -178,6 +180,8 @@ describe("OpenAI reasoning model thinking (Task 5)", () => {
       });
       expect(body.reasoning_effort).toBeUndefined();
       expect(body.max_tokens).toBe(4000);
+      // Non-reasoning path keeps temperature (today's behavior).
+      expect(body.temperature).toBe(0.7);
     },
     15000,
   );

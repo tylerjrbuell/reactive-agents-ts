@@ -11,9 +11,9 @@ describe("local resolveThinking delegates tri-state, keeps async capability prob
     it("true + capable → true", async () => {
         expect(await resolveThinking(showCapable, "qwen3:14b-test-capable", true)).toBe(true);
     });
-    it("true + incapable → false/undefined (degrade, no throw)", async () => {
+    it("true + incapable → undefined (degrade, no throw)", async () => {
         const r = await resolveThinking(showIncapable, "granite3.3-test-incapable", true);
-        expect(r === false || r === undefined).toBe(true);
+        expect(r).toBeUndefined();
     });
     it("false → undefined (off)", async () => {
         expect(await resolveThinking(showCapable, "qwen3:14b-test-false", false)).toBeUndefined();

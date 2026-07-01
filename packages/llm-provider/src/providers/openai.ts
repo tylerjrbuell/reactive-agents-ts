@@ -260,7 +260,11 @@ export const OpenAIProviderLive = Layer.effect(
           const requestBody: Record<string, unknown> = {
                 model,
                 ...tokenField,
-                temperature: request.temperature ?? config.defaultTemperature,
+                // I1: reasoning models (reserve !== undefined) reject
+                // `temperature` → omit it; keep it on the non-reasoning path.
+                ...(reserve === undefined
+                  ? { temperature: request.temperature ?? config.defaultTemperature }
+                  : {}),
                 messages,
                 stop: request.stopSequences
                   ? [...request.stopSequences]
@@ -360,8 +364,10 @@ export const OpenAIProviderLive = Layer.effect(
                 const stream = (await client.chat.completions.create({
                   model,
                   ...streamTokenField,
-                  temperature:
-                    request.temperature ?? config.defaultTemperature,
+                  // I1: omit temperature on the reasoning path (reserve set).
+                  ...(streamReserve === undefined
+                    ? { temperature: request.temperature ?? config.defaultTemperature }
+                    : {}),
                   messages: (() => {
                     const msgs = toOpenAIMessages(request.messages);
                     if (request.systemPrompt) {
@@ -577,7 +583,10 @@ export const OpenAIProviderLive = Layer.effect(
           const requestBody: Record<string, unknown> = {
             model,
             ...structuredTokenField,
-            temperature: request.temperature ?? config.defaultTemperature,
+            // I1: omit temperature on the reasoning path (reserve set).
+            ...(structuredReserve === undefined
+              ? { temperature: request.temperature ?? config.defaultTemperature }
+              : {}),
             response_format: {
               type: "json_schema",
               json_schema: {

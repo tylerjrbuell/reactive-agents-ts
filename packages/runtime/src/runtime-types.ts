@@ -132,7 +132,9 @@ export interface RuntimeOptions {
 
   /**
    * Rich thinking configuration (effort level, explicit budget).
-   * When present, `thinkingOptions.enabled` is authoritative over the `thinking` boolean.
+   * The `thinking` boolean stays authoritative for on/off; adapters resolve
+   * enablement from `thinking` then stamp `thinkingOptions.enabled`.
+   * `thinkingOptions` carries the secondary knobs (effort, budgetTokens).
    * Set via `.withThinking()`. See `@reactive-agents/llm-provider` thinking module.
    *
    * Default: undefined (uses `thinking` boolean or auto-detect)
