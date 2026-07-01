@@ -3,9 +3,19 @@ title: Quickstart
 description: Build your first Reactive Agent in 5 minutes.
 sidebar:
   order: 3
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
-import { Steps, FileTree, Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { FileTree, Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 ## Prerequisites
 
@@ -17,6 +27,40 @@ The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agen
 <Aside type="tip" title="In a hurry?">
 The minimum viable agent is **3 lines**. Skip to step 3 if you've already got Bun + an API key.
 </Aside>
+
+<ol class="ra-steps">
+
+<li>
+
+**Create a project** — scaffold with `rax init` or `bun init` manually.
+
+</li>
+
+<li>
+
+**Set up your environment** — add at least one provider API key to `.env`.
+
+</li>
+
+<li>
+
+**Build an agent** — three lines gets you a working agent.
+
+</li>
+
+<li>
+
+**Run it** — `bun run src/agent.ts`.
+
+</li>
+
+<li>
+
+**Add capabilities** — attach tools, memory, and reasoning with `HarnessProfile` presets.
+
+</li>
+
+</ol>
 
 ## 1. Create a Project
 

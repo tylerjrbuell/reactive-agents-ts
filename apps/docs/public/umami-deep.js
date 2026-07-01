@@ -223,4 +223,124 @@
   }
   // Re-install on Starlight client-side route changes (Astro view-transitions)
   document.addEventListener("astro:page-load", installFeedback);
+
+  /* ---------- GitHub Star CTA clicks ---------- */
+  // data-umami-event / data-umami-event-location handled by Umami's auto-collect,
+  // but we also fire a named event for consistent naming with other CTA events.
+  document.addEventListener(
+    "click",
+    (ev) => {
+      const a = ev.target?.closest?.("a.ra-star-cta");
+      if (!a) return;
+      const position = a.dataset.umamiEventLocation || "unknown";
+      track("github_star_cta", { location: position, from: location.pathname });
+    },
+    { capture: true, passive: true },
+  );
+
+  /* ---------- Sidebar navigation ---------- */
+  document.addEventListener(
+    "click",
+    (ev) => {
+      const a = ev.target?.closest?.("nav.sidebar a[href], .sidebar a[href]");
+      if (!a) return;
+      const label = (a.textContent || "").trim().slice(0, 60);
+      const to = a.getAttribute("href") || "";
+      // Try to find the section heading this link is nested under
+      const group = a.closest("[data-sl-collapsed], .sidebar-group")
+        ?.querySelector?.("summary, .group-label")
+        ?.textContent?.trim().slice(0, 40) || "";
+      track("sidebar_nav", { label, section: group, to, from: location.pathname });
+    },
+    { capture: true, passive: true },
+  );
+
+  /* ---------- TOC clicks ---------- */
+  document.addEventListener(
+    "click",
+    (ev) => {
+      const a = ev.target?.closest?.(".right-sidebar a[href^='#'], .toc a[href^='#']");
+      if (!a) return;
+      const heading = (a.textContent || "").trim().slice(0, 60);
+      track("toc_click", { heading, path: location.pathname });
+    },
+    { capture: true, passive: true },
+  );
+
+  /* ---------- Stability badge hover ---------- */
+  document.addEventListener(
+    "pointerenter",
+    (ev) => {
+      const badge = ev.target?.closest?.(".sl-badge, [class*='badge']");
+      if (!badge) return;
+      const text = (badge.textContent || "").trim().slice(0, 30);
+      if (!text) return;
+      track("version_badge_hover", { badge: text, path: location.pathname });
+    },
+    { capture: true, passive: true },
+  );
+
+  /* ---------- Updated callout hash link clicks ---------- */
+  document.addEventListener(
+    "click",
+    (ev) => {
+      const a = ev.target?.closest?.(".ra-updated-hash");
+      if (!a) return;
+      const hash = (a.textContent || "").trim().slice(0, 10);
+      track("changelog_link", { hash, path: location.pathname });
+    },
+    { capture: true, passive: true },
+  );
+
+  /* ---------- 404 hit ---------- */
+  (function () {
+    if (
+      location.pathname.startsWith("/404") ||
+      document.querySelector('meta[name="generator"][content*="404"]') ||
+      document.title?.includes("404")
+    ) {
+      track("404_hit", { referrer: document.referrer.slice(0, 120) });
+    }
+  })();
+
+  /* ---------- Time on page (capped at 10 min) ---------- */
+  (function () {
+    let START = Date.now();
+    const MAX_SEC = 600;
+
+    function flush() {
+      const elapsed = Math.round(Math.min((Date.now() - START) / 1000, MAX_SEC));
+      if (elapsed < 5) return; // ignore bounces under 5s
+      track("time_on_page", { path: location.pathname, seconds: elapsed });
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flush();
+    });
+
+    // Re-arm on Starlight view-transitions
+    document.addEventListener("astro:before-preparation", flush);
+    // Reset timer on each client-side page navigation so times don't accumulate across pages
+    document.addEventListener("astro:page-load", () => { START = Date.now(); });
+  })();
+
+  /* ---------- Pagefind search result click ---------- */
+  document.addEventListener(
+    "click",
+    (ev) => {
+      const result = ev.target?.closest?.(".pagefind-ui__result-link, [data-pagefind-result]");
+      if (!result) return;
+      const title = result.querySelector?.(".pagefind-ui__result-title")?.textContent?.trim().slice(0, 60)
+        || (result.textContent || "").trim().slice(0, 60);
+      const href = result.getAttribute?.("href") || result.closest?.("a")?.getAttribute?.("href") || "";
+      // Find the search input to read current query
+      const q = document.querySelector?.(".pagefind-ui__search-input")?.value?.trim().slice(0, 80) || "";
+      // Rank is hard to get from DOM; use position in result list
+      const allResults = [...(document.querySelectorAll?.(".pagefind-ui__result") ?? [])];
+      const resultItem = result.closest?.(".pagefind-ui__result");
+      const rank = resultItem ? allResults.indexOf(resultItem) + 1 : 0;
+      track("search_result_click", { q, result_title: title, result_path: href, rank });
+    },
+    { capture: true, passive: true },
+  );
 })();

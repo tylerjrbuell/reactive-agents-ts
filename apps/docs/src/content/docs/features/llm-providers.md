@@ -1,8 +1,20 @@
 ---
 title: LLM Providers
-description: Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Ollama, LiteLLM, and custom providers.
+description: >-
+  Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Ollama,
+  LiteLLM, and custom providers.
 sidebar:
   order: 4
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
 ---
 
 Reactive Agents supports multiple LLM providers through a unified `LLMService` interface. Switch providers with a single line — your agent code stays the same.

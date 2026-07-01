@@ -1,8 +1,20 @@
 ---
 title: Composable Kernel Architecture
-description: ThoughtKernel abstraction, KernelRunner universal loop, and custom kernel registration via StrategyRegistry.
+description: >-
+  ThoughtKernel abstraction, KernelRunner universal loop, and custom kernel
+  registration via StrategyRegistry.
 sidebar:
   order: 5
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The Composable Kernel Architecture separates *how a reasoning step works* (the kernel) from *when and how many times it runs* (the strategy). This makes reasoning algorithms swappable, testable in isolation, and extensible without touching core framework code.

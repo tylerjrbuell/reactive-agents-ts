@@ -1,8 +1,21 @@
 ---
 title: Status Display (TUI)
-description: Show a live spinner, collapsible think panel, cost display, and tool call scrollback in interactive terminal sessions.
+description: >-
+  Show a live spinner, collapsible think panel, cost display, and tool call
+  scrollback in interactive terminal sessions.
 sidebar:
   order: 12
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+since: v0.9
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 `StatusRenderer` is a terminal UI that replaces scrolling log output with a single updating status line during agent execution. It is designed for interactive terminal sessions where you want a clean, information-dense view of what the agent is doing without a wall of streaming text.

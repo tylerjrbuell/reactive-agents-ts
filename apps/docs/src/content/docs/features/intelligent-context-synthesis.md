@@ -1,8 +1,21 @@
 ---
 title: Intelligent Context Synthesis
-description: Optional kernel pass that rewrites the reasoning transcript between iterations — templates or LLM — with per-strategy overrides.
+description: >-
+  Optional kernel pass that rewrites the reasoning transcript between iterations
+  — templates or LLM — with per-strategy overrides.
 sidebar:
   order: 18
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+since: v0.8
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 **Intelligent Context Synthesis (ICS)** runs after each thinking step (iteration ≥ 1) when the shared ReAct-style kernel is active. It produces a compact message list for the next LLM call instead of replaying the full raw transcript.

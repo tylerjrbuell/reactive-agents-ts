@@ -1,8 +1,18 @@
 ---
 title: Contributing
-description: How to develop, test, and release changes to Reactive Agents.
+description: 'How to develop, test, and release changes to Reactive Agents.'
 sidebar:
   order: 99
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
 ---
 
 ## Setup

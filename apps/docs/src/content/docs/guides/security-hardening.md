@@ -1,8 +1,20 @@
 ---
 title: Security Hardening
-description: Practical hardening checklist for production agents, tools, and MCP transports.
+description: >-
+  Practical hardening checklist for production agents, tools, and MCP
+  transports.
 sidebar:
   order: 22
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 This guide focuses on secure defaults and common mistakes in real deployments.

@@ -4,15 +4,13 @@ import skills from "astro-skills";
 import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightImageZoom from "starlight-image-zoom";
-import { newPageIndicator } from "./src/plugins/new-page-indicator.ts";
-
+import starlightScrollToTop from "starlight-scroll-to-top";
 export default defineConfig({
   // Docs now deploy to a custom domain at the root path.
   site: "https://docs.reactiveagents.dev",
   base: "/",
   integrations: [
     skills(),
-    newPageIndicator({ withinDays: 14, maxAutoDetected: 10 }),
     starlight({
       title: "Reactive Agents",
       description:
@@ -79,7 +77,20 @@ export default defineConfig({
             },
           ],
         }),
+        // Scroll-to-top button — zero-config, appears on long pages
+        starlightScrollToTop(),
       ],
+      expressiveCode: {
+        themes: ["github-dark", "github-light"],
+        defaultProps: {
+          // bash/sh/shell blocks get the terminal frame by default
+          overridesByLang: {
+            bash: { frame: "terminal" },
+            sh: { frame: "terminal" },
+            shell: { frame: "terminal" },
+          },
+        },
+      },
       customCss: ["./src/styles/custom.css"],
       head: [
         // MUST be first + non-deferred: a service worker that injects
@@ -112,15 +123,6 @@ export default defineConfig({
             src: "/umami-deep.js",
           },
         },
-        // Marks sidebar links for pages flagged "new" (frontmatter or git date).
-        // Reads the inline window.__ra_new_pages_data__ injected by new-page-indicator.
-        {
-          tag: "script",
-          attrs: {
-            defer: true,
-            src: "/new-page-indicator.js",
-          },
-        },
         {
           tag: "script",
           attrs: {
@@ -148,7 +150,7 @@ export default defineConfig({
       // badge; the new-page-indicator plugin adds date-based badges on top.
       sidebar: [
         {
-          label: "Start Here",
+          label: "Get Started",
           items: [
             { label: "Introduction", link: "guides/introduction/" },
             { label: "Build AI Agents in TypeScript", link: "guides/build-ai-agents-typescript/" },
@@ -159,18 +161,22 @@ export default defineConfig({
           ],
         },
         {
-          label: "Core Guides",
+          label: "Build",
           items: [
             { label: "Reasoning Strategies", link: "guides/reasoning/" },
             { label: "Choosing a Strategy", link: "guides/choosing-strategies/" },
             { label: "Tools", link: "guides/tools/" },
             { label: "Memory", link: "guides/memory/" },
-            { label: "Typed Structured Output", link: "guides/structured-output/" },
+            {
+              label: "Typed Structured Output",
+              link: "guides/structured-output/",
+              badge: { text: "New in v0.12", variant: "success" },
+            },
+            { label: "Streaming Responses", link: "features/streaming/" },
+            { label: "Chat & Sessions", link: "cookbook/chat-and-sessions/" },
             { label: "Lifecycle Hooks", link: "guides/hooks/" },
             { label: "Interaction Modes", link: "guides/interaction-modes/" },
             { label: "Context Engineering", link: "guides/context-engineering/" },
-            { label: "Durable Execution", link: "guides/durable-execution/" },
-            { label: "Durable Human-in-the-Loop", link: "guides/durable-hitl/" },
             { label: "Sub-Agents", link: "guides/sub-agents/" },
             { label: "Agent Skills", link: "guides/agent-skills/" },
             { label: "Local Models", link: "guides/local-models/" },
@@ -182,25 +188,74 @@ export default defineConfig({
           label: "Ship to Production",
           items: [
             { label: "Production Checklist", link: "guides/production-checklist/" },
+            {
+              label: "Durable Execution",
+              link: "guides/durable-execution/",
+              badge: { text: "New in v0.12", variant: "success" },
+            },
+            {
+              label: "Durable Human-in-the-Loop",
+              link: "guides/durable-hitl/",
+              badge: { text: "New in v0.12", variant: "success" },
+            },
             { label: "Cost Optimization", link: "guides/cost-optimization/" },
             { label: "Guardrails", link: "guides/guardrails/" },
             { label: "Security Hardening", link: "guides/security-hardening/" },
           ],
         },
         {
-          label: "Features",
-          autogenerate: { directory: "features" },
+          label: "How It Works",
+          collapsed: true,
+          items: [
+            { label: "Architecture", link: "concepts/architecture/" },
+            { label: "Agent Lifecycle", link: "concepts/agent-lifecycle/" },
+            { label: "Composable Kernel", link: "concepts/composable-kernel/" },
+            { label: "Layer System", link: "concepts/layer-system/" },
+            { label: "Decision Tracing", link: "concepts/decision-tracing/" },
+            { label: "Effect-TS", link: "concepts/effect-ts/" },
+            { label: "Reactive Intelligence", link: "features/reactive-intelligence/" },
+            { label: "Harness Control Flow", link: "features/harness-control-flow/" },
+            { label: "Context Synthesis", link: "features/intelligent-context-synthesis/" },
+            { label: "Resilience", link: "features/resilience/" },
+            { label: "Verification", link: "features/verification/" },
+            { label: "Observability", link: "features/observability/" },
+            { label: "A2A Protocol", link: "features/a2a-protocol/" },
+            { label: "Benchmarks", link: "features/benchmarks/" },
+            { label: "Code Action", link: "features/code-action/" },
+            { label: "Cortex Studio", link: "features/cortex/" },
+            { label: "Cost Tracking", link: "features/cost-tracking/" },
+            { label: "Create Reactive Agent", link: "features/create-reactive-agent/" },
+            { label: "Debrief Chat", link: "features/debrief-chat/" },
+            { label: "Evaluation", link: "features/eval/" },
+            { label: "Gateway", link: "features/gateway/" },
+            { label: "Identity", link: "features/identity/" },
+            { label: "LLM Providers", link: "features/llm-providers/" },
+            { label: "Local Model Performance", link: "features/local-model-performance/" },
+            { label: "Observe (OTel)", link: "features/observe/" },
+            { label: "Orchestration", link: "features/orchestration/" },
+            { label: "Prompts", link: "features/prompts/" },
+            { label: "Snapshot & Replay", link: "features/snapshot-replay/" },
+          ],
         },
         {
-          label: "Concepts",
-          autogenerate: { directory: "concepts" },
+          label: "vs. Alternatives",
+          collapsed: true,
+          items: [
+            { label: "Migrating from LangChain", link: "guides/migrating-from-langchain/" },
+            { label: "vs. LangGraph", link: "guides/reactive-agents-vs-langgraph/" },
+            { label: "vs. Mastra", link: "guides/reactive-agents-vs-mastra/" },
+            { label: "vs. Vercel AI SDK", link: "guides/reactive-agents-vs-vercel-ai-sdk/" },
+            { label: "vs. Agent SDKs (OpenAI/Claude)", link: "guides/reactive-agents-vs-agent-sdks/" },
+          ],
         },
         {
           label: "Cookbook",
+          collapsed: true,
           autogenerate: { directory: "cookbook" },
         },
         {
           label: "API Reference",
+          collapsed: true,
           autogenerate: { directory: "reference" },
         },
         {
@@ -215,11 +270,6 @@ export default defineConfig({
           items: [
             { label: "FAQ", link: "guides/faq/" },
             { label: "Troubleshooting", link: "guides/troubleshooting/" },
-            { label: "Migrating from LangChain", link: "guides/migrating-from-langchain/" },
-            { label: "vs LangGraph", link: "guides/reactive-agents-vs-langgraph/" },
-            { label: "vs Mastra", link: "guides/reactive-agents-vs-mastra/" },
-            { label: "vs Vercel AI SDK", link: "guides/reactive-agents-vs-vercel-ai-sdk/" },
-            { label: "vs Agent SDKs (OpenAI/Claude)", link: "guides/reactive-agents-vs-agent-sdks/" },
             { label: "Examples Catalog", link: "guides/examples/" },
             { label: "Interactive Playground", link: "guides/playground/" },
             {

@@ -1,8 +1,20 @@
 ---
 title: Troubleshooting
-description: Fast diagnosis for common Reactive Agents issues in development and production.
+description: >-
+  Fast diagnosis for common Reactive Agents issues in development and
+  production.
 sidebar:
   order: 23
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Use this page as a symptom → cause → fix reference when agents fail, hang, or behave unexpectedly.

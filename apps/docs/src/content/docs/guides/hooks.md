@@ -3,6 +3,16 @@ title: Lifecycle Hooks
 description: Intercept and extend the 12-phase execution engine with custom hooks
 sidebar:
   order: 16
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 # Lifecycle Hooks

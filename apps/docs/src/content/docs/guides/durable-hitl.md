@@ -1,8 +1,22 @@
 ---
 title: Durable Human-in-the-Loop
-description: Pause an agent on a high-risk tool call, persist it, and approve or deny from any process — approval gates that survive process death.
+stability: experimental
+description: >-
+  Pause an agent on a high-risk tool call, persist it, and approve or deny from
+  any process — approval gates that survive process death.
 sidebar:
   order: 27
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+since: v0.12
+badge:
+  text: Experimental
+  variant: caution
+  __auto: '1'
 ---
 
 Some actions need a human's sign-off before they run — a shell command, a file

@@ -1,8 +1,23 @@
 ---
 title: Build an AI Agent with Tool Calling and MCP in TypeScript
-description: A hands-on TypeScript tutorial for building an AI agent with function calling and Model Context Protocol (MCP). Define your own tools with the ToolBuilder API, plug in MCP servers over stdio and streamable-http, and run the same code on local and frontier models.
+description: >-
+  A hands-on TypeScript tutorial for building an AI agent with function calling
+  and Model Context Protocol (MCP). Define your own tools with the ToolBuilder
+  API, plug in MCP servers over stdio and streamable-http, and run the same code
+  on local and frontier models.
 sidebar:
   order: 31
+badge:
+  text: New in v0.12
+  variant: success
+  __auto: '1'
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+since: v0.12
 ---
 
 Tools are how an AI agent stops talking and starts *acting* — searching the web, reading files, hitting an API, querying a database. A language model on its own can only produce text; tool calling (a.k.a. function calling) is what lets it choose an action, hand you structured arguments, and use the real result to decide what to do next.

@@ -1,8 +1,20 @@
 ---
 title: Building Custom Tools
-description: Create typed, validated tools with the fluent ToolBuilder API or plain ToolDefinition objects.
+description: >-
+  Create typed, validated tools with the fluent ToolBuilder API or plain
+  ToolDefinition objects.
 sidebar:
   order: 8
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Tools give agents the ability to take real-world actions — fetch data, run code, call APIs, write files. This recipe covers both the fluent `ToolBuilder` API and the lower-level `ToolDefinition` format.

@@ -1,8 +1,20 @@
 ---
 title: Custom Reasoning Strategies
-description: Build and register your own reasoning strategies for specialized agent behavior.
+description: >-
+  Build and register your own reasoning strategies for specialized agent
+  behavior.
 sidebar:
   order: 5
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 While the 5 built-in strategies cover most use cases, you can register custom reasoning strategies for specialized behavior.

@@ -21,10 +21,21 @@ export const collections = {
     loader: docsLoader(),
     schema: docsSchema({
       extend: z.object({
+        // Legacy new-page fields — kept for backward compat, replaced by badge system
         isNew: z.boolean().optional(),
         newUntil: z.string().optional(),
-        // Curated Q&A -> Schema.org FAQPage JSON-LD (AEO: featured snippets,
-        // answer-engine grounding). Emitted by src/components/Head.astro.
+        // Badge system fields (written by scripts/sync-page-metadata.ts)
+        stability: z.enum(["stable", "unstable", "experimental", "deprecated"]).optional(),
+        since: z.string().optional(),
+        lastCommit: z
+          .object({
+            subject: z.string(),
+            hash: z.string(),
+            date: z.string(),
+          })
+          .optional(),
+        changedSections: z.array(z.string()).optional(),
+        // Curated Q&A -> Schema.org FAQPage JSON-LD
         faq: z
           .array(z.object({ q: z.string(), a: z.string() }))
           .optional(),

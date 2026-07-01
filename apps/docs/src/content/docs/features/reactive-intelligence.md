@@ -1,8 +1,20 @@
 ---
 title: Reactive Intelligence
-description: Real-time entropy sensing, adaptive control, and local learning for smarter agent reasoning.
+description: >-
+  Real-time entropy sensing, adaptive control, and local learning for smarter
+  agent reasoning.
 sidebar:
   order: 10
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 Reactive Intelligence monitors reasoning quality in real time and takes corrective action automatically. Instead of waiting for an agent to exhaust its iteration budget, the system measures entropy — a composite signal of how uncertain or unfocused the agent's reasoning is — and intervenes early.

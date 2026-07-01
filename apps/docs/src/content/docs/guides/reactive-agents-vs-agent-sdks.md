@@ -1,8 +1,21 @@
 ---
-title: "Reactive Agents vs the OpenAI / Claude Agent SDKs"
-description: "When a vendor Agent SDK is enough — and when a framework earns its keep. An honest look at raw SDKs vs Reactive Agents for building TypeScript agents."
+title: Reactive Agents vs the OpenAI / Claude Agent SDKs
+description: >-
+  When a vendor Agent SDK is enough — and when a framework earns its keep. An
+  honest look at raw SDKs vs Reactive Agents for building TypeScript agents.
 sidebar:
   order: 24
+badge:
+  text: New in v0.12
+  variant: success
+  __auto: '1'
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+since: v0.12
 ---
 
 A real 2026 question: vendor Agent SDKs (OpenAI Agents SDK, the Claude Agent SDK) got good, model APIs converged, and "just call the SDK" is now legitimate advice. So before reaching for *any* framework — including this one — it's worth being honest about when you don't need one.

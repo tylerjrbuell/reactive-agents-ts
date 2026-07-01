@@ -1,8 +1,20 @@
 ---
-title: "Working with Sub-Agents"
-description: "Delegate tasks to specialized sub-agents with persona control and context forwarding"
+title: Working with Sub-Agents
+description: >-
+  Delegate tasks to specialized sub-agents with persona control and context
+  forwarding
 sidebar:
   order: 13
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 ## Overview

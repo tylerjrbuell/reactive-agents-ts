@@ -1,6 +1,19 @@
 ---
 title: API Stability & Versioning
-description: SemVer commitments, stability tiers, what's stable vs experimental in v0.12, and the deprecation policy.
+description: >-
+  SemVer commitments, stability tiers, what's stable vs experimental in v0.12,
+  and the deprecation policy.
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+since: v0.10
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 This page is the honest answer to "is this safe to depend on?"

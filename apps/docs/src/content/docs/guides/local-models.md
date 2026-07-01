@@ -1,8 +1,20 @@
 ---
 title: Local Models Guide
-description: Choose the right local model for your task and configure Reactive Agents for optimal performance
+description: >-
+  Choose the right local model for your task and configure Reactive Agents for
+  optimal performance
 sidebar:
   order: 11
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 # Local Models Guide

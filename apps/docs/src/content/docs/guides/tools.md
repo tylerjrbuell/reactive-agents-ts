@@ -1,8 +1,20 @@
 ---
 title: Tools
-description: Giving agents the ability to act in the world — tool registry, sandbox execution, MCP, and reasoning integration.
+description: >-
+  Giving agents the ability to act in the world — tool registry, sandbox
+  execution, MCP, and reasoning integration.
 sidebar:
   order: 9
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The tools layer lets agents call external functions, APIs, and MCP servers. Tools integrate directly with the reasoning loop — when an agent thinks it needs information or wants to take an action, it calls a tool and uses the real result.

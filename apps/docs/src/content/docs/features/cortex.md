@@ -1,8 +1,22 @@
 ---
 title: Cortex — Local Agent Studio
-description: A local companion web app for Reactive Agents. Watch reasoning traces in real time, inspect run history, chat with agents interactively, and manage the full scaffold from a single browser window.
+description: >-
+  A local companion web app for Reactive Agents. Watch reasoning traces in real
+  time, inspect run history, chat with agents interactively, and manage the full
+  scaffold from a single browser window.
 sidebar:
-    order: 2
+  order: 2
+lastCommit:
+  subject: >-
+    docs(revamp): fix callout sentinel, analytics double-count, SPA time reset,
+    minor accuracy
+  hash: 090ed16
+  date: '2026-07-01'
+since: v0.9
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/components";
@@ -204,7 +218,7 @@ Configure global Cortex defaults:
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withModel('claude-sonnet-4-6')
-    .withReasoning({ strategy: 'plan-execute' })
+    .withReasoning({ defaultStrategy: 'plan-execute-reflect' })
     .withTools()
     .withCortex() // ← connects to http://localhost:4321
     .withCortex('http://my-cortex:4321') // ← or explicit URL

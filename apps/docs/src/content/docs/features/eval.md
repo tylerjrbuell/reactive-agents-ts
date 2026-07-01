@@ -1,8 +1,21 @@
 ---
 title: Evaluation Framework
-description: LLM-as-judge scoring, EvalStore persistence, regression detection, and custom dimensions via @reactive-agents/eval.
+stability: experimental
+description: >-
+  LLM-as-judge scoring, EvalStore persistence, regression detection, and custom
+  dimensions via @reactive-agents/eval.
 sidebar:
   order: 15
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+badge:
+  text: Experimental
+  variant: caution
+  __auto: '1'
 ---
 
 The `@reactive-agents/eval` package provides a structured framework for measuring agent quality. It uses an LLM-as-judge approach to score agent responses across multiple dimensions, persists results to SQLite, and detects regressions between agent versions.

@@ -1,8 +1,21 @@
 ---
 title: Harness Control Flow
-description: How the kernel's entropy sensor, reactive controller, and calibration system work together to guide agent reasoning.
+description: >-
+  How the kernel's entropy sensor, reactive controller, and calibration system
+  work together to guide agent reasoning.
 sidebar:
   order: 11
+lastCommit:
+  subject: >-
+    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
+    import
+  hash: 1216d5f
+  date: '2026-07-01'
+since: v0.9
+badge:
+  text: Updated
+  variant: note
+  __auto: '1'
 ---
 
 The harness control flow is the real-time feedback loop that monitors and steers agent reasoning. It connects three systems — the **entropy sensor**, the **reactive controller**, and the **calibration store** — into a single evaluation pipeline that runs after every kernel iteration.

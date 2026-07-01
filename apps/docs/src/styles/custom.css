@@ -1948,3 +1948,181 @@ nav a[data-ra-new='true']::before {
     font-size: 0.7rem;
     color: var(--sl-color-gray-3);
 }
+
+/* ── Last-updated line (PageTitle.astro) — shown on all pages ── */
+.ra-last-updated {
+  font-size: 0.75rem;
+  color: var(--sl-color-gray-3);
+  margin: 0.25rem 0 0.75rem;
+}
+.ra-last-updated a {
+  color: var(--sl-color-gray-3);
+  font-family: var(--sl-font-mono, monospace);
+}
+.ra-last-updated a:hover {
+  color: var(--sl-color-text);
+}
+
+/* ── Push scroll-to-top above the Context7 chat widget ─────── */
+.scroll-to-top-button {
+  bottom: 5rem !important;
+}
+
+/* ── Updated callout (PageTitle.astro) ──────────────────────── */
+.ra-updated-callout {
+  margin: -0.5rem 0 1.25rem;
+  border-left: 2px solid var(--sl-color-accent);
+  padding: 0.35rem 0.75rem;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--sl-color-accent) 6%, transparent);
+  font-size: 0.8rem;
+  color: var(--sl-color-gray-2);
+}
+
+.ra-updated-callout summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+}
+
+.ra-updated-callout summary::-webkit-details-marker { display: none; }
+
+.ra-updated-icon {
+  font-size: 0.7rem;
+  color: var(--sl-color-accent);
+}
+
+.ra-updated-detail {
+  margin: 0.35rem 0 0;
+  color: var(--sl-color-gray-3);
+  font-size: 0.75rem;
+}
+
+.ra-updated-subject { font-style: italic; }
+
+.ra-updated-hash {
+  font-family: var(--sl-font-mono, monospace);
+  color: var(--sl-color-accent-high);
+  text-decoration: none;
+}
+.ra-updated-hash:hover { text-decoration: underline; }
+
+/* ── GitHub Star CTA (PageSidebar) ──────────────────────────── */
+.ra-star-cta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--sl-color-gray-5);
+  background: color-mix(in srgb, var(--sl-color-accent) 5%, transparent);
+  color: var(--sl-color-white);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ra-star-cta:hover {
+  border-color: var(--sl-color-accent);
+  background: color-mix(in srgb, var(--sl-color-accent) 12%, transparent);
+  text-decoration: none;
+}
+
+.ra-star-icon { font-size: 0.9rem; }
+
+.ra-star-label { flex: 1; }
+
+.ra-star-count {
+  background: var(--sl-color-gray-5);
+  border-radius: 10px;
+  padding: 0 0.45rem;
+  font-size: 0.7rem;
+  color: var(--sl-color-gray-2);
+}
+
+/* ── Numbered steps (Tailwind-style 01 → 02 → ...) ─────────── */
+/* Apply class="ra-steps" to <ol> in guides for numbered steps  */
+ol.ra-steps {
+  counter-reset: ra-step;
+  list-style: none;
+  padding: 0;
+}
+
+ol.ra-steps > li {
+  counter-increment: ra-step;
+  position: relative;
+  padding-left: 3rem;
+  padding-bottom: 1.5rem;
+  border-left: 2px solid var(--sl-color-gray-5);
+  margin-left: 1rem;
+}
+
+ol.ra-steps > li::before {
+  content: counter(ra-step, decimal-leading-zero);
+  position: absolute;
+  left: -1.35rem;
+  top: 0;
+  background: var(--sl-color-bg);
+  border: 2px solid var(--sl-color-accent);
+  color: var(--sl-color-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+ol.ra-steps > li:last-child {
+  border-left-color: transparent;
+}
+
+/* Sidebar dot — applied via JS (data-ra-updated attribute) */
+a[data-ra-updated]::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1cafd9;
+  flex-shrink: 0;
+  margin-inline-end: 0.45rem;
+  vertical-align: middle;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #1cafd9 25%, transparent);
+}
+
+/* TOC section change indicator */
+starlight-toc a[data-ra-changed]::before {
+  content: '●';
+  font-size: 0.5rem;
+  color: #1cafd9;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.ra-changed-sections {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.ra-changed-sections li {
+  font-size: 0.7rem;
+  color: var(--sl-color-gray-3);
+  background: var(--sl-color-gray-6);
+  border-radius: 3px;
+  padding: 0.1em 0.45em;
+  font-family: var(--sl-font-mono, monospace);
+}
