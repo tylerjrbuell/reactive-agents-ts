@@ -135,10 +135,70 @@ function renderToolLines(tools: ToolSummary[]): string {
  * (and possibly wrong) argument content is suggested. Falls back to the generic
  * structure-only example when no tools are available.
  */
+const WRITE_TOOL_PATTERNS = ["write", "send", "post", "create", "save", "upload", "publish"];
+
+function isWriteTool(name: string): boolean {
+  const lower = name.toLowerCase();
+  return WRITE_TOOL_PATTERNS.some((p) => lower.includes(p));
+}
+
 function buildPlanExample(tools: ToolSummary[]): string {
   const first = tools[0];
   if (!first) return PLAN_STEP_EXAMPLE;
 
+  // When a write-type tool is available alongside a fetch tool, generate a
+  // 3-step example showing the correct pattern: fetch → analysis → write.
+  // This prevents weak models from merging synthesis + file I/O into one
+  // "analysis" step, which has no tools and can never call file-write.
+  const writeTool = tools.find((t) => isWriteTool(t.name));
+  const fetchTool = writeTool ? (tools.find((t) => t !== writeTool) ?? first) : first;
+
+  if (writeTool && writeTool !== fetchTool) {
+    const fetchArgs =
+      fetchTool.params && fetchTool.params.length > 0
+        ? `{ ${fetchTool.params.map((p) => `"${p.name}": "<value>"`).join(", ")} }`
+        : "{}";
+    const writeArgs =
+      writeTool.params && writeTool.params.length > 0
+        ? `{ ${writeTool.params
+            .map((p) =>
+              p.name === "content" || p.name === "message" || p.name === "body"
+                ? `"${p.name}": "{{from_step:s2}}"`
+                : `"${p.name}": "<value>"`,
+            )
+            .join(", ")} }`
+        : `{ "content": "{{from_step:s2}}" }`;
+
+    return `{
+  "steps": [
+    {
+      "title": "Fetch the needed data",
+      "instruction": "Call ${fetchTool.name} to get the data the goal requires",
+      "type": "tool_call",
+      "toolName": "${fetchTool.name}",
+      "toolArgs": ${fetchArgs},
+      "rationale": { "why": "Need this data before synthesis can begin", "confidence": 0.9 }
+    },
+    {
+      "title": "Synthesize the result",
+      "instruction": "Analyze and compose the data from the previous step into the required format",
+      "type": "analysis",
+      "dependsOn": ["s1"]
+    },
+    {
+      "title": "Write the output",
+      "instruction": "Call ${writeTool.name} to persist or deliver the synthesized result",
+      "type": "tool_call",
+      "toolName": "${writeTool.name}",
+      "toolArgs": ${writeArgs},
+      "dependsOn": ["s2"],
+      "rationale": { "why": "The goal requires persisting the output — call ${writeTool.name} with the composed content from s2", "confidence": 0.95 }
+    }
+  ]
+}`;
+  }
+
+  // Fallback: 2-step example (single tool or no identifiable write tool)
   const toolArgs =
     first.params && first.params.length > 0
       ? `{ ${first.params.map((p) => `"${p.name}": "<value>"`).join(", ")} }`
@@ -183,9 +243,10 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
     `- Prefer "tool_call" steps — they execute instantly without LLM overhead.\n` +
     `- When the goal asks for data about MULTIPLE distinct items (e.g. multiple currencies, products, users), create a SEPARATE tool_call step for each item — combined queries lose specificity.\n` +
     `- Parallel-safe tool_call steps with no data dependencies can execute concurrently — prefer separate steps over combined queries.\n` +
-    `- Use at most ONE "analysis" step to do all reasoning/writing/composition work.\n` +
+    `- Use at most ONE "analysis" step for pure text reasoning/synthesis — no tool side-effects.\n` +
+    `- CRITICAL: If the goal requires a side-effect tool (write a file, send a message, POST to an API), that action MUST be a separate "tool_call" step AFTER any "analysis" step. Pass the composed content via {{from_step:sN}} as the tool argument. Never put file I/O or network calls inside an "analysis" step.\n` +
     `- Use {{from_step:sN}} in toolArgs to pass previous step results to tool calls.\n` +
-    `- Never split summarizing, formatting, and composing into separate steps — combine them.\n\n` +
+    `- Combine all text reasoning into one "analysis" step — never split reasoning into multiple analysis steps.\n\n` +
     `GOAL:\n${input.goal}`,
   );
 

@@ -19,7 +19,7 @@ import type {
   TaskError,
   RunControllerLike,
 } from "@reactive-agents/core";
-import type { GatewayOptions, OutputSchemaOptions } from "../types.js";
+import type { GatewayOptions, ModelRoutingOptions, OutputSchemaOptions } from "../types.js";
 import type { ParentExecutionContextSnapshot } from "./parent-context.js";
 import type { SchemaContract } from "@reactive-agents/reasoning";
 
@@ -59,10 +59,11 @@ export interface AgentInstantiationDeps {
     minIterations?: number;
     taskContext?: Record<string, string>;
     progressCheckpoint?: { every: number; autoResume?: boolean };
-    verificationStep?: { mode: "reflect" | "loop"; prompt?: string };
+    verificationStep?: { mode: "reflect"; prompt?: string };
     outputValidator?: (output: string) => { valid: boolean; feedback?: string };
     outputValidatorOptions?: { maxRetries?: number };
     customTermination?: (state: { output: string }) => boolean;
+    modelRouting?: ModelRoutingOptions;
   };
   /**
    * Durable resume context (Phase C). Present only when `.withDurableRuns()`

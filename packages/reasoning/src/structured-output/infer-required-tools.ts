@@ -251,12 +251,16 @@ Respond with JSON:
 }
 
 Rules:
-- "required" = tools the agent MUST call or the task literally cannot be completed.
-  Ask: "if I deleted this tool, would the task still be doable?" If yes → NOT required.
-  Prefer a SHORTER required list. When in doubt, put the tool in "relevant" instead.
-  Example: "fetch prices for X, Y, Z then render markdown table" → required: [web-search×3].
-  code-execute, file-write, etc. are NOT required unless the task explicitly asks to
-  run code or save a file to disk.
+- "required" = the task cannot be done EFFECTIVELY without calling this tool at least once.
+  Test: "Could the agent satisfy the goal without ever calling this tool?" If yes → NOT required.
+  This includes both data-retrieval AND output/delivery tools: if the task asks to fetch
+  data, that fetch tool is required; if the task asks to write a file, send a message, or
+  post output somewhere, that output tool is equally required — the task isn't done until
+  the output lands. Examples:
+    - "Fetch prices for X, Y, Z then render a markdown table" → required: [web-search×3]
+    - "Fetch commits and write to ./commits.md" → required: [github/list_commits, file-write]
+    - "Summarize this and email it" → required: [email-send]
+    - "Run this script and show output" → required: [code-execute]
 - **Factual knowledge questions need NO tools.** If the task asks "what is X?",
   "explain Y", "define Z", "who/when/where", or otherwise requests information the
   model already knows (history, science facts, definitions, common knowledge) AND

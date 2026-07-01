@@ -284,6 +284,13 @@ export interface RuntimeOptions {
   enableCostTracking?: boolean;
 
   /**
+   * Opt-in cost-aware model routing config. Absent = off (default).
+   * Set via `.withModelRouting()`; the cost-route phase reads this to pick
+   * the cheapest capable model per run.
+   */
+  modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' };
+
+  /**
    * Enable the reasoning layer (multi-step strategies: ReAct, tree-of-thought, etc.).
    * Without this, agent uses single-step LLM calls.
    *
@@ -865,6 +872,8 @@ export interface LightRuntimeOptions {
   enableGuardrails?: boolean;
   enableObservability?: boolean;
   enableCostTracking?: boolean;
+  /** Opt-in cost-aware model routing config. Absent = off (default). */
+  modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' };
   observabilityOptions?: ObservabilityOptions;
   guardrailsOptions?: import("./builder.js").GuardrailsOptions;
 }

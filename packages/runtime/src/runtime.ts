@@ -351,6 +351,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     fabricationGuard: options.fabricationGuard,
     // Stall/no-progress policy. Propagated from `.withStallPolicy()`.
     stallPolicy: options.stallPolicy,
+    // Opt-in cost-aware model routing. Propagated from `.withModelRouting()`.
+    modelRouting: options.modelRouting,
     // Opt-in durable run persistence. Propagated from `.withDurableRuns()`.
     durableRuns: options.durableRuns,
     // Opt-in durable HITL approval policy. Propagated from `.withApprovalPolicy()`.

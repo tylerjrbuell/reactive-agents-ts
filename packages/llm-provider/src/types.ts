@@ -775,8 +775,8 @@ export type TokenLogprob = {
 export type CompletionRequest = {
   /** Conversation history (at least 1 message required) */
   readonly messages: readonly LLMMessage[];
-  /** Model config (provider + model name + optional sampling params) */
-  readonly model?: ModelConfig;
+  /** Model config (provider + model name + optional sampling params), or bare model-name string for routing overrides */
+  readonly model?: ModelConfig | string;
   /** Maximum response tokens (optional, uses config default if omitted) */
   readonly maxTokens?: number;
   /** Sampling temperature 0.0-1.0 (optional, uses config default if omitted) */

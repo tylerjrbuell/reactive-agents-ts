@@ -198,6 +198,7 @@ export class ReactiveAgent<TOut = unknown> {
             }
             outputValidatorOptions?: { maxRetries?: number }
             customTermination?: (state: { output: string }) => boolean
+            modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' }
         },
         /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
         private readonly _durableResume?: { readonly dir: string; readonly configHash: string },

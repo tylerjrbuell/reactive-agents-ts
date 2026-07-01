@@ -1,5 +1,10 @@
 import { Schema, type Effect } from "effect";
 
+// ─── Provider ───
+
+export const Provider = Schema.Literal("anthropic", "openai", "gemini", "ollama", "litellm");
+export type Provider = typeof Provider.Type;
+
 // ─── Model Tier ───
 
 export const ModelTier = Schema.Literal("haiku", "sonnet", "opus");
@@ -10,7 +15,7 @@ export type ModelTier = typeof ModelTier.Type;
 
 export const ModelCostConfigSchema = Schema.Struct({
   tier: ModelTier,
-  provider: Schema.Literal("anthropic", "openai", "ollama", "gemini", "litellm"),
+  provider: Provider,
   model: Schema.String,
   costPer1MInput: Schema.Number,
   costPer1MOutput: Schema.Number,

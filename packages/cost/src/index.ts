@@ -10,6 +10,7 @@ export type {
 } from "./types.js";
 export {
   ModelTier,
+  Provider,
   ModelCostConfigSchema,
   CostEntrySchema,
   BudgetLimitsSchema,
@@ -31,8 +32,11 @@ export {
   getModelCostConfig,
   estimateTokens,
   estimateCost,
+  TIER_ORDER,
+  isRoutableProvider,
 } from "./routing/complexity-router.js";
 export type { RoutingContext } from "./routing/complexity-router.js";
+export { selectCapableModel } from "./routing/capability-rail.js";
 
 // ─── Caching ───
 export { makeSemanticCache } from "./caching/semantic-cache.js";

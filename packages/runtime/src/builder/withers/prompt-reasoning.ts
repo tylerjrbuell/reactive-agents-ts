@@ -45,11 +45,11 @@ export const applyWithReasoning = (
 
 /**
  * Apply `.withVerificationStep(config)` — configure the post-result
- * verification pass (reflect-mode default or loop-mode re-entry).
+ * verification pass (reflect mode — the only supported mode).
  */
 export const applyWithVerificationStep = (
   builder: ReactiveAgentBuilder,
-  config: { mode?: "reflect" | "loop"; prompt?: string } = {},
+  config: { mode?: "reflect"; prompt?: string } = {},
 ): void => {
   asBuilderState(builder)._verificationStep = {
     mode: config.mode ?? "reflect",

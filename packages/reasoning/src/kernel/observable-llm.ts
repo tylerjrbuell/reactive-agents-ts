@@ -134,8 +134,8 @@ function emitForRequest(
   return emitLLMExchange({
     taskId: request.traceContext?.taskId ?? PLACEHOLDER_TASK_ID,
     iteration: request.traceContext?.iteration ?? PLACEHOLDER_ITERATION,
-    provider: request.model?.provider ?? fullResponse?.model ?? "unknown",
-    model: request.model?.model ?? fullResponse?.model ?? "unknown",
+    provider: typeof request.model === "string" ? (fullResponse?.model ?? "unknown") : (request.model?.provider ?? fullResponse?.model ?? "unknown"),
+    model: typeof request.model === "string" ? request.model : (request.model?.model ?? fullResponse?.model ?? "unknown"),
     requestKind: kind,
     systemPrompt: request.systemPrompt,
     messages: toExchangeMessages(request.messages),

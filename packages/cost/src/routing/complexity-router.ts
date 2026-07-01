@@ -1,10 +1,6 @@
 import { Effect } from "effect";
-import type { ModelTier, ModelCostConfig, ComplexityAnalysis } from "../types.js";
+import type { ModelTier, ModelCostConfig, ComplexityAnalysis, Provider } from "../types.js";
 import { RoutingError } from "../errors.js";
-
-// ─── Provider type ───
-
-type Provider = "anthropic" | "openai" | "gemini" | "ollama" | "litellm";
 
 // ─── Model cost configurations per provider ───
 // Each provider maps haiku/sonnet/opus to its light/mid/heavy model.
@@ -244,7 +240,15 @@ export interface RoutingContext {
   readonly toolReliabilityThreshold?: number;
 }
 
-const TIER_ORDER: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
+export const TIER_ORDER: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
+
+/**
+ * Returns true iff the given string is a provider that has a tier table in
+ * PROVIDER_CONFIGS. Stays in sync with PROVIDER_CONFIGS automatically — no
+ * separate hardcoded set to drift.
+ */
+export const isRoutableProvider = (p: string | undefined): p is Provider =>
+  p !== undefined && Object.hasOwn(PROVIDER_CONFIGS, p);
 
 /**
  * Walk the tier ladder from `start` upward, returning the first tier whose
