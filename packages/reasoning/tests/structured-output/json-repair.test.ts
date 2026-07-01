@@ -100,12 +100,31 @@ describe("repairJson", () => {
     expect(result.neg).toBeNull();
   });
 
-  it("does not replace True/False inside strings", () => {
-    // fixPythonLiterals uses simple word boundary regex - this is expected behavior:
-    // it replaces "True" inside strings too. For typical LLM JSON output, this is
-    // acceptable since string values of "True" almost always indicate Python-style booleans.
-    const input = '{"msg": "True story", "flag": True}';
+  it("converts Python/non-finite literals in VALUE position but preserves them inside string content", () => {
+    // String-aware repair: `True`/`NaN` as bare JSON values are converted, but the
+    // same tokens inside a legit double-quoted string value are DATA and must survive.
+    const input = '{"title": "True Story", "co": "NaN Industries", "flag": True, "n": NaN}';
     const result = JSON.parse(repairJson(input));
+    expect(result.title).toBe("True Story"); // string content preserved
+    expect(result.co).toBe("NaN Industries"); // string content preserved
+    expect(result.flag).toBe(true); // bare value converted
+    expect(result.n).toBeNull(); // bare value converted
+  });
+
+  it("preserves Infinity/False inside string content", () => {
+    const input = '{"name": "Infinity Ward", "verdict": "False positive", "b": False}';
+    const result = JSON.parse(repairJson(input));
+    expect(result.name).toBe("Infinity Ward");
+    expect(result.verdict).toBe("False positive");
+    expect(result.b).toBe(false);
+  });
+
+  it("preserves literals inside single-quoted string content (quote-normalized first)", () => {
+    // Single quotes are normalized to double BEFORE literal fixing, so the
+    // string span is recognized and its content survives.
+    const input = "{'msg': 'True story', 'flag': True}";
+    const result = JSON.parse(repairJson(input));
+    expect(result.msg).toBe("True story");
     expect(result.flag).toBe(true);
   });
 });

@@ -61,14 +61,16 @@ export function repairJson(input: string): string {
   // Strip single-line comments (// ...) outside strings
   text = stripComments(text);
 
-  // Fix Python-style booleans/none: True→true, False→false, None→null
+  // Normalize single quotes → double quotes FIRST so the string-aware literal
+  // fixers below can see every string span as double-quoted. Otherwise a value
+  // like {'msg': 'True story'} would be treated as out-of-string and corrupted.
+  text = fixSingleQuotes(text);
+
+  // Fix Python-style booleans/none: True→true, False→false, None→null (string-aware)
   text = fixPythonLiterals(text);
 
-  // Fix NaN/Infinity → null (not valid JSON values)
+  // Fix NaN/Infinity → null (not valid JSON values) (string-aware)
   text = fixNonFinite(text);
-
-  // Fix single quotes → double quotes (outside of existing double-quoted strings)
-  text = fixSingleQuotes(text);
 
   // Fix unescaped newlines inside strings
   text = fixUnescapedNewlines(text);
@@ -117,24 +119,79 @@ function stripComments(text: string): string {
 }
 
 /**
+ * Apply regex replacements ONLY to the segments of `text` that lie outside
+ * double-quoted string literals. String content is DATA — a value like
+ * `"True Story"` or `"NaN Industries"` must survive untouched, while a bare
+ * `True`/`NaN` in value position gets converted.
+ *
+ * Walks char-by-char tracking string/escape state, then runs each replacement
+ * against the concatenated out-of-string spans only. Quoted spans are copied
+ * through verbatim.
+ */
+function replaceOutsideStrings(
+  text: string,
+  replacements: ReadonlyArray<readonly [RegExp, string]>,
+): string {
+  const out: string[] = [];
+  let segment = "";
+  let inString = false;
+  let escape = false;
+
+  const flush = (): void => {
+    if (segment.length === 0) return;
+    let s = segment;
+    for (const [re, rep] of replacements) s = s.replace(re, rep);
+    out.push(s);
+    segment = "";
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (inString) {
+      out.push(ch);
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      flush();
+      out.push(ch);
+      inString = true;
+      continue;
+    }
+    segment += ch;
+  }
+  flush();
+  return out.join("");
+}
+
+const PYTHON_LITERAL_REPLACEMENTS = [
+  [/\bTrue\b/g, "true"],
+  [/\bFalse\b/g, "false"],
+  [/\bNone\b/g, "null"],
+] as const;
+
+const NON_FINITE_REPLACEMENTS = [
+  [/\bNaN\b/g, "null"],
+  [/-Infinity\b/g, "null"],
+  [/\bInfinity\b/g, "null"],
+] as const;
+
+/**
  * Replace Python-style boolean/none literals with JSON equivalents.
- * Only replaces outside strings at word boundaries.
+ * String-aware: only replaces outside double-quoted strings.
  */
 function fixPythonLiterals(text: string): string {
-  return text
-    .replace(/\bTrue\b/g, "true")
-    .replace(/\bFalse\b/g, "false")
-    .replace(/\bNone\b/g, "null");
+  return replaceOutsideStrings(text, PYTHON_LITERAL_REPLACEMENTS);
 }
 
 /**
  * Replace NaN, Infinity, -Infinity with null (not valid JSON).
+ * String-aware: only replaces outside double-quoted strings.
  */
 function fixNonFinite(text: string): string {
-  return text
-    .replace(/\bNaN\b/g, "null")
-    .replace(/-Infinity\b/g, "null")
-    .replace(/\bInfinity\b/g, "null");
+  return replaceOutsideStrings(text, NON_FINITE_REPLACEMENTS);
 }
 
 function fixSingleQuotes(text: string): string {

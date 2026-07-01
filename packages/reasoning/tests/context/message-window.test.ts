@@ -76,6 +76,25 @@ describe("applyMessageWindowWithCompact", () => {
     expect(hasRecallHint).toBe(false);
   }, 15000);
 
+  it("preserves ungrouped mid-thread user instructions when over budget", () => {
+    // A user clarification issued mid-conversation is not part of any
+    // assistant+tool_result turn group. It must NOT be silently dropped.
+    const BIG = "x".repeat(1000);
+    const messages: KernelMessage[] = [
+      { role: "user", content: "original task" },
+      { role: "assistant", content: "", toolCalls: [{ id: "tc1", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc1", toolName: "web-search", content: BIG } as any,
+      { role: "user", content: "IMPORTANT: only report figures in USD" } as any,
+      { role: "assistant", content: "", toolCalls: [{ id: "tc2", name: "web-search", arguments: {} }] } as any,
+      { role: "tool_result", toolCallId: "tc2", toolName: "web-search", content: "fresh" } as any,
+    ];
+    const out = applyMessageWindowWithCompact(messages, "local", 200, 1);
+    const joined = out
+      .map((m) => (typeof m.content === "string" ? m.content : ""))
+      .join(" | ");
+    expect(joined).toContain("only report figures in USD");
+  }, 15000);
+
   it("keeps the most recent N turns in full (tier-adaptive)", () => {
     const BIG = "x".repeat(1000);
     const messages: KernelMessage[] = [

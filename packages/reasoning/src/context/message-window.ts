@@ -59,12 +59,14 @@ export function applyMessageWindowWithCompact(
   }
 
   // ── Over budget: keep first user message + recent N turns ──────────────
-  const firstUser = mutable.find((m) => m.role === "user")
-  const recentTurnIdxs = new Set(
-    turns
-      .slice(-keepFullTurns)
-      .flatMap((t) => [t.assistantIdx, ...t.resultIdxs]),
-  )
+  // The recent window is an INDEX RANGE (everything from the earliest kept turn
+  // onward), not just the grouped assistant/tool_result indices. This preserves
+  // ungrouped messages interleaved in the recent region — mid-thread user
+  // clarifications and assistant final-answer text that belong to no turn group
+  // would otherwise be silently dropped.
+  const firstUserIdx = mutable.findIndex((m) => m.role === "user")
+  const recentTurns = turns.slice(-keepFullTurns)
+  const cutoffIdx = recentTurns.length > 0 ? recentTurns[0]!.assistantIdx : mutable.length
 
   const oldSummaryParts = turns
     .slice(0, Math.max(0, turns.length - keepFullTurns))
@@ -85,14 +87,26 @@ export function applyMessageWindowWithCompact(
     })
     .filter(Boolean)
 
+  // Ungrouped USER messages before the cutoff carry instructions (e.g. "only
+  // use USD") — preserve them verbatim rather than folding into the lossy
+  // summary. Assistant chatter in the old region is dropped; the [Prior] summary
+  // and the Observations section stand in for older tool work.
+  const preservedOldUsers: KernelMessage[] = []
+  for (let i = 0; i < cutoffIdx; i++) {
+    if (i === firstUserIdx) continue
+    const m = mutable[i]!
+    if (m.role === "user") preservedOldUsers.push(m)
+  }
+
   const windowed: KernelMessage[] = []
-  if (firstUser) windowed.push(firstUser)
+  // firstUser is added explicitly only when it sits before the recent window;
+  // if it falls inside the recent range the range loop below includes it.
+  if (firstUserIdx >= 0 && firstUserIdx < cutoffIdx) windowed.push(mutable[firstUserIdx]!)
   if (oldSummaryParts.length > 0) {
     windowed.push({ role: "user", content: `[Prior: ${oldSummaryParts.join(" | ")}]` })
   }
-  for (let i = 0; i < mutable.length; i++) {
-    if (recentTurnIdxs.has(i)) windowed.push(mutable[i]!)
-  }
+  for (const u of preservedOldUsers) windowed.push(u)
+  for (let i = cutoffIdx; i < mutable.length; i++) windowed.push(mutable[i]!)
 
   return windowed
 }

@@ -3,10 +3,31 @@ date: 2026-06-30
 type: audit-report
 scope: prompting + context-management + structured-output
 method: 3 parallel read-only investigators (Explore) → targeted hotspot review
-status: findings logged, unfixed
+status: 3 fixed (branch fix/prompt-context-so-audit), 2 verified, rest open
 ---
 
 # Audit: Prompting, Context Management & Structured Output
+
+> **Resolution (2026-07-01)** — branch `fix/prompt-context-so-audit`:
+> - **SO-1 FIXED** — `json-repair.ts` literal fixers made string-aware
+>   (`replaceOutsideStrings`) + single-quote normalization moved ahead of literal
+>   fixing. Tests: 3 added, GREEN.
+> - **CM-1 FIXED** — `message-window.ts` recent window is now an index range +
+>   ungrouped old user instructions preserved verbatim. Test added, GREEN.
+> - **SO-2 FIXED** — `field-provenance.ts` boundary-aware string match
+>   (`findWithBoundary`) + recursion into nested objects/arrays (dotted paths);
+>   `grounded-extract.ts` abstention loop guards dotted keys. Tests: 3 added, GREEN.
+> - **SO-5 VERIFIED (minor)** — `grounded-extract.ts:172-180` already falls back
+>   to the full contract when `Schema.partial` is a no-op; for Zod (`Schema.declare`
+>   bridge) Phase-A leniency is effectively off, but harmless. Left as documented.
+> - **PR-3 VERIFIED (not a bug)** — `context-manager.ts:119-156` hybrid steering
+>   *intentionally* reinforces guidance via a short one-line recent-turn reminder
+>   (`buildShortGuidanceReminder`, ≤120 chars) alongside the full system-prompt
+>   block. Deliberate dual-channel for weak-model attention; bounded cost. Dismissed.
+> - Reasoning package: `tsc --noEmit` clean; 236 unit tests GREEN. (observability
+>   DTS build failure is pre-existing/unrelated — otlp-exporter opentelemetry drift.)
+> - **Still open:** SO-3, SO-4 (stream reparse perf), CM-2, CM-3 (token estimate),
+>   CM-4, CM-5, PR-1 (sanitizeToolName collision), PR-2 (tool cap).
 
 Read-only review of all prompt-assembly, context-management/compression, and
 structured-output code. 3 parallel investigators mapped the subsystems; hotspot
