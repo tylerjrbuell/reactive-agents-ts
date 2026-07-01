@@ -206,6 +206,10 @@ export const groundedExtract = <A>(
     // Opt-in abstention — OPTIONAL fields only (required fields always stay).
     if (input.abstainBelow !== undefined) {
       for (const [k, conf] of Object.entries(grounded.confidence)) {
+        // Nested provenance keys are dotted paths (`meta.ticker`); abstention
+        // operates only on top-level fields — deleting a dotted key is a no-op
+        // and would spuriously populate `abstained`.
+        if (k.includes(".")) continue;
         if (conf < input.abstainBelow) {
           const isRequired = reqs.find((r) => r.path === k)?.required ?? false;
           if (!isRequired) {

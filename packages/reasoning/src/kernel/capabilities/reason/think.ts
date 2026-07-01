@@ -19,6 +19,7 @@ import {
   toProviderMessage,
   buildToolSchemas,
   sanitizeToolName,
+  buildSanitizedReverseMap,
 } from "../attend/context-utils.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
@@ -744,9 +745,17 @@ export function handleThinking(
     // fallback) so registry lookup/execution is unchanged. The reverse map is
     // built from the EXACT schemas offered this turn. accumulatedToolCalls is a
     // mutable list of objects, so in-place name reassignment is safe.
-    const canonicalBySanitized = new Map(
-      gatedToolSchemas.map((ts) => [sanitizeToolName(ts.name), ts.name] as const),
+    const { map: canonicalBySanitized, collisions } = buildSanitizedReverseMap(
+      gatedToolSchemas.map((ts) => ts.name),
     );
+    if (collisions.length > 0) {
+      yield* Effect.logWarning(
+        `[think] tool-name sanitization collision — inbound de-sanitization may ` +
+        `dispatch the wrong tool: ${collisions
+          .map(([a, b]) => `"${a}" ~ "${b}" → "${sanitizeToolName(a)}"`)
+          .join("; ")}. Rename the tools to disambiguate.`,
+      );
+    }
     for (const tc of accumulatedToolCalls) {
       const canon = canonicalBySanitized.get(tc.name);
       if (canon !== undefined) tc.name = canon;

@@ -71,4 +71,16 @@ describe("parsePartial", () => {
     const r = parsePartial('```json\n{"total":4200,"currency":');
     expect(r.total).toBe(4200);
   });
+
+  it("parses a large object (well past MAX_WALKBACK) truncated mid last value", () => {
+    // 200 complete fields then a dangling key/value. The latest stable cut is the
+    // comma after k199, which parses on the first Tier-1 attempt — the walkback
+    // bound must not drop the completed prefix.
+    const N = 200;
+    const complete = Array.from({ length: N }, (_, i) => `"k${i}":${i}`).join(",");
+    const r = parsePartial(`{${complete},"k${N}":`);
+    expect(r.k0).toBe(0);
+    expect(r[`k${N - 1}`]).toBe(N - 1);
+    expect(r[`k${N}`]).toBeUndefined(); // dangling last field dropped
+  });
 });

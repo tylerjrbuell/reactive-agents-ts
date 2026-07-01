@@ -11,6 +11,29 @@ const KEEP_FULL_TURNS_BY_TIER: Record<string, number> = {
 }
 
 /**
+ * Rough chars-per-token used for the compaction trigger estimate. A coarse
+ * heuristic (real BPE varies by content) — matches CHARS_PER_TOKEN in
+ * tool-formatting.ts. Underestimates dense code/JSON, so treat the trigger as a
+ * lower bound, not an exact budget.
+ */
+const CHARS_PER_TOKEN = 4
+
+/** Fraction of maxTokens at which the sliding window begins compacting. */
+const COMPACTION_THRESHOLD = 0.75
+
+/** Max chars of a summarized tool-result snippet in the [Prior: ...] fold. */
+const SUMMARY_SNIPPET_CHARS = 80
+
+/** Collapse whitespace and truncate at a word boundary for the fold summary. */
+function briefSnippet(text: string, max = SUMMARY_SNIPPET_CHARS): string {
+  const oneLine = text.replace(/\s+/g, " ").trim()
+  if (oneLine.length <= max) return oneLine
+  const cut = oneLine.slice(0, max)
+  const lastSpace = cut.lastIndexOf(" ")
+  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + "…"
+}
+
+/**
  * Sliding message window.
  *
  * Only fires when estimated tokens exceed 75% of maxTokens. When over budget:
@@ -50,21 +73,23 @@ export function applyMessageWindowWithCompact(
   const mutable = [...messages] as KernelMessage[]
   const estimatedTokens = mutable.reduce((sum, m) => {
     const c = m.content ?? ""
-    return sum + Math.ceil((typeof c === "string" ? c : JSON.stringify(c)).length / 4)
+    return sum + Math.ceil((typeof c === "string" ? c : JSON.stringify(c)).length / CHARS_PER_TOKEN)
   }, 0)
 
-  const budget = Math.floor(maxTokens * 0.75)
+  const budget = Math.floor(maxTokens * COMPACTION_THRESHOLD)
   if (estimatedTokens <= budget) {
     return mutable
   }
 
   // ── Over budget: keep first user message + recent N turns ──────────────
-  const firstUser = mutable.find((m) => m.role === "user")
-  const recentTurnIdxs = new Set(
-    turns
-      .slice(-keepFullTurns)
-      .flatMap((t) => [t.assistantIdx, ...t.resultIdxs]),
-  )
+  // The recent window is an INDEX RANGE (everything from the earliest kept turn
+  // onward), not just the grouped assistant/tool_result indices. This preserves
+  // ungrouped messages interleaved in the recent region — mid-thread user
+  // clarifications and assistant final-answer text that belong to no turn group
+  // would otherwise be silently dropped.
+  const firstUserIdx = mutable.findIndex((m) => m.role === "user")
+  const recentTurns = turns.slice(-keepFullTurns)
+  const cutoffIdx = recentTurns.length > 0 ? recentTurns[0]!.assistantIdx : mutable.length
 
   const oldSummaryParts = turns
     .slice(0, Math.max(0, turns.length - keepFullTurns))
@@ -78,21 +103,34 @@ export function applyMessageWindowWithCompact(
       const snippet = t.resultIdxs
         .map((i) => {
           const c = mutable[i]?.content ?? ""
-          return typeof c === "string" ? c.slice(0, 60) : ""
+          return typeof c === "string" ? briefSnippet(c) : ""
         })
+        .filter(Boolean)
         .join("; ")
       return toolNames ? `called ${toolNames} → ${snippet}` : ""
     })
     .filter(Boolean)
 
+  // Ungrouped USER messages before the cutoff carry instructions (e.g. "only
+  // use USD") — preserve them verbatim rather than folding into the lossy
+  // summary. Assistant chatter in the old region is dropped; the [Prior] summary
+  // and the Observations section stand in for older tool work.
+  const preservedOldUsers: KernelMessage[] = []
+  for (let i = 0; i < cutoffIdx; i++) {
+    if (i === firstUserIdx) continue
+    const m = mutable[i]!
+    if (m.role === "user") preservedOldUsers.push(m)
+  }
+
   const windowed: KernelMessage[] = []
-  if (firstUser) windowed.push(firstUser)
+  // firstUser is added explicitly only when it sits before the recent window;
+  // if it falls inside the recent range the range loop below includes it.
+  if (firstUserIdx >= 0 && firstUserIdx < cutoffIdx) windowed.push(mutable[firstUserIdx]!)
   if (oldSummaryParts.length > 0) {
     windowed.push({ role: "user", content: `[Prior: ${oldSummaryParts.join(" | ")}]` })
   }
-  for (let i = 0; i < mutable.length; i++) {
-    if (recentTurnIdxs.has(i)) windowed.push(mutable[i]!)
-  }
+  for (const u of preservedOldUsers) windowed.push(u)
+  for (let i = cutoffIdx; i < mutable.length; i++) windowed.push(mutable[i]!)
 
   return windowed
 }

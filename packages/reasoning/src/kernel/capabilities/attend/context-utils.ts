@@ -37,6 +37,47 @@ export function sanitizeToolName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
+/** Result of building the sanitized→canonical reverse map for a tool set. */
+export interface SanitizedReverseMap {
+  /** sanitized display name → canonical registered name (first wins on collision). */
+  readonly map: ReadonlyMap<string, string>;
+  /**
+   * Distinct canonical name pairs that sanitize to the same display name.
+   * A non-empty list means inbound de-sanitization is ambiguous for those
+   * names and may dispatch the wrong tool — callers should surface it.
+   */
+  readonly collisions: ReadonlyArray<readonly [string, string]>;
+}
+
+/**
+ * Build the inbound de-sanitization map (sanitized FC name → canonical name)
+ * for the tool set offered this turn, detecting collisions.
+ *
+ * `sanitizeToolName` is many-to-one (`a.b` and `a/b` both → `a_b`), so two
+ * distinct canonical names can collapse to one display name. The old
+ * `new Map(pairs)` construction silently kept the LAST such pair, dispatching
+ * the earlier tool's calls to the wrong canonical name. This keeps the FIRST
+ * deterministically and reports every collision so the caller can warn.
+ * Exact duplicate registrations (same canonical name twice) are not collisions.
+ */
+export function buildSanitizedReverseMap(
+  canonicalNames: readonly string[],
+): SanitizedReverseMap {
+  const map = new Map<string, string>();
+  const collisions: Array<readonly [string, string]> = [];
+  for (const name of canonicalNames) {
+    const key = sanitizeToolName(name);
+    const existing = map.get(key);
+    if (existing === undefined) {
+      map.set(key, name);
+    } else if (existing !== name) {
+      collisions.push([existing, name] as const);
+    }
+    // existing === name → duplicate registration, ignore.
+  }
+  return { map, collisions };
+}
+
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 
 /**
