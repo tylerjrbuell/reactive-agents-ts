@@ -194,6 +194,26 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // Suffix-less alias: callers using the marketing name `claude-sonnet-4-5`
+  // (without the 20250929 date suffix) previously fell to the 2048 conservative
+  // fallback — which the bench honesty guard marks inconclusive and refuses to
+  // score. Mirrors the `claude-haiku-4-5` alias below; same capability as the
+  // dated entry.
+  "anthropic/claude-sonnet-4-5": {
+    provider: "anthropic",
+    model: "claude-sonnet-4-5",
+    tier: "large",
+    maxContextTokens: 1_000_000,
+    recommendedNumCtx: 1_000_000,
+    maxOutputTokens: 64_000,
+    tokenizerFamily: "claude",
+    supportsPromptCaching: true,
+    supportsVision: true,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
   "anthropic/claude-haiku-4-5-20251001": {
     provider: "anthropic",
     model: "claude-haiku-4-5-20251001",
