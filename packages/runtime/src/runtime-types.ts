@@ -131,6 +131,15 @@ export interface RuntimeOptions {
   thinking?: boolean;
 
   /**
+   * Rich thinking configuration (effort level, explicit budget).
+   * When present, `thinkingOptions.enabled` is authoritative over the `thinking` boolean.
+   * Set via `.withThinking()`. See `@reactive-agents/llm-provider` thinking module.
+   *
+   * Default: undefined (uses `thinking` boolean or auto-detect)
+   */
+  thinkingOptions?: import("@reactive-agents/llm-provider").ThinkingOptions;
+
+  /**
    * Override default LLM temperature (0.0-1.0).
    *
    * Default: undefined (uses provider default)
@@ -849,6 +858,8 @@ export interface LightRuntimeOptions {
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
   model?: string;
   thinking?: boolean;
+  /** Rich thinking configuration (effort level, explicit budget). Authoritative over `thinking` when present. */
+  thinkingOptions?: import("@reactive-agents/llm-provider").ThinkingOptions;
   temperature?: number;
   maxTokens?: number;
   /** Context window size for local providers (Ollama `options.num_ctx`). */

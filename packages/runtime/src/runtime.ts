@@ -273,6 +273,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     defaultModel: resolvedModel,
     provider: options.provider,
     thinking: options.thinking,
+    thinkingOptions: options.thinkingOptions,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
     numCtx: options.numCtx,
@@ -382,6 +383,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     resolvedModel,
     {
       thinking: options.thinking,
+      thinkingOptions: options.thinkingOptions,
       temperature: options.temperature,
       maxTokens: options.maxTokens,
       numCtx: options.numCtx,
@@ -1092,6 +1094,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     defaultModel: resolvedModel,
     provider: options.provider,
     thinking: options.thinking,
+    thinkingOptions: options.thinkingOptions,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
     numCtx: options.numCtx,
@@ -1148,6 +1151,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
     resolvedModel,
     {
       thinking: options.thinking,
+      thinkingOptions: options.thinkingOptions,
       temperature: options.temperature,
       maxTokens: options.maxTokens,
       numCtx: options.numCtx,

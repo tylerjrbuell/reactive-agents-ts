@@ -40,6 +40,7 @@ import {
 import {
     applyWithModel,
     applyWithBudget,
+    applyWithThinking,
 } from './builder/withers/model-budget.js'
 import {
     applyWithTools,
@@ -205,6 +206,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _provider: ProviderName = 'test'
     private _model?: string
     private _thinking?: boolean
+    private _thinkingOptions?: import('@reactive-agents/llm-provider').ThinkingOptions
     private _temperature?: number
     private _maxTokens?: number
     private _memoryTier: '1' | '2' = '1'
@@ -664,6 +666,16 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     withModel(params: ModelParamsInput): this
     withModel(modelOrParams: string | ModelParamsInput): this {
         applyWithModel(this, modelOrParams)
+        return this
+    }
+
+    /**
+     * Enable native thinking / reasoning mode with optional effort + budget.
+     * Rich-config home; `.withModel({thinking})` remains the quick boolean.
+     * @param options `true`/absent enable, `false` disable, or `{ effort, budgetTokens }`.
+     */
+    withThinking(options?: boolean | import('@reactive-agents/llm-provider').ThinkingOptions): this {
+        applyWithThinking(this, options)
         return this
     }
 
@@ -2364,6 +2376,12 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     : undefined,
                 outputSchemaConfig: self._outputSchemaConfig,
                 enableTools: self._enableTools,
+                runtimeConfig: {
+                    thinking: self._thinking,
+                    thinkingOptions: self._thinkingOptions,
+                    provider: self._provider,
+                    model: self._model,
+                },
             })
         }) as Effect.Effect<ReactiveAgent<TOut>, Error>
     }

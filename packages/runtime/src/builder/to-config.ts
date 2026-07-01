@@ -37,6 +37,7 @@ export interface BuilderStateForSerialization {
   _provider: string;
   _model?: string;
   _thinking?: boolean;
+  _thinkingOptions?: import("@reactive-agents/llm-provider").ThinkingOptions;
   _temperature?: number;
   _maxTokens?: number;
   _numCtx?: number;
@@ -120,6 +121,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
 
   if (state._model) config["model"] = state._model;
   if (state._thinking !== undefined) config["thinking"] = state._thinking;
+  if (state._thinkingOptions !== undefined) config["thinkingOptions"] = state._thinkingOptions;
   if (state._temperature !== undefined) config["temperature"] = state._temperature;
   if (state._maxTokens !== undefined) config["maxTokens"] = state._maxTokens;
   if (state._numCtx !== undefined) config["numCtx"] = state._numCtx;

@@ -177,6 +177,15 @@ export {
   createLLMProviderLayerWithConfig,
 } from "./runtime.js";
 
+// ─── Thinking / Reasoning Budget ───
+export {
+  resolveThinkingEnabled,
+  reserveThinkingBudget,
+  THINKING_MIN,
+  THINKING_MAX,
+} from "./thinking/index.js";
+export type { ThinkingOptions } from "./thinking/index.js";
+
 // ─── Embedding Cache ───
 export { makeEmbeddingCache } from "./embedding-cache.js";
 export type { EmbeddingCache } from "./embedding-cache.js";
