@@ -26,8 +26,9 @@ This is the foundation for a family of web-UI value built on the harness. Nothin
 | Grounding receipts, `trustVerdict`, forced abstention | `<Claim>` citations, `<TrustBadge>`, honest "declined" states |
 | Budget/cost tracking + cost-aware model routing | `<CostMeter>`, per-user-tier routing hooks |
 | EventBus telemetry | `<StepTimeline>`, live tool/strategy trace |
-| Snapshot/replay | `<ReplayViewer>` (deferred tier) |
-| 4-layer memory + identity | `<MemoryPanel>` inspector (deferred tier) |
+| Snapshot/replay | `<ReplayViewer>` (deferred tier); replay button in `<AgentDevtools>` |
+| 4-layer memory + identity | `<MemoryPanel>` inspector (deferred tier); per-user/org scoping of runs, memory, budgets (§4.5.1) |
+| Deterministic `test` provider + `withTestScenario` | zero-token, zero-flake CI testing of agent UIs (fixture record/replay) |
 
 Competitors would need to build the substrate first. RA only needs the last mile.
 
@@ -107,12 +108,34 @@ This inverts the market's render-only flow: the agent can *drive* UI and wait in
 `@reactive-agents/runtime` exports mount-anywhere handlers (framework-agnostic `Request → Response`, works in Next/Nuxt/SvelteKit/Bun/Express adapters):
 
 ```ts
-createAgentEndpoint(agent)          // POST run + SSE stream (exists via toSSE; extend with new events)
+createAgentEndpoint(agent, opts?)   // POST run + SSE stream (exists via toSSE; extend with new events)
 createRunAttachEndpoint(agent)      // GET reattach + replay from cursor
 createInteractionEndpoint(agent)    // POST InteractionResponse
 createApprovalEndpoint(agent)       // GET pending / POST decision (wraps listPendingApprovals/approve/deny)
-createInboxEndpoint(agent)          // GET durable runs by user/identity → task inbox
+createInboxEndpoint(agent)          // GET durable runs for resolved identity → task inbox
 ```
+
+### 4.5.1 Identity scoping (multi-tenancy)
+
+Every helper accepts an **identity resolver**: `identify: (req: Request) => Promise<{ userId, orgId? } | null>`. Resolved identity scopes runs, memory, budgets, approvals, and the inbox per user/org automatically (`packages/identity` integration). `createInboxEndpoint` *requires* it; the others treat `null` as anonymous. Real apps are multi-tenant on day 1 — the kit must be too, not as an add-on.
+
+### 4.5.2 Wallet protection (public-endpoint guards)
+
+Public agent endpoint = open wallet. `createAgentEndpoint` ships with enforcement built in, on by default with sane limits:
+
+```ts
+createAgentEndpoint(agent, {
+  identify,
+  limits: {
+    budgetPerUser:  { usd: 0.50, window: "1d" },   // budget substrate, per identity
+    anonymous:      { runs: 3, window: "1h" },     // throttle for null identity
+    maxConcurrentRunsPerUser: 2,
+    rateLimit:      { requests: 20, window: "1m" },
+  },
+})
+```
+
+Over-limit → typed 429/402-style SSE error event the bindings render honestly. Headline this enables: **"ship a public AI feature without going broke."**
 
 ## 5. Component Families & Scope
 
@@ -125,6 +148,9 @@ createInboxEndpoint(agent)          // GET durable runs by user/identity → tas
 | **Inbox** | `useTaskInbox`, `<TaskInbox>` — async agent jobs, email-like | durable runs + gateway |
 | **Render** | `<AgentSurface>` + registry + `uiTreeSchema()` | streamObject |
 | **Observe (lite)** | `useRunCost` → `<CostMeter>`, `useRunSteps` → `<StepTimeline>` | budget events + EventBus |
+| **Devtools** | `<AgentDevtools>` — dev-mode floating overlay: all runs, live event stream, tool calls, cost burn, replay-run button | EventBus + snapshot/replay + Observe hooks |
+| **Testing** | fixture recorder (`recordRunFixture`) + `mockAgentEndpoint(fixture)` — replay exact SSE streams in Vitest/Playwright/Storybook: zero tokens, zero flake | deterministic `test` provider + §7 contract-fixture format, exposed publicly |
+| **Protect** | identity resolver + wallet guards on all endpoint helpers (§4.5.1–4.5.2); bindings render over-limit states honestly | identity + budget substrate |
 
 Bindings: **React complete** (hooks + reference components). **Vue + Svelte: full hook/composable parity** (ui-core makes this cheap); reference components React-first, ported as second wave.
 
@@ -132,7 +158,7 @@ Styling: headless-first (hooks + unstyled primitives with data-attributes), plus
 
 ### v2 (explicitly deferred)
 
-Trust components (`<Claim>`, `<TrustBadge>`, abstention rendering beyond the raw `Abstained` event), form copilot, cost-tier routing hook (`useAgent({ tier })`), `<ReplayViewer>`, `<MemoryPanel>`, multi-agent roster (a2a). Protocol reserves event tags now (`TrustEvent` ships in v1 wire format so v2 needs no protocol bump).
+Trust components (`<Claim>`, `<TrustBadge>`, abstention rendering beyond the raw `Abstained` event), `<AgentErrorBoundary>` (retry/backoff + degrade-to-cheaper-model via routing + honest failure states — ships with Trust wave), form copilot, cost-tier routing hook (`useAgent({ tier })`), `<ReplayViewer>` (full standalone; v1 devtools includes replay-run only), `<MemoryPanel>`, usage-metering/billing hooks (cost events → Stripe meter), multi-agent roster (a2a). Protocol reserves event tags now (`TrustEvent` ships in v1 wire format so v2 needs no protocol bump).
 
 ### Non-goals
 
@@ -148,6 +174,8 @@ One 90-second-demoable app exercising every v1 family:
 4. Spend threshold → `<ApprovalGate>` (existing durable approval).
 5. Result renders as dynamic UI tree (summary card + table) via `<AgentSurface>`.
 6. Kill the dev server mid-run and restart → run resumes (crash-resume as UX).
+7. `<AgentDevtools>` open throughout — event stream, cost burn, and a replay of step 2 shown live.
+8. Endpoint runs with default wallet guards; a scripted burst shows the honest over-limit state.
 
 ## 7. Testing Strategy
 
@@ -155,16 +183,17 @@ One 90-second-demoable app exercising every v1 family:
 - **Protocol round-trip:** server helper ↔ ui-core client against a real `test`-provider agent in-process; assert every event tag round-trips typed.
 - **Durability e2e:** start run → drop stream → reattach with cursor → assert no event loss/dup; interaction answered after "reload" resumes run. Use existing durable-run test rails.
 - **Bindings:** thin — mount hook, drive with recorded event fixtures from ui-core tests (no browser needed for logic; component render smoke via happy-dom).
-- **Contract tests:** one shared fixture set consumed by react/vue/svelte binding tests so parity drift is caught mechanically.
+- **Contract tests:** one shared fixture set consumed by react/vue/svelte binding tests so parity drift is caught mechanically. **This fixture format IS the public testing API** (`recordRunFixture`/`mockAgentEndpoint`) — dogfooded internally before users see it.
+- **Guard tests:** wallet-protection limits (budget/rate/concurrency) enforced with real runtime state + fire path, per the killswitch-honesty rule.
 - **CI parity rule honored:** all tests run keyless with `test` provider; no Ollama dependency (feedback_ci_parity_no_keys_no_ollama).
 
 ## 8. Phasing
 
 1. **P1 — ui-core + protocol:** package scaffold, event types, stream client with resume cursor, state machines; move parse-partial/structured-stream out of the three bindings (dedupe, re-export for compat).
 2. **P2 — server helpers:** extend toSSE event set; attach/interaction/approval/inbox endpoints; `request_user_input` meta-tool + durable interaction store + `.withUserInteraction()`.
-3. **P3 — React binding + reference components** (all v1 families).
+3. **P3 — React binding + reference components** (all v1 families incl. `<AgentDevtools>`); testing package (`recordRunFixture` + `mockAgentEndpoint`) published from the §7 fixture format.
 4. **P4 — Vue/Svelte hook parity** via shared contract fixtures.
-5. **P5 — flagship demo app + docs** (guides: "resumable agent UI in 10 minutes", "durable human-in-the-loop form").
+5. **P5 — flagship demo app + docs + scaffold funnel**: guides ("resumable agent UI in 10 minutes", "durable human-in-the-loop form", "public endpoint without going broke"); `create-reactive-agent --template next-inbox` (and sveltekit variant) emitting a working full-stack app with endpoint helpers + UI + devtools enabled.
 
 Each phase lands green on main independently; P1/P2 have no UI risk and immediately pay the dedupe debt.
 
@@ -175,6 +204,7 @@ Each phase lands green on main independently; P1/P2 have no UI risk and immediat
 - **Protocol churn** — version field from day 1; TrustEvent reserved; additive-only policy.
 - **`@unstable` surface break** — existing react/vue/svelte exports have zero in-repo consumers; keep them working (re-export from ui-core) but mark superseded.
 - **Scope creep toward Cortex rewrite** — Cortex adoption of ui-core is a *later* migration, not part of v1.
+- **v1 scope growth from the painpoint sweep** — Devtools is bounded to an overlay composing the already-built Observe hooks + one replay action (not a Cortex-lite); the testing package is the §7 fixture format re-exported, not new machinery; wallet guards are enforcement wrappers over the existing budget substrate. If any of the three exceeds that bound during implementation, it slips to v1.5 rather than delaying the core families.
 
 ## 10. Gap-Log Mandate (dogfood deliverable)
 
@@ -187,4 +217,7 @@ Standing order for the whole build: every framework friction hit (missing runtim
 3. Zero duplicated parse/stream logic across binding packages.
 4. All three bindings pass the shared contract fixture suite.
 5. Gap log has ≥5 substantive entries (if it has zero, we weren't paying attention).
-6. Docs: 2 guides + API reference pages for every exported hook/component.
+6. Docs: 3 guides + API reference pages for every exported hook/component.
+7. A recorded fixture replays an agent UI test in CI with zero tokens and zero network.
+8. Public endpoint with default guards survives a scripted abuse run (burst + anonymous spam) without exceeding configured spend.
+9. `create-reactive-agent --template next-inbox` boots to a working inbox + devtools app in <2 minutes.

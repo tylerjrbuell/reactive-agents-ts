@@ -185,11 +185,17 @@ Each flip gets a named, greppable escape hatch and a CHANGELOG **BREAKING (secur
 
 **Session tally: 13 security bundles shipped.** Full tools 889 pass, real-container tests green.
 
+### 2026-07-02 — sixth execution session (1 commit, 16 total) — F10 + branch merge
+
+- **F10 (verification half)** — `.withVerification()` was pure telemetry ("proceeding anyway"). Added an `onReject` policy (`"proceed"` default | `"annotate"` | `"block"`) wired to a **real enforcement point**: the quality gate sets a `ctx.metadata` flag; result assembly reads it via `applyVerificationOutcome` (pure, tested) → `block` withholds the answer + `success:false`; `annotate` prepends a warning; `proceed` unchanged. Threaded `VerificationOptions.onReject` → `RuntimeOptions` → `ReactiveAgentsConfig`. **Verified end-to-end** through the real engine (mock verifier always rejects): block/annotate/proceed all behave correctly. Full runtime 1126 pass. Non-breaking (default proceed).
+
+**Session tally: 14 security bundles shipped.** Branch `security-hardening-wave` → merged to local `main` (per merge-to-local-main-then-tag workflow; unpushed).
+
 **Remaining (each has a real blocker):**
-1. **F10** — verification/guardrail `onReject: block`. Final output/success is assembled across multiple engine phases; a real "block" needs result-assembly plumbing (a metadata flag alone = dead theater). Off-by-default → lower urgency.
-2. **Phase 5** — CI supply-chain (F17–F24). Verifiable only by running CI; `publish.yml` release-sensitive. Safe additive parts (SHA-pin actions, `permissions:`, `--provenance`) can be done + inspection-verified when a CI dry-run is available.
+1. **F10 guardrail half** — wire `GuardrailService.checkOutput`, fail-closed detectors, scan tool/recalled content. Guardrails off-by-default → lower urgency; separate follow-up from the verification half (shipped).
+2. **Phase 5** — CI supply-chain (F17–F24). Verifiable only by running CI; `publish.yml` release-sensitive. Safe additive parts (SHA-pin actions, `permissions:`, `--provenance`) when a CI dry-run is available.
 3. **F8 tail** — trace content-capture opt-in, `Secret<T>` wrapper (redaction boundaries all done).
 4. **F3 remainder** — verified-aware retrieval + move recalled content out of the system turn (needs cross-tier ablation).
-5. **Smaller:** F13 (rate-limit/cost no-op public exports), F14-tail (body cap on `github-adapter`), F26 (durable audit log invoked), F27 (gate provider prompt-echo — mostly covered by redaction now).
+5. **Smaller:** F13, F14-tail, F26, F27.
 
 **Still owed (manual, user):** rotate the `apps/advocate` Tavily key + GitHub PAT.
