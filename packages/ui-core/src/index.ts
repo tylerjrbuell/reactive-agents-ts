@@ -4,3 +4,4 @@
  */
 export * from "./protocol/events.js";
 export * from "./parse-partial.js";
+export { connectRunStream, type ConnectOptions } from "./stream/connect.js";
