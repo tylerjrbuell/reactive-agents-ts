@@ -453,6 +453,41 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // Smaller local-tier siblings used by the public `local-models` bench
+  // session (qwen3:4b, cogito:8b). Without these the resolver falls back to a
+  // 2048-token window and the bench correctly refuses to report (capability
+  // source = "fallback"). Real windows are larger (qwen3 40960, cogito/qwen2
+  // 131072); 32K is the VRAM-safe ceiling shared with the 14B entries.
+  "ollama/qwen3:4b": {
+    provider: "ollama",
+    model: "qwen3:4b",
+    tier: "local",
+    maxContextTokens: 32_768,
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "ollama/cogito:8b": {
+    provider: "ollama",
+    model: "cogito:8b",
+    tier: "local",
+    maxContextTokens: 32_768,
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
   // qwen3.5 family — Phase-A canonical-harness-core local-tier baseline.
   // Resolver previously fell back to recommendedNumCtx=2048 because the
   // `:latest` tag carries no `Nb` size hint and the static table lacked
