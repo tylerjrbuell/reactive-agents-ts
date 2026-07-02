@@ -138,3 +138,29 @@ Each flip gets a named, greppable escape hatch and a CHANGELOG **BREAKING (secur
 ---
 
 **Next action:** Phase 0 credential rotation (independent of code) + start Phase 1 B1.1/B1.2 as a `tools-warden` bundle with an exploit-first red suite. Dispatch B2.x and B3.x in parallel once B1 lands the `Executor` seam.
+
+---
+
+## Progress log
+
+### 2026-07-02 — first execution session (branch `security-hardening-wave`, 6 commits)
+
+**Shipped (exploit-first TDD, all green):**
+- **Phase 0** — untracked placeholder `apps/stackblitz/*/.env` (F28). ⚠️ **Still owed (manual, user):** rotate the `apps/advocate` Tavily key + GitHub PAT — code cannot do this.
+- **F1a** (`fix(tools)` `13110108`) — structural shell-execute input hardening: quote-aware rejection of *all* shell expansion/substitution (`$VAR`, `${}`, `$(...)`, backticks, `<(...)`/`>(...)`) + uniform per-token path canonicalization vs the sandbox (closes quoted-absolute + bare-relative traversal + prefix-match bug) + broadened awk getline/print-pipe rules. Exploit corpus of every confirmed bypass now denied; legit commands (globs, redirects, jq pipes) preserved.
+- **F9 + F12** (`fix(tools)` `0a00308b`) — `buildSkillContentXml` attribute-escape + wrapper-tag neutralization (skill breakout closed); `buildMcpSubprocessEnv` allowlist so MCP subprocesses no longer inherit provider keys (opt-in via explicit `env`).
+- **F4** (`feat(security)` `282bec3a`) — `secureServe()` in runtime-shim: loopback default, fail-closed refusal to bind non-loopback without a token, bearer auth (constant-time), body-size cap before handler. Wired into A2A, `rax serve`, judge, health; host/token via `RA_{A2A,SERVE,JUDGE,HEALTH}_{HOST,TOKEN}`.
+- **F6** (`feat(security)` `3baef618`) — `assertPublicUrl()` SSRF egress guard (blocks loopback/link-local/private/CGNAT/metadata by IP, hostname, and DNS resolution incl. rebinding; injectable resolver). Wired into `http-get` with per-redirect-hop re-validation; `RA_HTTP_ALLOW_PRIVATE=1` opt-in. **RC3 (ingress+egress middleware) now complete.**
+
+**Deviations from plan (flagged):**
+- **F1a is the input-policy layer, not "delete the denylist."** Deleting the denylist + execFile-only breaks legitimate shell features (globs, pipes, redirects) that have no execFile equivalent; the true root containment is **F1b Docker-mandatory substrate** (keep `sh -c` inside a hardened container) which needs Docker and cannot be verified in this CI env. F1a closes every *confirmed* live vector as defense-in-depth; F1b remains the architectural follow-up.
+- awk/interpreter-internal escapes are handled by denylist rules (defense-in-depth), not structurally — F1b containment is the real fix.
+
+**Remaining (priority order):**
+1. **F2** — fail-closed approval enforcement in `ToolService.execute` (multiplier; breaking-by-design — needs approval-policy auto-feed + HITL escape hatch).
+2. **F3** — trust-fenced memory: `verified`/provenance-aware read + recalled-content envelope in a user turn (not system). Invasive prompt-assembly; needs ablation for token/quality.
+3. **F1b** — Docker-mandatory exec substrate (needs Docker env).
+4. **F8** — `redactSensitive()` + trace content opt-in + `Secret<T>`.
+5. **F10** — verification/guardrail `onReject: block`; wire or delete `checkOutput`.
+6. **F5 / F11** (dormant) — cert-auth trust anchor; webhook fail-closed.
+7. **Phase 5** — CI supply-chain hardening (F17–F24).
