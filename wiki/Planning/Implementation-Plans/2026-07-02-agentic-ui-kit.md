@@ -2165,7 +2165,9 @@ rtk git add packages/runtime/src/server/guards.ts packages/runtime/tests/server/
 rtk git commit -m "feat(runtime): endpoint wallet guards — rate/anonymous/concurrency/budget windows"
 ```
 
----### Task 13: Endpoint helpers — journaled SSE, attach, interaction, approval, inbox
+---
+
+### Task 13: Endpoint helpers — journaled SSE, attach, interaction, approval, inbox
 
 **Files:**
 - Create: `packages/runtime/src/server/journal.ts`
