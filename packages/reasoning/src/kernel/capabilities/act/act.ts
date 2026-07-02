@@ -17,6 +17,7 @@ import {
   type FinalAnswerCapture,
   type ToolCallSpec,
   runHealingPipeline,
+  getFileRoot,
 } from "@reactive-agents/tools";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
@@ -185,7 +186,15 @@ export function handleActing(
           })),
         })),
         FILE_TOOL_NAMES,
-        process.cwd(),
+        // Sandbox-aware root: matches the file-write/file-read handlers' own
+        // getFileRoot() (packages/tools/src/skills/file-operations.ts). Was
+        // process.cwd() — outside any withFileRoot() scope (e.g. the
+        // benchmark harness) that's the REAL process cwd, not the sandbox,
+        // so a model's relative/hallucinated path got healed to an absolute
+        // path outside the sandbox root, then correctly rejected by the
+        // handler's own traversal guard. Confined agents (bench, future
+        // sandboxed runs) never got their file-write calls to succeed.
+        getFileRoot(),
         {},
         {},
       );

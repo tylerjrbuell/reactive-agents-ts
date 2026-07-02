@@ -27,6 +27,7 @@
  */
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { getFileRoot } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { LogEvent } from "@reactive-agents/observability";
 import type { KernelStateLike, HarnessPipeline } from "@reactive-agents/core";
@@ -237,7 +238,9 @@ function executeBlueprintStep(
         heal: {
           schemas: ctx.availableToolSchemas ?? [],
           fileToolNames: FILE_TOOL_NAMES,
-          cwd: process.cwd(),
+          // Sandbox-aware root (was process.cwd() — see act.ts's healCall
+          // for the full writeup of the bug this caused).
+          cwd: getFileRoot(),
         },
         ...(ctx.harnessPipeline ? { pipeline: ctx.harnessPipeline } : {}),
         eventBus: services.eventBus,
