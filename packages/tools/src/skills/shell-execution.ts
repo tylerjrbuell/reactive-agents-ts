@@ -579,6 +579,17 @@ export interface ShellExecuteConfig {
   /** If true, allows `cwd` outside /tmp. Use with extreme caution. */
   readonly allowUnsafeCwd?: boolean;
   /**
+   * Execution substrate (F1b). `"host"` (default) runs the command in the
+   * process sandbox with the input filters. `"docker"` opts into running the
+   * command inside a hardened, throwaway container (no network, read-only
+   * rootfs, ephemeral tmpfs workdir, cap-drop ALL, non-root, seccomp) for added
+   * isolation — an escape is confined to the container and cannot touch the
+   * host. Requires Docker; if unavailable the call fails closed rather than
+   * silently downgrading. Files are ephemeral (no host directory is mounted).
+   * Also settable globally via `RA_SANDBOX=docker`.
+   */
+  readonly sandbox?: "host" | "docker";
+  /**
    * Audit callback invoked for every command attempt (allowed or rejected).
    * Use for OWASP-compliant security logging.
    */
@@ -698,6 +709,16 @@ export function shellExecuteHandler(
         maxOutputChars,
         ...dockerEscalation.config,
       })
+    : null;
+
+  // ── Opt-in Docker sandbox (F1b) ──
+  // When enabled (config.sandbox: "docker" or RA_SANDBOX=docker), the validated
+  // command runs inside a hardened throwaway container instead of on the host.
+  const useDockerSandbox =
+    (config?.sandbox ??
+      (process.env.RA_SANDBOX === "docker" ? "docker" : "host")) === "docker";
+  const shellDockerSandbox = useDockerSandbox
+    ? makeDockerSandbox({ timeoutMs, maxOutputChars, ...dockerEscalation?.config })
     : null;
 
   /** Map of command names to Docker sandbox RunnerLanguage. */
@@ -847,6 +868,39 @@ export function shellExecuteHandler(
           return {
             executed: false,
             error: `${pathIssue} — outside the sandbox`,
+          };
+        }
+
+        // ── 4a. Opt-in Docker sandbox (F1b) ──
+        // The command passed every input filter above; now run it inside a
+        // hardened, throwaway container. Fails closed if Docker is unavailable.
+        if (shellDockerSandbox) {
+          audit({ command, allowed: true, reason: "docker-sandbox" });
+          const dockerResult = await Effect.runPromise(
+            shellDockerSandbox.executeShell(command).pipe(
+              Effect.catchAll((err) =>
+                Effect.succeed({
+                  output: "",
+                  stderr: err.message,
+                  exitCode: 1,
+                  durationMs: 0,
+                  truncated: false,
+                  image: "unavailable",
+                }),
+              ),
+            ),
+          );
+          return {
+            executed: dockerResult.exitCode === 0,
+            output: dockerResult.output || "(no output)",
+            stderr: dockerResult.stderr,
+            exitCode: dockerResult.exitCode,
+            truncated: dockerResult.truncated,
+            dockerSandboxed: true,
+            image: dockerResult.image,
+            ...(dockerResult.exitCode !== 0
+              ? { error: dockerResult.stderr || `Process exited with code ${dockerResult.exitCode}` }
+              : {}),
           };
         }
 
