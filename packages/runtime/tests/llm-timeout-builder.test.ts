@@ -32,28 +32,28 @@ const ollamaState = await (async (): Promise<
  *     → resolveLocalTimeoutMs(request, config)             (local provider)
  */
 describe(".withLlmTimeout — per-call local timeout plumbing", () => {
-  // ── Keyless / CI-safe: builds without any API key or live server. ──
-  test("builder method is chainable and coexists with .withTimeout (keyless)", async () => {
+  // ── Keyless / CI-safe: builds with the `test` provider, which needs no API
+  // key AND no live server (the `ollama` provider runs a build-time connection
+  // probe that is unreachable in CI). These prove the builder SURFACE — the
+  // method chains, builds offline, and coexists with `.withTimeout`. The
+  // ollama-specific timeout behavior is proven by the live test below. ──
+  test("builder method is chainable and coexists with .withTimeout (keyless, serverless)", async () => {
     const agent = await ReactiveAgents.create()
-      .withProvider("ollama")
-      .withModel("qwen3.5:latest")
+      .withProvider("test")
       .withLlmTimeout(600_000) // per-call ceiling
       .withTimeout(900_000) // run-level ceiling — independent concern
       .withMaxIterations(1)
-      .withLazyValidation() // no build-time capability probe → offline-safe
       .build();
     expect(agent).toBeDefined();
     await agent.dispose();
   });
 
   test("keyless build: .withLlmTimeout works with no cloud key configured", async () => {
-    // Provider `ollama` needs no API key; a bare builder must not fail-fast
-    // under strict validation for lack of a cloud key (mirrors CI).
+    // The `test` provider is keyless-exempt; a builder using .withLlmTimeout
+    // must build without any cloud key or live server (mirrors CI).
     const agent = await ReactiveAgents.create()
-      .withProvider("ollama")
-      .withModel("qwen3.5:latest")
+      .withProvider("test")
       .withLlmTimeout(1)
-      .withLazyValidation()
       .build();
     expect(agent).toBeDefined();
     await agent.dispose();
