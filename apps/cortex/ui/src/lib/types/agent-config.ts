@@ -46,8 +46,13 @@ export interface AgentConfig {
   maxTokens: number;
   /** Provider context window override. Honored by local providers (Ollama `num_ctx`); cloud providers without a context knob ignore it. `0` = provider default. */
   numCtx: number;
-  /** `reactive` = ReAct loop (registry name; UI label "ReAct"). */
-  strategy: "reactive" | "plan-execute-reflect" | "tree-of-thought" | "reflexion" | "adaptive";
+  /**
+   * Canonical registry strategy name. Superset — the option list is served by
+   * the capability manifest (`GET /api/capabilities`) at runtime, so new
+   * framework strategies (blueprint/code-action/direct/…) appear automatically.
+   * `reactive` = ReAct loop (UI label "ReAct").
+   */
+  strategy: string;
   maxIterations: number;
   minIterations: number;
   strategySwitching: boolean;

@@ -164,3 +164,25 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.skills?.evolution?.rollbackOnRegression).toBe(true);
   });
 });
+
+describe("AgentConfig → LaunchParams — full strategy set", () => {
+  it("accepts every canonical strategy through POST /api/runs (no UI-only enum drift)", async () => {
+    for (const strategy of ["blueprint", "code-action", "direct", "reflexion", "tree-of-thought"]) {
+      const captured = { params: null as LaunchParams | null };
+      const db = new Database(":memory:");
+      applySchema(db);
+      const app = new Elysia().use(
+        runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)),
+      );
+      const res = await app.handle(
+        new Request("http://localhost/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...FULL_CONFIG_BODY, strategy }),
+        }),
+      );
+      expect(res.status, `strategy ${strategy} rejected`).toBe(200);
+      expect(captured.params?.strategy).toBe(strategy);
+    }
+  });
+});

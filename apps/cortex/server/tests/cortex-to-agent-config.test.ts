@@ -331,3 +331,15 @@ describe("cortexParamsToAgentConfig — reasoning kernel default", () => {
     expect((c.features as { reasoning?: boolean }).reasoning).toBe(true);
   });
 });
+
+describe("cortexParamsToAgentConfig — full strategy parity", () => {
+  it("accepts every canonical strategy through AgentConfig decode (no narrow-enum drop)", () => {
+    // Regression: AgentConfigSchema.reasoning.defaultStrategy previously used an
+    // inline 5-member literal that rejected blueprint/code-action/direct at decode,
+    // making them un-launchable from Cortex despite being registered strategies.
+    for (const strategy of ["reactive", "reflexion", "plan-execute-reflect", "tree-of-thought", "adaptive", "direct", "code-action", "blueprint"]) {
+      const c = cortexParamsToAgentConfig({ provider: "test", strategy });
+      expect((c.reasoning as { defaultStrategy?: string } | undefined)?.defaultStrategy, `strategy ${strategy} dropped`).toBe(strategy);
+    }
+  });
+});

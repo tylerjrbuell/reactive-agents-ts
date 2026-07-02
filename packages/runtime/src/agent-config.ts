@@ -6,6 +6,7 @@
  * via agentConfigToBuilder.
  */
 import { Schema } from "effect";
+import { ReasoningStrategy } from "@reactive-agents/core";
 import type { ReactiveAgentBuilder } from "./builder.js";
 
 // ─── Provider Schema ──────────────────────────────────────────────────────────
@@ -32,15 +33,12 @@ export const PersonaConfigSchema = Schema.Struct({
 export type PersonaConfig = Schema.Schema.Type<typeof PersonaConfigSchema>;
 
 export const ReasoningConfigSchema = Schema.Struct({
-  defaultStrategy: Schema.optional(
-    Schema.Literal(
-      "reactive",
-      "plan-execute-reflect",
-      "tree-of-thought",
-      "reflexion",
-      "adaptive",
-    ),
-  ),
+  // Single source: the canonical ReasoningStrategy literal from core (all 8
+  // registered strategies — reactive/reflexion/plan-execute-reflect/
+  // tree-of-thought/adaptive/direct/code-action/blueprint). Previously an inline
+  // 5-member duplicate that silently dropped blueprint/code-action/direct and
+  // made them un-launchable through AgentConfig decode.
+  defaultStrategy: Schema.optional(ReasoningStrategy),
   enableStrategySwitching: Schema.optional(Schema.Boolean),
   maxStrategySwitches: Schema.optional(Schema.Number),
   fallbackStrategy: Schema.optional(Schema.String),

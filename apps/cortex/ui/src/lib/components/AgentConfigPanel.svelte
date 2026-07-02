@@ -16,6 +16,7 @@
   import HighlightedField from "$lib/components/HighlightedField.svelte";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
+  import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
 
   export { type AgentConfig, defaultConfig };
   type PanelAgentConfig = AgentConfig & {
@@ -302,13 +303,29 @@
     }
   });
 
-  const STRATEGIES = [
+  // Fallback list (used only until the capability manifest loads / if it fails).
+  // The live option set comes from GET /api/capabilities so new framework
+  // strategies (blueprint/code-action/direct/…) appear here automatically.
+  const STRATEGY_FALLBACK = [
     { value: "reactive",             label: "ReAct",                desc: "Think→Act→Observe loop. Best for most tasks." },
     { value: "plan-execute-reflect", label: "Plan–Execute–Reflect", desc: "Creates a structured plan first. Good for multi-step tasks." },
     { value: "tree-of-thought",      label: "Tree of Thought",      desc: "Explores multiple paths. Good for creative/analytical problems." },
     { value: "reflexion",            label: "Reflexion",            desc: "Self-critiques and improves across attempts." },
     { value: "adaptive",             label: "Adaptive",             desc: "Selects strategy automatically based on task type." },
   ];
+
+  let capManifest = $state<CapabilityManifest | null>(null);
+  onMount(() => {
+    loadCapabilities()
+      .then((m) => (capManifest = m))
+      .catch((err) => console.warn("Failed to load capability manifest:", err));
+  });
+
+  const STRATEGIES = $derived(
+    capManifest
+      ? capManifest.strategies.map((s) => ({ value: s.name, label: s.label, desc: s.description }))
+      : STRATEGY_FALLBACK,
+  );
 
   const acpStrategyLabel = $derived(STRATEGIES.find((s) => s.value === config.strategy)?.label ?? config.strategy);
 
