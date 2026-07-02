@@ -156,11 +156,21 @@ Each flip gets a named, greppable escape hatch and a CHANGELOG **BREAKING (secur
 - **F1a is the input-policy layer, not "delete the denylist."** Deleting the denylist + execFile-only breaks legitimate shell features (globs, pipes, redirects) that have no execFile equivalent; the true root containment is **F1b Docker-mandatory substrate** (keep `sh -c` inside a hardened container) which needs Docker and cannot be verified in this CI env. F1a closes every *confirmed* live vector as defense-in-depth; F1b remains the architectural follow-up.
 - awk/interpreter-internal escapes are handled by denylist rules (defense-in-depth), not structurally — F1b containment is the real fix.
 
+### 2026-07-02 — second execution session (3 more commits, 9 total)
+
+- **F8a** (`fix(trace)` `redact secrets at the trace disk-write boundary`) — `applyRedactors(defaultRedactors)` applied to serialized JSONL in the recorder flush before `appendFile`; in-memory snapshot (rax-diagnose/replay) keeps full fidelity. Added a bearer-token pattern. Follow-up: OTel/cortex-reporter boundaries, content-capture opt-in, `Secret<T>`.
+- **F5** (`fix(identity)` cert-auth) — reject unsigned certs; anchor trust in the issued-cert store (foreign/self-signed rejected); fingerprint binding + signature verify against the trusted key. (Dormant finding, now safe when wired.)
+- **F3** (`fix(reasoning)` memory fence) — `fenceRecalledMemory()` wraps recalled memory in a `<retrieved_memory>` untrusted-data envelope with a guard note + breakout neutralization; wired into reactive + direct strategies. Follow-up: verified-aware retrieval + move recalled content out of the system turn (needs ablation).
+
+**Session tally:** 9 bundles green (Phase 0, F1a, F9, F12, F4, F6, F8a, F5, F3). Full-repo typecheck 69/69. Two Criticals (F1 vectors, F4) + the memory-injection Critical (F3, fence layer) + F5/F6/F8/F9/F12 closed.
+
 **Remaining (priority order):**
-1. **F2** — fail-closed approval enforcement in `ToolService.execute` (multiplier; breaking-by-design — needs approval-policy auto-feed + HITL escape hatch).
-2. **F3** — trust-fenced memory: `verified`/provenance-aware read + recalled-content envelope in a user turn (not system). Invasive prompt-assembly; needs ablation for token/quality.
-3. **F1b** — Docker-mandatory exec substrate (needs Docker env).
-4. **F8** — `redactSensitive()` + trace content opt-in + `Secret<T>`.
-5. **F10** — verification/guardrail `onReject: block`; wire or delete `checkOutput`.
-6. **F5 / F11** (dormant) — cert-auth trust anchor; webhook fail-closed.
-7. **Phase 5** — CI supply-chain hardening (F17–F24).
+1. **F2** — fail-closed approval enforcement. **Design note from this session:** `tool-gating.ts:33-49` already *documents* the intended fold of per-tool `requiresApproval` into `policy.tools`, but `runtime-construction.ts:474` assembles the policy without tool-definition access, so the auto-feed needs deeper tool-registry↔policy plumbing (custom tool defs aren't on `state` at that point). Plus a product decision on the no-policy default (pure fail-closed throw breaks headless agents). Breaking-by-design; do deliberately.
+2. **F1b** — Docker-mandatory exec substrate (needs Docker env to verify).
+3. **F10** — verification/guardrail `onReject: block`; wire or delete `checkOutput` (off-by-default → lower active value).
+4. **F11** (dormant) — webhook fail-closed + transport-bound identity.
+5. **F8 remainder** — OTel/cortex redaction, trace content opt-in, `Secret<T>`.
+6. **Phase 5** — CI supply-chain hardening (F17–F24).
+7. **F3 remainder** — verified-aware retrieval + recalled-content turn repositioning (needs ablation).
+
+**Still owed (manual, user):** rotate the `apps/advocate` Tavily key + GitHub PAT.
