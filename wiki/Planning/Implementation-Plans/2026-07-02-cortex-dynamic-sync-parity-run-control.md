@@ -4,6 +4,45 @@
 
 ---
 
+## STATUS — Phase C SHIPPED + verified live on Ollama (2026-07-02)
+
+**Phase C (C1–C5) complete, all tests green, verified against a REAL provider.**
+Run control now genuinely aborts in-flight work — Stop stays graceful (phase
+boundary), Terminate is immediate (fiber interrupt → provider HTTP abort).
+
+- **C1** `packages/guardrails/src/kill-switch.ts` — `KillSwitchService` gains a
+  per-agent `AbortController` map + `signal(agentId)`; `terminate()` aborts it
+  (ensureController so a terminate racing ahead of signal() still leaves an
+  aborted controller). 3 tests.
+- **C2 (deviation from plan — plan's premise was wrong).** The plan said "the LLM
+  `complete`/`stream` signal option is already honored by providers"; it is NOT —
+  `LLMRequest` has no signal field and anthropic/openai ignore any signal. The
+  REAL seam is **fiber interruption**: Ollama's `Effect.tryPromise((signal)=>…)`
+  aborts its fetch on fiber interrupt (`local.ts:413`). So C2 threads the
+  killswitch `AbortSignal` into `runtime.runPromise(effect, { signal })` at the
+  `run()` seam (`reactive-agent.ts:767`), acquired via `Effect.serviceOption`
+  (NOT bare `KillSwitchService.pipe`, which DIES on a missing service — that
+  defect is uncatchable by `catchAll` and runs on every run). On a mid-flight
+  abort it emits `AgentTerminated` (phase-boundary parity) + a clean terminal
+  error. **Live-verified:** gemma4:12b generation terminated at 800ms → run()
+  settled at 805ms (would take many seconds otherwise).
+- **C3** `runner-service.ts` — `terminate(runId)` + shared **idempotent**
+  `finalizeRun` (atomic claim from activeRef → no double-dispose when terminate
+  races the run's own `.finally`); `ActiveEntry` now carries `unsubscribe`.
+- **C4** `POST /api/runs/:runId/terminate` (mirrors `stop`).
+- **C5** `run-store.terminate()` + confirm-gated Terminate button beside Stop in
+  `RunDetail.svelte` (live + paused states). UI builds clean.
+
+**Tests:** guardrails 48, runtime terminate/abort suites, cortex runner/api/parity
+— 93 combined green; full runtime suite 879 pass (3 pre-existing fails: model-
+routing×2 need keys, built-surface needs dist — NOT introduced by Phase C).
+
+**Env note:** runtime/guardrails dist rebuilt so the Node-consumer Cortex server
+picks up C2 (workspace `bun` export runs framework from src for probes/tests, but
+the built Cortex server reads dist). Remaining: generic renderer + Phases A/D.
+
+---
+
 ## STATUS — Phase B SHIPPED + verified E2E (2026-07-02)
 
 Executed in worktree `worktree-cortex-dynamic-sync` (off origin/main @ v0.13.0). **Phase B (B1–B9) complete, all tests green, verified live.** Phases A/C/D NOT started (deferred per the step-back decision — off the Show-HN launch critical path).
