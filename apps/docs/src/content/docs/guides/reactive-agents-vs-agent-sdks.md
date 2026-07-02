@@ -37,7 +37,7 @@ Neither is strictly "better" — they sit at different altitudes. The SDK is the
 | Local models | First-class — same code on 4B Ollama and frontier | Generally not a goal |
 | Type model | Typed effect runtime (errors as values, structured concurrency) | Idiomatic SDK types |
 | Execution model | Deterministic 12-phase engine + per-phase hooks | The SDK's loop |
-| Reasoning strategies | 6 (ReAct, Reflexion, Plan-Execute, ToT, Adaptive, Code-Action) | The SDK's loop |
+| Reasoning strategies | 7 (ReAct, Reflexion, Plan-Execute, ToT, Adaptive, Code-Action, Blueprint) | The SDK's loop |
 | Tools | MCP-native + typed builder | Vendor tools (+ MCP on some) |
 | Guardrails / cost routing / budgets | Built in | Bring your own |
 | Durable execution + crash-resume | Built in | Bring your own |
@@ -72,6 +72,6 @@ In short: use the SDK for a loop on one vendor; use Reactive Agents when you nee
 
 These aren't mutually exclusive. A vendor SDK is a fine way to talk to one provider; Reactive Agents is how you make an agent out of it that's portable, observable, and safe to run unattended. Many teams start on an SDK and adopt a harness when the production requirements arrive.
 
-Honest note: Reactive Agents is early access (v0.12.0, MIT). The vendor SDKs are backed by their providers and move fast. The bet here is the architecture — typed runtime, local-to-frontier portability, observable-by-construction — and it's real and testable today.
+Honest note: Reactive Agents is early access (v0.13.0, MIT). The vendor SDKs are backed by their providers and move fast. The bet here is the architecture — typed runtime, local-to-frontier portability, observable-by-construction — and it's real and testable today.
 
 Ready to try it? Start with the [Quickstart](/guides/quickstart/), or see [Build AI Agents in TypeScript](/guides/build-ai-agents-typescript/) for the full picture.

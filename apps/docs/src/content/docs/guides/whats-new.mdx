@@ -27,7 +27,26 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
-## Unreleased — 0.13.0
+## v0.13.0 — Receipts & first-touch (July 2026)
+
+<Aside type="tip" title="Released on npm">
+Shipped July 2026 — all 35 packages are published. Install or upgrade with `bunx create-reactive-agent` or pin `reactive-agents@0.13.0`.
+</Aside>
+
+The v0.13 line is about **receipts and first-touch**: native reasoning on every provider, cost-aware routing, an overhauled first-ten-minutes developer experience, honest abstention as a first-class terminal, a new efficiency-first Blueprint strategy, two token-waste guards, and a broad correctness sweep across providers and the kernel.
+
+### Native thinking on every provider
+
+`.withThinking(...)` turns on native reasoning across Anthropic, OpenAI, Gemini, and local models from one builder switch — pass `true` or `{ effort, budgetTokens }`. It is **off by default everywhere**: `undefined` never auto-enables (this also flips Gemini's former thinks-by-default behavior off). Budgets are bounded and reserved _on top_ of the answer budget, so hidden reasoning can never starve the visible answer.
+
+```typescript
+ReactiveAgents.create()
+  .withProvider("anthropic").withModel("claude-sonnet-4-6")
+  .withThinking({ effort: "medium" })
+  .build();
+```
+
+See [Builder API](/reference/builder-api/).
 
 ### Cost-aware model routing
 
@@ -39,6 +58,51 @@ ReactiveAgents.create()
   .withModelRouting()   // simple tasks drop to the haiku tier
   .build();
 ```
+
+### First-touch developer experience
+
+The first ten minutes are re-paved:
+
+- **Typed tool authoring** — `defineTool({ name, description, input, handler })` takes a Standard Schema input (Zod, Effect, Valibot) and gives the plain-async handler **inferred argument types** — no `Record<string, unknown>` or `as never` casts. It also validates its own options and rejects wrong field names (e.g. `parameters`/`execute`) with a message naming the correct field instead of crashing. See [Tools](/guides/tools/).
+- **`ReactiveAgents.quick()`** — a two-line agent that resolves provider, model, and iteration defaults from the environment: `const agent = await ReactiveAgents.quick(); await agent.run("…")`. See [Quickstart](/guides/quickstart/).
+- **Fail-fast `build()`** — `.withStrictValidation()` catches a missing API key or unknown model at build time with a typed error and fix instructions, instead of a raw 401/404 on the first call.
+- **Per-LLM-call timeout** — `.withLlmTimeout(ms)` configures the local/Ollama per-call timeout (previously hardcoded at 120s); timeout errors name the model, elapsed time, and a cold-load/GPU-contention hint, and the in-flight local request is aborted server-side. See [Local Models](/guides/local-models/).
+
+### Honest abstention — a run that cannot succeed says so
+
+When a task is structurally impossible (a required tool is unavailable, or synthesis is repeatedly ungrounded), the run terminates with `terminatedBy: "abstained"` and a typed `result.abstention { reason, missing }` instead of fabricating an answer. This is harness-forced, not model-initiated. See [Structured Output](/guides/structured-output/).
+
+### Blueprint strategy — plan once, execute in parallel
+
+For static, decomposable tasks the whole plan is knowable up front. **Blueprint** (the 7th reasoning strategy) generates a plan, verifies it, executes independent steps in parallel **with no per-step LLM call**, then solves. Adaptive routing sends static-decomposable tasks to Blueprint automatically. See [Choosing Strategies](/guides/choosing-strategies/).
+
+### Two token-waste guards
+
+- **`.withStallPolicy(...)`** — when the model ignores required-tool nudges and makes no progress across consecutive iterations, the harness escalates and delivers accumulated artifacts (or fails) instead of looping to the full nudge cap — bounding wasted tokens on stuck runs while leaving progressing runs untouched.
+- **`.withFabricationGuard(mode)`** — an always-on verifier check (default `"block"`) that rejects empirical performance numbers (benchmark timings, %-speedups) absent from the tool-observation corpus. High-precision — only perf measurements are policed. Soften to `"warn"`/`"off"` or via the `RA_FABRICATION_GUARD` env var.
+
+See [Builder API](/reference/builder-api/).
+
+### Evaluation gate CLI
+
+`rax eval gate` runs the project lift rule over a benchmark report (`default-on | opt-in | reject`); `--ledger` appends a weakness→hypothesis→verdict chain and `rax eval ledger` reads it. Benchmark runs capture a per-run `RunDiagnosis` (honesty label, failure modes) when a trace dir is set. See [Eval](/features/eval/).
+
+### Correctness sweep
+
+Highlights from a broad provider + kernel fix pass:
+
+- **gpt-5.x non-thinking calls work** — the OpenAI adapter now picks the token-limit field by capability (`max_completion_tokens` for gpt-5.x/o-series, `max_tokens` for the gpt-4o family), fixing a 400 on default gpt-5.x calls.
+- **Thinking request shapes verified live** — Anthropic uses the adaptive shape on current-generation models and legacy `budget_tokens` on older ones; `temperature` is dropped when thinking is on (both Anthropic and OpenAI reject it otherwise).
+- **`withRetryPolicy` retries the real path** — it previously wrapped only `complete()`; the reactive kernel runs through `stream()` / `completeStructured()`, so transient failures were never retried. All three call sites are now retried.
+- **`withMinIterations(N)` enforces the full floor** — previously a lone `if` forced a single extra pass regardless of `N`; it now loops to the configured minimum.
+- **Cross-provider tool-call arguments are never dropped** — string-encoded JSON args (some Ollama models) are now coerced instead of silently reset to `{}`.
+- **Readable provider errors** — a model typo produces one clean error line with a suggestion instead of duplicated raw JSON and an internal stack.
+- **Configured-off phases stay off** — `runGuardedPhase` now honors `phase.skip`, so disabled phases don't run via direct callers.
+- **Context & structured-output correctness** — string-safe JSON repair, mid-thread user instructions kept over budget, boundary-matched + nested field provenance, duplicate-tool-name warnings, and a gated (O(N²)-removed) streaming reparse.
+
+The `withVerificationStep({ mode: "loop" })` option (documented but unimplemented) was removed; `"reflect"` is the only supported mode.
+
+See the [full 0.13.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for the complete list.
 
 ---
 
