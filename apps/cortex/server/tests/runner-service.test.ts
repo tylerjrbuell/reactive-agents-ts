@@ -31,6 +31,57 @@ describe("CortexRunnerService", () => {
   });
 });
 
+describe("CortexRunnerService — terminate (C3)", () => {
+  const buildRunner = () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const storeLayer = CortexStoreServiceLive(db);
+    const mockIngestLayer = Layer.succeed(CortexIngestService, {
+      handleEvent: () => Effect.void,
+      getSubscriberCount: () => Effect.succeed(0),
+    });
+    return CortexRunnerServiceLive.pipe(
+      Layer.provide(Layer.merge(storeLayer, mockIngestLayer)),
+    );
+  };
+
+  it("terminate() on an unknown run is a graceful no-op", async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexRunnerService;
+      // Must not throw — mirrors pause()/stop() guards.
+      yield* svc.terminate("no-such-run" as never);
+      const active = yield* svc.getActive();
+      expect(active.size).toBe(0);
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(buildRunner())));
+  });
+
+  it("terminate() removes an active run from the registry", async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexRunnerService;
+      // start() kicks agent.run() fire-and-forget and returns immediately, so
+      // the entry is registered as active before the (test-provider) run settles.
+      const { runId } = yield* svc.start({ provider: "test", prompt: "hi" });
+      yield* svc.terminate(runId as never);
+      const active = yield* svc.getActive();
+      expect(active.has(String(runId))).toBe(false);
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(buildRunner())));
+  });
+
+  it("terminate() is idempotent — a second call does not throw", async () => {
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexRunnerService;
+      const { runId } = yield* svc.start({ provider: "test", prompt: "hi" });
+      yield* svc.terminate(runId as never);
+      yield* svc.terminate(runId as never);
+      const active = yield* svc.getActive();
+      expect(active.has(String(runId))).toBe(false);
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(buildRunner())));
+  });
+});
+
 describe("buildCortexAgent — agentId passthrough", () => {
   it("uses the supplied agentId when provided", async () => {
     const agent = await buildCortexAgent({

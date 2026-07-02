@@ -35,6 +35,7 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
     pause: () => Effect.void,
     resume: () => Effect.void,
     stop: () => Effect.void,
+    terminate: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
     listPendingApprovals: () => Effect.succeed([]),
     approveApproval: () => Effect.void,
