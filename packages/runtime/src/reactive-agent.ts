@@ -861,14 +861,16 @@ export class ReactiveAgent<TOut = unknown> {
      * List persisted durable runs (newest-updated first), optionally filtered by
      * lifecycle status. Requires `.withDurableRuns()`.
      */
-    async listRuns(filter?: { status?: RunStatus }): Promise<readonly RunRecord[]> {
+    async listRuns(filter?: { status?: RunStatus; userId?: string }): Promise<readonly RunRecord[]> {
         if (!this._durableResume) {
             throw new Error(
                 'listRuns() requires .withDurableRuns() — this agent has no durable run store.',
             )
         }
         const dbPath = join(this._durableResume.dir, 'runs.db')
-        return Effect.runPromise(listDurableRuns({ dbPath, status: filter?.status }))
+        return Effect.runPromise(
+            listDurableRuns({ dbPath, status: filter?.status, userId: filter?.userId }),
+        )
     }
 
     /**
@@ -1609,7 +1611,22 @@ export class ReactiveAgent<TOut = unknown> {
      */
     runStream(
         input: string,
-        options?: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] }
+        options?: {
+            density?: StreamDensity
+            signal?: AbortSignal
+            history?: readonly ChatMessage[]
+            /**
+             * Agentic-UI kit (Task 13): fired once with the durable runId before
+             * the first event is emitted (durable path only). Lets server endpoint
+             * helpers open a per-run journal ahead of streaming. No-op otherwise.
+             */
+            onRunId?: (runId: string) => void
+            /**
+             * Agentic-UI kit (Task 13): stamps the durable run row's owner so a
+             * per-identity inbox can filter to it. Durable path only.
+             */
+            identity?: { userId: string; orgId?: string }
+        }
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -1634,7 +1651,13 @@ export class ReactiveAgent<TOut = unknown> {
 
     private async *_runStreamImpl(
         input: string,
-        options: { density?: StreamDensity; signal?: AbortSignal; history?: readonly ChatMessage[] },
+        options: {
+            density?: StreamDensity
+            signal?: AbortSignal
+            history?: readonly ChatMessage[]
+            onRunId?: (runId: string) => void
+            identity?: { userId: string; orgId?: string }
+        },
         controller: RunController
     ): AsyncGenerator<AgentStreamEvent> {
         const signal = options?.signal
@@ -1669,7 +1692,12 @@ export class ReactiveAgent<TOut = unknown> {
         // Post-runPromise guard: re-check signal after async acquisition so that
         // abort() fired during the await is not silently missed.
         const stream = await this.runtime.runPromise(
-            this.engine.executeStream(task, { density, runController: controller })
+            this.engine.executeStream(task, {
+                density,
+                runController: controller,
+                ...(options?.onRunId !== undefined ? { onRunId: options.onRunId } : {}),
+                ...(options?.identity !== undefined ? { identity: options.identity } : {}),
+            })
         )
         if (signal?.aborted) {
             yield {

@@ -110,6 +110,18 @@ export type { RunHandle, RunStatus, RunControllerLike } from "./run-controller.j
 // ─── Deployment ───
 export { createSigtermHandler, registerShutdownHandlers } from "./sigterm.js";
 
+// ─── Agentic-UI kit: server endpoint helpers (Task 13) ───
+export {
+  createAgentEndpoint,
+  createRunAttachEndpoint,
+  createInteractionEndpoint,
+  createApprovalEndpoint,
+  createInboxEndpoint,
+  type AgentEndpointOptions,
+  type IdentityResolver,
+} from "./server/endpoints.js";
+export { DEFAULT_LIMITS, type EndpointLimits, type Window as LimitWindow } from "./server/guards.js";
+
 // ─── Debrief ───
 export {
   synthesizeDebrief,

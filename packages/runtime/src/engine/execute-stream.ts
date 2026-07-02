@@ -100,7 +100,23 @@ export const makeExecuteStream =
   ({ config, execute }: ExecuteStreamDeps) =>
   (
     task: Task,
-    options?: { density?: StreamDensity; runController?: RunControllerLike },
+    options?: {
+      density?: StreamDensity;
+      runController?: RunControllerLike;
+      /**
+       * Agentic-UI kit (Task 13): fired ONCE, synchronously, right after the
+       * durable run row is created and its `runId` computed — BEFORE the first
+       * stream event is emitted. Only fires on the durable path (when
+       * `config.durableRuns` + a runController are set). Lets endpoint helpers
+       * open a per-run journal before any event flows. No-op otherwise.
+       */
+      onRunId?: (runId: string) => void;
+      /**
+       * Agentic-UI kit (Task 13): stamps the durable run row's `user_id`/`org_id`
+       * columns so per-identity inbox filtering works. Durable path only.
+       */
+      identity?: { userId: string; orgId?: string };
+    },
   ): Effect.Effect<EStream.Stream<AgentStreamEvent, Error>> =>
     Effect.gen(function* () {
       const queue = yield* Queue.unbounded<AgentStreamEvent>();
@@ -243,6 +259,10 @@ export const makeExecuteStream =
         // Stable-ish run id: content hash of agent + task + start time.
         const runId = hash(`${agentId}:${String(task.id)}:${startMs}`).toString(36);
         runStoreCtx = { runId, runStoreLayer };
+        // Agentic-UI kit (Task 13): expose the runId before the first event is
+        // emitted so endpoint helpers can open a journal keyed on it. Fired
+        // synchronously here (durable path only), ahead of createRun below.
+        options.onRunId?.(runId);
         // Phase C: hash the reproducible identity descriptor (not the whole
         // config) so ReactiveAgent.resume() can recompute a matching hash.
         const configHash = durableConfigHash({
@@ -257,6 +277,8 @@ export const makeExecuteStream =
             agentId,
             task: String((task.input as { question?: unknown })?.question ?? task.id),
             configHash,
+            ...(options.identity?.userId !== undefined ? { userId: options.identity.userId } : {}),
+            ...(options.identity?.orgId !== undefined ? { orgId: options.identity.orgId } : {}),
           });
         }).pipe(
           Effect.provide(runStoreLayer),
@@ -309,6 +331,11 @@ export const makeExecuteStream =
             taskId: String(task.id),
             agentId: String(task.agentId),
             ...(toolSummary.length > 0 ? { toolSummary } : {}),
+            // Agentic-UI kit (Task 13): stamp the durable runId on EVERY durable
+            // StreamCompleted (not just paused ones) so endpoint consumers can
+            // attach/replay a completed run by its id. Backward-compatible: the
+            // field is optional and was already populated on the pause paths.
+            ...(runStoreCtx !== undefined ? { runId: runStoreCtx.runId } : {}),
             ...(paused && runStoreCtx !== undefined
               ? {
                   runId: runStoreCtx.runId,

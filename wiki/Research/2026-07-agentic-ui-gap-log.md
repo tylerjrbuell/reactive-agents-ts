@@ -113,3 +113,48 @@ gets an entry here with production context. Format per entry:
   .withName(...)`. Papercut, but a trap: green `bun test` hid a type error until
   the tsc gate.
 - **Severity:** papercut.
+
+## GAP-6: no run-handle-before-first-event primitive on `runStream` (Task 13)
+- **Hit while:** Task 13 — journaled SSE endpoint needs the durable `runId` to
+  open a per-run journal BEFORE serializing event 1 (seq must start at 1 on the
+  first event). `runStream` events do not carry `runId` until `StreamCompleted`
+  (stream-types.ts:29, and even then only on the pause paths).
+- **Expected:** a way to learn the durable runId at run-setup time.
+- **Actual:** added an additive, opt-in `onRunId?: (runId) => void` option threaded
+  `runStream → _runStreamImpl → engine.executeStream → makeExecuteStream`, fired
+  synchronously right after `runId` is computed in execute-stream.ts (durable path
+  only, before `createRun`). The endpoint pulls the first event via
+  `iterator.next()` (which drives the generator into `runPromise(executeStream)`,
+  where `onRunId` fires) THEN `await journalReady` — no Promise.race. Fixed
+  additively; backward-compatible (every existing caller still compiles/behaves).
+- **Severity:** missing-primitive (now filled).
+
+## GAP-7: durable `StreamCompleted` did not carry `runId` on non-paused completion (Task 13)
+- **Hit while:** Task 13 attach test — `all.at(-1).e.runId` was `undefined` for a
+  normal (non-paused) durable run, so the client had no id to attach/replay with.
+- **Expected:** every durable `StreamCompleted` to expose its runId.
+- **Actual:** execute-stream only spread `runId` inside the `paused` /
+  `pausedInteraction` branches. Added an unconditional
+  `...(runStoreCtx !== undefined ? { runId } : {})` on the durable path. Field was
+  already optional on the event type — backward-compatible.
+- **Severity:** missing-field (now filled).
+
+## GAP-8: `identity` did not reach the durable run row from the streaming path (Task 13)
+- **Hit while:** Task 13 inbox test — per-identity filtering needs `runs.user_id`
+  populated, but the streaming write path (execute-stream inline `store.createRun`)
+  never passed userId/orgId, and `agent.listRuns` only accepted `{status?}` (not
+  `{userId?}`), so it could not filter by owner.
+- **Expected:** identity threads end-to-end (run creation + list filter).
+- **Actual:** added additive `identity?: {userId; orgId?}` option threaded the same
+  path as `onRunId`, spread into the inline `createRun`; extended `agent.listRuns`
+  + `listDurableRuns` to accept `userId?` (store.listRuns already supported it from
+  Task 7). Backward-compatible.
+- **Severity:** missing-plumbing (now filled).
+
+## GAP-9: per-call `RunStoreLive` layer opens the SQLite file per journal op (Task 13)
+- **Hit while:** Task 13 — `openJournal` constructs a fresh `RunStoreLive(dbPath)`
+  per `append`/`list`/`status`, opening the db each time. Mirrors the existing
+  per-call idiom in engine/durable-resume.ts (listDurableRuns / markRunStatus /
+  getPendingApprovalAt all do the same), so kept for consistency in v1.
+- **Expected (future):** a pooled/cached store handle reused across ops.
+- **Severity:** perf-debt (measurable under load; fine for v1 + tests).

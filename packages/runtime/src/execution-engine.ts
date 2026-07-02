@@ -121,7 +121,12 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
 
     readonly executeStream: (
       task: Task,
-      options?: { density?: StreamDensity; runController?: import("@reactive-agents/core").RunControllerLike },
+      options?: {
+        density?: StreamDensity;
+        runController?: import("@reactive-agents/core").RunControllerLike;
+        onRunId?: (runId: string) => void;
+        identity?: { userId: string; orgId?: string };
+      },
     ) => Effect.Effect<EStream.Stream<AgentStreamEvent, Error>>;
   }
 >() {}
