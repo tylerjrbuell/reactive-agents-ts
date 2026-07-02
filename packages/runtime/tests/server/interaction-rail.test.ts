@@ -62,4 +62,36 @@ describe("interaction rail e2e", () => {
     expect(info?.dbPath).toContain(dir);
     await agent.dispose();
   }, 20000);
+
+  // FIX 2 regression: a wrong `interactionId` must REJECT, not silently
+  // succeed. Before the fix, `decideInteraction`'s 0-row UPDATE result was
+  // ignored, the run resumed with a mismatched id, the runner's
+  // `response.interactionId === pending.interactionId` guard skipped
+  // injection, and the run returned the pause sentinel while
+  // `respondToInteraction` reported `success: true` (silent data loss).
+  test("respondToInteraction with a wrong interactionId rejects and the run stays pending", async () => {
+    const dir = durableDir();
+    const agent = await buildAgent(dir);
+
+    await agent.run("help me choose");
+    const pending = await agent.listPendingInteractions();
+    expect(pending.length).toBe(1);
+    const { runId, interactionId } = pending[0]!;
+
+    let err: unknown;
+    try {
+      await agent.respondToInteraction(runId, `${interactionId}-wrong`, "blue");
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeDefined();
+    expect(String((err as { _tag?: string })?._tag ?? err)).toContain("InteractionStateError");
+
+    // The run must still be pending — the mismatched id must not have decided it.
+    const stillPending = await agent.listPendingInteractions();
+    expect(stillPending.length).toBe(1);
+    expect(stillPending[0]!.interactionId).toBe(interactionId);
+
+    await agent.dispose();
+  }, 20000);
 });

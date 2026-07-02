@@ -49,6 +49,41 @@ const json = (value: unknown, status = 200): Response =>
   new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
 
 /**
+ * Wrap a wire-event stream so `onSettle` fires EXACTLY ONCE no matter how the
+ * stream ends: a recognized terminal tag (`StreamCompleted`/`StreamError`), an
+ * unrecognized terminal tag (e.g. `StreamCancelled`), plain exhaustion with no
+ * terminal event at all, a thrown error, or early consumer disconnect (the
+ * generator's `.return()` is called, which async-generator `finally` blocks
+ * also observe). Exported so the concurrency-guard release behavior can be
+ * unit-tested without standing up a full agent + LLM stream.
+ */
+export async function* withRunEndSettle(
+  events: AsyncIterable<WireEvent>,
+  onSettle: (costUsd: number) => void,
+): AsyncGenerator<WireEvent> {
+  let settled = false;
+  let costSoFar = 0;
+  const settle = (): void => {
+    if (settled) return;
+    settled = true;
+    onSettle(costSoFar);
+  };
+  try {
+    for await (const event of events) {
+      yield event;
+      if (event._tag === "StreamCompleted") {
+        costSoFar = (event as { metadata?: { cost?: number } }).metadata?.cost ?? 0;
+      }
+      if (event._tag === "StreamCompleted" || event._tag === "StreamError") {
+        settle();
+      }
+    }
+  } finally {
+    settle();
+  }
+}
+
+/**
  * POST `{prompt: string}` → journaled SSE. When the agent was built with
  * `.withDurableRuns()`, every emitted event is stamped `id: <seq>` and appended
  * to the run journal (enabling attach/replay); otherwise events flow unstamped.
@@ -104,22 +139,8 @@ export const createAgentEndpoint = (agent: ReactiveAgent, opts: AgentEndpointOpt
     });
     if (durable === undefined) resolveJournal(undefined);
 
-    async function* guarded(): AsyncGenerator<WireEvent> {
-      try {
-        for await (const event of enrichStream(raw)) {
-          yield event;
-          if (event._tag === "StreamCompleted" || event._tag === "StreamError") {
-            const cost =
-              event._tag === "StreamCompleted"
-                ? ((event as { metadata?: { cost?: number } }).metadata?.cost ?? 0)
-                : 0;
-            guards?.onRunEnd(userId, cost);
-          }
-        }
-      } catch (err) {
-        guards?.onRunEnd(userId, 0);
-        throw err;
-      }
+    function guarded(): AsyncGenerator<WireEvent> {
+      return withRunEndSettle(enrichStream(raw), (cost) => guards?.onRunEnd(userId, cost));
     }
 
     // Pull the first event before awaiting the journal so `onRunId` has fired;
@@ -127,12 +148,21 @@ export const createAgentEndpoint = (agent: ReactiveAgent, opts: AgentEndpointOpt
     const iterator = guarded()[Symbol.asyncIterator]();
     const first = await iterator.next();
     const journal = await journalReady;
+    // NOTE: this generator drives `iterator` manually (not via `for await`), so
+    // closing `withFirst()` early (consumer disconnect calling `.return()`)
+    // would NOT by itself propagate down to `iterator` — the `finally` below
+    // makes that propagation explicit so `withRunEndSettle`'s own `finally`
+    // (and thus the concurrency-guard release) still runs on early disconnect.
     async function* withFirst(): AsyncGenerator<WireEvent> {
-      if (!first.done) yield first.value;
-      for (;;) {
-        const next = await iterator.next();
-        if (next.done) return;
-        yield next.value;
+      try {
+        if (!first.done) yield first.value;
+        for (;;) {
+          const next = await iterator.next();
+          if (next.done) return;
+          yield next.value;
+        }
+      } finally {
+        await iterator.return?.(undefined);
       }
     }
     return toJournaledSSE(withFirst(), journal);
@@ -187,7 +217,12 @@ export const createRunAttachEndpoint = (agent: ReactiveAgent) => {
 /** POST `{runId, interactionId, value}` → resume a run paused on `request_user_input`. */
 export const createInteractionEndpoint = (agent: ReactiveAgent) => {
   return async (req: Request): Promise<Response> => {
-    const body = (await req.json()) as { runId?: string; interactionId?: string; value?: unknown };
+    let body: { runId?: string; interactionId?: string; value?: unknown };
+    try {
+      body = (await req.json()) as { runId?: string; interactionId?: string; value?: unknown };
+    } catch {
+      return json({ error: "invalid JSON body" }, 400);
+    }
     if (typeof body.runId !== "string" || typeof body.interactionId !== "string") {
       return json({ error: "runId and interactionId are required" }, 400);
     }
@@ -200,7 +235,12 @@ export const createInteractionEndpoint = (agent: ReactiveAgent) => {
 export const createApprovalEndpoint = (agent: ReactiveAgent) => {
   return async (req: Request): Promise<Response> => {
     if (req.method === "GET") return json(await agent.listPendingApprovals());
-    const body = (await req.json()) as { runId?: string; decision?: string; reason?: string };
+    let body: { runId?: string; decision?: string; reason?: string };
+    try {
+      body = (await req.json()) as { runId?: string; decision?: string; reason?: string };
+    } catch {
+      return json({ error: "invalid JSON body" }, 400);
+    }
     if (typeof body.runId !== "string" || (body.decision !== "approve" && body.decision !== "deny")) {
       return json({ error: "runId and decision ('approve'|'deny') required" }, 400);
     }

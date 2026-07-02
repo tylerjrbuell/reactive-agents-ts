@@ -8,7 +8,9 @@ import {
   createInboxEndpoint,
   createInteractionEndpoint,
   createRunAttachEndpoint,
+  withRunEndSettle,
 } from "../../src/server/endpoints.js";
+import type { WireEvent } from "../../src/server/journal.js";
 
 const sseEvents = async (
   res: Response,
@@ -164,5 +166,111 @@ describe("endpoint helpers", () => {
     const result = (await res.json()) as { success: boolean; output: string };
     expect(result.success).toBe(true);
     expect(result.output).toContain("Confirmed");
+  });
+
+  test("malformed JSON body on the interaction endpoint returns 400, not a thrown 500", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ra-ep-"));
+    const agent = await durableAgent(dir);
+    const respond = createInteractionEndpoint(agent);
+    const res = await respond(
+      new Request("http://x/api/interaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{not json",
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("withRunEndSettle (FIX1: guaranteed single onRunEnd release)", () => {
+  const collect = async (gen: AsyncGenerator<WireEvent>): Promise<WireEvent[]> => {
+    const out: WireEvent[] = [];
+    for await (const e of gen) out.push(e);
+    return out;
+  };
+
+  test("settles once on StreamCompleted, forwarding the reported cost", async () => {
+    async function* src(): AsyncGenerator<WireEvent> {
+      yield { _tag: "TextDelta", text: "hi" };
+      yield { _tag: "StreamCompleted", metadata: { cost: 0.02 } };
+    }
+    const calls: number[] = [];
+    await collect(withRunEndSettle(src(), (cost) => calls.push(cost)));
+    expect(calls).toEqual([0.02]);
+  });
+
+  test("settles exactly once even when the terminal tag is unrecognized (e.g. StreamCancelled) — the real leak bug", async () => {
+    async function* src(): AsyncGenerator<WireEvent> {
+      yield { _tag: "TextDelta", text: "hi" };
+      yield { _tag: "StreamCancelled", reason: "aborted" };
+    }
+    const calls: number[] = [];
+    await collect(withRunEndSettle(src(), (cost) => calls.push(cost)));
+    expect(calls.length).toBe(1);
+  });
+
+  test("settles exactly once on plain exhaustion with no terminal tag at all", async () => {
+    async function* src(): AsyncGenerator<WireEvent> {
+      yield { _tag: "TextDelta", text: "hi" };
+    }
+    const calls: number[] = [];
+    await collect(withRunEndSettle(src(), (cost) => calls.push(cost)));
+    expect(calls.length).toBe(1);
+  });
+
+  test("settles exactly once on early consumer disconnect (.return() before any terminal event)", async () => {
+    async function* infinite(): AsyncGenerator<WireEvent> {
+      let i = 0;
+      for (;;) {
+        yield { _tag: "TextDelta", text: String(i++) };
+      }
+    }
+    const calls: number[] = [];
+    const wrapped = withRunEndSettle(infinite(), (cost) => calls.push(cost));
+    await wrapped.next();
+    await wrapped.return(undefined);
+    expect(calls.length).toBe(1);
+  });
+
+  test("a thrown error still settles exactly once before propagating", async () => {
+    async function* src(): AsyncGenerator<WireEvent> {
+      yield { _tag: "TextDelta", text: "hi" };
+      throw new Error("boom");
+    }
+    const calls: number[] = [];
+    await expect(collect(withRunEndSettle(src(), (cost) => calls.push(cost)))).rejects.toThrow("boom");
+    expect(calls.length).toBe(1);
+  });
+});
+
+describe("FIX1 endpoint-level regression: concurrency slot release on disconnect", () => {
+  test("consuming the SSE only partially then breaking still releases the concurrency slot", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ra-ep-"));
+    const agent = await new ReactiveAgentBuilder()
+      .withName("endpoint-e2e-fix1")
+      .withProvider("test")
+      .withTestScenario([{ text: "hello from agent, a longer response so there is more than one delta chunk" }])
+      .withDurableRuns({ dir })
+      .build();
+    const handler = createAgentEndpoint(agent, { limits: { maxConcurrentRunsPerUser: 1 } });
+    const makeReq = () =>
+      new Request("http://x/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "hi" }),
+      });
+
+    const res1 = await handler(makeReq());
+    const reader = res1.body!.getReader();
+    await reader.read(); // consume only the first chunk — simulate a client that stops reading
+    await reader.cancel(); // simulate tab-close / abandoned consumer
+
+    // Let the (still-running-in-background) stream drain so onRunEnd fires.
+    await new Promise((r) => setTimeout(r, 100));
+
+    const res2 = await handler(makeReq());
+    const events2 = await sseEvents(res2);
+    expect(events2.map((x) => x.e._tag)).not.toContain("LimitExceeded");
   });
 });

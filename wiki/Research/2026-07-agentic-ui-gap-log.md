@@ -178,3 +178,42 @@ gets an entry here with production context. Format per entry:
   test by resolving with `new URL(String(input), "http://ra.test")` (mirroring the
   brief's own `attachFetch`). No source change needed.
 - **Severity:** DX/type-ergonomics (now fixed at source; no wire/protocol change).
+
+## GAP-11: interaction/approval endpoints have no owner-authorization check — MUST gate before public deploy
+- **Hit while:** whole-branch review of Task 13/14's server endpoints
+  (`createInteractionEndpoint` / `createApprovalEndpoint`,
+  `packages/runtime/src/server/endpoints.ts`).
+- **Expected (pre-public-deploy):** a caller can only answer an interaction or
+  decide an approval gate for a run they own — the resolved identity from
+  `opts.identify` must equal the run's stored `userId` before
+  `respondToInteraction`/`approveRun`/`denyRun` are invoked.
+- **Actual (current v1 scope, spec §4.5.1):** both endpoints take `runId` from
+  the POST body with NO ownership check at all. Any caller who knows (or
+  guesses/enumerates) a `runId` can answer another user's pending interaction
+  or approve/deny that user's spend-gated tool call — a real cross-tenant
+  authorization hole once these endpoints face the public internet. Scoping
+  this is deliberately deferred to P5 (do not implement yet) but MUST land
+  before any public deploy: add `identify` to `AgentEndpointOptions`-equivalent
+  options for these two endpoints and compare `identity.userId ===
+  run.userId` (404/403, not leaking existence) before mutating.
+- **Also noted — anonymous-bucket foot-gun:** when no `identify` resolver is
+  configured, EVERY caller collapses to the single shared `" anonymous"` key
+  in `guards.ts` (`ANON`) — the whole anonymous population shares one bucket
+  (default `anonymous: {runs: 3, window: "1h"}`), so the entire public/unauthed
+  surface of a deployment gets rate-limited together (one loud anonymous
+  client can lock out all other anonymous callers). Document prominently
+  before an unauthenticated deploy; the fix is "configure `identify`", not a
+  framework change.
+- **Also noted — `LimitExceeded` returns HTTP 200:** `createAgentEndpoint`'s
+  guard-rejection path (`sseSingle({_tag: "LimitExceeded", ...})`) always
+  returns a 200 response carrying an SSE event, by design — this is
+  EventSource-friendly (browsers' `EventSource` cannot read a non-2xx body),
+  but a plain-`fetch` consumer that checks `res.ok`/`res.status` before
+  parsing the body will silently treat a rate-limited/budget-exceeded/
+  concurrency-blocked request as a normal success. Document this in
+  consumer-facing docs for non-EventSource clients (plain fetch/curl/most
+  non-browser HTTP clients) — they must inspect the first SSE event's `_tag`,
+  not the HTTP status, to detect a guard rejection.
+- **Severity:** blocker (pre-public-deploy gate) — acknowledged v1 scope, not a
+  bug in the shipped code, but must not be forgotten before the endpoints are
+  exposed beyond a trusted/internal caller.

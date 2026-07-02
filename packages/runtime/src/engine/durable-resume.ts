@@ -212,7 +212,10 @@ export const persistInteractionPauseAt = (params: {
 /**
  * Record a human's response on a run's pending interaction. Fails
  * `InteractionStateError` when the run has no pending interaction (e.g. already
- * answered, completed, or never paused). Mirrors {@link decideApprovalRecord}.
+ * answered, completed, or never paused) OR when the supplied `interactionId`
+ * does not match the pending one (wrong/stale id) — the store UPDATE in that
+ * case matches 0 rows, which must not be treated as success. Mirrors
+ * {@link decideApprovalRecord}.
  */
 export const decideInteractionRecord = (params: {
   readonly dbPath: string;
@@ -223,12 +226,22 @@ export const decideInteractionRecord = (params: {
   Effect.gen(function* () {
     const store = yield* RunStoreService;
     const pending = yield* store.getPendingInteraction(params.runId);
-    if (!pending) {
+    if (!pending || pending.interactionId !== params.interactionId) {
       return yield* Effect.fail(
-        new InteractionStateError({ runId: params.runId, detail: "no pending interaction" }),
+        new InteractionStateError({
+          runId: params.runId,
+          detail: pending
+            ? `interactionId mismatch: pending is ${pending.interactionId}, got ${params.interactionId}`
+            : "no pending interaction",
+        }),
       );
     }
-    yield* store.decideInteraction(params.runId, params.interactionId, params.valueJson);
+    const changed = yield* store.decideInteraction(params.runId, params.interactionId, params.valueJson);
+    if (!changed) {
+      return yield* Effect.fail(
+        new InteractionStateError({ runId: params.runId, detail: "interaction already answered" }),
+      );
+    }
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 
 /** The single pending interaction for a run (or undefined). Used by `listPendingInteractions`. */

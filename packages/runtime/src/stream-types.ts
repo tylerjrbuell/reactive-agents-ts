@@ -25,7 +25,7 @@ export type AgentStreamEvent =
       readonly taskId?: string;
       readonly agentId?: string;
       readonly toolSummary?: ReadonlyArray<{ readonly name: string; readonly calls: number; readonly avgMs: number }>;
-      /** Durable HITL: the durable runId, present when this run paused for approval. */
+      /** Durable HITL: the durable runId, present on every durable-run completion (paused or not — not approval-pause-only). */
       readonly runId?: string;
       /** Durable HITL: the paused gate descriptor, present when status is awaiting-approval. */
       readonly pendingApproval?: {

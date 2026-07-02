@@ -92,7 +92,12 @@ export const createEndpointGuards = (
     onRunStart(userId) {
       const now = clock();
       const key = userId ?? ANON;
-      requestTimes.set(key, [...(requestTimes.get(key) ?? []), now]);
+      // Only record into `requestTimes` when a limit actually reads it
+      // (rateLimit or anonymous). Otherwise (concurrency/budget-only configs)
+      // entries would accumulate forever with nothing ever pruning them.
+      if (limits.rateLimit || limits.anonymous) {
+        requestTimes.set(key, [...(requestTimes.get(key) ?? []), now]);
+      }
       concurrent.set(key, (concurrent.get(key) ?? 0) + 1);
     },
 
