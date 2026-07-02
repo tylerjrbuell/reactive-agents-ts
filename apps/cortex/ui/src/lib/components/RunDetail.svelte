@@ -618,6 +618,15 @@
                  rounded-md bg-error/5 cursor-pointer hover:bg-error/10 transition-colors"
           onclick={() => void runStore.stop()}
         >Stop</button>
+        <button
+          type="button"
+          class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
+                 rounded-md bg-error/12 cursor-pointer hover:bg-error/20 transition-colors"
+          onclick={() => {
+            if (confirm("Terminate now? In-flight work is aborted immediately."))
+              void runStore.terminate();
+          }}
+        >Terminate</button>
       {:else if $runStore.status === "paused"}
         <button
           type="button"
@@ -631,6 +640,15 @@
                  rounded-md bg-error/5 cursor-pointer hover:bg-error/10 transition-colors"
           onclick={() => void runStore.stop()}
         >Stop</button>
+        <button
+          type="button"
+          class="px-3 py-1.5 border border-error/60 text-error font-mono text-[10px] uppercase
+                 rounded-md bg-error/12 cursor-pointer hover:bg-error/20 transition-colors"
+          onclick={() => {
+            if (confirm("Terminate now? In-flight work is aborted immediately."))
+              void runStore.terminate();
+          }}
+        >Terminate</button>
       {/if}
       <button
         type="button"

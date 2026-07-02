@@ -406,6 +406,18 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     }
   }
 
+  /** Immediate abort — interrupts the in-flight LLM call (vs stop()'s graceful
+   * halt at the next phase boundary). */
+  async function terminate() {
+    try {
+      await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/terminate`, {
+        method: "POST",
+      });
+    } catch {
+      /* network / server error */
+    }
+  }
+
   async function deleteRun(): Promise<boolean> {
     try {
       const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}`, {
@@ -448,6 +460,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     pause,
     resume,
     stop,
+    terminate,
     approve,
     deny,
     deleteRun,
