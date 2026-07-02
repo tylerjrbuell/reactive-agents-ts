@@ -69,10 +69,13 @@ beforeAll(() => {
     },
   });
   fixtureBaseUrl = `http://localhost:${httpFixture.port}`;
+  // Loopback fixture — opt in past the F6 egress guard (blocks loopback by default).
+  process.env.RA_HTTP_ALLOW_PRIVATE = "1";
 });
 
 afterAll(() => {
   httpFixture?.stop();
+  delete process.env.RA_HTTP_ALLOW_PRIVATE;
 });
 
 describe("Built-in Tool Handlers", () => {

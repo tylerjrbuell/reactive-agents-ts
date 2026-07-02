@@ -1,7 +1,11 @@
 import { Effect } from "effect";
+import { assertPublicUrl } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+
+/** Max redirect hops to follow while re-validating each against the egress guard. */
+const MAX_REDIRECTS = 5;
 
 export const httpGetTool: ToolDefinition = {
   name: "http-get",
@@ -53,7 +57,20 @@ export const httpGetHandler = (
       const url = args.url as string;
       const headers = (args.headers as Record<string, string>) ?? {};
 
-      const response = await fetch(url, { method: "GET", headers });
+      // Egress guard (F6): the URL is model-controlled. Validate the target —
+      // and every redirect hop — is public before fetching, so a prompt-injected
+      // agent cannot reach cloud metadata (169.254.169.254) or internal hosts.
+      // Set RA_HTTP_ALLOW_PRIVATE=1 to permit trusted loopback/private targets.
+      const guard = { allowPrivate: process.env.RA_HTTP_ALLOW_PRIVATE === "1" };
+      let current = (await assertPublicUrl(url, guard)).toString();
+      let response = await fetch(current, { method: "GET", headers, redirect: "manual" });
+      for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
+        if (response.status < 300 || response.status >= 400) break;
+        const location = response.headers.get("location");
+        if (!location) break;
+        current = (await assertPublicUrl(new URL(location, current).toString(), guard)).toString();
+        response = await fetch(current, { method: "GET", headers, redirect: "manual" });
+      }
       const contentType = response.headers.get("content-type") ?? "";
 
       let body: unknown;
