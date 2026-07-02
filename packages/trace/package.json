@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/observability": "workspace:*",
     "effect": "^3.10.0"
   },
   "devDependencies": {
