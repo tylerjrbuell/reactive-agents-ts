@@ -295,6 +295,10 @@ export class GatewayProcessManager {
           : undefined;
       const _budget = config.budget as { tokenLimit?: number; costLimit?: number } | undefined;
       const _grounding = config.grounding as { mode: "warn" | "block"; tolerance?: number } | undefined;
+      const _modelRouting =
+        config.modelRouting && typeof config.modelRouting === "object" && (config.modelRouting as { enabled?: boolean }).enabled
+          ? (config.modelRouting as { enabled?: boolean; minTier?: "haiku" | "sonnet" | "opus"; tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>> })
+          : undefined;
 
       const agent = await buildCortexAgent({
         agentName: name,
@@ -338,6 +342,7 @@ export class GatewayProcessManager {
         ...(_outputSchema ? { outputSchema: _outputSchema } : {}),
         ...(_budget && ((_budget.tokenLimit ?? 0) > 0 || (_budget.costLimit ?? 0) > 0) ? { budget: _budget } : {}),
         ...(_grounding?.mode ? { grounding: _grounding } : {}),
+        ...(_modelRouting?.enabled ? { modelRouting: _modelRouting } : {}),
         ...(_durableRuns ? { durableRuns: _durableRuns } : {}),
       });
       const agentId_ = agent.agentId;

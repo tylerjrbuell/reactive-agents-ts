@@ -93,6 +93,12 @@ export interface LaunchParams {
   readonly budget?: { tokenLimit?: number; costLimit?: number };
   /** Numeric evidence-grounding — `.withGrounding()`. */
   readonly grounding?: { mode: "warn" | "block"; tolerance?: number };
+  /** Cost-aware model routing (`.withModelRouting()`). enabled=false → not applied. */
+  readonly modelRouting?: {
+    readonly enabled?: boolean;
+    readonly minTier?: "haiku" | "sonnet" | "opus";
+    readonly tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>>;
+  };
   /**
    * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
    * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
@@ -262,6 +268,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
                 ...(params.budget ? { budget: params.budget } : {}),
                 ...(params.grounding ? { grounding: params.grounding } : {}),
+                ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),

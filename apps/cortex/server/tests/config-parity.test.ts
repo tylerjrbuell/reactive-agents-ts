@@ -83,6 +83,8 @@ const FULL_CONFIG_BODY = {
     paths: ["./.claude/skills", "./skills"],
     evolution: { mode: "suggest", refinementThreshold: 10, rollbackOnRegression: true },
   },
+  /** Phase A — cost-aware model routing (`withModelRouting`) */
+  modelRouting:       { enabled: true, minTier: "haiku" },
 };
 
 describe("AgentConfig → LaunchParams parity", () => {
@@ -163,6 +165,35 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.skills?.evolution?.mode).toBe("suggest");
     expect(p.skills?.evolution?.refinementThreshold).toBe(10);
     expect(p.skills?.evolution?.rollbackOnRegression).toBe(true);
+
+    // ── Model routing (Phase A) ──────────────────────────────────────────
+    expect(p.modelRouting?.enabled).toBe(true);
+    expect(p.modelRouting?.minTier).toBe("haiku");
+  });
+});
+
+describe("AgentConfig → LaunchParams — model routing (A1)", () => {
+  it("wires modelRouting through POST /api/runs → LaunchParams", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(
+      runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)),
+    );
+    const res = await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...FULL_CONFIG_BODY,
+          modelRouting: { enabled: true, minTier: "sonnet", tierModels: { haiku: "claude-haiku-4-5" } },
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(captured.params?.modelRouting?.enabled).toBe(true);
+    expect(captured.params?.modelRouting?.minTier).toBe("sonnet");
+    expect(captured.params?.modelRouting?.tierModels?.haiku).toBe("claude-haiku-4-5");
   });
 });
 

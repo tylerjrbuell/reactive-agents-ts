@@ -144,6 +144,12 @@ export interface BuildCortexAgentParams {
   readonly budget?: { readonly tokenLimit?: number; readonly costLimit?: number };
   /** Numeric evidence-grounding (v0.12) — `.withGrounding()`. Checks figures in the answer against tool data. */
   readonly grounding?: { readonly mode: "warn" | "block"; readonly tolerance?: number };
+  /** Cost-aware model routing (v0.13) — `.withModelRouting()`. Routes cheap/expensive turns by tier. */
+  readonly modelRouting?: {
+    readonly enabled?: boolean;
+    readonly minTier?: "haiku" | "sonnet" | "opus";
+    readonly tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>>;
+  };
   /**
    * Durable execution (v0.12) — opt-in crash-resume via SQLite RunStore.
    * When `enabled`, wires `.withDurableRuns(...)` so the run checkpoints and can
@@ -350,6 +356,14 @@ export async function buildCortexAgent(
     b = b.withGrounding({
       mode: params.grounding.mode,
       ...(params.grounding.tolerance != null ? { tolerance: params.grounding.tolerance } : {}),
+    });
+  }
+
+  // Cost-aware model routing (v0.13) — opt-in; degrades to the configured model.
+  if (params.modelRouting?.enabled) {
+    b = b.withModelRouting({
+      ...(params.modelRouting.minTier ? { minTier: params.modelRouting.minTier } : {}),
+      ...(params.modelRouting.tierModels ? { tierModels: params.modelRouting.tierModels } : {}),
     });
   }
 
