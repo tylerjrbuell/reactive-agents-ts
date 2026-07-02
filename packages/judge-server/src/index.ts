@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
 import { JudgeLLMService } from "@reactive-agents/eval";
-import { serve, isMain } from "@reactive-agents/runtime-shim";
+import { secureServe, isMain } from "@reactive-agents/runtime-shim";
 import { JudgeRequest, type ReproducibilityMetadata } from "./contract.js";
 import { handleJudgeRequest } from "./handler.js";
 import { buildJudgeLayer, resolveLiveLayerConfig } from "./live-layer.js";
@@ -72,8 +72,13 @@ export const startServer = async (config: ServerConfig): Promise<ServerHandle> =
       ? buildJudgeLayer(resolveLiveLayerConfig())
       : StubJudgeLayer;
 
-  const server = await serve({
+  // Secure-by-default ingress (F4): loopback unless RA_JUDGE_HOST is set;
+  // a non-loopback bind requires RA_JUDGE_TOKEN. Prevents anonymous peers from
+  // draining the operator's provider key via unbounded /judge LLM calls.
+  const server = await secureServe({
     port: config.port,
+    hostname: process.env.RA_JUDGE_HOST,
+    token: process.env.RA_JUDGE_TOKEN,
     fetch: async (req) => {
       const url = new URL(req.url);
 

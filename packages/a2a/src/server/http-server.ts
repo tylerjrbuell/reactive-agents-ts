@@ -12,7 +12,7 @@ import type {
 } from "../types.js";
 import { A2AError } from "../errors.js";
 import { Effect, Context, Layer, Ref } from "effect";
-import { serve } from "@reactive-agents/runtime-shim";
+import { secureServe } from "@reactive-agents/runtime-shim";
 import type { ServerLike } from "@reactive-agents/runtime-shim";
 import { A2AServer } from "./a2a-server.js";
 import { createTaskHandler, type TaskExecutor } from "./task-handler.js";
@@ -169,8 +169,12 @@ export const createA2AHttpServer = (port: number = 3000, executor?: TaskExecutor
           Effect.gen(function* () {
             const agentCard = yield* server.getAgentCard();
 
-            bunServer = yield* Effect.promise(() => serve({
+            // Secure-by-default ingress (F4): binds loopback unless RA_A2A_HOST
+            // is set, and refuses a non-loopback bind without RA_A2A_TOKEN.
+            bunServer = yield* Effect.promise(() => secureServe({
               port,
+              hostname: process.env.RA_A2A_HOST,
+              token: process.env.RA_A2A_TOKEN,
               fetch: async (req) => {
                 const url = new URL(req.url);
 

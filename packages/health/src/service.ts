@@ -1,6 +1,6 @@
 // packages/health/src/service.ts
 import { Effect, Ref } from "effect";
-import { serve } from "@reactive-agents/runtime-shim";
+import { secureServe } from "@reactive-agents/runtime-shim";
 import type { ServerLike } from "@reactive-agents/runtime-shim";
 import type {
   HealthConfig,
@@ -107,8 +107,13 @@ export const makeHealthService = (
 
       start: () =>
         Effect.promise(async () => {
-          server = await serve({
+          // Secure-by-default ingress (F4/F16): loopback unless RA_HEALTH_HOST
+          // is set; a non-loopback bind requires RA_HEALTH_TOKEN. Keeps
+          // /metrics (agent/dep names) off all interfaces by default.
+          server = await secureServe({
             port: config.port,
+            hostname: process.env.RA_HEALTH_HOST,
+            token: process.env.RA_HEALTH_TOKEN,
             fetch: handleRequest,
           });
           boundPort = server.port ?? config.port;
