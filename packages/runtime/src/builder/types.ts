@@ -457,6 +457,13 @@ export interface VerificationOptions {
      * When false, only tier-1 heuristics run (no extra model calls from verification).
      */
     readonly useLLMTier?: boolean
+    /**
+     * What to do when verification still rejects after retries (F10). Default
+     * "proceed" (ship the answer — telemetry only). "block" withholds the answer
+     * and fails the run; "annotate" ships with a visible warning prepended. Makes
+     * `.withVerification()` an enforcement point instead of pure telemetry.
+     */
+    readonly onReject?: "block" | "annotate" | "proceed"
 }
 
 /**

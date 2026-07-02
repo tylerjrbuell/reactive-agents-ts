@@ -100,14 +100,39 @@ export const runVerificationQualityGate = (
     // same extracted phase value; W23).
     ctx = yield* runVerifyAgain(ctx);
 
-    // If still rejected after retry, log warning and continue
+    // If still rejected after retry, apply the onReject policy (F10). Default
+    // "proceed" ships the answer (telemetry only); "block" withholds it and
+    // fails the run; "annotate" ships with a visible warning. The flag set here
+    // is read at result assembly (applyVerificationOutcome) — a real
+    // enforcement point, not dead telemetry.
     const vResultAfterRetry = ctx.metadata.verificationResult as
       | { passed?: boolean; recommendation?: string; overallScore?: number }
       | undefined;
     if (vResultAfterRetry && vResultAfterRetry.passed === false) {
+      const onReject = config.verificationOnReject ?? "proceed";
+      const scoreStr = vResultAfterRetry.overallScore?.toFixed(2) ?? "?";
+      const reason = `verification rejected after ${vRetryCount + 1} retry(s) (score: ${scoreStr})`;
+
+      if (onReject === "block") {
+        ctx = {
+          ...ctx,
+          metadata: { ...ctx.metadata, verificationBlocked: { reason } },
+        };
+      } else if (onReject === "annotate") {
+        ctx = {
+          ...ctx,
+          metadata: {
+            ...ctx.metadata,
+            verificationAnnotation: `⚠ This response failed verification (${reason}) and may be unreliable.`,
+          },
+        };
+      }
+
       if (obs) {
+        const action =
+          onReject === "block" ? "blocking" : onReject === "annotate" ? "annotating" : "proceeding anyway";
         yield* obs.info(
-          `⚠ [verify] Response still rejected after ${vRetryCount + 1} retry(s) (score: ${vResultAfterRetry.overallScore?.toFixed(2) ?? "?"}) — proceeding anyway`,
+          `⚠ [verify] Response still rejected (score: ${scoreStr}) — ${action}`,
         ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/verification-quality-gate.ts:log-still-rejected", tag: errorTag(err) })));
       }
     }

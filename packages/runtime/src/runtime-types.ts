@@ -298,6 +298,13 @@ export interface RuntimeOptions {
   enableVerification?: boolean;
 
   /**
+   * What to do when verification still rejects after retries (F10). Default
+   * "proceed" (ship the answer — telemetry only); "block" withholds it and
+   * fails the run; "annotate" ships with a visible warning prepended.
+   */
+  verificationOnReject?: "block" | "annotate" | "proceed";
+
+  /**
    * Enable cost tracking (token counting, USD estimation).
    *
    * Default: `false`

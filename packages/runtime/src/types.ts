@@ -489,6 +489,14 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   logPrefix: Schema.optional(Schema.String),
   /** Maximum retries when verification rejects the response (default: 1). Only used when enableVerification is true. */
   maxVerificationRetries: Schema.optional(Schema.Number),
+  /**
+   * What to do when verification still rejects after retries (F10). Default
+   * "proceed" (ship the answer — telemetry only). "block" withholds the answer
+   * and fails the run; "annotate" ships with a visible warning prepended.
+   */
+  verificationOnReject: Schema.optional(
+    Schema.Literal("block", "annotate", "proceed"),
+  ),
   /** Minimum iterations with at least one tool call before final-answer is allowed. */
   minIterations: Schema.optional(Schema.Number),
   /** Inject background data into reasoning context (separate from system prompt instructions). */

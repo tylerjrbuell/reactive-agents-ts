@@ -330,6 +330,7 @@ export const buildBaseRuntimeAndEngine = (
       maxIterations: state._maxIterations,
       enableGuardrails: state._enableGuardrails,
       enableVerification: state._enableVerification,
+      verificationOnReject: state._verificationOptions?.onReject,
       enableCostTracking: state._enableCostTracking,
       enableAudit: state._enableAudit,
       enableReasoning: state._enableReasoning,

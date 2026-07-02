@@ -432,4 +432,73 @@ describe("Verification Quality Gate", () => {
     expect((feedbackMsg as any).content).toContain("factuality");
     expect((feedbackMsg as any).content).toContain("factually incorrect");
   });
+
+  // ── F10: onReject enforcement (end-to-end through the engine) ──────────
+  const alwaysBadLLM = () =>
+    Layer.succeed(LLMServiceTag, {
+      complete: () =>
+        Effect.succeed({
+          content: "This answer is wrong and unverifiable.",
+          stopReason: "end_turn",
+          toolCalls: [],
+          usage: makeUsage(),
+          model: "test-model",
+        }),
+    });
+
+  const alwaysRejectVerification = () =>
+    Layer.succeed(VerificationService as any, {
+      verify: (_response: string, _input: string) =>
+        Effect.succeed({
+          overallScore: 0.15,
+          passed: false,
+          riskLevel: "high" as const,
+          layerResults: [
+            { layerName: "factuality", score: 0.15, passed: false, details: "wrong" },
+          ],
+          recommendation: "reject" as const,
+          verifiedAt: new Date(),
+        }),
+    });
+
+  const runWith = async (onReject: "block" | "annotate" | "proceed" | undefined) => {
+    const config = defaultReactiveAgentsConfig("agent-001", {
+      enableVerification: true,
+      maxVerificationRetries: 1,
+      ...(onReject ? { verificationOnReject: onReject } : {}),
+    });
+    const hookLayer = LifecycleHookRegistryLive;
+    const engineLayer = ExecutionEngineLive(config).pipe(Layer.provide(hookLayer));
+    const testLayer = Layer.mergeAll(
+      hookLayer,
+      engineLayer,
+      alwaysBadLLM(),
+      alwaysRejectVerification(),
+    );
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const engine = yield* ExecutionEngine;
+        return yield* engine.execute(mockTask);
+      }).pipe(Effect.provide(testLayer)),
+    );
+  };
+
+  it("onReject:'block' withholds the answer and fails the run", async () => {
+    const result = await runWith("block");
+    expect(result.success).toBe(false);
+    expect(String(result.output)).not.toContain("This answer is wrong");
+    expect(String(result.output).toLowerCase()).toContain("withheld");
+  });
+
+  it("onReject:'annotate' ships the answer with a warning", async () => {
+    const result = await runWith("annotate");
+    expect(String(result.output)).toContain("failed verification");
+    expect(String(result.output)).toContain("This answer is wrong");
+  });
+
+  it("default (proceed) ships the rejected answer unchanged", async () => {
+    const result = await runWith(undefined);
+    expect(String(result.output)).toContain("This answer is wrong");
+    expect(String(result.output).toLowerCase()).not.toContain("withheld");
+  });
 });
