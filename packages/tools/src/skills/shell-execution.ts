@@ -170,8 +170,12 @@ export const DEFAULT_BLOCKED_RULES: ReadonlyArray<BlockedCommandRule> = [
   { pattern: /(?:^|\s|[;&|])\s*crontab\b/i, reason: "crontab is blocked" },
   // awk shell escape — system() executes arbitrary commands
   { pattern: /\bawk\b.*\bsystem\s*\(/i, reason: "awk system() enables shell injection" },
-  // awk pipe-to-getline — can read from arbitrary commands
-  { pattern: /\bawk\b.*\|.*\bgetline\b/i, reason: "awk |getline enables shell injection" },
+  // awk getline — reads from an arbitrary file or command (`getline < "file"`, `"cmd" | getline`)
+  { pattern: /\bawk\b.*\bgetline\b/i, reason: "awk getline (arbitrary file/command read) is blocked" },
+  // awk print-pipe — `print ... | "cmd"` pipes awk output to a shell command
+  { pattern: /\bawk\b.*\|\s*"/i, reason: "awk print-pipe to a command is blocked (shell injection)" },
+  // Process substitution `<(...)` / `>(...)` — the inner command executes on the host (RCE)
+  { pattern: /[<>]\(/, reason: "process substitution <(...)/>(...) is blocked (shell injection)" },
   // sed execute flag — runs replacement as shell command (s/pat/repl/e)
   { pattern: /\bsed\b.*\/e\b/i, reason: "sed /e flag enables shell injection" },
   // find -exec/-execdir/-ok — arbitrary command execution through find (CWE-78)
@@ -341,8 +345,96 @@ export function isCommandBlocked(
 }
 
 /**
- * Detect absolute paths, tilde expansion, or path-traversal sequences
- * that reference locations outside the sandbox.
+ * Detect shell expansion / substitution that this tool does not support.
+ *
+ * shell-execute runs commands literally inside a sandbox; parameter expansion
+ * (`$VAR`, `${VAR}`), command substitution (`$(…)`, backticks), and process
+ * substitution (`<(…)`, `>(…)`) are all injection vectors with no legitimate
+ * use here. This scan is **quote-aware**: single quotes suppress every form of
+ * shell expansion, so `awk '{print $NF}'` and `echo 'costs $5'` are allowed,
+ * while `cat $VAR`, `cat "$VAR"`, and `cat <(id)` are rejected structurally
+ * (a policy on the expansion class, not an enumerated blocklist of commands).
+ *
+ * Returns an error message if unsafe, or `null` if safe.
+ */
+function detectShellExpansion(command: string): string | null {
+  let inSingle = false;
+  let inDouble = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    const next = i + 1 < command.length ? command[i + 1]! : "";
+
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    // Single quotes suppress all shell expansion — skip their contents.
+    if (inSingle) continue;
+
+    // $VAR / ${VAR} / $(...) — variable and command substitution.
+    // A `$` followed by a digit (e.g. `$5`) is not a shell variable, so allow it.
+    if (ch === "$" && /[A-Za-z_{(]/.test(next)) {
+      return "shell variable/command expansion ($…) is not supported by shell-execute";
+    }
+    // Backtick command substitution.
+    if (ch === "`") {
+      return "backtick command substitution is not supported by shell-execute";
+    }
+    // Process substitution <(…) / >(…) — only meaningful outside quotes.
+    if ((ch === "<" || ch === ">") && next === "(" && !inDouble) {
+      return "process substitution <(...)/>(...) is not supported by shell-execute";
+    }
+    // Backgrounding `&` — mid-string or trailing — escapes the timeout and the
+    // segment/allow-list splitter (e.g. `sleep 100 & evil`). `&&` chaining is fine.
+    if (ch === "&" && !inDouble) {
+      if (next === "&") {
+        i++; // consume the second '&' of a legitimate && chain
+        continue;
+      }
+      const prev = i > 0 ? command[i - 1] : "";
+      if (prev !== "&") {
+        return "background operator '&' is not supported by shell-execute (escapes the timeout)";
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Strip a single matching pair of leading/trailing shell quotes and leading redirect operators. */
+function unwrapToken(raw: string): string {
+  let tok = raw.replace(/^[<>]+/, "");
+  if (
+    (tok.startsWith('"') && tok.length > 1) ||
+    (tok.startsWith("'") && tok.length > 1)
+  ) {
+    tok = tok.slice(1);
+  }
+  if (tok.endsWith('"') || tok.endsWith("'")) {
+    tok = tok.slice(0, -1);
+  }
+  return tok;
+}
+
+/** True if `resolved` is the sandbox directory itself or nested within it. */
+function isWithinSandbox(resolved: string, sandboxDir: string): boolean {
+  return resolved === sandboxDir || resolved.startsWith(sandboxDir + "/");
+}
+
+/**
+ * Detect path tokens that reference locations outside the sandbox.
+ *
+ * Every whitespace-separated token is canonicalized uniformly — quotes and
+ * redirect operators stripped, then absolute paths resolved and relative
+ * traversal (`..`) resolved against the sandbox — and asserted to stay inside
+ * `sandboxDir`. This replaces the previous case-by-case checks (which only
+ * covered bare-absolute and redirect-target tokens and were defeated by a
+ * leading quote or a bare relative `..`).
  *
  * Returns an error message if unsafe, or `null` if safe.
  */
@@ -352,47 +444,17 @@ function detectUnsafePaths(command: string, sandboxDir: string): string | null {
     return "Command references home directory via ~ — outside the sandbox";
   }
 
-  // Extract all path-like tokens from the command.
-  // Tokens after redirection operators (>, >>) are especially dangerous.
-  const tokens = command.split(/\s+/);
-  for (const token of tokens) {
-    // Absolute paths: must be inside sandboxDir
-    if (token.startsWith("/")) {
-      const resolved = resolve(token);
-      if (!resolved.startsWith(sandboxDir)) {
+  for (const raw of command.split(/\s+/)) {
+    const token = unwrapToken(raw);
+    if (!token) continue;
+
+    if (isAbsolute(token)) {
+      if (!isWithinSandbox(resolve(token), sandboxDir)) {
         return `Absolute path "${token}" is outside the sandbox (${sandboxDir})`;
       }
-    }
-
-    // Redirect targets after > or >>
-    if (token.startsWith(">")) {
-      const target = token.replace(/^>>?/, "").trim();
-      if (target && target.startsWith("/")) {
-        const resolved = resolve(target);
-        if (!resolved.startsWith(sandboxDir)) {
-          return `Redirect target "${target}" is outside the sandbox`;
-        }
-      }
-    }
-  }
-
-  // Also check for redirect operator followed by a path (as separate tokens)
-  for (let i = 0; i < tokens.length; i++) {
-    if (tokens[i] === ">" || tokens[i] === ">>") {
-      const target = tokens[i + 1];
-      if (target) {
-        if (target.startsWith("/")) {
-          const resolved = resolve(target);
-          if (!resolved.startsWith(sandboxDir)) {
-            return `Redirect target "${target}" is outside the sandbox`;
-          }
-        }
-        if (target.includes("..")) {
-          const resolved = resolve(sandboxDir, target);
-          if (!resolved.startsWith(sandboxDir)) {
-            return `Redirect target "${target}" escapes outside the sandbox`;
-          }
-        }
+    } else if (token.includes("..")) {
+      if (!isWithinSandbox(resolve(sandboxDir, token), sandboxDir)) {
+        return `Relative path "${token}" escapes outside the sandbox`;
       }
     }
   }
@@ -517,6 +579,17 @@ export interface ShellExecuteConfig {
   /** If true, allows `cwd` outside /tmp. Use with extreme caution. */
   readonly allowUnsafeCwd?: boolean;
   /**
+   * Execution substrate (F1b). `"host"` (default) runs the command in the
+   * process sandbox with the input filters. `"docker"` opts into running the
+   * command inside a hardened, throwaway container (no network, read-only
+   * rootfs, ephemeral tmpfs workdir, cap-drop ALL, non-root, seccomp) for added
+   * isolation — an escape is confined to the container and cannot touch the
+   * host. Requires Docker; if unavailable the call fails closed rather than
+   * silently downgrading. Files are ephemeral (no host directory is mounted).
+   * Also settable globally via `RA_SANDBOX=docker`.
+   */
+  readonly sandbox?: "host" | "docker";
+  /**
    * Audit callback invoked for every command attempt (allowed or rejected).
    * Use for OWASP-compliant security logging.
    */
@@ -636,6 +709,16 @@ export function shellExecuteHandler(
         maxOutputChars,
         ...dockerEscalation.config,
       })
+    : null;
+
+  // ── Opt-in Docker sandbox (F1b) ──
+  // When enabled (config.sandbox: "docker" or RA_SANDBOX=docker), the validated
+  // command runs inside a hardened throwaway container instead of on the host.
+  const useDockerSandbox =
+    (config?.sandbox ??
+      (process.env.RA_SANDBOX === "docker" ? "docker" : "host")) === "docker";
+  const shellDockerSandbox = useDockerSandbox
+    ? makeDockerSandbox({ timeoutMs, maxOutputChars, ...dockerEscalation?.config })
     : null;
 
   /** Map of command names to Docker sandbox RunnerLanguage. */
@@ -768,6 +851,16 @@ export function shellExecuteHandler(
           };
         }
 
+        // ── 3b. Shell expansion / substitution check ──
+        const expansionIssue = detectShellExpansion(command);
+        if (expansionIssue !== null) {
+          audit({ command, allowed: false, reason: "shell-expansion" });
+          return {
+            executed: false,
+            error: `Command blocked by security policy: ${expansionIssue}`,
+          };
+        }
+
         // ── 4. Path safety check ──
         const pathIssue = detectUnsafePaths(command, sandboxDir);
         if (pathIssue) {
@@ -775,6 +868,39 @@ export function shellExecuteHandler(
           return {
             executed: false,
             error: `${pathIssue} — outside the sandbox`,
+          };
+        }
+
+        // ── 4a. Opt-in Docker sandbox (F1b) ──
+        // The command passed every input filter above; now run it inside a
+        // hardened, throwaway container. Fails closed if Docker is unavailable.
+        if (shellDockerSandbox) {
+          audit({ command, allowed: true, reason: "docker-sandbox" });
+          const dockerResult = await Effect.runPromise(
+            shellDockerSandbox.executeShell(command).pipe(
+              Effect.catchAll((err) =>
+                Effect.succeed({
+                  output: "",
+                  stderr: err.message,
+                  exitCode: 1,
+                  durationMs: 0,
+                  truncated: false,
+                  image: "unavailable",
+                }),
+              ),
+            ),
+          );
+          return {
+            executed: dockerResult.exitCode === 0,
+            output: dockerResult.output || "(no output)",
+            stderr: dockerResult.stderr,
+            exitCode: dockerResult.exitCode,
+            truncated: dockerResult.truncated,
+            dockerSandboxed: true,
+            image: dockerResult.image,
+            ...(dockerResult.exitCode !== 0
+              ? { error: dockerResult.stderr || `Process exited with code ${dockerResult.exitCode}` }
+              : {}),
           };
         }
 

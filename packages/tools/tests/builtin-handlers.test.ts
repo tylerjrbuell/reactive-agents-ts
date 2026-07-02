@@ -57,10 +57,14 @@ beforeAll(() => {
     },
   });
   fixtureBaseUrl = `http://localhost:${httpFixture.port}`;
+  // The fixture is on loopback; the F6 egress guard blocks loopback by default,
+  // so opt in for these local-fixture tests (the opt-out this env var provides).
+  process.env.RA_HTTP_ALLOW_PRIVATE = "1";
 });
 
 afterAll(() => {
   httpFixture?.stop();
+  delete process.env.RA_HTTP_ALLOW_PRIVATE;
 });
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -95,6 +99,34 @@ describe("httpGetHandler — error cases", () => {
     expect(typed.status).toBe(200);
     // Body should be a string (text), not parsed JSON
     expect(typeof typed.body).toBe("string");
+  });
+
+  // ── F6: SSRF egress guard (default, no opt-in) ──────────────────────
+  it("blocks the cloud metadata endpoint by default (F6)", async () => {
+    const priorOptIn = process.env.RA_HTTP_ALLOW_PRIVATE;
+    delete process.env.RA_HTTP_ALLOW_PRIVATE;
+    try {
+      const result = await Effect.runPromise(
+        httpGetHandler({ url: "http://169.254.169.254/latest/meta-data/" }).pipe(Effect.flip),
+      );
+      expect(result).toBeInstanceOf(ToolExecutionError);
+      expect(result.toolName).toBe("http-get");
+    } finally {
+      if (priorOptIn !== undefined) process.env.RA_HTTP_ALLOW_PRIVATE = priorOptIn;
+    }
+  });
+
+  it("blocks a loopback target by default (F6)", async () => {
+    const priorOptIn = process.env.RA_HTTP_ALLOW_PRIVATE;
+    delete process.env.RA_HTTP_ALLOW_PRIVATE;
+    try {
+      const result = await Effect.runPromise(
+        httpGetHandler({ url: "http://127.0.0.1:9/" }).pipe(Effect.flip),
+      );
+      expect(result).toBeInstanceOf(ToolExecutionError);
+    } finally {
+      if (priorOptIn !== undefined) process.env.RA_HTTP_ALLOW_PRIVATE = priorOptIn;
+    }
   });
 });
 

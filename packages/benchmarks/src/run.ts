@@ -15,7 +15,7 @@ import { recitationAblationSession } from "./sessions/recitation-ablation.js"
 import { clusterAGateSession } from "./sessions/cluster-a-gate.js"
 import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
-import { publicCompetitorQwenSession, publicCompetitorCogitoSession } from "./sessions/public-competitor-bench.js"
+import { publicCompetitorQwenSession, publicCompetitorCogitoSession, publicCompetitorSmokeSession } from "./sessions/public-competitor-bench.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
 import type { BenchmarkSession, SessionReport } from "./types.js"
 
@@ -81,13 +81,18 @@ function printSessionSummary(report: SessionReport): void {
       console.log("  " + "─".repeat(60))
 
       for (const result of ablation.filter(a => a.modelVariantId === model)) {
+        // Header says "RA Full" — pull the ra-full variant specifically, not
+        // bestVariantId (whichever variant scored highest accuracy, which with
+        // >2 variants is often a competitor, not RA). Using bestVariantId here
+        // desynced this column from `harnessLift` (ra-full - bare-llm), producing
+        // nonsensical rows like a 75%->95% task showing as "-75%" lift.
         const base = result.variants.find(v => v.variantId === result.baselineVariantId)
-        const best = result.variants.find(v => v.variantId === result.bestVariantId)
+        const full = result.variants.find(v => v.variantId === "ra-full")
         const baseScore = base?.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
-        const bestScore = best?.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
+        const fullScore = full?.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
         const lift = result.harnessLift
         const liftStr = lift > 0 ? `+${(lift * 100).toFixed(0)}%` : `${(lift * 100).toFixed(0)}%`
-        console.log(`  ${result.taskName.slice(0, 29).padEnd(30)} ${(baseScore * 100).toFixed(0).padStart(6)}%   ${(bestScore * 100).toFixed(0).padStart(6)}%   ${liftStr}`)
+        console.log(`  ${result.taskName.slice(0, 29).padEnd(30)} ${(baseScore * 100).toFixed(0).padStart(6)}%   ${(fullScore * 100).toFixed(0).padStart(6)}%   ${liftStr}`)
       }
     } else {
       // Single-variant session: emit accuracy + tokens + duration per task so
@@ -133,6 +138,7 @@ const SESSIONS: Record<string, BenchmarkSession> = {
   "thinking-ablation":     thinkingAblationSession(),
   "public-competitor-qwen3-14b": publicCompetitorQwenSession,
   "public-competitor-cogito-8b": publicCompetitorCogitoSession,
+  "public-competitor-smoke": publicCompetitorSmokeSession,
 }
 
 export interface CliArgs {

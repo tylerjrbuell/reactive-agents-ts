@@ -558,26 +558,28 @@ describe("shell-execute tool", () => {
     });
   });
 
-  // ── Environment isolation ───────────────────────────────────────────
+  // ── Environment isolation (F1a: shell expansion is rejected outright) ──
   describe("environment isolation", () => {
-    test("strips dangerous environment variables", async () => {
+    // As of the F1a security hardening, shell-execute rejects all shell
+    // variable/command expansion structurally rather than relying on a
+    // confined-but-still-expanded environment. `$HOME`/`$PATH` never reach a
+    // shell, so real-host values cannot leak via expansion.
+    test("rejects $VAR expansion instead of confining it ($HOME)", async () => {
       const handler = shellExecuteHandler();
       const result = (await Effect.runPromise(
         handler({ command: "echo $HOME" }),
-      )) as { output: string };
-      // HOME should be empty or unset in the sanitized env
-      // (the shell may still output a newline, but not the real home dir)
-      expect(result.output.trim()).not.toContain("/home/");
+      )) as { executed: boolean; error?: string };
+      expect(result.executed).toBe(false);
+      expect(result.error ?? "").toContain("expansion");
     });
 
-    test("PATH is restricted to standard system paths", async () => {
+    test("rejects $PATH expansion", async () => {
       const handler = shellExecuteHandler();
       const result = (await Effect.runPromise(
         handler({ command: "echo $PATH" }),
-      )) as { output: string };
-      const path = result.output.trim();
-      // Should contain standard paths, not user-local unusual paths
-      expect(path).toContain("/usr/bin");
+      )) as { executed: boolean; error?: string };
+      expect(result.executed).toBe(false);
+      expect(result.error ?? "").toContain("expansion");
     });
   });
 

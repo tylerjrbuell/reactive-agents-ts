@@ -72,6 +72,7 @@ import { runIterationGuards } from "./engine/phases/agent-loop/iteration-guards.
 import { runBootstrapSkillPostprocess } from "./engine/bootstrap/skill-postprocess.js";
 import { runPreLoopDispatch } from "./engine/phases/agent-loop/setup/pre-loop-dispatch.js";
 import { captureFinalSnapshot } from "./engine/finalize/snapshot-final.js";
+import { applyVerificationOutcome } from "./engine/finalize/verification-outcome.js";
 import { makeExecuteStream } from "./engine/execute-stream.js";
 import { prepareDebrief, finalizeDebriefBackground } from "./engine/finalize/debrief-synthesis.js";
 import { emitTelemetryRunReport } from "./engine/finalize/telemetry-emit.js";
@@ -1094,6 +1095,15 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // (post-answer), so the reported total reflects the ANSWER's cost.
                 // The forked debrief's tokens surface via debriefRich()/telemetry.
 
+                // F10: apply the verification onReject policy. When the gate
+                // flagged a still-rejected response for "block", the answer is
+                // withheld and the run fails; "annotate" prepends a warning.
+                const verificationOutcome = applyVerificationOutcome(
+                  sanitizedOutput,
+                  executionSucceeded,
+                  ctx.metadata as Record<string, unknown>,
+                );
+
                 const result: TaskResult & {
                   format?: string;
                   terminatedBy?: string;
@@ -1101,16 +1111,17 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 } = {
                   taskId: task.id as any,
                   agentId: task.agentId,
-                  output: sanitizedOutput,
-                  success: executionSucceeded,
-                  ...(!executionSucceeded
+                  output: verificationOutcome.output,
+                  success: verificationOutcome.success,
+                  ...(!verificationOutcome.success
                     ? {
                         error:
-                          outputForSuccess.length > 0
+                          verificationOutcome.error ??
+                          (outputForSuccess.length > 0
                             ? outputForSuccess
                             : rr?.status === "failed"
                               ? "Reasoning failed"
-                              : "Execution did not complete successfully",
+                              : "Execution did not complete successfully"),
                       }
                     : {}),
                   metadata: {

@@ -51,6 +51,13 @@ export interface DockerSandboxConfig {
    * When true (default), falls back to upstream if custom images are not built.
    */
   readonly preferHardenedImage: boolean;
+  /**
+   * Image used by {@link DockerSandbox.executeShell} for shell commands. Must
+   * contain a POSIX `sh` (the hardened `rax-sandbox:*` images have no shell, so
+   * they cannot be used here). Defaults to an Alpine-based image with BusyBox
+   * coreutils; supply a richer image if the agent needs git/jq/gh.
+   */
+  readonly shellImage: string;
 }
 
 export const DEFAULT_DOCKER_CONFIG: DockerSandboxConfig = {
@@ -64,6 +71,7 @@ export const DEFAULT_DOCKER_CONFIG: DockerSandboxConfig = {
   maxOutputChars: 4000,
   useSeccomp: true,
   preferHardenedImage: true,
+  shellImage: "oven/bun:1-alpine",
 };
 
 // ─── Prebuilt image names ───
@@ -157,6 +165,17 @@ export interface DockerSandbox {
   readonly execute: (
     code: string,
     language: RunnerLanguage,
+    config?: Partial<DockerSandboxConfig>,
+  ) => Effect.Effect<DockerExecResult, ToolExecutionError | ToolTimeoutError>;
+  /**
+   * Execute a shell command in a fully-isolated hardened container: a writable
+   * tmpfs working directory (`/work`, ephemeral — no host filesystem is
+   * mounted), no network, read-only rootfs, cap-drop ALL, non-root, seccomp. An
+   * escape (e.g. `cat <(id)`) is confined to the throwaway container and cannot
+   * touch the host. Output returns via stdout. Fails if Docker is unavailable.
+   */
+  readonly executeShell: (
+    command: string,
     config?: Partial<DockerSandboxConfig>,
   ) => Effect.Effect<DockerExecResult, ToolExecutionError | ToolTimeoutError>;
   /** Check if Docker is available. */
@@ -254,35 +273,144 @@ export const makeDockerSandbox = (
     } catch { /* best effort */ }
   };
 
+  /**
+   * Run one hardened container to completion. Shared by {@link execute} (code
+   * via an interpreter entrypoint) and {@link executeShell} (a mounted shell).
+   */
+  const runContainer = (
+    image: string,
+    cmd: readonly string[],
+    config: DockerSandboxConfig,
+    extra?: {
+      readonly mounts?: readonly string[];
+      readonly tmpfs?: readonly string[];
+      readonly workdir?: string;
+    },
+  ): Effect.Effect<DockerExecResult, ToolExecutionError | ToolTimeoutError> =>
+    Effect.gen(function* () {
+      const start = performance.now();
+
+      const dockerAvail = yield* Effect.tryPromise({
+        try: () => isDockerAvailable(),
+        catch: () =>
+          new ToolExecutionError({
+            message: "Failed to check Docker availability",
+            toolName: "docker-execute",
+            cause: undefined,
+          }),
+      });
+      if (!dockerAvail) {
+        return yield* Effect.fail(
+          new ToolExecutionError({
+            message:
+              "Docker is not available. Install Docker or disable the docker sandbox to run on the host.",
+            toolName: "docker-execute",
+            cause: undefined,
+          }),
+        );
+      }
+
+      const containerName = `rax-sandbox-${randomUUID().slice(0, 12)}`;
+      const seccompPath =
+        config.useSeccomp && existsSync(SECCOMP_PROFILE_PATH) ? SECCOMP_PROFILE_PATH : null;
+
+      const dockerArgs = [
+        "docker",
+        "run",
+        "--name", containerName,
+        ...(config.autoRemove ? ["--rm"] : []),
+        "--memory", `${config.memoryMb}m`,
+        "--memory-swap", `${config.memoryMb}m`, // No swap — hard OOM
+        "--cpus", String(config.cpuQuota),
+        "--network", config.network,
+        "--pids-limit", "50",
+        "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges",
+        ...(seccompPath ? ["--security-opt", `seccomp=${seccompPath}`] : []),
+        ...(config.readOnlyFs
+          ? ["--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m"]
+          : []),
+        ...(extra?.mounts ?? []).flatMap((m) => ["-v", m]),
+        ...(extra?.tmpfs ?? []).flatMap((t) => ["--tmpfs", t]),
+        ...(extra?.workdir ? ["-w", extra.workdir] : []),
+        // Prevent container from writing to the host filesystem (non-root nobody).
+        "--user", "65534:65534",
+        image,
+        ...cmd,
+      ];
+
+      const result = yield* Effect.tryPromise({
+        try: async () => {
+          const proc = spawn(dockerArgs, { stdout: "pipe", stderr: "pipe" });
+
+          let timedOut = false;
+          const timeoutId = setTimeout(async () => {
+            timedOut = true;
+            await killContainer(containerName);
+            try { proc.kill(); } catch { /* noop */ }
+          }, config.timeoutMs);
+
+          const stdout = await new Response(proc.stdout).text();
+          const stderr = await new Response(proc.stderr).text();
+          const exitCode = await proc.exited;
+          clearTimeout(timeoutId);
+
+          const maxChars = config.maxOutputChars;
+          let outputTrimmed = stdout.trim();
+          let truncated = false;
+          if (outputTrimmed.length > maxChars) {
+            outputTrimmed = outputTrimmed.slice(0, maxChars);
+            truncated = true;
+          }
+          let stderrTrimmed = stderr.trim();
+          if (stderrTrimmed.length > maxChars) {
+            stderrTrimmed = stderrTrimmed.slice(0, maxChars);
+          }
+
+          return {
+            output: outputTrimmed,
+            stderr: stderrTrimmed,
+            exitCode: exitCode ?? 1,
+            durationMs: performance.now() - start,
+            containerId: containerName,
+            truncated,
+            image,
+            timedOut,
+          };
+        },
+        catch: (e) =>
+          new ToolExecutionError({
+            message: `Docker execution failed: ${e instanceof Error ? e.message : String(e)}`,
+            toolName: "docker-execute",
+            cause: e,
+          }),
+      });
+
+      if (result.timedOut || result.durationMs >= config.timeoutMs) {
+        return yield* Effect.fail(
+          new ToolTimeoutError({
+            message: `Docker execution timed out after ${config.timeoutMs}ms`,
+            toolName: "docker-execute",
+            timeoutMs: config.timeoutMs,
+          }),
+        );
+      }
+
+      return {
+        output: result.output,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+        durationMs: result.durationMs,
+        containerId: result.containerId,
+        truncated: result.truncated,
+        image: result.image,
+      };
+    });
+
   return {
     execute: (code, language, configOverrides) =>
       Effect.gen(function* () {
         const config = { ...defaults, ...configOverrides };
-        const start = performance.now();
-
-        // ── 1. Docker availability ──
-        const dockerAvail = yield* Effect.tryPromise({
-          try: () => isDockerAvailable(),
-          catch: () =>
-            new ToolExecutionError({
-              message: "Failed to check Docker availability",
-              toolName: "docker-execute",
-              cause: undefined,
-            }),
-        });
-
-        if (!dockerAvail) {
-          return yield* Effect.fail(
-            new ToolExecutionError({
-              message:
-                "Docker is not available. Install Docker or use the process-based code-execute tool instead.",
-              toolName: "docker-execute",
-              cause: undefined,
-            }),
-          );
-        }
-
-        // ── 2. Resolve image (hardened or fallback) ──
         const image = yield* Effect.tryPromise({
           try: () => resolveImage(language, config.preferHardenedImage, config.image),
           catch: () =>
@@ -292,118 +420,19 @@ export const makeDockerSandbox = (
               cause: undefined,
             }),
         });
-
-        const runCmd = buildRunCommand(code, language, image);
-
-        // ── 3. Generate unique container name for lifecycle management ──
-        const containerName = `rax-sandbox-${randomUUID().slice(0, 12)}`;
-
-        // ── 4. Build docker run command with full security hardening ──
-        const seccompPath = config.useSeccomp && existsSync(SECCOMP_PROFILE_PATH)
-          ? SECCOMP_PROFILE_PATH
-          : null;
-
-        const dockerArgs = [
-          "docker",
-          "run",
-          "--name", containerName,
-          ...(config.autoRemove ? ["--rm"] : []),
-          "--memory", `${config.memoryMb}m`,
-          "--memory-swap", `${config.memoryMb}m`, // No swap — hard OOM
-          "--cpus", String(config.cpuQuota),
-          "--network", config.network,
-          "--pids-limit", "50",
-          "--cap-drop", "ALL",
-          "--security-opt", "no-new-privileges",
-          ...(seccompPath
-            ? ["--security-opt", `seccomp=${seccompPath}`]
-            : []),
-          ...(config.readOnlyFs
-            ? ["--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m"]
-            : []),
-          // Prevent container from writing to host filesystem
-          "--user", "65534:65534",
-          image,
-          ...runCmd,
-        ];
-
-        // ── 5. Execute with proper timeout via docker kill ──
-        const result = yield* Effect.tryPromise({
-          try: async () => {
-            // Pass through host env for Docker CLI (socket, context, config).
-            // Container env is isolated by Docker — this only affects the `docker` command itself.
-            const proc = spawn(dockerArgs, {
-              stdout: "pipe",
-              stderr: "pipe",
-            });
-
-            let timedOut = false;
-            const timeoutId = setTimeout(async () => {
-              timedOut = true;
-              // Kill the container by name — more reliable than killing the docker CLI process
-              await killContainer(containerName);
-              try { proc.kill(); } catch { /* noop */ }
-            }, config.timeoutMs);
-
-            const stdout = await new Response(proc.stdout).text();
-            const stderr = await new Response(proc.stderr).text();
-            const exitCode = await proc.exited;
-
-            clearTimeout(timeoutId);
-
-            // ── 6. Truncate output ──
-            const maxChars = config.maxOutputChars;
-            let outputTrimmed = stdout.trim();
-            let truncated = false;
-            if (outputTrimmed.length > maxChars) {
-              outputTrimmed = outputTrimmed.slice(0, maxChars);
-              truncated = true;
-            }
-
-            let stderrTrimmed = stderr.trim();
-            if (stderrTrimmed.length > maxChars) {
-              stderrTrimmed = stderrTrimmed.slice(0, maxChars);
-            }
-
-            return {
-              output: outputTrimmed,
-              stderr: stderrTrimmed,
-              exitCode: exitCode ?? 1,
-              durationMs: performance.now() - start,
-              containerId: containerName,
-              truncated,
-              image,
-              timedOut,
-            };
-          },
-          catch: (e) =>
-            new ToolExecutionError({
-              message: `Docker execution failed: ${e instanceof Error ? e.message : String(e)}`,
-              toolName: "docker-execute",
-              cause: e,
-            }),
-        });
-
-        if (result.timedOut || result.durationMs >= config.timeoutMs) {
-          return yield* Effect.fail(
-            new ToolTimeoutError({
-              message: `Docker execution timed out after ${config.timeoutMs}ms`,
-              toolName: "docker-execute",
-              timeoutMs: config.timeoutMs,
-            }),
-          );
-        }
-
-        return {
-          output: result.output,
-          stderr: result.stderr,
-          exitCode: result.exitCode,
-          durationMs: result.durationMs,
-          containerId: result.containerId,
-          truncated: result.truncated,
-          image: result.image,
-        };
+        return yield* runContainer(image, buildRunCommand(code, language, image), config);
       }),
+
+    executeShell: (command, configOverrides) => {
+      const config = { ...defaults, ...configOverrides };
+      // Ephemeral, writable tmpfs workdir (mode 1777 so the non-root user can
+      // write); no host filesystem is mounted, so this works on every Docker
+      // setup (incl. Docker Desktop path-sharing) and is maximally isolated.
+      return runContainer(config.shellImage, ["sh", "-c", command], config, {
+        tmpfs: ["/work:rw,size=64m,mode=1777"],
+        workdir: "/work",
+      });
+    },
 
     available: () =>
       Effect.tryPromise({

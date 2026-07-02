@@ -30,6 +30,7 @@
     "@opentelemetry/exporter-trace-otlp-http": "^0.57.2",
     "@opentelemetry/resources": "^2.6.0",
     "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/observability": "workspace:*",
     "effect": "^3.10.0"
   },
   "devDependencies": {

@@ -34,8 +34,26 @@ const SHARED = {
   runs: 3,
   traceDir: "benchmark-traces",
   concurrency: 1,
-  timeoutMs: 240_000,
+  // 240s was razor-thin against observed legit durations (up to 228-231s on
+  // multi-step plan-execute/reflect and manual tool loops) — a first run on
+  // this box measured 13/90 cells (14%, worst on ra-full at 5/15) as hard
+  // 0-token timeouts, roughly proportional across every tool-using variant
+  // (not RA-specific). 420s gives real headroom above the observed max.
+  timeoutMs: 420_000,
 } satisfies Partial<BenchmarkSession>
+
+// Run order: cogito:8b first (faster — 8B, smaller than qwen3:14b), then the
+// qwen3 family. Smaller/faster models let us validate the harness end-to-end
+// (and catch regressions like the timeout contamination found on the first
+// qwen3:14b attempt) before committing hours of GPU time to bigger models.
+export const publicCompetitorCogitoSession: BenchmarkSession = {
+  ...SHARED,
+  id: "public-competitor-cogito-8b",
+  name: "Public Competitor Benchmark — cogito:8b",
+  models: [
+    { id: "cogito-8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
+  ],
+}
 
 export const publicCompetitorQwenSession: BenchmarkSession = {
   ...SHARED,
@@ -46,10 +64,16 @@ export const publicCompetitorQwenSession: BenchmarkSession = {
   ],
 }
 
-export const publicCompetitorCogitoSession: BenchmarkSession = {
+// Cheap end-to-end smoke: 1 task, 1 run, all 6 variants (~6 LLM calls instead
+// of 90). Run before any full session to catch wiring/timeout/display
+// regressions without burning a multi-hour GPU run. Uses cogito:8b — the
+// fastest bench model — so the smoke itself stays cheap.
+export const publicCompetitorSmokeSession: BenchmarkSession = {
   ...SHARED,
-  id: "public-competitor-cogito-8b",
-  name: "Public Competitor Benchmark — cogito:8b",
+  id: "public-competitor-smoke",
+  name: "Public Competitor Benchmark — smoke (cogito:8b, rw-2, 1 run)",
+  taskIds: ["rw-2"],
+  runs: 1,
   models: [
     { id: "cogito-8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
   ],

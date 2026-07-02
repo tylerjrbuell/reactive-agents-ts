@@ -15,6 +15,13 @@ export { spawn } from "./spawn.js";
 export { writeFile, readFile } from "./fs.js";
 export { hash } from "./hash.js";
 export { serve } from "./serve.js";
+export { secureServe, type SecureServeOptions } from "./secure-serve.js";
+export {
+  assertPublicUrl,
+  isPrivateOrReservedIp,
+  isMetadataOrLinkLocalIp,
+  type AssertPublicUrlOptions,
+} from "./assert-public-url.js";
 export { glob } from "./glob.js";
 
 export type {

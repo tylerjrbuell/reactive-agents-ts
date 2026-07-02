@@ -42,7 +42,7 @@ export { makeToolRegistry } from "./registry/tool-registry.js";
 export type { RegisteredTool } from "./registry/tool-registry.js";
 
 // ─── MCP Client ───
-export { makeMCPClient, cleanupMcpTransport } from "./mcp/mcp-client.js";
+export { makeMCPClient, cleanupMcpTransport, buildMcpSubprocessEnv } from "./mcp/mcp-client.js";
 
 // ─── Function Calling ───
 export {

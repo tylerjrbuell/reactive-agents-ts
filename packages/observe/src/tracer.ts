@@ -1,6 +1,7 @@
 import { Effect, Layer } from "effect";
 import * as otelApi from "@opentelemetry/api";
 import { EventBus } from "@reactive-agents/core";
+import { redactSecrets, defaultRedactors } from "@reactive-agents/observability";
 
 // ─── OpenInference semantic attribute keys ───
 
@@ -174,14 +175,18 @@ export const OpenInferenceTracerLayer = Layer.scopedDiscard(
               "tool.duration_ms": event.durationMs,
               "tool.success": event.success,
             });
+            // F8: redact secrets before tool args/results are exported to OTLP.
             if (event.args !== undefined) {
               span.setAttribute(
                 OI.TOOL_PARAMETERS,
-                JSON.stringify(event.args),
+                redactSecrets(JSON.stringify(event.args), defaultRedactors),
               );
             }
             if (event.result !== undefined) {
-              span.setAttribute(OI.TOOL_OUTPUT, JSON.stringify(event.result));
+              span.setAttribute(
+                OI.TOOL_OUTPUT,
+                redactSecrets(JSON.stringify(event.result), defaultRedactors),
+              );
             }
             if (!event.success && event.error) {
               span.setStatus({

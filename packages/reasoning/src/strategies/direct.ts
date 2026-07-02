@@ -17,6 +17,7 @@
 import { Effect } from "effect";
 import type { ReasoningResult } from "../types/index.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
+import { fenceRecalledMemory } from "./memory-fence.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -109,9 +110,10 @@ export const executeDirect = (
     const requestedMax = input.maxIterations ?? 1;
     const maxIter = Math.min(Math.max(requestedMax, 1), 3);
 
-    // Map memoryContext into priorContext for the kernel
+    // Map memoryContext into priorContext for the kernel, fenced as untrusted
+    // data so stored/recalled content cannot act as injected instructions (F3).
     const priorContext = input.memoryContext?.trim()
-      ? `Relevant Memory:\n${input.memoryContext}`
+      ? fenceRecalledMemory(input.memoryContext)
       : undefined;
 
     // Resolve tool schemas — prefer full schemas, fall back to name-only stubs

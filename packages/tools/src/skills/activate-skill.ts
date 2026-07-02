@@ -23,8 +23,33 @@ export const activateSkillTool: ToolDefinition = {
   source: "function",
 };
 
+/** Escape XML attribute values so untrusted name/source cannot break out of the tag. */
+function escapeXmlAttr(value: string): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Neutralize skill-wrapper boundary tags inside untrusted body text so an
+ * `instructions` payload containing `</skill_content>` (or `<skill_content>`,
+ * `<skill_resources>`) cannot prematurely close the wrapper and inject
+ * free-form instructions. Only the tag-opening `<` is escaped, preserving
+ * legitimate markdown/code content elsewhere in the body.
+ */
+function neutralizeSkillTags(body: string): string {
+  return body.replace(/<(\/?)(skill_content|skill_resources)\b/gi, "&lt;$1$2");
+}
+
 /**
  * Build the <skill_content> XML wrapper for an activated skill.
+ *
+ * Skill fields are treated as untrusted: `name`/`source` are attribute-escaped
+ * and the `instructions` body has its wrapper-boundary tags neutralized, so a
+ * poisoned skill (e.g. from skill-evolution ingesting injected tool output)
+ * cannot break out of the envelope (F9).
  */
 export function buildSkillContentXml(params: {
   name: string;
@@ -34,9 +59,11 @@ export function buildSkillContentXml(params: {
   resources?: { scripts: string[]; references: string[] };
 }): string {
   const lines: string[] = [];
-  lines.push(`<skill_content name="${params.name}" version="${params.version}" source="${params.source}">`);
+  lines.push(
+    `<skill_content name="${escapeXmlAttr(params.name)}" version="${params.version}" source="${escapeXmlAttr(params.source)}">`,
+  );
   lines.push("");
-  lines.push(params.instructions);
+  lines.push(neutralizeSkillTags(params.instructions));
   lines.push("");
   if (params.resources && (params.resources.scripts.length > 0 || params.resources.references.length > 0)) {
     lines.push(`<skill_resources>`);

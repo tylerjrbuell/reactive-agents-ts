@@ -8,6 +8,62 @@ import type { SpawnResult } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
+import { makeDockerSandbox } from "../execution/docker-sandbox.js";
+
+/** Wrap user code so `return` works and CJS `require()` is available in ESM. */
+function wrapCode(rawCode: string): string {
+  return `
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const __fn = async () => { ${rawCode} };
+__fn()
+  .then((r) => console.log(JSON.stringify({ ok: true, result: r ?? null })))
+  .catch((e) => console.log(JSON.stringify({ ok: false, error: String(e) })));
+`;
+}
+
+/** Parse the wrapper's stdout sentinel into the code-execute result shape. */
+function parseCodeResult(stdout: string, stderr: string, exitCode: number): unknown {
+  const errorOutput = stderr.trim();
+  if (exitCode !== 0) {
+    const cleanError = errorOutput.replace(/\S*code-exec-[^\s]*/g, "<code>");
+    return {
+      executed: false,
+      error: cleanError || `Process exited with code ${exitCode}`,
+      output: "(no output)",
+      exitCode,
+    };
+  }
+  const lines = stdout.trimEnd().split("\n");
+  const sentinelLine = lines[lines.length - 1] ?? "";
+  const output = lines.slice(0, -1).join("\n").trim();
+
+  let sentinel: { ok: boolean; result?: unknown; error?: string };
+  try {
+    sentinel = JSON.parse(sentinelLine) as typeof sentinel;
+  } catch {
+    return {
+      executed: false,
+      error: `Unexpected output format (missing sentinel). stderr: ${errorOutput || "(none)"}`,
+      output: output || "(no output)",
+      exitCode,
+    };
+  }
+  if (!sentinel.ok) {
+    return {
+      executed: false,
+      error: sentinel.error ?? "Unknown runtime error",
+      output: output || "(no output)",
+      exitCode,
+    };
+  }
+  return {
+    executed: true,
+    result: sentinel.result ?? null,
+    output: output || "(no output)",
+    exitCode,
+  };
+}
 
 export const codeExecuteTool: ToolDefinition = {
   name: "code-execute",
@@ -87,14 +143,28 @@ export const codeExecuteHandler = (
       // Wrap user code in an async IIFE so `return` works, and inject
       // `createRequire` so CJS `require()` calls succeed in ESM context.
       // The wrapper always prints a JSON sentinel as the last stdout line.
-      const wrapped = `
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
-const __fn = async () => { ${rawCode} };
-__fn()
-  .then((r) => console.log(JSON.stringify({ ok: true, result: r ?? null })))
-  .catch((e) => console.log(JSON.stringify({ ok: false, error: String(e) })));
-`;
+      const wrapped = wrapCode(rawCode);
+
+      // ── Opt-in Docker sandbox (F1b) ──
+      // RA_SANDBOX=docker runs the code inside a hardened throwaway container
+      // (no network, non-root, read-only rootfs) instead of a host subprocess.
+      if (process.env.RA_SANDBOX === "docker") {
+        const dockerResult = await Effect.runPromise(
+          makeDockerSandbox({ timeoutMs }).execute(wrapped, "bun").pipe(
+            Effect.catchAll((err) =>
+              Effect.succeed({
+                output: "",
+                stderr: err.message,
+                exitCode: 1,
+                durationMs: 0,
+                truncated: false,
+                image: "unavailable",
+              }),
+            ),
+          ),
+        );
+        return parseCodeResult(dockerResult.output, dockerResult.stderr, dockerResult.exitCode);
+      }
 
       const tmpFile = join(tmpdir(), `code-exec-${Date.now()}-${Math.random().toString(36).slice(2)}.ts`);
       try {
@@ -141,54 +211,7 @@ __fn()
       clearTimeout(timeoutId);
       try { unlinkSync(tmpFile); } catch { /* best-effort cleanup */ }
 
-      const errorOutput = stderrText.trim();
-
-      if (exitCode !== 0) {
-        // Strip Bun's file path from the error output to avoid leaking temp paths
-        const cleanError = errorOutput.replace(/\S*code-exec-[^\s]*/g, "<code>");
-        return {
-          executed: false,
-          error: cleanError || `Process exited with code ${exitCode}`,
-          output: "(no output)",
-          exitCode,
-        };
-      }
-
-      // The wrapper always emits a JSON sentinel as the last line of stdout.
-      // Any lines before it are user console.log output.
-      const lines = stdoutText.trimEnd().split("\n");
-      const sentinelLine = lines[lines.length - 1] ?? "";
-      const userOutputLines = lines.slice(0, -1);
-      const output = userOutputLines.join("\n").trim();
-
-      let sentinel: { ok: boolean; result?: unknown; error?: string };
-      try {
-        sentinel = JSON.parse(sentinelLine) as typeof sentinel;
-      } catch {
-        // Shouldn't happen unless the process was killed mid-write
-        return {
-          executed: false,
-          error: `Unexpected output format (missing sentinel). stderr: ${errorOutput || "(none)"}`,
-          output: output || "(no output)",
-          exitCode,
-        };
-      }
-
-      if (!sentinel.ok) {
-        return {
-          executed: false,
-          error: sentinel.error ?? "Unknown runtime error",
-          output: output || "(no output)",
-          exitCode,
-        };
-      }
-
-      return {
-        executed: true,
-        result: sentinel.result ?? null,
-        output: output || "(no output)",
-        exitCode,
-      };
+      return parseCodeResult(stdoutText, stderrText, exitCode);
     },
     catch: (e) =>
       new ToolExecutionError({

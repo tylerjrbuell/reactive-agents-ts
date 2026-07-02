@@ -40,4 +40,37 @@ describe(".withApprovalPolicy", () => {
     expect(agent).toBeDefined();
     await agent.dispose();
   });
+
+  // F2: the auto-feed runs at config assembly when a policy is present, with the
+  // terminal shell tool enabled and a custom requiresApproval tool registered.
+  it("assembles with auto-fed requiresApproval tools (terminal + custom)", async () => {
+    const { Effect } = await import("effect");
+    const agent = await ReactiveAgents.create()
+      .withName("hitl-autofeed")
+      .withTestScenario([{ text: "ok" }])
+      .withReasoning()
+      .withTools({
+        terminal: true,
+        tools: [
+          {
+            definition: {
+              name: "danger-tool",
+              description: "does something risky",
+              parameters: [],
+              returnType: "string",
+              category: "custom",
+              riskLevel: "high",
+              timeoutMs: 1000,
+              requiresApproval: true,
+              source: "function",
+            },
+            handler: () => Effect.succeed("ok"),
+          },
+        ],
+      })
+      .withApprovalPolicy({ tools: [], mode: "block" })
+      .build();
+    expect(agent).toBeDefined();
+    await agent.dispose();
+  });
 });

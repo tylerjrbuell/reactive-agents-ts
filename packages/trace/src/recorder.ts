@@ -4,6 +4,7 @@ import { mkdir, appendFile } from "node:fs/promises"
 import { join } from "node:path"
 import type { TraceEvent } from "./events.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { applyRedactors, defaultRedactors } from "@reactive-agents/observability";
 
 // ─── Service Interface ───
 
@@ -75,7 +76,10 @@ export function TraceRecorderServiceLive(opts: TraceRecorderOptions): Layer.Laye
             catch: (e) => new Error(String(e)),
           }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:75", tag: errorTag(err) })))
           const path = join(dir, `${runId}.jsonl`)
-          const body = events.map((e) => JSON.stringify(e)).join("\n") + "\n"
+          const rawBody = events.map((e) => JSON.stringify(e)).join("\n") + "\n"
+          // F8: redact secrets (API keys, bearer tokens) before they reach disk.
+          // The in-memory snapshot (same-process debugging) keeps full fidelity.
+          const body = yield* applyRedactors(rawBody, defaultRedactors)
           yield* Effect.tryPromise({
             try: () => appendFile(path, body),
             catch: (e) => new Error(String(e)),

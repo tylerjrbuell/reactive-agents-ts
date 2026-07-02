@@ -1,4 +1,5 @@
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import { secureServe } from "@reactive-agents/runtime-shim";
 import { banner, kv, success, fail, info, muted, box } from "../ui.js";
 
 const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
@@ -132,8 +133,13 @@ async function startServer(
   // Task store for tracking in-flight tasks
   const tasks = new Map<string, { id: string; status: { state: string; message?: string; timestamp: string }; result?: unknown }>();
 
-  const server = Bun.serve({
+  // Secure-by-default ingress (F4): binds loopback unless RA_SERVE_HOST is set,
+  // and refuses a non-loopback bind without RA_SERVE_TOKEN. With --with-tools a
+  // remote caller would otherwise reach host tools and drain the operator key.
+  const server = await secureServe({
     port,
+    hostname: process.env.RA_SERVE_HOST,
+    token: process.env.RA_SERVE_TOKEN,
     async fetch(req) {
       const url = new URL(req.url);
 

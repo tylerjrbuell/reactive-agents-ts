@@ -281,6 +281,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     maxIterations: options.maxIterations ?? 10,
     enableGuardrails: options.enableGuardrails ?? false,
     enableVerification: options.enableVerification ?? false,
+    verificationOnReject: options.verificationOnReject,
     enableCostTracking: options.enableCostTracking ?? false,
     enableAudit: options.enableAudit ?? false,
     enableKillSwitch: options.enableKillSwitch ?? false,

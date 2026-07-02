@@ -52,4 +52,10 @@ export const defaultRedactors: readonly Redactor[] = [
     pattern: /AIza[A-Za-z0-9\-_]{35}/g,
     replacement: "[redacted-google-api-key]",
   },
+  {
+    // Bearer tokens in Authorization headers / serialized tool args.
+    name: "bearer-token",
+    pattern: /Bearer\s+[A-Za-z0-9\-._~+/]{8,}=*/g,
+    replacement: "Bearer [redacted]",
+  },
 ];

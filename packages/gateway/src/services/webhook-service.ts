@@ -10,6 +10,17 @@ import { createGenericAdapter } from "../adapters/generic-adapter.js";
 interface RouteEntry {
   readonly adapter: WebhookAdapter;
   readonly secret?: string;
+  /** When true (default), a route with no secret is refused (fail-closed, F11). */
+  readonly requireSignature: boolean;
+}
+
+export interface RegisterAdapterOptions {
+  /**
+   * Require a verified signature. Defaults to true: a route registered without a
+   * secret is refused, so an unauthenticated webhook cannot impersonate a sender.
+   * Set false to explicitly allow a secretless route.
+   */
+  readonly requireSignature?: boolean;
 }
 
 // ─── Built-in Adapter Registry ───────────────────────────────────────────────
@@ -32,6 +43,7 @@ export class WebhookService extends Context.Tag("WebhookService")<
       path: string,
       adapter: WebhookAdapter,
       secret?: string,
+      options?: RegisterAdapterOptions,
     ) => Effect.Effect<void, never>;
   }
 >() {}
@@ -53,6 +65,7 @@ export const WebhookServiceLive = (configs?: readonly WebhookConfig[]) =>
             initial[cfg.path] = {
               adapter: factory(),
               secret: cfg.secret,
+              requireSignature: cfg.requireSignature ?? true,
             };
           }
         }
@@ -71,6 +84,18 @@ export const WebhookServiceLive = (configs?: readonly WebhookConfig[]) =>
                   message: `No adapter registered for path: ${path}`,
                   source: "unknown",
                   statusCode: 404,
+                }),
+              );
+            }
+
+            // Fail-closed (F11): a route that requires a signature but has no
+            // secret cannot be authenticated — refuse rather than accept any POST.
+            if (!route.secret && route.requireSignature) {
+              return yield* Effect.fail(
+                new WebhookValidationError({
+                  message: `Webhook route "${path}" has no secret configured and requireSignature is on — refusing unauthenticated request`,
+                  source: route.adapter.source,
+                  statusCode: 401,
                 }),
               );
             }
@@ -111,10 +136,15 @@ export const WebhookServiceLive = (configs?: readonly WebhookConfig[]) =>
           path: string,
           adapter: WebhookAdapter,
           secret?: string,
+          options?: RegisterAdapterOptions,
         ) =>
           Ref.update(routesRef, (routes) => ({
             ...routes,
-            [path]: { adapter, secret },
+            [path]: {
+              adapter,
+              secret,
+              requireSignature: options?.requireSignature ?? true,
+            },
           })),
       };
     }),

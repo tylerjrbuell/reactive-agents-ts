@@ -29,16 +29,25 @@ export interface Redactor {
 export const applyRedactors = (
   input: string,
   redactors: readonly Redactor[],
-): Effect.Effect<string> =>
-  Effect.sync(() => {
-    let output = input;
-    for (const r of redactors) {
-      if (r.pattern.test(output)) {
-        // Reset regex state for subsequent `.test` / `.replace` calls when
-        // the pattern has the global flag.
-        r.pattern.lastIndex = 0;
-        output = output.replace(r.pattern, r.replacement);
-      }
+): Effect.Effect<string> => Effect.sync(() => redactSecrets(input, redactors));
+
+/**
+ * Synchronous variant of {@link applyRedactors} for non-Effect call sites
+ * (e.g. OTel `span.setAttribute`, WebSocket payload serialization). Applies the
+ * redactors in order; later ones operate on earlier results.
+ */
+export const redactSecrets = (
+  input: string,
+  redactors: readonly Redactor[],
+): string => {
+  let output = input;
+  for (const r of redactors) {
+    if (r.pattern.test(output)) {
+      // Reset regex state for subsequent `.test` / `.replace` calls when
+      // the pattern has the global flag.
+      r.pattern.lastIndex = 0;
+      output = output.replace(r.pattern, r.replacement);
     }
-    return output;
-  });
+  }
+  return output;
+};
