@@ -64,6 +64,15 @@ export type { ReasoningSynthesisResolutionInput } from "./reasoning-synthesis-fi
 export { ReasoningOptionsJsonSchema } from "./reasoning-options-schema.js";
 export type { ReasoningOptionsEncoded } from "./reasoning-options-schema.js";
 
+// ─── Capability Manifest (dynamic surface for Cortex / any UI) ───
+export { getCapabilityManifest } from "./capability/manifest.js";
+export type {
+  CapabilityManifest,
+  StrategyDescriptor,
+  BuilderMethodDescriptor,
+  ConfigFieldDescriptor,
+} from "./capability/manifest.js";
+
 // ─── Builder (Primary Public DX) ───
 export {
   ReactiveAgents,
