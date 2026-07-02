@@ -5,11 +5,23 @@ import {
   type UiStreamEvent,
 } from "../protocol/events.js";
 
+/**
+ * Minimal fetch-like injection seam. Deliberately looser than `typeof fetch`:
+ * the global `fetch` is assignable to this, but a hand-written mock/custom
+ * transport need not carry runtime-specific extras (e.g. Bun's `preconnect`
+ * static property, which `typeof fetch` requires and which would otherwise
+ * force every consumer to cast).
+ */
+export type FetchLike = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
 export interface ConnectOptions {
   readonly endpoint: string;
   readonly body?: Record<string, unknown>;
   readonly attach?: { readonly runId: string; readonly cursor?: number };
-  readonly fetchImpl?: typeof fetch;
+  readonly fetchImpl?: FetchLike;
   readonly maxRetries?: number;
   readonly retryDelayMs?: number;
   readonly signal?: AbortSignal;

@@ -158,3 +158,23 @@ gets an entry here with production context. Format per entry:
   getPendingApprovalAt all do the same), so kept for consistency in v1.
 - **Expected (future):** a pooled/cached store handle reused across ops.
 - **Severity:** perf-debt (measurable under load; fine for v1 + tests).
+
+## GAP-10: `ConnectOptions.fetchImpl` typed as `typeof fetch` is over-strict (Task 14)
+- **Hit while:** Task 14 round-trip test — the runtime test injects a mock fetch and
+  annotates it as `typeof fetch` (per the brief). Under Bun's lib types, `typeof fetch`
+  carries a static `preconnect` property, so a plain arrow function is NOT assignable:
+  `tsc` errored `Property 'preconnect' is missing`. The DOM `fetch` type has no such
+  requirement, so this only bites Bun/Node-typed consumers of the injectable seam.
+- **Expected:** a dependency-injection fetch seam should accept any minimal
+  `(input, init?) => Promise<Response>` — the whole point is to substitute a mock.
+- **Actual:** relaxed `ConnectOptions.fetchImpl` from `typeof fetch` to a new exported
+  `FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>`.
+  Global `fetch` stays assignable (looser target), the `?? fetch` default still holds,
+  and consumers no longer need a cast. Additive/backward-compatible; `FetchLike` is now
+  exported from `@reactive-agents/ui-core`.
+- **Also noted (test-harness, not a framework gap):** the brief's mock wrappers do
+  `new Request("/api/agent")`, which the raw `Request` constructor rejects (relative
+  URL) — unlike a browser `fetch`, which resolves against the page origin. Fixed in the
+  test by resolving with `new URL(String(input), "http://ra.test")` (mirroring the
+  brief's own `attachFetch`). No source change needed.
+- **Severity:** DX/type-ergonomics (now fixed at source; no wire/protocol change).
