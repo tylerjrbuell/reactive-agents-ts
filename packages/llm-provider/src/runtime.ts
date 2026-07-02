@@ -64,7 +64,7 @@ export const createLLMProviderLayer = (
   provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "anthropic",
   testScenario?: TestTurn[],
   model?: string,
-  modelParams?: { thinking?: boolean; thinkingOptions?: import("./thinking/index.js").ThinkingOptions; temperature?: number; maxTokens?: number; numCtx?: number },
+  modelParams?: { thinking?: boolean; thinkingOptions?: import("./thinking/index.js").ThinkingOptions; temperature?: number; maxTokens?: number; numCtx?: number; ollamaTimeoutMs?: number },
   circuitBreaker?: Partial<CircuitBreakerConfig> | false,
   pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>,
 ) => {
@@ -82,6 +82,7 @@ export const createLLMProviderLayer = (
   if (modelParams?.temperature !== undefined) configOverrides.defaultTemperature = modelParams.temperature;
   if (modelParams?.maxTokens !== undefined) configOverrides.defaultMaxTokens = modelParams.maxTokens;
   if (modelParams?.numCtx !== undefined) configOverrides.explicitNumCtx = modelParams.numCtx;
+  if (modelParams?.ollamaTimeoutMs !== undefined) configOverrides.ollamaTimeoutMs = modelParams.ollamaTimeoutMs;
   if (pricingRegistry) configOverrides.pricingRegistry = pricingRegistry;
 
   const configLayer = Object.keys(configOverrides).length > 0

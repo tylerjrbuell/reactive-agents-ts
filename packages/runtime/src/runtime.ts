@@ -387,6 +387,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       temperature: options.temperature,
       maxTokens: options.maxTokens,
       numCtx: options.numCtx,
+      ollamaTimeoutMs: options.ollamaTimeoutMs,
     },
     options.circuitBreakerConfig,
     options.pricingRegistry,

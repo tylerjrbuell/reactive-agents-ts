@@ -126,6 +126,7 @@ export interface BuilderState {
   /** Opt-in durable run persistence. Absent = off (zero overhead, default). */
   _durableRuns: DurableRunsOptions | undefined;
   _executionTimeoutMs?: number;
+  _ollamaTimeoutMs?: number;
   _retryPolicy?: { maxRetries: number; backoffMs: number };
   _cacheTimeoutMs?: number;
 

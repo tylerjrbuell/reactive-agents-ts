@@ -35,6 +35,7 @@ mock.module("ollama", () => ({
 }));
 
 const { LocalProviderLive } = await import("../src/providers/local.js");
+const { createLLMProviderLayer } = await import("../src/runtime.js");
 const { mapProviderError, oneLineReason } = await import(
   "../src/provider-error.js"
 );
@@ -111,6 +112,57 @@ describe("local provider — configurable timeout (criteria 1 & 2)", () => {
       makeConfig({ ollamaTimeoutMs: 9_000 }),
     );
     expect(timeoutErrorOf(exit).timeoutMs).toBe(40);
+  });
+
+  // Pipe test — goes THROUGH createLLMProviderLayer({ ollamaTimeoutMs }) rather
+  // than a hand-built LLMConfig. `configOverrides` is Record<string, unknown>,
+  // so a typo in the "ollamaTimeoutMs" key would compile clean and silently
+  // no-op. This is the only test that catches that: it proves the runtime
+  // modelParams field bridges into config.ollamaTimeoutMs and reaches local.ts.
+  it("createLLMProviderLayer({ ollamaTimeoutMs }) reaches local.ts as the wired ceiling (pipe end-to-end)", async () => {
+    const layer = createLLMProviderLayer(
+      "ollama",
+      undefined,
+      "cogito:14b",
+      { ollamaTimeoutMs: 80 },
+      false, // disable circuit breaker so the timeout surfaces directly
+    ) as Layer.Layer<LLMService>;
+
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "hi" }],
+          model: "cogito:14b",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+    // request omits timeoutMs → config.ollamaTimeoutMs (80, from modelParams)
+    // wins over the 300s default. Proves the modelParams → config bridge.
+    expect(timeoutErrorOf(exit).timeoutMs).toBe(80);
+  });
+
+  it("createLLMProviderLayer without ollamaTimeoutMs leaves request.timeoutMs authoritative (undefined = no behavior change)", async () => {
+    const layer = createLLMProviderLayer(
+      "ollama",
+      undefined,
+      "cogito:14b",
+      {}, // no ollamaTimeoutMs → guard skips the override key entirely
+      false,
+    ) as Layer.Layer<LLMService>;
+
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          messages: [{ role: "user", content: "hi" }],
+          model: "cogito:14b",
+          timeoutMs: 90,
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+    // ollamaTimeoutMs undefined must NOT clobber the request/env/default path.
+    expect(timeoutErrorOf(exit).timeoutMs).toBe(90);
   });
 
   it("timeout error carries model, elapsedMs, and a cold-load/GPU hint", async () => {

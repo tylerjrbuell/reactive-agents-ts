@@ -119,6 +119,7 @@ export interface BuilderRuntimeStateView {
     pruneThreshold?: number;
   };
   readonly _executionTimeoutMs?: number;
+  readonly _ollamaTimeoutMs?: number;
   readonly _retryPolicy?: { maxRetries: number; backoffMs: number };
   readonly _cacheTimeoutMs?: number;
   readonly _sessionPersist: boolean;
@@ -322,6 +323,7 @@ export const buildBaseRuntimeAndEngine = (
       temperature: state._temperature,
       maxTokens: state._maxTokens,
       numCtx: state._numCtx,
+      ollamaTimeoutMs: state._ollamaTimeoutMs,
       memoryTier: state._memoryTier,
       maxIterations: state._maxIterations,
       enableGuardrails: state._enableGuardrails,

@@ -392,6 +392,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     private _taskContract?: TaskContract
     private _executionTimeoutMs?: number
+    private _ollamaTimeoutMs?: number
     private _retryPolicy?: { maxRetries: number; backoffMs: number }
     private _cacheTimeoutMs?: number
     private _behavioralContract?: import('@reactive-agents/guardrails').BehavioralContract
@@ -1816,6 +1817,25 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withTimeout(ms: number): this {
         this._executionTimeoutMs = ms
+        return this
+    }
+
+    /**
+     * Set the per-LLM-call timeout for local (Ollama) providers. This bounds a
+     * single provider request — distinct from {@link withTimeout}, which bounds
+     * the *whole agent run* (all iterations combined).
+     *
+     * Provider-scoped: only Ollama/local honors this (maps to
+     * `LLMConfig.ollamaTimeoutMs`, consumed in the local provider's request
+     * timeout resolution `request.timeoutMs → ollamaTimeoutMs → default`).
+     * Hosted providers (Anthropic/OpenAI/Gemini) ignore it. Equivalent to the
+     * `OLLAMA_TIMEOUT_MS` env var, but scoped to this agent.
+     *
+     * @param ms - Per-call timeout in milliseconds
+     * @example .withLlmTimeout(600_000) // tolerate a 10-min cold model load
+     */
+    withLlmTimeout(ms: number): this {
+        this._ollamaTimeoutMs = ms
         return this
     }
 

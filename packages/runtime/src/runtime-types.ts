@@ -169,6 +169,16 @@ export interface RuntimeOptions {
   numCtx?: number;
 
   /**
+   * Per-LLM-call timeout in milliseconds for local (Ollama) providers.
+   * Set via `.withLlmTimeout(ms)`. Distinct from `executionTimeoutMs`
+   * (whole-run). Threads to `LLMConfig.ollamaTimeoutMs`; hosted providers
+   * ignore it.
+   *
+   * Default: undefined (falls back to `OLLAMA_TIMEOUT_MS` env → provider default)
+   */
+  ollamaTimeoutMs?: number;
+
+  /**
    * Memory system tier:
    * - `"1"` — Lightweight (working memory only)
    * - `"2"` — Full system (working, episodic, procedural, semantic with embeddings)
