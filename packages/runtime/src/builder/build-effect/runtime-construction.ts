@@ -30,6 +30,8 @@ import type {
 import type { ReasoningOptions, CalibrationMode } from "../../types.js";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
+import { builtinTools, shellExecuteTool } from "@reactive-agents/tools";
+import { foldApprovalRequiredTools } from "./approval-autofeed.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
 import type {
   ProviderName,
@@ -476,7 +478,17 @@ export const buildBaseRuntimeAndEngine = (
             mode:
               state._approvalPolicy.mode ??
               (state._durableRuns ? "detach" : "block"),
-            tools: state._approvalPolicy.tools ?? [],
+            // F2: auto-feed per-tool requiresApproval flags into the policy so
+            // shell-execute / code-execute / file-write (and any custom tool
+            // that declares the flag) are gated without the integrator
+            // re-listing each name. Only the actually-registered tools are
+            // considered (built-ins always; the terminal/shell tool only when
+            // enabled; custom tools as provided).
+            tools: foldApprovalRequiredTools(state._approvalPolicy.tools ?? [], [
+              ...builtinTools.map((t) => t.definition),
+              ...(state._toolsOptions?.terminal ? [shellExecuteTool] : []),
+              ...(state._toolsOptions?.tools ?? []).map((t) => t.definition),
+            ]),
             requireFor: state._approvalPolicy.requireFor,
           }
         : undefined,

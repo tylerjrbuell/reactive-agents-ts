@@ -403,9 +403,12 @@ export interface DurableRunsOptions {
  * path (where durable persistence lives). In `mode: "block"` the in-process
  * approval gate handles it instead.
  *
- * Note (v0.12): the per-tool `requiresApproval` flag does NOT auto-feed this gate
- * yet — list the tool names explicitly in `tools` or use `requireFor`. The
- * flag-auto-trigger is a fast-follow.
+ * As of the v0.14 security hardening (F2), a registered tool whose definition
+ * declares `requiresApproval: true` (built-ins like `code-execute`/`file-write`,
+ * the `shell-execute` terminal tool when enabled, and custom tools) is folded
+ * into `tools` automatically at config assembly — you no longer have to list
+ * those names by hand. `tools` / `requireFor` still add further tools on top.
+ * (Auto-feed applies only when an approval policy is configured.)
  */
 export interface ApprovalPolicyConfig {
     /** Tool names whose calls must pause for approval. */
