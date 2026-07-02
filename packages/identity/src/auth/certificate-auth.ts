@@ -22,6 +22,14 @@ const fromBase64 = (b64: string): ArrayBuffer => {
   return bytes.buffer as ArrayBuffer;
 };
 
+/** Compute the 16-byte SHA-256 fingerprint (hex) of a raw public key. */
+const fingerprintOfRaw = async (rawPub: ArrayBuffer): Promise<string> => {
+  const hash = await crypto.subtle.digest("SHA-256", rawPub);
+  return Array.from(new Uint8Array(hash).slice(0, 16))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
+
 /** Build the canonical payload that is signed: agentId|serialNumber|issuedAt|expiresAt|publicKey */
 const certPayload = (cert: {
   agentId: string;
@@ -91,39 +99,68 @@ export const makeCertificateAuth = Effect.gen(function* () {
         );
       }
 
-      // Verify Ed25519 signature when present
-      if (cert.signature) {
-        const valid = yield* Effect.tryPromise({
-          try: async () => {
-            const rawPub = fromBase64(cert.publicKey);
-            const pubKey = await crypto.subtle.importKey(
-              "raw",
-              rawPub,
-              "Ed25519",
-              true,
-              ["verify"],
-            );
-            const payload = certPayload(cert);
-            const sig = fromBase64(cert.signature!);
-            return crypto.subtle.verify("Ed25519", pubKey, sig, payload);
-          },
-          catch: () =>
-            new AuthenticationError({
-              message: `Signature verification failed for agent ${cert.agentId}`,
-              reason: "invalid-certificate",
-              agentId: cert.agentId,
-            }),
-        });
+      // A signature is mandatory — an unsigned cert must never authenticate (F5).
+      if (!cert.signature) {
+        return yield* Effect.fail(
+          new AuthenticationError({
+            message: `Unsigned certificate rejected for agent ${cert.agentId}`,
+            reason: "invalid-certificate",
+            agentId: cert.agentId,
+          }),
+        );
+      }
 
-        if (!valid) {
-          return yield* Effect.fail(
-            new AuthenticationError({
-              message: `Invalid signature for agent ${cert.agentId}`,
-              reason: "invalid-certificate",
-              agentId: cert.agentId,
-            }),
+      // Trust anchor (F5): the signature is carried alongside the public key it
+      // is verified against, so a self-signed cert would verify against itself.
+      // Anchor trust in this authenticator's own issued-cert store — the cert
+      // must match one we issued (same serial → same agentId + public key).
+      const issued = (yield* Ref.get(certsRef)).get(cert.serialNumber);
+      if (
+        !issued ||
+        issued.publicKey !== cert.publicKey ||
+        issued.agentId !== cert.agentId
+      ) {
+        return yield* Effect.fail(
+          new AuthenticationError({
+            message: `Certificate for agent ${cert.agentId} was not issued by this authenticator`,
+            reason: "invalid-certificate",
+            agentId: cert.agentId,
+          }),
+        );
+      }
+
+      // Verify fingerprint binding + Ed25519 signature against the trusted key.
+      const valid = yield* Effect.tryPromise({
+        try: async () => {
+          const rawPub = fromBase64(cert.publicKey);
+          if ((await fingerprintOfRaw(rawPub)) !== cert.fingerprint) return false;
+          const pubKey = await crypto.subtle.importKey(
+            "raw",
+            rawPub,
+            "Ed25519",
+            true,
+            ["verify"],
           );
-        }
+          const payload = certPayload(cert);
+          const sig = fromBase64(cert.signature!);
+          return crypto.subtle.verify("Ed25519", pubKey, sig, payload);
+        },
+        catch: () =>
+          new AuthenticationError({
+            message: `Signature verification failed for agent ${cert.agentId}`,
+            reason: "invalid-certificate",
+            agentId: cert.agentId,
+          }),
+      });
+
+      if (!valid) {
+        return yield* Effect.fail(
+          new AuthenticationError({
+            message: `Invalid signature for agent ${cert.agentId}`,
+            reason: "invalid-certificate",
+            agentId: cert.agentId,
+          }),
+        );
       }
 
       return {
@@ -153,11 +190,7 @@ export const makeCertificateAuth = Effect.gen(function* () {
         const publicKey = toBase64(rawPub);
 
         // Compute SHA-256 fingerprint of the public key
-        const hash = await crypto.subtle.digest("SHA-256", rawPub);
-        const hashBytes = new Uint8Array(hash);
-        const fingerprint = Array.from(hashBytes.slice(0, 16))
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("");
+        const fingerprint = await fingerprintOfRaw(rawPub);
 
         const certBase = {
           serialNumber,

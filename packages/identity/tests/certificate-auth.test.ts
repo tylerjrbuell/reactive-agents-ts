@@ -54,6 +54,32 @@ describe("CertificateAuth", () => {
     expect(error.reason).toBe("invalid-certificate");
   });
 
+  // ── F5: authentication-bypass hardening ─────────────────────────────
+  test("rejects an unsigned certificate (F5 bypass)", async () => {
+    const certAuth = await run(makeCertificateAuth);
+    const cert = await run(certAuth.issueCertificate("agent-1"));
+
+    // Strip the signature — previously this skipped verification and returned
+    // authenticated:true for any agentId.
+    const unsigned: Certificate = { ...cert, signature: undefined };
+
+    const error = await run(certAuth.authenticate(unsigned).pipe(Effect.flip));
+    expect(error.reason).toBe("invalid-certificate");
+  });
+
+  test("rejects a certificate this authenticator never issued (F5 self-signed)", async () => {
+    // An attacker mints a self-consistent, correctly-signed cert (here: issued by
+    // a *different* authenticator instance) and presents it. Without a trust
+    // anchor the old code verified it against its own embedded key and accepted
+    // it. The verifier must reject certs outside its issued store.
+    const attacker = await run(makeCertificateAuth);
+    const forged = await run(attacker.issueCertificate("orchestrator"));
+
+    const verifier = await run(makeCertificateAuth);
+    const error = await run(verifier.authenticate(forged).pipe(Effect.flip));
+    expect(error.reason).toBe("invalid-certificate");
+  });
+
   test("respects custom TTL", async () => {
     const certAuth = await run(makeCertificateAuth);
     const now = Date.now();
