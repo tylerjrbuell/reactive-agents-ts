@@ -2,6 +2,7 @@ import { Data, Effect, Layer, Ref } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import type { AgentEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { redactSecrets, defaultRedactors } from "@reactive-agents/observability";
 
 export class RuntimeCortexReporterError extends Data.TaggedError("RuntimeCortexReporterError")<{
   readonly message: string;
@@ -143,7 +144,12 @@ export const RuntimeCortexReporterLive = (cortexUrl: string) =>
           if (IGNORED_RUN_IDS.has(taskId)) return;
           const socket = yield* Ref.get(socketRef);
           const connected = yield* Ref.get(connectedRef);
-          const payload = JSON.stringify(toIngestMessage(event));
+          // F8: redact secrets (API keys / bearer tokens) before streaming
+          // event content off-machine to the Cortex UI over the WebSocket.
+          const payload = redactSecrets(
+            JSON.stringify(toIngestMessage(event)),
+            defaultRedactors,
+          );
           if (!socket || !connected || socket.readyState !== WebSocket.OPEN) {
             yield* Ref.update(bufferedMessagesRef, (buffered) => {
               const next = buffered.length >= MAX_BUFFERED_MESSAGES

@@ -11,11 +11,22 @@
  */
 
 import { Effect } from "effect";
+import { assertPublicUrl } from "@reactive-agents/runtime-shim";
 import type {
   RemoteAgentClient,
   TaskResult,
   ToolDefinition,
 } from "@reactive-agents/tools";
+
+/**
+ * Egress guard for A2A peer URLs (F15). These are operator-configured, and
+ * local peers (loopback / RFC-1918) are a legitimate multi-agent pattern, so
+ * private targets are allowed by default; cloud-metadata / link-local is always
+ * blocked. Set RA_AGENT_STRICT_EGRESS=1 to also refuse private targets.
+ */
+const agentEgressGuard = () => ({
+  allowPrivate: process.env.RA_AGENT_STRICT_EGRESS !== "1",
+});
 
 export interface RemoteAgentToolRegistration {
   readonly def: ToolDefinition;
@@ -57,8 +68,9 @@ export const createRemoteAgentToolRegistration = (
       agentCardUrl: string;
     }) =>
       Effect.tryPromise({
-        try: () =>
-          fetch(remoteUrl, {
+        try: async () => {
+          await assertPublicUrl(remoteUrl, agentEgressGuard());
+          return fetch(remoteUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -86,13 +98,15 @@ export const createRemoteAgentToolRegistration = (
                 d.result as {
                   taskId: string;
                 },
-            ),
+            );
+        },
         catch: (e) => new Error(String(e)),
       }),
     getTask: (params: { id: string }) =>
       Effect.tryPromise({
-        try: () =>
-          fetch(remoteUrl, {
+        try: async () => {
+          await assertPublicUrl(remoteUrl, agentEgressGuard());
+          return fetch(remoteUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -111,7 +125,8 @@ export const createRemoteAgentToolRegistration = (
                   status: string;
                   result: unknown;
                 },
-            ),
+            );
+        },
         catch: (e) => new Error(String(e)),
       }),
   };

@@ -1,7 +1,19 @@
 import { lookup } from "node:dns/promises";
 
-/** Hostnames that must never be fetched regardless of resolution. */
-const BLOCKED_HOSTNAMES = new Set(["localhost", "metadata.google.internal", "metadata"]);
+/** Cloud-metadata hostnames — never a legitimate target, blocked even when allowPrivate. */
+const METADATA_HOSTNAMES = new Set(["metadata.google.internal", "metadata"]);
+
+/**
+ * True if `ip` is link-local / cloud-metadata (169.254.0.0/16, fe80::/10). These
+ * are never a legitimate destination and are blocked even under `allowPrivate`.
+ */
+export function isMetadataOrLinkLocalIp(ip: string): boolean {
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (v4) return Number(v4[1]) === 169 && Number(v4[2]) === 254;
+  const low = ip.toLowerCase();
+  if (low.startsWith("::ffff:")) return isMetadataOrLinkLocalIp(low.slice(7));
+  return low.startsWith("fe80");
+}
 
 /**
  * True if `ip` is a loopback, link-local, private, CGNAT, or otherwise
@@ -73,20 +85,29 @@ export async function assertPublicUrl(
     throw new Error(`assertPublicUrl: blocked URL scheme "${url.protocol}"`);
   }
 
-  if (opts.allowPrivate) return url; // explicit opt-in — scheme already validated
+  const allowPrivate = opts.allowPrivate === true;
 
   let host = url.hostname.toLowerCase();
   if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1); // ipv6 brackets
 
-  if (BLOCKED_HOSTNAMES.has(host) || host.endsWith(".internal")) {
-    throw new Error(`assertPublicUrl: blocked host "${host}"`);
+  // Cloud-metadata hostnames are never legitimate — blocked even under allowPrivate.
+  if (METADATA_HOSTNAMES.has(host) || host.endsWith(".internal")) {
+    throw new Error(`assertPublicUrl: blocked metadata host "${host}"`);
   }
 
   if (isIpLiteral(host)) {
-    if (isPrivateOrReservedIp(host)) {
+    if (isMetadataOrLinkLocalIp(host)) {
+      throw new Error(`assertPublicUrl: blocked metadata/link-local address "${host}"`);
+    }
+    if (!allowPrivate && isPrivateOrReservedIp(host)) {
       throw new Error(`assertPublicUrl: blocked private/reserved address "${host}"`);
     }
     return url;
+  }
+
+  // localhost is a valid local peer only when private targets are allowed.
+  if (!allowPrivate && host === "localhost") {
+    throw new Error(`assertPublicUrl: blocked loopback host "${host}"`);
   }
 
   const resolve =
@@ -96,7 +117,10 @@ export async function assertPublicUrl(
     throw new Error(`assertPublicUrl: could not resolve host "${host}"`);
   }
   for (const addr of addresses) {
-    if (isPrivateOrReservedIp(addr)) {
+    if (isMetadataOrLinkLocalIp(addr)) {
+      throw new Error(`assertPublicUrl: host "${host}" resolves to metadata/link-local "${addr}"`);
+    }
+    if (!allowPrivate && isPrivateOrReservedIp(addr)) {
       throw new Error(`assertPublicUrl: host "${host}" resolves to private address "${addr}"`);
     }
   }

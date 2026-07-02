@@ -75,4 +75,35 @@ describe("F6 — assertPublicUrl", () => {
     const url = await assertPublicUrl("https://8.8.8.8/");
     expect(url.hostname).toBe("8.8.8.8");
   }, 15000);
+
+  // allowPrivate: permit RFC-1918/loopback peers, but NEVER metadata/link-local.
+  describe("allowPrivate (operator-configured local peers)", () => {
+    test("permits loopback and RFC-1918 when allowPrivate is set", async () => {
+      const a = await assertPublicUrl("http://127.0.0.1:8080/", { allowPrivate: true });
+      expect(a.hostname).toBe("127.0.0.1");
+      const b = await assertPublicUrl("http://10.0.0.5:3000/", { allowPrivate: true });
+      expect(b.hostname).toBe("10.0.0.5");
+    }, 15000);
+
+    test("still blocks the cloud metadata IP even with allowPrivate", async () => {
+      await expect(
+        assertPublicUrl("http://169.254.169.254/", { allowPrivate: true }),
+      ).rejects.toThrow(/metadata|link-local/i);
+    }, 15000);
+
+    test("still blocks the metadata hostname even with allowPrivate", async () => {
+      await expect(
+        assertPublicUrl("http://metadata.google.internal/", { allowPrivate: true }),
+      ).rejects.toThrow();
+    }, 15000);
+
+    test("still blocks a host that resolves to metadata even with allowPrivate", async () => {
+      await expect(
+        assertPublicUrl("http://sneaky.example.com/", {
+          allowPrivate: true,
+          resolve: resolveTo(["169.254.169.254"]),
+        }),
+      ).rejects.toThrow(/metadata|link-local/i);
+    }, 15000);
+  });
 });

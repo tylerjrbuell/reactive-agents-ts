@@ -389,6 +389,18 @@ function detectShellExpansion(command: string): string | null {
     if ((ch === "<" || ch === ">") && next === "(" && !inDouble) {
       return "process substitution <(...)/>(...) is not supported by shell-execute";
     }
+    // Backgrounding `&` — mid-string or trailing — escapes the timeout and the
+    // segment/allow-list splitter (e.g. `sleep 100 & evil`). `&&` chaining is fine.
+    if (ch === "&" && !inDouble) {
+      if (next === "&") {
+        i++; // consume the second '&' of a legitimate && chain
+        continue;
+      }
+      const prev = i > 0 ? command[i - 1] : "";
+      if (prev !== "&") {
+        return "background operator '&' is not supported by shell-execute (escapes the timeout)";
+      }
+    }
   }
 
   return null;

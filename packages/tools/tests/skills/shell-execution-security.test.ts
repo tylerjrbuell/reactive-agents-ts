@@ -73,6 +73,28 @@ describe("F1a — shell-execute structural input hardening", () => {
     }, 15000);
   });
 
+  describe("backgrounding is rejected (F25)", () => {
+    test("denies mid-string background operator `&`", async () => {
+      const r = await run("sleep 100 & cat notes.txt");
+      expect(r.executed).toBe(false);
+    }, 15000);
+
+    test("denies trailing background operator `&`", async () => {
+      const r = await run("echo hi &");
+      expect(r.executed).toBe(false);
+    }, 15000);
+
+    test("still allows `&&` chaining of allowed commands", async () => {
+      const r = await run("echo a && echo b");
+      expect(r.error ?? "").not.toContain("background operator");
+    }, 15000);
+
+    test("allows a literal `&` inside single quotes", async () => {
+      const r = await run("echo 'tom & jerry'");
+      expect(r.executed).toBe(true);
+    }, 15000);
+  });
+
   describe("interpreter-internal escapes are rejected", () => {
     // awk print | "cmd" — awk-internal pipe to a shell → RCE.
     test("denies awk print-pipe to a command", async () => {

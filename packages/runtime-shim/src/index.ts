@@ -19,6 +19,7 @@ export { secureServe, type SecureServeOptions } from "./secure-serve.js";
 export {
   assertPublicUrl,
   isPrivateOrReservedIp,
+  isMetadataOrLinkLocalIp,
   type AssertPublicUrlOptions,
 } from "./assert-public-url.js";
 export { glob } from "./glob.js";
