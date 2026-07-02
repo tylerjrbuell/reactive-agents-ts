@@ -225,7 +225,7 @@ function modelLabel(run: Run): string {
   </div>
 
   {/* ── Per-model summary cards ── */}
-  <h3>{isMultiRun ? "Model Summaries" : "Summary"}</h3>
+  {runData.length > 0 && <h3>{isMultiRun ? "Model Summaries" : "Summary"}</h3>}
   {runData.map(({ run, passRate }) => (
     <div class="model-summary-section">
       {isMultiRun && (
@@ -261,7 +261,7 @@ function modelLabel(run: Run): string {
   ))}
 
   {/* ── Per-model task drilldown ── */}
-  <h3>{isMultiRun ? "Task Details by Model" : "Individual Tasks"}</h3>
+  {runData.length > 0 && <h3>{isMultiRun ? "Task Details by Model" : "Individual Tasks"}</h3>}
   {runData.map(({ run, tasksByTier }) => (
     <div class="model-drilldown">
       {isMultiRun && (
