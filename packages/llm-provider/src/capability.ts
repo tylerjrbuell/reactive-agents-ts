@@ -103,6 +103,13 @@ export const CapabilitySchema = Schema.Struct({
   /** True when the model exposes a "thinking" / reasoning mode (e.g. Claude). */
   supportsThinkingMode: Schema.Boolean,
 
+  /**
+   * True when the model's API rejects `max_tokens` (400) and requires
+   * `max_completion_tokens` on every call, thinking or not (OpenAI gpt-5.x
+   * and o-series). Absent/false → legacy `max_tokens` is accepted.
+   */
+  requiresMaxCompletionTokens: Schema.optional(Schema.Boolean),
+
   /** True when the streaming API surfaces tool_use blocks incrementally. */
   supportsStreamingToolCalls: Schema.Boolean,
 
@@ -268,6 +275,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsPromptCaching: true,
     supportsVision: true,
     supportsThinkingMode: false,
+    requiresMaxCompletionTokens: true,
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",
     source: "static-table",
@@ -283,6 +291,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsPromptCaching: true,
     supportsVision: true,
     supportsThinkingMode: false,
+    requiresMaxCompletionTokens: true,
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",
     source: "static-table",
@@ -298,6 +307,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsPromptCaching: true,
     supportsVision: true,
     supportsThinkingMode: false,
+    requiresMaxCompletionTokens: true,
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",
     source: "static-table",
@@ -345,6 +355,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     supportsPromptCaching: true,
     supportsVision: false,
     supportsThinkingMode: true,
+    requiresMaxCompletionTokens: true,
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",
     source: "static-table",

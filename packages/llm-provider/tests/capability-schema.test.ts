@@ -27,6 +27,9 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       "supportsStreamingToolCalls",
       "toolCallDialect",
       "source",
+      // Optional (2026-07-01): models whose API rejects `max_tokens` and
+      // requires `max_completion_tokens` (OpenAI gpt-5.x / o-series).
+      "requiresMaxCompletionTokens",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count

@@ -26,6 +26,23 @@ import { deepClone } from "../schema-utils.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
 import { resolveCapability } from "../capability-resolver.js";
 
+// ─── Token-limit field selection ───
+// gpt-5.x / o-series reject `max_tokens` (400) and require `max_completion_tokens`
+// on every call — thinking merely adds the reserve + reasoning_effort on top.
+// Driven by the capability flag `requiresMaxCompletionTokens`; legacy models
+// (gpt-4o family) keep plain `max_tokens`.
+const buildTokenField = (
+  cap: { readonly requiresMaxCompletionTokens?: boolean },
+  answerBudget: number,
+  reserve: number | undefined,
+  effort: string,
+): Record<string, unknown> =>
+  reserve !== undefined
+    ? { max_completion_tokens: answerBudget + reserve, reasoning_effort: effort }
+    : cap.requiresMaxCompletionTokens
+      ? { max_completion_tokens: answerBudget }
+      : { max_tokens: answerBudget };
+
 // ─── OpenAI Message Conversion ───
 
 type OpenAIToolCallParam = {
@@ -240,9 +257,7 @@ export const OpenAIProviderLive = Layer.effect(
             ...(config.thinkingOptions ?? {}),
             enabled: thinkEnabled,
           });
-          const tokenField = reserve !== undefined
-            ? { max_completion_tokens: answerBudget + reserve, reasoning_effort: config.thinkingOptions?.effort ?? "medium" }
-            : { max_tokens: answerBudget };
+          const tokenField = buildTokenField(cap, answerBudget, reserve, config.thinkingOptions?.effort ?? "medium");
 
           const requestBody: Record<string, unknown> = {
                 model,
@@ -341,9 +356,7 @@ export const OpenAIProviderLive = Layer.effect(
             ...(config.thinkingOptions ?? {}),
             enabled: streamThinkEnabled,
           });
-          const streamTokenField = streamReserve !== undefined
-            ? { max_completion_tokens: streamAnswerBudget + streamReserve, reasoning_effort: config.thinkingOptions?.effort ?? "medium" }
-            : { max_tokens: streamAnswerBudget };
+          const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium");
 
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const doStream = async () => {
@@ -563,9 +576,7 @@ export const OpenAIProviderLive = Layer.effect(
             ...(config.thinkingOptions ?? {}),
             enabled: structuredThinkEnabled,
           });
-          const structuredTokenField = structuredReserve !== undefined
-            ? { max_completion_tokens: structuredAnswerBudget + structuredReserve, reasoning_effort: config.thinkingOptions?.effort ?? "medium" }
-            : { max_tokens: structuredAnswerBudget };
+          const structuredTokenField = buildTokenField(structuredCap, structuredAnswerBudget, structuredReserve, config.thinkingOptions?.effort ?? "medium");
 
           const requestBody: Record<string, unknown> = {
             model,

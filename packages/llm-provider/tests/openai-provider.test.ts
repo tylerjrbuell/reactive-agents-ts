@@ -169,9 +169,10 @@ describe("OpenAI reasoning model thinking (Task 5)", () => {
   );
 
   it(
-    "openai non-reasoning model + thinking true → warn+degrade: plain max_tokens, no reasoning_effort",
+    "openai non-reasoning model + thinking true → warn+degrade: no reasoning_effort",
     async () => {
-      // gpt-5.5 supportsThinkingMode=false → degrades silently with a console.warn
+      // gpt-5.5 supportsThinkingMode=false → degrades silently with a console.warn.
+      // gpt-5.x still requires max_completion_tokens (rejects max_tokens with 400).
       const body = await captureRequestBody({
         provider: "openai",
         model: "gpt-5.5",
@@ -179,8 +180,60 @@ describe("OpenAI reasoning model thinking (Task 5)", () => {
         maxTokens: 4000,
       });
       expect(body.reasoning_effort).toBeUndefined();
-      expect(body.max_tokens).toBe(4000);
+      expect(body.max_completion_tokens).toBe(4000);
+      expect(body.max_tokens).toBeUndefined();
       // Non-reasoning path keeps temperature (today's behavior).
+      expect(body.temperature).toBe(0.7);
+    },
+    15000,
+  );
+});
+
+describe("gpt-5.x token field — max_completion_tokens required (no thinking)", () => {
+  // Live-verified 2026-07-01 (thinking-ablation session): gpt-5.x rejects
+  // `max_tokens` with 400 and requires `max_completion_tokens` on every call,
+  // thinking or not. Capability flag `requiresMaxCompletionTokens` drives it.
+
+  it(
+    "gpt-5.4 default (thinking off) → max_completion_tokens, no max_tokens",
+    async () => {
+      const body = await captureRequestBody({
+        provider: "openai",
+        model: "gpt-5.4",
+        maxTokens: 4000,
+      });
+      expect(body.max_completion_tokens).toBe(4000);
+      expect(body.max_tokens).toBeUndefined();
+      expect(body.reasoning_effort).toBeUndefined();
+      expect(body.temperature).toBe(0.7);
+    },
+    15000,
+  );
+
+  it(
+    "gpt-5.4-mini default (thinking off) → max_completion_tokens, no max_tokens",
+    async () => {
+      const body = await captureRequestBody({
+        provider: "openai",
+        model: "gpt-5.4-mini",
+        maxTokens: 2000,
+      });
+      expect(body.max_completion_tokens).toBe(2000);
+      expect(body.max_tokens).toBeUndefined();
+    },
+    15000,
+  );
+
+  it(
+    "legacy gpt-4o unchanged → plain max_tokens",
+    async () => {
+      const body = await captureRequestBody({
+        provider: "openai",
+        model: "gpt-4o",
+        maxTokens: 4000,
+      });
+      expect(body.max_tokens).toBe(4000);
+      expect(body.max_completion_tokens).toBeUndefined();
       expect(body.temperature).toBe(0.7);
     },
     15000,
