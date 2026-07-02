@@ -19,7 +19,7 @@ updated: 2026-07-01
 - **Headline: the cross-tier promise is real** — a cold external tester reproduced the README core claim (identical correct typed `.withOutputSchema` object on a 4B local model, gemma4:e4b) without help. That is the launch asset. First-10-minutes DX papercuts catalogued.
 - v0.13 execution plan authored: [`wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md`](wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md) — subagent-parallel, package-isolated bundles; **DX wave ships _before_ Show-HN**. North star holds: harness = product, receipts = proof, first-touch DX = funnel.
 
-**✅ RESOLVED (2026-07-01 EOD, git-verified):** `main` IS pushed (0 ahead of origin); abstention branch MERGED; prompt-audit fixes MERGED (`bda7d04f`); Wave 0+1 DX wave SHIPPED. **v0.13.0 release prep IN PROGRESS:** gpt-5.x `max_completion_tokens` blocker fixed (`be0875cd`); 0.13.0 notes moved to `.changeset/v0-13-0-notes.md` (`bce57a96` — release.ts only reads changesets, hand-drafted CHANGELOG section was dead); pre-flight green (build 38/38, typecheck 69/69, keyless test 6854/0); `release:dry 0.13.0` clean (35 pkgs, 1 note). Remaining: docs gaps (withLlmTimeout/.quick()/tool-v2/abstention), tag push (user), then competitive bench + cold first-touch probe → Show-HN.
+**🚀 v0.13.0 RELEASED 2026-07-02** — publish.yml green 10m12s, 35 pkgs on npm, GH Release live, CI sync-back `020c6360` pulled. Pre-tag work: gpt-5.x `max_completion_tokens` blocker fixed (`be0875cd`); 0.13.0 notes moved to changeset (`bce57a96` — release.ts only reads `.changeset/*.md`, hand-drafted CHANGELOG section was dead); docs gaps closed (`46e6c28a`: withLlmTimeout/.quick()/defineTool-v2/abstention + counts 6,854/851); pre-flight green (build 38/38, typecheck 69/69, keyless test 6854/0). Remaining launch line: competitive bench + cold first-touch probe vs published tarball → Show-HN.
 
 ---
 
@@ -33,7 +33,7 @@ updated: 2026-07-01
 
 ## What's Next
 
-1. **Cut v0.13.0** — docs gaps closed → commit → `git tag v0.13.0` + push tag (user confirms; publish.yml does the rest).
+1. ~~Cut v0.13.0~~ ✅ RELEASED 2026-07-02.
 2. **Competitive bench** (plan 2.2 Receipts deliverable, still missing) — RA vs Mastra vs LangGraph.js vs raw AI SDK, pinned models/seeds, published traces, run vs published 0.13 tarball. Current published bench = internal ablation only (+13pp).
 3. **Cold first-touch re-verify** — re-run the 6 audit probes from OUTSIDE the repo against npm 0.13.0 (fail-fast build() now opt-in `.withStrictValidation()` — check missing-key DX) → Show-HN.
 4. **Stale-doc cleanup:** update `wiki/Issues/Running Issues Log.md` (HS-34/HS-35 → cleared).
