@@ -514,6 +514,38 @@ describe("Durable HITL endpoints (Phase E)", () => {
   });
 });
 
+describe("POST /api/runs/:runId/terminate (C4)", () => {
+  it("returns 200 and calls runner.terminate with the runId", async () => {
+    let terminatedWith = "";
+    const terminateLayer = Layer.succeed(CortexRunnerService, {
+      start: () =>
+        Effect.succeed({ agentId: "a", runId: "r" }),
+      pause: () => Effect.void,
+      resume: () => Effect.void,
+      stop: () => Effect.void,
+      terminate: (runId) => {
+        terminatedWith = String(runId);
+        return Effect.void;
+      },
+      getActive: () => Effect.succeed(new Map()),
+      listPendingApprovals: () => Effect.succeed([]),
+      approveApproval: () => Effect.void,
+      denyApproval: () => Effect.void,
+    });
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), terminateLayer));
+
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/run-1/terminate", { method: "POST" }),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+    expect(terminatedWith).toBe("run-1");
+  });
+});
+
 describe("POST /api/runs — durableRuns passthrough (Phase E)", () => {
   it("forwards durableRuns + approvalPolicy to the runner", async () => {
     const captured = { params: null as LaunchParams | null };

@@ -208,6 +208,19 @@ export const runsRouter = (
         return { error: String(e) };
       }
     })
+    .post("/:runId/terminate", async ({ params, set }) => {
+      const program = Effect.gen(function* () {
+        const runner = yield* CortexRunnerService;
+        yield* runner.terminate(params.runId as RunId);
+        return { ok: true as const };
+      });
+      try {
+        return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+      } catch (e) {
+        set.status = 500;
+        return { error: String(e) };
+      }
+    })
     // ── Durable HITL (Phase E) ──
     // Pending durable approvals across all runs paused in this process.
     .get("/pending-approvals", async ({ set }) => {
