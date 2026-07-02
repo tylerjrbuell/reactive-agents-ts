@@ -171,11 +171,20 @@ Each flip gets a named, greppable escape hatch and a CHANGELOG **BREAKING (secur
 
 **Session tally: 11 security bundles shipped, all green** (Phase 0, F1a, F9, F12, F4, F6, F8a, F5, F3, F2, F11). Full-repo typecheck 69/69. Every **active** Critical (F1 vectors, F3 memory-injection, F4 unauth servers) + the approval **multiplier** (F2) + Highs (F6, F8, F9, F10-partial-n/a, F12) + the two dormant Criticals (F5, F11) closed.
 
-**Remaining (each has a real blocker — do deliberately, not at a session tail):**
-1. **F10** — verification/guardrail `onReject: block`. **Investigated this session:** the final output/success is assembled across multiple engine phases (`inline-act.ts`, `reasoning-*`), so a real "block" needs result-assembly plumbing; a metadata-only flag would be the exact dead-theater the audit criticizes. Off-by-default → lower urgency. Do with the result path in hand.
-2. **F1b** — Docker-mandatory exec substrate. Needs a Docker daemon to verify (absent here). The F1a input layer holds the confirmed vectors meanwhile.
-3. **Phase 5** — CI supply-chain (F17–F24): SHA-pin actions, `permissions: contents: read`, bind version input to `env:`, scope `NPM_TOKEN`, `--provenance`. Verifiable only by running CI; `publish.yml` is release-sensitive — do with a CI dry-run available.
-4. **F8 remainder** — OTel tracer + cortex-reporter redaction boundaries, trace content-capture opt-in, `Secret<T>`.
-5. **F3 remainder** — verified-aware retrieval + move recalled content out of the system turn (needs cross-tier ablation for token/quality).
+### 2026-07-02 — fourth execution session (1 commit, 14 total)
+
+- **F8-remainder** (RC4 complete) — sync `redactSecrets()` added; applied at the OTel tracer (`observe/tracer.ts` tool params/output) and the Cortex WS reporter (`cortex-reporter.ts` payload). Secrets no longer leave the machine via telemetry. `observe` now depends on `observability` (acyclic).
+- **F15** — `assertPublicUrl` wired into the remaining config/peer fetch sites: remote-agent A2A calls + A2A discovery. Refined the guard so **cloud-metadata/link-local is always blocked even under `allowPrivate`** (`isMetadataOrLinkLocalIp`); operator-configured agent peers allow loopback/RFC-1918 by default (`RA_AGENT_STRICT_EGRESS=1` locks down).
+- **F25** — quote-aware scanner rejects bare `&` backgrounding (mid-string + trailing) while preserving `&&` chaining and literal `&` in single quotes.
+
+**Session tally: 12 security bundles shipped** (adds F8-remainder, F15, F25 to the 11). Full runtime 1120 pass, tools 882, typecheck clean.
+
+**Remaining (each has a real blocker):**
+1. **F10** — verification/guardrail `onReject: block`. Final output/success is assembled across multiple engine phases (`inline-act.ts`, `reasoning-*`); a real "block" needs result-assembly plumbing (a metadata flag alone = dead theater). Off-by-default → lower urgency.
+2. **F1b** — Docker-mandatory exec substrate. Needs a Docker daemon to verify (absent here). F1a input layer holds the confirmed vectors meanwhile.
+3. **Phase 5** — CI supply-chain (F17–F24). Verifiable only by running CI; `publish.yml` release-sensitive. Safe additive parts (SHA-pin actions, `permissions:`, `--provenance`) can be done + inspection-verified when a CI dry-run is available.
+4. **F8 tail** — trace content-capture opt-in, `Secret<T>` wrapper (redaction boundaries now all done).
+5. **F3 remainder** — verified-aware retrieval + move recalled content out of the system turn (needs cross-tier ablation).
+6. **Smaller:** F13 (rate-limit/cost no-op public exports), F14-tail (body cap on `github-adapter`), F26 (durable audit log invoked), F27 (gate provider prompt-echo — mostly covered by redaction now).
 
 **Still owed (manual, user):** rotate the `apps/advocate` Tavily key + GitHub PAT.
