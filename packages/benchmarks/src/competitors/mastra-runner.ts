@@ -3,17 +3,11 @@ import { join } from "node:path"
 import type { CompetitorRunner, TaskRunResult } from "./types.js"
 import type { BenchmarkTask, ModelVariant } from "../types.js"
 
-async function buildMastraModel(model: ModelVariant) {
-  if (model.provider === "anthropic") {
-    const { anthropic } = await import("@ai-sdk/anthropic")
-    return anthropic(model.model)
-  }
-  if (model.provider === "openai") {
-    const { openai } = await import("@ai-sdk/openai")
-    return openai(model.model)
-  }
-  throw new Error(`Mastra runner: unsupported provider ${model.provider}`)
-}
+import { buildAiSdkModel } from "./ai-sdk-model.js"
+
+// Mastra consumes AI SDK LanguageModels directly — share the builder
+// (anthropic / openai / ollama-via-OpenAI-compat).
+const buildMastraModel = buildAiSdkModel
 
 export const mastraRunner: CompetitorRunner = {
   id: "mastra-agent",
@@ -56,7 +50,10 @@ export const mastraRunner: CompetitorRunner = {
       })
 
       const response = await Promise.race([
-        agent.generate(task.prompt),
+        // maxSteps must allow the tool-use loop to continue past the first
+        // tool call — the default stops after one step, returning empty text
+        // whenever the model (correctly) starts with a tool call.
+        agent.generate(task.prompt, { maxSteps: task.maxIterations ?? 15 }),
         new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs)),
       ])
 

@@ -14,16 +14,8 @@ export const vercelAiRunner: CompetitorRunner = {
       const { generateText, tool } = await import("ai")
       const { z } = await import("zod")
 
-      let llmModel: unknown
-      if (model.provider === "anthropic") {
-        const { anthropic } = await import("@ai-sdk/anthropic")
-        llmModel = anthropic(model.model)
-      } else if (model.provider === "openai") {
-        const { openai } = await import("@ai-sdk/openai")
-        llmModel = openai(model.model)
-      } else {
-        throw new Error(`Vercel AI runner: unsupported provider ${model.provider}`)
-      }
+      const { buildAiSdkModel } = await import("./ai-sdk-model.js")
+      const llmModel = await buildAiSdkModel(model)
 
       const tools = {
         file_read: tool({

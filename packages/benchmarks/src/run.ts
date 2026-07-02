@@ -15,6 +15,7 @@ import { recitationAblationSession } from "./sessions/recitation-ablation.js"
 import { clusterAGateSession } from "./sessions/cluster-a-gate.js"
 import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
+import { publicCompetitorQwenSession, publicCompetitorCogitoSession } from "./sessions/public-competitor-bench.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
 import type { BenchmarkSession, SessionReport } from "./types.js"
 
@@ -130,6 +131,8 @@ const SESSIONS: Record<string, BenchmarkSession> = {
   "cluster-a-gate":        clusterAGateSession,
   "cross-tier-stress":     crossTierStressSession,
   "thinking-ablation":     thinkingAblationSession(),
+  "public-competitor-qwen3-14b": publicCompetitorQwenSession,
+  "public-competitor-cogito-8b": publicCompetitorCogitoSession,
 }
 
 export interface CliArgs {

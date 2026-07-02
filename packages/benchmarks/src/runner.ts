@@ -1012,6 +1012,30 @@ export async function runSession(
   log(`\n  Running session: ${session.name} (${session.id} v${session.version})`)
   log(`  Tasks: ${tasks.length} | Models: ${session.models.length} | Variants: ${session.harnessVariants.length} | Runs: ${runCount}\n`)
 
+  // ── Local-model warm-up ────────────────────────────────────────────────────
+  // Cold-load and GPU contention produce timing artifacts (a first call can
+  // pay 30s+ of model load that later calls don't). Load each Ollama model
+  // once, untimed, before any measured cell. Sessions that need strict
+  // one-model-resident serialization should define one model per session.
+  for (const m of session.models) {
+    if (m.provider !== "ollama") continue
+    const base =
+      process.env["OLLAMA_OPENAI_BASE_URL"]?.replace(/\/v1\/?$/, "") ??
+      "http://localhost:11434"
+    const t0 = performance.now()
+    try {
+      await fetch(`${base}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: m.model, prompt: "ok", stream: false, options: { num_predict: 1 } }),
+      })
+      log(`  Warmed ${m.model} in ${Math.round(performance.now() - t0)}ms`)
+    } catch (e) {
+      log(`  Warm-up failed for ${m.model}: ${String(e)} (continuing — first cell will pay the load)`)
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   for (const task of tasks) {
     for (const model of session.models) {
       // Per-cell capability-source preflight: resolve once per model. A fallback

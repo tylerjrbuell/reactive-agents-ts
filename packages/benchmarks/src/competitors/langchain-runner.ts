@@ -24,6 +24,16 @@ export const langchainRunner: CompetitorRunner = {
       } else if (model.provider === "openai") {
         const { ChatOpenAI } = await import("@langchain/openai")
         llm = new ChatOpenAI({ model: model.model, temperature: 0 })
+      } else if (model.provider === "ollama") {
+        // Ollama via its OpenAI-compatible endpoint (no native adapter pinned).
+        const { ChatOpenAI } = await import("@langchain/openai")
+        const { OLLAMA_OPENAI_BASE_URL } = await import("./ai-sdk-model.js")
+        llm = new ChatOpenAI({
+          model: model.model,
+          temperature: 0,
+          apiKey: "ollama",
+          configuration: { baseURL: OLLAMA_OPENAI_BASE_URL },
+        })
       } else {
         throw new Error(`LangChain runner: unsupported provider ${model.provider}`)
       }
@@ -60,9 +70,16 @@ export const langchainRunner: CompetitorRunner = {
         ? lastMsg.content
         : JSON.stringify(lastMsg?.content ?? "")
 
+      // Sum usage across all AI messages — each model turn carries its own
+      // usage_metadata (works for cloud and the Ollama OpenAI-compat path).
+      const tokensUsed = response.messages.reduce((sum: number, m: unknown) => {
+        const usage = (m as { usage_metadata?: { total_tokens?: number } }).usage_metadata
+        return sum + (usage?.total_tokens ?? 0)
+      }, 0)
+
       return {
         output,
-        tokensUsed: 0,
+        tokensUsed,
         durationMs: performance.now() - start,
         iterations: response.messages.filter((m: { _getType?: () => string }) => m._getType?.() === "tool").length,
         status: "pass",
