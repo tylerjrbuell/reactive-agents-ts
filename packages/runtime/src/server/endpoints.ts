@@ -13,8 +13,17 @@
  *  - `createInteractionEndpoint` / `createApprovalEndpoint` — POST a human
  *    response/decision that resumes a paused durable run.
  *  - `createInboxEndpoint` — GET → the resolved identity's durable runs.
+ *
+ * `createInteractionEndpoint`, `createApprovalEndpoint`, and
+ * `createRunAttachEndpoint` accept an optional `{identify}` (see
+ * `RunOwnerGuardOptions`); when configured, `resolveRunOwnerGuard` requires the
+ * resolved identity to own the target run (403/404 otherwise) before the
+ * request is allowed to answer/approve/deny/replay it (GAP-11). Omitted →
+ * unchanged open behavior.
  */
+import { Effect } from "effect";
 import type { ReactiveAgent } from "../reactive-agent.js";
+import { RunStoreLive, RunStoreService } from "../services/run-store.js";
 import { createEndpointGuards, DEFAULT_LIMITS, type EndpointLimits } from "./guards.js";
 import {
   enrichStream,
@@ -27,6 +36,61 @@ import {
 
 export interface IdentityResolver {
   (req: Request): Promise<{ userId: string; orgId?: string } | null>;
+}
+
+/** Options shared by the interaction/approval/attach endpoints (GAP-11). */
+export interface RunOwnerGuardOptions {
+  /**
+   * When configured, the caller must resolve to an identity that owns the
+   * run before answering an interaction, deciding an approval, or attaching.
+   * Omitted → behavior is unchanged (open; single-tenant/dev usage).
+   */
+  readonly identify?: IdentityResolver;
+}
+
+/**
+ * GAP-11 fix: shared owner-authorization gate for `createInteractionEndpoint`,
+ * `createApprovalEndpoint`, and `createRunAttachEndpoint`. Without an `identify`
+ * resolver configured, this is a no-op (open behavior preserved). With one
+ * configured:
+ *  - unresolved identity (`identify` returns `null`) → 403 `{error:"unauthorized"}`
+ *  - unknown run → 404 `{error:"not found"}`
+ *  - a run with a stored owner that does not match the resolved identity →
+ *    403 `{error:"forbidden"}`
+ *  - a run with no stored owner (legacy/unowned) or a matching owner → ok
+ */
+async function resolveRunOwnerGuard(
+  agent: ReactiveAgent,
+  req: Request,
+  identify: IdentityResolver | undefined,
+  runId: string,
+): Promise<{ ok: true } | { ok: false; response: Response }> {
+  if (!identify) return { ok: true };
+
+  const identity = await identify(req);
+  if (identity === null) {
+    return { ok: false, response: json({ error: "unauthorized" }, 403) };
+  }
+
+  const durable = agent.getDurableInfo();
+  // No durable store configured — the underlying call (respondToInteraction /
+  // approveRun / etc.) will itself reject with a clear "requires
+  // .withDurableRuns()" error; nothing to own-check here.
+  if (!durable) return { ok: true };
+
+  const run = await Effect.runPromise(
+    Effect.gen(function* () {
+      const store = yield* RunStoreService;
+      return yield* store.getRun(runId);
+    }).pipe(Effect.provide(RunStoreLive(durable.dbPath))),
+  );
+  if (!run) {
+    return { ok: false, response: json({ error: "not found" }, 404) };
+  }
+  if (run.userId !== undefined && run.userId !== identity.userId) {
+    return { ok: false, response: json({ error: "forbidden" }, 403) };
+  }
+  return { ok: true };
 }
 
 export interface AgentEndpointOptions {
@@ -174,10 +238,15 @@ export const createAgentEndpoint = (agent: ReactiveAgent, opts: AgentEndpointOpt
  * `RunAttached` head; while the run status is `running`, poll every 500ms and
  * stream new rows until a terminal event lands (v1 cross-request live-tail).
  */
-export const createRunAttachEndpoint = (agent: ReactiveAgent) => {
+export const createRunAttachEndpoint = (
+  agent: ReactiveAgent,
+  opts: RunOwnerGuardOptions = {},
+) => {
   return async (req: Request, params: { runId: string }): Promise<Response> => {
     const durable = agent.getDurableInfo();
     if (!durable) return json({ error: "durable runs not configured" }, 404);
+    const guard = await resolveRunOwnerGuard(agent, req, opts.identify, params.runId);
+    if (!guard.ok) return guard.response;
     const cursor = Number(new URL(req.url).searchParams.get("cursor") ?? "0");
     const journal = openJournal(durable.dbPath, params.runId);
     const status = await journal.status();
@@ -215,7 +284,10 @@ export const createRunAttachEndpoint = (agent: ReactiveAgent) => {
 };
 
 /** POST `{runId, interactionId, value}` → resume a run paused on `request_user_input`. */
-export const createInteractionEndpoint = (agent: ReactiveAgent) => {
+export const createInteractionEndpoint = (
+  agent: ReactiveAgent,
+  opts: RunOwnerGuardOptions = {},
+) => {
   return async (req: Request): Promise<Response> => {
     let body: { runId?: string; interactionId?: string; value?: unknown };
     try {
@@ -226,13 +298,18 @@ export const createInteractionEndpoint = (agent: ReactiveAgent) => {
     if (typeof body.runId !== "string" || typeof body.interactionId !== "string") {
       return json({ error: "runId and interactionId are required" }, 400);
     }
+    const guard = await resolveRunOwnerGuard(agent, req, opts.identify, body.runId);
+    if (!guard.ok) return guard.response;
     const result = await agent.respondToInteraction(body.runId, body.interactionId, body.value);
     return json({ success: result.success, output: result.output, runId: body.runId });
   };
 };
 
 /** GET → pending approvals; POST `{runId, decision, reason?}` → approve/deny + resume. */
-export const createApprovalEndpoint = (agent: ReactiveAgent) => {
+export const createApprovalEndpoint = (
+  agent: ReactiveAgent,
+  opts: RunOwnerGuardOptions = {},
+) => {
   return async (req: Request): Promise<Response> => {
     if (req.method === "GET") return json(await agent.listPendingApprovals());
     let body: { runId?: string; decision?: string; reason?: string };
@@ -244,6 +321,8 @@ export const createApprovalEndpoint = (agent: ReactiveAgent) => {
     if (typeof body.runId !== "string" || (body.decision !== "approve" && body.decision !== "deny")) {
       return json({ error: "runId and decision ('approve'|'deny') required" }, 400);
     }
+    const guard = await resolveRunOwnerGuard(agent, req, opts.identify, body.runId);
+    if (!guard.ok) return guard.response;
     const result =
       body.decision === "approve"
         ? await agent.approveRun(body.runId, { reason: body.reason })

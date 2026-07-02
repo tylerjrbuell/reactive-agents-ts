@@ -196,6 +196,30 @@ gets an entry here with production context. Format per entry:
   before any public deploy: add `identify` to `AgentEndpointOptions`-equivalent
   options for these two endpoints and compare `identity.userId ===
   run.userId` (404/403, not leaking existence) before mutating.
+- **RESOLVED (2026-07-02):** the owner-authorization part of this gap is
+  shipped. `createInteractionEndpoint`, `createApprovalEndpoint`, and
+  `createRunAttachEndpoint` now accept an optional `RunOwnerGuardOptions =
+  {identify?: IdentityResolver}` (additive; no-arg / `(agent)`-only call form
+  still compiles and behaves identically — verified by the pre-existing
+  `endpoints.test.ts` suite). A shared `resolveRunOwnerGuard(agent, req,
+  identify, runId)` helper (opens `RunStoreLive(dbPath)` via
+  `agent.getDurableInfo()`, same Effect idiom as `journal.ts`/
+  `durable-resume.ts`, and reads `getRun(runId).userId`) is applied: for
+  interaction/approval, AFTER body parse (need `runId` from the body first)
+  but BEFORE `respondToInteraction`/`approveRun`/`denyRun`; for attach, before
+  replaying. Unresolved identity → 403 `{error:"unauthorized"}`; unknown run →
+  404 `{error:"not found"}`; a run with a stored owner that mismatches the
+  resolved identity → 403 `{error:"forbidden"}` (mutation/replay never
+  invoked); a run with no stored owner (legacy/unowned) or a matching owner →
+  proceeds as before. No `identify` configured → completely unchanged (open)
+  behavior. New regression coverage in
+  `packages/runtime/tests/server/endpoints-authz.test.ts`: wrong-identity
+  403 leaves the interaction pending / the approval run paused; correct-owner
+  succeeds; unauthenticated (`identify` resolves `null`) gets 403. Full
+  `packages/runtime` suite green except the 2 pre-existing `model routing`
+  network-dependent failures (unrelated, documented elsewhere).
+  The shared-anonymous-bucket and `LimitExceeded`-over-200 notes below remain
+  open documentation items (not addressed by this fix).
 - **Also noted — anonymous-bucket foot-gun:** when no `identify` resolver is
   configured, EVERY caller collapses to the single shared `" anonymous"` key
   in `guards.ts` (`ANON`) — the whole anonymous population shares one bucket
