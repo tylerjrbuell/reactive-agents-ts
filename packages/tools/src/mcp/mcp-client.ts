@@ -278,6 +278,50 @@ async function waitForHttpEndpoint(url: string, timeoutMs: number): Promise<void
   throw new Error(`Endpoint ${url} not healthy within ${timeoutMs}ms${lastErr ? `: ${String(lastErr)}` : ""}`);
 }
 
+// ─── Subprocess Environment (F12) ──────────────────────────────────────────────
+
+/**
+ * Non-secret environment variables forwarded to MCP subprocesses by default.
+ *
+ * MCP servers are commonly `npx <untrusted-pkg>` or `docker run <untrusted-image>`.
+ * Inheriting the parent's full `process.env` hands every provider API key and
+ * token to that subprocess — one malicious package exfiltrates the whole secret
+ * set. Instead we forward only this allowlist of vars a subprocess legitimately
+ * needs (PATH, HOME, locale, proxy, runtime/docker config); secrets are opt-in
+ * via the server's explicit `env` map.
+ */
+const MCP_ENV_ALLOWLIST: ReadonlyArray<string> = [
+  // Core process
+  "PATH", "HOME", "USER", "LOGNAME", "SHELL", "PWD", "TMPDIR", "TZ", "TERM",
+  // Locale
+  "LANG", "LC_ALL", "LC_CTYPE",
+  // Proxy (needed for MCP servers that make outbound calls)
+  "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+  "http_proxy", "https_proxy", "no_proxy",
+  // Node / Python runtime discovery
+  "NODE_PATH", "NODE_OPTIONS", "PYTHONPATH", "VIRTUAL_ENV",
+  // Docker CLI (needed for `docker run` MCP servers to reach the daemon)
+  "DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT", "DOCKER_CERT_PATH",
+];
+
+/**
+ * Build the environment for an MCP subprocess: a non-secret base allowlist
+ * pulled from `process.env` plus the server's explicit `env` map (opt-in
+ * secrets). Explicit vars override base vars. Provider keys and other secrets
+ * in the parent environment are never forwarded implicitly (F12).
+ */
+export function buildMcpSubprocessEnv(
+  configEnv?: Record<string, string>,
+): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const key of MCP_ENV_ALLOWLIST) {
+    const val = process.env[key];
+    if (val !== undefined) env[key] = val;
+  }
+  if (configEnv) Object.assign(env, configEnv);
+  return env;
+}
+
 // ─── Transport Creation ────────────────────────────────────────────────────────
 
 function resolveTransport(config: ConnectConfig): MCPServer["transport"] {
@@ -301,7 +345,7 @@ function createTransport(config: ConnectConfig, overrideArgs?: string[]): Transp
       return new StdioClientTransport({
         command: config.command,
         args: overrideArgs ?? [...(config.args ?? [])],
-        env: config.env ? { ...process.env as Record<string, string>, ...config.env } : undefined,
+        env: buildMcpSubprocessEnv(config.env),
         cwd: config.cwd,
         stderr: "pipe",
       });
@@ -411,7 +455,7 @@ async function reconnectViaHttp(
       mcpDebug(`[MCP http-mode] "${config.name}" — endpoint already up at ${resolvedUrl}; reusing`);
     } else {
       mcpDebug(`[MCP http-mode] "${config.name}" — re-spawning "${config.command}" for HTTP mode`);
-      const spawnEnv = config.env ? { ...process.env, ...config.env } : { ...process.env };
+      const spawnEnv = buildMcpSubprocessEnv(config.env);
       const subprocess = nodeSpawn(config.command!, [...(config.args ?? [])], {
         stdio: ["ignore", "ignore", "pipe"],
         cwd: config.cwd,
