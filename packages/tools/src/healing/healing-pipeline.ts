@@ -2,6 +2,7 @@ import type { ToolCallSpec } from "../tool-calling/types.js"
 import type { HealingAction, HealingResult } from "../drivers/tool-calling-driver.js"
 import { healToolName } from "./tool-name-healer.js"
 import { healParamNames } from "./param-name-healer.js"
+import { unwrapWrappedArgs, remapSingleMissingRequired } from "./param-structure-healer.js"
 import { resolvePaths, coerceTypes } from "./path-resolver.js"
 
 interface ToolSchema {
@@ -36,12 +37,30 @@ export function runHealingPipeline(
   if (nameResult.action) actions.push(nameResult.action)
   currentName = nameResult.resolved
 
-  // Stage 2 — ParamNameHealer
+  // Stage 2a — StructureHealer: unwrap args nested under a wrapper key
+  // (e.g. `{ input: { path, content } }`) BEFORE name healing so the inner
+  // keys are visible to alias/typo resolution.
   const schema = registeredTools.find((t) => t.name === currentName)
+  if (schema) {
+    const unwrapResult = unwrapWrappedArgs(currentArgs, schema)
+    actions.push(...unwrapResult.actions)
+    currentArgs = unwrapResult.healed as Record<string, unknown>
+  }
+
+  // Stage 2b — ParamNameHealer
   if (schema) {
     const paramResult = healParamNames(currentName, currentArgs, schema, knownParamAliases)
     actions.push(...paramResult.actions)
     currentArgs = paramResult.healed as Record<string, unknown>
+  }
+
+  // Stage 2c — StructureHealer: exactly-one-missing-required remap, AFTER
+  // name healing so aliases/typos don't count as unknowns, and BEFORE path
+  // resolution so a remapped `path` still gets resolved.
+  if (schema) {
+    const remapResult = remapSingleMissingRequired(currentArgs, schema)
+    actions.push(...remapResult.actions)
+    currentArgs = remapResult.healed as Record<string, unknown>
   }
 
   // Stage 3 — PathResolver
