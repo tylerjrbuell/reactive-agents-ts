@@ -179,12 +179,17 @@ Each flip gets a named, greppable escape hatch and a CHANGELOG **BREAKING (secur
 
 **Session tally: 12 security bundles shipped** (adds F8-remainder, F15, F25 to the 11). Full runtime 1120 pass, tools 882, typecheck clean.
 
+### 2026-07-02 — fifth execution session (1 commit, 15 total)
+
+- **F1b — opt-in Docker isolation** (reframed per user: Docker is NOT a hard dep — host path stays default; Docker offered for added isolation). `docker-sandbox.executeShell()` added (shared hardened run-args builder); shell commands run in a fully-isolated container with a writable ephemeral **tmpfs `/work`** (mode 1777, **no host bind mount** — works on every Docker setup incl. Docker Desktop path-sharing), `--network none`, read-only rootfs, cap-drop ALL, non-root, seccomp. Opt in via `shell-execute` `sandbox: "docker"` (`.withTools({ terminal: { sandbox: "docker" } })`) or `RA_SANDBOX=docker` (global, also flips `code-execute`). F1a filters run first (defense-in-depth); fails closed if Docker unavailable. **Verified against a real Docker daemon** (runs, tmpfs writable, network blocked, no host FS, filters fire, code returns 42). Files ephemeral (isolation over continuity); shell image overridable for git/jq/gh.
+
+**Session tally: 13 security bundles shipped.** Full tools 889 pass, real-container tests green.
+
 **Remaining (each has a real blocker):**
-1. **F10** — verification/guardrail `onReject: block`. Final output/success is assembled across multiple engine phases (`inline-act.ts`, `reasoning-*`); a real "block" needs result-assembly plumbing (a metadata flag alone = dead theater). Off-by-default → lower urgency.
-2. **F1b** — Docker-mandatory exec substrate. Needs a Docker daemon to verify (absent here). F1a input layer holds the confirmed vectors meanwhile.
-3. **Phase 5** — CI supply-chain (F17–F24). Verifiable only by running CI; `publish.yml` release-sensitive. Safe additive parts (SHA-pin actions, `permissions:`, `--provenance`) can be done + inspection-verified when a CI dry-run is available.
-4. **F8 tail** — trace content-capture opt-in, `Secret<T>` wrapper (redaction boundaries now all done).
-5. **F3 remainder** — verified-aware retrieval + move recalled content out of the system turn (needs cross-tier ablation).
-6. **Smaller:** F13 (rate-limit/cost no-op public exports), F14-tail (body cap on `github-adapter`), F26 (durable audit log invoked), F27 (gate provider prompt-echo — mostly covered by redaction now).
+1. **F10** — verification/guardrail `onReject: block`. Final output/success is assembled across multiple engine phases; a real "block" needs result-assembly plumbing (a metadata flag alone = dead theater). Off-by-default → lower urgency.
+2. **Phase 5** — CI supply-chain (F17–F24). Verifiable only by running CI; `publish.yml` release-sensitive. Safe additive parts (SHA-pin actions, `permissions:`, `--provenance`) can be done + inspection-verified when a CI dry-run is available.
+3. **F8 tail** — trace content-capture opt-in, `Secret<T>` wrapper (redaction boundaries all done).
+4. **F3 remainder** — verified-aware retrieval + move recalled content out of the system turn (needs cross-tier ablation).
+5. **Smaller:** F13 (rate-limit/cost no-op public exports), F14-tail (body cap on `github-adapter`), F26 (durable audit log invoked), F27 (gate provider prompt-echo — mostly covered by redaction now).
 
 **Still owed (manual, user):** rotate the `apps/advocate` Tavily key + GitHub PAT.
