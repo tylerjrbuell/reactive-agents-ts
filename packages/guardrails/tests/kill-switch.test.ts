@@ -172,3 +172,42 @@ describe("KillSwitchService — lifecycle API", () => {
     expect(result).toBe("ok");
   });
 });
+
+describe("KillSwitchService — abort signal (C1)", () => {
+  test("signal() returns a stable, un-aborted AbortSignal for an agent", async () => {
+    const [aborted, sameRef] = await run(
+      Effect.gen(function* () {
+        const ks = yield* KillSwitchService;
+        const s1 = yield* ks.signal("agent-sig");
+        const s2 = yield* ks.signal("agent-sig");
+        return [s1?.aborted ?? true, s1 === s2] as const;
+      }),
+    );
+    expect(aborted).toBe(false);
+    expect(sameRef).toBe(true);
+  });
+
+  test("terminate() aborts the agent's AbortSignal", async () => {
+    const aborted = await run(
+      Effect.gen(function* () {
+        const ks = yield* KillSwitchService;
+        const sig = yield* ks.signal("agent-term");
+        yield* ks.terminate("agent-term", "test");
+        return sig?.aborted ?? false;
+      }),
+    );
+    expect(aborted).toBe(true);
+  });
+
+  test("terminate() aborts even if signal() was never called first", async () => {
+    const aborted = await run(
+      Effect.gen(function* () {
+        const ks = yield* KillSwitchService;
+        yield* ks.terminate("agent-late", "test");
+        const sig = yield* ks.signal("agent-late");
+        return sig?.aborted ?? false;
+      }),
+    );
+    expect(aborted).toBe(true);
+  });
+});
