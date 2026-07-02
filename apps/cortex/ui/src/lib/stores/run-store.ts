@@ -68,6 +68,8 @@ export interface RunState {
   readonly structuredObject: unknown | null;
   /** Lenient parse-fail message when extraction failed. */
   readonly structuredError: string | null;
+  /** Per-run launch config snapshot (from `launch_params_json`); enables Rerun / Edit & Rerun. */
+  readonly launchParams: Record<string, unknown> | null;
 }
 
 const DEFAULT_VITALS: RunVitals = {
@@ -210,6 +212,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     errorMessage: null,
     structuredObject: null,
     structuredError: null,
+    launchParams: null,
   });
 
   let unsubMsg: (() => void) | null = null;
@@ -296,6 +299,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         cost?: number;
         debrief?: string | null;
         errorMessage?: string | null;
+        launchParams?: Record<string, unknown>;
       };
       runStartMs = typeof run.startedAt === "number" ? run.startedAt : Date.now();
       const mapped: RunStatus =
@@ -317,6 +321,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         ...s,
         agentId: run.agentId,
         status: mapped === "live" && s.events.length === 0 ? "loading" : mapped,
+        launchParams: run.launchParams ?? s.launchParams,
         debrief: parsedDebrief ?? s.debrief,
         errorMessage: run.errorMessage ?? s.errorMessage,
         vitals: {
@@ -418,6 +423,21 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     }
   }
 
+  /** Relaunch a new run from this run's stored config snapshot. Returns the new
+   * run id (or null on failure — e.g. no snapshot / server error). */
+  async function rerun(): Promise<string | null> {
+    try {
+      const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/rerun`, {
+        method: "POST",
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { runId?: string };
+      return body.runId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async function deleteRun(): Promise<boolean> {
     try {
       const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}`, {
@@ -461,6 +481,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     resume,
     stop,
     terminate,
+    rerun,
     approve,
     deny,
     deleteRun,

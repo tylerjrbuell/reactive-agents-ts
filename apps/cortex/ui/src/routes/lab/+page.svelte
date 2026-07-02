@@ -307,6 +307,30 @@
     finally { gatewayLoading = false; }
   }
 
+  // Keys whose LaunchParams (server) shape matches BuilderAgentConfig (UI) 1:1,
+  // so they can be copied straight from a run snapshot into the builder. Nested
+  // fields that diverge between the two shapes (durableRuns, grounding, skills,
+  // guardrails, persona, agentTools, taskContext, dynamicSubAgents) are
+  // intentionally omitted — they keep the builder defaults.
+  const SNAPSHOT_PREFILL_KEYS = [
+    "prompt", "provider", "model", "temperature", "maxTokens", "numCtx",
+    "strategy", "maxIterations", "minIterations", "systemPrompt", "useReasoning",
+    "strategySwitching", "auditRationale", "runtimeVerification", "terminalTools",
+    "terminalShellAdditionalCommands", "terminalShellAllowedCommands",
+    "verificationStep", "observabilityVerbosity", "additionalToolNames",
+    "healthCheck", "tools", "modelRouting", "budget", "metaTools", "fallbacks",
+    "retryPolicy", "memory",
+  ] as const;
+
+  function prefillBuilderFromSnapshot(snapshot: Record<string, unknown>): void {
+    const patch: Record<string, unknown> = {};
+    for (const key of SNAPSHOT_PREFILL_KEYS) {
+      if (snapshot[key] !== undefined && snapshot[key] !== null) patch[key] = snapshot[key];
+    }
+    // Merge OVER current config so omitted / newly-added fields keep defaults.
+    builderConfig = { ...builderConfig, ...patch } as BuilderAgentConfig;
+  }
+
   function openCreate() {
     // New-agent creation now goes through the unified Builder flow.
     builderConfig = builderDefaultsFromSettings();
@@ -757,6 +781,20 @@
       fetch(`${CORTEX_SERVER_URL}/api/skills`).then(r => r.ok ? r.json() : []).then(j => { skills = j; }).catch(() => {}),
       fetch(`${CORTEX_SERVER_URL}/api/skills/files`).then(r => r.ok ? r.json() : { skills: [] }).then((j: { skills?: FsSkillSummary[] }) => { fsSkillSummaries = j.skills ?? []; }).catch(() => {}),
     ]);
+
+    // Edit & Rerun: ?fromRun=<id> prefills the builder from that run's stored
+    // launch snapshot, merged OVER the current defaults so a snapshot that
+    // predates a new config field keeps that field's default.
+    const fromRun = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("fromRun") : null;
+    if (fromRun) {
+      activeTab = "builder";
+      void fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(fromRun)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((run: { launchParams?: Record<string, unknown> } | null) => {
+          if (run?.launchParams) prefillBuilderFromSnapshot(run.launchParams);
+        })
+        .catch(() => {});
+    }
 
     return () => window.removeEventListener("cortex:lab-tab", onTabSwitch);
   });

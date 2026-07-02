@@ -5,6 +5,7 @@
   import VitalsStrip from "$lib/components/VitalsStrip.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import RunOverview from "$lib/components/RunOverview.svelte";
+  import RunConfigSnapshot from "$lib/components/RunConfigSnapshot.svelte";
   import DecisionLog from "$lib/components/DecisionLog.svelte";
   import MemoryPanel from "$lib/components/MemoryPanel.svelte";
   import ContextGauge from "$lib/components/ContextGauge.svelte";
@@ -339,6 +340,17 @@
     } finally { deletingRun = false; }
   }
 
+  let rerunning = $state(false);
+  async function doRerun() {
+    if (rerunning) return;
+    rerunning = true;
+    try {
+      const newRunId = await runStore.rerun();
+      if (newRunId) await goto(`/run/${newRunId}`);
+      else toast.error("Rerun failed", "No stored config for this run.");
+    } finally { rerunning = false; }
+  }
+
   onDestroy(() => {
     stopReplayPlay();
     runStore.destroy();
@@ -551,6 +563,7 @@
         eventCount={$runStore.events.length}
         errorMessage={$runStore.errorMessage}
       />
+      <RunConfigSnapshot launchParams={$runStore.launchParams} />
     </section>
       </div>
     </div>
@@ -657,6 +670,22 @@
                transition-colors"
         onclick={() => goto("/")}
       >Back</button>
+      {#if $runStore.launchParams}
+        <button
+          type="button"
+          disabled={rerunning}
+          class="px-3 py-1.5 border border-primary/35 text-primary font-mono text-[10px] uppercase
+                 rounded-md bg-primary/5 cursor-pointer hover:bg-primary/12 transition-colors
+                 disabled:opacity-40 disabled:cursor-not-allowed"
+          onclick={doRerun}
+        >{rerunning ? "…" : "Rerun"}</button>
+        <button
+          type="button"
+          class="px-3 py-1.5 border border-secondary/40 text-secondary font-mono text-[10px] uppercase
+                 rounded-md bg-secondary/5 cursor-pointer hover:bg-secondary/12 transition-colors"
+          onclick={() => goto(`/lab?fromRun=${encodeURIComponent(runId)}`)}
+        >Edit &amp; Rerun</button>
+      {/if}
       <button
         type="button"
         disabled={deletingRun}
