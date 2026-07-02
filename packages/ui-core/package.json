@@ -1,0 +1,32 @@
+{
+  "name": "@reactive-agents/ui-core",
+  "version": "0.10.6",
+  "description": "Headless core for Reactive Agents UI bindings — wire protocol, resumable stream client, run state machines, fixture testing",
+  "keywords": ["ai", "agents", "llm", "typescript", "streaming", "ai-ui", "agent-ui", "headless"],
+  "type": "module",
+  "exports": {
+    ".": {
+      "bun": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "bun": "./dist/testing/fixtures.js",
+      "types": "./dist/testing/fixtures.d.ts",
+      "import": "./dist/testing/fixtures.js",
+      "default": "./dist/testing/fixtures.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^6.0.0"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/testing/fixtures.ts --format esm --dts --out-dir dist",
+    "typecheck": "tsc --noEmit"
+  }
+}
