@@ -5,3 +5,9 @@
 export * from "./protocol/events.js";
 export * from "./parse-partial.js";
 export { connectRunStream, type ConnectOptions } from "./stream/connect.js";
+export {
+  initialRunState,
+  reduceRunState,
+  type RunState,
+  type ReduceOptions,
+} from "./state/run-machine.js";
