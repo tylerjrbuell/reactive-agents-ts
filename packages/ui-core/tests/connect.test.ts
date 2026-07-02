@@ -10,9 +10,21 @@ const sse = (events: Array<{ seq?: number; event: object }>, opts?: { dropAfter?
     chunks.push(`data: ${JSON.stringify(event)}\n\n`);
   });
   const encoder = new TextEncoder();
+  // Pull-based: deliver each queued (pre-drop) chunk to the reader one at a
+  // time, and only surface the drop error once every chunk has actually been
+  // read. A `start()`-based enqueue-then-error errors the stream before the
+  // reader ever calls `read()`, which causes engines (e.g. Bun) to discard
+  // the already-enqueued chunks entirely — unlike a real network drop, where
+  // bytes already received are delivered to the reader before the drop
+  // surfaces.
+  let index = 0;
   return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const c of chunks) controller.enqueue(encoder.encode(c));
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[index]));
+        index += 1;
+        return;
+      }
       if (opts?.dropAfter !== undefined) {
         controller.error(new Error("network drop"));
       } else {
