@@ -568,6 +568,50 @@ describe("POST /api/runs/:runId/terminate (C4)", () => {
   });
 });
 
+describe("POST /api/runs/:runId/rerun (D2)", () => {
+  it("relaunches a new run from the stored snapshot", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const rerunLayer = Layer.succeed(CortexRunnerService, {
+      start: (params) => {
+        captured.params = params;
+        return Effect.succeed({ agentId: "new-a", runId: "new-r" });
+      },
+      pause: () => Effect.void,
+      resume: () => Effect.void,
+      stop: () => Effect.void,
+      terminate: () => Effect.void,
+      getActive: () => Effect.succeed(new Map()),
+      listPendingApprovals: () => Effect.succeed([]),
+      approveApproval: () => Effect.void,
+      denyApproval: () => Effect.void,
+    });
+    const db = new Database(":memory:");
+    applySchema(db);
+    upsertRun(db, "ag", "orig-run", "Orig", JSON.stringify({ prompt: "hi", strategy: "blueprint", provider: "test" }));
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), rerunLayer));
+
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/orig-run/rerun", { method: "POST" }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { runId?: string };
+    expect(body.runId).toBe("new-r");
+    expect(captured.params?.strategy).toBe("blueprint");
+    expect(captured.params?.prompt).toBe("hi");
+  });
+
+  it("returns 400 when the run has no stored snapshot", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    upsertRun(db, "ag", "bare-run");
+    const app = appWithRunsDb(db);
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/bare-run/rerun", { method: "POST" }),
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /api/runs — durableRuns passthrough (Phase E)", () => {
   it("forwards durableRuns + approvalPolicy to the runner", async () => {
     const captured = { params: null as LaunchParams | null };

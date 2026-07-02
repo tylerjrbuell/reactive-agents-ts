@@ -1,7 +1,8 @@
 import { Elysia, t } from "elysia";
 import { Effect, Layer, Option } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
-import { CortexRunnerService } from "../services/runner-service.js";
+import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
+import { CortexError } from "../errors.js";
 import type { VariableDef } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 
@@ -227,6 +228,26 @@ export const runsRouter = (
       } catch (e) {
         set.status = 500;
         return { error: String(e) };
+      }
+    })
+    // Repeat a finished/failed run with its exact stored config (D1 snapshot).
+    .post("/:runId/rerun", async ({ params, set }) => {
+      const program = Effect.gen(function* () {
+        const store = yield* CortexStoreService;
+        const runner = yield* CortexRunnerService;
+        const snapshot = yield* store.getLaunchParams(params.runId);
+        if (!snapshot || typeof snapshot.prompt !== "string") {
+          return yield* Effect.fail(new CortexError({ message: "No stored config to rerun" }));
+        }
+        return yield* runner.start(snapshot as unknown as LaunchParams);
+      });
+      try {
+        return await Effect.runPromise(
+          program.pipe(Effect.provide(Layer.merge(storeLayer, runnerLayer))),
+        );
+      } catch (e) {
+        set.status = 400;
+        return { ok: false, error: String(e) };
       }
     })
     // ── Durable HITL (Phase E) ──
