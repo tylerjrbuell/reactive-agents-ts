@@ -82,7 +82,7 @@ export const listDurableRuns = (params: {
 }): Effect.Effect<readonly RunRecord[], never> =>
   Effect.gen(function* () {
     const store = yield* RunStoreService;
-    return yield* store.listRuns(params.status);
+    return yield* store.listRuns({ status: params.status });
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 
 /** Flip a run's lifecycle status (best-effort; never fails the caller). */
