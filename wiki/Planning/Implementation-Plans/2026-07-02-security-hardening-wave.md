@@ -164,13 +164,18 @@ Each flip gets a named, greppable escape hatch and a CHANGELOG **BREAKING (secur
 
 **Session tally:** 9 bundles green (Phase 0, F1a, F9, F12, F4, F6, F8a, F5, F3). Full-repo typecheck 69/69. Two Criticals (F1 vectors, F4) + the memory-injection Critical (F3, fence layer) + F5/F6/F8/F9/F12 closed.
 
-**Remaining (priority order):**
-1. **F2** — fail-closed approval enforcement. **Design note from this session:** `tool-gating.ts:33-49` already *documents* the intended fold of per-tool `requiresApproval` into `policy.tools`, but `runtime-construction.ts:474` assembles the policy without tool-definition access, so the auto-feed needs deeper tool-registry↔policy plumbing (custom tool defs aren't on `state` at that point). Plus a product decision on the no-policy default (pure fail-closed throw breaks headless agents). Breaking-by-design; do deliberately.
-2. **F1b** — Docker-mandatory exec substrate (needs Docker env to verify).
-3. **F10** — verification/guardrail `onReject: block`; wire or delete `checkOutput` (off-by-default → lower active value).
-4. **F11** (dormant) — webhook fail-closed + transport-bound identity.
-5. **F8 remainder** — OTel/cortex redaction, trace content opt-in, `Secret<T>`.
-6. **Phase 5** — CI supply-chain hardening (F17–F24).
-7. **F3 remainder** — verified-aware retrieval + recalled-content turn repositioning (needs ablation).
+### 2026-07-02 — third execution session (2 more commits, 12 total)
+
+- **F2** (`fix(runtime)` approval auto-feed) — folds per-tool `requiresApproval` flags into the approval policy at config assembly (`foldApprovalRequiredTools` in `approval-autofeed.ts`, wired at `runtime-construction.ts`). Registered `requiresApproval:true` tools (built-ins always; terminal `shell-execute` when enabled; custom) are now gated without hand-listing. **Non-breaking scope:** runs only when `.withApprovalPolicy` is set. Updated the stale `builder/types.ts` doc. Full runtime 1116 pass.
+- **F11** (`fix(gateway)` webhook fail-closed) — `requireSignature` (default true): a secretless route is refused (401) unless explicitly opted out. Threaded through `registerAdapter` + `WebhookConfig`. (Dormant finding; false boundary removed.) Gateway 123 pass.
+
+**Session tally: 11 security bundles shipped, all green** (Phase 0, F1a, F9, F12, F4, F6, F8a, F5, F3, F2, F11). Full-repo typecheck 69/69. Every **active** Critical (F1 vectors, F3 memory-injection, F4 unauth servers) + the approval **multiplier** (F2) + Highs (F6, F8, F9, F10-partial-n/a, F12) + the two dormant Criticals (F5, F11) closed.
+
+**Remaining (each has a real blocker — do deliberately, not at a session tail):**
+1. **F10** — verification/guardrail `onReject: block`. **Investigated this session:** the final output/success is assembled across multiple engine phases (`inline-act.ts`, `reasoning-*`), so a real "block" needs result-assembly plumbing; a metadata-only flag would be the exact dead-theater the audit criticizes. Off-by-default → lower urgency. Do with the result path in hand.
+2. **F1b** — Docker-mandatory exec substrate. Needs a Docker daemon to verify (absent here). The F1a input layer holds the confirmed vectors meanwhile.
+3. **Phase 5** — CI supply-chain (F17–F24): SHA-pin actions, `permissions: contents: read`, bind version input to `env:`, scope `NPM_TOKEN`, `--provenance`. Verifiable only by running CI; `publish.yml` is release-sensitive — do with a CI dry-run available.
+4. **F8 remainder** — OTel tracer + cortex-reporter redaction boundaries, trace content-capture opt-in, `Secret<T>`.
+5. **F3 remainder** — verified-aware retrieval + move recalled content out of the system turn (needs cross-tier ablation for token/quality).
 
 **Still owed (manual, user):** rotate the `apps/advocate` Tavily key + GitHub PAT.
