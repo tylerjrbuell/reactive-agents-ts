@@ -28,6 +28,7 @@ import { applySchema } from "../db/schema.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
 import { runsRouter } from "../api/runs.js";
+import { getCapabilityManifest } from "@reactive-agents/runtime";
 
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
@@ -198,8 +199,20 @@ describe("AgentConfig → LaunchParams — model routing (A1)", () => {
 });
 
 describe("AgentConfig → LaunchParams — full strategy set", () => {
-  it("accepts every canonical strategy through POST /api/runs (no UI-only enum drift)", async () => {
-    for (const strategy of ["blueprint", "code-action", "direct", "reflexion", "tree-of-thought"]) {
+  // Manifest-driven (A2): iterate the framework's authoritative strategy catalog
+  // rather than a hand-maintained list, so a NEW strategy registered in the
+  // framework fails HERE if it isn't launchable through Cortex — the whole
+  // anti-drift point. Every canonical strategy name + alias must POST cleanly.
+  it("accepts every manifest strategy through POST /api/runs (no UI-only enum drift)", async () => {
+    const manifest = getCapabilityManifest();
+    const names = manifest.strategies.flatMap((s) => [s.name, ...(s.aliases ?? [])]);
+    expect(names.length).toBeGreaterThanOrEqual(8);
+    // blueprint/code-action/direct were the historically-dropped ones — pin them.
+    expect(names).toContain("blueprint");
+    expect(names).toContain("code-action");
+    expect(names).toContain("direct");
+
+    for (const strategy of names) {
       const captured = { params: null as LaunchParams | null };
       const db = new Database(":memory:");
       applySchema(db);
