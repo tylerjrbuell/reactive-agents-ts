@@ -326,6 +326,13 @@ export const executeReactive = (
         ...(state.meta.awaitingApprovalFor !== undefined
           ? { awaitingApprovalFor: state.meta.awaitingApprovalFor }
           : {}),
+        // Durable pause (Task 9): mirror the awaitingApprovalFor forwarding
+        // above for the request_user_input pause — surfaces the interaction
+        // descriptor so a later task (10, persist+resume) can read it off
+        // AgentCompleted without reaching back into raw kernel state.
+        ...(state.meta.awaitingInteractionFor !== undefined
+          ? { awaitingInteractionFor: state.meta.awaitingInteractionFor }
+          : {}),
         // O3 C1: forward the run-level abstention surface so the engine can
         // populate AgentResult.abstention. Present only when terminatedBy ===
         // "abstained" (harness-forced or model-initiated via the abstain tool).

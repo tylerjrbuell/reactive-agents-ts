@@ -608,6 +608,11 @@ export function runKernel(
     // looks "required but uncalled" and the run is failed. Skip them entirely when
     // paused; resume executes the approved call and runs finalization then.
     const isAwaitingApproval = state.meta.terminatedBy === "awaiting-approval";
+    // Durable pause (Task 9): a run paused for `request_user_input` is the
+    // identical clean terminal state, mirroring `awaiting-approval` — same
+    // skip-finalization treatment, carrying `meta.awaitingInteractionFor`
+    // instead of `meta.awaitingApprovalFor`.
+    const isAwaitingInteraction = state.meta.terminatedBy === "awaiting-interaction";
     // O3 Task 6: abstained runs are a clean non-failure terminal (status:"done",
     // terminatedBy:"abstained"). The post-loop finalization blocks (required-tools
     // failure, verifier, quality gate, output synthesis) must be skipped — the
@@ -623,7 +628,13 @@ export function runKernel(
     // Final safety net: if the loop exited without failure but required quotas
     // are still missing, fail with a deterministic missing_required_tool error.
     // This applies uniformly across all non-failed exits.
-    if (state.status !== "failed" && requiredTools.length > 0 && !isAwaitingApproval && !isAbstained) {
+    if (
+      state.status !== "failed" &&
+      requiredTools.length > 0 &&
+      !isAwaitingApproval &&
+      !isAwaitingInteraction &&
+      !isAbstained
+    ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
       if (missingTools.length > 0) {
@@ -787,7 +798,13 @@ export function runKernel(
       iteration: state.iteration,
     });
 
-    if (state.status === "done" && state.output && !isAwaitingApproval && !isAbstained) {
+    if (
+      state.status === "done" &&
+      state.output &&
+      !isAwaitingApproval &&
+      !isAwaitingInteraction &&
+      !isAbstained
+    ) {
       // availableUserTools — pass through the user-registered tool list
       // so the verifier can run classifier-independent "agent-took-action"
       // checks (rejects parrots / hallucinated answers / meta-tool dumps
@@ -968,7 +985,13 @@ export function runKernel(
     // Route all successful outputs through the canonical finalization pipeline.
     // Validates format, optionally synthesizes when LLM is available.
     // Harness-assembled output (raw tool artifacts) always attempts synthesis.
-    if (state.status === "done" && state.output && !isAwaitingApproval && !isAbstained) {
+    if (
+      state.status === "done" &&
+      state.output &&
+      !isAwaitingApproval &&
+      !isAwaitingInteraction &&
+      !isAbstained
+    ) {
       // `harness_synthesis` (introduced when assembleDeliverable picks a
       // substantive model thought) is treated as a MODEL output here — the
       // text was authored by the LLM, not concatenated from raw tool JSON.

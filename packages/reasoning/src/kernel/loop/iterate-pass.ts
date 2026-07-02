@@ -474,7 +474,14 @@ export function runIterationPass(
       // `awaitingApprovalFor`, and the gate re-fires instead of executing the
       // approved call. Fire-and-forget through the same observer contract (never
       // kills the loop). The loop exits immediately after (status:"done").
-      if (state.meta.terminatedBy === "awaiting-approval" && _runCtl?.onCheckpoint) {
+      // Durable pause (Task 9): a `request_user_input` interaction pause needs
+      // the identical post-gate checkpoint — same rationale, mirrors
+      // `meta.awaitingInteractionFor` instead of `awaitingApprovalFor`.
+      if (
+        (state.meta.terminatedBy === "awaiting-approval" ||
+          state.meta.terminatedBy === "awaiting-interaction") &&
+        _runCtl?.onCheckpoint
+      ) {
         try {
           // Write at iteration+1 so this is a DISTINCT row that always wins
           // `latestCheckpoint` (ORDER BY iteration DESC) — the pass-boundary
@@ -939,10 +946,14 @@ export function runIterationPass(
       // tools redirect re-thinks the gated call every iteration (the gate re-fires,
       // the tool never "executes") and the run loops to max_iterations instead of
       // pausing. Resume executes the approved call, satisfying the requirement.
+      // Durable pause (Task 9): an `awaiting-interaction` pause is the identical
+      // case — the model asked for human input via `request_user_input` and the
+      // run is intentionally suspended, not missing a required tool.
       if (
         state.status === "done" &&
         requiredTools.length > 0 &&
-        state.meta.terminatedBy !== "awaiting-approval"
+        state.meta.terminatedBy !== "awaiting-approval" &&
+        state.meta.terminatedBy !== "awaiting-interaction"
       ) {
         const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
         if (missingTools.length > 0) {

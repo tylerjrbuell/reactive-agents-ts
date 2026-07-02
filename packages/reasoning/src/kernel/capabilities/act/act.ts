@@ -18,6 +18,7 @@ import {
   type ToolCallSpec,
   runHealingPipeline,
   getFileRoot,
+  REQUEST_USER_INPUT_TOOL_NAME,
 } from "@reactive-agents/tools";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
@@ -246,6 +247,42 @@ export function handleActing(
             deliverable: sentinelDeliverable("awaiting_approval"),
           });
         }
+      }
+
+      // ── Durable interaction pause (Task 9) ───────────────────────────────────
+      // Mirrors the approval gate directly above: when the model calls
+      // `request_user_input`, pause BEFORE any further tool execution. The
+      // interaction is stored on meta.awaitingInteractionFor and serialized into
+      // the checkpoint; the engine persists `awaiting-interaction` and returns
+      // control to the caller for a later task (10) to persist + resume.
+      // Gated on `metaTools.userInteraction` (same flag think.ts checks before
+      // offering the tool schema) so a call with this name is only ever
+      // intercepted when the feature was actually enabled for this run —
+      // otherwise it falls through to the normal unknown-tool path.
+      const interactionCall = input.metaTools?.userInteraction === true
+        ? normalizedPendingCalls.find((c) => c.name === REQUEST_USER_INPUT_TOOL_NAME)
+        : undefined;
+      if (interactionCall) {
+        const args = interactionCall.arguments as {
+          kind?: string;
+          prompt?: string;
+          schema?: unknown;
+        };
+        const paused = transitionState(state, {
+          meta: {
+            ...state.meta,
+            awaitingInteractionFor: {
+              interactionId: crypto.randomUUID(),
+              kind: typeof args.kind === "string" ? args.kind : "confirmation",
+              prompt: typeof args.prompt === "string" ? args.prompt : "",
+              schemaJson: JSON.stringify(args.schema ?? {}),
+            },
+          },
+        });
+        return terminate(paused, {
+          reason: "awaiting-interaction",
+          deliverable: sentinelDeliverable("awaiting_interaction"),
+        });
       }
 
       const newToolsUsed = new Set(state.toolsUsed);

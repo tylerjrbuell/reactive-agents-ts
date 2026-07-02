@@ -140,6 +140,18 @@ export interface KernelMeta {
     readonly args: unknown;
   };
   /**
+   * Durable pause (Task 9): set when the act capability intercepts a
+   * `request_user_input` tool call. Serialized into the checkpoint so a
+   * paused-for-interaction run survives a crash; a later task (10) persists
+   * and resumes it, mirroring the {@link awaitingApprovalFor} rail.
+   */
+  readonly awaitingInteractionFor?: {
+    readonly interactionId: string;
+    readonly kind: string;
+    readonly prompt: string;
+    readonly schemaJson: string;
+  };
+  /**
    * Durable HITL (Phase D): transient one-shot flag set by the runner's resume
    * re-entry while it executes an already-approved call via the act capability.
    * Tells the act gate to skip gating for that single pass (the human already

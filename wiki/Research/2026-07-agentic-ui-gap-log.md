@@ -8,3 +8,68 @@ gets an entry here with production context. Format per entry:
 - **Expected:** <what the framework should have offered>
 - **Actual:** <what exists / what you had to do instead>
 - **Severity:** blocker | workaround | papercut
+
+## GAP-1: act.ts intercept template omitted the offer-flag gate
+- **Hit while:** Task 9 — wiring the `request_user_input` durable pause into act.ts.
+  The brief's literal template (mirroring the approval-gate block) matched on
+  `normalizedPendingCalls.find((c) => c.name === REQUEST_USER_INPUT_TOOL_NAME)`
+  with no check of `input.metaTools?.userInteraction`.
+- **Expected:** the intercept should only fire when the feature was actually
+  enabled for the run (same flag think.ts checks before offering the tool
+  schema) — otherwise "flag off" and "flag on" are indistinguishable at the
+  act.ts seam, since a scripted/deterministic test model can emit a tool call
+  by name regardless of what was offered.
+- **Actual:** added `input.metaTools?.userInteraction === true` as a guard on
+  the `interactionCall` lookup in act.ts (mirroring the `tc.name === "brief" &&
+  input.metaTools?.brief` pattern already used a few lines below for meta-tool
+  registry gating). Without this, the "tool NOT offered when flag off" test
+  case is unfalsifiable — the intercept would pause unconditionally on tool
+  name alone.
+- **Severity:** papercut (caught by the required "not offered" test case; would
+  have been a real gating bug if shipped as literally templated).
+
+## GAP-2: sentinel deliverable reason is a two-place closed union
+- **Hit while:** Task 9 — adding `"awaiting_interaction"` as a new
+  `sentinelDeliverable(reason)` value in `packages/core/src/contracts/
+  deliverable.ts`.
+- **Expected:** one string-literal union to extend.
+- **Actual:** the reason string is declared TWICE — once as the
+  `sentinelDeliverable()` function parameter type, and again (independently)
+  as the `Deliverable` discriminated union's `sentinel` branch `reason` field.
+  Extending only the function signature type-checks fine at the call site but
+  fails `tsup`'s DTS build with a mismatched-literal error, because the
+  function's return type widens against the (unextended) `Deliverable` union.
+  Both must be updated together; also updated `deliverableToContent`'s
+  `sentinel` reason switch for a matching human-readable message ("Run
+  paused — awaiting human input.") alongside the existing `awaiting_approval`
+  case, otherwise the new reason silently falls into the generic "Task
+  complete." default.
+- **Severity:** papercut.
+
+## GAP-3: this worktree's `tsc --noEmit` silently resolves cross-package
+  imports to the MAIN REPO's stale `dist/`, not the worktree's own source
+- **Hit while:** Task 9 — running `cd packages/reasoning && bunx tsc --noEmit
+  -p tsconfig.json` per the verification step.
+- **Expected:** tsc checks the worktree's own source changes (this worktree
+  lives at `.claude/worktrees/agentic-ui-kit/`, a sibling checkout of `main`).
+- **Actual:** no package in this worktree has a locally-built `dist/`
+  (gitignored, never built here). `packages/*/tsconfig.json` sets `"paths":
+  {}`, which — per TS's extends semantics — REPLACES (does not merge with)
+  the root tsconfig's `@reactive-agents/*` → `./packages/*/src/index.ts` path
+  mapping, so cross-package imports fall back to plain node_modules
+  resolution. The worktree's own `node_modules/@reactive-agents/<pkg>` symlink
+  points at a `dist/` that doesn't exist locally, so TS's ancestor-directory
+  walk continues PAST the worktree boundary and resolves to the outer
+  checkout's `node_modules/@reactive-agents/<pkg>` → real repo's
+  `packages/<pkg>/dist/` — a build from BEFORE this worktree's changes
+  existed. Confirmed via `--traceResolution`: reported "no exported member"
+  errors were real (main-repo dist genuinely lacks Task 8/9's new exports) but
+  MISLEADING — they don't reflect this worktree's source at all, and would
+  have persisted even with fully correct worktree code. Fix: run `bun run
+  --filter=@reactive-agents/<pkg> build` locally for every package this
+  worktree changed (`core`, `tools` for this task) BEFORE trusting `tsc
+  --noEmit` inside a nested worktree — the local `dist/` then wins the
+  ancestor walk before it escapes to the main checkout.
+- **Severity:** workaround (costs real debugging time on every task in this
+  worktree that touches a cross-package export until dist is (re)built
+  locally; will recur for Task 10+ unless the workaround becomes routine).

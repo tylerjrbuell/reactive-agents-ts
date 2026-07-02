@@ -113,11 +113,19 @@ function applyTerminalPostConditionGate(
   // to `status:"failed"` would mislabel a resumable pause as a dead run. Pass
   // through to the normal terminal transition so the engine sees a clean
   // `terminatedBy:"awaiting-approval"`.
+  // Durable pause (Task 9): a `request_user_input` interaction pause is the
+  // same shape — the run is intentionally suspended awaiting a human answer,
+  // not failed. Mirrors the awaiting-approval treatment exactly.
   // O3 (Task 6): an abstained run intentionally declines to answer — post-conditions
   // are moot (no iterations could have met them when grounding was structurally
   // impossible). Pass through so `status:"done"` + `terminatedBy:"abstained"` is
   // set cleanly without the gate re-demoting to `status:"failed"`.
-  if (opts.reason === "awaiting-approval" || opts.reason === "abstained") return null;
+  if (
+    opts.reason === "awaiting-approval" ||
+    opts.reason === "awaiting-interaction" ||
+    opts.reason === "abstained"
+  )
+    return null;
   const conditions = state.meta.postConditions;
   if (!conditions || conditions.length === 0) return null;
 
