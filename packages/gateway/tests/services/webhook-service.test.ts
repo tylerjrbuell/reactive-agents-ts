@@ -37,7 +37,11 @@ describe("WebhookService", () => {
     const event = await Effect.runPromise(
       Effect.gen(function* () {
         const svc = yield* WebhookService;
-        yield* svc.registerAdapter("/github", createGitHubAdapter());
+        // This test exercises routing, not auth — opt out of the fail-closed
+        // signature requirement (F11).
+        yield* svc.registerAdapter("/github", createGitHubAdapter(), undefined, {
+          requireSignature: false,
+        });
         return yield* svc.handleRequest("/github", req);
       }).pipe(Effect.provide(WebhookServiceLive())),
     );
@@ -94,5 +98,44 @@ describe("WebhookService", () => {
     const json = JSON.stringify(result);
     expect(json).toContain("Invalid webhook signature");
     expect(json).toContain("401");
+  });
+
+  // ── F11: fail-closed on secretless routes ───────────────────────────
+  test("rejects a secretless route by default (fail-closed)", async () => {
+    const req = makeGitHubRequest(
+      { action: "opened", pull_request: { number: 1 } },
+      "pull_request",
+    );
+
+    const result = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const svc = yield* WebhookService;
+        // No secret, no explicit opt-out → must be refused unauthenticated.
+        yield* svc.registerAdapter("/github", createGitHubAdapter());
+        return yield* svc.handleRequest("/github", req);
+      }).pipe(Effect.provide(WebhookServiceLive())),
+    );
+
+    expect(result._tag).toBe("Failure");
+    expect(JSON.stringify(result)).toContain("401");
+  });
+
+  test("allows a secretless route only with explicit requireSignature:false", async () => {
+    const req = makeGitHubRequest(
+      { action: "opened", pull_request: { number: 1 } },
+      "pull_request",
+    );
+
+    const event = await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* WebhookService;
+        yield* svc.registerAdapter("/github", createGitHubAdapter(), undefined, {
+          requireSignature: false,
+        });
+        return yield* svc.handleRequest("/github", req);
+      }).pipe(Effect.provide(WebhookServiceLive())),
+    );
+
+    expect(event.source).toBe("webhook");
   });
 });

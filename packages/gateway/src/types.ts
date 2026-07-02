@@ -98,6 +98,8 @@ export const WebhookConfigSchema = Schema.Struct({
   adapter: Schema.String,
   secret: Schema.optional(Schema.String),
   events: Schema.optional(Schema.Array(Schema.String)),
+  /** When true (default), a route with no secret is refused (fail-closed, F11). */
+  requireSignature: Schema.optional(Schema.Boolean),
 });
 export type WebhookConfig = typeof WebhookConfigSchema.Type;
 
