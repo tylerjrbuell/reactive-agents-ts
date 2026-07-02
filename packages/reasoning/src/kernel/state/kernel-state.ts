@@ -630,6 +630,19 @@ export interface KernelInput {
     readonly reason?: string;
   };
   /**
+   * Agentic-UI durable interaction rail (Task 10): a human's response to a paused
+   * `request_user_input` interaction, threaded in on a resumed run by
+   * `ReactiveAgent.respondToInteraction` (via the `InteractionResponseRef`
+   * FiberRef, read + forwarded in `reasoning-think.ts`). Read by the runner at
+   * loop top together with `state.meta.awaitingInteractionFor`: the runner injects
+   * the value as the pending interaction's result and re-thinks. Mirrors
+   * {@link approvalDecision}. Null on every normal run (zero cost).
+   */
+  readonly interactionResponse?: {
+    readonly interactionId: string;
+    readonly valueJson: string;
+  };
+  /**
    * Durable HITL (Phase D): resolved approval-gate policy. The runtime merges the
    * three feeders (per-tool `requiresApproval` flags, builder `tools` list,
    * builder/compose predicate) into this single shape at config assembly. In

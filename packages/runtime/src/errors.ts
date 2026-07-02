@@ -176,6 +176,19 @@ export class ApprovalStateError extends Data.TaggedError("ApprovalStateError")<{
 }> {}
 
 /**
+ * Thrown by `agent.respondToInteraction` when the target run is not awaiting a
+ * user interaction (no pending interaction row) — e.g. already answered, already
+ * completed, or never paused. Agentic-UI durable interaction rail (Task 10).
+ * Mirrors {@link ApprovalStateError}.
+ */
+export class InteractionStateError extends Data.TaggedError("InteractionStateError")<{
+  /** The run id whose interaction could not be applied. */
+  readonly runId: string;
+  /** Human-readable reason (e.g. "no pending interaction"). */
+  readonly detail: string;
+}> {}
+
+/**
  * Union of all runtime error types that can be thrown by `agent.run()`.
  *
  * Use this as the error type in Effect pipelines or when calling `agent.run()`
@@ -189,7 +202,8 @@ export type RuntimeErrors =
   | KillSwitchTriggeredError
   | BehavioralContractViolationError
   | BudgetExceededError
-  | ApprovalStateError;
+  | ApprovalStateError
+  | InteractionStateError;
 
 /** Context and remediation suggestion for a runtime error. */
 export interface ErrorContext {

@@ -20,11 +20,13 @@ import {
   type RunRecord,
   type RunStatus,
   type ApprovalRecord,
+  type InteractionRecord,
 } from "../services/run-store.js";
 import {
   DurableRunNotFoundError,
   DurableConfigMismatchError,
   ApprovalStateError,
+  InteractionStateError,
 } from "../errors.js";
 
 /** The data needed to continue a crashed/paused run from its last checkpoint. */
@@ -172,4 +174,68 @@ export const persistApprovalPauseAt = (params: {
       toolName: params.gate.toolName,
       argsJson: JSON.stringify(params.gate.args ?? null),
     });
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+// ── Agentic-UI durable interaction rail (Task 10) ────────────────────────────
+// Mirror of the approval helpers above (persistApprovalPauseAt /
+// decideApprovalRecord / getPendingApprovalAt) for the `request_user_input`
+// pause. Semantic difference: an interaction always injects the human's value as
+// the pending call's result on resume; there is no approve/deny branch.
+
+/**
+ * Persist a paused-for-interaction run — status → awaiting-interaction + a pending
+ * interaction row. Mirrors {@link persistApprovalPauseAt} for the `run()` path.
+ */
+export const persistInteractionPauseAt = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+  readonly interaction: {
+    interactionId: string;
+    kind: string;
+    prompt: string;
+    schemaJson: string;
+  };
+}): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    yield* store.setStatus(params.runId, "awaiting-interaction");
+    yield* store.putInteraction({
+      runId: params.runId,
+      interactionId: params.interaction.interactionId,
+      kind: params.interaction.kind,
+      prompt: params.interaction.prompt,
+      schemaJson: params.interaction.schemaJson,
+    });
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/**
+ * Record a human's response on a run's pending interaction. Fails
+ * `InteractionStateError` when the run has no pending interaction (e.g. already
+ * answered, completed, or never paused). Mirrors {@link decideApprovalRecord}.
+ */
+export const decideInteractionRecord = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+  readonly interactionId: string;
+  readonly valueJson: string;
+}): Effect.Effect<void, InteractionStateError> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    const pending = yield* store.getPendingInteraction(params.runId);
+    if (!pending) {
+      return yield* Effect.fail(
+        new InteractionStateError({ runId: params.runId, detail: "no pending interaction" }),
+      );
+    }
+    yield* store.decideInteraction(params.runId, params.interactionId, params.valueJson);
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/** The single pending interaction for a run (or undefined). Used by `listPendingInteractions`. */
+export const getPendingInteractionAt = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+}): Effect.Effect<InteractionRecord | undefined, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    return yield* store.getPendingInteraction(params.runId);
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));

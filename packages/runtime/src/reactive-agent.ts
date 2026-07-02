@@ -34,7 +34,7 @@ import { unwrapError, toRunBoundaryError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ApprovalDecisionRef, RunControllerRef } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
@@ -44,6 +44,9 @@ import {
     getPendingApprovalAt,
     createDurableRun,
     persistApprovalPauseAt,
+    persistInteractionPauseAt,
+    decideInteractionRecord,
+    getPendingInteractionAt,
 } from './engine/durable-resume.js'
 import type { RunRecord, RunStatus } from './services/run-store.js'
 import type {
@@ -982,6 +985,124 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
+     * Agentic-UI interaction rail (Task 10): the durable store location + agent id
+     * for this agent when built with `.withDurableRuns()`, else `undefined`.
+     * Lets server adapters (Task 12) resolve the db path without reaching into
+     * builder internals. Matches how `runDurable`/`listRuns` compute the db path.
+     */
+    getDurableInfo(): { dbPath: string; agentId: string } | undefined {
+        if (!this._durableResume) return undefined
+        return {
+            dbPath: join(this._durableResume.dir, 'runs.db'),
+            agentId: this.agentId,
+        }
+    }
+
+    /**
+     * Agentic-UI interaction rail (Task 10): list runs paused awaiting a human
+     * response to a `request_user_input`, with the pending interaction (kind +
+     * prompt + parsed schema) for each. Requires `.withDurableRuns()`. Clone of
+     * `listPendingApprovals`.
+     */
+    async listPendingInteractions(): Promise<
+        readonly {
+            runId: string
+            interactionId: string
+            kind: string
+            prompt: string
+            schema: unknown
+            task: string
+            updatedAt: number
+        }[]
+    > {
+        if (!this._durableResume) {
+            throw new Error('listPendingInteractions() requires .withDurableRuns().')
+        }
+        const dbPath = join(this._durableResume.dir, 'runs.db')
+        const runs = await Effect.runPromise(
+            listDurableRuns({ dbPath, status: 'awaiting-interaction' }),
+        )
+        const out: {
+            runId: string
+            interactionId: string
+            kind: string
+            prompt: string
+            schema: unknown
+            task: string
+            updatedAt: number
+        }[] = []
+        for (const run of runs) {
+            const pending = await Effect.runPromise(
+                getPendingInteractionAt({ dbPath, runId: run.runId }),
+            )
+            if (pending) {
+                out.push({
+                    runId: run.runId,
+                    interactionId: pending.interactionId,
+                    kind: pending.kind,
+                    prompt: pending.prompt,
+                    schema: safeParseJson(pending.schemaJson),
+                    task: run.task,
+                    updatedAt: run.updatedAt,
+                })
+            }
+        }
+        return out
+    }
+
+    /**
+     * Agentic-UI interaction rail (Task 10): record a human's response to a run
+     * that paused for `request_user_input` and resume it to completion. Callable
+     * from ANY process (the response + the paused checkpoint live in the durable
+     * RunStore). Requires `.withDurableRuns()`. Clone of `decideAndResumeRun`.
+     *
+     * @throws Error if the agent was not built with `.withDurableRuns()`.
+     * @throws InteractionStateError if the run has no pending interaction.
+     */
+    async respondToInteraction(
+        runId: string,
+        interactionId: string,
+        value: unknown,
+    ): Promise<AgentResult> {
+        if (!this._durableResume) {
+            throw new Error(
+                'respondToInteraction() requires .withDurableRuns() — this agent has no durable run store.',
+            )
+        }
+        const { dir, configHash } = this._durableResume
+        const dbPath = join(dir, 'runs.db')
+
+        // 1. Record the human response (fails InteractionStateError if not pending).
+        await Effect.runPromise(
+            decideInteractionRecord({
+                dbPath,
+                runId,
+                interactionId,
+                valueJson: JSON.stringify(value),
+            }),
+        )
+
+        // 2. Load + guard the paused checkpoint.
+        const payload = await Effect.runPromise(
+            loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
+        )
+
+        // 3. Resume through the durable wrapper (same as approve/deny), seeding the
+        //    restored state + the interaction response. The runner injects the
+        //    value as the pending interaction's result and re-thinks to completion.
+        return this.runDurable({
+            input: payload.run.task,
+            taskId: runId,
+            runId,
+            task: payload.run.task,
+            resume: {
+                stateJson: payload.stateJson,
+                interaction: { interactionId, valueJson: JSON.stringify(value) },
+            },
+        })
+    }
+
+    /**
      * Execute a task as an Effect (advanced async version).
      *
      * Returns an Effect that, when run, performs the task execution. Useful for composing
@@ -1030,7 +1151,8 @@ export class ReactiveAgent<TOut = unknown> {
         readonly task: string
         readonly resume?: {
             readonly stateJson: string
-            readonly decision: { gateId: string; status: 'approved' | 'denied'; reason?: string }
+            readonly decision?: { gateId: string; status: 'approved' | 'denied'; reason?: string }
+            readonly interaction?: { interactionId: string; valueJson: string }
         }
     }): Promise<AgentResult> {
         const { dir, configHash } = this._durableResume!
@@ -1065,10 +1187,14 @@ export class ReactiveAgent<TOut = unknown> {
             durableRunId: params.runId,
         }).pipe(Effect.locally(RunControllerRef, controller))
         if (params.resume) {
-            pipeline = pipeline.pipe(
-                Effect.locally(ResumeStateRef, params.resume.stateJson),
-                Effect.locally(ApprovalDecisionRef, params.resume.decision),
-            )
+            const resume = params.resume
+            pipeline = pipeline.pipe(Effect.locally(ResumeStateRef, resume.stateJson))
+            if (resume.decision) {
+                pipeline = pipeline.pipe(Effect.locally(ApprovalDecisionRef, resume.decision))
+            }
+            if (resume.interaction) {
+                pipeline = pipeline.pipe(Effect.locally(InteractionResponseRef, resume.interaction))
+            }
         }
 
         try {
@@ -1084,6 +1210,22 @@ export class ReactiveAgent<TOut = unknown> {
                             gateId: result.pendingApproval.gateId,
                             toolName: result.pendingApproval.toolName,
                             args: result.pendingApproval.args,
+                        },
+                    }),
+                )
+            } else if (result.status === 'awaiting-interaction' && result.pendingInteraction) {
+                // Agentic-UI interaction rail (Task 10): paused for user input —
+                // persist (status + pending interaction row). Do NOT finish: the
+                // run stays `awaiting-interaction` until respondToInteraction.
+                await Effect.runPromise(
+                    persistInteractionPauseAt({
+                        dbPath,
+                        runId: params.runId,
+                        interaction: {
+                            interactionId: result.pendingInteraction.interactionId,
+                            kind: result.pendingInteraction.kind,
+                            prompt: result.pendingInteraction.prompt,
+                            schemaJson: JSON.stringify(result.pendingInteraction.schema ?? {}),
                         },
                     }),
                 )
@@ -1137,6 +1279,7 @@ export class ReactiveAgent<TOut = unknown> {
                     terminatedBy?: TerminatedBy
                     debrief?: AgentDebrief
                     awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }
+                    awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }
                 }
                 // Derive toolCalls from reasoning steps so consumers don't
                 // have to filter `metadata.reasoningSteps` themselves. The
@@ -1200,6 +1343,22 @@ export class ReactiveAgent<TOut = unknown> {
                                   gateId: r.awaitingApprovalFor.gateId,
                                   toolName: r.awaitingApprovalFor.toolName,
                                   args: r.awaitingApprovalFor.args,
+                              },
+                          }
+                        : {}),
+                    // Agentic-UI interaction rail (Task 10): when the run paused
+                    // for user interaction, surface status + the pending
+                    // interaction (with the durable runId so callers can
+                    // respondToInteraction it). Mirrors awaitingApprovalFor above.
+                    ...(r.awaitingInteractionFor !== undefined && options?.durableRunId !== undefined
+                        ? {
+                              status: 'awaiting-interaction' as const,
+                              pendingInteraction: {
+                                  runId: options.durableRunId,
+                                  interactionId: r.awaitingInteractionFor.interactionId,
+                                  kind: r.awaitingInteractionFor.kind,
+                                  prompt: r.awaitingInteractionFor.prompt,
+                                  schema: safeParseJson(r.awaitingInteractionFor.schemaJson),
                               },
                           }
                         : {}),

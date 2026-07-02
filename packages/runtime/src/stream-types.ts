@@ -34,6 +34,19 @@ export type AgentStreamEvent =
         readonly toolName: string;
         readonly args: unknown;
       };
+      /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor, present when the run paused for user interaction. */
+      readonly pendingInteraction?: {
+        readonly runId: string;
+        readonly interactionId: string;
+        readonly kind: string;
+        readonly prompt: string;
+        readonly schema: unknown;
+      };
+      /** Run-level abstention surface, present when the run abstained (terminatedBy === "abstained"). */
+      readonly abstention?: {
+        readonly reason: string;
+        readonly missing?: readonly string[];
+      };
     }
   | {
       /** Execution failed. Last event on a failed stream. */

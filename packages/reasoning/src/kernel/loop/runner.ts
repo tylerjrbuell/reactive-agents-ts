@@ -17,7 +17,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable, harnessSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
-import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
+import { createToolCallResolver, selectToolCallingDriver, REQUEST_USER_INPUT_TOOL_NAME } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -28,6 +28,7 @@ import {
   type KernelState,
   type KernelContext,
   type KernelInput,
+  type KernelMessage,
   type KernelRunOptions,
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
@@ -453,6 +454,60 @@ export function runKernel(
       } else if (reentry.action === "observe" && reentry.observation) {
         state = transitionState(state, {
           steps: [...state.steps, makeStep("observation", reentry.observation)],
+        });
+      }
+    }
+
+    // ── Durable interaction resume re-entry (Task 10) ────────────────────────
+    // Mirrors the approval re-entry directly above for the request_user_input
+    // rail. When resuming a checkpoint that paused for user interaction, inject
+    // the human's stored response HERE — before the loop — as an observation the
+    // next think reacts to, then clear `meta.awaitingInteractionFor`. Unlike
+    // approvals there is NO execute/skip branch: an interaction response is
+    // ALWAYS injected as the pending call's result. The paused checkpoint carries
+    // `status:"done"` + a sentinel output (act.ts terminate on pause), so we also
+    // reset the terminal fields — status back to "thinking", output/terminatedBy
+    // cleared — so the main loop re-runs and synthesizes a fresh answer from the
+    // injected response instead of returning the pause sentinel. No-op on a
+    // normal run (both fields undefined → zero cost).
+    if (state.meta.awaitingInteractionFor && effectiveInput.interactionResponse) {
+      const pending = state.meta.awaitingInteractionFor;
+      const response = effectiveInput.interactionResponse;
+      if (response.interactionId === pending.interactionId) {
+        // The act gate paused BEFORE assembleConversation ran, so state.messages
+        // has no record of the request_user_input call. Synthesize the
+        // assistant-call + tool_result pair here so the prompt-assembly path
+        // (fromKernelState builds the EventLog from state.messages, NOT steps)
+        // renders the human's answer as the pending call's result. A plain
+        // observation step alone would be invisible to the LLM prompt.
+        const observation = `The user responded: ${response.valueJson}`;
+        const assistantCall: KernelMessage = {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: pending.interactionId,
+              name: REQUEST_USER_INPUT_TOOL_NAME,
+              arguments: { kind: pending.kind, prompt: pending.prompt },
+            },
+          ],
+        };
+        const toolResult: KernelMessage = {
+          role: "tool_result",
+          toolCallId: pending.interactionId,
+          toolName: REQUEST_USER_INPUT_TOOL_NAME,
+          content: observation,
+        };
+        state = transitionState(state, {
+          status: "thinking",
+          output: null,
+          messages: [...state.messages, assistantCall, toolResult],
+          steps: [...state.steps, makeStep("observation", observation)],
+          meta: {
+            ...state.meta,
+            awaitingInteractionFor: undefined,
+            terminatedBy: undefined,
+          },
         });
       }
     }

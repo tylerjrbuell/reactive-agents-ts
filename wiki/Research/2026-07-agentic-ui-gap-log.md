@@ -73,3 +73,43 @@ gets an entry here with production context. Format per entry:
 - **Severity:** workaround (costs real debugging time on every task in this
   worktree that touches a cross-package export until dist is (re)built
   locally; will recur for Task 10+ unless the workaround becomes routine).
+
+## GAP-4: durable pause resume re-think requires manual status/message reconstruction
+- **Hit while:** Task 10 — resuming a run that paused for `request_user_input`.
+  The kernel `terminate()` sets `status:"done"` + a sentinel output for the
+  pause (same as `awaiting-approval`), and the paused checkpoint captured at
+  `iterate-pass.ts` serializes that `done` state. On resume the runner uses
+  `resumeState` VERBATIM, so the main loop's `while (status !== "done")` guard
+  never runs and no re-think happens — the run would return the pause sentinel.
+- **Expected:** the approval-rail re-entry (`runner.ts:425`) to be a working
+  template for "inject decision, then continue the loop". It is NOT: the
+  approve/deny e2e (`approve-deny-resume.test.ts`) uses `injectPause` onto a
+  COMPLETED run's checkpoint, so it never exercises re-think after a REAL pause.
+  The approval "observe" branch appends only a `makeStep("observation", ...)`,
+  which `fromKernelState` (the prompt assembler) IGNORES — it builds the
+  EventLog purely from `state.messages` (goal + assistant tool_calls +
+  tool_result), never from `state.steps`.
+- **Actual:** the interaction re-entry had to (a) reset `status:"thinking"` +
+  clear `output`/`terminatedBy` so the loop re-runs, and (b) synthesize the
+  assistant-call + `tool_result` message pair on `state.messages` (the act gate
+  pauses BEFORE `assembleConversation`, so no record of the call exists) so the
+  human's answer actually reaches the LLM prompt. A bare observation step is
+  invisible. This is a latent bug in the approval "observe"/real-pause path too
+  (masked by the injectPause test); flagged, not fixed (out of scope).
+- **Severity:** workaround (the approval rail is a structural template but not a
+  behavioral one for real pauses — cloning it literally produces a run that
+  resumes but silently drops the injected value).
+
+## GAP-5: brief's example builder API (`new ReactiveAgentBuilder("name")`) does not compile
+- **Hit while:** Task 10/11 — the brief's verbatim test code constructs
+  `new ReactiveAgentBuilder("interaction-e2e")`, passing a name to the
+  constructor.
+- **Expected:** either the constructor to accept a name, or the brief to use the
+  real API.
+- **Actual:** `ReactiveAgentBuilder` has no explicit constructor (0 args); the
+  name is set via `.withName(...)`. Bun ignores the extra runtime arg so tests
+  PASS under `bun test`, but `tsc --noEmit` errors `TS2554: Expected 0
+  arguments, but got 1`. Adapted the tests to `new ReactiveAgentBuilder()
+  .withName(...)`. Papercut, but a trap: green `bun test` hid a type error until
+  the tsc gate.
+- **Severity:** papercut.

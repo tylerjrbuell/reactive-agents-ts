@@ -1167,6 +1167,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   ...((rr?.metadata as Record<string, unknown> | undefined)?.["awaitingApprovalFor"] !== undefined
                     ? { awaitingApprovalFor: (rr!.metadata as Record<string, unknown>)["awaitingApprovalFor"] as { gateId: string; toolName: string; args: unknown } }
                     : {}),
+                  // Agentic-UI interaction rail (Task 10): forward the paused
+                  // interaction descriptor so ReactiveAgent can surface
+                  // pendingInteraction + persist. Mirrors awaitingApprovalFor above.
+                  ...((rr?.metadata as Record<string, unknown> | undefined)?.["awaitingInteractionFor"] !== undefined
+                    ? { awaitingInteractionFor: (rr!.metadata as Record<string, unknown>)["awaitingInteractionFor"] as { interactionId: string; kind: string; prompt: string; schemaJson: string } }
+                    : {}),
                   // O3 C1: forward the run-level abstention surface from the
                   // strategy result so ReactiveAgent.projectAbstention(r) can
                   // populate AgentResult.abstention. Mirrors awaitingApprovalFor

@@ -97,6 +97,8 @@ interface ReactiveInput {
   readonly approvalPolicy?: KernelInput["approvalPolicy"];
   /** Durable HITL (Phase D): human's approve/deny decision → `kernelInput.approvalDecision`. */
   readonly approvalDecision?: KernelInput["approvalDecision"];
+  /** Agentic-UI interaction rail (Task 10): human's response to a paused request_user_input → `kernelInput.interactionResponse`. */
+  readonly interactionResponse?: KernelInput["interactionResponse"];
   /** Intelligent Context Synthesis — from .withReasoning({ synthesis: ... }) */
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
@@ -219,6 +221,7 @@ export const executeReactive = (
       resumeState: input.resumeState,
       approvalPolicy: input.approvalPolicy,
       approvalDecision: input.approvalDecision,
+      interactionResponse: input.interactionResponse,
       synthesisConfig: input.synthesisConfig,
       observationSummary: input.observationSummary,
       auditRationale: input.auditRationale,
