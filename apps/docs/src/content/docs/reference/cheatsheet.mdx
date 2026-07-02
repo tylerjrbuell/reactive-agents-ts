@@ -7,9 +7,9 @@ sidebar:
   order: 1
 lastCommit:
   subject: >-
-    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
-    import
-  hash: 1216d5f
+    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
+    overlap
+  hash: ba99dce
   date: '2026-07-01'
 since: v0.10
 badge:
@@ -158,7 +158,8 @@ Phases: `bootstrap` · `guardrail` · `cost-route` · `strategy-select` · `thin
   output: string,
   success: boolean,
   debrief?: { summary, keyFindings, metrics },
-  terminatedBy: "final_answer" | "max_iterations" | "error",
+  terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "end_turn" | "llm_error" | "abstained",
+  abstention?: { reason, missing },  // present iff terminatedBy === "abstained"
   metadata: { duration, cost, tokensUsed, stepsCount, strategyUsed },
 }
 ```

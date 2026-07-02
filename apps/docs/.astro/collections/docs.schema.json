@@ -665,6 +665,12 @@
             "date"
           ]
         },
+        "changedSections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "faq": {
           "type": "array",
           "items": {

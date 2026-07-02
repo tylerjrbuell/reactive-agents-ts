@@ -7,9 +7,9 @@ sidebar:
   order: 9
 lastCommit:
   subject: >-
-    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
-    import
-  hash: 1216d5f
+    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
+    overlap
+  hash: ba99dce
   date: '2026-07-01'
 badge:
   text: Updated
@@ -39,7 +39,63 @@ const result = await agent.run("What is the population of Tokyo times 3?");
 
 ### Registering Custom Tools
 
-Pass custom tool definitions via the `tools` option:
+The canonical way to author a tool is `defineTool` — a schema plus a plain `async` handler whose `args` are typed from the schema. No Effect knowledge and no `Record<string, unknown>` casts required:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { defineTool } from "@reactive-agents/tools";
+import { Schema } from "effect";
+
+const calculator = defineTool({
+  name: "calculator",
+  description: "Perform arithmetic calculations",
+  input: Schema.Struct({
+    expression: Schema.String,
+  }),
+  // args is typed as { expression: string }
+  handler: async (args) => String(eval(args.expression)),
+});
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ tools: [calculator] })
+  .withReasoning()
+  .build();
+```
+
+The `input` field accepts an Effect `Schema.Struct` (canonical — full parameter metadata is extracted from the AST) or **any Standard Schema** — Zod, Valibot, ArkType, or `Schema.standardSchemaV1(...)`:
+
+```typescript
+import { z } from "zod";
+
+const addTool = defineTool({
+  name: "add",
+  description: "Add two numbers",
+  input: z.object({ a: z.number(), b: z.number() }),
+  handler: async ({ a, b }) => a + b, // { a: number; b: number }
+});
+```
+
+Raw arguments are validated against the schema at runtime before the handler runs; validation failures surface as `ToolExecutionError`, never a crash. Optional config fields mirror the raw `ToolDefinition`: `riskLevel` (default `"low"`), `timeoutMs` (default `30_000`), `requiresApproval` (default `false`), `category`, `returnType`, `isCacheable`, `cacheTtlMs`.
+
+`defineTool` also **fails fast on malformed options**: passing intuitive-but-wrong keys (`parameters` instead of `input`, `execute` instead of `handler`) throws a typed `ToolDefinitionError` naming the correct field — not a raw `TypeError`.
+
+#### Advanced: Effect handlers and raw definitions
+
+For Effect-native authors, the handler may return an `Effect` instead of a `Promise` — both are normalised at runtime:
+
+```typescript
+import { Effect, Schema } from "effect";
+
+const searchTool = defineTool({
+  name: "search",
+  description: "Search the web",
+  input: Schema.Struct({ query: Schema.String }),
+  handler: (args) => Effect.succeed(`Results for: ${args.query}`),
+});
+```
+
+You can also pass raw `{ definition, handler }` pairs directly to the `tools` option — the pre-`defineTool` shape, still fully supported:
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -64,6 +120,8 @@ const agent = await ReactiveAgents.create()
   .withReasoning()
   .build();
 ```
+
+For zero-schema quick tools there is also the `tool(name, description, handlerOrOptions)` helper (untyped args), and the [ToolBuilder fluent API](#toolbuilder-fluent-api) below.
 
 You can also register tools **after** `build()` on the agent facade: `await agent.registerTool({ definition, handler })` and `await agent.unregisterTool("name")` (non-builtin tools only).
 

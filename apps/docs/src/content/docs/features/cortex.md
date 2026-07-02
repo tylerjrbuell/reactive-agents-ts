@@ -8,9 +8,9 @@ sidebar:
   order: 2
 lastCommit:
   subject: >-
-    docs(revamp): fix callout sentinel, analytics double-count, SPA time reset,
-    minor accuracy
-  hash: 090ed16
+    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
+    overlap
+  hash: ba99dce
   date: '2026-07-01'
 since: v0.9
 badge:

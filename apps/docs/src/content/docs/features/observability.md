@@ -5,9 +5,9 @@ sidebar:
   order: 8
 lastCommit:
   subject: >-
-    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
-    import
-  hash: 1216d5f
+    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
+    overlap
+  hash: ba99dce
   date: '2026-07-01'
 badge:
   text: Updated

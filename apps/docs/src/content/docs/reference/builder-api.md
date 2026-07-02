@@ -2,15 +2,15 @@
 title: ReactiveAgentBuilder
 description: Complete API reference for the ReactiveAgentBuilder.
 lastCommit:
-  subject: >-
-    docs(accuracy): fix strategy IDs, withModelRouting section, sub-package
-    import
-  hash: 1216d5f
+  subject: 'docs: v0.13 audit + lift plan, truth-sync, document shipped methods'
+  hash: 0e8785c
   date: '2026-07-01'
 badge:
   text: Updated
   variant: note
   __auto: '1'
+changedSections:
+  - '### Memory'
 ---
 
 The `ReactiveAgentBuilder` is the primary entry point for creating agents. It provides a fluent API for composing capabilities.
@@ -47,14 +47,14 @@ const agent = await ReactiveAgents.create()
 
 | Category | Methods |
 | -------- | ------- |
-| [ReactiveAgents factory](#reactiveagents-factory) | `create`, `fromConfig`, `fromJSON` |
+| [ReactiveAgents factory](#reactiveagents-factory) | `create`, `quick`, `fromConfig`, `fromJSON` |
 | [Core Identity](#identity--prompts) | `withName`, `withPersona`, `withSystemPrompt`, `withEnvironment` |
 | [Model & Provider](#model--provider) | `withModel`, `withProvider` |
 | [Reasoning & Context](#execution) | `withReasoning`, `withMemory`, `withContextProfile`, `withMaxIterations`, `withMinIterations` |
 | [Tools & MCP](#optional-features) | `withTools`, `withRequiredTools`, `withMCP`, `withMetaTools`, `withSkills`, `withAgentTool`, `withDynamicSubAgents`, `withRemoteAgent` |
 | [Observability & Telemetry](#optional-features) | `withObservability`, `withTelemetry`, `withCortex`, `withStreaming`, `withLogging`, `withEvents` |
 | [Safety & Resilience](#optional-features) | `withGuardrails`, `withKillSwitch`, `withBehavioralContracts`, `withVerification`, `withGrounding`, `withCircuitBreaker`, `withRateLimiting`, `withIdentity` |
-| [Cost & Performance](#optional-features) | `withCostTracking`, `withModelRouting`, `withBudget`, `withModelPricing`, `withDynamicPricing`, `withCacheTimeout`, `withRetryPolicy`, `withTimeout` |
+| [Cost & Performance](#optional-features) | `withCostTracking`, `withModelRouting`, `withBudget`, `withModelPricing`, `withDynamicPricing`, `withCacheTimeout`, `withRetryPolicy`, `withTimeout`, `withLlmTimeout` |
 | [Lifecycle & Hooks](#lifecycle) | `withHook`, `withHealthCheck`, `withErrorHandler`, `withFallbacks`, `withAudit` |
 | [Advanced](#advanced) | `withOrchestration`, `withA2A`, `withGateway`, `withReactiveIntelligence`, `withPrompts`, `withInteraction`, `withDocuments`, `withTaskContext`, `withLayers` |
 | [Building & Running](#build-methods) | `build`, `buildEffect`, `runOnce` |
@@ -66,6 +66,7 @@ const agent = await ReactiveAgents.create()
 | API                                 | Description                                                                      |
 | ----------------------------------- | -------------------------------------------------------------------------------- |
 | `ReactiveAgents.create()`           | New empty builder (defaults: `name: "agent"`, `provider: "test"`).               |
+| `ReactiveAgents.quick(options?)`    | Async — resolve provider + model + `maxIterations` from the environment and `build()` a ready-to-run agent in one call. |
 | `ReactiveAgents.fromConfig(config)` | Async — rebuild a builder from an `AgentConfig` object (`agentConfigToBuilder`). |
 | `ReactiveAgents.fromJSON(json)`     | Async — parse JSON → validate → same as `fromConfig`.                            |
 
@@ -75,6 +76,27 @@ import { ReactiveAgents } from 'reactive-agents'
 
 const builder = ReactiveAgents.create()
 ```
+
+### `ReactiveAgents.quick()`
+
+The two-line first-touch entry point — returns a **built `ReactiveAgent`**, not a builder:
+
+```typescript
+const agent = await ReactiveAgents.quick()
+const result = await agent.run('Say hello')
+```
+
+Every field resolves from an environment variable, then a sensible default, so `quick()` with no arguments works out of the box:
+
+```typescript
+interface QuickOptions {
+    provider?: ProviderName // Default: REACTIVE_AGENTS_PROVIDER, else the first of anthropic/openai/gemini whose key is present, else "ollama"
+    model?: string          // Default: REACTIVE_AGENTS_MODEL, else the provider's default model
+    maxIterations?: number  // Default: REACTIVE_AGENTS_MAX_ITERATIONS, else 10
+}
+```
+
+A misconfigured environment (e.g. missing key) warns at build and surfaces a clean typed error at `run()` time; use `ReactiveAgents.create()....withStrictValidation()` when you want a hard failure at build instead.
 
 ### Agent as Data (`toConfig` / serialization)
 
@@ -187,7 +209,8 @@ interface ThinkingOptions {
 | `withMinIterations`    | `(n: number) => this`                        | Minimum iterations before `final-answer` is permitted — prevents fast-path exit on complex tasks |
 | `withContextProfile`   | `(profile: Partial<ContextProfile>) => this` | Model-adaptive context overrides: compaction thresholds, tool result size limits, budget         |
 | `withStrictValidation` | `() => this`                                 | Throw at build time if required config is missing (provider, model, etc.)                        |
-| `withTimeout`          | `(ms: number) => this`                       | Execution timeout in milliseconds. Throws `TimeoutError` if exceeded                             |
+| `withTimeout`          | `(ms: number) => this`                       | Execution timeout in milliseconds for the **whole agent run** (all iterations combined). Throws `TimeoutError` if exceeded |
+| `withLlmTimeout`       | `(ms: number) => this`                       | Per-LLM-call timeout in milliseconds — bounds a **single provider request**, distinct from `withTimeout`. Honored by the Ollama/local provider (maps to `LLMConfig.ollamaTimeoutMs`; equivalent to the `OLLAMA_TIMEOUT_MS` env var but scoped to this agent — useful to tolerate cold model loads, e.g. `.withLlmTimeout(600_000)`). Hosted providers (Anthropic/OpenAI/Gemini) ignore it |
 | `withRetryPolicy`      | `(policy: RetryPolicy) => this`              | Retry on transient LLM failures. `{ maxRetries: number, backoffMs: number }`                     |
 | `withCacheTimeout`     | `(ms: number) => this`                       | Semantic cache TTL in milliseconds. Entries older than this are evicted                          |
 
@@ -921,7 +944,14 @@ interface AgentResult {
         | 'max_iterations'    // Hit the iteration/llmCalls ceiling
         | 'end_turn'          // LLM stopped generating (no tool call, no final answer)
         | 'llm_error'         // LLM request or stream failed (provider error, network, etc.)
+        | 'abstained'         // Agent honestly declined — could not ground an answer (see abstention below)
     llmCalls?: number // Number of LLM calls made during the kernel loop (available when reasoning is enabled)
+
+    // Abstention (present iff terminatedBy === 'abstained')
+    abstention?: {
+        reason: string    // Why the agent declined rather than fabricating
+        missing: string[] // What was needed, e.g. "tool:web-search", a clarification
+    }
 
     // Durable HITL (present when a run paused for human approval — see Durable HITL guide)
     status?: 'completed' | 'awaiting-approval' | 'failed' // defaults to 'completed' when absent
@@ -936,6 +966,27 @@ interface AgentResult {
     debrief?: AgentDebrief
 }
 ```
+
+### Abstention (`terminatedBy: "abstained"`)
+
+When grounding an answer is structurally impossible — a declared required tool is
+absent from the registered tool set, or synthesis was repeatedly rejected as
+ungrounded — the harness **forces an honest `abstained` terminal** instead of
+grinding to `max_iterations` or letting fabrication through. A genuine
+deliverable is never overridden. When this happens, `result.terminatedBy` is
+`"abstained"` and `result.abstention` carries the reason plus what was missing:
+
+```typescript
+const result = await agent.run('Summarize the current HN front page')
+if (result.terminatedBy === 'abstained') {
+    console.log(result.abstention?.reason)  // "required tool unavailable; could not ground an answer"
+    console.log(result.abstention?.missing) // ["tool:web-search"]
+}
+```
+
+`goalAchieved` is `false` for abstained runs (honest non-achievement). This
+run-level surface is distinct from the per-field structured-output `abstained`
+map (`.withOutputSchema({ abstainBelow })`) — the two are unrelated and may coexist.
 
 ### `AgentDebrief`
 

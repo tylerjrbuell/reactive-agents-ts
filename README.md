@@ -17,7 +17,7 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 | **41 packages & apps**       | 35 packages + 6 apps — 33 published to npm, all opt-in, no hidden coupling |
 | **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
 | **7 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
-| **6,558 tests · 804 files**  | Verified with `bun test` on every PR                            |
+| **6,854 tests · 851 files**  | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -121,6 +121,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Verification** — semantic entropy, fact decomposition, NLI hallucination detection
 -   **Fabrication guard** — `.withFabricationGuard()` is **on by default**; rejects invented empirical performance measurements (benchmark timings, % speed-ups) absent from the tool-observation corpus. Soften to `"warn"` or disable with `"off"`
 -   **Stall / no-progress policy** — `.withStallPolicy()` bounds wasted iterations when the model ignores required-tool nudges: fast-escalate after N ignored nudges instead of looping to the full cap (progress resets the streak)
+-   **Harness-forced abstention** — when grounding is structurally impossible (a required tool is missing, or synthesis is repeatedly rejected as ungrounded), the run ends honestly with `terminatedBy: "abstained"` and `result.abstention { reason, missing }` instead of fabricating or grinding to `max_iterations`
 -   **Cost controls** — 27-signal complexity router, semantic cache, budget enforcement (persists across restarts), dynamic pricing via OpenRouter
 -   **Required tools guard** — ensure critical tools are called before answering, with `maxCallsPerTool` budgets to prevent research loops
 
@@ -133,13 +134,15 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 
 ### 🧩 Composition & Multi-Agent
 -   **Builder API** — chains capabilities in one place; **Agent-as-data** via `toConfig()` / `fromJSON()` for save/share/restore
+-   **Two-line entry point** — `ReactiveAgents.quick()` resolves provider, model, and iteration defaults from the environment and returns a ready-to-run agent
 -   **Functional combinators** — `agentFn()`, `pipe()`, `parallel()`, `race()` for declarative agent pipelines
 -   **A2A protocol** — Agent Cards, JSON-RPC 2.0 server/client, SSE streaming, agent-as-tool
 -   **Orchestration** — sequential, parallel, pipeline, map-reduce; dynamic sub-agent spawning with depth limits
 -   **Persistent gateway** — adaptive heartbeats, cron scheduling, webhook ingestion (GitHub adapter), composable policy engine, **chat mode** with per-sender SQLite session history
 
 ### ⚙️ Builder Hardening
-- `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withCacheTimeout()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withProgressCheckpoint()`, `withTaskContext()`
+- `withStrictValidation()`, `withTimeout()`, `withLlmTimeout()` (per-LLM-call timeout for local/Ollama providers — tolerate cold model loads without loosening the run-level timeout), `withRetryPolicy()`, `withCacheTimeout()`, `withErrorHandler()`, `withFallbacks()`, `withLogging()`, `withHealthCheck()`, `withMinIterations()`, `withVerificationStep()`, `withOutputValidator()`, `withCustomTermination()`, `withProgressCheckpoint()`, `withTaskContext()`
+- **`defineTool`** typed tool authoring — Standard Schema input (Effect Schema / Zod / Valibot / ArkType) + a plain async handler with arg types inferred from the schema; malformed options (`parameters`/`execute` instead of `input`/`handler`) fail fast with a typed error
 - **ToolBuilder** fluent API — define tools without raw schema objects
 - **Dynamic tool registration** — `agent.registerTool()` / `agent.unregisterTool()` at runtime
 
@@ -150,7 +153,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **6,558 tests** across 804 files — verified `bun test` on every PR
+- **6,854 tests** across 851 files — verified `bun test` on every PR
 - **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -398,7 +401,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   6,558 tests   |      --      |      --       |   --    |
+| Test suite                    |   6,854 tests   |      --      |      --       |   --    |
 
 <sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-06. `--` means we found no first-party equivalent, not that none exists. Corrections welcome — [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
@@ -638,10 +641,31 @@ rax run "Task" --cortex --provider anthropic             # Stream events to Cort
 
 Tools are registered at build time, via `agent.registerTool()` after `build()`, or through MCP. Built-in task tools include web search, file I/O, HTTP, and code execution; dynamic sub-agents add `spawn-agent`. With `.withTools()`, the Conductor's Suite also injects **`recall`**, **`find`**, **`brief`**, and **`pulse`** (override with `.withMetaTools(false)`).
 
-Use the `ToolBuilder` fluent API to define tools without raw schema objects:
+Use `defineTool` — a schema plus a plain async handler with arg types inferred from the schema. `input` accepts an Effect `Schema.Struct` or any Standard Schema (Zod / Valibot / ArkType):
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
+import { defineTool } from '@reactive-agents/tools'
+import { Schema } from 'effect'
+
+const webSearchTool = defineTool({
+    name: 'web_search',
+    description: 'Search the web for current information',
+    input: Schema.Struct({ query: Schema.String }),
+    // args is typed as { query: string }
+    handler: async (args) => `Results for: ${args.query}`,
+})
+
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withReasoning()
+    .withTools({ tools: [webSearchTool] })
+    .build()
+```
+
+Or the `ToolBuilder` fluent API to define tools without raw schema objects:
+
+```typescript
 import { ToolBuilder } from '@reactive-agents/tools'
 import { Effect } from 'effect'
 
@@ -651,12 +675,6 @@ const webSearchTool = ToolBuilder.create('web_search')
     .riskLevel('low')
     .timeout(10_000)
     .handler((args) => Effect.succeed(`Results for: ${args.query}`))
-    .build()
-
-const agent = await ReactiveAgents.create()
-    .withProvider('anthropic')
-    .withReasoning()
-    .withTools({ tools: [webSearchTool] })
     .build()
 ```
 
@@ -830,7 +848,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (6,558 tests / 804 files, ~95s)
+bun test                 # Run full test suite (6,854 tests / 851 files, ~95s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

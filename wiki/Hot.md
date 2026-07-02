@@ -19,7 +19,7 @@ updated: 2026-07-01
 - **Headline: the cross-tier promise is real** — a cold external tester reproduced the README core claim (identical correct typed `.withOutputSchema` object on a 4B local model, gemma4:e4b) without help. That is the launch asset. First-10-minutes DX papercuts catalogued.
 - v0.13 execution plan authored: [`wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md`](wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md) — subagent-parallel, package-isolated bundles; **DX wave ships _before_ Show-HN**. North star holds: harness = product, receipts = proof, first-touch DX = funnel.
 
-**⚠️ Outstanding action (now larger): local `main` is 98 commits ahead of `origin` and has NEVER been pushed.** Push syncs the entire v0.12 line (durable exec + HITL + Cortex Phase E + docs overhaul + channels) and closes stale-branch bookkeeping on origin.
+**✅ RESOLVED (2026-07-01 EOD, git-verified):** `main` IS pushed (0 ahead of origin); abstention branch MERGED; prompt-audit fixes MERGED (`bda7d04f`); Wave 0+1 DX wave SHIPPED. **v0.13.0 release prep IN PROGRESS:** gpt-5.x `max_completion_tokens` blocker fixed (`be0875cd`); 0.13.0 notes moved to `.changeset/v0-13-0-notes.md` (`bce57a96` — release.ts only reads changesets, hand-drafted CHANGELOG section was dead); pre-flight green (build 38/38, typecheck 69/69, keyless test 6854/0); `release:dry 0.13.0` clean (35 pkgs, 1 note). Remaining: docs gaps (withLlmTimeout/.quick()/tool-v2/abstention), tag push (user), then competitive bench + cold first-touch probe → Show-HN.
 
 ---
 
@@ -33,9 +33,9 @@ updated: 2026-07-01
 
 ## What's Next
 
-1. **Push `main` to origin** (98 commits unpushed) — syncs the whole v0.12 line (durable exec + HITL + Cortex Phase E + docs overhaul + channels).
-2. **Execute the v0.13 lift plan** ([`wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md`](wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md)) — DX wave (first-touch papercuts from the 2026-07-01 audit) ships *before* Show-HN, then public local-model bench receipts.
-3. **Cut v0.13** — bump VERSION, `bun run release:dry` (sole drift gate), tag-driven publish.
+1. **Cut v0.13.0** — docs gaps closed → commit → `git tag v0.13.0` + push tag (user confirms; publish.yml does the rest).
+2. **Competitive bench** (plan 2.2 Receipts deliverable, still missing) — RA vs Mastra vs LangGraph.js vs raw AI SDK, pinned models/seeds, published traces, run vs published 0.13 tarball. Current published bench = internal ablation only (+13pp).
+3. **Cold first-touch re-verify** — re-run the 6 audit probes from OUTSIDE the repo against npm 0.13.0 (fail-fast build() now opt-in `.withStrictValidation()` — check missing-key DX) → Show-HN.
 4. **Stale-doc cleanup:** update `wiki/Issues/Running Issues Log.md` (HS-34/HS-35 → cleared).
 
 ## Authoritative Document Hierarchy
