@@ -220,7 +220,6 @@ export default defineConfig({
             { label: "Verification", link: "features/verification/" },
             { label: "Observability", link: "features/observability/" },
             { label: "A2A Protocol", link: "features/a2a-protocol/" },
-            { label: "Benchmarks", link: "features/benchmarks/" },
             { label: "Code Action", link: "features/code-action/" },
             { label: "Cortex Studio", link: "features/cortex/" },
             { label: "Cost Tracking", link: "features/cost-tracking/" },
@@ -241,6 +240,7 @@ export default defineConfig({
           label: "vs. Alternatives",
           collapsed: true,
           items: [
+            { label: "Benchmarks", link: "features/benchmarks/" },
             { label: "Migrating from LangChain", link: "guides/migrating-from-langchain/" },
             { label: "vs. LangGraph", link: "guides/reactive-agents-vs-langgraph/" },
             { label: "vs. Mastra", link: "guides/reactive-agents-vs-mastra/" },
