@@ -107,6 +107,28 @@ describe("GET /api/runs", () => {
     expect(body.status).toBe("completed");
   });
 
+  it("GET /api/runs/:runId returns the launch config snapshot (D1)", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    upsertRun(db, "ag", "snap-run", "Snap Run", JSON.stringify({ prompt: "hi", strategy: "blueprint", provider: "test" }));
+
+    const res = await app.handle(new Request("http://localhost/api/runs/snap-run"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { launchParams?: { strategy?: string; prompt?: string } };
+    expect(body.launchParams?.strategy).toBe("blueprint");
+    expect(body.launchParams?.prompt).toBe("hi");
+  });
+
+  it("GET /api/runs/:runId omits launchParams when none stored", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    upsertRun(db, "ag", "no-snap");
+    const res = await app.handle(new Request("http://localhost/api/runs/no-snap"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { launchParams?: unknown };
+    expect(body.launchParams).toBeUndefined();
+  });
+
   it("GET /api/runs/:runId/events returns event rows", async () => {
     const db = new Database(":memory:");
     const app = appWithRunsDb(db);

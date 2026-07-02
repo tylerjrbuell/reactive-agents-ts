@@ -151,6 +151,7 @@ export function applySchema(db: Database): void {
   if (!runCols.includes("strategy")) db.exec("ALTER TABLE cortex_runs ADD COLUMN strategy TEXT");
   if (!runCols.includes("error_message")) db.exec("ALTER TABLE cortex_runs ADD COLUMN error_message TEXT");
   if (!runCols.includes("display_name")) db.exec("ALTER TABLE cortex_runs ADD COLUMN display_name TEXT");
+  if (!runCols.includes("launch_params_json")) db.exec("ALTER TABLE cortex_runs ADD COLUMN launch_params_json TEXT");
 
   const agentCols = (db.prepare("PRAGMA table_info(cortex_agents)").all() as Array<{ name: string }>)
     .map((c) => c.name);

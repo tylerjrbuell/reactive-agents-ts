@@ -280,6 +280,10 @@ export const CortexRunnerServiceLive = Layer.effect(
 
           yield* store.ensureRunRow(agentId, runId, {
             ...(params.agentName?.trim() ? { displayName: params.agentName.trim() } : {}),
+            // Snapshot the resolved launch config so the run can be repeated
+            // (Rerun) or opened prefilled (Edit & Rerun). Secrets never reach
+            // here — the `{{secret.*}}` namespace is left unresolved by design.
+            launchParamsJson: JSON.stringify(params),
           });
           let forwardedEvents = 0;
 

@@ -10,6 +10,7 @@ import {
   recomputeRunStats,
   updateRunLabel,
   upsertRun,
+  getLaunchParams,
 } from "../db/queries.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { CortexError } from "../errors.js";
@@ -29,8 +30,12 @@ export class CortexStoreService extends Context.Tag("CortexStoreService")<
     readonly ensureRunRow: (
       agentId: string,
       runId: string,
-      opts?: { displayName?: string },
+      opts?: { displayName?: string; launchParamsJson?: string },
     ) => Effect.Effect<void, CortexError>;
+    /** Parsed per-run launch snapshot (from `launch_params_json`); null if absent. Used by rerun. */
+    readonly getLaunchParams: (
+      runId: string,
+    ) => Effect.Effect<Record<string, unknown> | null, CortexError>;
     readonly deleteRun: (runId: string) => Effect.Effect<boolean, CortexError>;
     readonly pruneRuns: (
       olderThanMs: number,
@@ -77,8 +82,13 @@ export const CortexStoreServiceLive = (db: Database) =>
 
     ensureRunRow: (agentId, runId, opts) =>
       Effect.sync(() => {
-        upsertRun(db, agentId, runId, opts?.displayName);
+        upsertRun(db, agentId, runId, opts?.displayName, opts?.launchParamsJson);
       }).pipe(
+        Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
+      ),
+
+    getLaunchParams: (runId) =>
+      Effect.sync(() => getLaunchParams(db, runId)).pipe(
         Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
       ),
 
