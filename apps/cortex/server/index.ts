@@ -13,6 +13,7 @@ import { memoryRouter } from "./api/memory.js";
 import { promptRouter } from "./api/prompts.js";
 import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
+import { capabilitiesRouter } from "./api/capabilities.js";
 import { ChatSessionService } from "./services/chat-session-service.js";
 import { handleIngestMessage } from "./ws/ingest.js";
 import {
@@ -70,6 +71,7 @@ export async function startCortexServer(
 
   const app = new Elysia()
     .use(healthRouter)
+    .use(capabilitiesRouter)
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(messagesRouter(runtime.rawDb))
     .use(agentsRouter(runtime.rawDb, runtime.gateway))
