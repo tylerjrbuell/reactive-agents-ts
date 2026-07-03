@@ -1,6 +1,5 @@
 import { writable } from "svelte/store";
-import { parsePartialObject } from "./parse-partial.js";
-import type { AgentStreamEvent } from "./types.js";
+import { createRun } from "./run.js";
 
 export interface StructuredStreamState {
   /** Progressively-filled DeepPartial of the structured object. Updated on every TextDelta. */
@@ -11,9 +10,22 @@ export interface StructuredStreamState {
   error: string | null;
 }
 
+const toLegacy = (s: string): StructuredStreamState["status"] =>
+  s === "streaming" || s === "awaiting-interaction" || s === "awaiting-approval"
+    ? "streaming"
+    : s === "completed"
+      ? "completed"
+      : s === "error"
+        ? "error"
+        : "idle";
+
 /**
  * Create a reactive Svelte store that streams a structured JSON object token-by-token,
  * surfacing a `DeepPartial`-style `object` that updates as JSON arrives.
+ *
+ * Delegates all protocol/stream/state logic to `@reactive-agents/ui-core`
+ * (`connectRunStream`/`reduceRunState` via `createRun({ objectMode: true })`) —
+ * the surface below (signature + `StructuredStreamState` shape) is unchanged.
  *
  * @example
  * ```svelte
@@ -26,87 +38,49 @@ export interface StructuredStreamState {
  * {#if $stream.status === "completed"}<pre>{JSON.stringify($stream.object, null, 2)}</pre>{/if}
  * ```
  */
+const isTerminal = (status: string): boolean =>
+  status === "completed" || status === "error" || status === "cancelled";
+
 export function createStructuredStream(
   endpoint: string,
-  requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
+  _requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
 ): { subscribe: ReturnType<typeof writable<StructuredStreamState>>["subscribe"]; run: (prompt: string, body?: Record<string, unknown>) => Promise<void>; cancel: () => void } {
-  const store = writable<StructuredStreamState>({
-    object: {},
-    text: "",
-    status: "idle",
-    error: null,
+  const inner = createRun({ endpoint, objectMode: true });
+  const store = writable<StructuredStreamState>({ object: {}, text: "", status: "idle", error: null });
+
+  // `run()`'s pre-rewire contract awaited the *entire* stream (it drove the
+  // fetch reader loop to completion before returning) — callers such as the
+  // existing behavioral tests rely on `await stream.run(...)` observing the
+  // terminal state synchronously afterwards. `createRun.run()` itself is
+  // fire-and-forget, so mirror `createAgent`'s resolver pattern to preserve
+  // that awaiting contract without re-introducing hand-coded SSE parsing.
+  let resolveRun: (() => void) | null = null;
+  let lastStatus = "idle";
+
+  inner.subscribe((rs) => {
+    store.set({
+      object: (rs.object as Record<string, unknown>) ?? {},
+      text: rs.text,
+      status: toLegacy(rs.status),
+      error: rs.error ?? null,
+    });
+    if (rs.status !== lastStatus) {
+      lastStatus = rs.status;
+      if (isTerminal(rs.status)) {
+        resolveRun?.();
+        resolveRun = null;
+      }
+    }
   });
 
-  let abortController: AbortController | null = null;
-
-  function cancel() {
-    abortController?.abort();
-    store.update((s) => ({ ...s, status: "idle" }));
-  }
-
-  async function run(prompt: string, body?: Record<string, unknown>) {
-    abortController?.abort();
-    abortController = new AbortController();
-    store.set({ object: {}, text: "", status: "streaming", error: null });
-
-    try {
-      const res = await fetch(endpoint, {
-        ...requestInit,
-        method: "POST",
-        signal: abortController.signal,
-        headers: { "Content-Type": "application/json", ...requestInit?.headers },
-        body: JSON.stringify({ prompt, ...body }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      if (!res.body) throw new Error("No response body");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (!raw) continue;
-          try {
-            const event = JSON.parse(raw) as AgentStreamEvent;
-            store.update((s) => {
-              const next = { ...s };
-              if (event._tag === "TextDelta" && "text" in event) {
-                next.text = s.text + (event as { text: string }).text;
-                next.object = parsePartialObject(next.text);
-              } else if (event._tag === "StreamCompleted" && "output" in event) {
-                const finalOutput = (event as { output: string }).output;
-                next.object = parsePartialObject(finalOutput ?? next.text);
-                next.status = "completed";
-              } else if (event._tag === "StreamError" && "cause" in event) {
-                next.error = (event as { cause: string }).cause;
-                next.status = "error";
-              } else if (event._tag === "StreamCancelled") {
-                next.status = "idle";
-              }
-              return next;
-            });
-          } catch { /* skip non-JSON SSE lines */ }
-        }
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      store.update((s) => ({
-        ...s,
-        error: err instanceof Error ? err.message : String(err),
-        status: "error",
-      }));
-    }
-  }
-
-  return { subscribe: store.subscribe, run, cancel };
+  return {
+    subscribe: store.subscribe,
+    run: (prompt: string, body?: Record<string, unknown>): Promise<void> =>
+      new Promise<void>((resolve) => {
+        lastStatus = "idle";
+        resolveRun = resolve;
+        inner.run(prompt, body);
+      }),
+    cancel: () => inner.cancel(),
+  };
 }

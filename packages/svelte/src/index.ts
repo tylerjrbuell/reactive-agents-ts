@@ -23,6 +23,7 @@ export { createAgent } from "./agent.js";
 export { createStructuredStream } from "./structured-stream.js";
 export { parsePartialObject } from "./parse-partial.js";
 export { createRun, type CreateRunOptions, type RunStore } from "./run.js";
+export { createResumableRun, type CreateResumableRunOptions } from "./resumable.js";
 export type { AgentStreamState } from "./agent-stream.js";
 export type { AgentState } from "./agent.js";
 export type { StructuredStreamState } from "./structured-stream.js";
