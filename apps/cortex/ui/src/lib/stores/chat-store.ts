@@ -322,11 +322,22 @@ function createChatStore() {
       // liveText/reasoningSteps/content behavior — that logic (unchanged)
       // still switches on the raw event's `_tag` beneath.
       let rs: RunState = initialRunState();
+      // Fix 2: `connectRunStream` synthesizes a `StreamError` for BOTH a
+      // pre-stream connection failure (fetch throws / non-ok / no body,
+      // before any content ever arrived) and a genuine mid-stream drop.
+      // Pre-`bd8f7949` these were handled very differently (pre-stream:
+      // clean removal of the optimistic user+assistant turns + a friendly
+      // error; mid-stream: keep the partial content, just surface the
+      // error). `receivedContent` recovers that distinction: it flips true
+      // the moment any content-bearing event lands for this turn.
+      let receivedContent = false;
+      let preStreamFailureMsg: string | undefined;
 
       for await (const event of connectRunStream({ endpoint: url, body: { message } })) {
         rs = reduceRunState(rs, event, { objectMode: true });
 
         if (event._tag === "TextDelta") {
+          receivedContent = true;
           const partial =
             rs.object !== undefined &&
             rs.object !== null &&
@@ -350,6 +361,7 @@ function createChatStore() {
             ),
           }));
         } else if (event._tag === "IterationProgress") {
+          receivedContent = true;
           const iter = event.iteration;
           const max = event.maxIterations;
           const tools = event.toolsCalledThisStep;
@@ -402,6 +414,7 @@ function createChatStore() {
             }),
           }));
         } else if (event._tag === "ThoughtEmitted") {
+          receivedContent = true;
           const iter = event.iteration;
           const thought = event.content;
           update((s) => ({
@@ -428,6 +441,7 @@ function createChatStore() {
             }),
           }));
         } else if (event._tag === "StreamCompleted") {
+          receivedContent = true;
           tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
           costUsd = (event.metadata?.cost as number | undefined) ?? (event.metadata?.estimatedCost as number | undefined) ?? 0;
           steps =
@@ -451,11 +465,33 @@ function createChatStore() {
         } else if (event._tag === "StreamError") {
           // Handle stream errors
           console.error("[Chat Stream] Stream error:", event.cause);
-          update((s) => ({
-            ...s,
-            error: event.cause ?? "Stream error",
-          }));
+          if (!receivedContent) {
+            // Pre-stream connection failure (fetch threw / non-ok / no body,
+            // nothing ever rendered): restore the pre-bd8f7949 clean outcome
+            // below the loop instead of leaving a stale empty assistant
+            // bubble alongside the error banner.
+            preStreamFailureMsg = event.cause ?? "Request failed";
+          } else {
+            // Mid-stream drop: keep whatever partial content already
+            // rendered and just surface the error.
+            update((s) => ({
+              ...s,
+              error: event.cause ?? "Stream error",
+            }));
+          }
         }
+      }
+
+      if (preStreamFailureMsg !== undefined) {
+        update((s) => ({
+          ...s,
+          sending: false,
+          error: preStreamFailureMsg!,
+          activeTurns: s.activeTurns.filter(
+            (t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId,
+          ),
+        }));
+        return;
       }
 
       update((s) => ({

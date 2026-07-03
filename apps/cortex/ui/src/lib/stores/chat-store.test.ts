@@ -353,4 +353,162 @@ describe("chatStore stream completion handling", () => {
     // The existing text-authoritative behavior is untouched by the op-E addition.
     expect(assistant?.content).toBe('{"a":1,"b":2}');
   });
+
+  it("cleans up the optimistic user turn + assistant placeholder on a pre-stream HTTP failure (no stale empty bubble)", async () => {
+    const fetchImpl: FetchFn = (async (url: string) => {
+      if (url.endsWith("/api/chat/sessions")) {
+        return new Response(
+          JSON.stringify([
+            { sessionId: "s1", name: "S1", agentConfig: {}, createdAt: Date.now(), lastUsedAt: Date.now() },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "s1",
+            name: "S1",
+            agentConfig: {},
+            createdAt: Date.now(),
+            lastUsedAt: Date.now(),
+            turns: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1/chat/stream")) {
+        // Connection failure before any SSE content: server unreachable / 5xx.
+        return new Response(JSON.stringify({ error: "Internal Server Error" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: "unexpected url" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as FetchFn;
+
+    globalThis.fetch = fetchImpl;
+
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s1");
+    await chatStore.sendMessageStream("this will fail before any content streams");
+
+    const state = get(chatStore);
+    // Old (pre-bd8f7949) clean outcome: BOTH the optimistic user turn and the
+    // empty assistant placeholder are removed — no stale empty bubble left
+    // behind alongside the error banner.
+    expect(state.activeTurns).toEqual([]);
+    expect(state.sending).toBe(false);
+    expect(state.error).toBeTruthy();
+  });
+
+  it("cleans up optimistic turns the same way when fetch itself throws (network failure) before any content", async () => {
+    const fetchImpl: FetchFn = (async (url: string) => {
+      if (url.endsWith("/api/chat/sessions")) {
+        return new Response(
+          JSON.stringify([
+            { sessionId: "s1", name: "S1", agentConfig: {}, createdAt: Date.now(), lastUsedAt: Date.now() },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "s1",
+            name: "S1",
+            agentConfig: {},
+            createdAt: Date.now(),
+            lastUsedAt: Date.now(),
+            turns: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1/chat/stream")) {
+        throw new TypeError("Failed to fetch");
+      }
+
+      return new Response(JSON.stringify({ error: "unexpected url" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as FetchFn;
+
+    globalThis.fetch = fetchImpl;
+
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s1");
+    await chatStore.sendMessageStream("this will throw before any content streams");
+
+    const state = get(chatStore);
+    expect(state.activeTurns).toEqual([]);
+    expect(state.sending).toBe(false);
+    expect(state.error).toBeTruthy();
+  });
+
+  it("keeps partial content and surfaces the error when a stream fails mid-stream (after content already arrived)", async () => {
+    const fetchImpl: FetchFn = (async (url: string) => {
+      if (url.endsWith("/api/chat/sessions")) {
+        return new Response(
+          JSON.stringify([
+            { sessionId: "s1", name: "S1", agentConfig: {}, createdAt: Date.now(), lastUsedAt: Date.now() },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "s1",
+            name: "S1",
+            agentConfig: {},
+            createdAt: Date.now(),
+            lastUsedAt: Date.now(),
+            turns: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url.endsWith("/api/chat/sessions/s1/chat/stream")) {
+        // Some real content arrives, then the connection drops mid-stream
+        // (stream ends without a StreamCompleted terminal event, which
+        // `connectRunStream` — with no attach/runId to retry against —
+        // turns into a synthesized StreamError).
+        return sseStreamResponse([
+          'data: {"_tag":"TextDelta","text":"Partial answer before drop..."}\n\n',
+        ]);
+      }
+
+      return new Response(JSON.stringify({ error: "unexpected url" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as FetchFn;
+
+    globalThis.fetch = fetchImpl;
+
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s1");
+    await chatStore.sendMessageStream("this will drop mid-stream");
+
+    const state = get(chatStore);
+    const assistant = [...state.activeTurns].reverse().find((t) => t.role === "assistant");
+    // Mid-stream failure: unlike the pre-stream case, the assistant turn is
+    // NOT removed — its partial content survives, and the error is surfaced
+    // alongside it.
+    expect(assistant).toBeDefined();
+    expect(assistant?.content).toContain("Partial answer before drop...");
+    expect(state.error).toBeTruthy();
+  });
 });

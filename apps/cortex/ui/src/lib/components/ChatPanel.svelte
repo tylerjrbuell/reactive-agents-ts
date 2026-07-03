@@ -256,6 +256,18 @@
                   {:else}
                     <MarkdownRich markdown={turn.content} showCopy={true} class="text-[11px]" />
                   {/if}
+                  {#if turn.liveObject && Object.keys(turn.liveObject).length > 0}
+                    <!-- Op E: partial/final structured-output preview, updates live as it streams. -->
+                    <div class="mt-2 rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 p-2">
+                      <div class="mb-1 flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[13px] text-secondary/80">data_object</span>
+                        <span class="font-mono text-[9px] uppercase tracking-wide text-[var(--cortex-text-muted)]">
+                          Structured output
+                        </span>
+                      </div>
+                      <pre class="m-0 overflow-x-auto font-mono text-[10px] leading-snug text-[var(--cortex-text)] whitespace-pre">{JSON.stringify(turn.liveObject, null, 2)}</pre>
+                    </div>
+                  {/if}
                 </div>
               </div>
             {:else}
