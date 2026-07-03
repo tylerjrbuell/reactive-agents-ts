@@ -34,8 +34,8 @@
  */
 
 export type { AgentStreamEvent, AgentHookState, UseAgentStreamReturn, UseAgentReturn } from "./types.js";
-export { useAgentStream } from "./use-agent-stream.js";
-export { useAgent } from "./use-agent.js";
+export { useAgentStream } from "./hooks/use-agent-stream.js";
+export { useAgent } from "./hooks/use-agent.js";
 
 export { useRun, type UseRunOptions, type UseRunReturn } from "./hooks/use-run.js";
 // Re-export ui-core protocol + state types for consumers.
