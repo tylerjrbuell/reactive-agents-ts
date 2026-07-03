@@ -54,5 +54,12 @@ export { useRunCost } from "./hooks/use-run-cost.js";
 export { useRunSteps, type StepEntry } from "./hooks/use-run-steps.js";
 export { CostMeter, type CostMeterProps } from "./components/CostMeter.js";
 export { StepTimeline, type StepTimelineProps } from "./components/StepTimeline.js";
+export {
+  AgentSurface,
+  type AgentSurfaceProps,
+  type UiNode,
+  type ComponentRegistry,
+  uiTreeSchema,
+} from "./components/render/AgentSurface.js";
 // Re-export ui-core protocol + state types for consumers.
 export type { RunState, UiStreamEvent, UiRunStatus, PendingInteractionWire } from "@reactive-agents/ui-core";
