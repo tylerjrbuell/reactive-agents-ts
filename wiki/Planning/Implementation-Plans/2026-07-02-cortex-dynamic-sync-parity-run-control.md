@@ -4,6 +4,41 @@
 
 ---
 
+## STATUS — PLAN COMPLETE: Phases A/B/C/D + generic renderer SHIPPED (2026-07-03)
+
+All phases done in worktree `worktree-cortex-dynamic-sync` (unmerged). Cortex's
+config surface is now dynamically driven by the framework and cannot drift as the
+framework grows. Final tests: cortex server 320/0, UI 114/0; framework suites
+green from Phase C.
+
+- **Phase A (model routing)** — `withModelRouting` wired end-to-end (runner +
+  gateway + POST + UI control); strategy parity guard re-pointed to iterate
+  `getCapabilityManifest().strategies` (auto-covers new strategies).
+- **Phase B** — capability manifest (prior).
+- **Phase C (run control)** — immediate abort, live-verified on Ollama (below).
+- **Phase D (detail UX)** — `launch_params_json` per-run snapshot (D1),
+  `POST /api/runs/:runId/rerun` (D2), run-detail Rerun / Edit & Rerun + read-only
+  config snapshot panel (D3).
+- **Generic renderer (anti-drift core, the headline)** — Cortex already builds via
+  `cortexParamsToAgentConfig → agentConfigToBuilder`, so the generic override
+  needs NO per-field plumbing: a partial nested `rawConfig` (keyed by the same
+  schema paths `getCapabilityManifest().configFields` introspects via
+  `JSONSchema.make`) is deep-merged UNDER the curated draft before decode —
+  curated cortex controls win, advanced framework-only fields flow through,
+  invalid overrides fail cleanly at `Schema` decode. UI `AdvancedFrameworkConfig`
+  renders leaf config fields straight from the introspected manifest (widget per
+  `type`), so a NEW framework field appears with zero UI code. Threaded through
+  LaunchParams / POST / runner / gateway; survives Edit & Rerun.
+  **Live-verified:** POST with `rawConfig:{reasoning:{maxStrategySwitches:7}}` →
+  built + round-tripped through the D1 snapshot; invalid `defaultStrategy` → 500
+  at decode. Round-trip probe confirmed `toConfig→merge→fromConfig` preserves
+  tools + killswitch + strategy.
+
+Remaining (optional, out of this plan): richer generic widgets for array/object
+config fields; a live "framework surface" inspector dashboard.
+
+---
+
 ## STATUS — Phase C SHIPPED + verified live on Ollama (2026-07-02)
 
 **Phase C (C1–C5) complete, all tests green, verified against a REAL provider.**
