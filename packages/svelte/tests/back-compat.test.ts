@@ -38,4 +38,20 @@ describe("svelte back-compat", () => {
     const out = await a.run("hi");
     expect(out).toBe("hello");
   });
+
+  test("createAgentStream applies requestInit headers to underlying fetch", async () => {
+    const h = mockAgentEndpoint(FIXTURE);
+    let capturedInit: RequestInit | undefined;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInit = init;
+      return h(new Request(new URL(String(input), "http://ra.test").toString(), init));
+    }) as typeof fetch;
+
+    const s = createAgentStream("/x", { headers: { "X-Test": "1" } });
+    await s.run("hi");
+    await settle();
+
+    const headers = capturedInit?.headers as Record<string, string> | undefined;
+    expect(headers?.["X-Test"]).toBe("1");
+  });
 });

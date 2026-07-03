@@ -21,7 +21,7 @@ const sseEvent = (event: Record<string, unknown>): Response =>
  * A response already speaking `text/event-stream` passes straight through
  * to `connectRunStream`/`reduceRunState` unchanged.
  */
-const compatFetch = (requestInit?: Omit<RequestInit, "method" | "body">): FetchLike =>
+export const compatFetch = (requestInit?: Omit<RequestInit, "method" | "body">): FetchLike =>
   async (input, init) => {
     const headers = { ...requestInit?.headers, ...(init?.headers as Record<string, string> | undefined) };
     const res = await fetch(input, { ...requestInit, ...init, headers });

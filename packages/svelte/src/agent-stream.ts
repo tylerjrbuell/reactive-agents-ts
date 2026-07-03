@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { createRun } from "./run.js";
+import { compatFetch } from "./agent.js";
 import type { AgentStreamEvent } from "./types.js";
 
 export interface AgentStreamState {
@@ -37,9 +38,9 @@ const TERMINAL = new Set(["completed", "error", "cancelled"]);
  */
 export function createAgentStream(
   endpoint: string,
-  _requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
+  requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
 ) {
-  const inner = createRun({ endpoint });
+  const inner = createRun({ endpoint, fetchImpl: compatFetch(requestInit) });
   const store = writable<AgentStreamState>({ text: "", events: [], status: "idle", error: null, output: null });
 
   // run() resolves only once the underlying run reaches a terminal status —
