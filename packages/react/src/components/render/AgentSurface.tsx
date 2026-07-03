@@ -14,8 +14,9 @@ function RenderNode({ node, registry }: { node: unknown; registry: ComponentRegi
   if (!isUiNode(node)) return null;
   const Comp = registry[node.type];
   if (!Comp) return <span data-ra-unknown={node.type} />;
-  const kids = (node.children ?? []).map((child, i) => (
-    <RenderNode key={child.key ?? i} node={child} registry={registry} />
+  const rawKids = Array.isArray(node.children) ? node.children : [];
+  const kids = rawKids.map((child, i) => (
+    <RenderNode key={(isUiNode(child) ? child.key : undefined) ?? i} node={child} registry={registry} />
   ));
   return <Comp node={node}>{kids}</Comp>;
 }

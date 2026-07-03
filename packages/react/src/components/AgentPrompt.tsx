@@ -23,7 +23,7 @@ export function AgentPrompt({ interaction, onRespond, className, children }: Age
     <div className={className} data-ra-prompt data-ra-kind={interaction.kind}>
       <p data-ra-prompt-text>{interaction.prompt}</p>
       {interaction.kind === "choice" && (
-        <ChoiceCard options={(interaction.schema as { options?: readonly string[] })?.options ?? []} onPick={onRespond} />
+        <ChoiceCard options={asStringArray((interaction.schema as { options?: unknown })?.options)} onPick={onRespond} />
       )}
       {interaction.kind === "confirmation" && (
         <div data-ra-confirm>
@@ -36,10 +36,22 @@ export function AgentPrompt({ interaction, onRespond, className, children }: Age
         </div>
       )}
       {interaction.kind === "form" && (
-        <FormFields fields={(interaction.schema as { fields?: readonly FormField[] })?.fields ?? []} onSubmit={onRespond} />
+        <FormFields fields={asFieldArray((interaction.schema as { fields?: unknown })?.fields)} onSubmit={onRespond} />
       )}
     </div>
   );
+}
+
+function asStringArray(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function isFormField(value: unknown): value is FormField {
+  return typeof value === "object" && value !== null && typeof (value as { name?: unknown }).name === "string";
+}
+
+function asFieldArray(value: unknown): readonly FormField[] {
+  return Array.isArray(value) ? value.filter(isFormField) : [];
 }
 
 function FormFields({

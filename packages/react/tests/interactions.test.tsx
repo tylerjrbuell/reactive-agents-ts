@@ -41,6 +41,19 @@ describe("Interact", () => {
     expect(submitted).toBe("blue");
   });
 
+  test("AgentPrompt with malformed (non-array) schema.options does not throw", () => {
+    const interaction: PendingInteractionWire = {
+      runId: "r1",
+      interactionId: "i1",
+      kind: "choice",
+      prompt: "Pick one",
+      schema: { options: "not-an-array" },
+    };
+    const { container } = render(<AgentPrompt interaction={interaction} onRespond={() => {}} />);
+    expect(container.querySelector("[data-ra-choice]")).not.toBeNull();
+    expect(container.querySelectorAll("[data-ra-choice-option]").length).toBe(0);
+  });
+
   test("ApprovalGate fires approve/deny", () => {
     let decision = "";
     const { getByText } = render(

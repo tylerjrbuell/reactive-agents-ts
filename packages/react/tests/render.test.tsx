@@ -39,4 +39,18 @@ describe("Render", () => {
     const { container } = render(<AgentSurface tree={partial} registry={registry} />);
     expect(container).toBeDefined();
   });
+
+  test("registered parent with non-array children does not throw and renders no children", () => {
+    const malformed = { type: "card", children: "evil" } as unknown as UiNode;
+    const { container } = render(<AgentSurface tree={malformed} registry={registry} />);
+    const card = container.querySelector('[data-ra-node="card"]');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toBe("");
+  });
+
+  test("registered parent with a null entry in children does not throw", () => {
+    const malformed = { type: "card", children: [null] } as unknown as UiNode;
+    const { container } = render(<AgentSurface tree={malformed} registry={registry} />);
+    expect(container.querySelector('[data-ra-node="card"]')).not.toBeNull();
+  });
 });
