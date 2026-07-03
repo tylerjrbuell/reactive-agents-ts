@@ -26,6 +26,23 @@ export const META_TOOLS = new Set([
 ]) as ReadonlySet<string>;
 
 /**
+ * Pseudo tool names the HARNESS stamps on injected observation steps
+ * (guard redirects, quality-check nudges, legitimacy verdicts) via
+ * `makeObservationResult("<pseudo>", …)`. These are harness feedback, not
+ * model-initiated tool executions — grounding checks (F1 grounded-terminal
+ * invariant) and failure-streak detection (F3) MUST ignore them: a
+ * `system`/success:true quality nudge would otherwise count as a
+ * "successful substantive tool call" and mask an ungrounded run.
+ * Enumerated from the non-test `makeObservationResult("…")` literals in
+ * kernel/ (2026-07-02).
+ */
+export const HARNESS_PSEUDO_TOOLS = new Set([
+  "system",
+  "completion-guard",
+  "abstention-legitimacy",
+]) as ReadonlySet<string>;
+
+/**
  * Introspection-only meta-tools subject to consecutive-call dedup detection.
  * Subset of META_TOOLS — excludes final-answer and task-complete which are
  * termination tools, not introspection tools.

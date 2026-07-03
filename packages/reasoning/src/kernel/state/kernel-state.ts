@@ -212,6 +212,18 @@ export interface KernelMeta {
    */
   readonly synthesisRetryCount?: number;
 
+  // ── F1 — grounded-terminal invariant (2026-07-02) ──
+  /**
+   * How many times the Arbitrator's grounded-terminal gate rejected a terminal
+   * final answer because the task declares requiredTools but ZERO substantive
+   * tool calls have succeeded. Capped at 1 (one grounding redirect per run);
+   * the runner's §7.5 forced-abstention path treats a SECOND ungrounded
+   * terminal attempt (this counter > 0 and still no successful call) as
+   * reaching the ≥2 ungrounded-synthesis threshold → terminatedBy:"abstained".
+   * See kernel/loop/runner-helpers/grounded-terminal.ts.
+   */
+  readonly groundingRedirectCount?: number;
+
   // ── Phase D1 — block-mode evidence-grounding retry counter ──
   /**
    * How many corrective synthesis attempts the terminal verifier gate has

@@ -33,6 +33,7 @@ import {
 } from "../verify/requirement-state.js";
 import { makeStep } from "../sense/step-utils.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
+import { hasSuccessfulSubstantiveToolCall } from "../../loop/runner-helpers/grounded-terminal.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import {
   transitionState,
@@ -194,6 +195,25 @@ export function guardPrematureFinalAnswer(
   if (state.iteration >= ((state.meta.maxIterations as number) ?? 10) - 1) {
     return undefined;
   }
+  // F1 — grounded-terminal invariant (2026-07-02): when required tools are
+  // declared, at least one missing required tool is ACTUALLY CALLABLE (present
+  // in the available schemas — the gate's "call X now" redirect must be
+  // actionable), and ZERO substantive tool calls have succeeded, this guard
+  // DEFERS to the Arbitrator's grounded-terminal gate (one bounded recovery
+  // redirect, then forced abstention) instead of re-injecting the generic
+  // "not done yet" redirect every iteration until the budget dies.
+  // Partially-grounded runs (some success, specific required tool still
+  // missing) and runs whose missing tools aren't wired at all keep the
+  // existing per-attempt redirect below unchanged.
+  const availableForDefer = new Set(
+    (input.availableToolSchemas ?? []).map((t) => t.name),
+  );
+  if (
+    !hasSuccessfulSubstantiveToolCall(state.steps) &&
+    missingRequired.some((t) => availableForDefer.has(t))
+  ) {
+    return undefined;
+  }
 
   // Use adapter hint for targeted guidance, fall back to generic redirect
   const lastActStep = state.steps.filter((s) => s.type === "action").pop();
@@ -253,6 +273,18 @@ export function guardCompletionGaps(
   if (state.iteration >= ((state.meta.maxIterations as number) ?? 10) - 1) {
     return undefined;
   }
+  // F1 — grounded-terminal invariant (2026-07-02): same defer as
+  // guardPrematureFinalAnswer/guardQualityCheck. RequiredTools declared + ZERO
+  // substantive successes → the terminal attempt must reach the Arbitrator's
+  // grounded-terminal gate (one bounded redirect, then forced abstention)
+  // instead of an unbounded per-attempt "Not done yet" redirect here.
+  // Partially-grounded runs keep the existing gap redirect unchanged.
+  if (
+    (input.requiredTools ?? []).length > 0 &&
+    !hasSuccessfulSubstantiveToolCall(state.steps)
+  ) {
+    return undefined;
+  }
 
   const gapMsg = `Not done yet — missing steps:\n${gaps.map((g) => `• ${g}`).join("\n")}`;
   const gapStep = makeStep("observation", gapMsg, {
@@ -291,6 +323,19 @@ export function guardQualityCheck(
 ): KernelState | undefined {
   if (state.iteration <= 0) return undefined;
   if (state.meta.qualityCheckDone) return undefined;
+  // F1 — grounded-terminal invariant (2026-07-02): when required tools are
+  // declared and ZERO substantive tool calls have succeeded, the terminal
+  // attempt must reach the Arbitrator's grounded-terminal gate (one bounded
+  // recovery redirect, then forced abstention). A quality-check redirect here
+  // would both delay that gate AND inject a `system`/success:true pseudo-
+  // observation. Grounded runs and pure-synthesis tasks (no requiredTools)
+  // keep the existing quality check unchanged.
+  if (
+    (input.requiredTools ?? []).length > 0 &&
+    !hasSuccessfulSubstantiveToolCall(state.steps)
+  ) {
+    return undefined;
+  }
 
   const qcMsg = adapter.qualityCheck?.({
     task: input.task,

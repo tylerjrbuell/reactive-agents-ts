@@ -633,6 +633,14 @@ export interface ArbitrationContext {
    */
   readonly budget?: BudgetSignal;
   /**
+   * F1 — grounded-terminal invariant (2026-07-02). Mirror of
+   * `state.meta.groundingRedirectCount`: how many times the grounded-terminal
+   * gate already rejected an ungrounded terminal this run. 0/absent → the gate
+   * may reject ONCE; ≥1 → the next ungrounded terminal is accepted so the
+   * runner's forced-abstention path (§7.5) can convert it to "abstained".
+   */
+  readonly groundingRedirectCount?: number;
+  /**
    * PostCondition spine — the run's state-grounded success conditions, derived
    * ONCE at kernel-start and stored on `state.meta.postConditions`. Surfaced
    * here by `arbitrationContextFromState` so the steer gate reads the SAME set
@@ -787,6 +795,13 @@ function synthesisQualityRetry(
 import { detectScaffoldLeak } from "../verify/scaffold-leak.js";
 import { deriveConditions } from "../verify/derive-conditions.js";
 import { verify as verifyPostConditions, describeUnmet } from "../verify/post-conditions.js";
+import {
+  GROUNDING_REDIRECT,
+  TERMINAL_ANSWER_REASONS,
+  hasSuccessfulSubstantiveToolCall,
+  buildGroundingRedirectGuidance,
+} from "../../loop/runner-helpers/grounded-terminal.js";
+import { makeStep } from "../sense/step-utils.js";
 
 // ─── PostCondition spine — deterministic state-grounded success authority ─────
 //
@@ -849,6 +864,66 @@ function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verd
   };
 }
 
+// ─── F1 — Grounded-terminal invariant gate (2026-07-02) ──────────────────────
+//
+// Bench root cause (wiki/Research/Harness-Reports/2026-07-02-cogito8b-
+// competitor-bench-root-cause.md): a model that never landed a single
+// successful substantive tool call can still ship a terminal final answer —
+// a parametric guess — as status:success. Every runtime enforcement mechanism
+// (recovery steering, forced abstention) was keyed to conditions an early
+// ungrounded terminal never reaches.
+//
+// The gate runs POST-verdict (only on exit-success) for the terminal-ANSWER
+// family (TERMINAL_ANSWER_REASONS) when the task declares requiredTools:
+//   - zero successful substantive calls + no prior redirect → escalate ONCE
+//     with recovery/grounding steering (GROUNDING_REDIRECT sentinel; the
+//     applyTermination branch appends a harness_signal step, rides the message
+//     on pendingGuidance.errorRecovery, and bumps meta.groundingRedirectCount).
+//   - zero successful substantive calls + redirect already spent → ACCEPT the
+//     exit verbatim (deliberately bypassing the post-condition steer, which
+//     would otherwise grind the run to max_iterations). The runner's §7.5
+//     forced-abstention path then converts the accepted-but-ungrounded terminal
+//     into terminatedBy:"abstained" — the honest outcome, reachable at last.
+//   - any successful substantive call OR no requiredTools → null (no opinion);
+//     the post-condition gate proceeds exactly as before (zero behavior change
+//     for grounded runs and pure-synthesis tasks).
+function applyGroundedTerminalGate(
+  verdict: Verdict,
+  ctx: ArbitrationContext,
+): Verdict | null {
+  if (verdict.action !== "exit-success") return null;
+  if (!TERMINAL_ANSWER_REASONS.has(verdict.terminatedBy)) return null;
+  // Lever-8 precedent (2026-05-26): the final-answer TOOL is the model's
+  // deliberate, structured exit channel — it already skips the controller
+  // veto. The bench failure class THIS gate closes is the WEAK-signal family
+  // (end_turn / FINAL ANSWER regex narration give-ups); deliberate tool exits
+  // stay owned by the PostCondition spine below, which derives
+  // ToolCalled(requiredTools) and — for any task with declared requiredTools —
+  // steers an ungrounded final_answer_tool exit into its own (uncapped)
+  // post-condition-steer loop rather than letting it through. That is
+  // pre-existing PostCondition behavior, not this gate's concern: this line
+  // only means F1's one-shot redirect / forced-abstention pairing does not
+  // also fire on the tool-exit path, NOT that a graceful-failure tool exit
+  // is guaranteed to be accepted. (The PostCondition steer's own lack of a
+  // graceful-failure carve-out is a separate, real gap — see
+  // wiki/Research/Harness-Reports/2026-07-02-cogito8b-competitor-bench-root-cause.md
+  // follow-ups.)
+  if (verdict.terminatedBy === "final_answer_tool") return null;
+  if (ctx.requiredTools.length === 0) return null;
+  if (hasSuccessfulSubstantiveToolCall(ctx.steps)) return null;
+
+  if ((ctx.groundingRedirectCount ?? 0) === 0) {
+    return {
+      action: "escalate",
+      nextStrategy: GROUNDING_REDIRECT,
+      reason: buildGroundingRedirectGuidance(ctx.steps, ctx.requiredTools),
+    };
+  }
+  // Second ungrounded terminal attempt: accept so the loop exits; the runner's
+  // §7.5 forced-abstention path owns the conversion to "abstained".
+  return verdict;
+}
+
 /**
  * The Arbitrator's resolution function. Takes a TerminationIntent (what a
  * phase observed) and an ArbitrationContext (run-wide signals), and returns
@@ -872,6 +947,13 @@ function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verd
  */
 export function arbitrate(intent: TerminationIntent, ctx: ArbitrationContext): Verdict {
   const verdict = arbitrateInner(intent, ctx);
+  // F1 — grounded-terminal invariant gate. Runs BEFORE the post-condition gate:
+  // for the zero-successful-calls class it owns the outcome (one bounded
+  // redirect, then accept-for-abstention) — the post-condition steer would
+  // otherwise re-steer that class unboundedly and keep the forced-abstention
+  // threshold unreachable. Grounded runs fall through (returns null).
+  const grounded = applyGroundedTerminalGate(verdict, ctx);
+  if (grounded) return grounded;
   // Post-verdict PostCondition gate (single chokepoint, env-gated, additive).
   // No-op unless RA_POST_CONDITIONS=1 AND the verdict is exit-success AND the
   // run has non-empty derived post-conditions with an unmet member.
@@ -1164,6 +1246,26 @@ export function applyTermination(
       // Do NOT set escalateTo (no strategy switch) and do NOT touch
       // synthesisRetryCount (bounded by the standard iteration / budget caps,
       // not the synthesis 1-shot cap). Status stays "thinking" → loop re-enters.
+      // F1 — grounded-terminal redirect: reject the ungrounded terminal ONCE.
+      // Appends a harness_signal step (visible to think.ts prompt assembly,
+      // the verifier's recent-harness-signals window, and rax:diagnose via the
+      // runner's emitHarnessSignalInjected), rides the steering text on
+      // pendingGuidance.errorRecovery, and bumps the one-shot counter so the
+      // gate never fires twice. Status stays "thinking" → loop re-enters.
+      if (verdict.nextStrategy === GROUNDING_REDIRECT) {
+        return transitionState(state, {
+          steps: [...state.steps, makeStep("harness_signal", `⚠️ ${verdict.reason}`)],
+          pendingGuidance: {
+            ...(state.pendingGuidance ?? {}),
+            errorRecovery: verdict.reason,
+          },
+          meta: {
+            ...state.meta,
+            groundingRedirectCount: (state.meta.groundingRedirectCount ?? 0) + 1,
+            ...(extraMeta ?? {}),
+          },
+        });
+      }
       if (verdict.nextStrategy === "post-condition-steer") {
         return transitionState(state, {
           pendingGuidance: {
@@ -1331,6 +1433,11 @@ export function arbitrationContextFromState(
     // Surface scratchpad so the grounding check sees full tool data, not
     // the compressed-preview content stored on observation steps.
     scratchpad: state.scratchpad,
+    // F1 — grounded-terminal invariant: surface the one-shot redirect counter
+    // so the gate knows whether this run's grounding redirect is spent.
+    ...(state.meta.groundingRedirectCount !== undefined
+      ? { groundingRedirectCount: state.meta.groundingRedirectCount }
+      : {}),
     // Issue #128 — surface BudgetSignal when limits were declared.
     ...(budgetSignal ? { budget: budgetSignal } : {}),
     // PostCondition spine — surface the derived-once stored set so the steer

@@ -32,6 +32,16 @@ export interface ForceAbstentionInput {
   readonly iterationsRemaining: number;
   /** True when `countDeliverableCandidates(state) > 0`. Never forces over a real deliverable. */
   readonly hasDeliverable: boolean;
+  /**
+   * F1 — grounded-terminal invariant (2026-07-02). The declared required tools
+   * for which NO substantive call succeeded when the ungrounded-terminal
+   * threshold was reached. When present and non-empty, the forced abstention
+   * NAMES them: reason cites "no successful tool call for required tools (…)"
+   * and `missing` carries `tool:<name>` entries — so callers (and the bench
+   * judge) see exactly which grounding was absent. Absent/empty → the original
+   * generic reason is preserved (existing contract unchanged).
+   */
+  readonly ungroundedRequiredTools?: readonly string[];
 }
 
 export interface ForcedAbstention {
@@ -61,6 +71,19 @@ export function decideForcedAbstention(i: ForceAbstentionInput): ForcedAbstentio
     };
   }
   if (i.ungroundedSynthesisRejections >= FORCE_UNGROUNDED_THRESHOLD) {
+    // F1 — grounded-terminal invariant: when the caller identified WHICH
+    // required tools never landed a successful call, name them so the
+    // abstention is auditable ("what grounding was missing"), mirroring the
+    // required-tool-unavailable branch above. No named tools → generic reason
+    // (pre-F1 contract, byte-identical).
+    const named = i.ungroundedRequiredTools ?? [];
+    if (named.length > 0) {
+      return {
+        force: true,
+        reason: `no successful tool call for required tools (${named.join(", ")}); could not ground an answer in available evidence`,
+        missing: named.map((t) => `tool:${t}`),
+      };
+    }
     return {
       force: true,
       reason: "could not ground an answer in available evidence",

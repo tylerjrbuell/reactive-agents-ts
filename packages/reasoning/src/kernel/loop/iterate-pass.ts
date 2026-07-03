@@ -116,7 +116,13 @@ import {
 import {
   emitKernelStateSnapshot,
   emitGuardFired,
+  emitHarnessSignalInjected,
 } from "../../kernel/utils/diagnostics.js";
+import {
+  buildRecoverySteeringGuidance,
+  getToolFailureRecovery,
+  detectRepeatedIdenticalToolFailure,
+} from "./runner-helpers/recovery-steering.js";
 import { shouldAutoCheckpoint, autoCheckpoint } from "./auto-checkpoint.js";
 import { RunControllerRef } from "@reactive-agents/core";
 import {
@@ -437,6 +443,12 @@ export function runIterationPass(
       void iterRecallSkills;
 
       const kernelPhaseStart = Date.now();
+      // F1/F3 pass-start markers (2026-07-02): step count before the kernel
+      // phase runs (so F3 fires only on failures appended THIS pass, never on a
+      // stale streak) and the grounding-redirect counter before the Arbitrator
+      // could bump it (so the F1 redirect emits exactly one trace event).
+      const stepsAtPassStart = state.steps.length;
+      const groundingRedirectsAtPassStart = state.meta.groundingRedirectCount ?? 0;
       yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
 
       // 'before think' hooks — may abort iteration
@@ -501,6 +513,36 @@ export function runIterationPass(
         duration: Date.now() - kernelPhaseStart,
         status: state.status === "failed" ? "error" : "success",
       });
+
+      // ── F1 — grounded-terminal redirect trace (2026-07-02) ───────────────
+      // The Arbitrator's grounded-terminal gate is pure (it appends the
+      // harness_signal step and bumps meta.groundingRedirectCount inside
+      // applyTermination); the runner owns the diagnostics emission. A bump
+      // during this pass means the gate rejected an ungrounded terminal —
+      // surface it on the same harness-signal-injected trace path the
+      // stall/loop recovery redirects use, so rax:diagnose sees it.
+      if ((state.meta.groundingRedirectCount ?? 0) > groundingRedirectsAtPassStart) {
+        const redirectSignal = [...state.steps]
+          .reverse()
+          .find((s) => s.type === "harness_signal");
+        yield* emitHarnessSignalInjected({
+          taskId: currentOptions.taskId ?? state.taskId,
+          iteration: state.iteration,
+          signalKind: "redirect",
+          origin: "capabilities/decide/arbitrator.ts:890:applyGroundedTerminalGate",
+          content: redirectSignal?.content ?? "grounded-terminal redirect",
+          metadata: {
+            trigger: "grounded-terminal",
+            groundingRedirectCount: state.meta.groundingRedirectCount,
+            requiredTools: currentInput.requiredTools ?? [],
+          },
+        });
+        // The redirect IS this pass's steering — short-circuit to the next
+        // iteration (same "next" pattern as the stall/loop recovery paths) so
+        // the stall guard cannot stack a SECOND recovery signal onto the same
+        // pass and the run stays capped at ONE grounding redirect end-to-end.
+        sync(); return "continue";
+      }
 
       // ── Token-delta diminishing-returns guard ────────────────────────────
       // Track consecutive iterations where the model adds fewer than the
@@ -664,6 +706,66 @@ export function runIterationPass(
       }
       yield* hooks.onIterationProgress(state, toolsThisStep);
       prevActionCount = state.steps.length;
+
+      // ── F3 — repeated-identical-failure escalation (2026-07-02) ──────────
+      // Bench root cause (cogito:8b rw-8): the model repeated the SAME
+      // malformed call 4×, got 4 identical errors, then shipped a guess.
+      // Recovery steering existed but only fired via the stall (iter ≥ 2) or
+      // loop guards — several wasted iterations later. Here: same tool + same
+      // normalized error class ≥2 consecutive failures → inject the SAME
+      // recovery steering immediately. Guards:
+      //   - the trailing failure landed THIS pass (no re-fire on a stale streak),
+      //   - the tool is a real registered tool (never pseudo-observations like
+      //     "system"/"completion-guard" guard feedback),
+      //   - shared redirect budget (failureRecoveryRedirects) not exhausted,
+      //   - run still live (a terminal reached this pass is never reopened).
+      if (state.status !== "done" && state.status !== "failed") {
+        const repeated = detectRepeatedIdenticalToolFailure(state.steps);
+        const knownToolNames = new Set(
+          (currentInput.availableToolSchemas ?? []).map((t) => t.name),
+        );
+        if (
+          repeated !== null &&
+          repeated.lastIndex >= stepsAtPassStart &&
+          knownToolNames.has(repeated.toolName) &&
+          failureRecoveryRedirects < maxFailureRecoveryRedirects
+        ) {
+          const repeatedRecovery = getToolFailureRecovery(state, currentInput);
+          if (repeatedRecovery.failedUnresolved.length > 0) {
+            failureRecoveryRedirects++;
+            const guidance = buildRecoverySteeringGuidance(
+              repeatedRecovery,
+              failureRecoveryRedirects,
+              maxFailureRecoveryRedirects,
+              "stall",
+            );
+            yield* emitHarnessSignalInjected({
+              taskId: currentOptions.taskId ?? state.taskId,
+              iteration: state.iteration,
+              signalKind: "redirect",
+              origin: "loop/iterate-pass.ts:710:repeated-identical-failure",
+              content: guidance,
+              metadata: {
+                trigger: "repeated-identical-failure",
+                toolName: repeated.toolName,
+                errorClass: repeated.errorClass,
+                streak: repeated.streak,
+                redirectCount: failureRecoveryRedirects,
+              },
+            });
+            state = transitionState(state, {
+              status: "thinking",
+              steps: [...state.steps, makeStep("harness_signal", `⚠️ ${guidance}`)],
+              pendingGuidance: {
+                ...(state.pendingGuidance ?? {}),
+                errorRecovery: guidance,
+              },
+              error: null,
+            });
+            sync(); return "continue";
+          }
+        }
+      }
 
       // ── Lane controller (gather vs synthesize) ───────────────────────────
       const laneDecision = decideExecutionLane({

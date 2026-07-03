@@ -52,6 +52,10 @@ import {
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { terminate } from "./terminate.js";
 import { decideForcedAbstention } from "./runner-helpers/force-abstention.js";
+import {
+  TERMINAL_ANSWER_REASONS,
+  hasSuccessfulSubstantiveToolCall,
+} from "./runner-helpers/grounded-terminal.js";
 
 // ── WS-6 Phase 2 — helper bucket imports ──────────────────────────────────────
 // Tier-aware guard thresholds, deliverable assembly, recovery steering, and
@@ -570,8 +574,25 @@ export function runKernel(
         requiredToolUnavailable && state.iteration === 0
           ? 0
           : Math.max(0, currentOptions.maxIterations - state.iteration);
+      // F1 — grounded-terminal invariant (2026-07-02): when the Arbitrator's
+      // grounded-terminal gate already spent its ONE grounding redirect
+      // (meta.groundingRedirectCount ≥ 1), the loop exited via a terminal
+      // final answer (TERMINAL_ANSWER_REASONS), and STILL no substantive tool
+      // call has succeeded — this is the SECOND ungrounded terminal attempt.
+      // Count the redirect + this attempt toward the ≥2 ungrounded-synthesis
+      // threshold (which the redirect made reachable) so the accepted-but-
+      // ungrounded terminal converts to an honest `abstained` here. Grounded
+      // runs (any successful call) and non-answer terminals contribute 0 —
+      // pre-F1 arithmetic byte-identical.
+      const groundingRedirects = state.meta.groundingRedirectCount ?? 0;
+      const secondUngroundedTerminal =
+        groundingRedirects > 0 &&
+        TERMINAL_ANSWER_REASONS.has(String(state.meta.terminatedBy ?? "")) &&
+        !hasSuccessfulSubstantiveToolCall(state.steps);
       const ungroundedSynthesisRejections =
-        (state.meta.synthesisRetryCount ?? 0) + (state.meta.groundingBlockRetry ?? 0);
+        (state.meta.synthesisRetryCount ?? 0) +
+        (state.meta.groundingBlockRetry ?? 0) +
+        (secondUngroundedTerminal ? groundingRedirects + 1 : 0);
       const hasDeliverableForAbstain = countDeliverableCandidates(state) > 0;
 
       const forced = decideForcedAbstention({
@@ -580,6 +601,11 @@ export function runKernel(
         ungroundedSynthesisRejections,
         iterationsRemaining: iterationsRemainingForAbstain,
         hasDeliverable: hasDeliverableForAbstain,
+        // Name the tools whose grounding never landed (all required tools —
+        // zero substantive successes is the trigger condition above).
+        ...(secondUngroundedTerminal && requiredTools.length > 0
+          ? { ungroundedRequiredTools: requiredTools }
+          : {}),
       });
 
       if (forced !== null) {
