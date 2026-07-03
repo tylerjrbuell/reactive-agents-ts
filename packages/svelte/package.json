@@ -23,6 +23,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "bun": "./dist/testing.js",
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
     }
   },
   "main": "./dist/index.js",
@@ -42,7 +48,7 @@
     "typescript": "^6.0.0"
   },
   "scripts": {
-    "build": "tsup --config ../../tsup.config.base.ts",
+    "build": "tsup src/index.ts src/testing.ts --format esm --dts --out-dir dist --external svelte --external @reactive-agents/ui-core",
     "typecheck": "tsc --noEmit"
   }
 }

@@ -1,20 +1,17 @@
 {
   "name": "@reactive-agents/react",
   "version": "0.10.6",
-  "description": "React hooks for Reactive Agents — useAgentStream, useAgent",
+  "description": "React hooks + components for Reactive Agents agentic UI — runs, durable interactions, inbox, dynamic render",
   "keywords": [
     "ai",
     "agents",
-    "ai-agents",
     "llm",
-    "effect-ts",
-    "typescript",
     "react",
     "react-hooks",
-    "useagent",
     "streaming",
     "ai-ui",
-    "agent-ui"
+    "agent-ui",
+    "generative-ui"
   ],
   "type": "module",
   "exports": {
@@ -23,6 +20,18 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "bun": "./dist/testing.js",
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "default": "./dist/testing.js"
+    },
+    "./styles": {
+      "bun": "./dist/styles.js",
+      "types": "./dist/styles.d.ts",
+      "import": "./dist/styles.js",
+      "default": "./dist/styles.js"
     }
   },
   "main": "./dist/index.js",
@@ -30,16 +39,24 @@
   "files": [
     "dist"
   ],
+  "dependencies": {
+    "@reactive-agents/ui-core": "workspace:*"
+  },
   "peerDependencies": {
     "react": ">=18.0.0"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^15.0.0",
+    "@testing-library/react": "^16.0.0",
     "@types/react": "^18.0.0",
+    "happy-dom": "^15.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
     "tsup": "^8.0.0",
     "typescript": "^6.0.0"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --out-dir dist",
+    "build": "tsup src/index.ts src/testing.ts src/styles.ts --format esm --dts --out-dir dist --external react",
     "typecheck": "tsc --noEmit"
   }
 }

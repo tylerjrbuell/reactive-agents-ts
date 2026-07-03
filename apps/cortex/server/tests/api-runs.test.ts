@@ -19,6 +19,8 @@ const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
   listPendingApprovals: () => Effect.succeed([]),
   approveApproval: () => Effect.void,
   denyApproval: () => Effect.void,
+  listPendingInteractions: () => Effect.succeed([]),
+  respondToInteraction: () => Effect.succeed({ success: true, output: "" }),
 });
 
 /** Creates a mock runner that captures the LaunchParams passed to start(). */
@@ -36,6 +38,8 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
     listPendingApprovals: () => Effect.succeed([]),
     approveApproval: () => Effect.void,
     denyApproval: () => Effect.void,
+    listPendingInteractions: () => Effect.succeed([]),
+    respondToInteraction: () => Effect.succeed({ success: true, output: "" }),
   });
 }
 
@@ -553,6 +557,8 @@ describe("POST /api/runs/:runId/terminate (C4)", () => {
       listPendingApprovals: () => Effect.succeed([]),
       approveApproval: () => Effect.void,
       denyApproval: () => Effect.void,
+      listPendingInteractions: () => Effect.succeed([]),
+      respondToInteraction: () => Effect.succeed({ success: true, output: "" }),
     });
     const db = new Database(":memory:");
     applySchema(db);
@@ -584,6 +590,8 @@ describe("POST /api/runs/:runId/rerun (D2)", () => {
       listPendingApprovals: () => Effect.succeed([]),
       approveApproval: () => Effect.void,
       denyApproval: () => Effect.void,
+      listPendingInteractions: () => Effect.succeed([]),
+      respondToInteraction: () => Effect.succeed({ success: true, output: "" }),
     });
     const db = new Database(":memory:");
     applySchema(db);

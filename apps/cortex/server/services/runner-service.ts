@@ -6,6 +6,7 @@
  */
 import { Effect, Context, Layer, Ref } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
@@ -115,6 +116,12 @@ export interface LaunchParams {
     readonly dir?: string;
     readonly approvalPolicy?: { tools?: string[]; mode?: "detach" | "block" };
   };
+  /**
+   * Test-only: scripted `test`-provider turns (`.withTestScenario`). Not exposed
+   * on any HTTP route schema — for driving the real `start()` path deterministically
+   * from tests (e.g. the durable interaction-rail e2e), never from the desk UI.
+   */
+  readonly testScenario?: readonly TestTurn[];
 }
 
 /** Active desk run: keyed by framework task id (`runId`), same id passed to `agent.run(..., { taskId })`. */
@@ -153,6 +160,27 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     readonly approveApproval: (runId: RunId, reason?: string) => Effect.Effect<void, CortexError>;
     /** Deny a paused run's pending tool call; the run is terminated. */
     readonly denyApproval: (runId: RunId, reason: string) => Effect.Effect<void, CortexError>;
+    // ── Durable interaction rail (Agentic-UI) — `request_user_input` pauses,
+    // clone of the approval rail above. ──
+    /** Pending durable `request_user_input` pauses across all paused runs in this process. */
+    readonly listPendingInteractions: () => Effect.Effect<
+      readonly {
+        runId: string;
+        interactionId: string;
+        kind: string;
+        prompt: string;
+        schema: unknown;
+        task: string;
+        updatedAt: number;
+      }[],
+      never
+    >;
+    /** Record a human's response to a paused interaction; the run resumes durably. */
+    readonly respondToInteraction: (
+      runId: RunId,
+      interactionId: string,
+      value: unknown,
+    ) => Effect.Effect<{ success: boolean; output: string }, CortexError>;
   }
 >() {}
 
@@ -275,6 +303,9 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
                 ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
+                ...(params.testScenario && params.testScenario.length > 0
+                  ? { testScenario: [...params.testScenario] }
+                  : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
           });
@@ -352,7 +383,11 @@ export const CortexRunnerServiceLive = Layer.effect(
           void agent
             .run(params.prompt, { taskId: runId })
             .then((result) => {
-              const r = result as { status?: string; pendingApproval?: { runId: string } };
+              const r = result as {
+                status?: string;
+                pendingApproval?: { runId: string };
+                pendingInteraction?: { runId: string };
+              };
               if (r.status === "awaiting-approval" && r.pendingApproval) {
                 paused = true;
                 // Retain the agent in the SHARED registry keyed by the DURABLE
@@ -360,6 +395,14 @@ export const CortexRunnerServiceLive = Layer.effect(
                 // it differs from the cortex taskId — runDurable mints its own).
                 const durableRunId = r.pendingApproval.runId;
                 cortexLog("info", "runner", "durable run paused — awaiting approval", { agentId, runId, durableRunId });
+                durableApprovals.register({ agentId, durableRunId, agent, startedAt });
+              } else if (r.status === "awaiting-interaction" && r.pendingInteraction) {
+                paused = true;
+                // Same SHARED registry, keyed by the DURABLE runId — the
+                // interaction rail (listPendingInteractions/respondToInteraction)
+                // reuses the exact agent-handle mechanism the approval rail uses.
+                const durableRunId = r.pendingInteraction.runId;
+                cortexLog("info", "runner", "durable run paused — awaiting interaction", { agentId, runId, durableRunId });
                 durableApprovals.register({ agentId, durableRunId, agent, startedAt });
               }
               // The framework's DebriefCompleted event is not yet wired in the
@@ -569,6 +612,67 @@ export const CortexRunnerServiceLive = Layer.effect(
             catch: (e) => new CortexError({ message: `denyRun failed: ${String(e)}`, cause: e }),
           });
           yield* Effect.promise(() => durableApprovals.finalize(String(runId)));
+        }),
+
+      // Reads the SHARED registry, same mechanism as listPendingApprovals —
+      // both approval + interaction pauses register their agent handle there.
+      listPendingInteractions: () =>
+        Effect.gen(function* () {
+          const out: {
+            runId: string;
+            interactionId: string;
+            kind: string;
+            prompt: string;
+            schema: unknown;
+            task: string;
+            updatedAt: number;
+          }[] = [];
+          for (const entry of durableApprovals.list()) {
+            const pendings = yield* Effect.promise(() => entry.agent.listPendingInteractions()).pipe(
+              Effect.catchAll(() => Effect.succeed([] as readonly unknown[])),
+            );
+            for (const p of pendings as readonly {
+              runId?: string;
+              interactionId?: string;
+              kind?: string;
+              prompt?: string;
+              schema?: unknown;
+              task?: string;
+              updatedAt?: number;
+            }[]) {
+              out.push({
+                runId: p.runId ?? entry.durableRunId,
+                interactionId: p.interactionId ?? "",
+                kind: p.kind ?? "",
+                prompt: p.prompt ?? "",
+                schema: p.schema ?? null,
+                task: p.task ?? "",
+                updatedAt: p.updatedAt ?? entry.startedAt,
+              });
+            }
+          }
+          return out;
+        }),
+
+      respondToInteraction: (runId, interactionId, value) =>
+        Effect.gen(function* () {
+          const entry = durableApprovals.get(String(runId));
+          if (!entry) {
+            cortexLog("debug", "runner", "respondToInteraction: run not pending interaction", { runId });
+            return { success: false, output: "" };
+          }
+          const result = yield* Effect.tryPromise({
+            try: () => entry.agent.respondToInteraction(String(runId), interactionId, value),
+            catch: (e) => new CortexError({ message: `respondToInteraction failed: ${String(e)}`, cause: e }),
+          });
+          // Re-pause if it hit another gate/interaction; otherwise the run is
+          // done — clean up (mirrors approveApproval's re-pause handling).
+          if (result.status === "awaiting-approval" || result.status === "awaiting-interaction") {
+            cortexLog("info", "runner", "durable run re-paused after interaction response", { runId });
+            return { success: result.success, output: result.output };
+          }
+          yield* Effect.promise(() => durableApprovals.finalize(String(runId)));
+          return { success: result.success, output: result.output };
         }),
     };
   }),

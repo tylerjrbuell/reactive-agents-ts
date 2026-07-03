@@ -301,6 +301,40 @@ export const runsRouter = (
       },
       { body: t.Optional(t.Object({ reason: t.Optional(t.String()) })) },
     )
+    // ── Durable interaction rail (Agentic-UI) — request_user_input pauses,
+    // clone of the approval routes above. ──
+    .get("/pending-interactions", async ({ set }) => {
+      const program = Effect.gen(function* () {
+        const runner = yield* CortexRunnerService;
+        return { interactions: yield* runner.listPendingInteractions() };
+      });
+      try {
+        return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+      } catch (e) {
+        set.status = 500;
+        return { error: String(e) };
+      }
+    })
+    .post(
+      "/:runId/interaction",
+      async ({ params, body, set }) => {
+        const program = Effect.gen(function* () {
+          const runner = yield* CortexRunnerService;
+          return yield* runner.respondToInteraction(
+            params.runId as RunId,
+            body.interactionId,
+            body.value,
+          );
+        });
+        try {
+          return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+        } catch (e) {
+          set.status = 500;
+          return { error: String(e) };
+        }
+      },
+      { body: t.Object({ interactionId: t.String(), value: t.Unknown() }) },
+    )
     .delete("/:runId", async ({ params, set }) => {
       const program = Effect.gen(function* () {
         const store = yield* CortexStoreService;

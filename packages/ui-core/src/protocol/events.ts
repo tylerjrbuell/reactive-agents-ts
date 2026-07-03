@@ -37,6 +37,12 @@ export interface StreamCompleted {
   readonly taskId?: string;
   readonly agentId?: string;
   readonly runId?: string;
+  /** Per-tool call/duration rollup (mirrors runtime `AgentStreamEvent.StreamCompleted.toolSummary`). */
+  readonly toolSummary?: ReadonlyArray<{
+    readonly name: string;
+    readonly calls: number;
+    readonly avgMs: number;
+  }>;
   readonly pendingApproval?: {
     readonly runId: string;
     readonly gateId: string;

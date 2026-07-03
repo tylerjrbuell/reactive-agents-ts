@@ -1,0 +1,9 @@
+# Bun configuration for @reactive-agents/react.
+#
+# Preloads happy-dom's GlobalRegistrator so DOM globals (document, window,
+# etc.) exist for @testing-library/react hook/component tests. Only takes
+# effect when bun is invoked with this directory as cwd; when tests run from
+# the repo root, tests/use-run.test.tsx registers happy-dom itself in a
+# `beforeAll` guard as a fallback (see that file).
+[test]
+preload = ["@happy-dom/global-registrator/register"]

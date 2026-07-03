@@ -34,5 +34,33 @@
  */
 
 export type { AgentStreamEvent, AgentHookState, UseAgentStreamReturn, UseAgentReturn } from "./types.js";
-export { useAgentStream } from "./use-agent-stream.js";
-export { useAgent } from "./use-agent.js";
+export { useAgentStream } from "./hooks/use-agent-stream.js";
+export { useAgent } from "./hooks/use-agent.js";
+
+export { useRun, type UseRunOptions, type UseRunReturn } from "./hooks/use-run.js";
+export { useResumableRun, type UseResumableRunOptions } from "./hooks/use-resumable-run.js";
+export { useInteractions, type UseInteractionsOptions, type UseInteractionsReturn } from "./hooks/use-interactions.js";
+export { AgentPrompt, type AgentPromptProps } from "./components/AgentPrompt.js";
+export { ChoiceCard, type ChoiceCardProps } from "./components/ChoiceCard.js";
+export { ApprovalGate, type ApprovalGateProps } from "./components/ApprovalGate.js";
+export {
+  useTaskInbox,
+  type UseTaskInboxOptions,
+  type UseTaskInboxReturn,
+  type InboxRun,
+} from "./hooks/use-task-inbox.js";
+export { TaskInbox, type TaskInboxProps } from "./components/TaskInbox.js";
+export { useRunCost } from "./hooks/use-run-cost.js";
+export { useRunSteps, type StepEntry } from "./hooks/use-run-steps.js";
+export { CostMeter, type CostMeterProps } from "./components/CostMeter.js";
+export { StepTimeline, type StepTimelineProps } from "./components/StepTimeline.js";
+export {
+  AgentSurface,
+  type AgentSurfaceProps,
+  type UiNode,
+  type ComponentRegistry,
+  uiTreeSchema,
+} from "./components/render/AgentSurface.js";
+export { AgentDevtools, type AgentDevtoolsProps } from "./components/AgentDevtools.js";
+// Re-export ui-core protocol + state types for consumers.
+export type { RunState, UiStreamEvent, UiRunStatus, PendingInteractionWire } from "@reactive-agents/ui-core";

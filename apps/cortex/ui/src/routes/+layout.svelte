@@ -9,6 +9,7 @@
   import { commandPalette } from "$lib/stores/command-palette.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { startApprovalWatcher } from "$lib/stores/approval-watcher.js";
+  import { startInteractionWatcher } from "$lib/stores/interaction-watcher.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
   import { createAgentStore, beaconDeskRunLabel } from "$lib/stores/agent-store.js";
@@ -27,6 +28,7 @@
   let wsUnsub: (() => void) | null = null;
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
   let stopApprovalWatcher: (() => void) | null = null;
+  let stopInteractionWatcher: (() => void) | null = null;
   const wsClient = createWsClient("/ws/live/cortex-broadcast");
 
   const navItems = [
@@ -96,6 +98,8 @@
     stageStore.setNavigate((path) => goto(path));
     // Durable-HITL: app-wide interactive approval toasts (Approve/Deny).
     stopApprovalWatcher = startApprovalWatcher();
+    // Durable-HITL: app-wide `request_user_input` polling (feeds InteractPanel).
+    stopInteractionWatcher = startInteractionWatcher();
     window.addEventListener("keydown", handleGlobalKeydown);
     window.addEventListener("cortex:toggle-theme", toggleTheme as EventListener);
     window.addEventListener("focus", refreshAgentsSoon);
@@ -237,6 +241,8 @@
       wsUnsub = null;
       stopApprovalWatcher?.();
       stopApprovalWatcher = null;
+      stopInteractionWatcher?.();
+      stopInteractionWatcher = null;
       if (refreshTimer) {
         clearInterval(refreshTimer);
         refreshTimer = null;

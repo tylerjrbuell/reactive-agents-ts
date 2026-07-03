@@ -77,7 +77,10 @@ export const reduceRunState = (
     case "CostDelta":
       return { ...base, cost: { tokens: event.tokens, usd: event.usd } };
     case "StreamCompleted": {
-      const meta = event.metadata;
+      // `metadata` is typed as required, but not every sender (older
+      // servers, hand-rolled fixtures) guarantees it at runtime — degrade
+      // gracefully instead of throwing.
+      const meta = event.metadata ?? {};
       const cost =
         typeof meta.tokensUsed === "number" || typeof meta.cost === "number"
           ? { tokens: meta.tokensUsed ?? 0, usd: meta.cost ?? 0 }

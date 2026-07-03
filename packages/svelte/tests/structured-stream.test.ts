@@ -152,4 +152,31 @@ describe("createStructuredStream — behavioral", () => {
 
     unsub();
   });
+
+  it("threads requestInit (e.g. custom headers) into the underlying fetch", async () => {
+    let capturedInit: RequestInit | undefined;
+
+    const sseBody = [
+      `data: ${JSON.stringify({ _tag: "StreamCompleted", output: "{}" })}`,
+      "",
+    ].join("\n");
+
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedInit = init;
+      return new Response(sseBody, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as FetchFn;
+
+    const stream = createStructuredStream("/api/agent/structured", {
+      headers: { "X-Test": "1" },
+    });
+
+    await stream.run("hi");
+
+    expect(capturedInit).toBeDefined();
+    const headers = capturedInit!.headers as Record<string, string>;
+    expect(headers["X-Test"]).toBe("1");
+  });
 });
