@@ -10,6 +10,31 @@ import { Schema } from "effect";
 import { AgentConfigSchema, type AgentConfig } from "@reactive-agents/runtime";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 
+/**
+ * Recursively merge `over` into `base`, returning a new object. Objects merge
+ * key-by-key; scalars/arrays from `over` replace `base`. Used to layer the
+ * curated cortex config (`over`) on top of the generic rawConfig overrides
+ * (`base`) so curated controls always win on overlapping keys.
+ */
+function deepMerge(
+  base: Record<string, unknown>,
+  over: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(over)) {
+    const cur = out[k];
+    if (
+      v && typeof v === "object" && !Array.isArray(v) &&
+      cur && typeof cur === "object" && !Array.isArray(cur)
+    ) {
+      out[k] = deepMerge(cur as Record<string, unknown>, v as Record<string, unknown>);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 export function cortexParamsToAgentConfig(
   params: BuildCortexAgentParams,
   nameFallback?: string,
@@ -142,5 +167,14 @@ export function cortexParamsToAgentConfig(
     draft.features = { ...prev, healthCheck: true };
   }
 
-  return Schema.decodeUnknownSync(AgentConfigSchema)(draft);
+  // Generic framework-config overrides (type-introspected renderer): layer the
+  // curated `draft` OVER rawConfig so curated cortex controls win, while
+  // advanced framework-only fields the UI doesn't curate still flow through.
+  // Decode validates the merged result — an invalid override fails cleanly here.
+  const effective =
+    params.rawConfig && Object.keys(params.rawConfig).length > 0
+      ? deepMerge(params.rawConfig, draft)
+      : draft;
+
+  return Schema.decodeUnknownSync(AgentConfigSchema)(effective);
 }

@@ -99,6 +99,10 @@ export interface LaunchParams {
     readonly minTier?: "haiku" | "sonnet" | "opus";
     readonly tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>>;
   };
+  /** Generic framework-config overrides from the type-introspected renderer — a
+   * partial nested AgentConfig (manifest configField paths). Deep-merged under
+   * the curated config; see cortex-to-agent-config.ts. */
+  readonly rawConfig?: Record<string, unknown>;
   /**
    * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
    * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
@@ -269,6 +273,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.budget ? { budget: params.budget } : {}),
                 ...(params.grounding ? { grounding: params.grounding } : {}),
                 ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
+                ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),

@@ -151,6 +151,15 @@ export interface BuildCortexAgentParams {
     readonly tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>>;
   };
   /**
+   * Generic framework-config overrides — a partial, nested AgentConfig produced
+   * by the type-introspected generic renderer (keyed by the same schema paths
+   * `getCapabilityManifest().configFields` reports). Deep-merged UNDER the
+   * curated cortex config (curated controls win) and validated at decode, so
+   * NEW framework config fields are settable from the UI without per-field
+   * plumbing. See cortex-to-agent-config.ts.
+   */
+  readonly rawConfig?: Record<string, unknown>;
+  /**
    * Durable execution (v0.12) — opt-in crash-resume via SQLite RunStore.
    * When `enabled`, wires `.withDurableRuns(...)` so the run checkpoints and can
    * be resumed by id (`agent.resumeRun`) after a process death. `approvalPolicy`

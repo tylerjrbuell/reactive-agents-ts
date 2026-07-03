@@ -79,6 +79,8 @@ export const RunConfigBody = t.Object({
       tierModels: t.Optional(t.Record(t.String(), t.String())),
     }),
   ),
+  // Generic type-introspected config overrides (nested partial AgentConfig).
+  rawConfig: t.Optional(t.Record(t.String(), t.Unknown())),
   durableRuns: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -163,6 +165,7 @@ export const runsRouter = (
             ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
             ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
             ...(b.modelRouting?.enabled ? { modelRouting: b.modelRouting } : {}),
+            ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
           });
         });

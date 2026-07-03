@@ -332,6 +332,39 @@ describe("cortexParamsToAgentConfig — reasoning kernel default", () => {
   });
 });
 
+describe("cortexParamsToAgentConfig — rawConfig introspected overrides (generic renderer)", () => {
+  it("deep-merges an advanced framework-only field into the AgentConfig", () => {
+    const c = cortexParamsToAgentConfig({
+      provider: "test",
+      strategy: "reactive",
+      rawConfig: { reasoning: { maxStrategySwitches: 7 } },
+    });
+    expect((c.reasoning as { maxStrategySwitches?: number } | undefined)?.maxStrategySwitches).toBe(7);
+    // Cortex's curated field is unaffected by the sibling override.
+    expect((c.reasoning as { defaultStrategy?: string } | undefined)?.defaultStrategy).toBe("reactive");
+  });
+
+  it("cortex curated values WIN over an overlapping rawConfig key", () => {
+    const c = cortexParamsToAgentConfig({
+      provider: "test",
+      strategy: "blueprint",
+      // Even if the raw override tries to set the strategy, the curated control wins.
+      rawConfig: { reasoning: { defaultStrategy: "reactive", maxStrategySwitches: 4 } },
+    });
+    expect((c.reasoning as { defaultStrategy?: string }).defaultStrategy).toBe("blueprint");
+    expect((c.reasoning as { maxStrategySwitches?: number }).maxStrategySwitches).toBe(4);
+  });
+
+  it("rejects an invalid rawConfig override at decode", () => {
+    expect(() =>
+      cortexParamsToAgentConfig({
+        provider: "test",
+        rawConfig: { reasoning: { defaultStrategy: "not-a-real-strategy" } },
+      }),
+    ).toThrow();
+  });
+});
+
 describe("cortexParamsToAgentConfig — full strategy parity", () => {
   it("accepts every canonical strategy through AgentConfig decode (no narrow-enum drop)", () => {
     // Regression: AgentConfigSchema.reasoning.defaultStrategy previously used an

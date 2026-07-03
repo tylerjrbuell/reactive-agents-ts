@@ -34,6 +34,9 @@ const RUN_ONLY = new Set([
   "budget",
   "grounding",
   "modelRouting",
+  // rawConfig is the run-launcher's advanced framework-config override surface;
+  // chat sessions use the curated fields only.
+  "rawConfig",
 ]);
 
 const keysOf = (schema: { properties: Record<string, unknown> }): string[] =>
