@@ -46,6 +46,15 @@ No runtime version blocker — same monorepo, all kit surfaces are `workspace:*`
 
 **Sequencing:** A (unique) + B (de-risks fragile parser) first; C/D for durability/resume; E as a quick visual win.
 
+## Interplay with `worktree-cortex-dynamic-sync` (changes this plan)
+
+A parallel branch makes Cortex read framework surfaces **dynamically** via `getCapabilityManifest()` (`packages/runtime/src/capability/manifest.ts`) → `GET /api/capabilities` → UI renders controls from data. The manifest derives `strategies` (STRATEGY_CATALOG), `builderMethods` (builder-prototype reflection), `configFields` (AgentConfigSchema); kept honest by parity tests. **It covers the CONFIG surface only — NOT the runtime event/wire surface.** These are complementary, not overlapping: dynamic-sync = "what can I configure" (build-time); this kit = "what happens at run time + how the UI reacts to run events."
+
+**How it changes the showcase:**
+1. **Enablement of `.withUserInteraction()` is FREE.** Once both branches merge, `deriveBuilderMethods()` reflects the builder prototype → `.withUserInteraction()` auto-appears in `AgentConfigPanel.svelte`. Opportunity **A** no longer hand-wires an enable toggle — the config control is generated. The showcase work shifts entirely to rendering the runtime INTERACTION EVENT (the panel that shows the agent's question + captures the response) and the `POST /api/runs/interaction` handler. Config-surface = automatic; runtime-surface = the real build.
+2. **Adopt the manifest's anti-drift philosophy for the EVENT surface.** dynamic-sync proves the pattern (derive-from-source + parity-test). Extend it: make ui-core's versioned `UiStreamEvent` THE canonical event surface, delete Cortex's 3 hand-copies (GH #163), and add a runtime↔ui-core parity test (manifest-style: fails when runtime emits a `_tag` ui-core doesn't declare). This unifies both efforts into one story — **"Cortex is dynamic to ALL framework surfaces: config (manifest) + events (versioned protocol)."** The manifest does NOT solve GH #163; this kit is the natural fix for it.
+3. **Merge order (low conflict):** both branches add export lines to `packages/runtime/src/index.ts` (trivial). Only dynamic-sync edits `apps/cortex/**`; this kit only scoped it. Recommend merge dynamic-sync FIRST (config-surface infra + the `agent-config.ts` 5→8 ReasoningStrategy fix), then this kit (runtime endpoints/protocol + the builder method the manifest auto-surfaces), then execute this showcase ON TOP of both.
+
 ## Blockers / watch-items
 - **Event-shape divergence (GH #163):** Cortex hand-maintains 3 copies of the stream-event union (`runtime/stream-types.ts` canonical, `packages/svelte/src/types.ts` lossy, `chat-store.ts:21-51` local). Kit's `UiStreamEvent` is a 4th shape. **Converge on the kit's versioned protocol; do not add a 5th mirror.** Check `reduceRunState` against Cortex `_tag` variants (TextDelta, IterationProgress, ThoughtEmitted, LLMRequestCompleted, StreamCompleted…).
 - **Transport impedance:** desk live view = WS; kit = SSE/journal. Adopt on chat + new attach/inbox first; converting the WS desk to SSE is a separate, larger effort — out of showcase scope.
