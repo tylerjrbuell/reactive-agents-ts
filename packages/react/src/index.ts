@@ -38,5 +38,6 @@ export { useAgentStream } from "./hooks/use-agent-stream.js";
 export { useAgent } from "./hooks/use-agent.js";
 
 export { useRun, type UseRunOptions, type UseRunReturn } from "./hooks/use-run.js";
+export { useResumableRun, type UseResumableRunOptions } from "./hooks/use-resumable-run.js";
 // Re-export ui-core protocol + state types for consumers.
 export type { RunState, UiStreamEvent, UiRunStatus, PendingInteractionWire } from "@reactive-agents/ui-core";
