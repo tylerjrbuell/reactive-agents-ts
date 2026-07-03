@@ -13,9 +13,6 @@ import { writable } from "svelte/store";
 import type { PendingInteractionWire } from "@reactive-agents/ui-core";
 import { CORTEX_SERVER_URL } from "../constants.js";
 
-const keyFor = (i: Pick<PendingInteractionWire, "runId" | "interactionId">) =>
-  `interaction:${i.runId}|${i.interactionId}`;
-
 /** Shared store of currently-pending interactions, updated by the poll loop. */
 export const pendingInteractions = writable<PendingInteractionWire[]>([]);
 
@@ -23,8 +20,6 @@ export const pendingInteractions = writable<PendingInteractionWire[]>([]);
  * Start polling for pending `request_user_input` interactions. Returns a stop fn.
  */
 export function startInteractionWatcher(pollMs = 2500): () => void {
-  const seen = new Set<string>();
-
   async function poll(): Promise<void> {
     let interactions: PendingInteractionWire[] = [];
     try {
@@ -37,12 +32,6 @@ export function startInteractionWatcher(pollMs = 2500): () => void {
     }
 
     pendingInteractions.set(interactions);
-
-    const active = new Set(interactions.map(keyFor));
-    for (const key of [...seen]) {
-      if (!active.has(key)) seen.delete(key);
-    }
-    for (const i of interactions) seen.add(keyFor(i));
   }
 
   void poll();

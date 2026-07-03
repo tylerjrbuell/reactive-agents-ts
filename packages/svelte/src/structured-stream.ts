@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { createRun } from "./run.js";
+import { compatFetch } from "./agent.js";
 
 export interface StructuredStreamState {
   /** Progressively-filled DeepPartial of the structured object. Updated on every TextDelta. */
@@ -43,9 +44,9 @@ const isTerminal = (status: string): boolean =>
 
 export function createStructuredStream(
   endpoint: string,
-  _requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
+  requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
 ): { subscribe: ReturnType<typeof writable<StructuredStreamState>>["subscribe"]; run: (prompt: string, body?: Record<string, unknown>) => Promise<void>; cancel: () => void } {
-  const inner = createRun({ endpoint, objectMode: true });
+  const inner = createRun({ endpoint, objectMode: true, fetchImpl: compatFetch(requestInit) });
   const store = writable<StructuredStreamState>({ object: {}, text: "", status: "idle", error: null });
 
   // `run()`'s pre-rewire contract awaited the *entire* stream (it drove the
