@@ -43,5 +43,12 @@ export { useInteractions, type UseInteractionsOptions, type UseInteractionsRetur
 export { AgentPrompt, type AgentPromptProps } from "./components/AgentPrompt.js";
 export { ChoiceCard, type ChoiceCardProps } from "./components/ChoiceCard.js";
 export { ApprovalGate, type ApprovalGateProps } from "./components/ApprovalGate.js";
+export {
+  useTaskInbox,
+  type UseTaskInboxOptions,
+  type UseTaskInboxReturn,
+  type InboxRun,
+} from "./hooks/use-task-inbox.js";
+export { TaskInbox, type TaskInboxProps } from "./components/TaskInbox.js";
 // Re-export ui-core protocol + state types for consumers.
 export type { RunState, UiStreamEvent, UiRunStatus, PendingInteractionWire } from "@reactive-agents/ui-core";
