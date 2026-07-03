@@ -1,54 +1,21 @@
 import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
+import {
+  connectRunStream,
+  reduceRunState,
+  initialRunState,
+  type RunState,
+} from "@reactive-agents/ui-core";
 
 /**
- * Faithful mirror of the `AgentStreamEvent` SSE wire union emitted by
- * `agent.runStream()` (canonical source: `@reactive-agents/runtime`
- * `stream-types.ts`). This is a true discriminated union on `_tag` with
- * every variant's fields declared — narrowing on `event._tag` gives typed
- * field access with no casts.
- *
- * NOTE (divergence, GH #163): three copies of this union exist —
- * runtime/stream-types.ts (canonical), packages/svelte/src/types.ts (lossy
- * mirror), and this one. cortex-ui depends only on `@reactive-agents/svelte`,
- * which has no built dist and itself carries a lossy mirror, so this file
- * keeps its own complete copy rather than importing cross-package. A
- * follow-up should dedup these (svelte + chat-store re-export runtime).
- * `metadata` is kept as `Record<string, unknown>` to avoid importing
- * `AgentResultMetadata` across packages.
+ * Re-exported for backward compat: `RunChatTab.svelte` still imports this
+ * name for its own (separate, out-of-scope-for-this-refactor) SSE loop.
+ * The real, single-source-of-truth union now lives in
+ * `@reactive-agents/ui-core` (`UiStreamEvent`) — this file no longer keeps
+ * its own duplicate copy (GH #163).
  */
-export type AgentStreamEvent =
-  | { readonly _tag: "TextDelta"; readonly text: string }
-  | {
-      readonly _tag: "StreamCompleted";
-      readonly output: string;
-      readonly metadata: Record<string, unknown>;
-      readonly taskId?: string;
-      readonly agentId?: string;
-      readonly toolSummary?: ReadonlyArray<{ readonly name: string; readonly calls: number; readonly avgMs: number }>;
-    }
-  | { readonly _tag: "StreamError"; readonly cause: string }
-  | {
-      readonly _tag: "IterationProgress";
-      readonly iteration: number;
-      readonly maxIterations: number;
-      readonly toolsCalledThisStep?: readonly string[];
-      readonly status: string;
-    }
-  | { readonly _tag: "StreamCancelled"; readonly reason: string; readonly iterationsCompleted: number }
-  | { readonly _tag: "PhaseStarted"; readonly phase: string; readonly timestamp: number }
-  | { readonly _tag: "PhaseCompleted"; readonly phase: string; readonly durationMs: number }
-  | { readonly _tag: "ThoughtEmitted"; readonly content: string; readonly iteration: number }
-  | { readonly _tag: "ToolCallStarted"; readonly toolName: string; readonly callId: string }
-  | {
-      readonly _tag: "ToolCallCompleted";
-      readonly toolName: string;
-      readonly callId: string;
-      readonly durationMs: number;
-      readonly success: boolean;
-    }
-  | { readonly _tag: "LLMRequestCompleted"; readonly tokensUsed?: number; readonly estimatedCost?: number };
+export type { UiStreamEvent as AgentStreamEvent } from "@reactive-agents/ui-core";
 
 export type ReasoningStep = {
   iteration: number;
@@ -75,6 +42,14 @@ export type ChatTurn = {
    * folded into that step's thought; StreamCompleted.output replaces it.
    */
   liveText?: string;
+  /**
+   * Partial structured-output preview (op E): best-effort JSON parse of the
+   * accumulated stream text so far, via ui-core's `reduceRunState`
+   * (`objectMode: true`). Only set once the parse yields at least one key —
+   * plain-text (non-JSON) chat turns never populate this. Persists after
+   * streaming completes as the final deliverable preview.
+   */
+  liveObject?: Record<string, unknown>;
   /** Running totals during streaming — undefined when not streaming. */
   liveTokens?: number;
   liveCost?: number;
@@ -337,227 +312,149 @@ function createChatStore() {
     try {
       const url = `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`;
 
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-
-      if (!res.ok) {
-        let errorMsg = "Request failed";
-        try {
-          const body = (await res.json()) as { error: string };
-          errorMsg = body.error ?? errorMsg;
-        } catch {
-          errorMsg = `HTTP ${res.status}`;
-        }
-        update((s) => ({
-          ...s,
-          sending: false,
-          error: errorMsg,
-          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
-        }));
-        return;
-      }
-
-      if (!res.body) {
-        update((s) => ({
-          ...s,
-          sending: false,
-          error: "No response body",
-          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
-        }));
-        return;
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) {
-        update((s) => ({
-          ...s,
-          sending: false,
-          error: "No response body",
-          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
-        }));
-        return;
-      }
-
-      const decoder = new TextDecoder();
       let toolsUsed: string[] = [];
       let tokensUsed = 0;
       let costUsd = 0;
       let steps = 0;
-      let buffer = "";
-      let eventCount = 0;
+      // Op E: run the ui-core reducer alongside the existing per-event
+      // dispatch below, objectMode-on, purely to derive a partial structured
+      // object for the deliverable preview. It does not drive any of the
+      // liveText/reasoningSteps/content behavior — that logic (unchanged)
+      // still switches on the raw event's `_tag` beneath.
+      let rs: RunState = initialRunState();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          buffer += decoder.decode();
-          break;
-        }
+      for await (const event of connectRunStream({ endpoint: url, body: { message } })) {
+        rs = reduceRunState(rs, event, { objectMode: true });
 
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-
-        // Process complete SSE messages (separated by \n\n)
-        const parts = buffer.split("\n\n");
-        // Keep the last part in buffer in case it's incomplete
-        buffer = parts[parts.length - 1];
-
-        for (let i = 0; i < parts.length - 1; i++) {
-          const message = parts[i].trim();
-          if (!message) continue;
-
-          const lines = message.split("\n");
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const jsonStr = line.slice(6).trim();
-              if (!jsonStr) continue;
-
-              try {
-                const event = JSON.parse(jsonStr) as AgentStreamEvent;
-                eventCount++;
-
-                if (event._tag === "TextDelta") {
-                  // All deltas land in liveText — the visible answer preview.
-                  // The final iteration's deltas are the final answer; earlier
-                  // iterations' text gets folded into its step when superseded.
-                  update((s) => ({
-                    ...s,
-                    activeTurns: s.activeTurns.map((t) =>
-                      t.id === assistantTurnId
-                        ? { ...t, liveText: appendThoughtDelta(t.liveText, event.text) }
-                        : t,
-                    ),
-                  }));
-                } else if (event._tag === "IterationProgress") {
-                  const iter = event.iteration;
-                  const max = event.maxIterations;
-                  const tools = event.toolsCalledThisStep;
-                  const step: ReasoningStep = {
-                    iteration: iter,
-                    maxIterations: max,
-                    ...(tools && tools.length > 0 ? { toolsCalledThisStep: tools } : {}),
-                  };
-                  update((s) => ({
-                    ...s,
-                    activeTurns: s.activeTurns.map((t) => {
-                      if (t.id !== assistantTurnId) return t;
-                      const existing = t.reasoningSteps ?? [];
-                      const idx = existing.findIndex((r) => r.iteration === iter);
-                      let steps = idx >= 0
-                        ? existing.map((r, i) =>
-                            i === idx
-                              ? {
-                                  ...step,
-                                  ...(r.thought && r.thought.trim().length > 0 ? { thought: r.thought } : {}),
-                                }
-                              : r,
-                          )
-                        : [...existing, step];
-
-                      // New iteration started: the previous iteration's liveText was
-                      // reasoning, not the final answer — fold it into that step.
-                      const prevIter = t.streamProgress?.iteration;
-                      let liveText = t.liveText;
-                      if (prevIter != null && iter > prevIter && liveText && liveText.trim().length > 0) {
-                        const folded = liveText;
-                        const pIdx = steps.findIndex((r) => r.iteration === prevIter);
-                        steps = pIdx >= 0
-                          ? steps.map((r, i) =>
-                              i === pIdx ? { ...r, thought: mergeThoughtText(r.thought, folded) } : r,
-                            )
-                          : [
-                              { iteration: prevIter, maxIterations: max, thought: folded },
-                              ...steps,
-                            ];
-                        liveText = undefined;
-                      }
-
-                      return {
-                        ...t,
-                        streamProgress: { iteration: iter, maxIterations: max },
-                        reasoningSteps: steps,
-                        liveText,
-                      };
-                    }),
-                  }));
-                } else if (event._tag === "ThoughtEmitted") {
-                  const iter = event.iteration;
-                  const thought = event.content;
-                  update((s) => ({
-                    ...s,
-                    activeTurns: s.activeTurns.map((t) => {
-                      if (t.id !== assistantTurnId) return t;
-                      const existing = t.reasoningSteps ?? [];
-                      const idx = existing.findIndex((r) => r.iteration === iter);
-                      if (idx >= 0) {
-                        const prev = existing[idx]!;
-                        const next: ReasoningStep = {
-                          ...prev,
-                          thought: mergeThoughtText(prev.thought, thought),
-                        };
-                        return {
-                          ...t,
-                          reasoningSteps: existing.map((r, i) => (i === idx ? next : r)),
-                        };
-                      }
-                      return {
-                        ...t,
-                        reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }],
-                      };
-                    }),
-                  }));
-                } else if (event._tag === "LLMRequestCompleted") {
-                  const tokens = event.tokensUsed ?? 0;
-                  const cost = event.estimatedCost ?? 0;
-                  if (tokens > 0 || cost > 0) {
-                    update((s) => ({
-                      ...s,
-                      activeTurns: s.activeTurns.map((turn) => {
-                        if (turn.id !== assistantTurnId) return turn;
-                        return {
-                          ...turn,
-                          liveTokens: (turn.liveTokens ?? 0) + tokens,
-                          liveCost: (turn.liveCost ?? 0) + cost,
-                        };
-                      }),
-                    }));
+        if (event._tag === "TextDelta") {
+          const partial =
+            rs.object !== undefined &&
+            rs.object !== null &&
+            typeof rs.object === "object" &&
+            Object.keys(rs.object as Record<string, unknown>).length > 0
+              ? (rs.object as Record<string, unknown>)
+              : undefined;
+          // All deltas land in liveText — the visible answer preview.
+          // The final iteration's deltas are the final answer; earlier
+          // iterations' text gets folded into its step when superseded.
+          update((s) => ({
+            ...s,
+            activeTurns: s.activeTurns.map((t) =>
+              t.id === assistantTurnId
+                ? {
+                    ...t,
+                    liveText: appendThoughtDelta(t.liveText, event.text),
+                    ...(partial !== undefined ? { liveObject: partial } : {}),
                   }
-                } else if (event._tag === "StreamCompleted") {
-                  tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
-                  costUsd = (event.metadata?.cost as number | undefined) ?? (event.metadata?.estimatedCost as number | undefined) ?? 0;
-                  steps =
-                    (event.metadata?.iterations as number | undefined) ??
-                    (event.metadata?.stepsCount as number | undefined) ??
-                    0;
-                  if (event.toolSummary && event.toolSummary.length > 0) {
-                    toolsUsed = event.toolSummary.map((t) => t.name);
-                  }
-                  // StreamCompleted.output is authoritative final output after verification/retries.
-                  const output: string | undefined = event.output;
-                  update((s) => ({
-                    ...s,
-                    activeTurns: s.activeTurns.map((t) => {
-                      if (t.id !== assistantTurnId) return t;
-                      // Prefer authoritative output; fall back to the live preview text
-                      const content = output?.trim() ? output : (t.liveText ?? t.content);
-                      return { ...t, content, liveText: undefined };
-                    }),
-                  }));
-                } else if (event._tag === "StreamError") {
-                  // Handle stream errors
-                  console.error("[Chat Stream] Stream error:", event.cause);
-                  update((s) => ({
-                    ...s,
-                    error: event.cause ?? "Stream error",
-                  }));
-                }
-              } catch (e) {
-                console.error("[Chat Stream] Parse error:", e, "jsonStr:", jsonStr.slice(0, 100));
+                : t,
+            ),
+          }));
+        } else if (event._tag === "IterationProgress") {
+          const iter = event.iteration;
+          const max = event.maxIterations;
+          const tools = event.toolsCalledThisStep;
+          const step: ReasoningStep = {
+            iteration: iter,
+            maxIterations: max,
+            ...(tools && tools.length > 0 ? { toolsCalledThisStep: tools } : {}),
+          };
+          update((s) => ({
+            ...s,
+            activeTurns: s.activeTurns.map((t) => {
+              if (t.id !== assistantTurnId) return t;
+              const existing = t.reasoningSteps ?? [];
+              const idx = existing.findIndex((r) => r.iteration === iter);
+              let steps = idx >= 0
+                ? existing.map((r, i) =>
+                    i === idx
+                      ? {
+                          ...step,
+                          ...(r.thought && r.thought.trim().length > 0 ? { thought: r.thought } : {}),
+                        }
+                      : r,
+                  )
+                : [...existing, step];
+
+              // New iteration started: the previous iteration's liveText was
+              // reasoning, not the final answer — fold it into that step.
+              const prevIter = t.streamProgress?.iteration;
+              let liveText = t.liveText;
+              if (prevIter != null && iter > prevIter && liveText && liveText.trim().length > 0) {
+                const folded = liveText;
+                const pIdx = steps.findIndex((r) => r.iteration === prevIter);
+                steps = pIdx >= 0
+                  ? steps.map((r, i) =>
+                      i === pIdx ? { ...r, thought: mergeThoughtText(r.thought, folded) } : r,
+                    )
+                  : [
+                      { iteration: prevIter, maxIterations: max, thought: folded },
+                      ...steps,
+                    ];
+                liveText = undefined;
               }
-            }
+
+              return {
+                ...t,
+                streamProgress: { iteration: iter, maxIterations: max },
+                reasoningSteps: steps,
+                liveText,
+              };
+            }),
+          }));
+        } else if (event._tag === "ThoughtEmitted") {
+          const iter = event.iteration;
+          const thought = event.content;
+          update((s) => ({
+            ...s,
+            activeTurns: s.activeTurns.map((t) => {
+              if (t.id !== assistantTurnId) return t;
+              const existing = t.reasoningSteps ?? [];
+              const idx = existing.findIndex((r) => r.iteration === iter);
+              if (idx >= 0) {
+                const prev = existing[idx]!;
+                const next: ReasoningStep = {
+                  ...prev,
+                  thought: mergeThoughtText(prev.thought, thought),
+                };
+                return {
+                  ...t,
+                  reasoningSteps: existing.map((r, i) => (i === idx ? next : r)),
+                };
+              }
+              return {
+                ...t,
+                reasoningSteps: [...existing, { iteration: iter, maxIterations: 0, thought }],
+              };
+            }),
+          }));
+        } else if (event._tag === "StreamCompleted") {
+          tokensUsed = (event.metadata?.tokensUsed as number) ?? 0;
+          costUsd = (event.metadata?.cost as number | undefined) ?? (event.metadata?.estimatedCost as number | undefined) ?? 0;
+          steps =
+            (event.metadata?.iterations as number | undefined) ??
+            (event.metadata?.stepsCount as number | undefined) ??
+            0;
+          if (event.toolSummary && event.toolSummary.length > 0) {
+            toolsUsed = event.toolSummary.map((t) => t.name);
           }
+          // StreamCompleted.output is authoritative final output after verification/retries.
+          const output: string | undefined = event.output;
+          update((s) => ({
+            ...s,
+            activeTurns: s.activeTurns.map((t) => {
+              if (t.id !== assistantTurnId) return t;
+              // Prefer authoritative output; fall back to the live preview text
+              const content = output?.trim() ? output : (t.liveText ?? t.content);
+              return { ...t, content, liveText: undefined };
+            }),
+          }));
+        } else if (event._tag === "StreamError") {
+          // Handle stream errors
+          console.error("[Chat Stream] Stream error:", event.cause);
+          update((s) => ({
+            ...s,
+            error: event.cause ?? "Stream error",
+          }));
         }
       }
 
