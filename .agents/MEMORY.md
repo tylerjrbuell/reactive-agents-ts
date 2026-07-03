@@ -2,6 +2,27 @@
 
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
+## ✅ Agentic UI Kit P3 — React binding + Svelte binding + Cortex showcase, MERGED to local main (2026-07-03)
+
+Recovered a lost worktree (`worktree-cortex-agentic-ui`, 24 commits, never merged) and merged clean into main (`e05ca220`). Covers: React — full rewire onto `ui-core`'s `useRun`, all v1 families (Interact/Inbox/Observe/Render/Devtools), resumable-run reattach, DOM test harness. Svelte — same rewire (`createRun`/`createInteractions`/`createResumableRun`), `structured-stream`/`agent-stream` back-compat preserved. Cortex — Interact panel + interaction-watcher rail (durable `request_user_input` UX, e2e-tested), chat streaming converged onto `ui-core` `connectRunStream` (killed a 4th event-union copy, GH #163).
+
+Post-merge health sweep found + fixed 3 real issues (pre-existing, not introduced by this branch):
+- `AGENTS.md` dependency-tree doc-drift: `ui-core` package missing entirely; `react`/`svelte`/`vue` entries stale (said "no reactive-agents deps" — all three now depend on `ui-core`). Caught by `packages/core/tests/doc-drift.test.ts`.
+- `apps/cortex/ui/src/lib/constants.ts`: `globalThis.location` access broke `tsc` — the file is transitively pulled into the server-side (no-DOM-lib) `apps/cortex/tsconfig.json` via `messages-extract.ts`. Fixed with an explicit `BrowserGlobal` interface cast instead of relying on ambient `window`/`globalThis` DOM types.
+- WS-5b `as unknown as` cast-site ceiling test regressed 78 vs ceiling 76: two redundant double-casts in `packages/react/src/hooks/use-agent-stream.ts` and `packages/svelte/src/agent-stream.ts` (`state.events as unknown as AgentStreamEvent[]`) — a single cast typechecks fine, no double-cast needed.
+
+Known non-regression: `packages/runtime/tests/model-routing-reasoning-path.test.ts` (2 tests) fails — hits live Anthropic API, account **out of credits** (verified via direct curl to `/v1/messages`). Pre-existing test (predates this branch), environmental not code.
+
+Full health after fix: build 39/39, typecheck 71/71, tests 1119/1122 pass (3 fail = 2 credit-exhausted live-API tests + [already documented] eval perf-timing flake under parallel load, confirmed passes in isolation).
+
+## ✅ Cortex Dynamic Sync — PLAN COMPLETE (A/B/C/D + generic renderer), FULLY ON LOCAL MAIN (2026-07-03)
+
+A/C/D landed via earlier merges; the type-introspected generic renderer cherry-picked to main **`427f625b`/`f1d49303`/`1fa1a872`** (conflict-free — worktree HEAD~3 was already an ancestor of main; renderer target files unchanged on main since). Main cortex tests **434/0**, typecheck clean. Worktree `worktree-cortex-dynamic-sync` fully merged (kept, not removed — harness-owned path).
+
+- **Phase A (model routing):** `withModelRouting` wired end-to-end (runner+gateway+POST+UI checkbox/minTier); strategy parity guard iterates `getCapabilityManifest().strategies` (+aliases) → new framework strategies auto-covered.
+- **Phase D (detail UX):** D1 `launch_params_json` per-run snapshot (col+migration; `rowToRunSummary` parses → GET /:runId `launchParams`; `store.getLaunchParams`); D2 `POST /api/runs/:runId/rerun`; D3 run-detail Rerun / Edit & Rerun + read-only `RunConfigSnapshot`; lab `?fromRun=` prefill (shape-safe allowlist).
+- **GENERIC RENDERER (anti-drift headline — user's ask "render from type introspection"):** cortex already builds via `cortexParamsToAgentConfig → agentConfigToBuilder`, so a generic override needs ZERO per-field plumbing — deep-merge a partial nested `rawConfig` (keyed by the SAME schema paths `getCapabilityManifest().configFields` introspects via `JSONSchema.make`) UNDER the curated draft in `cortex-to-agent-config.ts` before `Schema.decodeUnknownSync`. Curated cortex controls WIN on overlap; advanced framework-only fields flow through; invalid overrides fail cleanly at decode. UI `AdvancedFrameworkConfig.svelte` renders leaf configFields straight from the introspected manifest (widget per `type`) → NEW framework field appears with zero UI code. De-risked via probe (`builder.toConfig()→deepMerge→ReactiveAgents.fromConfig()` preserves tools+killswitch+strategy). **Live-verified through real server:** POST `rawConfig:{reasoning:{maxStrategySwitches:7}}` → built + round-tripped in D1 snapshot; invalid `defaultStrategy:"not-real"` → 500 at decode. Reusable: `ReactiveAgents.fromConfig(AgentConfig)` (builder.ts:275) + `builder.toConfig()` (builder.ts:2168) = lossless config round-trip; `agentConfigToBuilder` decode-validates.
+
 ## ✅ Cortex Run Control — immediate abort (Phase C, MERGED to local main `67943256`, 2026-07-02)
 
 Worktree `worktree-cortex-dynamic-sync` (same branch as Phase B capability-manifest). **Stop stays graceful (halts at next phase boundary); new Terminate is immediate — aborts the in-flight LLM call.** 6 commits `67948fba`→`4a772604`, TDD, 93 combined tests green. **Live-verified on Ollama: gemma4:12b generation terminated@800ms → run() settled@805ms.**
