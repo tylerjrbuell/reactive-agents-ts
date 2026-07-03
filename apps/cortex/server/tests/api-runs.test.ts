@@ -14,6 +14,7 @@ const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
   pause: () => Effect.void,
   resume: () => Effect.void,
   stop: () => Effect.void,
+  terminate: () => Effect.void,
   getActive: () => Effect.succeed(new Map()),
   listPendingApprovals: () => Effect.succeed([]),
   approveApproval: () => Effect.void,
@@ -30,6 +31,7 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
     pause: () => Effect.void,
     resume: () => Effect.void,
     stop: () => Effect.void,
+    terminate: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
     listPendingApprovals: () => Effect.succeed([]),
     approveApproval: () => Effect.void,
@@ -103,6 +105,28 @@ describe("GET /api/runs", () => {
     const body = (await res.json()) as { runId: string; status: string };
     expect(body.runId).toBe("present-run");
     expect(body.status).toBe("completed");
+  });
+
+  it("GET /api/runs/:runId returns the launch config snapshot (D1)", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    upsertRun(db, "ag", "snap-run", "Snap Run", JSON.stringify({ prompt: "hi", strategy: "blueprint", provider: "test" }));
+
+    const res = await app.handle(new Request("http://localhost/api/runs/snap-run"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { launchParams?: { strategy?: string; prompt?: string } };
+    expect(body.launchParams?.strategy).toBe("blueprint");
+    expect(body.launchParams?.prompt).toBe("hi");
+  });
+
+  it("GET /api/runs/:runId omits launchParams when none stored", async () => {
+    const db = new Database(":memory:");
+    const app = appWithRunsDb(db);
+    upsertRun(db, "ag", "no-snap");
+    const res = await app.handle(new Request("http://localhost/api/runs/no-snap"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { launchParams?: unknown };
+    expect(body.launchParams).toBeUndefined();
   });
 
   it("GET /api/runs/:runId/events returns event rows", async () => {
@@ -509,6 +533,82 @@ describe("Durable HITL endpoints (Phase E)", () => {
     );
     expect(res.status).toBe(200);
     expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+  });
+});
+
+describe("POST /api/runs/:runId/terminate (C4)", () => {
+  it("returns 200 and calls runner.terminate with the runId", async () => {
+    let terminatedWith = "";
+    const terminateLayer = Layer.succeed(CortexRunnerService, {
+      start: () =>
+        Effect.succeed({ agentId: "a", runId: "r" }),
+      pause: () => Effect.void,
+      resume: () => Effect.void,
+      stop: () => Effect.void,
+      terminate: (runId) => {
+        terminatedWith = String(runId);
+        return Effect.void;
+      },
+      getActive: () => Effect.succeed(new Map()),
+      listPendingApprovals: () => Effect.succeed([]),
+      approveApproval: () => Effect.void,
+      denyApproval: () => Effect.void,
+    });
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), terminateLayer));
+
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/run-1/terminate", { method: "POST" }),
+    );
+
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { ok: boolean }).toEqual({ ok: true });
+    expect(terminatedWith).toBe("run-1");
+  });
+});
+
+describe("POST /api/runs/:runId/rerun (D2)", () => {
+  it("relaunches a new run from the stored snapshot", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const rerunLayer = Layer.succeed(CortexRunnerService, {
+      start: (params) => {
+        captured.params = params;
+        return Effect.succeed({ agentId: "new-a", runId: "new-r" });
+      },
+      pause: () => Effect.void,
+      resume: () => Effect.void,
+      stop: () => Effect.void,
+      terminate: () => Effect.void,
+      getActive: () => Effect.succeed(new Map()),
+      listPendingApprovals: () => Effect.succeed([]),
+      approveApproval: () => Effect.void,
+      denyApproval: () => Effect.void,
+    });
+    const db = new Database(":memory:");
+    applySchema(db);
+    upsertRun(db, "ag", "orig-run", "Orig", JSON.stringify({ prompt: "hi", strategy: "blueprint", provider: "test" }));
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), rerunLayer));
+
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/orig-run/rerun", { method: "POST" }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { runId?: string };
+    expect(body.runId).toBe("new-r");
+    expect(captured.params?.strategy).toBe("blueprint");
+    expect(captured.params?.prompt).toBe("hi");
+  });
+
+  it("returns 400 when the run has no stored snapshot", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    upsertRun(db, "ag", "bare-run");
+    const app = appWithRunsDb(db);
+    const res = await app.handle(
+      new Request("http://localhost/api/runs/bare-run/rerun", { method: "POST" }),
+    );
+    expect(res.status).toBe(400);
   });
 });
 

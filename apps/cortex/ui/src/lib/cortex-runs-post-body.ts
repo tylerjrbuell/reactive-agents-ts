@@ -92,6 +92,16 @@ export function cortexRunsPostBody(
       : {}),
     // Numeric grounding — send when enabled.
     ...(cfg.grounding && cfg.grounding.mode !== "off" ? { grounding: { mode: cfg.grounding.mode } } : {}),
+    // Cost-aware model routing — send when enabled.
+    ...(cfg.modelRouting?.enabled
+      ? {
+          modelRouting: {
+            enabled: true as const,
+            ...(cfg.modelRouting.minTier ? { minTier: cfg.modelRouting.minTier } : {}),
+            ...(cfg.modelRouting.tierModels ? { tierModels: cfg.modelRouting.tierModels } : {}),
+          },
+        }
+      : {}),
     // Durable execution (crash-resume + HITL). approvalTools → approvalPolicy gate.
     ...(cfg.durableRuns?.enabled
       ? {

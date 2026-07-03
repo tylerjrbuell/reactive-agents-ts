@@ -30,7 +30,7 @@ import {
 } from './agent/gateway-runner.js'
 import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
-import { unwrapError, toRunBoundaryError } from './errors.js'
+import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
@@ -754,6 +754,13 @@ export class ReactiveAgent<TOut = unknown> {
         const taskInput = withHistoryBlock(input, options?.history)
         const taskIdOpt = options?.taskId ? { taskId: options.taskId } : undefined
 
+        // Killswitch AbortSignal for the run fiber: threading it into runPromise
+        // lets terminate() interrupt the fiber (and thus any in-flight provider
+        // HTTP request that forwards the signal, e.g. Ollama) rather than only
+        // halting at the next phase boundary. undefined without .withKillSwitch()
+        // (the service is Layer.empty, so acquisition swallows to undefined).
+        const runSignal = await this.acquireRunSignal()
+
         const execute = async (): Promise<AgentResult> => {
             // Durable agents create a run row + checkpoint so a pause survives the
             // process; non-durable agents take the plain path.
@@ -764,7 +771,10 @@ export class ReactiveAgent<TOut = unknown> {
                       task: taskInput,
                       ...(options?.taskId ? { taskId: options.taskId } : {}),
                   })
-                : await this.runtime.runPromise(this.buildRunTaskEffect(taskInput, taskIdOpt))
+                : await this.runtime.runPromise(
+                      this.buildRunTaskEffect(taskInput, taskIdOpt),
+                      runSignal ? { signal: runSignal } : undefined,
+                  )
 
             // Tier 2 — same-process convenience: drive pause→decide→resume in one
             // call. Loops so multi-gate runs (a resume that pauses again) are handled.
@@ -780,7 +790,23 @@ export class ReactiveAgent<TOut = unknown> {
             return result
         }
 
-        return execute().catch((e) => {
+        return execute().catch(async (e) => {
+            // terminate() aborted the fiber mid-flight: the engine's phase-boundary
+            // lifecycle check never ran, so emit AgentTerminated here (parity with
+            // the phase-boundary terminate branch) and surface a clean terminal
+            // error rather than the raw interruption.
+            if (runSignal?.aborted) {
+                const tid = taskIdOpt?.taskId ?? 'unknown'
+                await this.emitAgentTerminated(tid, 'terminate() called')
+                throw toRunBoundaryError(
+                    new KillSwitchTriggeredError({
+                        message: `Agent ${this.agentId} terminated`,
+                        taskId: tid,
+                        agentId: this.agentId,
+                        reason: 'terminate() called',
+                    }),
+                )
+            }
             const unwrapped = unwrapError(e)
             if (this._errorHandler) {
                 try {
@@ -798,6 +824,50 @@ export class ReactiveAgent<TOut = unknown> {
             }
             throw toRunBoundaryError(unwrapped)
         }) as Promise<AgentResult & { object?: TOut }>
+    }
+
+    /**
+     * Resolve this agent's run-fiber AbortSignal from the KillSwitchService.
+     * Returns undefined when the service is absent (never built into the layer).
+     * The signal is stable per agentId, so terminate() — which aborts the same
+     * controller — interrupts whatever fiber is currently running it.
+     */
+    private async acquireRunSignal(): Promise<AbortSignal | undefined> {
+        // serviceOption (NOT bare `KillSwitchService.pipe`): a missing service is
+        // an Effect DEFECT that catchAll does not catch, and this runs on EVERY
+        // run — without .withKillSwitch() the layer is empty, so we must degrade
+        // to undefined rather than die.
+        return this.runtime.runPromise(
+            Effect.serviceOption(KillSwitchService).pipe(
+                Effect.flatMap((opt) =>
+                    opt._tag === 'Some'
+                        ? opt.value.signal(this.agentId)
+                        : Effect.succeed(undefined),
+                ),
+                Effect.catchAll(() => Effect.succeed(undefined)),
+            ) as Effect.Effect<AbortSignal | undefined>,
+        )
+    }
+
+    /**
+     * Publish AgentTerminated for a mid-flight abort. The engine only emits this
+     * at a phase boundary; when terminate() interrupts an in-flight LLM call the
+     * boundary check never runs, so run() emits it here to keep event parity.
+     */
+    private async emitAgentTerminated(taskId: string, reason: string): Promise<void> {
+        await this.runtime.runPromise(
+            EventBus.pipe(
+                Effect.flatMap((eb) =>
+                    eb.publish({
+                        _tag: 'AgentTerminated' as const,
+                        agentId: this.agentId,
+                        taskId,
+                        reason,
+                    } as AgentEvent),
+                ),
+                Effect.catchAll(() => Effect.void),
+            ) as Effect.Effect<void>,
+        )
     }
 
     /**

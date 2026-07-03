@@ -60,6 +60,18 @@ Post-release sequence (user-accepted): (2) **competitive bench** (plan 2.2 Recei
 
 Memory prune 2026-07-02 (verified vs code): ReWOO SHIPPED as `blueprint` strategy (`strategies/blueprint.ts` + `blueprint/worker.ts`, registry:165); gemini thinking-starvation fix COMMITTED (`881ce51a`/`8141353b`, superseded by shared helpers `e45bd7c5`); `docs-receipts.ts` session exists; memory default-off flag lives at `runtime/src/builder/build-effect/runtime-construction.ts:113`. Working tree WIP uncommitted: competitive-bench (`competitors/{langchain,mastra,vercel-ai}-runner.ts` modified; `competitors/ai-sdk-model.ts`, `sessions/public-competitor-bench.ts` new).
 
+## ▶ Cortex Dynamic Capability Sync — MERGED to local main (2026-07-02, worktree kept)
+
+Goal: Cortex infers config/capability surface from the framework at runtime so new strategies/builder methods auto-sync into the UI (no hand-wiring 5 files). Design+plan: `wiki/Architecture/Design-Specs/2026-07-02-cortex-framework-parity-dynamic-sync-run-control-design.md` + `wiki/Planning/Implementation-Plans/2026-07-02-cortex-dynamic-sync-parity-run-control.md`.
+
+In git worktree branch **`worktree-cortex-dynamic-sync`** (off origin/main @ v0.13.0) — **NOT merged to main.** Phase B (B1–B9) complete, all tests green, verified LIVE E2E. Phases A/C/D deferred (off Show-HN launch critical path).
+
+- **`getCapabilityManifest()`** exported from `@reactive-agents/runtime` (`packages/runtime/src/capability/manifest.ts`): `{version, strategies, builderMethods, configFields}`. strategies ← new `STRATEGY_CATALOG` (`packages/reasoning/src/services/strategy-catalog.ts`, 8 entries + registry-equality guard); builderMethods ← **prototype reflection** over `ReactiveAgentBuilder.prototype` (83 `with*`) + annotation map (zero drift by construction, NOT a static table); configFields ← `JSONSchema.make(AgentConfigSchema)` walk (126 fields).
+- Cortex **`GET /api/capabilities`** serves it; UI `capabilities.ts` store + `config-presentation.ts` (`hintFor` default-widget fallback → new fields never vanish) + server-side `manifest-coverage.test.ts` guard (UI has NO runtime dep by design). Strategy dropdown in `AgentConfigPanel.svelte` now manifest-driven.
+- **KEY FRAMEWORK FIX:** `AgentConfigSchema.reasoning.defaultStrategy` (`packages/runtime/src/agent-config.ts`) was a hand-dup 5-member literal rejecting blueprint/code-action/direct at `Schema.decodeUnknownSync` → replaced with core's canonical 8-member `ReasoningStrategy`. E2E: `POST /api/runs {strategy:"blueprint"}` now builds + dispatches to `[phase:blueprint:plan]` (was hard-fail at decode).
+- **Env:** Cortex = Node-runtime consumer (own tsconfig, no `src` path map) → server/UI tests need framework **built to dist** (`bunx turbo run build --filter='./packages/*'`) first.
+- **Remaining (foundation ready):** generic renderer across all 126 config fields (only strategy dropdown migrated); Phase A (model-routing UI — `withModelRouting` already in manifest). Phases C (run-control killswitch AbortSignal → in-flight abort + Stop/Terminate) + D (rerun from detail) shipped through `c06d78cb` (D3). Worktree `worktree-cortex-dynamic-sync` KEPT for remaining Phase A + generic renderer.
+
 ## ▶ v0.13 Lift Execution — Waves 0-3 SHIPPED to origin (2026-07-01)
 
 Executed the v0.13 lift plan via wardens (canonicalized contract). ALL pushed to origin main, CI green. Plan: `wiki/Planning/Implementation-Plans/2026-07-01-v13-lift-execution.md`.

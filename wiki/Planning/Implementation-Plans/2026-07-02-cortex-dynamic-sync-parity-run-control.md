@@ -2,6 +2,67 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+---
+
+## STATUS — Phase C SHIPPED + verified live on Ollama (2026-07-02)
+
+**Phase C (C1–C5) complete, all tests green, verified against a REAL provider.**
+Run control now genuinely aborts in-flight work — Stop stays graceful (phase
+boundary), Terminate is immediate (fiber interrupt → provider HTTP abort).
+
+- **C1** `packages/guardrails/src/kill-switch.ts` — `KillSwitchService` gains a
+  per-agent `AbortController` map + `signal(agentId)`; `terminate()` aborts it
+  (ensureController so a terminate racing ahead of signal() still leaves an
+  aborted controller). 3 tests.
+- **C2 (deviation from plan — plan's premise was wrong).** The plan said "the LLM
+  `complete`/`stream` signal option is already honored by providers"; it is NOT —
+  `LLMRequest` has no signal field and anthropic/openai ignore any signal. The
+  REAL seam is **fiber interruption**: Ollama's `Effect.tryPromise((signal)=>…)`
+  aborts its fetch on fiber interrupt (`local.ts:413`). So C2 threads the
+  killswitch `AbortSignal` into `runtime.runPromise(effect, { signal })` at the
+  `run()` seam (`reactive-agent.ts:767`), acquired via `Effect.serviceOption`
+  (NOT bare `KillSwitchService.pipe`, which DIES on a missing service — that
+  defect is uncatchable by `catchAll` and runs on every run). On a mid-flight
+  abort it emits `AgentTerminated` (phase-boundary parity) + a clean terminal
+  error. **Live-verified:** gemma4:12b generation terminated at 800ms → run()
+  settled at 805ms (would take many seconds otherwise).
+- **C3** `runner-service.ts` — `terminate(runId)` + shared **idempotent**
+  `finalizeRun` (atomic claim from activeRef → no double-dispose when terminate
+  races the run's own `.finally`); `ActiveEntry` now carries `unsubscribe`.
+- **C4** `POST /api/runs/:runId/terminate` (mirrors `stop`).
+- **C5** `run-store.terminate()` + confirm-gated Terminate button beside Stop in
+  `RunDetail.svelte` (live + paused states). UI builds clean.
+
+**Tests:** guardrails 48, runtime terminate/abort suites, cortex runner/api/parity
+— 93 combined green; full runtime suite 879 pass (3 pre-existing fails: model-
+routing×2 need keys, built-surface needs dist — NOT introduced by Phase C).
+
+**Env note:** runtime/guardrails dist rebuilt so the Node-consumer Cortex server
+picks up C2 (workspace `bun` export runs framework from src for probes/tests, but
+the built Cortex server reads dist). Remaining: generic renderer + Phases A/D.
+
+---
+
+## STATUS — Phase B SHIPPED + verified E2E (2026-07-02)
+
+Executed in worktree `worktree-cortex-dynamic-sync` (off origin/main @ v0.13.0). **Phase B (B1–B9) complete, all tests green, verified live.** Phases A/C/D NOT started (deferred per the step-back decision — off the Show-HN launch critical path).
+
+**Commits (in worktree):** B1 `strategy-catalog`, B2 `builder-methods`, B3 `config-fields`, B4 `getCapabilityManifest`, B5 `/api/capabilities`, B6 UI store, B7 presentation map, B8 coverage guard, B9 strategy dropdown + **blueprint/code-action/direct decode fix**.
+
+**Live E2E proof:** started the real server; `GET /api/capabilities` → 8 strategies (incl. blueprint/code-action/direct), `withModelRouting` present, 126 config fields, 83 builder methods; `POST /api/runs {strategy:"blueprint"}` → 200, agent **built + dispatched** to `[phase:blueprint:plan]` (previously impossible — hard-failed at decode). UI builds clean.
+
+**Deviations from the plan as written (all improvements, kept the intent):**
+1. **B2 builder methods — reflection, not a static table.** `deriveBuilderMethods()` reflects `ReactiveAgentBuilder.prototype` (83 `with*` methods) + an annotation map for the well-known ones; unannotated methods default to inferred overlays. Zero drift *by construction* — strictly better than the planned 22-entry hand table.
+2. **B3 flatten simplified.** `JSONSchema.make(AgentConfigSchema)` emits fully-inline schema (no `$defs`), optional = omission from a struct's `required`. No `$ref`/`anyOf` handling needed.
+3. **B8 coverage guard moved server-side.** The UI package intentionally has NO `@reactive-agents/runtime` dep (keeps the runtime out of the browser bundle), so the guard (needs manifest + presentation) lives in `apps/cortex/server/tests/manifest-coverage.test.ts`, importing the pure UI presentation map.
+4. **B9 KEY FINDING + substantive framework fix.** The real parity blocker was NOT the UI enum — it was `AgentConfigSchema.reasoning.defaultStrategy` in `packages/runtime/src/agent-config.ts`, a **hand-duplicated 5-member literal** that rejected blueprint/code-action/direct at `Schema.decodeUnknownSync`. Replaced with core's canonical 8-member `ReasoningStrategy`. This is exactly the class of drift the whole effort targets.
+
+**Env facts learned:** reasoning tests live in `tests/` (plural); runtime has both `test/` and `tests/`. Cortex is a Node-runtime consumer with its own tsconfig (no `src` path map) → its server/UI tests require the framework packages **built to dist** (`bunx turbo run build --filter='./packages/*'`) before they resolve `@reactive-agents/*`.
+
+**NOT done in Phase B (remaining to fully realize "full field-driven UI"):** only the strategy dropdown was migrated to the manifest (the planned incremental first-adoption). The **generic renderer across all 126 config fields** is not built — the foundation (`capabilities` store, `config-presentation` map, `hintFor` default-widget fallback, `manifest-coverage` guard) is all in place for it. That + Phases A (model-routing UI), C (run-control), D (detail UX) are the follow-ups.
+
+---
+
 **Goal:** Make Cortex infer its config/capability surface from the framework at runtime so new strategies and builder methods auto-sync into the UI, close the current parity gaps (blueprint/code-action/direct/model-routing), and make Stop/Terminate genuinely abort in-flight LLM calls — all without breaking existing Cortex features.
 
 **Architecture:** The framework gains one authoritative, machine-readable `getCapabilityManifest()` (strategies + builder methods + config-field descriptors derived from `AgentConfigSchema` via `JSONSchema.make`). Source-side guard tests fail the build if the manifest drifts from the registry/builder/schema. Cortex serves it at `GET /api/capabilities`; the UI renders config controls from it through a generic renderer backed by a coverage-guarded presentation-hint map, so unknown-but-new fields degrade to a default widget rather than vanishing. Run-control threads a `KillSwitchService` `AbortSignal` into the `agent.run()`-path LLM call.

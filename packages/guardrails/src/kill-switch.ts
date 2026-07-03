@@ -31,6 +31,13 @@ export class KillSwitchService extends Context.Tag("KillSwitchService")<
     readonly stop: (agentId: string, reason: string) => Effect.Effect<void>;
     /** Immediately terminate agent (also triggers kill switch). */
     readonly terminate: (agentId: string, reason: string) => Effect.Effect<void>;
+    /**
+     * Per-agent AbortSignal wired into the run-path fiber. Passed to
+     * `runtime.runPromise(effect, { signal })` so `terminate()` interrupts the
+     * fiber and aborts any in-flight LLM HTTP request that forwards the signal
+     * (e.g. Ollama). Lazily creates the controller; stable across calls per agent.
+     */
+    readonly signal: (agentId: string) => Effect.Effect<AbortSignal | undefined>;
     /** Get the current lifecycle state for an agent. */
     readonly getLifecycle: (agentId: string) => Effect.Effect<"running" | "paused" | "stopping" | "terminated" | "unknown">;
     /**
@@ -51,6 +58,18 @@ export const KillSwitchServiceLive = () =>
       const globalKill = yield* Ref.make<string | null>(null);
       const lifecycleRef = yield* Ref.make<Map<string, "running" | "paused" | "stopping" | "terminated">>(new Map());
       const pauseDeferreds = yield* Ref.make<Map<string, Deferred.Deferred<void>>>(new Map());
+      // Per-agent AbortController: signal() hands its .signal to the run-path
+      // fiber; terminate() calls .abort() to interrupt in-flight work.
+      const controllers = yield* Ref.make<Map<string, AbortController>>(new Map());
+
+      // Return the existing controller for an agent or create+store one.
+      const ensureController = (agentId: string) =>
+        Ref.modify(controllers, (m) => {
+          const existing = m.get(agentId);
+          if (existing) return [existing, m] as const;
+          const c = new AbortController();
+          return [c, new Map(m).set(agentId, c)] as const;
+        });
 
       // EventBus is optional — publish lifecycle events when available
       const ebOpt = yield* Effect.serviceOption(EventBus).pipe(
@@ -156,7 +175,15 @@ export const KillSwitchServiceLive = () =>
               n.set(agentId, reason);
               return n;
             });
+            // Abort the fiber's signal to cut in-flight LLM work immediately.
+            // ensureController so a terminate that races AHEAD of signal() still
+            // leaves an already-aborted controller for the later signal() caller.
+            const c = yield* ensureController(agentId);
+            c.abort();
           }),
+
+        signal: (agentId) =>
+          Effect.map(ensureController(agentId), (c) => c.signal),
 
         getLifecycle: (agentId) =>
           Ref.get(lifecycleRef).pipe(

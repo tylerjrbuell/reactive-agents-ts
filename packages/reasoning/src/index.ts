@@ -90,6 +90,8 @@ export {
   StrategyRegistryLive,
 } from "./services/strategy-registry.js";
 export type { StrategyFn } from "./services/strategy-registry.js";
+export { STRATEGY_CATALOG } from "./services/strategy-catalog.js";
+export type { StrategyCatalogEntry } from "./services/strategy-catalog.js";
 
 // ─── Strategy Functions ───
 export { executeReactive } from "./strategies/reactive.js";

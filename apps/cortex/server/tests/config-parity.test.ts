@@ -28,6 +28,7 @@ import { applySchema } from "../db/schema.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
 import { runsRouter } from "../api/runs.js";
+import { getCapabilityManifest } from "@reactive-agents/runtime";
 
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
@@ -35,6 +36,7 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
     pause: () => Effect.void,
     resume: () => Effect.void,
     stop: () => Effect.void,
+    terminate: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
     listPendingApprovals: () => Effect.succeed([]),
     approveApproval: () => Effect.void,
@@ -82,6 +84,8 @@ const FULL_CONFIG_BODY = {
     paths: ["./.claude/skills", "./skills"],
     evolution: { mode: "suggest", refinementThreshold: 10, rollbackOnRegression: true },
   },
+  /** Phase A — cost-aware model routing (`withModelRouting`) */
+  modelRouting:       { enabled: true, minTier: "haiku" },
 };
 
 describe("AgentConfig → LaunchParams parity", () => {
@@ -162,5 +166,68 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.skills?.evolution?.mode).toBe("suggest");
     expect(p.skills?.evolution?.refinementThreshold).toBe(10);
     expect(p.skills?.evolution?.rollbackOnRegression).toBe(true);
+
+    // ── Model routing (Phase A) ──────────────────────────────────────────
+    expect(p.modelRouting?.enabled).toBe(true);
+    expect(p.modelRouting?.minTier).toBe("haiku");
+  });
+});
+
+describe("AgentConfig → LaunchParams — model routing (A1)", () => {
+  it("wires modelRouting through POST /api/runs → LaunchParams", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(
+      runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)),
+    );
+    const res = await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...FULL_CONFIG_BODY,
+          modelRouting: { enabled: true, minTier: "sonnet", tierModels: { haiku: "claude-haiku-4-5" } },
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(captured.params?.modelRouting?.enabled).toBe(true);
+    expect(captured.params?.modelRouting?.minTier).toBe("sonnet");
+    expect(captured.params?.modelRouting?.tierModels?.haiku).toBe("claude-haiku-4-5");
+  });
+});
+
+describe("AgentConfig → LaunchParams — full strategy set", () => {
+  // Manifest-driven (A2): iterate the framework's authoritative strategy catalog
+  // rather than a hand-maintained list, so a NEW strategy registered in the
+  // framework fails HERE if it isn't launchable through Cortex — the whole
+  // anti-drift point. Every canonical strategy name + alias must POST cleanly.
+  it("accepts every manifest strategy through POST /api/runs (no UI-only enum drift)", async () => {
+    const manifest = getCapabilityManifest();
+    const names = manifest.strategies.flatMap((s) => [s.name, ...(s.aliases ?? [])]);
+    expect(names.length).toBeGreaterThanOrEqual(8);
+    // blueprint/code-action/direct were the historically-dropped ones — pin them.
+    expect(names).toContain("blueprint");
+    expect(names).toContain("code-action");
+    expect(names).toContain("direct");
+
+    for (const strategy of names) {
+      const captured = { params: null as LaunchParams | null };
+      const db = new Database(":memory:");
+      applySchema(db);
+      const app = new Elysia().use(
+        runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)),
+      );
+      const res = await app.handle(
+        new Request("http://localhost/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...FULL_CONFIG_BODY, strategy }),
+        }),
+      );
+      expect(res.status, `strategy ${strategy} rejected`).toBe(200);
+      expect(captured.params?.strategy).toBe(strategy);
+    }
   });
 });

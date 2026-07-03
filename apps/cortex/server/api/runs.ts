@@ -1,7 +1,8 @@
 import { Elysia, t } from "elysia";
 import { Effect, Layer, Option } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
-import { CortexRunnerService } from "../services/runner-service.js";
+import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
+import { CortexError } from "../errors.js";
 import type { VariableDef } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 
@@ -71,6 +72,13 @@ export const RunConfigBody = t.Object({
   outputSchemaOnParseFail: t.Optional(t.Union([t.Literal("degrade"), t.Literal("throw")])),
   budget: t.Optional(t.Object({ tokenLimit: t.Optional(t.Number()), costLimit: t.Optional(t.Number()) })),
   grounding: t.Optional(t.Object({ mode: t.Union([t.Literal("warn"), t.Literal("block")]), tolerance: t.Optional(t.Number()) })),
+  modelRouting: t.Optional(
+    t.Object({
+      enabled: t.Optional(t.Boolean()),
+      minTier: t.Optional(t.Union([t.Literal("haiku"), t.Literal("sonnet"), t.Literal("opus")])),
+      tierModels: t.Optional(t.Record(t.String(), t.String())),
+    }),
+  ),
   durableRuns: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),
@@ -154,6 +162,7 @@ export const runsRouter = (
             ...(b.outputSchemaOnParseFail ? { outputSchemaOnParseFail: b.outputSchemaOnParseFail } : {}),
             ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
             ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
+            ...(b.modelRouting?.enabled ? { modelRouting: b.modelRouting } : {}),
             ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
           });
         });
@@ -206,6 +215,39 @@ export const runsRouter = (
       } catch (e) {
         set.status = 500;
         return { error: String(e) };
+      }
+    })
+    .post("/:runId/terminate", async ({ params, set }) => {
+      const program = Effect.gen(function* () {
+        const runner = yield* CortexRunnerService;
+        yield* runner.terminate(params.runId as RunId);
+        return { ok: true as const };
+      });
+      try {
+        return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+      } catch (e) {
+        set.status = 500;
+        return { error: String(e) };
+      }
+    })
+    // Repeat a finished/failed run with its exact stored config (D1 snapshot).
+    .post("/:runId/rerun", async ({ params, set }) => {
+      const program = Effect.gen(function* () {
+        const store = yield* CortexStoreService;
+        const runner = yield* CortexRunnerService;
+        const snapshot = yield* store.getLaunchParams(params.runId);
+        if (!snapshot || typeof snapshot.prompt !== "string") {
+          return yield* Effect.fail(new CortexError({ message: "No stored config to rerun" }));
+        }
+        return yield* runner.start(snapshot as unknown as LaunchParams);
+      });
+      try {
+        return await Effect.runPromise(
+          program.pipe(Effect.provide(Layer.merge(storeLayer, runnerLayer))),
+        );
+      } catch (e) {
+        set.status = 400;
+        return { ok: false, error: String(e) };
       }
     })
     // ── Durable HITL (Phase E) ──

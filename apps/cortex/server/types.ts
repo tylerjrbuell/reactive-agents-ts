@@ -76,6 +76,8 @@ export interface RunSummary {
   readonly model?: string;
   readonly strategy?: string;
   readonly errorMessage?: string;
+  /** Parsed per-run launch config snapshot (from `launch_params_json`); enables Rerun / Edit & Rerun. */
+  readonly launchParams?: Record<string, unknown>;
 }
 
 export interface AgentSummary {

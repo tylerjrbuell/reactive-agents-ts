@@ -93,6 +93,12 @@ export interface LaunchParams {
   readonly budget?: { tokenLimit?: number; costLimit?: number };
   /** Numeric evidence-grounding — `.withGrounding()`. */
   readonly grounding?: { mode: "warn" | "block"; tolerance?: number };
+  /** Cost-aware model routing (`.withModelRouting()`). enabled=false → not applied. */
+  readonly modelRouting?: {
+    readonly enabled?: boolean;
+    readonly minTier?: "haiku" | "sonnet" | "opus";
+    readonly tierModels?: Partial<Record<"haiku" | "sonnet" | "opus", string>>;
+  };
   /**
    * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
    * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
@@ -113,6 +119,9 @@ type ActiveEntry = {
   readonly runId: string;
   readonly agent: ReactiveAgent;
   readonly startedAt: number;
+  /** Event-forwarding unsubscribe; set once the subscription is established so
+   * terminate() can tear it down without the run's own `.finally` closure. */
+  readonly unsubscribe?: () => void;
 };
 
 export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
@@ -125,6 +134,9 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     readonly pause: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly resume: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly stop: (runId: RunId) => Effect.Effect<void, CortexError>;
+    /** Immediately abort an in-flight run (interrupts the agent fiber) and tear
+     * down its resources now, rather than waiting for a phase boundary. */
+    readonly terminate: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly getActive: () => Effect.Effect<ReadonlyMap<string, ActiveEntry>, never>;
     // ── Durable HITL (Phase E) — operate on agents retained while a durable run
     // is paused awaiting approval (in-process, live-session). ──
@@ -152,6 +164,41 @@ export const CortexRunnerServiceLive = Layer.effect(
     const store = yield* CortexStoreService;
     const ingest = yield* CortexIngestService;
     const activeRef = yield* Ref.make(new Map<string, ActiveEntry>());
+
+    // Shared teardown reused by normal completion (.finally) + terminate().
+    // Atomically claims the run from activeRef so exactly ONE caller runs the
+    // dispose — terminate() and the run's own `.finally` both fire on abort, and
+    // this prevents a double dispose / double unsubscribe.
+    const finalizeRun = (
+      runId: string,
+      unsubscribe?: () => void,
+      agent?: ReactiveAgent,
+    ) =>
+      Effect.gen(function* () {
+        const claimed = yield* Ref.modify(activeRef, (m) => {
+          if (!m.has(runId)) return [false, m] as const;
+          const copy = new Map(m);
+          copy.delete(runId);
+          return [true, copy] as const;
+        });
+        if (!claimed) return;
+        if (unsubscribe) {
+          try {
+            unsubscribe();
+          } catch {
+            // fire-and-forget: unsubscribe errors must not block teardown
+          }
+        }
+        if (agent) {
+          // Release MCP transports + their docker containers so a later run with
+          // the same name does not hit "container name already in use".
+          yield* Effect.tryPromise({ try: () => agent.dispose(), catch: (e) => e }).pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:finalizeRun", tag: errorTag(err) }),
+            ),
+          );
+        }
+      });
 
     return {
       start: (rawParams) =>
@@ -221,6 +268,7 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.outputSchemaOnParseFail ? { outputSchemaOnParseFail: params.outputSchemaOnParseFail } : {}),
                 ...(params.budget ? { budget: params.budget } : {}),
                 ...(params.grounding ? { grounding: params.grounding } : {}),
+                ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
@@ -232,10 +280,11 @@ export const CortexRunnerServiceLive = Layer.effect(
 
           yield* store.ensureRunRow(agentId, runId, {
             ...(params.agentName?.trim() ? { displayName: params.agentName.trim() } : {}),
+            // Snapshot the resolved launch config so the run can be repeated
+            // (Rerun) or opened prefilled (Edit & Rerun). Secrets never reach
+            // here — the `{{secret.*}}` namespace is left unresolved by design.
+            launchParamsJson: JSON.stringify(params),
           });
-          yield* Ref.update(activeRef, (m) =>
-            new Map(m).set(runId, { agentId, runId, agent, startedAt }),
-          );
           let forwardedEvents = 0;
 
           const unsubscribe = yield* Effect.tryPromise({
@@ -267,6 +316,12 @@ export const CortexRunnerServiceLive = Layer.effect(
                 cause: e,
               }),
           });
+
+          // Register as active now that the event subscription exists, so
+          // terminate()/finalizeRun can tear the subscription down too.
+          yield* Ref.update(activeRef, (m) =>
+            new Map(m).set(runId, { agentId, runId, agent, startedAt, unsubscribe }),
+          );
 
           const cortexHttp = defaultCortexHttpUrl();
           cortexLog("info", "runner", "starting agent.run (events piped directly to ingest)", {
@@ -392,29 +447,9 @@ export const CortexRunnerServiceLive = Layer.effect(
                 );
                 return;
               }
-              try {
-                unsubscribe();
-              } catch {
-                // ignore unsubscribe errors in fire-and-forget path
-              }
-              // Release the agent's resources — MCP transports and their docker
-              // containers — now that the run is done. Without this the container
-              // leaks and a later run with the same name hits
-              // "container name already in use".
-              void agent.dispose().catch((err) => {
-                cortexLog("warn", "runner", "agent.dispose() failed on run finish", {
-                  agentId,
-                  runId,
-                  ...formatErrorDetails(err),
-                });
-              });
-              void Effect.runPromise(
-                Ref.update(activeRef, (m) => {
-                  const copy = new Map(m);
-                  copy.delete(runId);
-                  return copy;
-                }),
-              );
+              // Shared teardown: unsubscribe + dispose + drop from active. Idempotent
+              // with a concurrent terminate() on the same run (atomic claim).
+              void Effect.runPromise(finalizeRun(runId, unsubscribe, agent));
             });
 
           return { agentId, runId };
@@ -453,6 +488,25 @@ export const CortexRunnerServiceLive = Layer.effect(
           yield* Effect.promise(() => entry.agent.stop("Cortex UI stop")).pipe(
             Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:329", tag: errorTag(err) })),
           );
+        }),
+
+      terminate: (runId) =>
+        Effect.gen(function* () {
+          const m = yield* Ref.get(activeRef);
+          const entry = m.get(String(runId));
+          if (!entry) {
+            cortexLog("debug", "runner", "terminate: run not active", { runId });
+            return;
+          }
+          // Interrupt the agent fiber — aborts any in-flight LLM HTTP request
+          // (C2) instead of only halting at the next phase boundary.
+          yield* Effect.promise(() => entry.agent.terminate("Cortex UI terminate")).pipe(
+            Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:terminate", tag: errorTag(err) })),
+          );
+          // Immediate teardown — do not wait for run() to settle (it is aborting).
+          // finalizeRun's atomic claim makes this a no-op if the run's own
+          // `.finally` already fired after the interrupt.
+          yield* finalizeRun(String(runId), entry.unsubscribe, entry.agent);
         }),
 
       getActive: () => Ref.get(activeRef),

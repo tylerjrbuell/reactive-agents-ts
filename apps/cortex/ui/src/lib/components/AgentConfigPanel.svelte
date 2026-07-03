@@ -16,6 +16,7 @@
   import HighlightedField from "$lib/components/HighlightedField.svelte";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
+  import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
 
   export { type AgentConfig, defaultConfig };
   type PanelAgentConfig = AgentConfig & {
@@ -302,13 +303,29 @@
     }
   });
 
-  const STRATEGIES = [
+  // Fallback list (used only until the capability manifest loads / if it fails).
+  // The live option set comes from GET /api/capabilities so new framework
+  // strategies (blueprint/code-action/direct/…) appear here automatically.
+  const STRATEGY_FALLBACK = [
     { value: "reactive",             label: "ReAct",                desc: "Think→Act→Observe loop. Best for most tasks." },
     { value: "plan-execute-reflect", label: "Plan–Execute–Reflect", desc: "Creates a structured plan first. Good for multi-step tasks." },
     { value: "tree-of-thought",      label: "Tree of Thought",      desc: "Explores multiple paths. Good for creative/analytical problems." },
     { value: "reflexion",            label: "Reflexion",            desc: "Self-critiques and improves across attempts." },
     { value: "adaptive",             label: "Adaptive",             desc: "Selects strategy automatically based on task type." },
   ];
+
+  let capManifest = $state<CapabilityManifest | null>(null);
+  onMount(() => {
+    loadCapabilities()
+      .then((m) => (capManifest = m))
+      .catch((err) => console.warn("Failed to load capability manifest:", err));
+  });
+
+  const STRATEGIES = $derived(
+    capManifest
+      ? capManifest.strategies.map((s) => ({ value: s.name, label: s.label, desc: s.description }))
+      : STRATEGY_FALLBACK,
+  );
 
   const acpStrategyLabel = $derived(STRATEGIES.find((s) => s.value === config.strategy)?.label ?? config.strategy);
 
@@ -941,6 +958,22 @@
             <option value="block">Block — one corrective retry, then degrade</option>
           </select>
           <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Checks numbers in the answer against tool data (<code class="text-[8px]">.withGrounding</code>); never hard-fails.</p>
+        </div>
+        <div>
+          <label class="config-label flex items-center gap-2">
+            <input type="checkbox" bind:checked={config.modelRouting.enabled} />
+            Cost-aware model routing
+          </label>
+          {#if config.modelRouting.enabled}
+            <label for="routing-min-tier" class="config-label mt-1">Minimum tier</label>
+            <select id="routing-min-tier" bind:value={config.modelRouting.minTier} class="config-input">
+              <option value={undefined}>Auto — cheapest capable</option>
+              <option value="haiku">Haiku</option>
+              <option value="sonnet">Sonnet</option>
+              <option value="opus">Opus</option>
+            </select>
+          {/if}
+          <p class="mt-1 font-mono text-[8px] text-[var(--cortex-text-muted)]">Routes each turn to the cheapest capable model for the provider (<code class="text-[8px]">.withModelRouting</code>); degrades to the configured model on any routing error.</p>
         </div>
         <div>
           <label for="verification-step" class="config-label">Verification Step</label>

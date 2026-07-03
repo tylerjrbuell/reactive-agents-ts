@@ -24,21 +24,38 @@ export function insertEvent(
   );
 }
 
-export function upsertRun(db: Database, agentId: string, runId: string, displayName?: string | null): void {
+export function upsertRun(
+  db: Database,
+  agentId: string,
+  runId: string,
+  displayName?: string | null,
+  launchParamsJson?: string | null,
+): void {
   const dn = typeof displayName === "string" && displayName.trim() ? displayName.trim() : null;
+  const lp = typeof launchParamsJson === "string" && launchParamsJson.trim() ? launchParamsJson : null;
   db.prepare(
     `
-    INSERT INTO cortex_runs (run_id, agent_id, started_at, display_name)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO cortex_runs (run_id, agent_id, started_at, display_name, launch_params_json)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(run_id) DO UPDATE SET
       agent_id = CASE
         WHEN cortex_runs.agent_id = cortex_runs.run_id OR cortex_runs.agent_id = 'unknown'
           THEN excluded.agent_id
         ELSE cortex_runs.agent_id
       END,
-      display_name = COALESCE(cortex_runs.display_name, excluded.display_name)
+      display_name = COALESCE(cortex_runs.display_name, excluded.display_name),
+      -- Snapshot is written once at launch; a later re-ingest must not clobber it.
+      launch_params_json = COALESCE(cortex_runs.launch_params_json, excluded.launch_params_json)
   `,
-  ).run(runId, agentId, Date.now(), dn);
+  ).run(runId, agentId, Date.now(), dn, lp);
+}
+
+/** Raw stored launch snapshot for a run (used by rerun). null if absent/malformed. */
+export function getLaunchParams(db: Database, runId: string): Record<string, unknown> | null {
+  const row = db
+    .prepare("SELECT launch_params_json FROM cortex_runs WHERE run_id = ?")
+    .get(runId) as { launch_params_json: string | null } | null;
+  return parseLaunchParams(row?.launch_params_json ?? null) ?? null;
 }
 
 export function updateRunStats(
@@ -139,9 +156,21 @@ type RunRow = {
   strategy: string | null;
   error_message: string | null;
   display_name: string | null;
+  launch_params_json: string | null;
   /** From LEFT JOIN cortex_agents — only present on joined selects */
   agent_table_name?: string | null;
 };
+
+/** Parse a stored launch_params_json blob; null on absence or malformed JSON. */
+function parseLaunchParams(raw: string | null): Record<string, unknown> | undefined {
+  if (!raw) return undefined;
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function resolvedRunDisplayName(row: RunRow): string | undefined {
   const fromRun = row.display_name?.trim();
@@ -170,6 +199,10 @@ function rowToRunSummary(row: RunRow): RunSummary {
     ...(row.strategy ? { strategy: row.strategy } : {}),
     ...(row.error_message ? { errorMessage: row.error_message } : {}),
     ...(row.completed_at != null ? { completedAt: row.completed_at } : {}),
+    ...((): { launchParams?: Record<string, unknown> } => {
+      const lp = parseLaunchParams(row.launch_params_json);
+      return lp ? { launchParams: lp } : {};
+    })(),
   };
   return base;
 }
@@ -179,7 +212,7 @@ const runSelectBase = `
     r.iteration_count, r.tokens_used, r.cost_usd,
     (r.debrief IS NOT NULL) AS has_debrief,
     r.provider, r.model, r.strategy, r.error_message,
-    r.display_name,
+    r.display_name, r.launch_params_json,
     a.name AS agent_table_name`;
 
 export function getRecentRuns(db: Database, limit = 50): RunSummary[] {
