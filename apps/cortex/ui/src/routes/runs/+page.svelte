@@ -4,6 +4,7 @@
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import ApprovalPanel from "$lib/components/ApprovalPanel.svelte";
+  import InteractPanel from "$lib/components/InteractPanel.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
 
@@ -429,6 +430,11 @@
   <!-- Durable HITL — runs paused awaiting approval (Phase E) -->
   <div class="flex-shrink-0 rounded-lg border border-[var(--cortex-border)] bg-white/70 px-4 py-3 backdrop-blur-sm dark:bg-surface-container-low/40">
     <ApprovalPanel />
+  </div>
+
+  <!-- Durable HITL — runs paused awaiting request_user_input (Agentic UI kit) -->
+  <div class="flex-shrink-0 rounded-lg border border-[var(--cortex-border)] bg-white/70 px-4 py-3 backdrop-blur-sm dark:bg-surface-container-low/40">
+    <InteractPanel />
   </div>
 
   {#if !loading && !error}
