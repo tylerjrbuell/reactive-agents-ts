@@ -39,5 +39,9 @@ export { useAgent } from "./hooks/use-agent.js";
 
 export { useRun, type UseRunOptions, type UseRunReturn } from "./hooks/use-run.js";
 export { useResumableRun, type UseResumableRunOptions } from "./hooks/use-resumable-run.js";
+export { useInteractions, type UseInteractionsOptions, type UseInteractionsReturn } from "./hooks/use-interactions.js";
+export { AgentPrompt, type AgentPromptProps } from "./components/AgentPrompt.js";
+export { ChoiceCard, type ChoiceCardProps } from "./components/ChoiceCard.js";
+export { ApprovalGate, type ApprovalGateProps } from "./components/ApprovalGate.js";
 // Re-export ui-core protocol + state types for consumers.
 export type { RunState, UiStreamEvent, UiRunStatus, PendingInteractionWire } from "@reactive-agents/ui-core";
