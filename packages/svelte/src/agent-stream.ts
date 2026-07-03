@@ -54,7 +54,7 @@ export function createAgentStream(
   inner.subscribe((rs) => {
     store.set({
       text: rs.text,
-      events: rs.events as unknown as AgentStreamEvent[],
+      events: rs.events as AgentStreamEvent[],
       status: toLegacy(rs.status),
       error: rs.error ?? null,
       output: rs.output ?? null,

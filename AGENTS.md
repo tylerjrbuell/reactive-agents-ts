@@ -66,6 +66,9 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/runtime-shim  — Bun/Node.js unified primitives (Database, spawn, serve, glob, hash)
 │   (no reactive-agents deps — consumed by memory, tools, health, judge-server)
 │
+├── @reactive-agents/ui-core       — Headless UI core: wire protocol, resumable stream client, run state machines, fixture testing
+│   (no reactive-agents deps — consumed by react, svelte, vue bindings)
+│
 ├── @reactive-agents/trace         — Structured execution traces: TraceEvent schema, recorders, span helpers
 │   └── depends on: core
 │
@@ -96,14 +99,14 @@ Foundation (no reactive-agents deps)
 ├── @reactive-agents/observe       — OpenTelemetry/OpenInference span exporter: OpenInferenceTracerLayer, setupOpenInferenceExporter
 │   └── depends on: core
 │
-├── @reactive-agents/react         — React hooks for Reactive Agents: useAgentStream, useAgent
-│   (no reactive-agents deps — peer-depends on `react`; consumes umbrella API)
+├── @reactive-agents/react         — React hooks + components for Reactive Agents: useRun, useAgentStream, useAgent, Interact/Inbox/Observe/Render/Devtools families
+│   └── depends on: ui-core; peer-depends on `react`
 │
-├── @reactive-agents/svelte        — Svelte stores for Reactive Agents: agentStream, agentRun
-│   (no reactive-agents deps — peer-depends on `svelte`; consumes umbrella API)
+├── @reactive-agents/svelte        — Svelte stores for Reactive Agents: createRun, agentStream, agentRun, Interact/Observe/Resume families
+│   └── depends on: ui-core; peer-depends on `svelte`
 │
 ├── @reactive-agents/vue           — Vue composables for Reactive Agents: useAgentStream, useAgent
-│   (no reactive-agents deps — peer-depends on `vue`; consumes umbrella API)
+│   └── depends on: ui-core; peer-depends on `vue`
 │
 └── Facade & Runtime
     ├── @reactive-agents/runtime   — ExecutionEngine, ReactiveAgentBuilder, createRuntime()

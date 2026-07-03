@@ -8,15 +8,18 @@ export const CORTEX_COLORS = {
 } as const;
 
 /** Browser: current origin (dev proxy). SSR fallback: Cortex default port. */
-export const CORTEX_SERVER_URL =
-  typeof globalThis !== "undefined" && "location" in globalThis && globalThis.location?.host
-    ? `${globalThis.location.protocol}//${globalThis.location.host}`
-    : "http://localhost:4321";
+interface BrowserGlobal {
+  location?: { protocol: string; host: string };
+}
+const browserLocation = (globalThis as BrowserGlobal).location;
 
-export const WS_BASE =
-  typeof globalThis !== "undefined" && "location" in globalThis && globalThis.location?.host
-    ? `${globalThis.location.protocol === "https:" ? "wss" : "ws"}://${globalThis.location.host}`
-    : "ws://localhost:4321";
+export const CORTEX_SERVER_URL = browserLocation?.host
+  ? `${browserLocation.protocol}//${browserLocation.host}`
+  : "http://localhost:4321";
+
+export const WS_BASE = browserLocation?.host
+  ? `${browserLocation.protocol === "https:" ? "wss" : "ws"}://${browserLocation.host}`
+  : "ws://localhost:4321";
 
 export const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000] as const;
 

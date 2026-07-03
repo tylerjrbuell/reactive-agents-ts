@@ -70,7 +70,7 @@ export function useAgentStream(
   return useMemo(
     () => ({
       text: state.text,
-      events: state.events as unknown as AgentStreamEvent[],
+      events: state.events as AgentStreamEvent[],
       status: toLegacyStatus(state.status),
       error: state.error ?? null,
       output: state.output ?? null,
