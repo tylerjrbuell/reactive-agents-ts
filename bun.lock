@@ -672,6 +672,7 @@
         "@standard-schema/spec": "^1.0.0",
       },
       "devDependencies": {
+        "@reactive-agents/ui-core": "workspace:*",
         "bun-types": "latest",
         "effect": "^3.10.0",
         "typescript": "^6.0.3",
@@ -705,6 +706,9 @@
     "packages/svelte": {
       "name": "@reactive-agents/svelte",
       "version": "0.10.6",
+      "dependencies": {
+        "@reactive-agents/ui-core": "workspace:*",
+      },
       "devDependencies": {
         "svelte": "^5.0.0",
         "tsup": "^8.0.0",
@@ -769,6 +773,14 @@
         "effect": "^3.10.0",
       },
     },
+    "packages/ui-core": {
+      "name": "@reactive-agents/ui-core",
+      "version": "0.10.6",
+      "devDependencies": {
+        "tsup": "^8.0.0",
+        "typescript": "^6.0.0",
+      },
+    },
     "packages/verification": {
       "name": "@reactive-agents/verification",
       "version": "0.10.6",
@@ -789,6 +801,9 @@
     "packages/vue": {
       "name": "@reactive-agents/vue",
       "version": "0.10.6",
+      "dependencies": {
+        "@reactive-agents/ui-core": "workspace:*",
+      },
       "devDependencies": {
         "tsup": "^8.0.0",
         "typescript": "^6.0.0",
@@ -1639,6 +1654,8 @@
     "@reactive-agents/tools": ["@reactive-agents/tools@workspace:packages/tools"],
 
     "@reactive-agents/trace": ["@reactive-agents/trace@workspace:packages/trace"],
+
+    "@reactive-agents/ui-core": ["@reactive-agents/ui-core@workspace:packages/ui-core"],
 
     "@reactive-agents/verification": ["@reactive-agents/verification@workspace:packages/verification"],
 

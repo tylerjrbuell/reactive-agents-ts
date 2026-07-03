@@ -17,7 +17,7 @@ import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable, harnessSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
-import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
+import { createToolCallResolver, selectToolCallingDriver, REQUEST_USER_INPUT_TOOL_NAME } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -28,6 +28,7 @@ import {
   type KernelState,
   type KernelContext,
   type KernelInput,
+  type KernelMessage,
   type KernelRunOptions,
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
@@ -423,17 +424,33 @@ export function runKernel(
     // human's stored decision HERE — before the loop — so the gated step is
     // resolved without re-calling the LLM (spec §7 determinism). Approved:
     // execute the exact stored call once via the act capability, with
-    // `approvalBypass` set so the gate does not re-pause it. Denied: append a
-    // denial observation so the next think reacts. No-op on a normal run (both
-    // fields undefined → zero cost).
+    // `approvalBypass` set so the gate does not re-pause it. Denied: inject the
+    // denial as an LLM-visible message so the next think reacts. No-op on a
+    // normal run (both fields undefined → zero cost).
+    //
+    // The paused checkpoint is a clean terminal state (act.ts terminate on
+    // pause: status:"done", terminatedBy:"awaiting-approval", a sentinel
+    // output). We MUST reset those terminal fields on resume — exactly as the
+    // interaction re-entry directly below does — so the main loop re-runs and
+    // synthesizes a real answer instead of returning the pause sentinel. The
+    // "execute" branch happened to work without this reset (handleActing sets
+    // status back to "acting"/"thinking" as a side effect), but the "observe"
+    // (deny) branch does NOT run a tool: without the reset, status stayed
+    // "done", the main loop was skipped, and denyRun returned "Run paused —
+    // awaiting human approval." as the final answer. Reset unconditionally so
+    // both branches re-enter the loop.
     if (state.meta.awaitingApprovalFor && effectiveInput.approvalDecision) {
-      const reentry = resolveApprovalReentry(
-        state.meta.awaitingApprovalFor,
-        effectiveInput.approvalDecision,
-      );
+      const gate = state.meta.awaitingApprovalFor;
+      const reentry = resolveApprovalReentry(gate, effectiveInput.approvalDecision);
       if (reentry.action !== "none") {
         state = transitionState(state, {
-          meta: { ...state.meta, awaitingApprovalFor: undefined },
+          status: "thinking",
+          output: null,
+          meta: {
+            ...state.meta,
+            awaitingApprovalFor: undefined,
+            terminatedBy: undefined,
+          },
         });
       }
       if (reentry.action === "execute" && reentry.call) {
@@ -455,8 +472,92 @@ export function runKernel(
           meta: { ...state.meta, approvalBypass: undefined },
         });
       } else if (reentry.action === "observe" && reentry.observation) {
+        // Inject the denial as an LLM-VISIBLE message pair (synthetic assistant
+        // tool-call + tool_result), not only a step: prompt assembly
+        // (fromKernelState) builds the EventLog from state.messages, NOT steps,
+        // so a bare observation step is invisible to the next think and the
+        // model would never learn its action was denied. Mirrors the
+        // interaction re-entry's tool_result injection. The act gate paused
+        // BEFORE assembleConversation ran, so state.messages has no record of
+        // the gated call — synthesize the assistant-call + tool_result pair here
+        // (keyed on the stored gateId) so the denial renders as that call's
+        // result. Keep the observation step too, for the systems-observed
+        // record (entropy/metrics/debrief).
+        const observation = reentry.observation;
+        const assistantCall: KernelMessage = {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: gate.gateId,
+              name: gate.toolName,
+              arguments: (gate.args ?? {}) as Record<string, unknown>,
+            },
+          ],
+        };
+        const toolResult: KernelMessage = {
+          role: "tool_result",
+          toolCallId: gate.gateId,
+          toolName: gate.toolName,
+          content: observation,
+        };
         state = transitionState(state, {
-          steps: [...state.steps, makeStep("observation", reentry.observation)],
+          messages: [...state.messages, assistantCall, toolResult],
+          steps: [...state.steps, makeStep("observation", observation)],
+        });
+      }
+    }
+
+    // ── Durable interaction resume re-entry (Task 10) ────────────────────────
+    // Mirrors the approval re-entry directly above for the request_user_input
+    // rail. When resuming a checkpoint that paused for user interaction, inject
+    // the human's stored response HERE — before the loop — as an observation the
+    // next think reacts to, then clear `meta.awaitingInteractionFor`. Unlike
+    // approvals there is NO execute/skip branch: an interaction response is
+    // ALWAYS injected as the pending call's result. The paused checkpoint carries
+    // `status:"done"` + a sentinel output (act.ts terminate on pause), so we also
+    // reset the terminal fields — status back to "thinking", output/terminatedBy
+    // cleared — so the main loop re-runs and synthesizes a fresh answer from the
+    // injected response instead of returning the pause sentinel. No-op on a
+    // normal run (both fields undefined → zero cost).
+    if (state.meta.awaitingInteractionFor && effectiveInput.interactionResponse) {
+      const pending = state.meta.awaitingInteractionFor;
+      const response = effectiveInput.interactionResponse;
+      if (response.interactionId === pending.interactionId) {
+        // The act gate paused BEFORE assembleConversation ran, so state.messages
+        // has no record of the request_user_input call. Synthesize the
+        // assistant-call + tool_result pair here so the prompt-assembly path
+        // (fromKernelState builds the EventLog from state.messages, NOT steps)
+        // renders the human's answer as the pending call's result. A plain
+        // observation step alone would be invisible to the LLM prompt.
+        const observation = `The user responded: ${response.valueJson}`;
+        const assistantCall: KernelMessage = {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            {
+              id: pending.interactionId,
+              name: REQUEST_USER_INPUT_TOOL_NAME,
+              arguments: { kind: pending.kind, prompt: pending.prompt },
+            },
+          ],
+        };
+        const toolResult: KernelMessage = {
+          role: "tool_result",
+          toolCallId: pending.interactionId,
+          toolName: REQUEST_USER_INPUT_TOOL_NAME,
+          content: observation,
+        };
+        state = transitionState(state, {
+          status: "thinking",
+          output: null,
+          messages: [...state.messages, assistantCall, toolResult],
+          steps: [...state.steps, makeStep("observation", observation)],
+          meta: {
+            ...state.meta,
+            awaitingInteractionFor: undefined,
+            terminatedBy: undefined,
+          },
         });
       }
     }
@@ -634,6 +735,11 @@ export function runKernel(
     // looks "required but uncalled" and the run is failed. Skip them entirely when
     // paused; resume executes the approved call and runs finalization then.
     const isAwaitingApproval = state.meta.terminatedBy === "awaiting-approval";
+    // Durable pause (Task 9): a run paused for `request_user_input` is the
+    // identical clean terminal state, mirroring `awaiting-approval` — same
+    // skip-finalization treatment, carrying `meta.awaitingInteractionFor`
+    // instead of `meta.awaitingApprovalFor`.
+    const isAwaitingInteraction = state.meta.terminatedBy === "awaiting-interaction";
     // O3 Task 6: abstained runs are a clean non-failure terminal (status:"done",
     // terminatedBy:"abstained"). The post-loop finalization blocks (required-tools
     // failure, verifier, quality gate, output synthesis) must be skipped — the
@@ -649,7 +755,13 @@ export function runKernel(
     // Final safety net: if the loop exited without failure but required quotas
     // are still missing, fail with a deterministic missing_required_tool error.
     // This applies uniformly across all non-failed exits.
-    if (state.status !== "failed" && requiredTools.length > 0 && !isAwaitingApproval && !isAbstained) {
+    if (
+      state.status !== "failed" &&
+      requiredTools.length > 0 &&
+      !isAwaitingApproval &&
+      !isAwaitingInteraction &&
+      !isAbstained
+    ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
       if (missingTools.length > 0) {
@@ -813,7 +925,13 @@ export function runKernel(
       iteration: state.iteration,
     });
 
-    if (state.status === "done" && state.output && !isAwaitingApproval && !isAbstained) {
+    if (
+      state.status === "done" &&
+      state.output &&
+      !isAwaitingApproval &&
+      !isAwaitingInteraction &&
+      !isAbstained
+    ) {
       // availableUserTools — pass through the user-registered tool list
       // so the verifier can run classifier-independent "agent-took-action"
       // checks (rejects parrots / hallucinated answers / meta-tool dumps
@@ -994,7 +1112,13 @@ export function runKernel(
     // Route all successful outputs through the canonical finalization pipeline.
     // Validates format, optionally synthesizes when LLM is available.
     // Harness-assembled output (raw tool artifacts) always attempts synthesis.
-    if (state.status === "done" && state.output && !isAwaitingApproval && !isAbstained) {
+    if (
+      state.status === "done" &&
+      state.output &&
+      !isAwaitingApproval &&
+      !isAwaitingInteraction &&
+      !isAbstained
+    ) {
       // `harness_synthesis` (introduced when assembleDeliverable picks a
       // substantive model thought) is treated as a MODEL output here — the
       // text was authored by the LLM, not concatenated from raw tool JSON.

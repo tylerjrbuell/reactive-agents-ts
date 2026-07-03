@@ -36,6 +36,15 @@ export interface ExecuteStreamDeps {
   readonly execute: (task: Task) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
 }
 
+/** Parse a persisted interaction schemaJson into an unknown value; empty object on parse failure. */
+const safeParseSchema = (schemaJson: string): unknown => {
+  try {
+    return JSON.parse(schemaJson);
+  } catch {
+    return {};
+  }
+};
+
 /** Persist a paused run: status → awaiting-approval + a pending approval row. */
 const persistApprovalPause = (params: {
   runStoreLayer: Layer.Layer<RunStoreService>;
@@ -61,11 +70,53 @@ const persistApprovalPause = (params: {
     ),
   );
 
+/** Persist a paused-for-interaction run: status → awaiting-interaction + a pending interaction row. Sibling of persistApprovalPause (Task 10). */
+const persistInteractionPause = (params: {
+  runStoreLayer: Layer.Layer<RunStoreService>;
+  runId: string;
+  interaction: { interactionId: string; kind: string; prompt: string; schemaJson: string };
+}): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    yield* store.setStatus(params.runId, "awaiting-interaction");
+    yield* store.putInteraction({
+      runId: params.runId,
+      interactionId: params.interaction.interactionId,
+      kind: params.interaction.kind,
+      prompt: params.interaction.prompt,
+      schemaJson: params.interaction.schemaJson,
+    });
+  }).pipe(
+    Effect.provide(params.runStoreLayer),
+    Effect.catchAllCause((cause) =>
+      emitErrorSwallowed({
+        site: "runtime/src/engine/execute-stream.ts:persistInteractionPause",
+        tag: errorTag(cause),
+      }),
+    ),
+  );
+
 export const makeExecuteStream =
   ({ config, execute }: ExecuteStreamDeps) =>
   (
     task: Task,
-    options?: { density?: StreamDensity; runController?: RunControllerLike },
+    options?: {
+      density?: StreamDensity;
+      runController?: RunControllerLike;
+      /**
+       * Agentic-UI kit (Task 13): fired ONCE, synchronously, right after the
+       * durable run row is created and its `runId` computed — BEFORE the first
+       * stream event is emitted. Only fires on the durable path (when
+       * `config.durableRuns` + a runController are set). Lets endpoint helpers
+       * open a per-run journal before any event flows. No-op otherwise.
+       */
+      onRunId?: (runId: string) => void;
+      /**
+       * Agentic-UI kit (Task 13): stamps the durable run row's `user_id`/`org_id`
+       * columns so per-identity inbox filtering works. Durable path only.
+       */
+      identity?: { userId: string; orgId?: string };
+    },
   ): Effect.Effect<EStream.Stream<AgentStreamEvent, Error>> =>
     Effect.gen(function* () {
       const queue = yield* Queue.unbounded<AgentStreamEvent>();
@@ -208,6 +259,10 @@ export const makeExecuteStream =
         // Stable-ish run id: content hash of agent + task + start time.
         const runId = hash(`${agentId}:${String(task.id)}:${startMs}`).toString(36);
         runStoreCtx = { runId, runStoreLayer };
+        // Agentic-UI kit (Task 13): expose the runId before the first event is
+        // emitted so endpoint helpers can open a journal keyed on it. Fired
+        // synchronously here (durable path only), ahead of createRun below.
+        options.onRunId?.(runId);
         // Phase C: hash the reproducible identity descriptor (not the whole
         // config) so ReactiveAgent.resume() can recompute a matching hash.
         const configHash = durableConfigHash({
@@ -222,6 +277,8 @@ export const makeExecuteStream =
             agentId,
             task: String((task.input as { question?: unknown })?.question ?? task.id),
             configHash,
+            ...(options.identity?.userId !== undefined ? { userId: options.identity.userId } : {}),
+            ...(options.identity?.orgId !== undefined ? { orgId: options.identity.orgId } : {}),
           });
         }).pipe(
           Effect.provide(runStoreLayer),
@@ -245,9 +302,13 @@ export const makeExecuteStream =
           // Durable HITL: detect if the run paused for approval.
           const gate = (taskResult as { awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown } }).awaitingApprovalFor;
           const paused = gate !== undefined && runStoreCtx !== undefined;
+          // Agentic-UI interaction rail (Task 10): mirror the approval pause
+          // detection above for `request_user_input`.
+          const interaction = (taskResult as { awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string } }).awaitingInteractionFor;
+          const pausedInteraction = interaction !== undefined && runStoreCtx !== undefined;
 
           // Only mark a non-paused run as finished in the durable store.
-          if (!paused) {
+          if (!paused && !pausedInteraction) {
             durableFinish?.(true);
           }
 
@@ -270,6 +331,11 @@ export const makeExecuteStream =
             taskId: String(task.id),
             agentId: String(task.agentId),
             ...(toolSummary.length > 0 ? { toolSummary } : {}),
+            // Agentic-UI kit (Task 13): stamp the durable runId on EVERY durable
+            // StreamCompleted (not just paused ones) so endpoint consumers can
+            // attach/replay a completed run by its id. Backward-compatible: the
+            // field is optional and was already populated on the pause paths.
+            ...(runStoreCtx !== undefined ? { runId: runStoreCtx.runId } : {}),
             ...(paused && runStoreCtx !== undefined
               ? {
                   runId: runStoreCtx.runId,
@@ -281,12 +347,26 @@ export const makeExecuteStream =
                   },
                 }
               : {}),
+            ...(pausedInteraction && runStoreCtx !== undefined
+              ? {
+                  runId: runStoreCtx.runId,
+                  pendingInteraction: {
+                    runId: runStoreCtx.runId,
+                    interactionId: interaction!.interactionId,
+                    kind: interaction!.kind,
+                    prompt: interaction!.prompt,
+                    schema: safeParseSchema(interaction!.schemaJson),
+                  },
+                }
+              : {}),
           };
           // Persist the pause BEFORE emitting StreamCompleted so callers that
-          // consume the event can immediately call decideApproval.
+          // consume the event can immediately call decideApproval / respond.
           const persistStep = paused && runStoreCtx !== undefined
             ? persistApprovalPause({ runStoreLayer: runStoreCtx.runStoreLayer, runId: runStoreCtx.runId, gate: gate! })
-            : Effect.void;
+            : pausedInteraction && runStoreCtx !== undefined
+              ? persistInteractionPause({ runStoreLayer: runStoreCtx.runStoreLayer, runId: runStoreCtx.runId, interaction: interaction! })
+              : Effect.void;
           const offer = persistStep.pipe(Effect.zipRight(Queue.offer(queue, completedEvent)));
           if (!eb) return offer;
           return offer.pipe(

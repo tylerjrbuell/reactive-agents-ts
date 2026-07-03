@@ -12,7 +12,7 @@
  * actual module path for telemetry accuracy.
  */
 import { Effect, FiberRef } from "effect";
-import { emitErrorSwallowed, errorTag, ResumeStateRef, ApprovalDecisionRef } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "@reactive-agents/core";
 import type { Task } from "@reactive-agents/core";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
@@ -231,6 +231,12 @@ export const runReasoningThink = (
     // runs (zero cost).
     const approvalDecision = (yield* FiberRef.get(ApprovalDecisionRef)) ?? undefined;
 
+    // Agentic-UI interaction rail (Task 10): a human's response to a paused
+    // request_user_input, threaded in on a resumed run via InteractionResponseRef
+    // (seeded by respondToInteraction). Forwarded to the runner, which injects the
+    // value + re-thinks. Null on normal runs (zero cost). Mirrors approvalDecision.
+    const interactionResponse = (yield* FiberRef.get(InteractionResponseRef)) ?? undefined;
+
     const executeRequest = {
       taskDescription: extractTaskText(task.input),
       taskType: task.type,
@@ -265,6 +271,7 @@ export const runReasoningThink = (
       initialMessages,
       resumeState,
       approvalDecision,
+      interactionResponse,
       approvalPolicy: config.approvalPolicy
         ? {
             mode: config.approvalPolicy.mode,

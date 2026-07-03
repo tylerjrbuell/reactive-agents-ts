@@ -33,6 +33,7 @@ import {
   shouldShowFinalAnswer,
   parseRationaleBlocks,
   stripRationaleBlocks,
+  requestUserInputTool,
   type ToolCallSpec,
   type ResolverInput,
 } from "@reactive-agents/tools";
@@ -321,6 +322,12 @@ export function handleThinking(
         requiredToolUnavailable: false,
         toolsAttempted: state.toolsUsed.size,
       }) ? [abstainToolSchema] : []),
+      // Agentic-UI (Task 9): offer request_user_input whenever
+      // metaTools.userInteraction === true. Unlike abstain there is NO
+      // iteration gate — the model may ask for human input on iteration 0.
+      ...(input.metaTools?.userInteraction === true
+        ? [{ name: requestUserInputTool.name, description: requestUserInputTool.description, parameters: requestUserInputTool.parameters }]
+        : []),
     ] as readonly ToolSchema[];
 
     // ── Context pressure hard gate ───────────────────────────────────────────

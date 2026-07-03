@@ -90,6 +90,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly approvalPolicy?: import("../kernel/state/kernel-state.js").KernelInput["approvalPolicy"];
       /** Durable HITL (Phase D): human's approve/deny decision on a resumed run; spread through to the kernel. */
       readonly approvalDecision?: import("../kernel/state/kernel-state.js").KernelInput["approvalDecision"];
+      /** Agentic-UI interaction rail (Task 10): human's response to a paused request_user_input; spread through to the kernel. */
+      readonly interactionResponse?: import("../kernel/state/kernel-state.js").KernelInput["interactionResponse"];
       readonly synthesisConfig?: SynthesisConfig;
       /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
       readonly observationSummary?: boolean | "auto";

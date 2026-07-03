@@ -253,6 +253,10 @@ export type {
   FinalAnswerCapture,
   FinalAnswerDescriptionContext,
 } from "./skills/final-answer.js";
+export {
+  requestUserInputTool,
+  REQUEST_USER_INPUT_TOOL_NAME,
+} from "./skills/request-user-input.js";
 
 // ─── Completion Gaps Utility ───
 export { detectCompletionGaps } from "./skills/completion-gaps.js";

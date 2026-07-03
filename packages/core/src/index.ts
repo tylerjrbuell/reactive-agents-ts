@@ -202,7 +202,8 @@ export type {
 } from "./services/harness-types.js";
 
 // ─── Streaming ───
-export { StreamingTextCallback, RunControllerRef, ResumeStateRef, ApprovalDecisionRef } from "./streaming.js";
+export { StreamingTextCallback, RunControllerRef, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "./streaming.js";
+export type { InteractionResponse } from "./streaming.js";
 export type { RunControllerLike, ApprovalDecision } from "./streaming.js";
 
 // ─── AgentMemory port (NS §3.1 — FIX-34) ───

@@ -39,6 +39,11 @@ export type TerminateReason =
   // intentionally not met its post-conditions and must not be demoted to
   // `failed`). The engine detects this reason to persist `awaiting-approval`.
   | "awaiting-approval"
+  // Durable pause (Task 9): the act capability intercepted a
+  // `request_user_input` tool call and paused the run for a human answer.
+  // Mirrors `awaiting-approval` exactly — a NON-FAILURE terminal reason;
+  // Task 10 persists/resumes it via `state.meta.awaitingInteractionFor`.
+  | "awaiting-interaction"
   // O3: model honestly declined — cannot ground a response or a required input
   // is unavailable. Non-failure terminal (goalAchieved=false, success=false but
   // not a crash). Task 5 (legitimacy gate) + Task 6 (forced path) extend this.

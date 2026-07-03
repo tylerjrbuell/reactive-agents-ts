@@ -88,3 +88,21 @@ export interface ApprovalDecision {
 export const ApprovalDecisionRef = FiberRef.unsafeMake<ApprovalDecision | null>(
   null,
 );
+
+/**
+ * A human's response to a paused durable `request_user_input` interaction,
+ * carried into a resumed pipeline by `ReactiveAgent.respondToInteraction` (via
+ * `Effect.locally`). Read by the reasoning THINK phase (`reasoning-think.ts`) and
+ * forwarded as `KernelInput.interactionResponse`, where the runner injects the
+ * value as the pending interaction's result before the loop re-thinks. Null on
+ * every normal run, so non-resume executions pay zero cost. Mirrors
+ * `ApprovalDecisionRef`. Agentic-UI durable interaction rail (Task 10).
+ */
+export interface InteractionResponse {
+  readonly interactionId: string;
+  /** JSON-serialized user value (JSON.stringify of whatever the human answered). */
+  readonly valueJson: string;
+}
+
+export const InteractionResponseRef =
+  FiberRef.unsafeMake<InteractionResponse | null>(null);

@@ -20,11 +20,13 @@ import {
   type RunRecord,
   type RunStatus,
   type ApprovalRecord,
+  type InteractionRecord,
 } from "../services/run-store.js";
 import {
   DurableRunNotFoundError,
   DurableConfigMismatchError,
   ApprovalStateError,
+  InteractionStateError,
 } from "../errors.js";
 
 /** The data needed to continue a crashed/paused run from its last checkpoint. */
@@ -75,14 +77,15 @@ export const loadResumePayload = (params: {
     return { run, stateJson: checkpoint.stateJson };
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 
-/** Enumerate persisted runs (newest-updated first), optionally filtered by status. */
+/** Enumerate persisted runs (newest-updated first), optionally filtered by status/userId. */
 export const listDurableRuns = (params: {
   readonly dbPath: string;
   readonly status?: RunStatus;
+  readonly userId?: string;
 }): Effect.Effect<readonly RunRecord[], never> =>
   Effect.gen(function* () {
     const store = yield* RunStoreService;
-    return yield* store.listRuns(params.status);
+    return yield* store.listRuns({ status: params.status, userId: params.userId });
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 
 /** Flip a run's lifecycle status (best-effort; never fails the caller). */
@@ -172,4 +175,81 @@ export const persistApprovalPauseAt = (params: {
       toolName: params.gate.toolName,
       argsJson: JSON.stringify(params.gate.args ?? null),
     });
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+// ── Agentic-UI durable interaction rail (Task 10) ────────────────────────────
+// Mirror of the approval helpers above (persistApprovalPauseAt /
+// decideApprovalRecord / getPendingApprovalAt) for the `request_user_input`
+// pause. Semantic difference: an interaction always injects the human's value as
+// the pending call's result on resume; there is no approve/deny branch.
+
+/**
+ * Persist a paused-for-interaction run — status → awaiting-interaction + a pending
+ * interaction row. Mirrors {@link persistApprovalPauseAt} for the `run()` path.
+ */
+export const persistInteractionPauseAt = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+  readonly interaction: {
+    interactionId: string;
+    kind: string;
+    prompt: string;
+    schemaJson: string;
+  };
+}): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    yield* store.setStatus(params.runId, "awaiting-interaction");
+    yield* store.putInteraction({
+      runId: params.runId,
+      interactionId: params.interaction.interactionId,
+      kind: params.interaction.kind,
+      prompt: params.interaction.prompt,
+      schemaJson: params.interaction.schemaJson,
+    });
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/**
+ * Record a human's response on a run's pending interaction. Fails
+ * `InteractionStateError` when the run has no pending interaction (e.g. already
+ * answered, completed, or never paused) OR when the supplied `interactionId`
+ * does not match the pending one (wrong/stale id) — the store UPDATE in that
+ * case matches 0 rows, which must not be treated as success. Mirrors
+ * {@link decideApprovalRecord}.
+ */
+export const decideInteractionRecord = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+  readonly interactionId: string;
+  readonly valueJson: string;
+}): Effect.Effect<void, InteractionStateError> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    const pending = yield* store.getPendingInteraction(params.runId);
+    if (!pending || pending.interactionId !== params.interactionId) {
+      return yield* Effect.fail(
+        new InteractionStateError({
+          runId: params.runId,
+          detail: pending
+            ? `interactionId mismatch: pending is ${pending.interactionId}, got ${params.interactionId}`
+            : "no pending interaction",
+        }),
+      );
+    }
+    const changed = yield* store.decideInteraction(params.runId, params.interactionId, params.valueJson);
+    if (!changed) {
+      return yield* Effect.fail(
+        new InteractionStateError({ runId: params.runId, detail: "interaction already answered" }),
+      );
+    }
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/** The single pending interaction for a run (or undefined). Used by `listPendingInteractions`. */
+export const getPendingInteractionAt = (params: {
+  readonly dbPath: string;
+  readonly runId: string;
+}): Effect.Effect<InteractionRecord | undefined, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    return yield* store.getPendingInteraction(params.runId);
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));

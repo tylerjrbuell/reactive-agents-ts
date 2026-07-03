@@ -25,7 +25,7 @@ export type AgentStreamEvent =
       readonly taskId?: string;
       readonly agentId?: string;
       readonly toolSummary?: ReadonlyArray<{ readonly name: string; readonly calls: number; readonly avgMs: number }>;
-      /** Durable HITL: the durable runId, present when this run paused for approval. */
+      /** Durable HITL: the durable runId, present on every durable-run completion (paused or not — not approval-pause-only). */
       readonly runId?: string;
       /** Durable HITL: the paused gate descriptor, present when status is awaiting-approval. */
       readonly pendingApproval?: {
@@ -33,6 +33,19 @@ export type AgentStreamEvent =
         readonly gateId: string;
         readonly toolName: string;
         readonly args: unknown;
+      };
+      /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor, present when the run paused for user interaction. */
+      readonly pendingInteraction?: {
+        readonly runId: string;
+        readonly interactionId: string;
+        readonly kind: string;
+        readonly prompt: string;
+        readonly schema: unknown;
+      };
+      /** Run-level abstention surface, present when the run abstained (terminatedBy === "abstained"). */
+      readonly abstention?: {
+        readonly reason: string;
+        readonly missing?: readonly string[];
       };
     }
   | {

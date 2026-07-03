@@ -898,12 +898,24 @@ export interface AgentResult {
      * `"awaiting-approval"` when a durable run paused for human approval (durable
      * HITL, Phase D), or `"failed"` on error.
      */
-    readonly status?: "completed" | "awaiting-approval" | "failed";
+    readonly status?: "completed" | "awaiting-approval" | "awaiting-interaction" | "failed";
     /** Present only when `status === "awaiting-approval"`. The paused gate + the durable runId to approve/deny. */
     readonly pendingApproval?: {
         readonly runId: string;
         readonly gateId: string;
         readonly toolName: string;
         readonly args: unknown;
+    };
+    /**
+     * Agentic-UI interaction rail (Task 10): present only when
+     * `status === "awaiting-interaction"`. The paused interaction + the durable
+     * runId to `respondToInteraction`.
+     */
+    readonly pendingInteraction?: {
+        readonly runId: string;
+        readonly interactionId: string;
+        readonly kind: string;
+        readonly prompt: string;
+        readonly schema: unknown;
     };
 }

@@ -118,6 +118,10 @@ export type Deliverable =
         | "no_substantive_output"
         | "max_iterations_no_artifacts"
         | "awaiting_approval"
+        // Durable pause (Task 9): the act capability intercepted a
+        // `request_user_input` tool call and paused the run for a human
+        // answer. Mirrors `awaiting_approval` exactly.
+        | "awaiting_interaction"
         // O3: model honestly declined (Task 3 — model-initiated abstain path).
         | "model-abstained";
     };
@@ -143,6 +147,8 @@ export function deliverableToContent(d: Deliverable): string {
           return "Task did not converge within the iteration budget.";
         case "awaiting_approval":
           return "Run paused — awaiting human approval.";
+        case "awaiting_interaction":
+          return "Run paused — awaiting human input.";
         default:
           return "Task complete.";
       }
@@ -200,6 +206,7 @@ export function sentinelDeliverable(
     | "no_substantive_output"
     | "max_iterations_no_artifacts"
     | "awaiting_approval"
+    | "awaiting_interaction"
     | "model-abstained",
 ): Deliverable {
   return { source: "sentinel", reason };

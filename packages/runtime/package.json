@@ -34,6 +34,7 @@
     "@standard-schema/spec": "^1.0.0"
   },
   "devDependencies": {
+    "@reactive-agents/ui-core": "workspace:*",
     "typescript": "^6.0.3",
     "bun-types": "latest",
     "effect": "^3.10.0"

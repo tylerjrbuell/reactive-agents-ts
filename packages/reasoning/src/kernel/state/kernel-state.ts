@@ -140,6 +140,18 @@ export interface KernelMeta {
     readonly args: unknown;
   };
   /**
+   * Durable pause (Task 9): set when the act capability intercepts a
+   * `request_user_input` tool call. Serialized into the checkpoint so a
+   * paused-for-interaction run survives a crash; a later task (10) persists
+   * and resumes it, mirroring the {@link awaitingApprovalFor} rail.
+   */
+  readonly awaitingInteractionFor?: {
+    readonly interactionId: string;
+    readonly kind: string;
+    readonly prompt: string;
+    readonly schemaJson: string;
+  };
+  /**
    * Durable HITL (Phase D): transient one-shot flag set by the runner's resume
    * re-entry while it executes an already-approved call via the act capability.
    * Tells the act gate to skip gating for that single pass (the human already
@@ -628,6 +640,19 @@ export interface KernelInput {
     readonly gateId: string;
     readonly status: "approved" | "denied";
     readonly reason?: string;
+  };
+  /**
+   * Agentic-UI durable interaction rail (Task 10): a human's response to a paused
+   * `request_user_input` interaction, threaded in on a resumed run by
+   * `ReactiveAgent.respondToInteraction` (via the `InteractionResponseRef`
+   * FiberRef, read + forwarded in `reasoning-think.ts`). Read by the runner at
+   * loop top together with `state.meta.awaitingInteractionFor`: the runner injects
+   * the value as the pending interaction's result and re-thinks. Mirrors
+   * {@link approvalDecision}. Null on every normal run (zero cost).
+   */
+  readonly interactionResponse?: {
+    readonly interactionId: string;
+    readonly valueJson: string;
   };
   /**
    * Durable HITL (Phase D): resolved approval-gate policy. The runtime merges the

@@ -504,6 +504,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _durableRuns: import('./builder/types.js').DurableRunsOptions | undefined = undefined
     /** Opt-in durable HITL approval policy (Phase D). Absent = off (default). */
     private _approvalPolicy: import('./builder/types.js').ApprovalPolicyConfig | undefined = undefined
+    /** Agentic-UI (Task 11): opt-in agent-initiated user interaction (request_user_input). Requires durable runs. */
+    private _userInteraction = false
     private _harnessRegistrations: Array<(harness: import('@reactive-agents/core').Harness) => void> = []
 
     // ─── Calibration ───
@@ -1078,6 +1080,20 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withDurableRuns(options?: import('./builder/types.js').DurableRunsOptions): this {
         this._durableRuns = options ?? {}
+        return this
+    }
+
+    /**
+     * Agentic-UI (Task 11): enable agent-initiated user interaction. When set, the
+     * model may call `request_user_input` to pause the run durably and ask the
+     * human for a form / choice / confirmation; `respondToInteraction` resumes it.
+     * Requires `.withDurableRuns()` — interaction pauses persist to the durable
+     * store. Zero cost when not called.
+     *
+     * @returns `this` for chaining
+     */
+    withUserInteraction(): this {
+        this._userInteraction = true
         return this
     }
 
@@ -2192,6 +2208,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                         'detached approval pauses need a durable store to persist them.',
                 )
             }
+        }
+
+        // Agentic-UI (Task 11): request_user_input pauses persist to the durable
+        // store, so .withUserInteraction() requires .withDurableRuns(). Mirror of
+        // the approval-detach guard above — fail fast on misconfiguration.
+        if (this._userInteraction && !this._durableRuns) {
+            throw new Error(
+                '.withUserInteraction() requires .withDurableRuns() — interaction pauses persist to the durable store.',
+            )
         }
 
         // Auto-resolve context profile from model name if not explicitly set.

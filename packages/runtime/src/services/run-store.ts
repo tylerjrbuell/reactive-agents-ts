@@ -49,6 +49,7 @@ export type RunStatus =
   | "running"
   | "paused"
   | "awaiting-approval"
+  | "awaiting-interaction"
   | "completed"
   | "failed";
 
@@ -59,6 +60,8 @@ export interface RunRecord {
   readonly status: RunStatus;
   readonly configHash: string;
   readonly updatedAt: number;
+  readonly userId?: string;
+  readonly orgId?: string;
 }
 
 export interface CheckpointRecord {
@@ -76,6 +79,22 @@ export interface ApprovalRecord {
   readonly reason?: string;
 }
 
+export interface RunEventRecord {
+  readonly seq: number;
+  readonly eventJson: string;
+  readonly createdAt: number;
+}
+
+export interface InteractionRecord {
+  readonly runId: string;
+  readonly interactionId: string;
+  readonly kind: string;
+  readonly schemaJson: string;
+  readonly prompt: string;
+  readonly status: "pending" | "answered";
+  readonly valueJson?: string;
+}
+
 export interface RunStore {
   /** Insert (or replace) a run row, status seeded to `running`. */
   readonly createRun: (r: {
@@ -83,6 +102,8 @@ export interface RunStore {
     agentId: string;
     task: string;
     configHash: string;
+    userId?: string;
+    orgId?: string;
   }) => Effect.Effect<void, never>;
   /** Transition a run to a new lifecycle status. */
   readonly setStatus: (
@@ -105,12 +126,14 @@ export interface RunStore {
   ) => Effect.Effect<RunRecord | undefined, never>;
   /**
    * All persisted run rows, newest-updated first. When `status` is supplied,
-   * only runs in that lifecycle state are returned. Used by `agent.listRuns()`
+   * only runs in that lifecycle state are returned; when `userId` is supplied,
+   * only runs owned by that user are returned. Used by `agent.listRuns()`
    * (Phase C) to enumerate resumable / completed / failed runs.
    */
-  readonly listRuns: (
-    status?: RunStatus,
-  ) => Effect.Effect<readonly RunRecord[], never>;
+  readonly listRuns: (filter?: {
+    status?: RunStatus;
+    userId?: string;
+  }) => Effect.Effect<readonly RunRecord[], never>;
   /** Insert a pending approval row for a paused run. */
   readonly putApproval: (r: {
     runId: string;
@@ -128,6 +151,40 @@ export interface RunStore {
     gateId: string,
     status: "approved" | "denied",
     reason?: string,
+  ) => Effect.Effect<boolean, never>;
+  /** Append one stream-event journal row at the given sequence number. */
+  readonly appendRunEvent: (
+    runId: string,
+    seq: number,
+    eventJson: string,
+  ) => Effect.Effect<void, never>;
+  /**
+   * Journal rows for a run, ordered by `seq` ASC. When `afterSeq` is supplied,
+   * only rows with `seq > afterSeq` are returned (resume-from-cursor).
+   */
+  readonly listRunEvents: (
+    runId: string,
+    afterSeq?: number,
+  ) => Effect.Effect<readonly RunEventRecord[], never>;
+  /** Next journal sequence number for a run (max(seq)+1, starts at 1). */
+  readonly nextEventSeq: (runId: string) => Effect.Effect<number, never>;
+  /** Insert a pending agent-initiated interaction row. */
+  readonly putInteraction: (r: {
+    runId: string;
+    interactionId: string;
+    kind: string;
+    schemaJson: string;
+    prompt: string;
+  }) => Effect.Effect<void, never>;
+  /** The single pending interaction for a run, or undefined if none pending. */
+  readonly getPendingInteraction: (
+    runId: string,
+  ) => Effect.Effect<InteractionRecord | undefined, never>;
+  /** Flip a pending interaction to answered. Returns false if no pending row matched. */
+  readonly decideInteraction: (
+    runId: string,
+    interactionId: string,
+    valueJson: string,
   ) => Effect.Effect<boolean, never>;
 }
 
@@ -149,6 +206,8 @@ interface RunRow {
   status: string;
   config_hash: string;
   updated_at: number;
+  user_id: string | null;
+  org_id: string | null;
 }
 
 interface ApprovalRow {
@@ -158,6 +217,22 @@ interface ApprovalRow {
   args_json: string;
   status: string;
   reason: string | null;
+}
+
+interface RunEventRow {
+  seq: number;
+  event_json: string;
+  created_at: number;
+}
+
+interface InteractionRow {
+  run_id: string;
+  interaction_id: string;
+  kind: string;
+  schema_json: string;
+  prompt: string;
+  status: string;
+  value_json: string | null;
 }
 
 /**
@@ -185,6 +260,18 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
         updated_at  INTEGER NOT NULL
       )`,
     );
+    // Identity columns on `runs` — guarded ALTER so pre-existing DBs (created
+    // before per-user/per-org identity was tracked) pick them up idempotently.
+    const runsCols = db
+      .prepare("PRAGMA table_info(runs)")
+      .all()
+      .map((c) => (c as { name: string }).name);
+    if (!runsCols.includes("user_id")) {
+      db.exec("ALTER TABLE runs ADD COLUMN user_id TEXT");
+    }
+    if (!runsCols.includes("org_id")) {
+      db.exec("ALTER TABLE runs ADD COLUMN org_id TEXT");
+    }
     db.exec(
       `CREATE TABLE IF NOT EXISTS run_checkpoints (
         run_id     TEXT NOT NULL,
@@ -207,18 +294,50 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
         PRIMARY KEY (run_id, gate_id)
       )`,
     );
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS run_events (
+        run_id     TEXT NOT NULL,
+        seq        INTEGER NOT NULL,
+        event_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (run_id, seq)
+      )`,
+    );
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS run_interactions (
+        run_id        TEXT NOT NULL,
+        interaction_id TEXT NOT NULL,
+        kind          TEXT NOT NULL,
+        schema_json   TEXT NOT NULL,
+        prompt        TEXT NOT NULL,
+        status        TEXT NOT NULL,
+        value_json    TEXT,
+        created_at    INTEGER NOT NULL,
+        decided_at    INTEGER,
+        PRIMARY KEY (run_id, interaction_id)
+      )`,
+    );
 
     const now = (): number => Date.now();
 
     return {
-      createRun: ({ runId, agentId, task, configHash }) =>
+      createRun: ({ runId, agentId, task, configHash, userId, orgId }) =>
         Effect.sync(() => {
           const ts = now();
           db.prepare(
             `INSERT OR REPLACE INTO runs
-               (run_id, agent_id, task, status, config_hash, created_at, updated_at)
-             VALUES (?, ?, ?, 'running', ?, ?, ?)`,
-          ).run(runId, agentId, task, configHash, ts, ts);
+               (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id)
+             VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?)`,
+          ).run(
+            runId,
+            agentId,
+            task,
+            configHash,
+            ts,
+            ts,
+            userId ?? null,
+            orgId ?? null,
+          );
         }),
 
       setStatus: (runId, status) =>
@@ -265,7 +384,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
         Effect.sync(() => {
           const row = db
             .prepare(
-              `SELECT run_id, agent_id, task, status, config_hash, updated_at
+              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id
                  FROM runs
                 WHERE run_id = ?`,
             )
@@ -278,30 +397,35 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
                 status: row.status as RunStatus,
                 configHash: row.config_hash,
                 updatedAt: row.updated_at,
+                userId: row.user_id ?? undefined,
+                orgId: row.org_id ?? undefined,
               }
             : undefined;
         }),
 
-      listRuns: (status) =>
+      listRuns: (filter) =>
         Effect.sync(() => {
-          const rows = (
-            status === undefined
-              ? db
-                  .prepare(
-                    `SELECT run_id, agent_id, task, status, config_hash, updated_at
-                       FROM runs
-                   ORDER BY updated_at DESC`,
-                  )
-                  .all()
-              : db
-                  .prepare(
-                    `SELECT run_id, agent_id, task, status, config_hash, updated_at
-                       FROM runs
-                      WHERE status = ?
-                   ORDER BY updated_at DESC`,
-                  )
-                  .all(status)
-          ) as RunRow[];
+          const status = filter?.status;
+          const userId = filter?.userId;
+          const conditions: string[] = [];
+          const params: string[] = [];
+          if (status !== undefined) {
+            conditions.push("status = ?");
+            params.push(status);
+          }
+          if (userId !== undefined) {
+            conditions.push("user_id = ?");
+            params.push(userId);
+          }
+          const whereClause =
+            conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
+          const rows = db
+            .prepare(
+              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id
+                 FROM runs${whereClause}
+             ORDER BY updated_at DESC`,
+            )
+            .all(...params) as RunRow[];
           return rows.map((row) => ({
             runId: row.run_id,
             agentId: row.agent_id,
@@ -309,6 +433,8 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             status: row.status as RunStatus,
             configHash: row.config_hash,
             updatedAt: row.updated_at,
+            userId: row.user_id ?? undefined,
+            orgId: row.org_id ?? undefined,
           }));
         }),
 
@@ -353,6 +479,100 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
                 WHERE run_id = ? AND gate_id = ? AND status = 'pending'`,
             )
             .run(status, reason ?? null, now(), runId, gateId);
+          return res.changes > 0;
+        }),
+
+      appendRunEvent: (runId, seq, eventJson) =>
+        Effect.sync(() => {
+          db.prepare(
+            `INSERT OR REPLACE INTO run_events
+               (run_id, seq, event_json, created_at)
+             VALUES (?, ?, ?, ?)`,
+          ).run(runId, seq, eventJson, now());
+        }),
+
+      listRunEvents: (runId, afterSeq) =>
+        Effect.sync(() => {
+          const rows = (
+            afterSeq === undefined
+              ? db
+                  .prepare(
+                    `SELECT seq, event_json, created_at
+                       FROM run_events
+                      WHERE run_id = ?
+                   ORDER BY seq ASC`,
+                  )
+                  .all(runId)
+              : db
+                  .prepare(
+                    `SELECT seq, event_json, created_at
+                       FROM run_events
+                      WHERE run_id = ? AND seq > ?
+                   ORDER BY seq ASC`,
+                  )
+                  .all(runId, afterSeq)
+          ) as RunEventRow[];
+          return rows.map((row) => ({
+            seq: row.seq,
+            eventJson: row.event_json,
+            createdAt: row.created_at,
+          }));
+        }),
+
+      nextEventSeq: (runId) =>
+        Effect.sync(() => {
+          const row = db
+            .prepare(
+              `SELECT COALESCE(MAX(seq), 0) + 1 AS next
+                 FROM run_events
+                WHERE run_id = ?`,
+            )
+            .get(runId) as { next: number };
+          return row.next;
+        }),
+
+      putInteraction: ({ runId, interactionId, kind, schemaJson, prompt }) =>
+        Effect.sync(() => {
+          db.prepare(
+            `INSERT OR REPLACE INTO run_interactions
+               (run_id, interaction_id, kind, schema_json, prompt, status, value_json, created_at, decided_at)
+             VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, NULL)`,
+          ).run(runId, interactionId, kind, schemaJson, prompt, now());
+        }),
+
+      getPendingInteraction: (runId) =>
+        Effect.sync(() => {
+          const row = db
+            .prepare(
+              `SELECT run_id, interaction_id, kind, schema_json, prompt, status, value_json
+                 FROM run_interactions
+                WHERE run_id = ? AND status = 'pending'
+             ORDER BY created_at DESC
+                LIMIT 1`,
+            )
+            .get(runId) as InteractionRow | undefined;
+          return row
+            ? {
+                runId: row.run_id,
+                interactionId: row.interaction_id,
+                kind: row.kind,
+                schemaJson: row.schema_json,
+                prompt: row.prompt,
+                status: row.status as InteractionRecord["status"],
+                valueJson: row.value_json ?? undefined,
+              }
+            : undefined;
+        }),
+
+      decideInteraction: (runId, interactionId, valueJson) =>
+        Effect.sync(() => {
+          const res = db
+            .prepare(
+              `UPDATE run_interactions
+                  SET status = 'answered', value_json = ?, decided_at = ?
+                WHERE run_id = ? AND interaction_id = ? AND status = 'pending'`,
+            )
+            .run(valueJson, now(), runId, interactionId);
           return res.changes > 0;
         }),
     };

@@ -30,6 +30,9 @@
   "files": [
     "dist"
   ],
+  "dependencies": {
+    "@reactive-agents/ui-core": "workspace:*"
+  },
   "peerDependencies": {
     "vue": ">=3.0.0"
   },
