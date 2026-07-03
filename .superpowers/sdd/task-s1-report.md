@@ -84,3 +84,64 @@ I considered instead patching this at the SSE-body level inside `agent-stream.ts
 ```
 
 (Includes the `run-machine.ts` guard fix in the same commit since `agent-stream.ts`'s rewire is what surfaces it — noted above; will flag to the plan owner that `packages/ui-core` was touched.)
+
+---
+
+## Follow-up fix (2026-07-03): `createAgentStream` dropped `requestInit`
+
+## Status: DONE
+
+### Bug
+
+Post-rewire, `createAgentStream(endpoint, requestInit?)` renamed its second parameter to `_requestInit` and never used it — `createRun({ endpoint })` was called with no `fetchImpl`, so any custom `headers`/`credentials`/`mode` a caller passed (e.g. an `Authorization` header) were silently dropped on every fetch. Pre-rewire, these were applied. `createAgent` in the same file tree already avoided this by building a `compatFetch(requestInit)` wrapper and passing it as `createRun({ fetchImpl })` — `createAgentStream` needed the equivalent.
+
+### Fix
+
+- `packages/svelte/src/agent.ts`: exported the existing `compatFetch` helper (`const compatFetch` → `export const compatFetch`) so it can be shared instead of re-implemented.
+- `packages/svelte/src/agent-stream.ts`: renamed `_requestInit` back to `requestInit`, imported `compatFetch` from `./agent.js`, and changed `createRun({ endpoint })` to `createRun({ endpoint, fetchImpl: compatFetch(requestInit) })`.
+- No signature change to `createAgentStream`, no change to its returned store shape — purely restores the dropped wiring.
+
+### Test
+
+Added to `packages/svelte/tests/back-compat.test.ts`:
+
+```ts
+test("createAgentStream applies requestInit headers to underlying fetch", async () => {
+  const h = mockAgentEndpoint(FIXTURE);
+  let capturedInit: RequestInit | undefined;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    capturedInit = init;
+    return h(new Request(new URL(String(input), "http://ra.test").toString(), init));
+  }) as typeof fetch;
+
+  const s = createAgentStream("/x", { headers: { "X-Test": "1" } });
+  await s.run("hi");
+  await settle();
+
+  const headers = capturedInit?.headers as Record<string, string> | undefined;
+  expect(headers?.["X-Test"]).toBe("1");
+});
+```
+
+Verified TDD red→green: stashed the two source fixes (`agent.ts`, `agent-stream.ts`), ran the test against the pre-fix code — failed as expected (`Expected: "1", Received: undefined`). Restored the fixes (`git stash pop`), reran — green.
+
+Full package suite after fix, `bun test packages/svelte --timeout 20000`:
+
+```
+34 pass
+0 fail
+65 expect() calls
+Ran 34 tests across 5 files. [208.00ms]
+```
+
+(33 prior tests + 1 new, all green.)
+
+### tsc
+
+`cd packages/svelte && bunx tsc --noEmit` → clean, no output, exit 0. No `any` introduced.
+
+### Commit
+
+```
+ce0ce0ba fix(svelte): createAgentStream applies requestInit again (headers were dropped post-rewire)
+```

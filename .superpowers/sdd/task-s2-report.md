@@ -75,3 +75,56 @@ No `any` casts introduced (verified via grep over `src/*.ts`).
 
 1. `structured-stream.ts`'s `run()` awaits terminal state via a resolver instead of the plan's fire-and-forget `Promise.resolve()` — required to keep the existing behavioral test suite green (see above). This is the only functional deviation from the plan's literal S2 code; `resumable.ts`, the resumable test, and the index export match the plan verbatim.
 2. `_requestInit` param on `createStructuredStream` remains accepted (for back-compat signature) but is now inert — like the S1 rewire of `agent-stream.ts`, per-call header/init customization is no longer threaded through to the underlying transport since `createRun` doesn't expose a `requestInit` passthrough. This matches the plan's own Step 4 snippet (which also drops it) and existing `structured-stream.test.ts` doesn't exercise custom `requestInit`, so no test regression.
+
+---
+
+## Follow-up fix (2026-07-03): `createStructuredStream` dropped `requestInit` (whole-branch review)
+
+### Status: DONE
+
+Deviation 2 above was flagged as an inert back-compat gap; whole-branch review upgraded it to a real bug: a caller passing auth headers/`credentials` into `createStructuredStream` had them silently discarded, same class of regression already fixed once in `agent-stream.ts` (S1 follow-up) via the shared `compatFetch` helper in `agent.ts`.
+
+### Fix
+
+- `packages/svelte/src/structured-stream.ts`: renamed `_requestInit` → `requestInit`, imported `compatFetch` from `./agent.js` (already exported there), changed `createRun({ endpoint, objectMode: true })` to `createRun({ endpoint, objectMode: true, fetchImpl: compatFetch(requestInit) })`. No change to `createStructuredStream`'s signature or `StructuredStreamState` shape.
+- Reused the existing `compatFetch` export rather than re-implementing a wrapper (DRY, same helper the S1 `agent-stream.ts` fix used).
+
+### Test (TDD, red → green)
+
+Added to `packages/svelte/tests/structured-stream.test.ts`:
+
+```ts
+it("threads requestInit (e.g. custom headers) into the underlying fetch", async () => {
+  let capturedInit: RequestInit | undefined;
+  globalThis.fetch = (async (_input, init) => {
+    capturedInit = init;
+    return new Response(sseBody, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }) as FetchFn;
+
+  const stream = createStructuredStream("/api/agent/structured", { headers: { "X-Test": "1" } });
+  await stream.run("hi");
+
+  expect((capturedInit!.headers as Record<string, string>)["X-Test"]).toBe("1");
+});
+```
+
+Ran against pre-fix code first: failed (`Expected: "1", Received: undefined`), confirming the drop. Applied the fix, reran — green.
+
+### Second fix in same pass: dead `seen` Set in `interaction-watcher.ts`
+
+`apps/cortex/ui/src/lib/stores/interaction-watcher.ts`'s `startInteractionWatcher` built a `seen` Set (and a `keyFor` helper used only to populate/prune it) that was written every poll but never read — the store is set wholesale from the poll response each tick, so `seen` had no effect. Removed `seen`, `keyFor`, and the prune/populate loop; `pendingInteractions.set(interactions)` is the only remaining behavior. No behavior change; `interaction-watcher.test.ts` unaffected.
+
+### Full verification
+
+```
+$ bun test packages/svelte --timeout 20000
+39 pass, 0 fail, 74 expect() calls (Ran 39 tests across 8 files)
+
+$ cd apps/cortex && bun test src/lib --timeout 20000
+120 pass, 0 fail, 231 expect() calls (Ran 120 tests across 22 files)
+
+$ cd packages/svelte && bunx tsc --noEmit
+(clean, no output)
+```
+
+Commit: `fix(svelte,cortex-ui): createStructuredStream applies requestInit; drop dead seen Set` — `0a772aa2`.
