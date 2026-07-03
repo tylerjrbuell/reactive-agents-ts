@@ -319,7 +319,7 @@
     "terminalShellAdditionalCommands", "terminalShellAllowedCommands",
     "verificationStep", "observabilityVerbosity", "additionalToolNames",
     "healthCheck", "tools", "modelRouting", "budget", "metaTools", "fallbacks",
-    "retryPolicy", "memory",
+    "retryPolicy", "memory", "rawConfig",
   ] as const;
 
   function prefillBuilderFromSnapshot(snapshot: Record<string, unknown>): void {

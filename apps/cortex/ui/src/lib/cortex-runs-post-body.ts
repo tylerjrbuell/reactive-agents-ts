@@ -102,6 +102,10 @@ export function cortexRunsPostBody(
           },
         }
       : {}),
+    // Generic type-introspected framework-config overrides — send when non-empty.
+    ...(cfg.rawConfig && typeof cfg.rawConfig === "object" && Object.keys(cfg.rawConfig).length > 0
+      ? { rawConfig: cfg.rawConfig }
+      : {}),
     // Durable execution (crash-resume + HITL). approvalTools → approvalPolicy gate.
     ...(cfg.durableRuns?.enabled
       ? {

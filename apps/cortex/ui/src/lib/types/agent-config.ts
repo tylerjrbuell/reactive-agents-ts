@@ -149,6 +149,9 @@ export interface AgentConfig {
   grounding: { mode: "off" | "warn" | "block" };
   /** Cost-aware model routing (v0.13). enabled=false → not applied. `.withModelRouting()`. */
   modelRouting: { enabled: boolean; minTier?: "haiku" | "sonnet" | "opus"; tierModels?: Record<string, string> };
+  /** Generic framework-config overrides from the type-introspected renderer — a
+   * nested partial AgentConfig keyed by manifest configField paths. Empty by default. */
+  rawConfig: Record<string, unknown>;
   /** Living skills: SKILL.md directories + optional evolution (framework `withSkills`). */
   skills: {
     paths: string[];
@@ -184,6 +187,7 @@ export function defaultConfig(): AgentConfig {
     budget: { tokenLimit: 0, costLimit: 0 },
     grounding: { mode: "off" },
     modelRouting: { enabled: false },
+    rawConfig: {},
     verificationStep: "none",
     runtimeVerification: false,
     auditRationale: false,

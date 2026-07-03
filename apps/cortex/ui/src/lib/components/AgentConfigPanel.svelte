@@ -17,6 +17,7 @@
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
+  import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
 
   export { type AgentConfig, defaultConfig };
   type PanelAgentConfig = AgentConfig & {
@@ -319,6 +320,12 @@
     loadCapabilities()
       .then((m) => (capManifest = m))
       .catch((err) => console.warn("Failed to load capability manifest:", err));
+  });
+
+  // Saved/loaded configs may predate the rawConfig field; ensure it exists so
+  // the generic renderer can bind to it.
+  $effect(() => {
+    if (config && !config.rawConfig) config.rawConfig = {};
   });
 
   const STRATEGIES = $derived(
@@ -999,6 +1006,9 @@
             — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--ra-amber-strong,inherit)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
           </span>
         </label>
+
+        <!-- Generic framework-config renderer — auto-synced from the manifest -->
+        <AdvancedFrameworkConfig manifest={capManifest} bind:rawConfig={config.rawConfig} />
 
         <!-- Lifecycle webhooks -->
         <div class="rounded-lg border border-[var(--cortex-border)] p-2.5 space-y-2">
