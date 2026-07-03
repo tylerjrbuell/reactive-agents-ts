@@ -5,16 +5,6 @@ description: >-
   LiteLLM, and custom providers.
 sidebar:
   order: 4
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
 ---
 
 Reactive Agents supports multiple LLM providers through a unified `LLMService` interface. Switch providers with a single line — your agent code stays the same.

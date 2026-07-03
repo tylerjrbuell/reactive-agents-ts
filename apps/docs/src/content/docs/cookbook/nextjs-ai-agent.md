@@ -6,17 +6,6 @@ description: >-
   over Server-Sent Events.
 sidebar:
   order: 32
-badge:
-  text: New
-  variant: success
-  __auto: '1'
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.12
 ---
 
 This tutorial shows how to add a streaming **AI agent to a Next.js app** using TypeScript and the App Router. You'll build the agent on the server, expose it through a Route Handler, and render tokens as they arrive in a client component — the same pattern you'd reach for to **stream an AI agent in Next.js** without writing any SSE plumbing by hand.

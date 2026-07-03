@@ -5,16 +5,6 @@ description: >-
   production.
 sidebar:
   order: 23
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 Use this page as a symptom → cause → fix reference when agents fail, hang, or behave unexpectedly.

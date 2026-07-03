@@ -3,16 +3,6 @@ title: Migrating from LangChain.js
 description: Side-by-side guide for moving agents from LangChain.js to Reactive Agents
 sidebar:
   order: 20
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 This guide maps LangChain.js concepts to their Reactive Agents equivalents and shows side-by-side code examples for common patterns.

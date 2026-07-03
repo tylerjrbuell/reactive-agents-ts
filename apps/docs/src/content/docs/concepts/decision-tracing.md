@@ -3,17 +3,6 @@ title: Decision Tracing
 description: >-
   Capture *why* every agent decision is made — tool selection, assumption,
   termination — as typed, queryable rationale across the harness.
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.10
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 # Decision Tracing (v0.11.x)

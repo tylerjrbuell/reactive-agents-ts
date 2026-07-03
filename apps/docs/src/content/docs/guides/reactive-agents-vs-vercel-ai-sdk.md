@@ -5,17 +5,6 @@ description: >-
   each other. SDK toolkit vs agent harness: an honest, sourced breakdown.
 sidebar:
   order: 23
-badge:
-  text: New
-  variant: success
-  __auto: '1'
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.12
 ---
 
 If you're choosing between **Reactive Agents** and the **Vercel AI SDK**, the most useful thing to know up front is that they sit at *different altitudes*. The Vercel AI SDK is a lower-level **TypeScript toolkit** — a unified provider interface plus best-in-class UI streaming primitives. Reactive Agents is a higher-level **agent harness** that runs on top of that kind of foundation: a deterministic execution engine, reasoning strategies, memory, guardrails, durability, and governance.

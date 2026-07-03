@@ -5,16 +5,6 @@ description: >-
   and wire up external monitoring.
 sidebar:
   order: 11
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 `withObservability()` turns on distributed tracing, the metrics dashboard, and structured logging with a single builder call. This recipe shows how to use each piece.

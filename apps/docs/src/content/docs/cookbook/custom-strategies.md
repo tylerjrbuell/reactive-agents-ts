@@ -5,16 +5,6 @@ description: >-
   behavior.
 sidebar:
   order: 5
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 While the 5 built-in strategies cover most use cases, you can register custom reasoning strategies for specialized behavior.

@@ -6,17 +6,6 @@ description: >-
   checkpoint — kill the process, restart, finish the job.
 sidebar:
   order: 26
-badge:
-  text: Experimental
-  variant: caution
-  __auto: '1'
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.12
 ---
 
 Long-running agents crash. The machine reboots, the container is rescheduled, a

@@ -3,16 +3,6 @@ title: Identity & RBAC
 description: 'Agent authentication, role-based access control, certificates, and delegation.'
 sidebar:
   order: 7
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 The identity layer provides authentication, authorization, and audit capabilities for agents. Control what each agent can access, delegate permissions between agents, and maintain a full audit trail.

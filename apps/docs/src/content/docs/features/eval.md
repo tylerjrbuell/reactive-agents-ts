@@ -6,16 +6,6 @@ description: >-
   dimensions via @reactive-agents/eval.
 sidebar:
   order: 15
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Experimental
-  variant: caution
-  __auto: '1'
 ---
 
 The `@reactive-agents/eval` package provides a structured framework for measuring agent quality. It uses an LLM-as-judge approach to score agent responses across multiple dimensions, persists results to SQLite, and detects regressions between agent versions.

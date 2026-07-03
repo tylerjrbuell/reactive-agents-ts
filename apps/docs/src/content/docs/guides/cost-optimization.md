@@ -5,16 +5,6 @@ description: >-
   Agents
 sidebar:
   order: 24
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 Smart cost management is essential for production agents. This guide covers pricing, budget controls, and zero-cost local model options.

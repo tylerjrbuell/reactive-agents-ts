@@ -643,8 +643,23 @@
             "deprecated"
           ]
         },
-        "since": {
-          "type": "string"
+        "badge": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "variant": {
+              "type": "string"
+            },
+            "__auto": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "text",
+            "variant"
+          ]
         },
         "lastCommit": {
           "type": "object",

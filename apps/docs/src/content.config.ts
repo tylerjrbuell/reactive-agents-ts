@@ -1,7 +1,7 @@
 import { defineCollection } from "astro:content";
 import { z } from "astro/zod";
-import { docsLoader } from "@astrojs/starlight/loaders";
 import { docsSchema } from "@astrojs/starlight/schema";
+import { docsLoaderWithMeta } from "./content/docs-loader-with-meta";
 import { starlightSafeSkillsLoader } from "./content/skills-loader";
 
 const skillFileSchema = z.object({
@@ -18,15 +18,20 @@ const skillsSchema = z.object({
 
 export const collections = {
   docs: defineCollection({
-    loader: docsLoader(),
+    loader: docsLoaderWithMeta(),
     schema: docsSchema({
       extend: z.object({
         // Legacy new-page fields — kept for backward compat, replaced by badge system
         isNew: z.boolean().optional(),
         newUntil: z.string().optional(),
-        // Badge system fields (written by scripts/sync-page-metadata.ts)
+        // Manually-authored: drives computeGitPageMetadata()'s badge priority
         stability: z.enum(["stable", "unstable", "experimental", "deprecated"]).optional(),
-        since: z.string().optional(),
+        // Everything below is computed at build time by docs-loader-with-meta.ts
+        // (git-page-metadata.ts) — never authored by hand, never persisted to
+        // source frontmatter.
+        badge: z
+          .object({ text: z.string(), variant: z.string(), __auto: z.string().optional() })
+          .optional(),
         lastCommit: z
           .object({
             subject: z.string(),

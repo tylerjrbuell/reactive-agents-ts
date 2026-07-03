@@ -6,17 +6,6 @@ description: >-
   any process — approval gates that survive process death.
 sidebar:
   order: 27
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.12
-badge:
-  text: Experimental
-  variant: caution
-  __auto: '1'
 ---
 
 Some actions need a human's sign-off before they run — a shell command, a file

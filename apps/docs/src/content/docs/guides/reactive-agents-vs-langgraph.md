@@ -6,17 +6,6 @@ description: >-
   breakdown.
 sidebar:
   order: 21
-badge:
-  text: New
-  variant: success
-  __auto: '1'
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.12
 ---
 
 [LangGraph](https://langchain-ai.github.io/langgraphjs/) and Reactive Agents both help you build agentic LLM systems, but they start from different premises. LangGraph models an agent as an **explicit graph state machine** — you define nodes, edges, and a shared state object, and the runtime drives transitions between them. It is part of the LangChain ecosystem, is Python-first in depth, and ships a mature TypeScript port (LangGraph.js). Reactive Agents is a **composable, typed harness** that is TypeScript-first end to end (built on [Effect-TS](https://effect.website/)), aims for the same code running on a local 4B Ollama model or a frontier API, and bundles reasoning strategies, memory, guardrails, durable execution, and HITL as opt-in layers. If you want to hand-draw control flow as a graph, LangGraph is purpose-built for that. If you want a strongly typed agent you assemble from layers without wiring a state machine, that is what Reactive Agents optimizes for.

@@ -5,16 +5,6 @@ description: >-
   Docker sandbox for production-grade reliability.
 sidebar:
   order: 16
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 Reactive Agents includes multiple resilience layers that protect your agent workflows from provider outages, redundant API calls, and unsafe code execution.

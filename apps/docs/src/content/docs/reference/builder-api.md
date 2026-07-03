@@ -1,16 +1,6 @@
 ---
 title: ReactiveAgentBuilder
 description: Complete API reference for the ReactiveAgentBuilder.
-lastCommit:
-  subject: 'docs: v0.13 audit + lift plan, truth-sync, document shipped methods'
-  hash: 0e8785c
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
-changedSections:
-  - '### Memory'
 ---
 
 The `ReactiveAgentBuilder` is the primary entry point for creating agents. It provides a fluent API for composing capabilities.

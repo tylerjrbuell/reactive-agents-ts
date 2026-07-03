@@ -7,17 +7,6 @@ description: >-
   on local and frontier models.
 sidebar:
   order: 31
-badge:
-  text: New
-  variant: success
-  __auto: '1'
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.12
 ---
 
 Tools are how an AI agent stops talking and starts *acting* — searching the web, reading files, hitting an API, querying a database. A language model on its own can only produce text; tool calling (a.k.a. function calling) is what lets it choose an action, hand you structured arguments, and use the real result to decide what to do next.

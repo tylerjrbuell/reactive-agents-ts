@@ -1,16 +1,6 @@
 ---
 title: Effect-TS Primer
 description: The key Effect-TS concepts used in Reactive Agents.
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 Reactive Agents is built on [Effect-TS](https://effect.website). You don't need to be an Effect expert to use the framework, but understanding these concepts helps.

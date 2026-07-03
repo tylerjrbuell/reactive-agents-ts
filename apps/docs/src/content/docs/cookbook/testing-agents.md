@@ -5,16 +5,6 @@ description: >-
   Effect layers.
 sidebar:
   order: 3
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 Reactive Agents is designed for testability. The Layer system lets you swap any service with a test implementation, and the built-in test provider gives deterministic LLM responses.

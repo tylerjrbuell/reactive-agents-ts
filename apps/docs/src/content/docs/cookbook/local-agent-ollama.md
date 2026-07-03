@@ -5,17 +5,6 @@ description: >-
   Ollama — no API key, full privacy, and one-line parity with frontier models.
 sidebar:
   order: 30
-badge:
-  text: New
-  variant: success
-  __auto: '1'
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.12
 ---
 
 This is a complete, runnable guide to **building a local AI agent in TypeScript with Ollama**. You will install Ollama, pull a small open model, wire it into Reactive Agents, give it tools, tune it for small-model reliability, and — the payoff — swap to a frontier API by changing a single line. The same agent code runs on a 4B model on your laptop and on Claude or GPT in production.

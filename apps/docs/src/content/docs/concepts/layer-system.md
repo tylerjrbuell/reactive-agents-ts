@@ -1,16 +1,6 @@
 ---
 title: Layer System
 description: How the composable layer system works.
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 The layer system is the core architectural pattern of Reactive Agents. Every capability is an independent Effect Layer that can be enabled or disabled.

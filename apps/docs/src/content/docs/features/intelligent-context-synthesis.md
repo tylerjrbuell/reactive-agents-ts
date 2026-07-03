@@ -5,17 +5,6 @@ description: >-
   — templates or LLM — with per-strategy overrides.
 sidebar:
   order: 18
-lastCommit:
-  subject: >-
-    docs(revamp): stability tags, last-updated on all pages, fix scroll-to-top
-    overlap
-  hash: ba99dce
-  date: '2026-07-01'
-since: v0.8
-badge:
-  text: Updated
-  variant: note
-  __auto: '1'
 ---
 
 **Intelligent Context Synthesis (ICS)** runs after each thinking step (iteration ≥ 1) when the shared ReAct-style kernel is active. It produces a compact message list for the next LLM call instead of replaying the full raw transcript.
