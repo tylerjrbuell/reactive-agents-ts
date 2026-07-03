@@ -41,6 +41,8 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
     listPendingApprovals: () => Effect.succeed([]),
     approveApproval: () => Effect.void,
     denyApproval: () => Effect.void,
+    listPendingInteractions: () => Effect.succeed([]),
+    respondToInteraction: () => Effect.succeed({ success: true, output: "" }),
   });
 }
 

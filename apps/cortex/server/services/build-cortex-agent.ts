@@ -386,6 +386,9 @@ export async function buildCortexAgent(
       opts.checkpointEvery = params.durableRuns.checkpointEvery;
     }
     b = b.withDurableRuns(opts);
+    // Agentic-UI interaction rail: enables request_user_input pauses. Build-guarded
+    // on durable runs (persists the pause + response to the durable store).
+    b = b.withUserInteraction();
 
     const ap = params.durableRuns.approvalPolicy;
     if (ap && ap.tools && ap.tools.length > 0) {
