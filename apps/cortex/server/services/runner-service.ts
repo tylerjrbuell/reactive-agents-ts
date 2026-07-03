@@ -6,6 +6,7 @@
  */
 import { Effect, Context, Layer, Ref } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
@@ -111,6 +112,12 @@ export interface LaunchParams {
     readonly dir?: string;
     readonly approvalPolicy?: { tools?: string[]; mode?: "detach" | "block" };
   };
+  /**
+   * Test-only: scripted `test`-provider turns (`.withTestScenario`). Not exposed
+   * on any HTTP route schema — for driving the real `start()` path deterministically
+   * from tests (e.g. the durable interaction-rail e2e), never from the desk UI.
+   */
+  readonly testScenario?: readonly TestTurn[];
 }
 
 /** Active desk run: keyed by framework task id (`runId`), same id passed to `agent.run(..., { taskId })`. */
@@ -291,6 +298,9 @@ export const CortexRunnerServiceLive = Layer.effect(
                 ...(params.grounding ? { grounding: params.grounding } : {}),
                 ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
                 ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
+                ...(params.testScenario && params.testScenario.length > 0
+                  ? { testScenario: [...params.testScenario] }
+                  : {}),
               }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
           });
