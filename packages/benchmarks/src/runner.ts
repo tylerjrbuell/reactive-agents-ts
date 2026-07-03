@@ -615,6 +615,21 @@ async function runInternal(
           : undefined
       if (builtins && builtins.length > 0) {
         builder.withTools({ builtins })
+        // F1 grounded-terminal invariant needs KernelInput.requiredTools
+        // populated (wiki/Research/Harness-Reports/2026-07-02-cogito8b-
+        // competitor-bench-root-cause.md). The default adaptive-classifier
+        // path (config.requiredTools ?? {adaptive:true} when
+        // reasoning+tools are both on) resolves via an LLM classifier
+        // gated by model-tier reliability, falling back to literal
+        // tool-name mentions in the prompt for untrusted tiers — neither
+        // fires reliably for weak local models on these prompts, leaving
+        // requiredTools empty and the F1 gate structurally inert. These
+        // are exactly the fixture-bearing tasks (rw-8, rw-9) the
+        // root-cause report traced by hand; the concrete builtins list
+        // computed above IS the grounding requirement for them.
+        if (task.requiresTools) {
+          builder.withRequiredTools({ tools: builtins })
+        }
       } else {
         builder.withTools()
       }
