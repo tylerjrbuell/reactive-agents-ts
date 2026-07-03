@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { createRun } from "./run.js";
 import type { AgentStreamEvent } from "./types.js";
 
 export interface AgentStreamState {
@@ -8,6 +9,17 @@ export interface AgentStreamState {
   error: string | null;
   output: string | null;
 }
+
+const toLegacy = (s: string): AgentStreamState["status"] =>
+  s === "streaming" || s === "awaiting-interaction" || s === "awaiting-approval"
+    ? "streaming"
+    : s === "completed"
+    ? "completed"
+    : s === "error"
+    ? "error"
+    : "idle";
+
+const TERMINAL = new Set(["completed", "error", "cancelled"]);
 
 /**
  * Create a reactive Svelte store that streams agent output token-by-token.
@@ -25,80 +37,43 @@ export interface AgentStreamState {
  */
 export function createAgentStream(
   endpoint: string,
-  requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
+  _requestInit?: Omit<RequestInit, "method" | "body" | "signal">,
 ) {
-  const store = writable<AgentStreamState>({
-    text: "", events: [], status: "idle", error: null, output: null,
+  const inner = createRun({ endpoint });
+  const store = writable<AgentStreamState>({ text: "", events: [], status: "idle", error: null, output: null });
+
+  // run() resolves only once the underlying run reaches a terminal status —
+  // callers read the store synchronously right after `await run()` and
+  // expect the terminal state (or error state) to already be visible; it
+  // never rejects, mirroring the pre-rewire behavior where a StreamError
+  // event was absorbed into store state rather than thrown.
+  let pending: (() => void) | null = null;
+  let lastStatus = "idle";
+
+  inner.subscribe((rs) => {
+    store.set({
+      text: rs.text,
+      events: rs.events as unknown as AgentStreamEvent[],
+      status: toLegacy(rs.status),
+      error: rs.error ?? null,
+      output: rs.output ?? null,
+    });
+    if (rs.status !== lastStatus) {
+      lastStatus = rs.status;
+      if (TERMINAL.has(rs.status)) {
+        pending?.();
+        pending = null;
+      }
+    }
   });
 
-  let abortController: AbortController | null = null;
-
-  function cancel() {
-    abortController?.abort();
-    store.update((s) => ({ ...s, status: "idle" }));
-  }
-
-  async function run(prompt: string, body?: Record<string, unknown>) {
-    abortController?.abort();
-    abortController = new AbortController();
-    store.set({ text: "", events: [], status: "streaming", error: null, output: null });
-
-    try {
-      const res = await fetch(endpoint, {
-        ...requestInit,
-        method: "POST",
-        signal: abortController.signal,
-        headers: { "Content-Type": "application/json", ...requestInit?.headers },
-        body: JSON.stringify({ prompt, ...body }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      if (!res.body) throw new Error("No response body");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const raw = line.slice(6).trim();
-          if (!raw) continue;
-          try {
-            const event = JSON.parse(raw) as AgentStreamEvent;
-            store.update((s) => {
-              const next = { ...s, events: [...s.events, event] };
-              if (event._tag === "TextDelta" && "text" in event) {
-                next.text = s.text + (event as { text: string }).text;
-              } else if (event._tag === "StreamCompleted" && "output" in event) {
-                next.output = (event as { output: string }).output;
-                next.status = "completed";
-              } else if (event._tag === "StreamError" && "cause" in event) {
-                next.error = (event as { cause: string }).cause;
-                next.status = "error";
-              } else if (event._tag === "StreamCancelled") {
-                next.status = "idle";
-              }
-              return next;
-            });
-          } catch { /* skip */ }
-        }
-      }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      store.update((s) => ({
-        ...s,
-        error: err instanceof Error ? err.message : String(err),
-        status: "error",
-      }));
-    }
-  }
-
-  return { subscribe: store.subscribe, run, cancel };
+  return {
+    subscribe: store.subscribe,
+    run: (prompt: string, body?: Record<string, unknown>): Promise<void> =>
+      new Promise<void>((resolve) => {
+        pending = resolve;
+        inner.run(prompt, body);
+      }),
+    cancel: () => inner.cancel(),
+  };
 }
