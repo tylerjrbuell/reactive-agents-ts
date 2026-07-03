@@ -1,9 +1,6 @@
 /**
- * @reactive-agents/react/testing — placeholder subpath entry.
- *
- * Reserved for a future task in the P3 plan (React test ergonomics
- * re-exporting `@reactive-agents/ui-core/testing`). Exists now only so the
- * multi-entry tsup build (`src/index.ts src/testing.ts src/styles.ts`) has
- * three real entry points to compile.
+ * @reactive-agents/react/testing — re-export of ui-core's fixture testing API
+ * so React consumers can import test helpers from one place, without a direct
+ * dependency on `@reactive-agents/ui-core/testing` in their test files.
  */
-export {};
+export { recordRunFixture, mockAgentEndpoint, fixtureToSSE, type RunFixture } from "@reactive-agents/ui-core/testing";

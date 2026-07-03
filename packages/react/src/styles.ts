@@ -1,9 +1,15 @@
 /**
- * @reactive-agents/react/styles — placeholder subpath entry.
- *
- * Reserved for a future task in the P3 plan (opt-in styled-reference
- * className presets). Exists now only so the multi-entry tsup build
- * (`src/index.ts src/testing.ts src/styles.ts`) has three real entry points
- * to compile.
+ * Opt-in class-name presets for the reference components. Consumers pass these
+ * to the components' `className` props for a styled default; the components
+ * themselves ship unstyled (headless-first). Pair with your own CSS that
+ * targets these class names or the `data-ra-*` attributes.
  */
-export {};
+export const raStyles = {
+  prompt: "ra-prompt",
+  choice: "ra-choice",
+  approval: "ra-approval",
+  inbox: "ra-inbox",
+  cost: "ra-cost",
+  timeline: "ra-timeline",
+  surface: "ra-surface",
+} as const;

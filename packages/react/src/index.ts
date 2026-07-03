@@ -61,5 +61,6 @@ export {
   type ComponentRegistry,
   uiTreeSchema,
 } from "./components/render/AgentSurface.js";
+export { AgentDevtools, type AgentDevtoolsProps } from "./components/AgentDevtools.js";
 // Re-export ui-core protocol + state types for consumers.
 export type { RunState, UiStreamEvent, UiRunStatus, PendingInteractionWire } from "@reactive-agents/ui-core";
