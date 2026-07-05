@@ -14,6 +14,10 @@ Reactive Agents includes first-class support for streaming agent output into Rea
 1. **Server** — A route handler calls `AgentStream.toSSE()` and returns a standard `Response`
 2. **Client** — A hook/composable/store consumes the SSE stream and exposes reactive state
 
+:::tip[Beyond streaming]
+The examples below cover token streaming. All three bindings sit on the headless [`@reactive-agents/ui-core`](/features/agentic-ui-core/) engine, which also powers **resumable** streams (survive a reload via cursor reattach), **durable** [human-in-the-loop](/guides/durable-hitl/) (`useRun`/`createRun` expose `pendingInteraction`/`pendingApproval`; answer with `respondToInteraction`/`decideApproval`), **safe generative UI** (`uiTreeSchema`/`AgentSurface`), and **zero-token testing** (`recordRunFixture`/`mockAgentEndpoint`). See the [Agentic UI Core reference](/features/agentic-ui-core/) for the full surface.
+:::
+
 ## Server Setup
 
 The server-side is identical regardless of which client framework you use. `AgentStream.toSSE()` returns a standard Web API `Response`, making it compatible with any framework that accepts one.

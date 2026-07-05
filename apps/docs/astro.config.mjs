@@ -182,6 +182,11 @@ export default defineConfig({
             { label: "Local Models", link: "guides/local-models/" },
             { label: "Messaging Channels", link: "guides/messaging-channels/" },
             { label: "Web Integration", link: "guides/web-integration/" },
+            {
+              label: "Agentic UI Core",
+              link: "features/agentic-ui-core/",
+              badge: { text: "New", variant: "success" },
+            },
           ],
         },
         {

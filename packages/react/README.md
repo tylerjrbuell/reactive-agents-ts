@@ -1,17 +1,13 @@
 # @reactive-agents/react
 
-> React hooks for Reactive Agents — useAgentStream, useAgent
+> React hooks + components for Reactive Agents agentic UI — runs, durable interactions, inbox, generative UI, devtools.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/react?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/react)
 [![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev)
 
-> **Stability: experimental.** The SSE event contract may change in a minor release. Pin a version for production use.
+> **Stability: experimental.** The wire contract is versioned and additive-only, but signatures may change in a minor release. Pin a version for production use.
 
-React hooks for AI agents — stream agent output token-by-token into your UI, or
-fire a one-shot call and await the result. Built for chat UIs, copilots, and any
-React app that talks to an LLM agent. These hooks consume a Server-Sent Events
-(SSE) endpoint produced by `AgentStream.toSSE()` on the server, so token
-streaming "just works" with `fetch` and no extra client deps.
+React bindings for AI agents, built on the headless [`@reactive-agents/ui-core`](https://www.npmjs.com/package/@reactive-agents/ui-core) engine — so streams are **resumable**, human-in-the-loop is **durable** (survives reloads), and generative UI is **registry-safe**. All hooks are thin reactivity wrappers over `ui-core`; the protocol, reconnect, and state logic live there.
 
 ## Install
 
@@ -20,7 +16,7 @@ bun add @reactive-agents/react
 # or: npm install @reactive-agents/react
 ```
 
-## Usage
+## Quick start
 
 Server (Next.js App Router):
 
@@ -35,51 +31,58 @@ export async function POST(req: Request) {
 }
 ```
 
-Client — streaming:
+Client:
 
 ```tsx
-import { useAgentStream } from "@reactive-agents/react";
+import { useRun } from "@reactive-agents/react";
 
 function Chat() {
-  const { text, status, error, run } = useAgentStream("/api/agent");
+  const { state, run } = useRun({ endpoint: "/api/agent" });
   return (
     <div>
       <button onClick={() => run("Explain quantum entanglement")}>Ask</button>
-      <p style={{ whiteSpace: "pre-wrap" }}>{text}</p>
-      {status === "streaming" && <span>●</span>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      <p style={{ whiteSpace: "pre-wrap" }}>{state.text}</p>
+      {state.status === "streaming" && <span>●</span>}
+      {state.error && <p style={{ color: "red" }}>{state.error}</p>}
     </div>
   );
 }
 ```
 
-Client — one-shot:
+## Hooks
+
+| Hook | Purpose |
+|------|---------|
+| `useRun({ endpoint, objectMode?, auto?, attach? })` | Core run hook — returns `{ state, run, cancel, reattach }`. `state` is `ui-core`'s `RunState` (`status`, `text`, `output`, `object`, `cost`, `pendingInteraction`, `pendingApproval`, …). |
+| `useResumableRun({ endpoint, runId, cursor? })` | Reattach to a durable run on mount and replay from a cursor (survives reloads). |
+| `useInteractions({ interactionEndpoint })` | `respond(runId, interactionId, value)` for durable `request_user_input` — returns `{ respond, pending, error }`. |
+| `useTaskInbox({ endpoint, pollMs? })` | Poll the durable-run inbox — `{ runs, loading, error, refresh }`. |
+| `useRunCost` / `useRunSteps` | Live cost and tool/step trace derived from the run stream. |
+| `useAgentStream` / `useAgent` | Streaming and one-shot classics (now rewired onto `useRun`). |
+
+## Components
+
+Headless-first (unstyled primitives with `data-*` attributes + render-prop/callback escape hatches); an optional styled reference layer ships from `@reactive-agents/react/styles`.
+
+| Component | Purpose |
+|-----------|---------|
+| `AgentPrompt`, `ChoiceCard`, `ApprovalGate` | Render a durable interaction / approval and answer it. |
+| `TaskInbox` | Email-like list of async agent jobs. |
+| `CostMeter`, `StepTimeline` | Live cost + tool/step trace. |
+| `AgentSurface` (+ `uiTreeSchema`, `ComponentRegistry`) | Safe generative UI — renders a registry-constrained node tree; hallucinated components are unrepresentable. |
+| `AgentDevtools` | Floating dev overlay: runs, live event stream, cost burn, replay. |
+
+## Testing
+
+Record a real run once, replay it in CI with zero tokens (via `@reactive-agents/ui-core/testing`):
 
 ```tsx
-import { useAgent } from "@reactive-agents/react";
+import { mockAgentEndpoint, recordRunFixture } from "@reactive-agents/ui-core/testing";
 
-function Summary({ text }: { text: string }) {
-  const { output, loading, run } = useAgent("/api/agent");
-  return (
-    <button onClick={() => run(`Summarize: ${text}`)} disabled={loading}>
-      {loading ? "Summarizing..." : output ?? "Summarize"}
-    </button>
-  );
-}
+const fixture = await recordRunFixture(agentStream);
+// pass mockAgentEndpoint(fixture) as the fetchImpl to any hook
 ```
-
-## API
-
-- `useAgentStream(endpoint, requestInit?)` — streaming hook. Returns
-  `{ text, events, status, error, output, run, cancel }`. `run(prompt, body?)`
-  starts a stream (cancelling any in-flight one); `text` grows as `TextDelta`
-  events arrive; `status` is `"idle" | "streaming" | "completed" | "error"`.
-- `useAgent(endpoint, requestInit?)` — one-shot hook. Returns
-  `{ output, loading, error, run }`; `run(prompt, body?)` resolves with the
-  final output string.
-- Types: `AgentStreamEvent`, `AgentHookState`, `UseAgentStreamReturn`,
-  `UseAgentReturn`.
 
 ## Part of Reactive Agents
 
-This package is part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI agent framework built on Effect-TS. See the [Web Integration guide](https://docs.reactiveagents.dev/guides/web-integration/) and the [full docs](https://docs.reactiveagents.dev).
+Part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI-agent framework on Effect-TS. See the [Web Integration guide](https://docs.reactiveagents.dev/guides/web-integration/), the [Agentic UI Core reference](https://docs.reactiveagents.dev/features/agentic-ui-core/), and the [full docs](https://docs.reactiveagents.dev).
