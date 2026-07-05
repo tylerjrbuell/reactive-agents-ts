@@ -21,6 +21,8 @@
 - Live-probe report: `wiki/Research/Harness-Reports/2026-07-05-north-star-live-probe-validation.md`
 - North star: `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` §4, §10
 
+**Execution order (gate spine first):** the launch gate (spec §10) needs T1, T2, T4, T5, T6, T7, T8, T10 — execute those in numeric order first. T3 (replay layer) and T9 (Ed25519) are NOT gate items; run them after the gate spine as slack. T6 fork does live LLM post-fork, so it has no dependency on T3. Hard ordering constraint: **T4 must land before T6** — checkpoint writes are fire-and-forget (`run-controller.ts:52`) and `fork()` reads checkpoints, so an un-flushed checkpoint plus an immediate fork yields a stale-state fork. The bench-receipts thread (gate item 5) lives outside this plan and should start in parallel with T1.
+
 ---
 
 ### Task 1: Capture tool-call arguments in streamed LLM exchanges
