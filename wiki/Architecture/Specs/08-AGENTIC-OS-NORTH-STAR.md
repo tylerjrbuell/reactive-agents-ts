@@ -82,7 +82,7 @@ Verified-live systems the arcs build on — these are stronger than internal fol
 
 ### 4.1 One event log (keystone)
 - Every run — durable or not — appends to ONE canonical, versioned event log; trace JSONL, `run_events` journal, EventBus, and `steps[]` become projections/views of it. Resolves GH #188 (stream union diverged 3 ways) structurally.
-- **Capture LLM I/O on the live path** (`LLMExchangeEmitted` currently never fires live — `trace/analyze.ts:322`). This single change makes full deterministic replay *recordable*, unlocking: zero-token CI, fork determinism, bisect, and Arc 4's self-improvement validator.
+- **Complete LLM I/O capture on the live path.** Live-probe correction (2026-07-05, P4): `llm-exchange` events DO fire live — request side complete (systemPrompt + full history); response side is dropped by the callers (`content:""`, toolCalls names-only) even though the emitter schema (`diagnostics.ts:306`) already carries `arguments?: unknown` + truncation flags. The keystone work is therefore: populate response payloads at the call sites, persist exchanges to the log, and fix the stale `analyze.ts:322` comment. Materially cheaper than originally scoped. This makes full deterministic replay *recordable*, unlocking: zero-token CI, fork determinism, bisect, and Arc 4's self-improvement validator.
 - Two-records doctrine (messages[] = LLM-visible, steps[] = systems-observed) is preserved — both become projections.
 
 ### 4.2 RunHandle v2 (the process model)
@@ -115,6 +115,9 @@ Five trust systems exist disconnected: `packages/verification` (semantic entropy
 
 ### 5.2 Honesty default-on
 - `RA_POST_CONDITIONS` (post-condition/artifact verification) and output-path guardrails (`checkOutput` — currently zero callers) go through the lift gate for default-on; custom-detector registration API added (today 3 hardcoded detectors).
+
+### 5.2b Config truthfulness (added from live-probe evidence 2026-07-05)
+The builder itself must not lie. Two silent no-ops found live in one probe session: unknown builder options are swallowed without warning (`withDurableRuns({dbPath})` accepted, silently defaulted), and `.withDurableRuns()` is inert on the default execution path and on `run()` (run row written, zero checkpoints — user believes they have crash-resume and does not). Work: (a) unknown-option rejection or loud warning at `build()`; (b) inert-combination detection ("durable checkpoints require the kernel path — add `.withReasoning()` or this run will not checkpoint"); (c) either extend checkpointing to all execution paths or make the constraint an explicit, documented error. Evidence: `wiki/Research/Harness-Reports/2026-07-05-north-star-live-probe-validation.md`.
 
 ### 5.3 The public gate
 - Unify `packages/eval` (user-facing BYO) with the benchmarks lift-gate/ledger (private): one report shape, `rax eval gate` runs on user suites. The ≥3pp/≤15% discipline ships as a product feature.
