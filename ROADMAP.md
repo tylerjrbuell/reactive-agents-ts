@@ -1,68 +1,63 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-06-17 (v0.12.0 "Durable & Honest" published to npm — durable exec A–E + HITL, typed structured output, memory default-OFF, effect-free hooks)
+> **Last updated:** 2026-07-05 (v0.13.0 published; direction re-ratified as the **Agentic OS program** — see `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md`)
 > **The open-source agent framework built for control, not magic.**
 
-This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` + `wiki/Architecture/Specs/05-DESIGN-NORTH-STAR.md`. When they disagree, the decision doc wins and this doc is out of date — open an issue.
+This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (north star v6.0, 2026-07-05) + `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` (historical sequencing). When they disagree, the north-star spec wins and this doc is out of date — open an issue.
 
 **Live board:** [github.com/users/tylerjrbuell/projects/1](https://github.com/users/tylerjrbuell/projects/1)
 
 ---
 
-## Where we are today (v0.12.0 published)
+## Where we are today (v0.13.0 published 2026-07-02)
 
-- **v0.12.0** on npm (2026-06-17): all 35 packages, "Durable & Honest" — crash-resumable runs, durable human-in-the-loop approval gates, typed structured output across every provider, and honesty defaults (memory off, grounding opt-in, debrief off the critical path).
-- **v0.11 line shipped:** Compose API (7 chokepoints, killswitches), Snapshot/Replay, `rax-diagnose`, OTel exporter (`@reactive-agents/observe`), `create-reactive-agent`, code-action strategy, skill persistence, gateway chat, Cortex studio with parameterized runs.
-- **Architecture:** canonical kernel (capability-grouped, acyclic, single termination owner, unified `project()` context assembly). Independent audit grade: structurally healthy.
+- **v0.13.0** on npm: all 35 packages. Cross-tier thinking (`.withThinking`), cost-aware model routing, abstention/trust-loop hardening, strict-validation opt-in, agentic UI kit foundation (`@reactive-agents/ui-core` + React/Svelte bindings, durable Interact/Inbox/Resume rails).
+- **v0.12.0** (2026-06-17): durable execution + durable HITL, typed structured output, memory default-OFF, effect-free hooks.
+- **Competitive receipts in hand:** public local-model bench (RA vs LangChain vs Vercel AI SDK vs Mastra vs bare LLM, cogito:8b + qwen3:14b via Ollama) — RA best-of-6 on accuracy after grounded-termination fixes, with honest per-dimension trade-offs published. Traces + methodology in-repo.
+- **Live-probe validation** (2026-07-05): 7 end-to-end probes confirmed the platform's strengths (durable rail, flywheel, cross-tier structured output) and its gaps (result trust surface, introspection, config truthfulness) — `wiki/Research/Harness-Reports/2026-07-05-north-star-live-probe-validation.md`.
 
 **What we learned (and publish honestly):**
-- Heavy strategies (reflexion / tree-of-thought / plan-execute) show **no quality lift over the reactive kernel** on our internal benches, at 3–15× cost on local models. We document them as frontier/niche options, not headline features.
-- The defensible, externally-demanded strengths are: **agents that actually work on local models** (per-model calibration, 4-stage tool-call healing, tier-adaptive context) and the **local flight recorder** (deterministic replay + diagnosis CLI, no SaaS attached).
+- Heavy strategies (reflexion / tree-of-thought / plan-execute) show **no quality lift over the reactive kernel** on our benches at 3–15× local cost. Documented as frontier/niche options.
+- The defensible strengths: **agents that work on local models** (per-model calibration + community profiles, healing pipeline, tier-adaptive context), the **local flight recorder** (replay + diagnosis CLI, no SaaS), and the **durable run rail** (crash-resume, HITL, resumable streams).
+- The 2026 unmet need we aim at: **verification** — nobody owns runtime-level trust. And our own audit found our declared control surface ahead of our enforced one; closing that gap honestly IS the roadmap.
 
 ---
 
-## v0.12 — "Durable & Honest" ✅ Released 2026-06-17
+## The Agentic OS program (v0.14 → v1.0)
 
-**Goal:** close the one 2026 table-stakes gap, and make the surface match the quality of the internals. One migration event for users.
+North star: **runs are processes, execution history is inspectable, trust is a type, the runtime learns the model it drives, and every consenting run improves the platform.** Executed as a *wiring program* — the audit showed most subsystems 70–90% built; we finish and enforce rather than pile new surface. Full detail: `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md`.
 
-| Track | Contents | Status |
-|---|---|---|
-| **Durable execution** | Crash-resume: opt-in `.withDurableRuns()`, SQLite RunStore, checkpoint-every-N, `agent.resume(runId)`. Durable human-in-the-loop: approval requests survive process death (`approve`/`deny` from a new process). Acceptance: SIGKILL mid-run → resume → identical output. | **Shipped A–E** (checkpoint seam + state codec, SQLite RunStore + `.withDurableRuns()`, `resumeRun()`, durable HITL via `.withApprovalPolicy`/`approveRun`/`denyRun` on both `run()` and `runStream()` paths, plus Cortex UI: launch durable runs + approval gates from the config panel with an app-wide approval-toast prompt). |
-| **DX wave** | Effect-free lifecycle hooks (no `Effect.succeed` required), builder consolidation (observability 5 methods → 1; one canonical hook route; documented config precedence), plain-Error mapping at promise boundaries. | **Shipped** — effect-free hooks (`.withHook()` plain fns) + observability consolidation: `.withObservability({ cortex, telemetry, logging, tracing, health, audit, costs })` fans out to one canonical route (dedicated methods retained, last-call-wins precedence documented). |
-| **Memory default OFF** | Breaking-ish: stateless by default, one-line `.withMemory()` opt-in. No more surprise SQLite writes in CI. | **Shipped** (memory default-OFF; `balanced()`/`intelligent()` opt in explicitly). |
-| **Cost honesty** | Tier-aware debrief synthesis (skip/template on local — the single largest per-run overhead), meta-tool prompt audit per tier. | **Shipped** — debrief forked off the critical path (~46% faster `run()`) + LLM debrief synthesis now skipped on the local tier (deterministic fallback kept; local synth failed ~52% at ~825 tok/~6s). |
-| **Strategy honesty** | Adaptive routing defaults to reactive on local tier; heavy strategies documented per the parity data. | **Shipped** — adaptive defaults to reactive on the local tier (heavy-strategy parity; skips the analysis LLM call) + #195 closed (Compose hooks/killswitches/calibration thread through all 5 strategies, single+batch emit). |
+### v0.13.1 — patch (imminent)
+- File-root sandbox fix (healing pipeline path resolution) — already on `main`, needs release.
 
-Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. **v0.12 milestone complete** — all five durable phases + the DX/honesty tracks shipped in v0.12.0 (2026-06-17). Slipped during 2026-06-16 triage to later lines: #188/#47/#35 → v0.13, #43 → v0.14.
+### v0.14 — "The Log & The Process" (Arc 1) — **public launch**
+- **Complete the record:** LLM exchanges captured with full response payloads (request side already lives), persisted for replay; one canonical event log direction (resolves the stream-union divergence, #188).
+- **The process model:** `run.inspect()` (state, tokens, pending calls), `fork()` from any checkpoint (counterfactual restart — honest scope), `rax ps` / `rax attach` / `rax fork`; Cortex replay viewer + fork.
+- **Trust receipt:** `result.receipt` on every run — claim→evidence provenance, verdict + confidence + method, Ed25519-signed provenance (not a truth certificate). Consolidates verification/guardrails/honesty/grounding into one spine.
+- **Launch gate (fixed, 5 items):** LLM I/O capture ✚ inspect + ps/attach ✚ fork v1 ✚ receipt v1 ✚ published bench receipts → **Show-HN fires here.**
 
----
+### v0.15 — "The Boundary & The Gate" (Arc 2)
+- **Real enforcement at the tool boundary:** allowedTools/approval/per-tool budget enforced in `ToolService.execute`; `IdentityService.authorize()` wired; audit log.
+- **Config truthfulness:** unknown builder options rejected loudly; inert combinations warned (e.g. durable checkpoints require the kernel path); the builder never lies.
+- **Honesty default-on candidates** through the lift gate: post-condition verification, output-path guardrails.
+- **BYO eval gate:** one report shape across `packages/eval` and the lift-gate/ledger; `rax eval gate` runs on user suites.
 
-## v0.13 — "Receipts" (public launch)
+### v0.16 — "The Team" (Arc 3)
+- A2A last mile (executor bridged, server actually started, real SSE) → cross-machine agent collaboration.
+- Sub-agent events propagate to the parent bus (observable teams; Cortex team topology).
+- Orchestration durability moved onto the RunStore rail (workflow crash-resume).
+- MissionBrief / UpwardReport as typed primitives; parents verify child receipts (trust chain).
+- Orchestration pattern breadth ships **behind the multi-agent bench** — no headline without lift evidence.
 
-**Goal:** prove the differentiated claims reproducibly, then make noise.
+### v0.17 — "The Flywheel" (Arc 4)
+- Healing outcomes feed learned aliases back into calibration; auto-calibration for unknown models (probe → community profile → generic).
+- Skill/capability contribution to the community API (opt-in, transparent) — the substrate adapter.
+- Commons transparency contract enforced: published payload schema, open aggregate data, first-run notice, never content/PII.
+- Harness packages with attached eval receipts; verifiable self-improvement (replay-validated, gate-passed, ledgered) — the capstone, last.
 
-- **Public local-model bench:** same task suite, qwen/llama 7–14B via Ollama — Reactive Agents vs Mastra vs LangGraph.js vs raw AI SDK. First-attempt success + token cost. Model + provider + date pinned, ≥3 seed variance, raw traces published. Stop-the-line rule: if external delta >15% from internal, fix the harness — not the result.
-- **Flight recorder, front and center:** "record once, debug forever" — deterministic offline replay of the full provider interaction + `rax-diagnose` root-cause CLI. No observability SaaS required.
-- **Cost governance demo:** budget + watchdog + approval killswitches composing on one agent, with our own measured overhead published.
-- **Infra:** OIDC trusted publishing (no npm token rotation).
-- **Show-HN / launch happens here** — with evidence, not adjectives.
-
----
-
-## v0.14 — "Compounding"
-
-**Goal:** the capability bet — agents that get better across runs.
-
-- Progress recitation and cross-run experience-reuse, behind ablation gates.
-- Sequenced after v0.13 deliberately: lift gets measured on the public bench (≥3 percentage-point rule, ≤15% token overhead), making results publishable rather than anecdotal.
-
----
-
-## v1.0 — Polish & Release
-
-- Every prior milestone gate re-run on the integrated codebase.
-- `README.md` states only validated claims; vision pillar artifact table complete — each of the 8 pillars cites a file, bench number, or doc.
-- Snapshot/replay determinism re-validated.
+### v1.0 — Polish & Release
+- Every milestone gate re-run on the integrated codebase; every dead seam wired or deleted (zero declarative debt).
+- `README.md` states only validated claims; 8-pillar artifact table complete.
 - This doc rewritten: what shipped, what was deferred, what was killed and why.
 
 ---
@@ -71,20 +66,21 @@ Design spec: `wiki/Architecture/Design-Specs/2026-06-10-durable-execution.md`. *
 
 The framework's defensible value, per empirical evidence:
 
-- **Local-first reliability** — per-model runtime calibration, capability-signal tool routing, 4-stage healing pipeline, tier-adaptive context. The same agent code runs on a 4B Ollama model and a frontier model.
-- **Control** — every harness primitive is developer-overridable via `.compose(harness)`; killswitches; `RunHandle` pause/resume/stop/terminate; durable resume (v0.12).
-- **Observability** — default-on traces/metrics/logs, OTel exporter, deterministic replay + diagnosis CLI — all local, no SaaS coupling.
-- **Honesty** — we publish our own overhead numbers and negative results (heavy-strategy parity, falsified optimizations). Claims scope per `01-RESEARCH-DISCIPLINE.md` Rule 11.
+- **Local-first reliability** — per-model calibration + live community profiles, capability-signal routing, healing pipeline, tier-adaptive context. Same agent code on a 4B Ollama model and a frontier model.
+- **Control** — developer-overridable harness (`.compose()`), killswitches, pause/resume/stop today; inspect/fork next. Enforcement moves to the boundary in v0.15.
+- **Observability** — default-on traces, replay + diagnosis CLI, OTel export — all local, no SaaS coupling.
+- **Honesty** — we publish our own overhead numbers, negative results, and our own audit's façade findings; claims scope per `01-RESEARCH-DISCIPLINE.md` Rule 11. The receipt (v0.14) makes this a runtime feature, not just a culture.
 
 What we do **not** yet have:
-- Public third-party benchmark (v0.13 gate)
-- Production case studies / named users
+- Named production users / case studies (v0.14 launch begins this).
+- Third-party-hosted benchmark validation (own-bench receipts ship first; third-party integration remains a candidate).
 
 ---
 
 ## How to track progress
 
-- **Decision record** — `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` (why this sequencing)
+- **North star** — `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (direction + arcs + gates)
+- **Decision records** — `wiki/Decisions/`
 - **Hot cache** (`wiki/Hot.md`) — current working state
 - **Implementation plans** — `wiki/Planning/Implementation-Plans/`
 - **Evidence artifacts** — `wiki/Research/Harness-Reports/`
