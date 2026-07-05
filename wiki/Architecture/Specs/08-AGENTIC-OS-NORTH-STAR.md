@@ -88,6 +88,7 @@ Verified-live systems the arcs build on — these are stronger than internal fol
 ### 4.2 RunHandle v2 (the process model)
 - `inspect()`: messages, tokens, iteration, entropy trajectory, pending tool calls. Wire the existing `state-inspector.ts`/`thought-tracer.ts` rather than building new.
 - `fork({ at, model?, compose?, revoke? })`: branch a run from any checkpoint into counterfactual timelines; `diffRuns(a, b)` unified (today two divergent diff impls: `replay/diff.ts` vs `diagnose/diff.ts` — merge).
+  - **Honest-claims note (binding):** a fork is a **counterfactual restart from a checkpoint**, not time-travel. The LLM runs live post-fork; recorded tool results apply only where call args still match (args-hash keyed); divergent trajectories cache-miss by design. Market it as exactly that. Likewise zero-token CI = **exact-replay regression** (config/harness unchanged → identical outcome); behavior-changing diffs re-run live. We do not claim determinism the provider cannot give — our own Rule 11 applies to our own headline.
 - Mid-run `grant()/revoke()` of tools at iteration boundary; model swap at iteration boundary (routing rail exists per-run; extend to boundary re-entry).
 - Checkpoint durability fix: checkpoint writes are currently fire-and-forget (`Effect.runFork`, errors swallowed) — make awaited-with-timeout; add model identity to the resume config hash (today a swapped model resumes silently).
 - CLI verbs: `rax ps` (live + durable runs, status, burn), `rax attach <run>` (cursor tail + control), `rax fork <run>@N`. Cortex: fork button, timeline scrubber, wire the orphan `ReplayControls.svelte`, cost analytics view.
@@ -98,6 +99,7 @@ Five trust systems exist disconnected: `packages/verification` (semantic entropy
 - Emit the reserved `TrustEvent` protocol tag → UI kit renders trust natively (protocol already versioned for it).
 - Close the audited grounding holes: no-`requiredTools` tasks get a grounding pathway; harness give-up terminals (`loop_detected`, `harness_deliverable`, etc.) receive a receipt-level "ungrounded delivery" mark rather than silent acceptance; `final_answer_tool` bypass documented or closed.
 - Downstream contract: `if (!receipt.grounded) …` — trust becomes a type, not a dashboard.
+- **Honest-claims note (binding):** the receipt is **graded evidence, not a truth certificate**. Verdicts derive from heuristic + LLM-tier analyzers and carry a confidence + method field (`heuristic | llm-judge | tool-verified`); the Ed25519 signature certifies **provenance and integrity** (this run, this config, this evidence, untampered) — never correctness. Receipt copy and docs must say this; a signed wrong verdict presented as truth would burn the honesty brand the receipt exists to express. Receipt claim-calibration (false-verified rate on the bench suite) is measured and published like any other claim.
 
 **Arc 1 exit gate:** full-replay determinism test green (same log + same overrides → identical outcome, provider nondeterminism logged); fork-diff demo scripted end-to-end; receipt present on every `run()` including non-durable; the 90-second demo recorded.
 
@@ -140,6 +142,7 @@ Five trust systems exist disconnected: `packages/verification` (semantic entropy
 1. **Learned aliases close the loop**: healing successes write `knownToolAliases`/`knownParamAliases` back to the local calibration profile (the literal `act.ts:325` "Phase 2" TODO); widen local observations beyond the current 2 fields.
 2. **Skill/capability substrate adapter**: populate `RunReport.skillFragment` (field exists on the wire type, never sent); validated skills with evolution telemetry (successRate, entropy-delta — schema already tracks) contributable to and pullable from the commons; capability probe results contributed with provenance.
 3. **Commons provenance**: community profiles publish sampleCount/window/variance per field — profiles carry their own evidence (same honesty law as everything else).
+3b. **Commons transparency contract** (binding, pre-scale): the flywheel stays default-on ONLY under radical transparency — (a) first-run console notice naming exactly what is sent + one-line opt-out (`telemetry: false` / env var); (b) the full RunReport payload schema published on a docs page; (c) the aggregate data flows back out through the same public API it flows in (open stats + profiles endpoints, no account, no gate — the commons is readable by everyone or it is not a commons); (d) never content, never PII, never task text — telemetry carries signals about the *runtime*, not the *user's data*; enforced by schema, tested. This converts the "phone-home" liability into the differentiator: open-source telemetry that visibly feeds every install. If any clause can't hold, the default flips to opt-in.
 4. **Auto-calibration fallback chain**: unknown model → local probe (runner exists, CLI-only, Ollama-only → runtime-invocable) → community profile → generic tier. No model starts blind if anyone has run it.
 5. **Kernel learning woven in**: recall/learn Noop seams get real Layers backed by the LIVE ExperienceStore + learning engine (today bolted at finalize; weave into the loop, lift-gated).
 6. **Surface calibration** (cheapest big win): `rax calibrate` verb, docs page, runnable example, template wiring — the most under-surfaced shipped system becomes a headline feature.
@@ -180,7 +183,13 @@ Arc 4 (Flywheel)  — needs Arc 2 gate (validation) ; A2A/commons independent st
 ```
 
 - Milestone naming/versioning intentionally deferred to the roadmap amendment (this spec is direction; ROADMAP.md carries dates/versions).
-- The unfired launch line (public competitor bench + Show-HN) executes at the Arc 1 boundary — receipts exist today; Arc 1 gives them their product frame.
+- **Launch posture (ratified 2026-07-05): launch when the potential is visible, not before — and the bar is explicit to prevent the historical slip pattern (v0.11 → v0.12 → v0.13 launches all deferred).** The launch gate is a fixed, minimal, demoable subset of Arc 1 — NOT all of Arc 1:
+  1. LLM I/O captured on the live path (exact-replay works end-to-end),
+  2. `run.inspect()` + `rax ps`/`rax attach` (the process model is touchable),
+  3. `fork()` v1 (counterfactual restart from checkpoint — honest scope, see §4.2 note),
+  4. `result.receipt` v1 (graded evidence, see §4.3 note),
+  5. the competitor-bench receipts published.
+  When those five are demoable, the Show-HN fires — even if the rest of Arc 1 (full log unification, Cortex fork UI, grant/revoke) is in flight. Anything beyond the five is scope creep against the launch; log it and keep moving.
 - Research discipline Rules 1–12, single-owner terminate invariant, tag-driven lockstep release flow: unchanged and binding.
 
 ## 11. What this means for developers (the paradigm shift)
