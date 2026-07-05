@@ -11,3 +11,4 @@ export {
   type RunState,
   type ReduceOptions,
 } from "./state/run-machine.js";
+export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
