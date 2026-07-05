@@ -14,7 +14,7 @@
 - `packages/ui-core` is **Effect-free and dependency-free by design** (runs in browsers). It must NOT import `react`, `vue`, `svelte`, `effect`, or any workspace package. Internal cross-module imports use relative `./` / `../` paths with `.js` extensions.
 - All tests pass **keyless** (no `.env`, no Ollama): pure functions + mocked `fetch`. Never touch a real provider.
 - **Additive-only public API:** never remove or rename existing exports of `@reactive-agents/{react,ui-core}`. Types moved to ui-core must be **re-exported** from their old React location so downstream imports keep resolving.
-- Under Bun, `@reactive-agents/*` resolve from `src/` (the `bun` export condition) — editing ui-core `src` is live for React tests with **zero rebuild** (only rebuild for npm-publish / Node-runtime / `.d.ts` validation).
+- **Rebuild rule (verified 2026-07-05 in worktree):** ui-core's `bun`/`import` export condition points at `./dist/index.js`, NOT `src`. ui-core's own tests import `../src/*.js` **relative** — they need no build. But the React package resolves `@reactive-agents/ui-core` via the **built `dist/`**. Therefore: after ANY edit to `packages/ui-core/src`, run `cd packages/ui-core && bun run build && cd ../..` **before** running React tests/typecheck, or React resolves stale/missing ui-core. React depends only on ui-core (no other workspace dep to rebuild).
 - Commit after every task (conventional commits, **no AI co-author trailers**).
 - Prefix shell commands with `rtk` where supported (`rtk git`, `rtk grep`).
 - Do NOT touch `packages/benchmarks` (uncommitted WIP).
@@ -573,10 +573,10 @@ export type ComponentRegistry = Record<
 Run: `rtk grep -n "from \"./registry.js\"" packages/react/src/components/render/AgentSurface.tsx`
 Expected: it imports `{ isUiNode, type ComponentRegistry }` and re-exports `type { UiNode, ComponentRegistry }` + `{ uiTreeSchema }` — all still provided by the rewritten `registry.ts`. No edit needed. (If a symbol were missing, tsc in Step 3 would fail.)
 
-- [ ] **Step 3: Run the React render suite + typecheck**
+- [ ] **Step 3: Rebuild ui-core, then run the React render suite + typecheck**
 
-Run: `bun test packages/react/tests/render.test.tsx --timeout 15000 && cd packages/react && bun run typecheck && cd ../..`
-Expected: render tests PASS unchanged; `tsc --noEmit` clean. (Bun resolves `@reactive-agents/ui-core` from `src` — Task 1's edits are live, no rebuild.)
+Run: `cd packages/ui-core && bun run build && cd ../.. && bun test packages/react/tests/render.test.tsx --timeout 15000 && cd packages/react && bun run typecheck && cd ../..`
+Expected: ui-core builds (Tasks 1–3 exports land in `dist/`); render tests PASS unchanged; `tsc --noEmit` clean. (React resolves ui-core via `dist/` — the rebuild is mandatory, see Global Constraints rebuild rule.)
 
 - [ ] **Step 4: Commit**
 
@@ -696,10 +696,10 @@ export function useInteractions(opts: UseInteractionsOptions): UseInteractionsRe
 }
 ```
 
-- [ ] **Step 3: Run the affected React suites + typecheck**
+- [ ] **Step 3: Rebuild ui-core, then run the affected React suites + typecheck**
 
-Run: `bun test packages/react/tests/inbox.test.tsx packages/react/tests/interactions.test.tsx --timeout 15000 && cd packages/react && bun run typecheck && cd ../..`
-Expected: both suites PASS unchanged; `tsc --noEmit` clean.
+Run: `cd packages/ui-core && bun run build && cd ../.. && bun test packages/react/tests/inbox.test.tsx packages/react/tests/interactions.test.tsx --timeout 15000 && cd packages/react && bun run typecheck && cd ../..`
+Expected: both suites PASS unchanged; `tsc --noEmit` clean. (ui-core rebuild mandatory — React resolves via `dist/`.)
 
 - [ ] **Step 4: Commit**
 
@@ -720,10 +720,10 @@ rtk git commit -m "refactor(react): inbox + interactions delegate to ui-core con
 - Consumes: everything above.
 - Produces: proof the lift is behavior-neutral and duplication is gone — the gate Plans 2–3 build on.
 
-- [ ] **Step 1: Run the full ui-core + React suites**
+- [ ] **Step 1: Rebuild ui-core, then run the full ui-core + React suites**
 
-Run: `bun test packages/ui-core packages/react --timeout 15000`
-Expected: all green (3 new ui-core suites + all pre-existing react suites: back-compat, devtools, inbox, interactions, observe, render, resume, smoke, use-run).
+Run: `cd packages/ui-core && bun run build && cd ../.. && bun test packages/ui-core/tests packages/react/tests --timeout 15000`
+Expected: all green (3 new ui-core suites + all pre-existing react suites: back-compat, devtools, inbox, interactions, observe, render, resume, smoke, use-run). Scope to `/tests` subdirs — a bare `bun test packages/ui-core packages/react` sweeps unrelated packages (e.g. reactive-intelligence telemetry hits `ECONNREFUSED`); the baseline is 23 ui-core + 28 react.
 
 - [ ] **Step 2: Typecheck both packages**
 

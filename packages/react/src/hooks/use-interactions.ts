@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { FetchLike } from "@reactive-agents/ui-core";
+import { respondToInteraction, type FetchLike } from "@reactive-agents/ui-core";
 
 export interface UseInteractionsOptions {
   readonly interactionEndpoint: string;
@@ -20,21 +20,16 @@ export function useInteractions(opts: UseInteractionsOptions): UseInteractionsRe
     async (runId: string, interactionId: string, value: unknown) => {
       setPending(true);
       setError(null);
-      try {
-        const res = await fetchImpl(opts.interactionEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ runId, interactionId, value }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()) as { success: boolean; output: string };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
-        return { success: false, output: "" };
-      } finally {
-        setPending(false);
-      }
+      const result = await respondToInteraction({
+        endpoint: opts.interactionEndpoint,
+        runId,
+        interactionId,
+        value,
+        fetchImpl,
+      });
+      if (result.error) setError(result.error);
+      setPending(false);
+      return { success: result.success, output: result.output };
     },
     [fetchImpl, opts.interactionEndpoint],
   );

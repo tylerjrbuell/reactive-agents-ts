@@ -147,10 +147,11 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - **Dynamic tool registration** — `agent.registerTool()` / `agent.unregisterTool()` at runtime
 
 ### 🌐 Frontend Integration
-- **`@reactive-agents/react`** — `useAgentStream`, `useAgent` hooks
+- **`@reactive-agents/ui-core`** — headless, framework-agnostic core: versioned wire protocol, resumable stream client (cursor reconnect), run state machine, safe generative-UI trees, durable human-in-the-loop rails, and zero-token fixture testing. The engine the bindings share.
+- **`@reactive-agents/react`** — React 18+ hooks + components: `useRun`, `useResumableRun`, `useInteractions`, `useTaskInbox`, `useRunCost`/`useRunSteps`, `AgentSurface`, `AgentDevtools`, and the `useAgentStream`/`useAgent` classics
 - **`@reactive-agents/vue`** — Vue 3 composables with reactive refs
-- **`@reactive-agents/svelte`** — Svelte 4/5 writable stores
-- All consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
+- **`@reactive-agents/svelte`** — Svelte 4/5 stores (`createRun`, `createResumableRun`, `createInteractions`, `createAgentStream`, …)
+- All build on `ui-core` and consume `AgentStream.toSSE()` + the durable endpoint helpers from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
 - **6,854 tests** across 851 files — verified `bun test` on every PR
@@ -580,9 +581,10 @@ gauge in Cortex Studio.
 | [`@reactive-agents/benchmarks`](packages/benchmarks)                       | Benchmark suite: 20 tasks x 5 tiers, overhead measurement, report generation                                                                                                              |
 | [`@reactive-agents/health`](packages/health)                               | Health checks and readiness probes for production deployments                                                                                                                             |
 | [`@reactive-agents/reactive-intelligence`](packages/reactive-intelligence) | Metacognitive layer: entropy sensor (5 sources), reactive controller (early-stop, compression, strategy switch), learning engine (calibration, bandit, skill synthesis), telemetry client |
-| [`@reactive-agents/react`](packages/react)                                 | React 18+ hooks: `useAgentStream` (token streaming), `useAgent` (one-shot) — consume `AgentStream.toSSE()` endpoints                                                                      |
+| [`@reactive-agents/ui-core`](packages/ui-core)                             | Headless, dependency-free UI engine: versioned wire protocol, resumable stream client (cursor reconnect + backoff), run state machine, safe generative-UI trees (`uiTreeSchema`/`reconcileUiTree`), durable HITL rails (`respondToInteraction`/`decideApproval`), inbox fetch, and zero-token fixture testing — shared by all framework bindings |
+| [`@reactive-agents/react`](packages/react)                                 | React 18+ hooks + components over `ui-core`: `useRun`, `useResumableRun`, `useInteractions`, `useTaskInbox`, `useRunCost`/`useRunSteps`, `AgentSurface`, `AgentDevtools` (+ `useAgentStream`/`useAgent`)                    |
 | [`@reactive-agents/vue`](packages/vue)                                     | Vue 3 composables: `useAgentStream`, `useAgent` with reactive refs                                                                                                                        |
-| [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores: `createAgentStream`, `createAgent` writable stores                                                                                                                     |
+| [`@reactive-agents/svelte`](packages/svelte)                               | Svelte 4/5 stores over `ui-core`: `createRun`, `createResumableRun`, `createInteractions`, `createAgentStream`, `createAgent`                                                              |
 | [`@reactive-agents/observe`](packages/observe)                             | Zero-config OpenTelemetry tracing — maps `AgentStarted/Completed`, `LLMRequest*`, and `ToolCall*` events to OpenInference-compliant OTLP spans                                            |
 | [`@reactive-agents/replay`](packages/replay)                               | Deterministic trace replay — record any run to a snapshot file, re-run with different model/prompt without re-calling the LLM; supports strict/lenient mode and `diffTraces`              |
 | [`@reactive-agents/runtime-shim`](packages/runtime-shim)                   | Cross-runtime adapter — lets the framework run on Node.js 22.5+ in addition to Bun; provides unified `Database`, `spawn`, `serve`, and file I/O primitives                               |
