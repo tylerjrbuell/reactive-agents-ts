@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import type { FetchLike } from "@reactive-agents/ui-core";
+import { fetchInbox, type FetchLike, type InboxRun } from "@reactive-agents/ui-core";
 
-export interface InboxRun {
-  readonly runId: string;
-  readonly task: string;
-  readonly status: string;
-  readonly updatedAt: number;
-}
+// InboxRun now lives in ui-core; re-export to preserve this module's API.
+export type { InboxRun } from "@reactive-agents/ui-core";
 
 export interface UseTaskInboxOptions {
   readonly endpoint: string;
@@ -32,9 +28,7 @@ export function useTaskInbox(opts: UseTaskInboxOptions): UseTaskInboxReturn {
     setError(null);
     void (async () => {
       try {
-        const res = await fetchImpl(opts.endpoint, { method: "GET" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setRuns((await res.json()) as InboxRun[]);
+        setRuns(await fetchInbox({ endpoint: opts.endpoint, fetchImpl }));
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
