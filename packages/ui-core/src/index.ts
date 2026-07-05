@@ -13,3 +13,8 @@ export {
 } from "./state/run-machine.js";
 export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
 export { type InboxRun, fetchInbox } from "./inbox/controller.js";
+export {
+  type InteractionResult,
+  respondToInteraction,
+  decideApproval,
+} from "./interaction/controller.js";
