@@ -16,6 +16,7 @@ import type {
   ToolDefinition,
   ToolCall,
   TokenLogprob,
+  LLMProvider,
 } from "../types.js";
 import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import type { CacheUsage } from "../token-counter.js";
@@ -112,7 +113,7 @@ export const toOpenAIMessages = (
     };
   });
 
-const toEffectError = (error: unknown, provider: "openai"): LLMErrors =>
+const toEffectError = (error: unknown, provider: LLMProvider): LLMErrors =>
   mapProviderError(error, provider);
 
 // ─── OpenAI Tool Conversion ───
@@ -198,12 +199,40 @@ export const toOpenAITool = (tool: ToolDefinition, strict: boolean) => ({
   },
 });
 
-// ─── OpenAI Provider Layer ───
+// ─── OpenAI-Compatible Provider Factory ───
 
-export const OpenAIProviderLive = Layer.effect(
+/**
+ * Options for {@link makeOpenAICompatProvider}. OpenAI, Groq, and xAI all speak
+ * the OpenAI Chat Completions wire format; they differ only in base URL, API
+ * key, capability rows, embedding support, and the fallback model used when the
+ * configured `defaultModel` belongs to another provider.
+ */
+export interface OpenAICompatOptions {
+  /** Canonical provider identity (drives capability lookup + error tagging). */
+  readonly providerName: LLMProvider;
+  /** Extract this provider's API key from the resolved LLMConfig. */
+  readonly resolveApiKey: (config: typeof LLMConfig.Service) => string | undefined;
+  /** Resolve the base URL override; `undefined` uses the SDK default (OpenAI). */
+  readonly resolveBaseUrl?: (config: typeof LLMConfig.Service) => string | undefined;
+  /** Model used when `config.defaultModel` targets another provider (e.g. claude). */
+  readonly fallbackModel: string;
+  /** Whether this provider exposes an embeddings endpoint. Groq/xAI do not. */
+  readonly supportsEmbeddings: boolean;
+  /**
+   * Whether this provider supports `logprobs`/`top_logprobs`. OpenAI does;
+   * Groq explicitly lists them as unsupported and xAI/Grok rejects them, so a
+   * forwarded `logprobs` would 400. Defaults to `true` when omitted.
+   */
+  readonly supportsLogprobs?: boolean;
+}
+
+export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
+  Layer.effect(
   LLMService,
   Effect.gen(function* () {
     const config = yield* LLMConfig;
+    const { providerName, resolveApiKey, resolveBaseUrl, fallbackModel, supportsEmbeddings } = opts;
+    const supportsLogprobs = opts.supportsLogprobs ?? true;
 
     // Lazy-load the SDK via dynamic import so Bun `mock.module(...)` can
     // intercept it during tests (CJS `require()` is not reliably interceptable
@@ -220,21 +249,27 @@ export const OpenAIProviderLive = Layer.effect(
       };
     };
     type OpenAIModule = {
-      default: new (opts: { apiKey?: string }) => OpenAIClient;
+      default: new (opts: { apiKey?: string; baseURL?: string }) => OpenAIClient;
     };
 
     let _clientPromise: Promise<OpenAIClient> | null = null;
     const getClient = (): Promise<OpenAIClient> => {
       if (!_clientPromise) {
+        const baseURL = resolveBaseUrl?.(config);
         _clientPromise = (
           import("openai") as unknown as Promise<OpenAIModule>
-        ).then(({ default: OpenAI }) => new OpenAI({ apiKey: config.openaiApiKey }));
+        ).then(({ default: OpenAI }) => new OpenAI({
+          apiKey: resolveApiKey(config),
+          ...(baseURL ? { baseURL } : {}),
+        }));
       }
       return _clientPromise;
     };
 
+    // When the configured default model belongs to another provider (the global
+    // default is a claude model), fall back to this provider's own default.
     const defaultModel = config.defaultModel.startsWith("claude")
-      ? "gpt-4o"
+      ? fallbackModel
       : config.defaultModel;
 
     return LLMService.of({
@@ -250,9 +285,9 @@ export const OpenAIProviderLive = Layer.effect(
             messages.unshift({ role: "system", content: request.systemPrompt });
           }
 
-          const cap = resolveCapability("openai", model);
+          const cap = resolveCapability(providerName, model);
           const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const thinkEnabled = resolveThinkingEnabled("openai", model, config.thinking, cap.supportsThinkingMode);
+          const thinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, cap.supportsThinkingMode);
           const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: thinkEnabled,
@@ -273,7 +308,9 @@ export const OpenAIProviderLive = Layer.effect(
                   : undefined,
           };
 
-          if (request.logprobs) {
+          // Groq/xAI reject logprobs (unsupported) → only forward when the
+          // provider actually supports them, else the request 400s.
+          if (request.logprobs && supportsLogprobs) {
             requestBody.logprobs = true;
             if (request.topLogprobs != null) {
               requestBody.top_logprobs = request.topLogprobs;
@@ -287,7 +324,7 @@ export const OpenAIProviderLive = Layer.effect(
 
           const response = yield* Effect.tryPromise({
             try: () => client.chat.completions.create(requestBody),
-            catch: (error) => toEffectError(error, "openai"),
+            catch: (error) => toEffectError(error, providerName),
           });
 
           const mapped = mapOpenAIResponse(
@@ -304,11 +341,11 @@ export const OpenAIProviderLive = Layer.effect(
           if ((rawFinish === "length" || rawFinish === "content_filter") && !hasContent) {
             return yield* Effect.fail(
               new LLMError({
-                provider: "openai",
+                provider: providerName,
                 message:
                   rawFinish === "length"
-                    ? "OpenAI response ended with finish_reason=length and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens."
-                    : "OpenAI response ended with finish_reason=content_filter and no content. The response was blocked by the content filter.",
+                    ? `${providerName} response ended with finish_reason=length and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens.`
+                    : `${providerName} response ended with finish_reason=content_filter and no content. The response was blocked by the content filter.`,
               }),
             );
           }
@@ -322,7 +359,7 @@ export const OpenAIProviderLive = Layer.effect(
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
-                provider: "openai",
+                provider: providerName,
                 timeoutMs: 120_000,
               }),
             ),
@@ -349,9 +386,9 @@ export const OpenAIProviderLive = Layer.effect(
           const useAdapterNormalization =
             typeof streamAdapter.parseToolCalls === "function";
 
-          const streamCap = resolveCapability("openai", model);
+          const streamCap = resolveCapability(providerName, model);
           const streamAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const streamThinkEnabled = resolveThinkingEnabled("openai", model, config.thinking, streamCap.supportsThinkingMode);
+          const streamThinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, streamCap.supportsThinkingMode);
           const streamReserve = reserveThinkingBudget(streamAnswerBudget, streamCap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: streamThinkEnabled,
@@ -503,11 +540,11 @@ export const OpenAIProviderLive = Layer.effect(
                     ) {
                       emit.fail(
                         new LLMError({
-                          provider: "openai",
+                          provider: providerName,
                           message:
                             fr === "length"
-                              ? "OpenAI stream ended with finish_reason=length and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens."
-                              : "OpenAI stream ended with finish_reason=content_filter and no content. The response was blocked by the content filter.",
+                              ? `${providerName} stream ended with finish_reason=length and no content. The output token budget was exhausted before any visible text was emitted — raise maxTokens.`
+                              : `${providerName} stream ended with finish_reason=content_filter and no content. The response was blocked by the content filter.`,
                         }),
                       );
                       return;
@@ -546,7 +583,7 @@ export const OpenAIProviderLive = Layer.effect(
                 emit.fail(
                   new LLMError({
                     message: err.message ?? String(error),
-                    provider: "openai",
+                    provider: providerName,
                     cause: error,
                   }),
                 );
@@ -569,9 +606,9 @@ export const OpenAIProviderLive = Layer.effect(
 
           // ── Native JSON Schema mode (gpt-4o-2024-08-06+, o-series, gpt-4.1) ──
           // Use response_format with json_schema for strict enforcement.
-          const structuredCap = resolveCapability("openai", model);
+          const structuredCap = resolveCapability(providerName, model);
           const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
-          const structuredThinkEnabled = resolveThinkingEnabled("openai", model, config.thinking, structuredCap.supportsThinkingMode);
+          const structuredThinkEnabled = resolveThinkingEnabled(providerName, model, config.thinking, structuredCap.supportsThinkingMode);
           const structuredReserve = reserveThinkingBudget(structuredAnswerBudget, structuredCap.supportsThinkingMode, {
             ...(config.thinkingOptions ?? {}),
             enabled: structuredThinkEnabled,
@@ -628,7 +665,7 @@ export const OpenAIProviderLive = Layer.effect(
                   ...requestBody,
                   messages: toOpenAIMessages(msgs),
                 }),
-              catch: (error) => toEffectError(error, "openai"),
+              catch: (error) => toEffectError(error, providerName),
             });
 
             const response = mapOpenAIResponse(
@@ -665,37 +702,47 @@ export const OpenAIProviderLive = Layer.effect(
         }),
 
       embed: (texts, model) =>
-        Effect.tryPromise({
-          try: async () => {
-            const client = await getClient();
-            const embeddingModel =
-              model ?? config.embeddingConfig.model;
-            const batchSize = config.embeddingConfig.batchSize ?? 100;
-            const results: number[][] = [];
+        supportsEmbeddings
+          ? Effect.tryPromise({
+              try: async () => {
+                const client = await getClient();
+                const embeddingModel =
+                  model ?? config.embeddingConfig.model;
+                const batchSize = config.embeddingConfig.batchSize ?? 100;
+                const results: number[][] = [];
 
-            for (let i = 0; i < texts.length; i += batchSize) {
-              const batch = texts.slice(i, i + batchSize);
-              const response = await client.embeddings.create({
-                model: embeddingModel,
-                input: [...batch],
-                dimensions: config.embeddingConfig.dimensions,
-              });
-              results.push(
-                ...response.data.map(
-                  (d: { embedding: number[] }) => d.embedding,
-                ),
-              );
-            }
+                for (let i = 0; i < texts.length; i += batchSize) {
+                  const batch = texts.slice(i, i + batchSize);
+                  const response = await client.embeddings.create({
+                    model: embeddingModel,
+                    input: [...batch],
+                    dimensions: config.embeddingConfig.dimensions,
+                  });
+                  results.push(
+                    ...response.data.map(
+                      (d: { embedding: number[] }) => d.embedding,
+                    ),
+                  );
+                }
 
-            return results;
-          },
-          catch: (error) =>
-            new LLMError({
-              message: `Embedding failed: ${error}`,
-              provider: "openai",
-              cause: error,
-            }),
-        }),
+                return results;
+              },
+              catch: (error) =>
+                new LLMError({
+                  message: `Embedding failed: ${error}`,
+                  provider: providerName,
+                  cause: error,
+                }),
+            })
+          : Effect.fail(
+              new LLMError({
+                provider: providerName,
+                message:
+                  `${providerName} does not expose an embeddings endpoint. ` +
+                  `Route embeddings to a provider that does by setting ` +
+                  `EMBEDDING_PROVIDER=openai (or ollama) — see EmbeddingConfig.provider.`,
+              }),
+            ),
 
       countTokens: (messages) =>
         Effect.gen(function* () {
@@ -704,7 +751,7 @@ export const OpenAIProviderLive = Layer.effect(
 
       getModelConfig: () =>
         Effect.succeed({
-          provider: "openai" as const,
+          provider: providerName,
           model: defaultModel,
         }),
 
@@ -721,11 +768,41 @@ export const OpenAIProviderLive = Layer.effect(
           supportsToolCalling: true,
           supportsStreaming: true,
           supportsStructuredOutput: true,
-          supportsLogprobs: true,
+          supportsLogprobs,
         } satisfies ProviderCapabilities),
     });
   }),
 );
+
+// ─── Concrete OpenAI-Compatible Provider Layers ───
+
+/** OpenAI (GPT / o-series). Native embeddings. */
+export const OpenAIProviderLive = makeOpenAICompatProvider({
+  providerName: "openai",
+  resolveApiKey: (c) => c.openaiApiKey,
+  fallbackModel: "gpt-4o",
+  supportsEmbeddings: true,
+});
+
+/** Groq LPU inference — OpenAI-compatible; no embeddings, no logprobs. */
+export const GroqProviderLive = makeOpenAICompatProvider({
+  providerName: "groq",
+  resolveApiKey: (c) => c.groqApiKey,
+  resolveBaseUrl: (c) => c.groqBaseUrl ?? "https://api.groq.com/openai/v1",
+  fallbackModel: "llama-3.3-70b-versatile",
+  supportsEmbeddings: false,
+  supportsLogprobs: false,
+});
+
+/** xAI Grok — OpenAI-compatible; no embeddings, no logprobs. */
+export const XAIProviderLive = makeOpenAICompatProvider({
+  providerName: "xai",
+  resolveApiKey: (c) => c.xaiApiKey,
+  resolveBaseUrl: (c) => c.xaiBaseUrl ?? "https://api.x.ai/v1",
+  fallbackModel: "grok-4",
+  supportsEmbeddings: false,
+  supportsLogprobs: false,
+});
 
 // ─── OpenAI Response Mapping ───
 

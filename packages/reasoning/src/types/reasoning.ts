@@ -38,6 +38,13 @@ export const ReasoningResultSchema = Schema.Struct({
   output: Schema.Unknown,
   metadata: ReasoningMetadataSchema,
   status: ReasoningStatus,
+  /**
+   * Failure detail carried up from the kernel's final failed state (e.g. the
+   * `explainProviderError`-enriched "LLM stream failed at iteration N: <provider
+   * 413/400 …>" message). Present only on failed/error results; lets the runtime
+   * surface the real cause instead of a generic "Reasoning failed".
+   */
+  error: Schema.optional(Schema.String),
 });
 export type ReasoningResult = typeof ReasoningResultSchema.Type;
 

@@ -309,6 +309,7 @@ export const executeReactive = (
       totalInputTokens: pass.inputTokens,
       totalOutputTokens: pass.outputTokens,
       totalCost: pass.cost,
+      error: state.error,
       extraMetadata: {
         terminatedBy,
         // Parallel open-string channel preserving raw kernel meta.

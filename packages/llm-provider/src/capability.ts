@@ -519,6 +519,155 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // ── Groq (OpenAI-compatible LPU inference) ─────────────────────────────────
+  // Windows/output per Groq model docs (2026-07). All native-fc. Unlisted Groq
+  // models resolve via the provider-aware fallback below (native-fc, 128k),
+  // NOT the conservative local fallback — Groq always speaks OpenAI tools.
+  "groq/llama-3.3-70b-versatile": {
+    provider: "groq",
+    model: "llama-3.3-70b-versatile",
+    tier: "large",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 32_768,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "groq/llama-3.1-8b-instant": {
+    provider: "groq",
+    model: "llama-3.1-8b-instant",
+    tier: "mid",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 8_192,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "groq/openai/gpt-oss-120b": {
+    provider: "groq",
+    model: "openai/gpt-oss-120b",
+    tier: "large",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 32_768,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "groq/openai/gpt-oss-20b": {
+    provider: "groq",
+    model: "openai/gpt-oss-20b",
+    tier: "mid",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 32_768,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "groq/meta-llama/llama-4-scout-17b-16e-instruct": {
+    provider: "groq",
+    model: "meta-llama/llama-4-scout-17b-16e-instruct",
+    tier: "mid",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 8_192,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: true,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "groq/qwen/qwen3-32b": {
+    provider: "groq",
+    model: "qwen/qwen3-32b",
+    tier: "large",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 16_384,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    // Groq drives qwen3 reasoning via `reasoning_format`, not the
+    // `reasoning_effort` param this adapter emits — leave thinking off to
+    // avoid a 400 on the opt-in thinking path.
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+
+  // ── xAI Grok (OpenAI-compatible) ───────────────────────────────────────────
+  // Windows per xAI model docs (2026-07). Unlisted grok-* models resolve via
+  // the provider-aware fallback below.
+  "xai/grok-4": {
+    provider: "xai",
+    model: "grok-4",
+    tier: "frontier",
+    maxContextTokens: 256_000,
+    recommendedNumCtx: 256_000,
+    maxOutputTokens: 32_768,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: true,
+    supportsVision: true,
+    // grok-4 always reasons and rejects a configurable `reasoning_effort`;
+    // exposing thinking would emit a param it 400s on. grok-3-mini keeps it.
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "xai/grok-3": {
+    provider: "xai",
+    model: "grok-3",
+    tier: "large",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 16_384,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: true,
+    supportsVision: true,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "xai/grok-3-mini": {
+    provider: "xai",
+    model: "grok-3-mini",
+    tier: "mid",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 131_072,
+    maxOutputTokens: 16_384,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: true,
+    supportsVision: false,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+
   // ── Static table is intentionally small ─────────────────────────────────
   //
   // Only "tested baseline" models the framework has explicitly validated
@@ -539,7 +688,34 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
  * setting it preserves prior behavior while making the conservatism visible
  * in telemetry via `source: "fallback"`.
  */
+/**
+ * Hosted OpenAI-compatible providers (Groq, xAI) whose model lists drift fast.
+ * An unlisted model here MUST still get `native-fc` — these providers always
+ * accept the OpenAI tools schema, so the conservative `toolCallDialect:"none"`
+ * local fallback would silently strip tool-calling. A generous 128k window is a
+ * safe lower bound across their current lineups.
+ */
+const OPENAI_COMPAT_FALLBACK_PROVIDERS = new Set(["groq", "xai"]);
+
 export function fallbackCapability(provider: string, model: string): Capability {
+  if (OPENAI_COMPAT_FALLBACK_PROVIDERS.has(provider)) {
+    return {
+      provider,
+      model,
+      tier: "large",
+      maxContextTokens: 131_072,
+      recommendedNumCtx: 131_072,
+      maxOutputTokens: 8_192,
+      tokenizerFamily: provider === "xai" ? "tiktoken-cl100k" : "llama",
+      supportsPromptCaching: false,
+      supportsVision: false,
+      supportsThinkingMode: false,
+      supportsStreamingToolCalls: true,
+      toolCallDialect: "native-fc",
+      source: "fallback",
+    };
+  }
+
   return {
     provider,
     model,

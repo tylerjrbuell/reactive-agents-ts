@@ -8,7 +8,7 @@
 //
 // Flags:
 //   --template=<minimal|with-tools|streaming>
-//   --provider=<anthropic|openai|google|ollama>
+//   --provider=<anthropic|openai|google|groq|xai|ollama>
 //   --pm=<bun|npm|pnpm|yarn>
 //   --yes               Skip prompts, use defaults
 //   --help, --version
@@ -78,7 +78,7 @@ Usage:
 
 Options:
   --template=<name>     minimal | with-tools | streaming | with-structured-output | with-approval-gates | with-memory
-  --provider=<name>     anthropic | openai | google | ollama
+  --provider=<name>     anthropic | openai | google | groq | xai | ollama
   --pm=<manager>        bun | npm | pnpm | yarn
   --yes                 Accept all defaults, skip prompts
   --version             Print version
@@ -107,7 +107,7 @@ function isValidTemplate(s: string): s is TemplateName {
 }
 
 function isValidProvider(s: string): s is Provider {
-  return s === "anthropic" || s === "openai" || s === "google" || s === "ollama";
+  return s === "anthropic" || s === "openai" || s === "google" || s === "ollama" || s === "groq" || s === "xai";
 }
 
 function isValidPM(s: string): s is PackageManager {
@@ -165,6 +165,8 @@ async function main(): Promise<void> {
             { value: "anthropic", label: "Anthropic (Claude)" },
             { value: "openai", label: "OpenAI (GPT)" },
             { value: "google", label: "Google (Gemini)" },
+            { value: "groq", label: "Groq (fast LPU inference)" },
+            { value: "xai", label: "xAI (Grok)" },
             { value: "ollama", label: "Ollama (local, no key)" },
           ],
           "anthropic",

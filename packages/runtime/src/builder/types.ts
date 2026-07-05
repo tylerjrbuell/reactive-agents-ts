@@ -46,6 +46,8 @@ export type ProviderName =
     | 'ollama'
     | 'gemini'
     | 'litellm'
+    | 'groq'
+    | 'xai'
     | 'test'
 
 // ─── Optional Parameter Types ─────────────────────────────────────────────────

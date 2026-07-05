@@ -331,6 +331,7 @@ export const executeAdaptive = (
       start,
       totalTokens: finalSubResult.metadata.tokensUsed + analysisTokens,
       totalCost: finalSubResult.metadata.cost + analysisCost,
+      error: finalSubResult.error,
       extraMetadata: {
         selectedStrategy: activeStrategy,
         fallbackOccurred,

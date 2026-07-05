@@ -10,6 +10,8 @@ export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
     ollama: 'llama3.2',
     gemini: 'gemini-2.5-flash',
     litellm: 'gpt-4o',
+    groq: 'llama-3.3-70b-versatile',
+    xai: 'grok-4',
     test: 'test-model',
 }
 

@@ -5,7 +5,7 @@ import type {
   TaskContract,
 } from "@reactive-agents/core";
 
-type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" | "custom";
+type ProviderName = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test" | "custom";
 
 const PROVIDER_API_KEY_MAP: Record<string, string> = {
   anthropic: "ANTHROPIC_API_KEY",
@@ -13,6 +13,8 @@ const PROVIDER_API_KEY_MAP: Record<string, string> = {
   gemini: "GOOGLE_API_KEY",
   litellm: "OPENAI_API_KEY",
   ollama: "OLLAMA_API_KEY",
+  groq: "GROQ_API_KEY",
+  xai: "XAI_API_KEY",
 };
 
 const PROVIDER_MODEL_PREFIXES: Record<string, string[]> = {
@@ -21,6 +23,10 @@ const PROVIDER_MODEL_PREFIXES: Record<string, string[]> = {
   gemini: ["gemini"],
   ollama: [],
   litellm: [],
+  // Groq serves many families (llama-, qwen/, openai/gpt-oss, moonshotai/,
+  // deepseek-) — no single prefix, so skip the model-name heuristic.
+  groq: [],
+  xai: ["grok"],
   test: ["test"],
 };
 

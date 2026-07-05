@@ -196,6 +196,8 @@ export interface ExecutionContextMetadata {
     output: unknown;
     status: string;
     strategy?: string;
+    /** Failure detail carried up from the kernel's final failed state (provider 413/400 message). */
+    error?: string;
     steps?: readonly {
       id: string;
       type: string;

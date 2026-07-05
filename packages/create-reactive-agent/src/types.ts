@@ -1,4 +1,4 @@
-export type Provider = "anthropic" | "openai" | "google" | "ollama";
+export type Provider = "anthropic" | "openai" | "google" | "ollama" | "groq" | "xai";
 
 export type PackageManager = "bun" | "npm" | "pnpm" | "yarn";
 

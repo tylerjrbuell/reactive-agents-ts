@@ -1125,7 +1125,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                           (outputForSuccess.length > 0
                             ? outputForSuccess
                             : rr?.status === "failed"
-                              ? "Reasoning failed"
+                              // Prefer the real kernel failure detail (provider
+                              // 413/400 message via explainProviderError) over the
+                              // generic label — the error was captured in
+                              // state.error and carried onto rr.error.
+                              ? (typeof rr?.error === "string" && rr.error.trim().length > 0
+                                  ? rr.error
+                                  : "Reasoning failed")
                               : "Execution did not complete successfully"),
                       }
                     : {}),

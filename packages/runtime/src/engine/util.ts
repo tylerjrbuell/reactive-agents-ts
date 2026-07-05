@@ -215,6 +215,8 @@ export type ExecutionReasoningResult = {
   output: unknown;
   status: string;
   strategy?: string;
+  /** Kernel failure detail (provider 413/400 message) carried through normalization. */
+  error?: string;
   steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string; duration?: number } }[];
   metadata: { cost: number; tokensUsed: number; inputTokens?: number; outputTokens?: number; stepsCount: number; strategyFallback?: boolean; confidence?: number; llmCalls?: number; terminatedBy?: string; rawTerminatedBy?: string; selectedStrategy?: string; awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }; /** Agentic-UI interaction rail (Task 10): the paused interaction descriptor — present iff terminatedBy === "awaiting-interaction". */ awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }; /** O3 C1: run-level abstention surface — present iff terminatedBy === "abstained". */ abstention?: { reason: string; missing: readonly string[] } };
 };
@@ -239,6 +241,10 @@ export function normalizeReasoningResult(
     output: candidate.output,
     status: typeof candidate.status === "string" ? candidate.status : "error",
     strategy: typeof candidate.strategy === "string" ? candidate.strategy : undefined,
+    // Preserve the kernel failure detail (provider 413/400 message) through the
+    // whitelist rebuild — without this the engine falls back to a generic
+    // "Reasoning failed" and the real cause is lost.
+    error: typeof candidate.error === "string" ? candidate.error : undefined,
     steps: Array.isArray(candidate.steps)
       ? (candidate.steps as ExecutionReasoningResult["steps"])
       : undefined,

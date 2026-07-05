@@ -129,7 +129,7 @@ export { PromptManager, PromptManagerLive } from "./prompt-manager.js";
 
 // ─── Providers ───
 export { AnthropicProviderLive } from "./providers/anthropic.js";
-export { OpenAIProviderLive } from "./providers/openai.js";
+export { OpenAIProviderLive, GroqProviderLive, XAIProviderLive, makeOpenAICompatProvider } from "./providers/openai.js";
 export { LocalProviderLive } from "./providers/local.js";
 export { GeminiProviderLive } from "./providers/gemini.js";
 export { LiteLLMProviderLive } from "./providers/litellm.js";

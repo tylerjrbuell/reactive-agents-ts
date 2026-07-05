@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { LLMConfig, LLMConfigFromEnv, llmConfigFromEnv } from "./llm-config.js";
 import { LLMService } from "./llm-service.js";
 import { AnthropicProviderLive } from "./providers/anthropic.js";
-import { OpenAIProviderLive } from "./providers/openai.js";
+import { OpenAIProviderLive, GroqProviderLive, XAIProviderLive } from "./providers/openai.js";
 import { LocalProviderLive } from "./providers/local.js";
 import { GeminiProviderLive } from "./providers/gemini.js";
 import { LiteLLMProviderLive } from "./providers/litellm.js";
@@ -61,7 +61,7 @@ const makeCircuitBreakerLayer = (config?: Partial<CircuitBreakerConfig>) =>
  * wrapper — it short-circuits earlier in this function.
  */
 export const createLLMProviderLayer = (
-  provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test" = "anthropic",
+  provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test" = "anthropic",
   testScenario?: TestTurn[],
   model?: string,
   modelParams?: { thinking?: boolean; thinkingOptions?: import("./thinking/index.js").ThinkingOptions; temperature?: number; maxTokens?: number; numCtx?: number; ollamaTimeoutMs?: number },
@@ -98,7 +98,11 @@ export const createLLMProviderLayer = (
           ? GeminiProviderLive
           : provider === "litellm"
             ? LiteLLMProviderLive
-            : LocalProviderLive;
+            : provider === "groq"
+              ? GroqProviderLive
+              : provider === "xai"
+                ? XAIProviderLive
+                : LocalProviderLive;
 
   const baseProviderLayer = providerLayer.pipe(Layer.provide(configLayer));
 
@@ -127,7 +131,7 @@ export const createLLMProviderLayer = (
  */
 export const createLLMProviderLayerWithConfig = (
   config: typeof LLMConfig.Service,
-  provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" = "anthropic",
+  provider: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" = "anthropic",
 ) => {
   const configLayer = Layer.succeed(LLMConfig, config);
 
@@ -140,7 +144,11 @@ export const createLLMProviderLayerWithConfig = (
           ? GeminiProviderLive
           : provider === "litellm"
             ? LiteLLMProviderLive
-            : LocalProviderLive;
+            : provider === "groq"
+              ? GroqProviderLive
+              : provider === "xai"
+                ? XAIProviderLive
+                : LocalProviderLive;
 
   const baseProviderLayer = providerLayer.pipe(Layer.provide(configLayer));
 
