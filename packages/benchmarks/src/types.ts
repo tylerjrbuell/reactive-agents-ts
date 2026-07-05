@@ -308,7 +308,7 @@ export type HarnessVariant = InternalVariant | CompetitorVariant
 
 export interface ModelVariant {
   readonly id: string;
-  readonly provider: "anthropic" | "openai" | "gemini" | "ollama" | "litellm";
+  readonly provider: "anthropic" | "openai" | "gemini" | "ollama" | "litellm" | "groq" | "xai";
   readonly model: string;
   readonly contextTier?: "local" | "standard" | "large" | "frontier";
 }

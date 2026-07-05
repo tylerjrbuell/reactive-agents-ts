@@ -106,11 +106,12 @@ export interface RuntimeOptions {
 
   /**
    * LLM provider to use.
-   * One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`, or `"test"`
+   * One of: `"anthropic"`, `"openai"`, `"ollama"`, `"gemini"`, `"litellm"`,
+   * `"groq"`, `"xai"`, or `"test"`
    *
    * Default: `"test"` (mock provider)
    */
-  provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
 
   /**
    * LLM model identifier (provider-specific).
@@ -874,7 +875,7 @@ export interface RuntimeOptions {
  */
 export interface LightRuntimeOptions {
   agentId: string;
-  provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "test";
+  provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
   model?: string;
   thinking?: boolean;
   /** Rich thinking configuration (effort level, explicit budget). Authoritative over `thinking` when present. */

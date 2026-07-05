@@ -199,6 +199,8 @@ const QUICK_KEYED_PROVIDERS: readonly ProviderName[] = [
     'anthropic',
     'openai',
     'gemini',
+    'groq',
+    'xai',
 ]
 
 /**

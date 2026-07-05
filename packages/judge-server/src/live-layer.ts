@@ -21,7 +21,7 @@ import { JudgeLLMService } from "@reactive-agents/eval";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { createLLMProviderLayer } from "@reactive-agents/llm-provider";
 
-export type JudgeProvider = "anthropic" | "openai" | "ollama" | "gemini" | "litellm";
+export type JudgeProvider = "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai";
 
 export interface LiveLayerConfig {
   /** Model identifier passed to the provider (e.g. "claude-haiku-4-5-20251001"). */
@@ -30,7 +30,7 @@ export interface LiveLayerConfig {
   readonly provider: JudgeProvider;
 }
 
-const PROVIDERS: readonly JudgeProvider[] = ["anthropic", "openai", "ollama", "gemini", "litellm"];
+const PROVIDERS: readonly JudgeProvider[] = ["anthropic", "openai", "ollama", "gemini", "litellm", "groq", "xai"];
 
 const isJudgeProvider = (value: string): value is JudgeProvider =>
   (PROVIDERS as readonly string[]).includes(value);

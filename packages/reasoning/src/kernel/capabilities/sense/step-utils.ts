@@ -56,6 +56,12 @@ export function buildStrategyResult(params: {
   totalCost: number;
   /** Strategy-specific metadata fields merged into result.metadata */
   extraMetadata?: Record<string, unknown>;
+  /**
+   * Failure detail from the kernel's final state (`state.error`). Carried onto
+   * the ReasoningResult so the runtime can surface the real provider cause
+   * instead of a generic "Reasoning failed". Ignored on successful results.
+   */
+  error?: string | null;
 }): ReasoningResult {
   // Sanitize output to strip internal agent metadata before it reaches the user
   const sanitizedOutput =
@@ -95,5 +101,10 @@ export function buildStrategyResult(params: {
       ...params.extraMetadata,
     },
     status: effectiveStatus,
+    // Surface failure detail only when the result actually failed and a
+    // non-empty error string exists — keeps successful results clean.
+    ...(effectiveStatus === "failed" && params.error && params.error.trim().length > 0
+      ? { error: params.error.trim() }
+      : {}),
   };
 }

@@ -64,6 +64,40 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly googleApiKey?: string;
 
     /**
+     * Groq API key (OpenAI-compatible LPU inference).
+     * Retrieved from GROQ_API_KEY environment variable.
+     * Required if provider is "groq".
+     *
+     * @default From GROQ_API_KEY env var (undefined if not set)
+     */
+    readonly groqApiKey?: string;
+
+    /**
+     * Base URL override for the Groq OpenAI-compatible endpoint.
+     * Retrieved from GROQ_BASE_URL environment variable.
+     *
+     * @default "https://api.groq.com/openai/v1"
+     */
+    readonly groqBaseUrl?: string;
+
+    /**
+     * xAI API key (OpenAI-compatible Grok models).
+     * Retrieved from XAI_API_KEY environment variable.
+     * Required if provider is "xai".
+     *
+     * @default From XAI_API_KEY env var (undefined if not set)
+     */
+    readonly xaiApiKey?: string;
+
+    /**
+     * Base URL override for the xAI OpenAI-compatible endpoint.
+     * Retrieved from XAI_BASE_URL environment variable.
+     *
+     * @default "https://api.x.ai/v1"
+     */
+    readonly xaiBaseUrl?: string;
+
+    /**
      * Ollama server endpoint.
      * Retrieved from OLLAMA_ENDPOINT environment variable.
      * Used for local model serving.
@@ -289,6 +323,14 @@ export const llmConfigFromEnv = LLMConfig.of({
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   openaiApiKey: process.env.OPENAI_API_KEY,
   googleApiKey: process.env.GOOGLE_API_KEY,
+  groqApiKey: process.env.GROQ_API_KEY,
+  ...(process.env.GROQ_BASE_URL !== undefined
+    ? { groqBaseUrl: process.env.GROQ_BASE_URL }
+    : {}),
+  xaiApiKey: process.env.XAI_API_KEY,
+  ...(process.env.XAI_BASE_URL !== undefined
+    ? { xaiBaseUrl: process.env.XAI_BASE_URL }
+    : {}),
   ollamaEndpoint:
     process.env.OLLAMA_ENDPOINT ?? "http://localhost:11434",
   ollamaApiKey: process.env.OLLAMA_API_KEY,

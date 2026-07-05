@@ -22,6 +22,10 @@ export const LLMProviderType = Schema.Literal(
   "gemini",
   /** LiteLLM proxy — unified gateway to 40+ model providers. */
   "litellm",
+  /** Groq LPU inference (OpenAI-compatible). Requires GROQ_API_KEY. */
+  "groq",
+  /** xAI Grok models (OpenAI-compatible). Requires XAI_API_KEY. */
+  "xai",
   /** User-defined provider adapter — implement the LLMService interface. */
   "custom",
 );
@@ -33,6 +37,8 @@ export const LLMProviderType = Schema.Literal(
  * - "ollama": Local models via Ollama
  * - "gemini": Google Gemini models
  * - "litellm": LiteLLM proxy (40+ model providers)
+ * - "groq": Groq LPU inference (OpenAI-compatible)
+ * - "xai": xAI Grok models (OpenAI-compatible)
  * - "custom": User-defined provider adapter
  */
 export type LLMProvider = Schema.Schema.Type<typeof LLMProviderType>;
