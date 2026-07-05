@@ -2,6 +2,14 @@
 
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
+## ▶ Agentic OS North Star v6.0 RATIFIED (2026-07-05) — CANONICAL forward direction
+
+Spec: `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (commit `28acc328`), successor to 05-DESIGN-NORTH-STAR §6 sequencing; 00-VISION pillars unchanged. Grounded in 10-subsystem parallel audit (2×5 explorers) + mid-2026 landscape research.
+
+**Master finding: last-mile WIRING program, not building.** ~70-90%-built subsystems missing final wire (all file:line-cited in spec §1): A2A executor never bridged + server never started; `RunReport.skillFragment` never populated; UI protocol reserved tags (TrustEvent/StepEvent/UiTreeDelta/ObjectDelta) zero emitters; `checkOutput` zero runtime callers; kernel recall/learn = Noop layers; `authorize()` unconsumed; `ToolService.execute` enforces nothing; LLM I/O not captured on live path (replay = tool-surface only); trustVerdict bench-only; orchestration "durable" = in-memory Refs; 8/12 phase hooks dead; calibration = most under-surfaced shipped system.
+
+**4 arcs:** (1) **Log+Process+Receipt** — one canonical event log w/ LLM I/O capture, RunHandle v2 (inspect/fork/grant/revoke, `rax ps/attach/fork`), `result.receipt` consolidating 5 disconnected trust systems; LAUNCH LINE here (bench receipts + Show-HN). (2) **Boundary+Gate** — enforce at execute(), wire authorize(), BYO lift-gate (unify packages/eval ↔ benchmarks gate). (3) **Team** — A2A last mile, sub-agent events→parent bus, orchestration durability onto RunStore, MissionBrief/UpwardReport primitives, receipt chain. (4) **Flywheel** — skillFragment, learned aliases (act.ts:325 TODO), auto-calibration chain, harness packages w/ receipts, verifiable self-improvement LAST. **Dead-seam law: every dead seam goes live or gets deleted.** Non-goals carried: no new strategies, no falsified levers, no UI-binding race, lift gate on every default-on. NEXT: ROADMAP.md amendment → Arc 1 implementation plan.
+
 ## ✅ Agentic UI Kit COMPLETION wave — Plan 1 (ui-core shared controllers + React backfill) MERGED to local main `38289da4` (2026-07-05)
 
 New **completion wave** finishing the deferred second wave (full React/Vue/Svelte parity + genUI depth). Design: `wiki/Architecture/Design-Specs/2026-07-05-agentic-ui-kit-completion.md`. Decomposed into 4 plans; **Plan 1 shipped** (`wiki/Planning/Implementation-Plans/2026-07-05-agentic-ui-kit-p1-uicore-controllers.md`, 6 TDD tasks subagent-driven in worktree, opus final review READY-TO-MERGE).
