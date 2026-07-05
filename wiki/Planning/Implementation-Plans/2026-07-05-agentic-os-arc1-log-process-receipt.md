@@ -541,10 +541,12 @@ git commit -m "fix(runtime): awaited checkpoint flush + warn on inert durable co
 
 ### Task 5: `RunHandle.inspect()` — live state introspection
 
-The kernel already serializes full state to `onCheckpoint` per iteration; the controller just doesn't keep it. Store the latest snapshot on the controller and expose `inspect()` on the handle. Always-on for the kernel path (cheap — the string already exists), independent of durable persistence.
+The kernel already serializes full state to `onCheckpoint` per iteration (durable runs only); the controller just doesn't keep it. Store a LAZY snapshot thunk on the controller and expose `inspect()` on the handle — always-on for the kernel path, independent of durable persistence.
+
+**Backward-compat/perf constraint (binding):** non-durable runs must NOT pay per-iteration serialization. `noteCheckpoint` receives a **thunk** (`() => string`), not a pre-serialized string; serialization executes only when `inspect()` is actually called. On durable runs the kernel may pass `() => serialized` reusing the string it already produced for `onCheckpoint`.
 
 **Files:**
-- Modify: `packages/core/src/streaming.ts:49` region (`RunControllerLike` — add optional `noteCheckpoint`)
+- Modify: `packages/core/src/streaming.ts:49` region (`RunControllerLike` — add optional `noteCheckpoint(snapshot: () => string, iteration: number): void`)
 - Modify: `packages/runtime/src/run-controller.ts` (`RunController` snapshot storage + `inspect()`; `RunHandle` type)
 - Modify: kernel checkpoint call site — `packages/reasoning/src/kernel/loop/iterate-pass.ts:375` region (call `noteCheckpoint` ALWAYS, `onCheckpoint` only when durable — read the site first; today `onCheckpoint(serializeKernelState(...))` is called conditionally)
 - Modify: `packages/runtime/src/reactive-agent.ts:1682-1720` region (expose `inspect` on the returned handle)
@@ -584,10 +586,13 @@ const SNAPSHOT = JSON.stringify({
 });
 
 describe("RunController.inspect", () => {
-  test("returns parsed snapshot fields", () => {
+  test("returns parsed snapshot fields (lazy thunk)", () => {
     const c = new RunController(new AbortController());
-    c.noteCheckpoint(SNAPSHOT, 3);
+    let serialized = 0;
+    c.noteCheckpoint(() => { serialized++; return SNAPSHOT; }, 3);
+    expect(serialized).toBe(0); // NOT serialized until inspect()
     const i = c.inspect();
+    expect(serialized).toBe(1);
     expect(i).toBeDefined();
     expect(i!.iteration).toBe(3);
     expect(i!.stepsCount).toBe(1);
@@ -612,9 +617,9 @@ Expected: FAIL — `noteCheckpoint`/`inspect` don't exist.
 
 - [ ] **Step 3: Implement**
 
-`RunController`: add `private _lastSnapshot?: { json: string; iteration: number; at: number }`; `noteCheckpoint(json, iter)` stores it; `inspect()` lazily parses (try/catch → undefined on parse error) and projects the `RunInspection` fields (truncate `lastThought` to 500 chars; guard every path with optional chaining — the codec state shape is versioned).
+`RunController`: add `private _lastSnapshot?: { thunk: () => string; iteration: number; at: number }`; `noteCheckpoint(thunk, iter)` stores it (NO serialization here); `inspect()` invokes the thunk, parses (try/catch → undefined on parse error), and projects the `RunInspection` fields (truncate `lastThought` to 500 chars; guard every path with optional chaining — the codec state shape is versioned).
 
-Kernel site: where `controller.onCheckpoint` is invoked (iterate-pass), call `controller.noteCheckpoint?.(serialized, iteration)` UNCONDITIONALLY before the durable-only `onCheckpoint` branch — the serialization already happens there only when `onCheckpoint` exists; hoist it so serialization occurs when `noteCheckpoint` OR `onCheckpoint` is present. Add `noteCheckpoint?` to `RunControllerLike` (core/streaming.ts).
+Kernel site: where `controller.onCheckpoint` is invoked (iterate-pass), call `controller.noteCheckpoint?.(thunk, iteration)` UNCONDITIONALLY at every iteration boundary, where `thunk` closes over the live state ref: on durable runs reuse the already-serialized string (`() => serialized`); on non-durable runs `() => serializeKernelState(state)` — deferred, zero cost unless `inspect()` fires. Add `noteCheckpoint?(snapshot: () => string, iteration: number): void` to `RunControllerLike` (core/streaming.ts).
 
 `reactive-agent.ts` handle assembly: add `inspect: () => controller.inspect()`. Extend the `RunHandle` type in `run-controller.ts` with `inspect(): RunInspection | undefined`.
 
