@@ -1,4 +1,5 @@
 import type { Trace } from "@reactive-agents/trace"
+import type { LLMTable } from "./llm-table.js"
 
 export interface RecordedToolResult {
     readonly toolName: string
@@ -21,6 +22,8 @@ export interface RecordedRun {
     readonly config: Readonly<Record<string, unknown>>
     readonly trace: Trace
     readonly toolTable: ReadonlyMap<string, readonly RecordedToolResult[]>
+    /** Exact-replay LLM dispense table (Task 3) — additive; not populated by older recordings. */
+    readonly llmTable: LLMTable
 }
 
 export interface ReplayOverrides {
