@@ -1,3 +1,16 @@
+## [0.13.6] — 2026-07-06
+
+Declare `@reactive-agents/runtime-shim` as a dependency of the CLI and mark it
+`external` in the bundle. The `rax serve` command imports `secureServe` from it;
+previously it was inlined into the CLI bundle instead of resolved from
+node_modules. Functionally identical for users, but restores the deduplicated
+external-dependency packaging the other workspace deps use.
+
+Bump plan `shortId()` entropy from 4 to 6 base36 characters. The 4-char id space
+(~1.7M) made a 100-id uniqueness draw collide roughly 0.3% of the time — a real
+intermittent CI failure in the plan tests. Six characters (~2.2B) makes it
+effectively never, and the id stays within its 8-character budget (`p_` + 6).
+
 ## [0.13.5] — 2026-07-06
 
 ### Groq and xAI providers
