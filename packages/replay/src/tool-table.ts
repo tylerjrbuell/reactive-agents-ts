@@ -1,14 +1,7 @@
 import { createHash } from "node:crypto"
 import type { TraceEvent } from "@reactive-agents/trace"
 import type { RecordedToolResult } from "./types.js"
-
-function stableStringify(v: unknown): string {
-    if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null"
-    if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]"
-    const obj = v as Record<string, unknown>
-    const keys = Object.keys(obj).sort()
-    return "{" + keys.map((k) => JSON.stringify(k) + ":" + stableStringify(obj[k])).join(",") + "}"
-}
+import { stableStringify } from "./stable-stringify.js"
 
 export function computeArgsHash(args: unknown): string {
     return createHash("sha256").update(stableStringify(args)).digest("hex").slice(0, 16)

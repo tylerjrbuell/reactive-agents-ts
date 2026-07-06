@@ -1,9 +1,9 @@
 import { Effect, Layer, Stream } from "effect"
 import {
     LLMService,
+    messageContentToString,
     type CompletionRequest,
     type CompletionResponse,
-    type ContentBlock,
     type StopReason,
     type StreamEvent,
     type ToolCall,
@@ -32,14 +32,18 @@ function toStopReason(s: string | undefined): StopReason {
     return s !== undefined && isStopReason(s) ? s : "end_turn"
 }
 
-function contentToString(content: string | readonly ContentBlock[]): string {
-    return typeof content === "string" ? content : JSON.stringify(content)
-}
-
+/**
+ * Project a live CompletionRequest into the recorded-exchange key space using
+ * the SAME flattening the record side applies (`messageContentToString` from
+ * llm-provider's exchange-projection — ContentBlock[] → text blocks + tool
+ * placeholders). Truncation to the record-side caps happens inside
+ * `exchangeKey` itself, so a live untruncated prompt hashes identically to
+ * its recorded (capped) counterpart.
+ */
 function requestKey(req: CompletionRequest): string {
     return exchangeKey(
         req.systemPrompt,
-        req.messages.map((m) => ({ role: m.role, content: contentToString(m.content) })),
+        req.messages.map((m) => ({ role: m.role, content: messageContentToString(m.content) })),
     )
 }
 

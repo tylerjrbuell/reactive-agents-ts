@@ -30,6 +30,7 @@ import { Effect, Layer, Ref, Stream } from "effect";
 import type { Context } from "effect";
 import {
   LLMService,
+  messageContentToString,
   type CompletionRequest,
   type StructuredCompletionRequest,
   type LLMMessage,
@@ -48,24 +49,9 @@ import { emitLLMExchange, emitContextPressure } from "./utils/diagnostics.js";
 const PLACEHOLDER_TASK_ID = "llm-direct";
 const PLACEHOLDER_ITERATION = 0;
 
-function messageContentToString(content: LLMMessage["content"]): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((b) => {
-        if (typeof b === "string") return b;
-        if (b && typeof b === "object") {
-          const blk = b as { type?: string; text?: string; name?: string };
-          if (blk.type === "text" && typeof blk.text === "string") return blk.text;
-          if (blk.type === "tool_use") return `[tool_use:${blk.name ?? "?"}]`;
-          if (blk.type === "tool_result") return `[tool_result]`;
-        }
-        return "";
-      })
-      .join("");
-  }
-  return "";
-}
+// Message-content flattening lives in @reactive-agents/llm-provider
+// (exchange-projection.ts) so the exact-replay layer can apply the IDENTICAL
+// projection when hashing live requests — record and replay must never drift.
 
 type ExchangeRole = "system" | "user" | "assistant" | "tool";
 
