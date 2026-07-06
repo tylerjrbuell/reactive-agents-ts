@@ -44,6 +44,7 @@
         "@reactive-agents/llm-provider": "workspace:*",
         "@reactive-agents/memory": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
+        "@reactive-agents/runtime-shim": "workspace:*",
         "@reactive-agents/tools": "workspace:*",
         "@reactive-agents/trace": "workspace:*",
         "boxen": "^8.0.1",

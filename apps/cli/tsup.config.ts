@@ -12,6 +12,7 @@ export default defineConfig({
     "effect",
     "@reactive-agents/core",
     "@reactive-agents/runtime",
+    "@reactive-agents/runtime-shim",
     "@reactive-agents/benchmarks",
     "@reactive-agents/eval",
     "@reactive-agents/llm-provider",
