@@ -21,7 +21,7 @@ sidebar:
 | Reasoning strategies built in | ReAct, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Code-Action | ReAct prebuilt; others authored as custom graphs |
 | Custom control flow | 12-phase engine + per-phase hooks | Arbitrary node/edge graphs (very flexible) |
 | Local model parity | First-class (Ollama 4B+, same code as frontier) | Via provider integrations (e.g. `ChatOllama`) |
-| Providers | Anthropic, OpenAI, Gemini, Ollama, LiteLLM (40+), Test | Any LangChain `Chat*` model integration |
+| Providers | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM (40+), Test | Any LangChain `Chat*` model integration |
 | Tools | MCP-native, typed `ToolDefinition` | `tool()` + ToolNode; MCP via adapters |
 | Multi-agent | A2A protocol | Supervisor / subgraph patterns, `langgraph-supervisor` |
 | Persistence / resume | Durable execution + crash-resume | Checkpointers (Memory/SQLite/Postgres/Redis/Mongo) |

@@ -24,7 +24,7 @@ Both Reactive Agents and [Mastra](https://mastra.ai) are TypeScript-first framew
 | RAG / vector stores | Via tools + memory; bring your own store | First-party RAG pipeline (chunk, embed, store, rerank) across many vector DBs |
 | Memory | 4 layers (working / semantic / episodic / procedural) | Conversation history, semantic recall, working + observational memory |
 | Local / small models | First-class: same code on Ollama 4B+ and frontier APIs; 4-tier context profiles | Supported via the model router; no dedicated small-model tuning found ¹ |
-| Providers | Anthropic, OpenAI, Gemini, Ollama, LiteLLM (40+), Test | Model router across 40+ providers / many models |
+| Providers | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM (40+), Test | Model router across 40+ providers / many models |
 | Structured output | `.withOutputSchema(zodSchema)` → typed `result.object` | Structured output via the underlying SDK |
 | Durable execution | Built-in durable runs + crash-resume | Workflow suspend/resume; durable runs via the workflow engine |
 | Human-in-the-loop | `.withApprovalPolicy()` + approve/deny/resume | Workflow suspend awaiting input/approval |

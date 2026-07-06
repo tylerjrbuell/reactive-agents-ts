@@ -10,7 +10,7 @@ import { FileTree, Aside, Badge, CardGrid, LinkCard } from '@astrojs/starlight/c
 ## Prerequisites
 
 - [Bun](https://bun.sh) ≥1.0.0 (`curl -fsSL https://bun.sh/install | bash`)
-- An API key from [Anthropic](https://console.anthropic.com), [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com), or [LiteLLM](https://www.litellm.ai) — *or* run a local model with [Ollama](https://ollama.com) (no key needed)
+- An API key from [Anthropic](https://console.anthropic.com), [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com), [Groq](https://console.groq.com), [xAI](https://console.x.ai), or [LiteLLM](https://www.litellm.ai) — *or* run a local model with [Ollama](https://ollama.com) (no key needed)
 
 The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agents Executable).
 
@@ -96,6 +96,8 @@ Set at least one provider key. Pick whichever you have access to:
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env  # Recommended for first agent
 echo 'OPENAI_API_KEY=sk-...'        >> .env
 echo 'GOOGLE_API_KEY=...'           >> .env
+echo 'GROQ_API_KEY=gsk_...'         >> .env
+echo 'XAI_API_KEY=xai-...'          >> .env
 
 # Or run fully local — no key needed
 ollama pull qwen3:4b

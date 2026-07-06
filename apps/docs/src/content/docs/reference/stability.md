@@ -24,7 +24,7 @@ Every public surface falls into one of three tiers. Tier is declared by JSDoc ta
 The following surfaces are tier-1 stable. We will not break these without a major bump.
 
 - **Builder entry point** — `ReactiveAgents.create()` and the `.with*()` chain syntax
-- **Provider selection** — `.withProvider("anthropic" | "openai" | "google" | "ollama" | "litellm" | "local")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface
+- **Provider selection** — `.withProvider("anthropic" | "openai" | "google" | "groq" | "xai" | "ollama" | "litellm" | "local")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface
 - **Reasoning core** — `.withReasoning()` with the documented `ReasoningOptions` shape; the five canonical strategies — `reactive` (ReAct), `reflexion`, `plan-execute-reflect`, `tree-of-thought`, and `adaptive` (auto-routes among them). `direct` (single-shot) is the no-reasoning fallback.
 - **Tool surface** — `.withTools()`, `defineTool()` / `tool()`, MCP attachment via `.withMCP()`, and the `Tool` interface
 - **Typed structured output** *(new in 0.12)* — `.withOutputSchema(schema, options?)` and the result fields `result.object` / `result.objectError`; `agent.streamObject(task)` yielding `{ object: DeepPartial<T> }`. Standard Schema (Zod / Valibot / ArkType) and Effect Schema are all accepted.
@@ -35,7 +35,7 @@ The following surfaces are tier-1 stable. We will not break these without a majo
 - **Compose API** — `.compose()` (alias: `.withHarness()`) for harness composition; `.on()`, `.tap()`, `.before()`, `.after()`, `.onError()` transforms and hooks; all 12-phase composition and tag pattern matching
 - **Snapshot & Replay** — `@reactive-agents/replay` package: `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces`, `computeArgsHash`. The `ToolCallCompleted` event payload's `args`, `result`, `error`, `resultTruncated` fields are also stable.
 - **AgentResult shape** — `.run()` and `.runStream()` return values
-- **Raw provider clients** — `AnthropicProviderLive`, `OpenAIProviderLive`, `LocalProviderLive`, `GeminiProviderLive`, `LiteLLMProviderLive` exported as standalone Effect Layers (you can skip the harness entirely)
+- **Raw provider clients** — `AnthropicProviderLive`, `OpenAIProviderLive`, `LocalProviderLive`, `GeminiProviderLive`, `GroqProviderLive`, `XAIProviderLive`, `LiteLLMProviderLive` exported as standalone Effect Layers (you can skip the harness entirely)
 
 ## What's `@unstable` in v0.12
 

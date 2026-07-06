@@ -14,7 +14,7 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 | Method | Default | Description |
 |--------|---------|-------------|
 | `.withName(name)` | `"agent"` | Agent identifier used in logs and metrics |
-| `.withProvider(provider)` | `"test"` | LLM provider: `"anthropic"` \| `"openai"` \| `"gemini"` \| `"ollama"` \| `"litellm"` \| `"test"` |
+| `.withProvider(provider)` | `"test"` | LLM provider: `"anthropic"` \| `"openai"` \| `"gemini"` \| `"groq"` \| `"xai"` \| `"ollama"` \| `"litellm"` \| `"test"` |
 | `.withModel(model)` | Provider default | Model string or `ModelParams` (`model`, `thinking?`, `temperature?`, `maxTokens?`, `numCtx?`). `numCtx` pins the exact provider context window (Ollama `num_ctx`); also a top-level `AgentConfig` field |
 | `.withSystemPrompt(prompt)` | none | Custom system prompt prepended to all LLM calls |
 | `.withPersona(persona)` | none | Structured persona: `{ name?, role?, background?, instructions?, tone? }` |
@@ -132,6 +132,8 @@ Every aspect of Reactive Agents is configurable through the builder API. This pa
 | `ANTHROPIC_API_KEY` | Anthropic provider | — | Anthropic API key |
 | `OPENAI_API_KEY` | OpenAI/LiteLLM provider | — | OpenAI API key |
 | `GOOGLE_API_KEY` | Gemini provider | — | Google AI API key |
+| `GROQ_API_KEY` | Groq provider | — | Groq API key |
+| `XAI_API_KEY` | xAI provider | — | xAI API key |
 | `TAVILY_API_KEY` | Web search tool (primary) | — | Tavily search API key |
 | `BRAVE_SEARCH_API_KEY` | Web search tool (secondary) | — | Brave Search API key (`X-Subscription-Token`); alias: `BRAVE_API_KEY` |
 | `EMBEDDING_PROVIDER` | Enhanced memory tier | `"openai"` | Embedding provider |

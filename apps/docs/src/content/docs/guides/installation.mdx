@@ -35,7 +35,7 @@ npm install reactive-agents
 
 ```bash
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
-# or OPENAI_API_KEY, GOOGLE_API_KEY, LITELLM_API_KEY
+# or OPENAI_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, XAI_API_KEY, LITELLM_API_KEY
 ```
 
 </li>
@@ -115,7 +115,7 @@ The framework is modular — install only the packages you need:
 | -------------------------------- | ------------------------------------------------------------------------- |
 | `@reactive-agents/core`          | EventBus, AgentService, TaskService, canonical types                      |
 | `@reactive-agents/runtime`       | 12-phase ExecutionEngine, ReactiveAgentBuilder, `createRuntime()`         |
-| `@reactive-agents/llm-provider`  | LLM adapters: Anthropic, OpenAI, Gemini, Ollama, LiteLLM (40+), Test      |
+| `@reactive-agents/llm-provider`  | LLM adapters: Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM (40+), Test |
 
 **Cognition (recommended)**
 
@@ -218,6 +218,8 @@ Create a `.env` file:
 ANTHROPIC_API_KEY=sk-ant-...        # Anthropic Claude
 OPENAI_API_KEY=sk-...               # OpenAI GPT-4o
 GOOGLE_API_KEY=...                  # Google Gemini
+GROQ_API_KEY=gsk_...                # Groq
+XAI_API_KEY=xai-...                 # xAI Grok
 LITELLM_API_KEY=...                 # Optional — LiteLLM proxy auth when required
 
 # Tools (optional)

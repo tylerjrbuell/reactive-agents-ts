@@ -1,8 +1,8 @@
 ---
 title: LLM Providers
 description: >-
-  Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Ollama,
-  LiteLLM, and custom providers.
+  Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Groq, xAI,
+  Ollama, LiteLLM, and custom providers.
 sidebar:
   order: 4
 ---
@@ -16,6 +16,8 @@ Reactive Agents supports multiple LLM providers through a unified `LLMService` i
 | **Anthropic**     | Claude Haiku 4.5, Claude Sonnet 4.6, Claude Opus 4.8    |     Yes      |    Yes    | No (use OpenAI) | Yes (explicit)  |
 | **OpenAI**        | GPT-4o, GPT-4o-mini                                     |     Yes      |    Yes    |       Yes       | Yes (automatic) |
 | **Google Gemini** | Gemini 2.0 Flash, Gemini 2.5 Flash, Gemini 2.5 Pro      |     Yes      |    Yes    |       No        | Yes (automatic) |
+| **Groq**          | Llama 3.3 70B Versatile, Llama 3.1 8B Instant           |     Yes      |    Yes    |       No        | No              |
+| **xAI**           | Grok 4, Grok 3                                           |     Yes      |    Yes    |       No        | Yes             |
 | **Ollama**        | Any locally hosted model — see [Local Models Guide](/guides/local-models/) |     Yes      |    Yes    |       Yes       | No              |
 | **LiteLLM**       | 40+ models via LiteLLM proxy                            |     Yes      |    Yes    |       No        | Depends         |
 | **Test**          | Mock provider for testing (`withTestScenario`)          |     Yes\*    |    Yes\*  |       No        | No              |
@@ -47,6 +49,18 @@ const agent = await ReactiveAgents.create()
   .withModel("gemini-2.5-flash")
   .build();
 
+// Groq — OpenAI-compatible LPU inference (fast)
+const agent = await ReactiveAgents.create()
+  .withProvider("groq")
+  .withModel("llama-3.3-70b-versatile")
+  .build();
+
+// xAI — Grok models, OpenAI-compatible
+const agent = await ReactiveAgents.create()
+  .withProvider("xai")
+  .withModel("grok-4")
+  .build();
+
 // Ollama (local) — Healing Pipeline lifts 4B+ models by +80pp accuracy
 const agent = await ReactiveAgents.create()
   .withProvider("ollama")
@@ -67,6 +81,8 @@ const agent = await ReactiveAgents.create()
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=...
+GROQ_API_KEY=gsk_...
+XAI_API_KEY=xai-...
 OLLAMA_ENDPOINT=http://localhost:11434   # defaults to this
 LITELLM_BASE_URL=http://localhost:4000   # LiteLLM proxy endpoint
 
@@ -129,6 +145,8 @@ const agent = await ReactiveAgents.create()
 | `gemini-2.0-flash`  | Gemini    | $0.10         | 1M             | 0.75    |
 | `gemini-2.5-flash`  | Gemini    | $0.15         | 1M             | 0.80    |
 | `gemini-2.5-pro`    | Gemini    | $1.25         | 1M             | 0.95    |
+| `llama-3.3-70b-versatile` | Groq | $0.59      | 131K           | 0.75    |
+| `grok-4`            | xAI       | $3.00         | 256K           | 0.90    |
 
 ## Tool Calling
 
@@ -137,6 +155,8 @@ When tools are enabled, each provider translates tool definitions to its native 
 - **Anthropic** — `tools` parameter with Anthropic's `tool_use` format; last tool marked with `cache_control` to cache the full schema block
 - **OpenAI** — `tools` array with `function_calling`; automatic prompt caching applies to tool schemas
 - **Gemini** — `functionDeclarations` in `tools` array; function calling supported natively
+- **Groq** — OpenAI-compatible `tools` array; native function calling on LPU-hosted models
+- **xAI** — OpenAI-compatible `tools` array; native function calling on Grok models
 - **Ollama** — OpenAI-compatible `tools` array via the Ollama SDK
 - **LiteLLM** — OpenAI-compatible `tools` array forwarded to proxy
 

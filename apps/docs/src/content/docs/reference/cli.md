@@ -57,7 +57,7 @@ rax create agent <name> --interactive
 The `--interactive` flag launches a readline-based wizard (TTY only) that prompts for:
 
 1. **Agent name** — defaults to the first positional argument if you pass one (e.g. `rax create agent my-agent --interactive`).
-2. **Provider** — one of `anthropic`, `openai`, `ollama`, or `gemini` (same set the wizard validates today).
+2. **Provider** — one of `anthropic`, `openai`, `gemini`, `groq`, `xai`, or `ollama` (same set the wizard validates today).
 3. **Recipe** — `basic`, `researcher`, `coder`, or `orchestrator`.
 4. **Features** — comma-separated list; default `reasoning,tools`. This is collected for the session; the **generated file is determined only by the recipe** (templates live in `apps/cli/src/generators/agent-generator.ts`). Adjust `.withProvider()`, `.withModel()`, and builder flags in the generated source after scaffolding if you need a different stack.
 
@@ -66,7 +66,7 @@ $ rax create agent my-agent --interactive
 
 Create Agent (Interactive)
 ? Agent name: my-research-agent
-? Provider [anthropic/openai/ollama/gemini]: anthropic
+? Provider [anthropic/openai/gemini/groq/xai/ollama]: anthropic
 ? Recipe [basic/researcher/coder/orchestrator]: researcher
 ? Features (comma-separated) (reasoning,tools): reasoning,tools
 
@@ -78,7 +78,7 @@ Create Agent (Interactive)
 Run an agent with a prompt.
 
 ```bash
-rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test]
+rax run <prompt> [--provider anthropic|openai|gemini|groq|xai|ollama|litellm|test]
           [--model <model>] [--name <name>] [--tools] [--reasoning] [--stream] [--cortex]
 ```
 

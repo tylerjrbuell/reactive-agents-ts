@@ -4,7 +4,7 @@
  *
  * Single source of truth for the numbers that appear on the home page,
  * the cheatsheet, the architecture page, and anywhere else that cites
- * "30 packages / 5 apps / 12 phases / 5 strategies / 6 providers / N tests."
+ * "30 packages / 5 apps / 12 phases / 5 strategies / 8 providers / N tests."
  *
  * Counts derived from filesystem + canonical TypeScript source — never
  * from a hardcoded literal that can drift. Test count is read from a
@@ -165,16 +165,21 @@ const main = () => {
       // strategy — excluding it keeps the count honest at the marketed 6.
       !name.includes("direct"),
   );
-  const providers = countDirectoryEntries(
-    "packages/llm-provider/src/providers",
-    (name) =>
-      name.endsWith(".ts") &&
-      !name.endsWith(".test.ts") &&
-      !name.endsWith(".spec.ts") &&
-      !name.includes("probe"), // local-probe.ts is internal
+  // Provider count = keys of the declared provider registry
+  // (PROVIDER_DEFAULT_MODELS), the single source of truth for selectable
+  // providers. File-counting `providers/*.ts` undercounts because
+  // OpenAI-compatible providers (groq, xai) reuse openai.ts via the
+  // makeOpenAICompatProvider factory rather than shipping their own file.
+  const providerDefaultsSrc = readFileSync(
+    resolve(REPO_ROOT, "packages/llm-provider/src/provider-defaults.ts"),
+    "utf-8",
   );
-  // +1 for the deterministic test provider, registered separately
-  const totalProviders = providers + 1;
+  const providerBlock = providerDefaultsSrc.match(
+    /PROVIDER_DEFAULT_MODELS[^{]*\{([\s\S]*?)\}/,
+  );
+  const totalProviders = providerBlock
+    ? (providerBlock[1].match(/^\s*['"]?[\w-]+['"]?\s*:/gm) ?? []).length
+    : 0;
 
   const { tests, cached } = readTestCount(testFiles);
 

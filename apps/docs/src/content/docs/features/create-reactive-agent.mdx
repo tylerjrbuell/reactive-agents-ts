@@ -47,7 +47,7 @@ The CLI detects your package manager automatically. Running without a project na
 │  ○ streaming  — token-by-token via agent.runStream()
 │
 ◆  Provider?
-│  ● anthropic · openai · google · ollama
+│  ● anthropic · openai · google · groq · xai · ollama
 │
 ◆  Package manager?
 │  ● bun · npm · pnpm · yarn
@@ -115,6 +115,8 @@ for await (const event of stream) {
 | `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
 | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` |
 | `google` | `GOOGLE_API_KEY` | `gemini-2.0-flash` |
+| `groq` | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
+| `xai` | `XAI_API_KEY` | `grok-4` |
 | `ollama` | _(none — local)_ | `qwen3:14b` |
 
 Ollama runs locally with no API key. The scaffolded `.env.example` reflects the correct variable for the chosen provider.
@@ -136,7 +138,7 @@ npm create reactive-agent my-agent -- \
 | Flag | Description |
 |------|-------------|
 | `--template=<name>` | `minimal` \| `with-tools` \| `streaming` |
-| `--provider=<name>` | `anthropic` \| `openai` \| `google` \| `ollama` |
+| `--provider=<name>` | `anthropic` \| `openai` \| `google` \| `groq` \| `xai` \| `ollama` |
 | `--pm=<manager>` | `bun` \| `npm` \| `pnpm` \| `yarn` |
 | `--yes` | Skip prompts, accept defaults |
 | `--help` | Show help |

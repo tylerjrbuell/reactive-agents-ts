@@ -43,7 +43,7 @@ That's it. Provider key from `.env`, model auto-picked, direct LLM loop.
 | Method | Status | What it does |
 |--------|:------:|--------------|
 | `.withName(name)` | <Badge text="recommended" variant="note" size="small" /> | Identifier for logs, telemetry, A2A |
-| `.withProvider(p)` | <Badge text="essential" variant="success" size="small" /> | `"anthropic"` · `"openai"` · `"gemini"` · `"ollama"` · `"litellm"` · `"test"` |
+| `.withProvider(p)` | <Badge text="essential" variant="success" size="small" /> | `"anthropic"` · `"openai"` · `"gemini"` · `"groq"` · `"xai"` · `"ollama"` · `"litellm"` · `"test"` |
 | `.withModel(id)` | <Badge text="recommended" variant="note" size="small" /> | e.g. `"claude-sonnet-4-6"`, `"gpt-4o"`, `"qwen3:14b"` |
 | `.withSystemPrompt(s)` | <Badge text="opt-in" variant="tip" size="small" /> | Persona / instructions for the agent |
 
@@ -254,6 +254,8 @@ const agent = await restored.build();
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=...
+GROQ_API_KEY=gsk_...
+XAI_API_KEY=xai-...
 
 # Optional — enables built-in tools
 TAVILY_API_KEY=tvly-...      # Web search

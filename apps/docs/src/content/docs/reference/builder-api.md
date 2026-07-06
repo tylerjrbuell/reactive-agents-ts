@@ -80,7 +80,7 @@ Every field resolves from an environment variable, then a sensible default, so `
 
 ```typescript
 interface QuickOptions {
-    provider?: ProviderName // Default: REACTIVE_AGENTS_PROVIDER, else the first of anthropic/openai/gemini whose key is present, else "ollama"
+    provider?: ProviderName // Default: REACTIVE_AGENTS_PROVIDER, else the first of anthropic/openai/gemini/groq/xai whose key is present, else "ollama"
     model?: string          // Default: REACTIVE_AGENTS_MODEL, else the provider's default model
     maxIterations?: number  // Default: REACTIVE_AGENTS_MAX_ITERATIONS, else 10
 }
@@ -115,7 +115,7 @@ All chain methods return `this` unless noted.
 | `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-6"`)             |
 | `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens`, `numCtx` |
 | `withThinking` | `(options?: boolean \| ThinkingOptions) => this`                                             | Enable native thinking / reasoning mode with optional effort + budget. The rich-config home for thinking; `.withModel({ thinking })` remains the quick boolean. `true` / absent enables, `false` disables, or pass `{ effort, budgetTokens }`. Off unless enabled. |
-| `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
+| `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "groq" \| "xai" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
 
 #### ModelParams
 

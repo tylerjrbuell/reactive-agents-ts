@@ -25,7 +25,7 @@ function readErrorCause(err: unknown): string | undefined {
   return symbolCause instanceof Error ? symbolCause.message : String(symbolCause);
 }
 
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "litellm", "test"] as const;
+const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "groq", "xai", "litellm", "test"] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
 
 const PROVIDER_API_KEYS: Record<string, { env: string; label: string } | null> = {
@@ -50,7 +50,7 @@ const HELP = `
     <prompt>              Prompt text (positional, may be multiple words)
 
   Options:
-    --provider <name>     anthropic, openai, ollama, gemini, litellm, test (default: anthropic)
+    --provider <name>     anthropic, openai, ollama, gemini, groq, xai, litellm, test (default: anthropic)
     --model <model>       Model identifier
     --name <name>         Agent name (default: cli-agent)
     --tools               Enable tool calling
@@ -123,7 +123,7 @@ export async function runAgent(args: string[]): Promise<void> {
   if (!prompt) {
     console.error(fail("Usage: rax run <prompt> [options]\n"));
     console.error(section("Options"));
-    console.error(kv("--provider <name>", "anthropic, openai, ollama, gemini, litellm, test"));
+    console.error(kv("--provider <name>", "anthropic, openai, ollama, gemini, groq, xai, litellm, test"));
     console.error(kv("--model <model>", "Model identifier"));
     console.error(kv("--name <name>", "Agent name (default: cli-agent)"));
     console.error(kv("--tools", "Enable tool calling"));

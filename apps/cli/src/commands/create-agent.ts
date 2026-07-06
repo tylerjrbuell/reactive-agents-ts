@@ -3,7 +3,7 @@ import { generateAgent, type AgentRecipe } from "../generators/agent-generator.j
 import { fail, info, section, success } from "../ui.js";
 
 const VALID_RECIPES: AgentRecipe[] = ["basic", "researcher", "coder", "orchestrator"];
-const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini"];
+const VALID_PROVIDERS = ["anthropic", "openai", "ollama", "gemini", "groq", "xai"];
 
 const HELP = `
   Usage: rax create agent <name> [options]

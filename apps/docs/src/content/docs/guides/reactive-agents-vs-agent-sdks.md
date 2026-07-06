@@ -22,7 +22,7 @@ Neither is strictly "better" — they sit at different altitudes. The SDK is the
 | | Reactive Agents | Vendor Agent SDK |
 |---|---|---|
 | Scope | Multi-provider harness | Single vendor, first-party |
-| Provider lock-in | None (Anthropic, OpenAI, Gemini, Ollama, LiteLLM) | Tied to the vendor |
+| Provider lock-in | None (Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM) | Tied to the vendor |
 | Local models | First-class — same code on 4B Ollama and frontier | Generally not a goal |
 | Type model | Typed effect runtime (errors as values, structured concurrency) | Idiomatic SDK types |
 | Execution model | Deterministic 12-phase engine + per-phase hooks | The SDK's loop |

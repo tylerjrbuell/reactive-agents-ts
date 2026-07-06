@@ -18,7 +18,7 @@ They are frequently **complementary, not strictly either/or**. Plenty of teams u
 | Capability | Reactive Agents | Vercel AI SDK |
 |---|---|---|
 | Positioning | Higher-level agent harness | Lower-level SDK / TypeScript toolkit |
-| Unified provider API | ✅ 6 providers + LiteLLM (40+) | ✅ 25+ providers |
+| Unified provider API | ✅ 8 providers + LiteLLM (40+) | ✅ 25+ providers |
 | Local model support | ✅ Ollama first-class, 4B → frontier same code | ✅ via Ollama community/compatible providers |
 | UI streaming primitives | SSE + `@reactive-agents/{react,vue,svelte}` adapters | ✅ first-party `useChat` / `useCompletion` (React, Vue, Svelte, Angular) |
 | Text + structured output | ✅ `.withOutputSchema(zod)` → `result.object` | ✅ `generateObject` / `streamObject` |

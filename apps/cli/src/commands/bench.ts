@@ -52,7 +52,7 @@ export async function runBench(argv: string[]) {
     // V1 API: Run benchmarks with provider/model
     const { runBenchmarks } = benchmarks;
     const provider = (getArg("--provider") ?? "test") as
-      | "anthropic" | "openai" | "gemini" | "ollama" | "litellm" | "test";
+      | "anthropic" | "openai" | "gemini" | "groq" | "xai" | "ollama" | "litellm" | "test";
     const model = getArg("--model");
     const tierArg = getArg("--tier");
     const tiers = tierArg ? (tierArg.split(",") as any[]) : undefined;
