@@ -10,6 +10,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Effect, type Context } from 'effect'
 import type { TerminatedBy } from '@reactive-agents/core'
+import { getProviderDefaultModel } from '@reactive-agents/llm-provider'
 import type { AgentPersona } from './types.js'
 
 /**
@@ -76,17 +77,44 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
 
 /**
  * Derive `{name, ok}` tool-call outcomes for the trust receipt (Arc 1 Task 8)
- * from a run's `reasoningSteps`. Pairs each `action` step's
- * `metadata.toolCall.id` with the `observation` step carrying the matching
- * `metadata.toolCallId`, reading `metadata.observationResult.success` as the
- * ok/fail signal (see `packages/reasoning/.../act/tool-observe.ts` and
- * `act.ts`, which both stamp this exact shape on every tool call).
+ * from a run's result metadata. Two sources, in preference order:
+ *
+ * 1. `reasoningSteps` (kernel path) — pairs each `action` step's
+ *    `metadata.toolCall.id` with the `observation` step carrying the matching
+ *    `metadata.toolCallId`, reading `metadata.observationResult.success` as
+ *    the ok/fail signal (see `packages/reasoning/.../act/tool-observe.ts` and
+ *    `act.ts`, which both stamp this exact shape on every tool call). Steps
+ *    are preferred because they also cover calls that never reached the
+ *    ToolCallCompleted event (e.g. allowedTools-blocked calls become a
+ *    failed action/observation pair).
+ * 2. `receiptToolCalls` (fallback) — `{name, ok}` outcomes forwarded by
+ *    execution-engine.ts from its ToolCallCompleted event log. This is the
+ *    ONLY source on the minimal/inline loop, which executes tools but
+ *    produces no reasoningSteps — without it, tool-using minimal runs would
+ *    falsely grade "ungrounded".
  *
  * An action step with no resolvable observation pairing (e.g. the run was
  * interrupted mid-call) is conservatively treated as failed rather than
  * dropped, so `toolCallStats` still accounts for every attempted call.
  */
 export function deriveReceiptToolCalls(
+    metadata: {
+        readonly reasoningSteps?: ReadonlyArray<{
+            readonly type: string
+            readonly metadata?: Record<string, unknown>
+        }>
+        readonly receiptToolCalls?: ReadonlyArray<{
+            readonly name: string
+            readonly ok: boolean
+        }>
+    } | undefined
+): ReadonlyArray<{ readonly name: string; readonly ok: boolean }> {
+    const fromSteps = deriveFromSteps(metadata?.reasoningSteps)
+    if (fromSteps.length > 0) return fromSteps
+    return metadata?.receiptToolCalls ?? []
+}
+
+function deriveFromSteps(
     reasoningSteps: ReadonlyArray<{
         readonly type: string
         readonly metadata?: Record<string, unknown>
@@ -117,6 +145,31 @@ export function deriveReceiptToolCalls(
         result.push({ name: toolCall.name, ok })
     }
     return result
+}
+
+/**
+ * Resolve the `modelId` stamped on a TrustReceipt (Arc 1 Task 8) — the SINGLE
+ * source used by BOTH receipt-assembly sites (`reactive-agent.ts`
+ * buildRunTaskEffect and `engine/execute-stream.ts`), so the same run can
+ * never carry different `receipt.modelId` values across `.run()` vs
+ * `.runStream()`.
+ *
+ * Mirrors `createRuntime`'s model-resolution chain (runtime.ts:263-269)
+ * exactly: explicit model > `LLM_DEFAULT_MODEL` env > provider registry
+ * default > the same hardcoded final fallback. The stream site passes the
+ * already-resolved `config.defaultModel` (first branch returns it verbatim);
+ * the non-stream site passes the raw builder `_model` + provider and walks
+ * the identical chain — converging on the same value by construction.
+ */
+export function deriveReceiptModelId(model: unknown, provider: unknown): string {
+    if (typeof model === 'string' && model.length > 0) return model
+    const envModel = process.env.LLM_DEFAULT_MODEL
+    if (envModel !== undefined && envModel.length > 0) return envModel
+    if (typeof provider === 'string' && provider.length > 0) {
+        const providerDefault = getProviderDefaultModel(provider)
+        if (providerDefault !== undefined && providerDefault.length > 0) return providerDefault
+    }
+    return 'claude-sonnet-4-6'
 }
 
 // ─── Persona Composition Helper ───────────────────────────────────────────────

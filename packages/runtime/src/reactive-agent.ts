@@ -19,7 +19,7 @@ import {
     Context,
     Fiber,
 } from 'effect'
-import { deriveGoalAchieved, deriveReceiptToolCalls } from './builder/helpers.js'
+import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from './builder/helpers.js'
 import {
     CapabilityRegistry,
     type CapabilityAuditReport,
@@ -1480,32 +1480,43 @@ export class ReactiveAgent<TOut = unknown> {
                 // answer was produced, computed from in-memory run data (works
                 // without tracing). See @reactive-agents/core's TrustReceipt
                 // JSDoc: NOT a truth certificate.
-                const receiptModelId =
-                    typeof this.config.model === 'string' && this.config.model.length > 0
-                        ? this.config.model
-                        : typeof this.config.provider === 'string'
-                            ? `${this.config.provider}:default`
-                            : 'unknown'
-                const receipt: TrustReceipt = computeTrustReceipt({
-                    toolCalls: deriveReceiptToolCalls(reasoningSteps),
-                    ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
-                    goalAchieved,
-                    abstained: r.terminatedBy === 'abstained',
-                    success: r.success,
-                    modelId: receiptModelId,
-                    ...(this._durableResume?.configHash !== undefined
-                        ? { configHash: this._durableResume.configHash }
-                        : {}),
-                    ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
-                    now: Date.now(),
-                })
+                // Receipts belong to TERMINAL results only: a run paused for
+                // approval/interaction is unfinished — grading it now would
+                // stamp a misleading verdict, and the resumed run produces its
+                // own receipt on completion. Mirrors the TrustEvent pause
+                // suppression in engine/execute-stream.ts.
+                const isPausedRun =
+                    r.awaitingApprovalFor !== undefined ||
+                    r.awaitingInteractionFor !== undefined
+                const receipt: TrustReceipt | undefined = isPausedRun
+                    ? undefined
+                    : computeTrustReceipt({
+                          toolCalls: deriveReceiptToolCalls(
+                              rawMetadata as {
+                                  reasoningSteps?: ReadonlyArray<{ type: string; metadata?: Record<string, unknown> }>
+                                  receiptToolCalls?: ReadonlyArray<{ name: string; ok: boolean }>
+                              },
+                          ),
+                          ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
+                          goalAchieved,
+                          abstained: r.terminatedBy === 'abstained',
+                          success: r.success,
+                          // Single shared source with the streaming site — see
+                          // deriveReceiptModelId's JSDoc (builder/helpers.ts).
+                          modelId: deriveReceiptModelId(this.config.model, this.config.provider),
+                          ...(this._durableResume?.configHash !== undefined
+                              ? { configHash: this._durableResume.configHash }
+                              : {}),
+                          ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
+                          now: Date.now(),
+                      })
                 const agentResult: AgentResult = {
                     output: String(r.output ?? ''),
                     success: r.success,
                     taskId: String(r.taskId),
                     agentId: String(r.agentId),
                     metadata: enrichedMetadata,
-                    receipt,
+                    ...(receipt !== undefined ? { receipt } : {}),
                     ...(r.format !== undefined ? { format: r.format } : {}),
                     ...(r.terminatedBy !== undefined
                         ? { terminatedBy: r.terminatedBy }

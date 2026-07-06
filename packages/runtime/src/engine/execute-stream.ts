@@ -31,7 +31,7 @@ import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
-import { deriveGoalAchieved, deriveReceiptToolCalls } from "../builder/helpers.js";
+import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from "../builder/helpers.js";
 
 export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
@@ -379,6 +379,14 @@ export const makeExecuteStream =
           // alongside StreamCompleted rather than folded into it, per the
           // ui-core reserved-tag contract (protocol/events.ts). NOT a truth
           // certificate — see TrustReceipt's JSDoc in @reactive-agents/core.
+          //
+          // SUPPRESSED on pause paths (awaiting-approval / awaiting-interaction):
+          // receipts belong to terminal results only — a paused run is
+          // unfinished, and the resumed run emits its own TrustEvent on
+          // completion. Detected on the RAW awaiting descriptors (not the
+          // durable-gated `paused` flags) so a pause never grades, durable or
+          // not. Mirrors the receipt suppression in reactive-agent.ts.
+          const isPausedRun = gate !== undefined || interaction !== undefined;
           const receiptSource = taskResult as {
             terminatedBy?: TerminatedBy
             success?: boolean
@@ -387,28 +395,32 @@ export const makeExecuteStream =
                 readonly type: string
                 readonly metadata?: Record<string, unknown>
               }>
+              receiptToolCalls?: ReadonlyArray<{
+                readonly name: string
+                readonly ok: boolean
+              }>
             }
           };
-          const receiptModelId =
-            typeof config.defaultModel === "string" && config.defaultModel.length > 0
-              ? config.defaultModel
-              : typeof config.provider === "string"
-                ? `${config.provider}:default`
-                : "unknown";
-          const receipt = computeTrustReceipt({
-            toolCalls: deriveReceiptToolCalls(receiptSource.metadata?.reasoningSteps),
-            ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
-            goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
-            abstained: receiptSource.terminatedBy === "abstained",
-            success: receiptSource.success ?? true,
-            modelId: receiptModelId,
-            now: Date.now(),
-          });
-          const trustEvent: AgentStreamEvent = {
-            _tag: "TrustEvent",
-            verdict: receipt.verdict,
-            confidence: receipt.confidence,
-          };
+          const trustEvent: AgentStreamEvent | undefined = isPausedRun
+            ? undefined
+            : (() => {
+                const receipt = computeTrustReceipt({
+                  toolCalls: deriveReceiptToolCalls(receiptSource.metadata),
+                  ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
+                  goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
+                  abstained: receiptSource.terminatedBy === "abstained",
+                  success: receiptSource.success ?? true,
+                  // Single shared source with the non-streaming site — see
+                  // deriveReceiptModelId's JSDoc (builder/helpers.ts).
+                  modelId: deriveReceiptModelId(config.defaultModel, config.provider),
+                  now: Date.now(),
+                });
+                return {
+                  _tag: "TrustEvent",
+                  verdict: receipt.verdict,
+                  confidence: receipt.confidence,
+                } satisfies AgentStreamEvent;
+              })();
 
           // Persist the pause BEFORE emitting StreamCompleted so callers that
           // consume the event can immediately call decideApproval / respond.
@@ -427,10 +439,13 @@ export const makeExecuteStream =
           // TrustEvent must be queued BEFORE the terminal StreamCompleted:
           // the consumer's unfold loop stops reading the queue the instant it
           // sees a terminal tag, so anything offered after it would never be
-          // delivered.
+          // delivered. `undefined` = pause path (suppressed, see above).
+          const trustStep = trustEvent !== undefined
+            ? Queue.offer(queue, trustEvent)
+            : Effect.void;
           const offer = flushStep.pipe(
             Effect.zipRight(persistStep),
-            Effect.zipRight(Queue.offer(queue, trustEvent)),
+            Effect.zipRight(trustStep),
             Effect.zipRight(Queue.offer(queue, completedEvent)),
           );
           if (!eb) return offer;
