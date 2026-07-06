@@ -14,10 +14,10 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 
 |                              |                                                                  |
 | ---------------------------- | ---------------------------------------------------------------- |
-| **41 packages & apps**       | 35 packages + 6 apps — 33 published to npm, all opt-in, no hidden coupling |
-| **6 LLM providers**          | Anthropic, OpenAI, Gemini, Ollama (local), LiteLLM 40+, Test     |
+| **41 packages & apps**       | 36 packages + 5 apps — 33 published to npm, all opt-in, no hidden coupling |
+| **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM 40+, Test |
 | **7 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
-| **6,854 tests · 851 files**  | Verified with `bun test` on every PR                            |
+| **7,190 tests · 908 files**  | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -107,7 +107,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Agent debrief + chat** — `agent.chat()` for one-shot Q&A, `agent.session()` for multi-turn (optional SQLite persistence), post-run `DebriefSynthesizer`
 
 ### 🔌 Providers & Models
--   **6 LLM providers** — Anthropic, OpenAI, Google Gemini, Ollama (local), LiteLLM (40+ models), Test (deterministic)
+-   **8 LLM providers** — Anthropic, OpenAI, Google Gemini, Groq, xAI (Grok), Ollama (local), LiteLLM (40+ models), Test (deterministic)
 -   **Model-adaptive context profiles** — 4 tiers (local / mid / large / frontier) with tier-aware prompts, compaction, and truncation; **4B+ Ollama models work** with the same code
 -   **Adaptive tool calling** — FC dialect probe routes to `NativeFCDriver` or 3-tier `TextParseDriver` (XML / JSON / pseudo-code)
 -   **HealingPipeline** — normalizes tool-name aliases, param aliases, paths, and type coercion before every execution (86.7% recovery rate, +80pp accuracy on small models)
@@ -154,7 +154,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All build on `ui-core` and consume `AgentStream.toSSE()` + the durable endpoint helpers from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **6,854 tests** across 851 files — verified `bun test` on every PR
+- **7,190 tests** across 908 files — verified `bun test` on every PR
 - **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -402,7 +402,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   6,854 tests   |      --      |      --       |   --    |
+| Test suite                    |   7,190 tests   |      --      |      --       |   --    |
 
 <sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-06. `--` means we found no first-party equivalent, not that none exists. Corrections welcome — [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
@@ -850,7 +850,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (6,854 tests / 851 files, ~95s)
+bun test                 # Run full test suite (7,190 tests / 908 files, ~95s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

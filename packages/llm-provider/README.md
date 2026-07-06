@@ -3,9 +3,10 @@
 > Version: **0.10.3** — LLM provider adapters for [Reactive Agents](https://docs.reactiveagents.dev/).
 
 A unified `LLMService` interface (`complete`, `stream`, `embed`, structured output) with adapters
-for **Anthropic**, **OpenAI**, **Google Gemini**, **Ollama**, **LiteLLM**, and a deterministic
-**test** provider. Includes provider behavior adapters, calibration, retry/circuit-breaker/rate
-limiting, and a fallback chain.
+for **Anthropic**, **OpenAI**, **Google Gemini**, **Groq**, **xAI (Grok)**, **Ollama**, **LiteLLM**,
+and a deterministic **test** provider. Groq and xAI are OpenAI-compatible and share the
+`makeOpenAICompatProvider` factory. Includes provider behavior adapters, calibration,
+retry/circuit-breaker/rate limiting, and a fallback chain.
 
 ## Installation
 
@@ -17,9 +18,9 @@ Install the SDK for your chosen provider:
 
 ```bash
 bun add @anthropic-ai/sdk           # Anthropic Claude
-bun add openai                      # OpenAI GPT-4o, o1
+bun add openai                      # OpenAI GPT-4o, o1 — also Groq & xAI (OpenAI-compatible)
 bun add @google/genai               # Google Gemini
-# Ollama and LiteLLM use plain HTTP — no SDK required.
+# Groq, xAI, Ollama, and LiteLLM use OpenAI-compatible / plain HTTP — reuse the openai SDK or none.
 ```
 
 ## Supported providers

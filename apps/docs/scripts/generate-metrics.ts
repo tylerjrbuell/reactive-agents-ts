@@ -63,7 +63,14 @@ const countTestFiles = (): number => {
       if (e.name.toString() === "node_modules" || e.name.toString() === "dist" || e.name.toString().startsWith(".")) continue;
       const full = join(path, e.name.toString());
       if (e.isDirectory()) walk(full);
-      else if (e.isFile() && (e.name.toString().endsWith(".test.ts") || e.name.toString().endsWith(".spec.ts"))) count++;
+      else if (
+        e.isFile() &&
+        (e.name.toString().endsWith(".test.ts") ||
+          e.name.toString().endsWith(".test.tsx") ||
+          e.name.toString().endsWith(".spec.ts") ||
+          e.name.toString().endsWith(".spec.tsx"))
+      )
+        count++;
     }
   };
   for (const r of roots) walk(join(REPO_ROOT, r));

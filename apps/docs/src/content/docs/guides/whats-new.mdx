@@ -16,6 +16,42 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## v0.13.5 — Groq, xAI & the Agentic UI Kit (July 2026)
+
+<Aside type="tip" title="Released on npm">
+Shipped July 2026 — all {metrics.packagesTotal} packages are published. Install or upgrade with `bunx create-reactive-agent` or pin `reactive-agents@0.13.5`.
+</Aside>
+
+Two new providers, a headless UI-controller package that unifies the React, Svelte, and Vue bindings, a durable request-for-input rail in Cortex, and honest error surfacing.
+
+### Groq and xAI providers
+
+Both wire through a shared `makeOpenAICompatProvider` factory, so they inherit the full OpenAI-compatible stack — streaming, native function calling, structured output — with no bespoke adapter.
+
+```typescript
+ReactiveAgents.create().withProvider("groq").withModel("llama-3.3-70b-versatile").build();
+ReactiveAgents.create().withProvider("xai").withModel("grok-4").build();
+```
+
+Both are live-verified end to end (plain completion + native tool-call round-trips). Logprobs and embeddings are capability-gated (neither provider exposes them); structured output on Groq is model-dependent (`json_schema` strict on `gpt-oss` and some models, `json_object` elsewhere), with the parse-retry loop covering the gap. The selectable-provider count is now **{metrics.providers}**. See [LLM Providers](/features/llm-providers/).
+
+### Agentic UI Kit — `@reactive-agents/ui-core`
+
+A new framework-agnostic headless package holds the shared controllers behind every UI binding: a progressive UI-tree reconciler, a task-inbox fetch controller, and interaction + approval POST controllers. React, Svelte, and Vue now delegate to these instead of each re-implementing the wire protocol.
+
+- **React** — rewired onto `ui-core` with a core `useRun` hook and the full v1 family surface: Interact (`AgentPrompt`/`ChoiceCard`), Inbox (`useTaskInbox`/`TaskInbox`), Observe (`useRunCost`/`useRunSteps`, `CostMeter`/`StepTimeline`), Render (`AgentSurface` registry + UI-tree schema), plus `useResumableRun` and an `AgentDevtools` overlay with `testing`/`styles` subpaths.
+- **Svelte** and **Vue** — rewired onto the same controllers (`createRun`, `createInteractions`, `createResumableRun`, run cost/steps), with `requestInit`/header pass-through restored on structured streams.
+
+### Cortex `request_user_input` rail
+
+Cortex gains a durable request-for-input rail — runner methods plus a `.withInteraction(...)` surface, an interaction-watcher, and a real pause → register → respond → resume flow. The Cortex UI renders a live Interact panel and streaming structured previews.
+
+### Honest run errors
+
+Reasoning failures now propagate the real error string to `result.error` end to end. Previously the kernel captured the message in `state.error`, but `normalizeReasoningResult` dropped it during its whitelist rebuild, so callers only saw a generic `"Reasoning failed"`. A bad model id now surfaces `"…404 The model … does not exist"` on `result.error`.
+
+---
+
 ## v0.13.0 — Receipts & first-touch (July 2026)
 
 <Aside type="tip" title="Released on npm">
