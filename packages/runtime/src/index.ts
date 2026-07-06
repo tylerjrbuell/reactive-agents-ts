@@ -201,3 +201,16 @@ export {
   type HarnessProfilePatch,
   type HarnessProfileName,
 } from "./capabilities/profile.js";
+
+// ─── Durable RunStore substrate (Arc 1 Task 7: `rax ps` / `rax attach`) ───
+// `RunStatus` is already exported above (run-controller's own in-memory
+// running/paused/stopped/terminated/completed status) — alias the store's
+// persisted lifecycle status as `RunStoreStatus` to avoid a name collision,
+// mirroring the internal alias `run-controller.ts` already uses.
+export {
+  RunStoreLive,
+  RunStoreService,
+  type RunRecord,
+  type RunStatus as RunStoreStatus,
+} from "./services/run-store.js";
+export { listDurableRuns } from "./engine/durable-resume.js";

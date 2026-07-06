@@ -1,3 +1,5 @@
+import { psCommand } from "./commands/ps.js";
+import { attachCommand } from "./commands/attach.js";
 import { runInit } from "./commands/init.js";
 import { runCreateAgent } from "./commands/create-agent.js";
 import { runDev } from "./commands/dev.js";
@@ -49,6 +51,8 @@ const HELP = `
     skills export --agent <id> [--name <s>] [--out <file|dir>]   Export skills as SKILL.md
     skills import <file> --agent <id> [--rebind <id>] [--regenerate-id]   Import from SKILL.md
     skills list --agent <id>                          List skills for an agent
+    ps [--db <path>] [--all]                          List durable runs (process model)
+    attach <runId> [--db <path>]                      Poll a durable run's status until terminal
     help                                              Show this help
     version                                           Show version
 
@@ -137,6 +141,14 @@ export function main(argv: string[] = process.argv.slice(2)) {
 
     case "diagnose":
       runAsync(runDiagnose(argv.slice(1)));
+      break;
+
+    case "ps":
+      runAsync(psCommand(argv.slice(1)));
+      break;
+
+    case "attach":
+      runAsync(attachCommand(argv.slice(1)));
       break;
 
     case "version":
