@@ -37,6 +37,11 @@ describe("ReactiveAgentBuilder", () => {
     expect(result.metadata).toBeDefined();
     expect(typeof result.metadata.duration).toBe("number");
     expect(typeof result.metadata.stepsCount).toBe("number");
+    // Trust receipt (Arc 1 Task 8): present on every run, including the
+    // non-reasoning test-provider path (works without tracing/tools).
+    expect(result.receipt?.verdict).toBeDefined();
+    expect(result.receipt?.method).toBe("heuristic");
+    expect(typeof result.receipt?.confidence).toBe("number");
   });
 
   it("withModel() accepts a ModelParams object with thinking/temperature/maxTokens", async () => {

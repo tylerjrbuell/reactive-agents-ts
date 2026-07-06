@@ -19,7 +19,7 @@ import {
     Context,
     Fiber,
 } from 'effect'
-import { deriveGoalAchieved } from './builder/helpers.js'
+import { deriveGoalAchieved, deriveReceiptToolCalls } from './builder/helpers.js'
 import {
     CapabilityRegistry,
     type CapabilityAuditReport,
@@ -34,7 +34,7 @@ import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError } from './err
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef, computeTrustReceipt, type TrustReceipt } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
@@ -1334,6 +1334,7 @@ export class ReactiveAgent<TOut = unknown> {
         let pipeline = this.buildRunTaskEffect(params.input, {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
+            ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
         }).pipe(Effect.locally(RunControllerRef, controller))
         if (params.modelOverride !== undefined) {
             pipeline = pipeline.pipe(Effect.locally(ModelOverrideRef, params.modelOverride))
@@ -1396,7 +1397,12 @@ export class ReactiveAgent<TOut = unknown> {
      */
     private buildRunTaskEffect(
         input: string,
-        options?: { readonly taskId?: string; readonly durableRunId?: string }
+        options?: {
+            readonly taskId?: string
+            readonly durableRunId?: string
+            /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
+            readonly forkedFrom?: string
+        }
     ): Effect.Effect<AgentResult, Error> {
         // Pre-set the task description so sub-agents spawned on the first iteration
         // have access to the full user prompt (including phone numbers, URLs, etc.)
@@ -1469,17 +1475,42 @@ export class ReactiveAgent<TOut = unknown> {
                 // attaches the fiber here. debriefRich() awaits it lazily; the
                 // fiber is tracked so dispose() joins it (no dropped persist).
                 const debriefFiber = (r as { _debriefFiber?: Fiber.RuntimeFiber<{ debrief?: AgentDebrief; tokensUsed: number }, never> })._debriefFiber
+                const goalAchieved = deriveGoalAchieved(r.terminatedBy)
+                // Trust receipt (Arc 1 Task 8) — graded evidence about HOW the
+                // answer was produced, computed from in-memory run data (works
+                // without tracing). See @reactive-agents/core's TrustReceipt
+                // JSDoc: NOT a truth certificate.
+                const receiptModelId =
+                    typeof this.config.model === 'string' && this.config.model.length > 0
+                        ? this.config.model
+                        : typeof this.config.provider === 'string'
+                            ? `${this.config.provider}:default`
+                            : 'unknown'
+                const receipt: TrustReceipt = computeTrustReceipt({
+                    toolCalls: deriveReceiptToolCalls(reasoningSteps),
+                    ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
+                    goalAchieved,
+                    abstained: r.terminatedBy === 'abstained',
+                    success: r.success,
+                    modelId: receiptModelId,
+                    ...(this._durableResume?.configHash !== undefined
+                        ? { configHash: this._durableResume.configHash }
+                        : {}),
+                    ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
+                    now: Date.now(),
+                })
                 const agentResult: AgentResult = {
                     output: String(r.output ?? ''),
                     success: r.success,
                     taskId: String(r.taskId),
                     agentId: String(r.agentId),
                     metadata: enrichedMetadata,
+                    receipt,
                     ...(r.format !== undefined ? { format: r.format } : {}),
                     ...(r.terminatedBy !== undefined
                         ? { terminatedBy: r.terminatedBy }
                         : {}),
-                    goalAchieved: deriveGoalAchieved(r.terminatedBy),
+                    goalAchieved,
                     ...(projectAbstention(r) !== undefined
                         ? { abstention: projectAbstention(r) }
                         : {}),

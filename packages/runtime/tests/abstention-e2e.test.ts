@@ -67,6 +67,11 @@ describe("result.abstention e2e — full strategy→engine→runtime path (C1)",
       expect(result.abstention).toBeDefined();
       expect(result.abstention?.reason).toBeTruthy();
       expect(result.abstention?.missing).toContain("tool:missing-tool-xyz");
+
+      // Trust receipt (Arc 1 Task 8): abstained wins over everything on the
+      // kernel path too — confidence pinned at 0.95 per the verdict rules.
+      expect(result.receipt?.verdict).toBe("abstained");
+      expect(result.receipt?.confidence).toBe(0.95);
     },
     20_000,
   );

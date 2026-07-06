@@ -14,7 +14,7 @@ import type {
     ShellExecuteConfig,
 } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
-import type { OutputFormat, TerminatedBy } from '@reactive-agents/core'
+import type { OutputFormat, TerminatedBy, TrustReceipt } from '@reactive-agents/core'
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import type { AgentDebrief } from '../debrief.js'
 
@@ -839,6 +839,16 @@ export interface AgentResult {
     readonly agentId: string
     /** Metadata about the execution (duration, cost, tokens, strategy, steps). */
     readonly metadata: AgentResultMetadata
+    /**
+     * Deterministic trust receipt (Arc 1 Task 8) — graded evidence about HOW
+     * this answer was produced (tool-call outcomes, termination reason,
+     * abstention, verifier verdict when present). Computed from in-memory run
+     * data at result assembly, so it is present even when tracing is off.
+     *
+     * NOT a truth certificate: `receipt.verdict` grades the run's evidence
+     * trail, not the factual correctness of `output`. See {@link TrustReceipt}.
+     */
+    readonly receipt?: TrustReceipt
     // New optional fields — backward compatible
     /** Output format detected or declared by the agent. */
     readonly format?: OutputFormat

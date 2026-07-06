@@ -10,7 +10,7 @@
  * instead of closure-captured.
  */
 import { Effect, Layer, Option, Queue, Stream as EStream } from "effect";
-import type { Task, TaskResult, RunControllerLike, AgentEvent } from "@reactive-agents/core";
+import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import {
   StreamingTextCallback,
@@ -18,6 +18,7 @@ import {
   EventBus,
   emitErrorSwallowed,
   errorTag,
+  computeTrustReceipt,
 } from "@reactive-agents/core";
 import { hash } from "@reactive-agents/runtime-shim";
 import { homedir } from "node:os";
@@ -30,6 +31,7 @@ import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
+import { deriveGoalAchieved, deriveReceiptToolCalls } from "../builder/helpers.js";
 
 export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
@@ -371,6 +373,43 @@ export const makeExecuteStream =
                 }
               : {}),
           };
+          // Trust receipt (Arc 1 Task 8) — graded evidence about HOW the
+          // answer was produced, computed from this same in-memory taskResult
+          // (works without tracing). Emitted as an additive TrustEvent
+          // alongside StreamCompleted rather than folded into it, per the
+          // ui-core reserved-tag contract (protocol/events.ts). NOT a truth
+          // certificate — see TrustReceipt's JSDoc in @reactive-agents/core.
+          const receiptSource = taskResult as {
+            terminatedBy?: TerminatedBy
+            success?: boolean
+            metadata?: {
+              reasoningSteps?: ReadonlyArray<{
+                readonly type: string
+                readonly metadata?: Record<string, unknown>
+              }>
+            }
+          };
+          const receiptModelId =
+            typeof config.defaultModel === "string" && config.defaultModel.length > 0
+              ? config.defaultModel
+              : typeof config.provider === "string"
+                ? `${config.provider}:default`
+                : "unknown";
+          const receipt = computeTrustReceipt({
+            toolCalls: deriveReceiptToolCalls(receiptSource.metadata?.reasoningSteps),
+            ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
+            goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
+            abstained: receiptSource.terminatedBy === "abstained",
+            success: receiptSource.success ?? true,
+            modelId: receiptModelId,
+            now: Date.now(),
+          });
+          const trustEvent: AgentStreamEvent = {
+            _tag: "TrustEvent",
+            verdict: receipt.verdict,
+            confidence: receipt.confidence,
+          };
+
           // Persist the pause BEFORE emitting StreamCompleted so callers that
           // consume the event can immediately call decideApproval / respond.
           const persistStep = paused && runStoreCtx !== undefined
@@ -385,8 +424,13 @@ export const makeExecuteStream =
           const flushStep = durableFlush
             ? Effect.promise(() => durableFlush!())
             : Effect.void;
+          // TrustEvent must be queued BEFORE the terminal StreamCompleted:
+          // the consumer's unfold loop stops reading the queue the instant it
+          // sees a terminal tag, so anything offered after it would never be
+          // delivered.
           const offer = flushStep.pipe(
             Effect.zipRight(persistStep),
+            Effect.zipRight(Queue.offer(queue, trustEvent)),
             Effect.zipRight(Queue.offer(queue, completedEvent)),
           );
           if (!eb) return offer;

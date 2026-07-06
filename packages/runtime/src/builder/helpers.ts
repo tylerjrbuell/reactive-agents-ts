@@ -74,6 +74,51 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
     }
 }
 
+/**
+ * Derive `{name, ok}` tool-call outcomes for the trust receipt (Arc 1 Task 8)
+ * from a run's `reasoningSteps`. Pairs each `action` step's
+ * `metadata.toolCall.id` with the `observation` step carrying the matching
+ * `metadata.toolCallId`, reading `metadata.observationResult.success` as the
+ * ok/fail signal (see `packages/reasoning/.../act/tool-observe.ts` and
+ * `act.ts`, which both stamp this exact shape on every tool call).
+ *
+ * An action step with no resolvable observation pairing (e.g. the run was
+ * interrupted mid-call) is conservatively treated as failed rather than
+ * dropped, so `toolCallStats` still accounts for every attempted call.
+ */
+export function deriveReceiptToolCalls(
+    reasoningSteps: ReadonlyArray<{
+        readonly type: string
+        readonly metadata?: Record<string, unknown>
+    }> | undefined
+): ReadonlyArray<{ readonly name: string; readonly ok: boolean }> {
+    if (!reasoningSteps || reasoningSteps.length === 0) return []
+
+    const okByCallId = new Map<string, boolean>()
+    for (const step of reasoningSteps) {
+        if (step.type !== "observation") continue
+        const callId = step.metadata?.toolCallId
+        const observationResult = step.metadata?.observationResult as
+            | { success?: boolean }
+            | undefined
+        if (typeof callId === "string" && typeof observationResult?.success === "boolean") {
+            okByCallId.set(callId, observationResult.success)
+        }
+    }
+
+    const result: Array<{ name: string; ok: boolean }> = []
+    for (const step of reasoningSteps) {
+        if (step.type !== "action") continue
+        const toolCall = step.metadata?.toolCall as
+            | { id?: string; name?: string }
+            | undefined
+        if (!toolCall?.name) continue
+        const ok = typeof toolCall.id === "string" ? okByCallId.get(toolCall.id) ?? false : false
+        result.push({ name: toolCall.name, ok })
+    }
+    return result
+}
+
 // ─── Persona Composition Helper ───────────────────────────────────────────────
 
 /**

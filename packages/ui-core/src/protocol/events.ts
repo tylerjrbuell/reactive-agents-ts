@@ -142,7 +142,10 @@ export interface LimitExceeded {
   readonly retryAfterMs?: number;
 }
 
-// ── Reserved tags (declared for forward-compat; NOT emitted in v1) ───────
+// ── Reserved / forward-compat tags ────────────────────────────────────────
+// ObjectDelta/UiTreeDelta/StepEvent: declared for forward-compat, NOT emitted
+// in v1. TrustEvent graduated out of "reserved" in Arc 1 Task 8 — it IS
+// emitted (alongside StreamCompleted) starting this version.
 export interface ObjectDelta {
   readonly _tag: "ObjectDelta";
   readonly partial: unknown;
@@ -151,11 +154,23 @@ export interface UiTreeDelta {
   readonly _tag: "UiTreeDelta";
   readonly partial: unknown;
 }
+/**
+ * Trust receipt summary (Arc 1 Task 8) — emitted alongside `StreamCompleted`
+ * on every run. `verdict`/`confidence` mirror `TrustReceipt` (see
+ * `@reactive-agents/core`); NOT a truth certificate — grades the evidence
+ * trail, not factual correctness.
+ *
+ * `claimId`/`sources` are reserved for a future per-claim grounding-check
+ * variant of this tag and are NOT populated by the run-level receipt event
+ * shipped in v1 — kept optional so a future producer can add them without
+ * another breaking shape change.
+ */
 export interface TrustEvent {
   readonly _tag: "TrustEvent";
-  readonly claimId: string;
   readonly verdict: string;
-  readonly sources: readonly string[];
+  readonly confidence: number;
+  readonly claimId?: string;
+  readonly sources?: readonly string[];
 }
 export interface StepEvent {
   readonly _tag: "StepEvent";

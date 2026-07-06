@@ -101,4 +101,16 @@ export type AgentStreamEvent =
       readonly callId: string;
       readonly durationMs: number;
       readonly success: boolean;
+    }
+  | {
+      /**
+       * Trust receipt summary (Arc 1 Task 8) — emitted immediately before
+       * `StreamCompleted` on every run (both densities). Mirrors the
+       * corresponding fields of `AgentResult.receipt`; NOT a truth
+       * certificate — `verdict` grades the evidence trail, not factual
+       * correctness. See `TrustReceipt` in `@reactive-agents/core`.
+       */
+      readonly _tag: "TrustEvent";
+      readonly verdict: "tool-grounded" | "partially-grounded" | "ungrounded" | "abstained" | "failed";
+      readonly confidence: number;
     };
