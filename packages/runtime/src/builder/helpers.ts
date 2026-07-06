@@ -11,6 +11,8 @@ import { join } from 'node:path'
 import { Effect, type Context } from 'effect'
 import type { TerminatedBy } from '@reactive-agents/core'
 import { getProviderDefaultModel } from '@reactive-agents/llm-provider'
+import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME } from '@reactive-agents/reasoning'
+import { REQUEST_USER_INPUT_TOOL_NAME } from '@reactive-agents/tools'
 import type { AgentPersona } from './types.js'
 
 /**
@@ -76,8 +78,43 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
 }
 
 /**
+ * Whether a tool name counts as SUBSTANTIVE grounding evidence for the trust
+ * receipt (Arc 1 Task 8). Excluded, per the kernel's own "not real work"
+ * classification (live-smoke defect fix 2026-07-06):
+ *
+ * - `META_TOOLS` (kernel-constants.ts, the single source of truth): harness
+ *   inline tools — final-answer, task-complete, context-status, brief, pulse,
+ *   find, recall, checkpoint, activate-skill, discover-tools,
+ *   write_result_to_file. EVERY kernel run terminates via `final-answer`, so
+ *   counting it made verdict "ungrounded" unreachable on the kernel path and
+ *   graded pure-knowledge answers "tool-grounded" — inverting the receipt's
+ *   whole purpose.
+ * - `HARNESS_PSEUDO_TOOLS` (same file): harness-injected observation
+ *   pseudo-names (system, completion-guard, abstention-legitimacy). Its JSDoc
+ *   documents this exact masking hazard for the kernel's own grounded-terminal
+ *   invariant; excluded here defensively (they never appear as action
+ *   `toolCall` names or ToolCallCompleted events today).
+ * - `ABSTAIN_TOOL_NAME` ("abstain", meta-tool-handlers.ts — NOT in
+ *   META_TOOLS): termination meta-tool. Safe to exclude: verdict rule 1
+ *   (abstained) is driven by `terminatedBy === "abstained"`, never by
+ *   toolCalls.
+ * - `REQUEST_USER_INPUT_TOOL_NAME` ("request_user_input", tools pkg): the
+ *   interaction PAUSE tool — paused runs never grade (receipt suppressed),
+ *   but a resumed-then-completed run's steps can still contain it.
+ *
+ * All names import from their owning packages — no hardcoded copies to drift.
+ */
+const isSubstantiveReceiptTool = (name: string): boolean =>
+    !META_TOOLS.has(name) &&
+    !HARNESS_PSEUDO_TOOLS.has(name) &&
+    name !== ABSTAIN_TOOL_NAME &&
+    name !== REQUEST_USER_INPUT_TOOL_NAME
+
+/**
  * Derive `{name, ok}` tool-call outcomes for the trust receipt (Arc 1 Task 8)
- * from a run's result metadata. Two sources, in preference order:
+ * from a run's result metadata. Meta/termination/pseudo tools are excluded at
+ * BOTH sources (see {@link isSubstantiveReceiptTool}) — only substantive
+ * calls are grounding evidence. Two sources, in preference order:
  *
  * 1. `reasoningSteps` (kernel path) — pairs each `action` step's
  *    `metadata.toolCall.id` with the `observation` step carrying the matching
@@ -111,7 +148,9 @@ export function deriveReceiptToolCalls(
 ): ReadonlyArray<{ readonly name: string; readonly ok: boolean }> {
     const fromSteps = deriveFromSteps(metadata?.reasoningSteps)
     if (fromSteps.length > 0) return fromSteps
-    return metadata?.receiptToolCalls ?? []
+    return (metadata?.receiptToolCalls ?? []).filter((tc) =>
+        isSubstantiveReceiptTool(tc.name),
+    )
 }
 
 function deriveFromSteps(
@@ -141,6 +180,9 @@ function deriveFromSteps(
             | { id?: string; name?: string }
             | undefined
         if (!toolCall?.name) continue
+        // Meta/termination/pseudo tools are not grounding evidence — see
+        // isSubstantiveReceiptTool (live-smoke defect: final-answer counted).
+        if (!isSubstantiveReceiptTool(toolCall.name)) continue
         const ok = typeof toolCall.id === "string" ? okByCallId.get(toolCall.id) ?? false : false
         result.push({ name: toolCall.name, ok })
     }
