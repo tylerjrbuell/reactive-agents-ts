@@ -66,20 +66,14 @@ export interface LLMTable {
     readonly size: number
 }
 
-interface LLMExchangeShape {
-    readonly kind: "llm-exchange"
-    readonly systemPrompt?: string
-    readonly messages: readonly { readonly role: string; readonly content: string }[]
-    readonly response: RecordedExchangeResponse
-}
-
 export function buildLLMTable(events: readonly TraceEvent[]): LLMTable {
     const buckets = new Map<string, RecordedExchange[]>()
     for (const ev of events) {
+        // The kind check narrows the TraceEvent discriminated union to
+        // LLMExchangeEvent (packages/trace/src/events.ts) — no cast needed.
         if (ev.kind !== "llm-exchange") continue
-        const e = ev as unknown as LLMExchangeShape
-        const key = exchangeKey(e.systemPrompt, e.messages)
-        const rec: RecordedExchange = { key, response: e.response }
+        const key = exchangeKey(ev.systemPrompt, ev.messages)
+        const rec: RecordedExchange = { key, response: ev.response }
         const list = buckets.get(key) ?? []
         list.push(rec)
         buckets.set(key, list)
