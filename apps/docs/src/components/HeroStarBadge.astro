@@ -1,0 +1,66 @@
+---
+// Fetches the live GitHub star count client-side and updates every
+// "Star on GitHub" surface on the page (hero button + sidebar CTA).
+// Safe to render more than once per page — guarded against double-fetch.
+---
+
+<script>
+  async function updateGitHubStars() {
+    // This component can be rendered on the same page more than once
+    // (e.g. hero + sidebar both present on the index page) — only fetch once.
+    if (window.__raGithubStarsFetched) return
+    window.__raGithubStarsFetched = true
+
+    try {
+      const res = await fetch('https://api.github.com/repos/tylerjrbuell/reactive-agents-ts')
+      if (!res.ok) return
+      const data = await res.json()
+      const count = new Intl.NumberFormat('en-US').format(data.stargazers_count)
+
+      // Hero button (index page only)
+      const heroButtons = document.querySelectorAll('.hero .sl-link-button')
+      const starButton = Array.from(heroButtons).find(btn => btn.textContent.includes('Star on GitHub'))
+      if (starButton) {
+        let badge = starButton.querySelector('.gh-star-badge')
+        if (!badge) {
+          badge = document.createElement('span')
+          badge.className = 'gh-star-badge'
+          starButton.appendChild(badge)
+        }
+        badge.textContent = count
+      }
+
+      // Sidebar CTA (every page)
+      const sidebarCta = document.querySelector('.ra-star-cta')
+      if (sidebarCta) {
+        let sidebarBadge = sidebarCta.querySelector('.ra-star-count')
+        if (!sidebarBadge) {
+          sidebarBadge = document.createElement('span')
+          sidebarBadge.className = 'ra-star-count'
+          sidebarCta.appendChild(sidebarBadge)
+        }
+        sidebarBadge.textContent = count
+      }
+    } catch (err) {
+      console.error('Failed to fetch GitHub stars:', err)
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', updateGitHubStars)
+  } else {
+    updateGitHubStars()
+  }
+</script>
+
+<style>
+  :global(.gh-star-badge) {
+    display: inline-block;
+    margin-left: 0.35rem;
+    background: rgba(139, 92, 246, 0.2);
+    border-radius: 6px;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.85em;
+    font-weight: 600;
+  }
+</style>

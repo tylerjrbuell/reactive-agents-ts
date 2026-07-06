@@ -111,6 +111,26 @@ html {
     }
 }
 
+/* ── Hero actions row — the text column is narrower than both buttons
+   combined, so Starlight's own flex-wrap on .actions was dropping
+   "Star on GitHub" to a second line even on desktop. Force a single row
+   there; only the .actions row (not the whole .stack copy column). ─── */
+.hero .actions {
+    flex-wrap: nowrap;
+    gap: 0.85rem;
+}
+
+@media (max-width: 640px) {
+    .hero .actions {
+        flex-wrap: wrap;
+    }
+}
+
+.hero .sl-link-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 /* ── Hero title gradient — darker at bottom ─────────────────── */
 .hero h1 {
     font-size: clamp(2.2rem, 5vw, 3.8rem);
@@ -133,6 +153,7 @@ html {
     background-clip: text;
     -webkit-text-fill-color: transparent;
     animation: ra-title-flow 8s ease-in-out infinite;
+    margin: 0;
 }
 
 /* ── Hero subtitle ──────────────────────────────────────────── */
@@ -141,6 +162,7 @@ html {
     line-height: 1.7;
     max-width: 44ch;
     margin-inline: auto;
+    margin-top: 0;
 }
 
 /* ── Header site title — gradient text, darker at bottom ────── */

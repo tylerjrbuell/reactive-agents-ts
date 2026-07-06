@@ -37,6 +37,12 @@ import demoGif from '../../assets/local-vs-frontier.gif'
   AND the bundled IntersectionObserver) live in ScrollReveal.astro so
   MDX doesn't mangle script contents with smart quotes or <p> wrapping.
 */}
+{/*
+  GitHub star count is fetched client-side and injected into both this
+  hero button and the sidebar CTA by HeroStarBadge, rendered globally
+  from PageSidebar.astro (Starlight's sidebar override, present on
+  every page including this one) — no separate import needed here.
+*/}
 <ScrollReveal />
 
 {/*

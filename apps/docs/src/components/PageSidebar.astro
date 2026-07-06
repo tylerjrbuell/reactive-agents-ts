@@ -12,6 +12,7 @@ import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/PageSidebar.astro";
 import EmailSubscribe from "./EmailSubscribe.astro";
 import FeedbackButton from "./FeedbackButton.astro";
+import HeroStarBadge from "./HeroStarBadge.astro";
 import githubStats from "../data/github-stats.json";
 
 const GITHUB_URL = "https://github.com/tylerjrbuell/reactive-agents-ts";
@@ -29,6 +30,7 @@ const GITHUB_URL = "https://github.com/tylerjrbuell/reactive-agents-ts";
         >
           <span class="ra-star-icon">⭐</span>
           <span class="ra-star-label">Star on GitHub</span>
+          {/* SSR fallback from build-time snapshot; HeroStarBadge overwrites with the live count on load */}
           {githubStats.stars > 0 && (
             <span class="ra-star-count">{githubStats.stars}</span>
           )}
@@ -37,3 +39,5 @@ const GITHUB_URL = "https://github.com/tylerjrbuell/reactive-agents-ts";
         <FeedbackButton />
     </div>
 </div>
+
+<HeroStarBadge />
