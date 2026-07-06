@@ -32,6 +32,7 @@ import type {
   InterventionDispatchedEvent,
   InterventionSuppressedEvent,
   HarnessSignalInjectedEvent,
+  LLMExchangeEvent,
 } from "./events.js";
 
 export interface GuardStat {
@@ -277,6 +278,7 @@ const isDispatched = (e: TraceEvent): e is InterventionDispatchedEvent => e.kind
 const isSuppressed = (e: TraceEvent): e is InterventionSuppressedEvent => e.kind === "intervention-suppressed";
 const isSignal = (e: TraceEvent): e is HarnessSignalInjectedEvent => e.kind === "harness-signal-injected";
 const isToolEnd = (e: TraceEvent): e is ToolCallEvent => e.kind === "tool-call-end";
+const isLLMExchange = (e: TraceEvent): e is LLMExchangeEvent => e.kind === "llm-exchange";
 
 /** Tools that count as substantive (non-introspection) work. */
 const INTROSPECTION_TOOLS = new Set([
@@ -321,9 +323,8 @@ export interface CostSignal {
   readonly interventionEstimatedTokens: number;
   /**
    * Whether per-exchange input/output + cache token split is available.
-   * Currently FALSE — emitLLMExchange does not fire on the live path and no
-   * provider populates tokensIn/tokensOut/cacheRead (coverage gap). The cache
-   * (KV-stability) signal needs that wiring before it can be reported.
+   * Currently FALSE — no provider populates tokensIn/tokensOut/cacheRead (coverage gap).
+   * The cache (KV-stability) signal needs that wiring before it can be reported.
    */
   readonly inOutSplitAvailable: boolean;
 }
@@ -382,13 +383,14 @@ export interface RunAnalysis {
   readonly failureModes: readonly FailureMode[];
   /** CENTERPIECE — what the trace could and could NOT see. */
   readonly coverage: CoverageReport;
+  /** Count of llm-exchange events in this run — proxy for model round-trips. */
+  readonly llmExchangeCount: number;
 }
 
 /** Emitters verified (this session) to have zero call sites. */
 const KNOWN_DEAD_EMITTERS = [
   "emitCuratorDecision (0 callers — context-fidelity/budget-decision signal blind)",
   "emitAlternativesConsidered (0 callers — counterfactual signal blind)",
-  "emitLLMExchange (wired but does not fire on the live reactive path — per-exchange token/cache signal blind)",
 ];
 
 export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis {
@@ -512,6 +514,9 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
   }
   const coverage: CoverageReport = { present, knownDeadEmitters: KNOWN_DEAD_EMITTERS, blindSpots };
 
+  // ── LLM exchange count ──────────────────────────────────────────────────
+  const llmExchangeCount = ev.filter(isLLMExchange).length;
+
   return {
     runId: trace.runId,
     ...(completed?.status ? { status: completed.status } : {}),
@@ -519,6 +524,7 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
     honesty, interventions, pressure, cost, reasoning, tools,
     failureModes: interventions.failureModes,
     coverage,
+    llmExchangeCount,
   };
 }
 
