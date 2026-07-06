@@ -323,8 +323,9 @@ export interface CostSignal {
   readonly interventionEstimatedTokens: number;
   /**
    * Whether per-exchange input/output + cache token split is available.
-   * Currently FALSE — no provider populates tokensIn/tokensOut/cacheRead (coverage gap).
-   * The cache (KV-stability) signal needs that wiring before it can be reported.
+   * llm-exchange fires on the live kernel path via observable-llm.ts (verified
+   * 2026-07-05); response payloads complete as of Arc 1 Task 1. Currently FALSE
+   * because no provider populates tokensIn/tokensOut/cacheRead yet (coverage gap).
    */
   readonly inOutSplitAvailable: boolean;
 }
