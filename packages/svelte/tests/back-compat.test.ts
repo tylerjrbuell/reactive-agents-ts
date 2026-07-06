@@ -1,7 +1,20 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mockAgentEndpoint, type RunFixture } from "@reactive-agents/ui-core/testing";
 import { createAgentStream } from "../src/agent-stream.js";
 import { createAgent } from "../src/agent.js";
+
+// These tests monkeypatch globalThis.fetch. Without restoring it, the patch
+// leaks into every later test in the same `bun test` process — real HTTP tests
+// (judge-server, secureServe) then get this SSE fixture for every request. Save
+// and restore around each test, matching smoke.test.ts / structured-stream.test.ts.
+type FetchFn = typeof globalThis.fetch;
+let originalFetch: FetchFn;
+beforeEach(() => {
+  originalFetch = globalThis.fetch;
+});
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 const FIXTURE: RunFixture = {
   protocolVersion: 1,

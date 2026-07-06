@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { describe, expect, test } from "bun:test";
+import { withHappyDom } from "./happy-dom.js";
 import { renderHook, render } from "@testing-library/react";
 import { initialRunState, reduceRunState, type RunState, type SeqStamped, type UiStreamEvent } from "@reactive-agents/ui-core";
 import { useRunCost } from "../src/hooks/use-run-cost.js";
@@ -7,9 +7,7 @@ import { useRunSteps } from "../src/hooks/use-run-steps.js";
 import { CostMeter } from "../src/components/CostMeter.js";
 import { StepTimeline } from "../src/components/StepTimeline.js";
 
-beforeAll(() => {
-  if (!globalThis.document) GlobalRegistrator.register();
-});
+withHappyDom();
 
 const build = (events: SeqStamped<UiStreamEvent>[]): RunState =>
   events.reduce((s, e) => reduceRunState(s, e), initialRunState());

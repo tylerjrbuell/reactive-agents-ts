@@ -1,12 +1,10 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { describe, expect, test } from "bun:test";
+import { withHappyDom } from "./happy-dom.js";
 import { render } from "@testing-library/react";
 import * as React from "react";
 import { AgentSurface, uiTreeSchema, type UiNode, type ComponentRegistry } from "../src/components/render/AgentSurface.js";
 
-beforeAll(() => {
-  if (!globalThis.document) GlobalRegistrator.register();
-});
+withHappyDom();
 
 const registry: ComponentRegistry = {
   card: ({ children }) => <section data-ra-node="card">{children}</section>,

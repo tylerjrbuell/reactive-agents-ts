@@ -1,14 +1,12 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { describe, expect, test } from "bun:test";
+import { withHappyDom } from "./happy-dom.js";
 import { renderHook, render, fireEvent, act } from "@testing-library/react";
 import type { FetchLike, PendingInteractionWire } from "@reactive-agents/ui-core";
 import { useInteractions } from "../src/hooks/use-interactions.js";
 import { AgentPrompt } from "../src/components/AgentPrompt.js";
 import { ApprovalGate } from "../src/components/ApprovalGate.js";
 
-beforeAll(() => {
-  if (!globalThis.document) GlobalRegistrator.register();
-});
+withHappyDom();
 
 describe("Interact", () => {
   test("useInteractions.respond posts and returns success", async () => {

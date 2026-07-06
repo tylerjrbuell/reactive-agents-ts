@@ -1,13 +1,11 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { describe, expect, test } from "bun:test";
+import { withHappyDom } from "./happy-dom.js";
 import { renderHook, render, waitFor, fireEvent } from "@testing-library/react";
 import type { FetchLike } from "@reactive-agents/ui-core";
 import { useTaskInbox, type InboxRun } from "../src/hooks/use-task-inbox.js";
 import { TaskInbox } from "../src/components/TaskInbox.js";
 
-beforeAll(() => {
-  if (!globalThis.document) GlobalRegistrator.register();
-});
+withHappyDom();
 
 const RUNS: InboxRun[] = [
   { runId: "r1", task: "research part", status: "awaiting-interaction", updatedAt: 2 },

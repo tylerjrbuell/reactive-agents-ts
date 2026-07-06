@@ -1,12 +1,21 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { mockAgentEndpoint, type RunFixture } from "@reactive-agents/ui-core/testing";
 import { useAgentStream } from "../src/hooks/use-agent-stream.js";
 import { useAgent } from "../src/hooks/use-agent.js";
+import { withHappyDom } from "./happy-dom.js";
 
-beforeAll(() => {
-  if (!globalThis.document) GlobalRegistrator.register();
+withHappyDom();
+
+// patchFetch also mutates globalThis.fetch; restore it around each test so the
+// SSE fixture never leaks past this file.
+type FetchFn = typeof globalThis.fetch;
+let originalFetch: FetchFn;
+beforeEach(() => {
+  originalFetch = globalThis.fetch;
+});
+afterEach(() => {
+  globalThis.fetch = originalFetch;
 });
 
 const FIXTURE: RunFixture = {

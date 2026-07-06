@@ -1,12 +1,10 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { describe, expect, test } from "bun:test";
+import { withHappyDom } from "./happy-dom.js";
 import { render, fireEvent } from "@testing-library/react";
 import { initialRunState, reduceRunState, type RunState } from "@reactive-agents/ui-core";
 import { AgentDevtools } from "../src/components/AgentDevtools.js";
 
-beforeAll(() => {
-  if (!globalThis.document) GlobalRegistrator.register();
-});
+withHappyDom();
 
 const state: RunState = reduceRunState(
   reduceRunState(initialRunState(), { _tag: "ToolCallStarted", toolName: "web-search", callId: "c1", seq: 1 }),

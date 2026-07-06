@@ -1,13 +1,11 @@
-import { describe, expect, test, beforeAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { describe, expect, test } from "bun:test";
+import { withHappyDom } from "./happy-dom.js";
 import { renderHook, waitFor } from "@testing-library/react";
 import { mockAgentEndpoint, type RunFixture } from "@reactive-agents/ui-core/testing";
 import type { FetchLike } from "@reactive-agents/ui-core";
 import { useResumableRun } from "../src/hooks/use-resumable-run.js";
 
-beforeAll(() => {
-  if (!globalThis.document) GlobalRegistrator.register();
-});
+withHappyDom();
 
 const ATTACH_FIXTURE: RunFixture = {
   protocolVersion: 1,
