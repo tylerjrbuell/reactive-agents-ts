@@ -35,8 +35,11 @@ export interface PsRow {
   readonly forkedAtIteration?: number;
 }
 
-/** Statuses hidden by default — the only two terminal values in `RunStatus`. */
-const TERMINAL_STATUSES: ReadonlySet<string> = new Set(["completed", "failed"]);
+/**
+ * Statuses hidden by `rax ps` default and that end the `rax attach` poll loop —
+ * the only two terminal values in `RunStatus`. Shared with `attach.ts`.
+ */
+export const TERMINAL_STATUSES: ReadonlySet<string> = new Set(["completed", "failed"]);
 
 /**
  * Default DB discovery: every `runs.db` under `~/.reactive-agents/<agentId>/`

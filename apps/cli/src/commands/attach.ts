@@ -4,7 +4,7 @@
 // (`createRunAttachEndpoint` in `server/endpoints.ts`) for a later task.
 import { Effect } from "effect";
 import { RunStoreLive, RunStoreService, type RunRecord } from "@reactive-agents/runtime";
-import { discoverDbPaths } from "./ps.js";
+import { discoverDbPaths, TERMINAL_STATUSES } from "./ps.js";
 import { box, fail, kv, muted, section } from "../ui.js";
 
 const HELP = `
@@ -18,8 +18,44 @@ const HELP = `
     --help         Show this help
 `.trimEnd();
 
-/** Statuses that end the attach loop — the only two terminal values in `RunStatus`. */
-const TERMINAL_STATUSES: ReadonlySet<string> = new Set(["completed", "failed"]);
+/** Parsed `rax attach` arguments. Exactly one of `error` / `runId` is set (unless `help`). */
+export interface AttachArgs {
+  readonly help: boolean;
+  readonly runId?: string;
+  readonly db?: string;
+  readonly error?: string;
+}
+
+/**
+ * Parse `rax attach` args. Consumes the `--db <value>` PAIR before taking the
+ * first remaining non-flag token as the runId — a bare
+ * `args.find((a) => !a.startsWith("--"))` would wrongly grab the `--db` VALUE
+ * as the runId when the flag precedes the positional
+ * (e.g. `attach --db /tmp/x.db r-123`).
+ */
+export function parseAttachArgs(args: readonly string[]): AttachArgs {
+  if (args.includes("--help") || args.includes("-h")) return { help: true };
+
+  let db: string | undefined;
+  let runId: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--db") {
+      const value = args[i + 1];
+      if (!value || value.startsWith("--")) {
+        return { help: false, error: "--db requires a path argument" };
+      }
+      db = value;
+      i++; // consume the value token so it can't be mistaken for the runId
+    } else if (!arg.startsWith("--")) {
+      runId ??= arg;
+    }
+    // Unknown --flags are tolerated, matching existing command style (inspect.ts).
+  }
+
+  if (!runId) return { help: false, error: "Usage: rax attach <runId> [--db path]" };
+  return { help: false, runId, ...(db !== undefined ? { db } : {}) };
+}
 
 export interface AttachSnapshot {
   readonly db: string;
@@ -55,33 +91,41 @@ export async function findRun(
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function attachCommand(args: string[]): Promise<void> {
-  if (args.includes("--help") || args.includes("-h")) {
+/** Poll-loop knobs — production defaults 1s interval / ~10s not-found grace; injectable for tests. */
+export interface AttachPollOptions {
+  /** Poll interval in ms (default 1000). */
+  readonly pollMs?: number;
+  /**
+   * Consecutive not-found polls tolerated BEFORE the run is first seen
+   * (default 10 ≈ 10s): a typo'd runId must error out (exit code 1), not spin
+   * silently forever. Once the run HAS been seen, polling until a terminal
+   * status stays unbounded — that is the whole point of attach.
+   */
+  readonly notFoundAttempts?: number;
+}
+
+export async function attachCommand(args: string[], opts?: AttachPollOptions): Promise<void> {
+  const parsed = parseAttachArgs(args);
+  if (parsed.help) {
     box(HELP, { title: " rax attach " });
     return;
   }
-
-  const runId = args.find((arg) => !arg.startsWith("--"));
-  if (!runId) {
-    console.error(fail("Usage: rax attach <runId> [--db path]"));
+  if (parsed.error !== undefined || parsed.runId === undefined) {
+    console.error(fail(parsed.error ?? "Usage: rax attach <runId> [--db path]"));
     process.exitCode = 1;
     return;
   }
+  const runId = parsed.runId;
 
-  const dbFlagIndex = args.indexOf("--db");
-  const dbOverride = dbFlagIndex >= 0 ? args[dbFlagIndex + 1] : undefined;
-  if (dbFlagIndex >= 0 && !dbOverride) {
-    console.error(fail("--db requires a path argument"));
-    process.exitCode = 1;
-    return;
-  }
-
-  const dbPaths = dbOverride ? [dbOverride] : discoverDbPaths();
+  const dbPaths = parsed.db !== undefined ? [parsed.db] : discoverDbPaths();
   if (dbPaths.length === 0) {
     console.error(fail("No RunStore databases found under ~/.reactive-agents/*/runs.db (or --db)."));
     process.exitCode = 1;
     return;
   }
+
+  const pollMs = opts?.pollMs ?? 1000;
+  const notFoundAttempts = opts?.notFoundAttempts ?? 10;
 
   console.log(section(`Attaching to ${runId}`));
 
@@ -95,12 +139,28 @@ export async function attachCommand(args: string[]): Promise<void> {
   let lastStatus: string | undefined;
   let lastIteration: number | undefined;
   let seenOnce = false;
+  let notFoundCount = 0;
 
   try {
     while (!detached) {
       const snapshot = await findRun(dbPaths, runId);
       if (!snapshot) {
-        if (!seenOnce) console.log(muted(`  waiting for run ${runId}...`));
+        // Bounded only while the run has never been seen; if it existed and
+        // its row later disappears (db deleted mid-attach), keep polling —
+        // Ctrl-C remains the exit path for that edge.
+        if (!seenOnce) {
+          notFoundCount++;
+          if (notFoundCount === 1) console.log(muted(`  waiting for run ${runId}...`));
+          if (notFoundCount >= notFoundAttempts) {
+            console.error(
+              fail(
+                `Run ${runId} not found in ${dbPaths.length} database(s) after ${notFoundAttempts} attempts — check the runId (rax ps --all).`,
+              ),
+            );
+            process.exitCode = 1;
+            return;
+          }
+        }
       } else {
         seenOnce = true;
         if (snapshot.run.status !== lastStatus) {
@@ -115,7 +175,7 @@ export async function attachCommand(args: string[]): Promise<void> {
           return;
         }
       }
-      await sleep(1000);
+      await sleep(pollMs);
     }
   } finally {
     process.removeListener("SIGINT", onSigint);
