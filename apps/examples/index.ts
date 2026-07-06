@@ -334,6 +334,19 @@ const EXAMPLES: ExampleMeta[] = [
         requiresKey: false,
         path: './src/advanced/cost-governance.ts',
     },
+    {
+        // Arc 1 launch demo (Tasks 5-9 composed): runStream().inspect() mid-run,
+        // agent.fork() counterfactual restart, result.receipt. Pinned to a live
+        // Ollama qwen3:4b regardless of DEFAULT_PROVIDER/--offline — the test
+        // provider can't script a multi-iteration kernel stream deterministically
+        // enough for inspect()/fork(). Skips gracefully (passed:true) in
+        // --offline mode or when Ollama/qwen3:4b isn't available locally.
+        num: 'A26',
+        label: 'process-model-demo',
+        category: 'advanced',
+        requiresKey: false,
+        path: './src/advanced/process-model-demo.ts',
+    },
     // reasoning — 20 offline
     {
         num: '19',

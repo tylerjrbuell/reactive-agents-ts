@@ -16,7 +16,7 @@ export interface TrustReceipt {
   readonly method: "heuristic";
   /** 0..1 — confidence in the verdict itself (not in the answer). */
   readonly confidence: number;
-  /** Distinct tool names with ≥1 successful substantive call. */
+  /** Distinct tool names with ≥1 successful substantive call — "substantive" excludes kernel META/termination/memory-retrieval tools (final-answer, task-complete, recall, checkpoint, abstain, etc.; see `isSubstantiveReceiptTool` in runtime/builder/helpers.ts). */
   readonly toolsUsed: readonly string[];
   /** Successful / total tool calls. */
   readonly toolCallStats: { readonly ok: number; readonly failed: number };

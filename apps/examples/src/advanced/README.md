@@ -9,5 +9,6 @@ Cost tracking, prompt A/B experiments, evaluation, observability, and self-impro
 | 16  | eval-framework     | LLM-as-judge evaluation with structured scoring                          | ⚡       |
 | 17  | observability      | Live streaming + JSONL file export + metrics dashboard                   | ⚡       |
 | 18  | self-improvement   | Cross-task episodic learning — run 2 leverages run 1 outcomes            | ⚡       |
+| A26 | process-model-demo | `runStream().inspect()`, `agent.fork()`, `result.receipt` — the launch demo | 🦙 Ollama only |
 
 Run offline only: `bun run ../../index.ts --filter advanced --offline`

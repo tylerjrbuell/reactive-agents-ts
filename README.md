@@ -342,6 +342,26 @@ for await (const event of agent.runStream('Analyze this dataset', {
 controller.abort()
 ```
 
+### Agents are processes
+
+A durable run behaves like an OS process: inspect it live, fork it from a checkpoint, and read a graded evidence receipt on completion.
+
+```typescript
+const handle = agent.runStream(task)          // needs .withReasoning() + .withDurableRuns()
+handle.inspect()                              // live: { iteration, stepsCount, lastThought, pendingToolCalls }
+handle.pause(); handle.resume()
+
+const result = await agent.run(task)
+result.receipt                                // { verdict: "tool-grounded", toolsUsed: ["calculator"], … }
+// graded evidence about HOW the answer was produced — not a truth certificate
+// optional Ed25519 signing via .withReceiptSigning() certifies provenance
+
+await agent.fork(runId, { at: 1 })            // counterfactual restart from iteration 1's checkpoint —
+                                              // live LLM calls after the fork point, never "time-travel"
+```
+
+From the terminal: `rax ps` lists durable runs, `rax attach <runId>` tails one. Recorded runs re-execute with zero tokens via exact replay (`makeReplayLLMLayer` — unchanged prompts only; drift misses loudly). [→ The Process Model docs](https://docs.reactiveagents.dev/features/process-model/) · [demo](apps/examples/src/advanced/process-model-demo.ts)
+
 ### Lifecycle Hooks
 
 Intercept any of the 12 execution phases with before, after, or error hooks:

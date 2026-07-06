@@ -203,6 +203,11 @@ export default defineConfig({
               link: "guides/durable-hitl/",
               badge: { text: "New in v0.12", variant: "success" },
             },
+            {
+              label: "The Process Model",
+              link: "features/process-model/",
+              badge: { text: "New", variant: "success" },
+            },
             { label: "Cost Optimization", link: "guides/cost-optimization/" },
             { label: "Guardrails", link: "guides/guardrails/" },
             { label: "Security Hardening", link: "guides/security-hardening/" },
