@@ -2219,6 +2219,21 @@ export class ReactiveAgentBuilder<TOut = unknown> {
             )
         }
 
+        // Durable checkpoint hardening (Arc 1 Task 4): `.withDurableRuns()`
+        // writes a run row unconditionally, but per-iteration checkpointing
+        // only fires through the kernel path — installDurableCheckpointing's
+        // onCheckpoint seam is wired by the reasoning kernel, so without
+        // `.withReasoning()` the run row exists but is never checkpointed and
+        // crash-resume silently can't rehydrate. Warn once, don't throw: the
+        // run row + approval rails still work without the kernel path.
+        if (this._durableRuns && !this._enableReasoning) {
+            console.warn(
+                "[reactive-agents] .withDurableRuns() is configured but the run will NOT checkpoint: " +
+                "crash-resume checkpoints require the kernel path — add .withReasoning(). " +
+                "(The run row and approval rails still work.)",
+            )
+        }
+
         // Auto-resolve context profile from model name if not explicitly set.
         // resolveProfileWithWindow binds maxTokens to the MODEL's real window
         // (recommendedNumCtx) instead of the tier placeholder — otherwise the

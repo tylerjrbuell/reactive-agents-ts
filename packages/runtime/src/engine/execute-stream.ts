@@ -245,7 +245,13 @@ export const makeExecuteStream =
       // RunStore, plus a `finish(success)` to flip the run status at the end.
       // Absent the opt-in this whole block is skipped: no store, no run row, no
       // db file, and the controller's `onCheckpoint` stays undefined (zero cost).
-      let durableFinish: ((success: boolean) => void) | undefined;
+      let durableFinish: ((success: boolean) => Promise<void>) | undefined;
+      // Durable checkpoint hardening (Arc 1 Task 4): `flush()` awaits every
+      // checkpoint write started so far. We gate BOTH terminal events
+      // (StreamCompleted and StreamError) on it below so a downstream reader
+      // (resume, or agent.fork()) that reacts to the terminal event never
+      // races an in-flight checkpoint write.
+      let durableFlush: (() => Promise<void>) | undefined;
       let runStoreCtx: { runId: string; runStoreLayer: Layer.Layer<RunStoreService> } | undefined;
       if (config.durableRuns && options?.runController) {
         const agentId = config.agentId;
@@ -290,11 +296,13 @@ export const makeExecuteStream =
           ),
         );
 
-        durableFinish = installDurableCheckpointing(options.runController, {
+        const installed = installDurableCheckpointing(options.runController, {
           runId,
           runStoreLayer,
           checkpointEvery,
-        }).finish;
+        });
+        durableFinish = installed.finish;
+        durableFlush = installed.flush;
       }
 
       yield* execute(task).pipe(
@@ -308,8 +316,11 @@ export const makeExecuteStream =
           const pausedInteraction = interaction !== undefined && runStoreCtx !== undefined;
 
           // Only mark a non-paused run as finished in the durable store.
+          // `finish` is fire-and-forget here (its own flush()-then-status-write
+          // sequencing is internal); the explicit `flushStep` below is what
+          // actually gates the emitted terminal event on checkpoint durability.
           if (!paused && !pausedInteraction) {
-            durableFinish?.(true);
+            void durableFinish?.(true);
           }
 
           const debriefToolsUsed = (taskResult as { debrief?: { toolsUsed?: Array<{ name: string; calls: number; successRate: number }> } })
@@ -367,7 +378,17 @@ export const makeExecuteStream =
             : pausedInteraction && runStoreCtx !== undefined
               ? persistInteractionPause({ runStoreLayer: runStoreCtx.runStoreLayer, runId: runStoreCtx.runId, interaction: interaction! })
               : Effect.void;
-          const offer = persistStep.pipe(Effect.zipRight(Queue.offer(queue, completedEvent)));
+          // Durable checkpoint hardening (Arc 1 Task 4): await the last
+          // checkpoint's durability BEFORE yielding StreamCompleted — a
+          // fork/resume reader that reacts to this event must never race an
+          // in-flight checkpoint write. flush() never throws.
+          const flushStep = durableFlush
+            ? Effect.promise(() => durableFlush!())
+            : Effect.void;
+          const offer = flushStep.pipe(
+            Effect.zipRight(persistStep),
+            Effect.zipRight(Queue.offer(queue, completedEvent)),
+          );
           if (!eb) return offer;
           return offer.pipe(
             Effect.tap(() =>
@@ -391,13 +412,18 @@ export const makeExecuteStream =
           );
         }),
         Effect.catchAll((err: unknown) => {
-          durableFinish?.(false);
+          void durableFinish?.(false);
           const cause =
             typeof err === "object" && err !== null && "message" in err
               ? String((err as { message: unknown }).message)
               : String(err);
           const errorEvent: AgentStreamEvent = { _tag: "StreamError", cause };
-          const offer = Queue.offer(queue, errorEvent);
+          // Same durability gate as the success path — the last checkpoint
+          // must be durable before a reader reacts to the terminal event.
+          const flushStep = durableFlush
+            ? Effect.promise(() => durableFlush!())
+            : Effect.void;
+          const offer = flushStep.pipe(Effect.zipRight(Queue.offer(queue, errorEvent)));
           if (!eb) return offer;
           return offer.pipe(
             Effect.tap(() =>

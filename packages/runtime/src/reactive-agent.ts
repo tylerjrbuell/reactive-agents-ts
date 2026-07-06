@@ -1302,11 +1302,11 @@ export class ReactiveAgent<TOut = unknown> {
                     }),
                 )
             } else {
-                finish(true)
+                await finish(true)
             }
             return result
         } catch (e) {
-            finish(false)
+            await finish(false)
             throw unwrapError(e)
         }
     }

@@ -29,11 +29,25 @@ export interface DurableCheckpointDeps {
  *
  * Installs `controller.onCheckpoint` so the kernel seam (which already no-ops
  * when `onCheckpoint` is absent) hands every Nth iteration's serialized
- * snapshot to the RunStore. Writes go through `Effect.runFork` — fire-and-forget,
- * never blocking the reasoning loop and never failing it (errors are swallowed
- * non-silently via `emitErrorSwallowed`, R11). Returns a `finish(success)`
- * callback the caller invokes at run end to flip the run status to
- * `completed` / `failed`.
+ * snapshot to the RunStore. Writes go through `Effect.runPromise` — the
+ * reasoning loop still never awaits them (still fire-and-forget from the
+ * loop's perspective, still never failing it: errors are swallowed
+ * non-silently via `emitErrorSwallowed`, R11) — but the resulting Promise is
+ * tracked in an in-flight set so {@link flush} can await durability on demand.
+ *
+ * Durable checkpoint hardening (Arc 1 Task 4): a crash immediately after an
+ * iteration used to lose the checkpoint silently because nothing ever waited
+ * on the write. `flush()` closes that gap for any caller that needs a
+ * durability boundary (run end, before a fork reads the latest checkpoint,
+ * etc.) without slowing down the per-iteration hot path.
+ *
+ * Returns:
+ *  - `flush()` — awaits every write started so far (checkpoints + any
+ *    in-flight status write). Never throws (writes already swallow their own
+ *    errors); resolves once everything currently in flight has settled.
+ *  - `finish(success)` — awaits `flush()` first (so the last checkpoint is
+ *    durable before the run flips to a terminal status), then persists the
+ *    `completed` / `failed` status row.
  *
  * Only called when `.withDurableRuns()` was set, so absent that opt-in the
  * controller's `onCheckpoint` stays undefined and the kernel pays zero cost.
@@ -41,15 +55,21 @@ export interface DurableCheckpointDeps {
 export function installDurableCheckpointing(
     controller: RunControllerLike,
     deps: DurableCheckpointDeps,
-): { finish: (success: boolean) => void } {
+): { finish: (success: boolean) => Promise<void>; flush: () => Promise<void> } {
     const { runId, runStoreLayer, checkpointEvery } = deps;
     const every = checkpointEvery >= 1 ? checkpointEvery : 1;
+
+    // In-flight write promises. `runWrite`'s Effect already swallows its own
+    // errors (catchAllDefect below), so every entry settles via fulfillment —
+    // the `.catch` here is defensive only, guarding against a future change
+    // that reintroduces a rejection path from leaving a dangling entry.
+    const inflight = new Set<Promise<void>>();
 
     const runWrite = (
         effect: Effect.Effect<void, never, RunStoreService>,
         site: string,
-    ): void => {
-        Effect.runFork(
+    ): Promise<void> => {
+        const write = Effect.runPromise(
             effect.pipe(
                 Effect.provide(runStoreLayer),
                 Effect.catchAllDefect((defect) =>
@@ -57,11 +77,17 @@ export function installDurableCheckpointing(
                 ),
             ),
         );
+        inflight.add(write);
+        write.catch(() => undefined).finally(() => inflight.delete(write));
+        return write;
     };
 
     controller.onCheckpoint = (serializedState: string, iteration: number): void => {
         if (iteration % every !== 0) return;
-        runWrite(
+        // The reasoning loop calls onCheckpoint synchronously and must never
+        // await it — `void` makes the fire-and-forget intent explicit.
+        // Durability is guaranteed via flush()/finish(), not here.
+        void runWrite(
             Effect.gen(function* () {
                 const store = yield* RunStoreService;
                 yield* store.putCheckpoint(runId, iteration, serializedState);
@@ -70,10 +96,19 @@ export function installDurableCheckpointing(
         );
     };
 
+    const flush = (): Promise<void> =>
+        Promise.allSettled([...inflight]).then(() => undefined);
+
     return {
-        finish: (success: boolean): void => {
+        flush,
+        finish: async (success: boolean): Promise<void> => {
+            // Await the last checkpoint's durability BEFORE flipping status —
+            // otherwise a reader (resume, or agent.fork()) could observe a
+            // `completed`/`failed` run whose latest checkpoint is still in
+            // flight or lost to a crash.
+            await flush();
             const status: RunStoreStatus = success ? "completed" : "failed";
-            runWrite(
+            await runWrite(
                 Effect.gen(function* () {
                     const store = yield* RunStoreService;
                     yield* store.setStatus(runId, status);
@@ -122,6 +157,15 @@ export class RunController implements RunControllerLike { // RunControllerLike f
     private _pausePromise: Promise<void> | null = null;
     private _stopRequested = false;
     private readonly _abortController: AbortController;
+    /**
+     * Optional durable-checkpoint observer (see {@link RunControllerLike}).
+     * Declared here (not just inherited structurally from the interface) so
+     * `installDurableCheckpointing`'s assignment — and callers reading it back
+     * off a concrete `RunController` instance, e.g. in tests — typecheck.
+     * Undefined until `installDurableCheckpointing` wires it; the kernel's
+     * call site already no-ops when absent, so this stays zero-cost.
+     */
+    onCheckpoint?: (serializedState: string, iteration: number) => void;
 
     constructor(abortController: AbortController) {
         this._abortController = abortController;
