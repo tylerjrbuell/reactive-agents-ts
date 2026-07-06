@@ -3,8 +3,11 @@ import { Schema } from "effect";
 
 // ─── Short ID Generator ───
 
+// 6 base36 chars of entropy (~2.2B space). The previous 4 chars (~1.7M) made a
+// 100-id uniqueness draw collide ~0.3% of the time — a real CI flake. Stays
+// within the 8-char id budget (`p_` + 6).
 export const shortId = (): string =>
-  `p_${Math.random().toString(36).slice(2, 8).padEnd(4, "0").slice(0, 4)}`;
+  `p_${Math.random().toString(36).slice(2, 8).padEnd(6, "0").slice(0, 6)}`;
 
 // ─── LLM Plan Step (content-only, from LLM output) ───
 
