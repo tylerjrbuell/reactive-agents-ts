@@ -47,6 +47,19 @@ export interface RunControllerLike {
    * enabled.
    */
   onCheckpoint?(serializedState: string, iteration: number): void;
+  /**
+   * Always-on introspection seam (Arc 1 Task 5) — independent of
+   * `onCheckpoint`/durable persistence. The kernel invokes this at every
+   * iteration boundary with a LAZY snapshot thunk (not a pre-serialized
+   * string): the thunk is only invoked when a caller later calls
+   * `RunHandle.inspect()`. This keeps non-durable runs at zero
+   * per-iteration serialization cost — `RunController.inspect()` stores the
+   * thunk and defers execution until inspection is actually requested. On
+   * durable runs the kernel may pass `() => serialized` reusing the string
+   * already produced for `onCheckpoint` (no extra work either way). Must
+   * not throw and must not block the loop.
+   */
+  noteCheckpoint?(snapshot: () => string, iteration: number): void;
 }
 
 /**

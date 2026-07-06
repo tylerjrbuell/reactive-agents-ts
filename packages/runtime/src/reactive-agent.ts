@@ -1676,6 +1676,9 @@ export class ReactiveAgent<TOut = unknown> {
      * pause()     — freeze at next iteration boundary; await resume().
      * resume()    — continue from paused state.
      * status()    — current RunStatus.
+     * inspect()   — live kernel-state introspection (iteration/steps/messages/
+     *               pending tool calls/last thought); undefined before the
+     *               first iteration boundary.
      *
      * Note: streamed results do not carry the typed structured `object`; use `streamObject()` for streaming structured output.
      */
@@ -1716,6 +1719,7 @@ export class ReactiveAgent<TOut = unknown> {
             stop: (_opts?: { reason?: string }) => controller.stop(),
             terminate: (_opts?: { reason?: string }) => controller.terminate(),
             status: () => controller.status(),
+            inspect: () => controller.inspect(),
         }) as RunHandle;
     }
 

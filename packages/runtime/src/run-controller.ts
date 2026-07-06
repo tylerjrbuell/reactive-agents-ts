@@ -129,6 +129,13 @@ export type RunHandle = AsyncGenerator<AgentStreamEvent> & {
     stop(opts?: { reason?: string }): void;
     terminate(opts?: { reason?: string }): void;
     status(): RunStatus;
+    /**
+     * Live kernel-state introspection (Arc 1 Task 5) — projects the most
+     * recent iteration-boundary checkpoint into a small, stable shape.
+     * `undefined` before the first iteration boundary or on non-kernel paths
+     * (nothing has called `noteCheckpoint` yet); never throws.
+     */
+    inspect(): RunInspection | undefined;
 };
 
 export type RunStatus =
@@ -137,6 +144,27 @@ export type RunStatus =
     | "stopped"
     | "terminated"
     | "completed";
+
+/**
+ * Projection of the latest kernel-state checkpoint, produced by
+ * {@link RunController.inspect}. Deliberately small and stable — NOT a
+ * pass-through of the full (versioned, internal) `KernelState` codec
+ * envelope, so this shape doesn't need to change every time internal kernel
+ * fields do.
+ */
+export interface RunInspection {
+    /** The controller's own run status (running/paused/stopped/...), NOT the kernel's internal thinking/acting/... FSM state. */
+    readonly status: RunStatus;
+    readonly iteration: number;
+    readonly stepsCount: number;
+    readonly messagesCount: number;
+    /** Most recent thought text, truncated to 500 chars. Undefined if no thought has been recorded yet. */
+    readonly lastThought?: string;
+    /** Names of tool calls awaiting execution (native FC handoff between think → act). */
+    readonly pendingToolCalls: readonly string[];
+    /** Epoch ms when the underlying checkpoint was recorded (noteCheckpoint() time, not inspect() time). */
+    readonly capturedAt: number;
+}
 
 /**
  * Per-call control plane for an agent run.
@@ -166,6 +194,14 @@ export class RunController implements RunControllerLike { // RunControllerLike f
      * call site already no-ops when absent, so this stays zero-cost.
      */
     onCheckpoint?: (serializedState: string, iteration: number) => void;
+
+    /**
+     * Latest snapshot thunk noted by the kernel (Arc 1 Task 5). Stored, not
+     * invoked — `inspect()` is the only caller of `thunk()`, so a non-durable
+     * run that never calls `inspect()` pays zero serialization cost even
+     * though `noteCheckpoint` fires every iteration.
+     */
+    private _lastSnapshot?: { thunk: () => string; iteration: number; at: number };
 
     constructor(abortController: AbortController) {
         this._abortController = abortController;
@@ -238,5 +274,92 @@ export class RunController implements RunControllerLike { // RunControllerLike f
         this._pauseResolve?.();
         this._pauseResolve = null;
         this._pausePromise = null;
+    }
+
+    /**
+     * Store the latest iteration-boundary snapshot thunk (Arc 1 Task 5).
+     * NO serialization happens here — `snapshot` is invoked lazily, only if
+     * `inspect()` is later called. Called unconditionally by the kernel at
+     * every iteration boundary, independent of `onCheckpoint`/durability.
+     */
+    noteCheckpoint(snapshot: () => string, iteration: number): void {
+        this._lastSnapshot = { thunk: snapshot, iteration, at: Date.now() };
+    }
+
+    /**
+     * Project the most recent checkpoint into a small, stable
+     * {@link RunInspection}. Invokes the stored thunk (this is where the
+     * deferred serialization/parse cost actually happens). Never throws —
+     * a thrown thunk, corrupt JSON, or an envelope shape mismatch all
+     * resolve to `undefined` rather than propagating.
+     */
+    inspect(): RunInspection | undefined {
+        const snapshot = this._lastSnapshot;
+        if (!snapshot) return undefined;
+
+        let raw: string;
+        try {
+            raw = snapshot.thunk();
+        } catch {
+            return undefined;
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(raw);
+        } catch {
+            return undefined;
+        }
+        if (typeof parsed !== "object" || parsed === null) return undefined;
+
+        const state = (parsed as { state?: unknown }).state;
+        if (typeof state !== "object" || state === null) return undefined;
+        const s = state as Record<string, unknown>;
+
+        const steps = Array.isArray(s["steps"]) ? (s["steps"] as unknown[]) : [];
+        const messages = Array.isArray(s["messages"]) ? (s["messages"] as unknown[]) : [];
+        const meta =
+            typeof s["meta"] === "object" && s["meta"] !== null
+                ? (s["meta"] as Record<string, unknown>)
+                : {};
+
+        // meta.lastThought is the canonical field, but the act phase clears
+        // it to undefined once a thought has been acted on — fall back to
+        // the most recent steps[] entry of type "thought".
+        const metaLastThought = typeof meta["lastThought"] === "string" ? (meta["lastThought"] as string) : undefined;
+        let lastThought = metaLastThought;
+        if (lastThought === undefined) {
+            for (let i = steps.length - 1; i >= 0; i--) {
+                const step = steps[i];
+                if (
+                    step &&
+                    typeof step === "object" &&
+                    (step as Record<string, unknown>)["type"] === "thought"
+                ) {
+                    const content = (step as Record<string, unknown>)["content"];
+                    if (typeof content === "string") {
+                        lastThought = content;
+                        break;
+                    }
+                }
+            }
+        }
+
+        const pendingRaw = Array.isArray(meta["pendingNativeToolCalls"])
+            ? (meta["pendingNativeToolCalls"] as unknown[])
+            : [];
+        const pendingToolCalls = pendingRaw
+            .map((c) => (c && typeof c === "object" ? (c as Record<string, unknown>)["name"] : undefined))
+            .filter((n): n is string => typeof n === "string");
+
+        return {
+            status: this._status,
+            iteration: snapshot.iteration,
+            stepsCount: steps.length,
+            messagesCount: messages.length,
+            lastThought: lastThought !== undefined ? lastThought.slice(0, 500) : undefined,
+            pendingToolCalls,
+            capturedAt: snapshot.at,
+        };
     }
 }

@@ -372,11 +372,38 @@ export function runIterationPass(
         // Durable-execution seam (v0.12.0 track 1): surface the iteration-boundary
         // state to an optional durable controller. Observer must NEVER kill the
         // loop — failures are warn-surfaced (R11 precedent), not propagated.
+        //
+        // `checkpointState`/`checkpointIteration` capture the CURRENT (immutable)
+        // state value now — the outer `state` binding is reassigned later this
+        // same pass (`state = yield* kernel(...)` below), so closing over `state`
+        // directly in a deferred thunk would silently serialize a LATER state.
+        // KernelState values themselves never mutate, so this ref is safe to
+        // close over lazily.
+        const checkpointState = state;
+        const checkpointIteration = checkpointState.iteration;
+        // Live-inspection seam (Arc 1 Task 5): always-on, independent of
+        // `onCheckpoint`/durability. `serializeOnce` memoizes so a durable run
+        // (onCheckpoint present) reuses the SAME already-computed string for
+        // both observers instead of serializing twice; a non-durable run
+        // (onCheckpoint absent) pays ZERO serialization cost unless a caller
+        // later invokes `RunHandle.inspect()`, which invokes this thunk.
+        let checkpointSerialized: string | undefined;
+        const serializeOnce = (): string =>
+          checkpointSerialized ?? (checkpointSerialized = serializeKernelState(checkpointState));
+
         if (_runCtl.onCheckpoint) {
           try {
-            _runCtl.onCheckpoint(serializeKernelState(state), state.iteration);
+            _runCtl.onCheckpoint(serializeOnce(), checkpointIteration);
           } catch (err) {
-            const msg = `[durable-checkpoint] onCheckpoint observer threw at iteration ${state.iteration}: ${err instanceof Error ? err.message : String(err)}`;
+            const msg = `[durable-checkpoint] onCheckpoint observer threw at iteration ${checkpointIteration}: ${err instanceof Error ? err.message : String(err)}`;
+            yield* Effect.logWarning(msg);
+          }
+        }
+        if (_runCtl.noteCheckpoint) {
+          try {
+            _runCtl.noteCheckpoint(serializeOnce, checkpointIteration);
+          } catch (err) {
+            const msg = `[live-inspect] noteCheckpoint observer threw at iteration ${checkpointIteration}: ${err instanceof Error ? err.message : String(err)}`;
             yield* Effect.logWarning(msg);
           }
         }
@@ -490,22 +517,41 @@ export function runIterationPass(
       // the identical post-gate checkpoint — same rationale, mirrors
       // `meta.awaitingInteractionFor` instead of `awaitingApprovalFor`.
       if (
-        (state.meta.terminatedBy === "awaiting-approval" ||
-          state.meta.terminatedBy === "awaiting-interaction") &&
-        _runCtl?.onCheckpoint
+        state.meta.terminatedBy === "awaiting-approval" ||
+        state.meta.terminatedBy === "awaiting-interaction"
       ) {
-        try {
-          // Write at iteration+1 so this is a DISTINCT row that always wins
-          // `latestCheckpoint` (ORDER BY iteration DESC) — the pass-boundary
-          // checkpoint above writes the pre-gate state at this same iteration, and
-          // both go through fire-and-forget `Effect.runFork`, so a same-iteration
-          // write would race. The stateJson keeps its real iteration; the column
-          // is only an ordering key. Resume reads the stateJson, not the column.
-          _runCtl.onCheckpoint(serializeKernelState(state), state.iteration + 1);
-        } catch (err) {
-          yield* Effect.logWarning(
-            `[durable-checkpoint] paused-state onCheckpoint threw at iteration ${state.iteration}: ${err instanceof Error ? err.message : String(err)}`,
-          );
+        // Same capture-now rationale as the pass-boundary seam above: `state`
+        // keeps getting reassigned later this pass, so a deferred noteCheckpoint
+        // thunk must close over THIS value, not the live `state` binding.
+        const pausedState = state;
+        const pausedIteration = pausedState.iteration + 1;
+        let pausedSerialized: string | undefined;
+        const serializePausedOnce = (): string =>
+          pausedSerialized ?? (pausedSerialized = serializeKernelState(pausedState));
+
+        if (_runCtl?.onCheckpoint) {
+          try {
+            // Write at iteration+1 so this is a DISTINCT row that always wins
+            // `latestCheckpoint` (ORDER BY iteration DESC) — the pass-boundary
+            // checkpoint above writes the pre-gate state at this same iteration, and
+            // both go through fire-and-forget `Effect.runFork`, so a same-iteration
+            // write would race. The stateJson keeps its real iteration; the column
+            // is only an ordering key. Resume reads the stateJson, not the column.
+            _runCtl.onCheckpoint(serializePausedOnce(), pausedIteration);
+          } catch (err) {
+            yield* Effect.logWarning(
+              `[durable-checkpoint] paused-state onCheckpoint threw at iteration ${pausedState.iteration}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+        if (_runCtl?.noteCheckpoint) {
+          try {
+            _runCtl.noteCheckpoint(serializePausedOnce, pausedIteration);
+          } catch (err) {
+            yield* Effect.logWarning(
+              `[live-inspect] paused-state noteCheckpoint threw at iteration ${pausedState.iteration}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
         }
       }
 
