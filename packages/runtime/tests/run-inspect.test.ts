@@ -125,3 +125,76 @@ describe("RunController.noteCheckpoint / inspect", () => {
         expect(i!.lastThought).toBeUndefined();
     });
 });
+
+// ─── Integration: public runStream() handle exposes inspect() ───────────────
+// Guards the exact gap the T5 live smoke caught: unit tests import
+// RunController from src and stay green while the PUBLIC handle returned by
+// agent.runStream() silently lacks the method (wrapper site missed, or a
+// consumer running a stale dist). Keyless — test provider, kernel path.
+import { Effect } from "effect";
+import { ReactiveAgents } from "../src/builder.js";
+
+function makeToolDef(name: string) {
+    return {
+        name,
+        description: `Tool ${name}`,
+        parameters: [
+            {
+                name: "input",
+                type: "string" as const,
+                description: "Input",
+                required: true,
+            },
+        ],
+        riskLevel: "low" as const,
+        timeoutMs: 5_000,
+        requiresApproval: false,
+        source: "function" as const,
+    };
+}
+
+describe("runStream() public handle — inspect() integration", () => {
+    test("handle exposes inspect(); undefined pre-iteration; live values on kernel path", async () => {
+        const agent = await ReactiveAgents.create()
+            .withName("run-inspect-integration")
+            .withTestScenario([
+                { toolCall: { name: "echo-tool", args: { input: "hello" } } },
+                { text: "FINAL ANSWER: done" },
+            ])
+            .withTools({
+                tools: [
+                    {
+                        definition: makeToolDef("echo-tool"),
+                        handler: (args: { input: string }) => Effect.succeed(`echoed: ${args.input}`),
+                    },
+                ],
+            })
+            .withReasoning()
+            .withMaxIterations(4)
+            .build();
+        try {
+            const handle = agent.runStream("echo hello");
+            // The wiring gap this test exists for: the PUBLIC handle must have it.
+            expect(typeof handle.inspect).toBe("function");
+            // Before the first iteration boundary: undefined, never a throw.
+            expect(handle.inspect()).toBeUndefined();
+
+            const seen: Array<{ iteration: number; stepsCount: number }> = [];
+            for await (const _event of handle) {
+                const i = handle.inspect();
+                if (i) seen.push({ iteration: i.iteration, stepsCount: i.stepsCount });
+            }
+
+            // The kernel path crossed at least one iteration boundary mid-run.
+            expect(seen.length).toBeGreaterThan(0);
+            const last = handle.inspect();
+            expect(last).toBeDefined();
+            // Multi-pass run (tool call then final answer): the latest snapshot
+            // reflects a later boundary, not the pristine iteration-0 state.
+            expect(last!.iteration).toBeGreaterThanOrEqual(1);
+            expect(last!.stepsCount).toBeGreaterThanOrEqual(1);
+        } finally {
+            await agent.dispose();
+        }
+    }, 30000);
+});
