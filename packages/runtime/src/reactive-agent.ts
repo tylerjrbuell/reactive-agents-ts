@@ -34,10 +34,11 @@ import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError } from './err
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
+    loadForkPayload,
     listDurableRuns,
     markRunStatus,
     decideApprovalRecord,
@@ -928,6 +929,75 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
+     * Fork a NEW run from any checkpoint of a prior run (Arc 1 Task 6) —
+     * a counterfactual restart, NEVER "time travel". Every LLM call made
+     * after the fork point is a live, fresh call against the current
+     * provider; nothing is replayed.
+     *
+     * Loads the checkpoint at-or-below `opts.at` (defaults to the source
+     * run's latest checkpoint, like `resumeRun`) from `runId`'s history via
+     * `loadForkPayload` — deliberately WITHOUT `resumeRun`'s config-hash
+     * guard, since forking under a different config (or a different
+     * `opts.model`) is the whole point, not an error. Creates a BRAND NEW
+     * run row (`${runId}-fork-<4 hex chars>`) stamped with THIS agent's
+     * current config hash and `{ forkedFrom, forkedAtIteration }` provenance,
+     * seeds the restored `KernelState`, and runs to completion — mirroring
+     * `runDurable`'s create-row + checkpoint + resume-seed pipeline used by
+     * `run()`/`approveRun`/`denyRun`.
+     *
+     * v1 scope: same agent instance/tools/system prompt as the source run.
+     * `opts.task` overrides the re-run input (defaults to the source run's
+     * original task — reusing it verbatim only makes sense against a fresh
+     * test scenario/replay; real providers regenerate live). `opts.model`
+     * overrides the model for this run only (see `ModelOverrideRef`); it has
+     * no effect when `.withModelRouting()` is also enabled, since that phase
+     * recomputes the selected model independently (known v1 gap).
+     *
+     * Caveat inherited from Task 4: a run that is currently paused
+     * (`awaiting-approval` / `awaiting-interaction`) does not flush its
+     * in-flight checkpoint write, so forking it may see a stale or absent
+     * checkpoint row.
+     *
+     * @param runId - The SOURCE run id to fork from.
+     * @throws Error if the agent was not built with `.withDurableRuns()`.
+     * @throws DurableRunNotFoundError if the source run / a qualifying checkpoint is unknown.
+     */
+    async fork(
+        runId: string,
+        opts?: { at?: number; model?: string; task?: string },
+    ): Promise<AgentResult> {
+        if (!this._durableResume) {
+            throw new Error(
+                'fork() requires .withDurableRuns() — this agent has no durable run store.',
+            )
+        }
+        const { dir } = this._durableResume
+        const dbPath = join(dir, 'runs.db')
+
+        // 1. Load the source checkpoint — any iteration, no config-hash guard.
+        const payload = await Effect.runPromise(
+            loadForkPayload({ runId, dbPath, at: opts?.at }),
+        )
+
+        // 2. Fresh identity for the forked run — never collides with the source.
+        const forkedRunId = `${runId}-fork-${crypto.randomUUID().slice(0, 4)}`
+        const task = opts?.task ?? payload.run.task
+
+        // 3. Create the new row (this agent's CURRENT configHash) + seed the
+        //    restored state + run to completion, same rail as run()/approveRun.
+        return this.runDurable({
+            input: task,
+            taskId: forkedRunId,
+            runId: forkedRunId,
+            task,
+            resume: { stateJson: payload.stateJson },
+            ...(opts?.model !== undefined ? { modelOverride: opts.model } : {}),
+            forkedFrom: runId,
+            forkedAtIteration: payload.iteration,
+        })
+    }
+
+    /**
      * List persisted durable runs (newest-updated first), optionally filtered by
      * lifecycle status. Requires `.withDurableRuns()`.
      */
@@ -1226,6 +1296,11 @@ export class ReactiveAgent<TOut = unknown> {
             readonly decision?: { gateId: string; status: 'approved' | 'denied'; reason?: string }
             readonly interaction?: { interactionId: string; valueJson: string }
         }
+        /** Per-run model override (Arc 1 Task 6) — seeded via `ModelOverrideRef`. */
+        readonly modelOverride?: string
+        /** Fork lineage (Arc 1 Task 6) — stamped onto the created run row. */
+        readonly forkedFrom?: string
+        readonly forkedAtIteration?: number
     }): Promise<AgentResult> {
         const { dir, configHash } = this._durableResume!
         const dbPath = join(dir, 'runs.db')
@@ -1241,6 +1316,8 @@ export class ReactiveAgent<TOut = unknown> {
                 agentId: this.agentId,
                 task: params.task,
                 configHash,
+                ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
+                ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
             }),
         )
 
@@ -1258,6 +1335,9 @@ export class ReactiveAgent<TOut = unknown> {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
         }).pipe(Effect.locally(RunControllerRef, controller))
+        if (params.modelOverride !== undefined) {
+            pipeline = pipeline.pipe(Effect.locally(ModelOverrideRef, params.modelOverride))
+        }
         if (params.resume) {
             const resume = params.resume
             pipeline = pipeline.pipe(Effect.locally(ResumeStateRef, resume.stateJson))

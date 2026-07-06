@@ -85,6 +85,21 @@ export const RunControllerRef = FiberRef.unsafeMake<RunControllerLike | null>(nu
 export const ResumeStateRef = FiberRef.unsafeMake<string | null>(null);
 
 /**
+ * A per-run model override, carried into a pipeline by `ReactiveAgent.fork()`
+ * (via `Effect.locally`) when `opts.model` is supplied. Read once at
+ * execution-context initialization (`execution-engine.ts`) as the seed for
+ * `ctx.selectedModel`, falling back to `config.defaultModel` when unset —
+ * mirrors `ResumeStateRef`'s per-run FiberRef pattern. Null on every normal
+ * run, so non-fork executions pay zero cost. Arc 1 Task 6.
+ *
+ * v1 scope: this is a request-time seed, not integrated with the
+ * `cost-route` phase — when `.withModelRouting()` is also enabled on the
+ * agent, that phase recomputes `selectedModel` independently and will
+ * override this seed. Known gap, not fixed in v1.
+ */
+export const ModelOverrideRef = FiberRef.unsafeMake<string | null>(null);
+
+/**
  * A human's approval decision for a paused durable run, carried into a resumed
  * pipeline by `ReactiveAgent.approveRun`/`denyRun` (via `Effect.locally`). Read
  * by the reasoning THINK phase (`reasoning-think.ts`) and forwarded as

@@ -77,6 +77,58 @@ export const loadResumePayload = (params: {
     return { run, stateJson: checkpoint.stateJson };
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 
+/**
+ * The data needed to fork a NEW run from any checkpoint of a prior run
+ * (Arc 1 Task 6). Unlike {@link ResumePayload}, also carries the checkpoint's
+ * own `iteration` — the caller threads it into the new run's
+ * `{ forkedFrom, forkedAtIteration }` provenance.
+ */
+export interface ForkPayload {
+  readonly run: RunRecord;
+  /** Codec-serialized `KernelState` from the checkpoint at-or-below `at`. */
+  readonly stateJson: string;
+  /** The iteration the returned checkpoint was captured at. */
+  readonly iteration: number;
+}
+
+/**
+ * Load the fork payload for `runId` from the RunStore at `dbPath` — the
+ * checkpoint at-or-below `params.at` (defaults to the latest checkpoint, same
+ * as resume, when `at` is omitted).
+ *
+ * Deliberately NO config-hash guard (contrast {@link loadResumePayload}): a
+ * fork is an intentional counterfactual restart, not a crash recovery, so
+ * restarting under a different agent config (or with `opts.model` applied by
+ * the caller) is expected and desired, not an error condition.
+ *
+ * Fails `DurableRunNotFoundError` when the run row or a qualifying checkpoint
+ * is missing.
+ */
+export const loadForkPayload = (params: {
+  readonly runId: string;
+  readonly dbPath: string;
+  readonly at?: number;
+}): Effect.Effect<ForkPayload, DurableRunNotFoundError> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    const run = yield* store.getRun(params.runId);
+    if (!run) {
+      return yield* Effect.fail(
+        new DurableRunNotFoundError({ runId: params.runId }),
+      );
+    }
+    const checkpoint =
+      params.at === undefined
+        ? yield* store.latestCheckpoint(params.runId)
+        : yield* store.checkpointAt(params.runId, params.at);
+    if (!checkpoint) {
+      return yield* Effect.fail(
+        new DurableRunNotFoundError({ runId: params.runId }),
+      );
+    }
+    return { run, stateJson: checkpoint.stateJson, iteration: checkpoint.iteration };
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
 /** Enumerate persisted runs (newest-updated first), optionally filtered by status/userId. */
 export const listDurableRuns = (params: {
   readonly dbPath: string;
@@ -145,6 +197,9 @@ export const createDurableRun = (params: {
   readonly agentId: string;
   readonly task: string;
   readonly configHash: string;
+  /** Fork lineage (Arc 1 Task 6) — see {@link RunRecord.forkedFrom}. */
+  readonly forkedFrom?: string;
+  readonly forkedAtIteration?: number;
 }): Effect.Effect<void, never> =>
   Effect.gen(function* () {
     const store = yield* RunStoreService;
@@ -153,6 +208,8 @@ export const createDurableRun = (params: {
       agentId: params.agentId,
       task: params.task,
       configHash: params.configHash,
+      ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
+      ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
     });
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 

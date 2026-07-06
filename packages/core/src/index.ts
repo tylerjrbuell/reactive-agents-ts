@@ -202,7 +202,7 @@ export type {
 } from "./services/harness-types.js";
 
 // ─── Streaming ───
-export { StreamingTextCallback, RunControllerRef, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef } from "./streaming.js";
+export { StreamingTextCallback, RunControllerRef, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef } from "./streaming.js";
 export type { InteractionResponse } from "./streaming.js";
 export type { RunControllerLike, ApprovalDecision } from "./streaming.js";
 

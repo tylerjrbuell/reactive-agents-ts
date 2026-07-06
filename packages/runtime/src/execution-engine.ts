@@ -12,7 +12,7 @@ import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
-import { StreamingTextCallback } from "@reactive-agents/core";
+import { StreamingTextCallback, ModelOverrideRef } from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -448,6 +448,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const executeCore = (): Effect.Effect<TaskResult, RuntimeErrors, any> =>
               Effect.gen(function* () {
 
+                // Per-run model override (Arc 1 Task 6): `ReactiveAgent.fork()`
+                // seeds this via `Effect.locally` when `opts.model` is supplied.
+                // Null on every normal run — falls back to `config.defaultModel`,
+                // so non-fork executions are unaffected.
+                const modelOverride = yield* FiberRef.get(ModelOverrideRef);
+
                 // Initialize context
                 let ctx: ExecutionContext = {
                   taskId: task.id,
@@ -462,7 +468,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   cost: 0,
                   tokensUsed: 0,
                   startedAt: now,
-                  selectedModel: config.defaultModel,
+                  selectedModel: modelOverride ?? config.defaultModel,
                   provider: config.provider,
                   metadata: {},
                 };

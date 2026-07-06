@@ -62,6 +62,14 @@ export interface RunRecord {
   readonly updatedAt: number;
   readonly userId?: string;
   readonly orgId?: string;
+  /**
+   * Counterfactual-restart provenance (Arc 1 Task 6): the source run this one
+   * was forked from, and the iteration its checkpoint was forked at. Absent on
+   * every non-forked run. Consumed by `rax ps` (Task 7) and `result.receipt`
+   * (Task 8) to surface fork lineage — never framed as "time travel".
+   */
+  readonly forkedFrom?: string;
+  readonly forkedAtIteration?: number;
 }
 
 export interface CheckpointRecord {
@@ -104,6 +112,9 @@ export interface RunStore {
     configHash: string;
     userId?: string;
     orgId?: string;
+    /** Fork lineage (Task 6) — see {@link RunRecord.forkedFrom}. */
+    forkedFrom?: string;
+    forkedAtIteration?: number;
   }) => Effect.Effect<void, never>;
   /** Transition a run to a new lifecycle status. */
   readonly setStatus: (
@@ -119,6 +130,15 @@ export interface RunStore {
   /** Highest-iteration checkpoint for a run, or undefined if none. */
   readonly latestCheckpoint: (
     runId: string,
+  ) => Effect.Effect<CheckpointRecord | undefined, never>;
+  /**
+   * Highest-iteration checkpoint at or below `iteration`, or undefined if none
+   * qualifies. Used by `agent.fork()` (Task 6) to restart from ANY prior
+   * checkpoint, not just the latest — unlike `latestCheckpoint` (crash-resume).
+   */
+  readonly checkpointAt: (
+    runId: string,
+    iteration: number,
   ) => Effect.Effect<CheckpointRecord | undefined, never>;
   /** The run row, or undefined if unknown. */
   readonly getRun: (
@@ -208,6 +228,8 @@ interface RunRow {
   updated_at: number;
   user_id: string | null;
   org_id: string | null;
+  forked_from: string | null;
+  forked_at_iteration: number | null;
 }
 
 interface ApprovalRow {
@@ -272,6 +294,14 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
     if (!runsCols.includes("org_id")) {
       db.exec("ALTER TABLE runs ADD COLUMN org_id TEXT");
     }
+    // Fork lineage columns (Arc 1 Task 6) — guarded ALTER for the same reason
+    // as user_id/org_id above: pre-existing DBs predate fork() support.
+    if (!runsCols.includes("forked_from")) {
+      db.exec("ALTER TABLE runs ADD COLUMN forked_from TEXT");
+    }
+    if (!runsCols.includes("forked_at_iteration")) {
+      db.exec("ALTER TABLE runs ADD COLUMN forked_at_iteration INTEGER");
+    }
     db.exec(
       `CREATE TABLE IF NOT EXISTS run_checkpoints (
         run_id     TEXT NOT NULL,
@@ -321,13 +351,13 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
     const now = (): number => Date.now();
 
     return {
-      createRun: ({ runId, agentId, task, configHash, userId, orgId }) =>
+      createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration }) =>
         Effect.sync(() => {
           const ts = now();
           db.prepare(
             `INSERT OR REPLACE INTO runs
-               (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id)
-             VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?)`,
+               (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id, forked_from, forked_at_iteration)
+             VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
             runId,
             agentId,
@@ -337,6 +367,8 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             ts,
             userId ?? null,
             orgId ?? null,
+            forkedFrom ?? null,
+            forkedAtIteration ?? null,
           );
         }),
 
@@ -380,11 +412,31 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             : undefined;
         }),
 
+      checkpointAt: (runId, iteration) =>
+        Effect.sync(() => {
+          const row = db
+            .prepare(
+              `SELECT iteration, state_json, created_at
+                 FROM run_checkpoints
+                WHERE run_id = ? AND iteration <= ?
+             ORDER BY iteration DESC
+                LIMIT 1`,
+            )
+            .get(runId, iteration) as CheckpointRow | undefined;
+          return row
+            ? {
+                iteration: row.iteration,
+                stateJson: row.state_json,
+                createdAt: row.created_at,
+              }
+            : undefined;
+        }),
+
       getRun: (runId) =>
         Effect.sync(() => {
           const row = db
             .prepare(
-              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id
+              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration
                  FROM runs
                 WHERE run_id = ?`,
             )
@@ -399,6 +451,8 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
                 updatedAt: row.updated_at,
                 userId: row.user_id ?? undefined,
                 orgId: row.org_id ?? undefined,
+                forkedFrom: row.forked_from ?? undefined,
+                forkedAtIteration: row.forked_at_iteration ?? undefined,
               }
             : undefined;
         }),
@@ -421,7 +475,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
           const rows = db
             .prepare(
-              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id
+              `SELECT run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration
                  FROM runs${whereClause}
              ORDER BY updated_at DESC`,
             )
@@ -435,6 +489,8 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
             updatedAt: row.updated_at,
             userId: row.user_id ?? undefined,
             orgId: row.org_id ?? undefined,
+            forkedFrom: row.forked_from ?? undefined,
+            forkedAtIteration: row.forked_at_iteration ?? undefined,
           }));
         }),
 
