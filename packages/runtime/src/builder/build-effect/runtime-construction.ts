@@ -58,6 +58,8 @@ import type {
 export interface BuilderRuntimeStateView {
   readonly _provider: ProviderName;
   readonly _model?: string;
+  /** Ed25519 private JWK from `.withReceiptSigning()` (Arc 1 Task 9) — threaded to the engine config for the streaming receipt-signing path. */
+  readonly _receiptSigningKey?: JsonWebKey;
   readonly _thinking?: boolean;
   readonly _thinkingOptions?: import("@reactive-agents/llm-provider").ThinkingOptions;
   readonly _temperature?: number;
@@ -332,6 +334,7 @@ export const buildBaseRuntimeAndEngine = (
       agentId,
       provider: state._provider,
       model: state._model,
+      receiptSigningKey: state._receiptSigningKey,
       thinking: state._thinking,
       thinkingOptions: state._thinkingOptions,
       temperature: state._temperature,

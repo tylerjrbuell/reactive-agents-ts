@@ -32,6 +32,12 @@ import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
 import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from "../builder/helpers.js";
+import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
+import type { TrustReceipt } from "@reactive-agents/core";
+
+/** The StreamCompleted member of the event union — narrowed so the receipt
+ * can be attached via spread after the async signing step. */
+type StreamCompletedEvent = Extract<AgentStreamEvent, { _tag: "StreamCompleted" }>;
 
 export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
@@ -331,7 +337,7 @@ export const makeExecuteStream =
             debriefToolsUsed && debriefToolsUsed.length > 0
               ? debriefToolsUsed.map((t) => ({ name: t.name, calls: t.calls, avgMs: 0 }))
               : [];
-          const completedEvent: AgentStreamEvent = {
+          const completedEvent: StreamCompletedEvent = {
             _tag: "StreamCompleted",
             output: String((taskResult as { output?: unknown }).output ?? ""),
             metadata:
@@ -375,27 +381,24 @@ export const makeExecuteStream =
           };
           // Trust receipt (Arc 1 Task 8) — graded evidence about HOW the
           // answer was produced, computed from this same in-memory taskResult
-          // (works without tracing). Emitted as an additive TrustEvent
-          // alongside StreamCompleted rather than folded into it, per the
-          // ui-core reserved-tag contract (protocol/events.ts). NOT a truth
-          // certificate — see TrustReceipt's JSDoc in @reactive-agents/core.
+          // (works without tracing). The FULL receipt is attached to
+          // `StreamCompleted.receipt` (Task 8 closure — streamed runs are
+          // runs; `AgentStream.collect()` reconstructs `AgentResult.receipt`
+          // from it), and a lean `TrustEvent` {verdict, confidence} is still
+          // emitted before it for progress consumers. NOT a truth certificate
+          // — see TrustReceipt's JSDoc in @reactive-agents/core.
           //
           // SUPPRESSED on pause paths (awaiting-approval / awaiting-interaction):
           // receipts belong to terminal results only — a paused run is
-          // unfinished, and the resumed run emits its own TrustEvent on
+          // unfinished, and the resumed run emits its own receipt on
           // completion. Detected on the RAW awaiting descriptors (not the
           // durable-gated `paused` flags) so a pause never grades, durable or
           // not. Mirrors the receipt suppression in reactive-agent.ts.
           //
-          // NOT SIGNED (Arc 1 Task 9): `TrustEvent` only carries `verdict` +
-          // `confidence` — by design (see this event's JSDoc in
-          // stream-types.ts), it never held the full `TrustReceipt` object.
-          // Ed25519 signing operates over the receipt's full canonical bytes,
-          // so there is nothing here to sign without a stream-protocol change
-          // (adding a full receipt payload to `TrustEvent`/`StreamCompleted`),
-          // which is out of scope for this task. Only the non-streaming
-          // `agent.run()` result (reactive-agent.ts's `buildRunTaskEffect`,
-          // where the full `AgentResult.receipt` exists) is signed.
+          // SIGNED (Arc 1 Task 9) when a signing key is configured — same
+          // Ed25519 wiring as the non-stream site (reactive-agent.ts
+          // buildRunTaskEffect's signing step): signing failure degrades to
+          // the unsigned receipt and must NEVER fail the stream.
           const isPausedRun = gate !== undefined || interaction !== undefined;
           const receiptSource = taskResult as {
             terminatedBy?: TerminatedBy
@@ -411,26 +414,28 @@ export const makeExecuteStream =
               }>
             }
           };
-          const trustEvent: AgentStreamEvent | undefined = isPausedRun
+          const unsignedReceipt: TrustReceipt | undefined = isPausedRun
             ? undefined
-            : (() => {
-                const receipt = computeTrustReceipt({
-                  toolCalls: deriveReceiptToolCalls(receiptSource.metadata),
-                  ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
-                  goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
-                  abstained: receiptSource.terminatedBy === "abstained",
-                  success: receiptSource.success ?? true,
-                  // Single shared source with the non-streaming site — see
-                  // deriveReceiptModelId's JSDoc (builder/helpers.ts).
-                  modelId: deriveReceiptModelId(config.defaultModel, config.provider),
-                  now: Date.now(),
-                });
-                return {
-                  _tag: "TrustEvent",
-                  verdict: receipt.verdict,
-                  confidence: receipt.confidence,
-                } satisfies AgentStreamEvent;
-              })();
+            : computeTrustReceipt({
+                toolCalls: deriveReceiptToolCalls(receiptSource.metadata),
+                ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
+                goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
+                abstained: receiptSource.terminatedBy === "abstained",
+                success: receiptSource.success ?? true,
+                // Single shared source with the non-streaming site — see
+                // deriveReceiptModelId's JSDoc (builder/helpers.ts).
+                modelId: deriveReceiptModelId(config.defaultModel, config.provider),
+                now: Date.now(),
+              });
+          const signingKey = unsignedReceipt !== undefined
+            ? resolveReceiptSigningKey(config.receiptSigningKey)
+            : undefined;
+          const receiptStep: Effect.Effect<TrustReceipt | undefined> =
+            unsignedReceipt !== undefined && signingKey !== undefined
+              ? Effect.promise(() =>
+                  signReceipt(unsignedReceipt, signingKey).catch(() => unsignedReceipt),
+                )
+              : Effect.succeed(unsignedReceipt);
 
           // Persist the pause BEFORE emitting StreamCompleted so callers that
           // consume the event can immediately call decideApproval / respond.
@@ -449,14 +454,24 @@ export const makeExecuteStream =
           // TrustEvent must be queued BEFORE the terminal StreamCompleted:
           // the consumer's unfold loop stops reading the queue the instant it
           // sees a terminal tag, so anything offered after it would never be
-          // delivered. `undefined` = pause path (suppressed, see above).
-          const trustStep = trustEvent !== undefined
-            ? Queue.offer(queue, trustEvent)
-            : Effect.void;
+          // delivered. `undefined` receipt = pause path (suppressed, see
+          // above) — no TrustEvent, no StreamCompleted.receipt.
           const offer = flushStep.pipe(
             Effect.zipRight(persistStep),
-            Effect.zipRight(trustStep),
-            Effect.zipRight(Queue.offer(queue, completedEvent)),
+            Effect.zipRight(receiptStep),
+            Effect.flatMap((receipt) => {
+              const trustStep = receipt !== undefined
+                ? Queue.offer(queue, {
+                    _tag: "TrustEvent",
+                    verdict: receipt.verdict,
+                    confidence: receipt.confidence,
+                  } satisfies AgentStreamEvent as AgentStreamEvent)
+                : Effect.void;
+              const completed: AgentStreamEvent = receipt !== undefined
+                ? { ...completedEvent, receipt }
+                : completedEvent;
+              return trustStep.pipe(Effect.zipRight(Queue.offer(queue, completed)));
+            }),
           );
           if (!eb) return offer;
           return offer.pipe(

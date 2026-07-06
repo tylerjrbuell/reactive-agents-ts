@@ -25,6 +25,25 @@ export interface ResultMetadataWire {
   readonly [key: string]: unknown;
 }
 
+/**
+ * Wire mirror of the runtime's `TrustReceipt` (`@reactive-agents/core`) —
+ * re-declared structurally because ui-core stays dependency-free. Graded
+ * evidence about HOW the answer was produced; NOT a truth certificate
+ * (`verdict` grades the evidence trail, not factual correctness). Loose like
+ * `ResultMetadataWire` so additive server-side receipt fields (e.g. the
+ * optional Task 9 `signature`) pass through without a protocol bump.
+ */
+export interface TrustReceiptWire {
+  readonly verdict: string;
+  readonly method: string;
+  readonly confidence: number;
+  readonly toolsUsed: readonly string[];
+  readonly toolCallStats: { readonly ok: number; readonly failed: number };
+  readonly modelId: string;
+  readonly computedAt: number;
+  readonly [key: string]: unknown;
+}
+
 // ── Base tags (server-originated, exist today) ────────────────────────────
 export interface TextDelta {
   readonly _tag: "TextDelta";
@@ -51,6 +70,12 @@ export interface StreamCompleted {
   };
   readonly pendingInteraction?: PendingInteractionWire;
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
+  /**
+   * Full trust receipt (Arc 1 Task 8 closure) — present on terminal
+   * completions when the server runtime attaches it; absent on pause
+   * completions. See {@link TrustReceiptWire}.
+   */
+  readonly receipt?: TrustReceiptWire;
 }
 export interface StreamError {
   readonly _tag: "StreamError";

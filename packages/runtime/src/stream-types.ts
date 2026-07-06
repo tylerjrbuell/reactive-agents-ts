@@ -1,3 +1,4 @@
+import type { TrustReceipt } from "@reactive-agents/core";
 import type { AgentResultMetadata } from "./builder.js";
 
 /** How many event types the stream emits.
@@ -47,6 +48,15 @@ export type AgentStreamEvent =
         readonly reason: string;
         readonly missing?: readonly string[];
       };
+      /**
+       * Full trust receipt (Arc 1 Task 8 closure) — same object attached to
+       * `AgentResult.receipt` on the non-streaming path, signed when a
+       * signing key is configured (Task 9). Present on every TERMINAL
+       * completion; absent on pause completions (awaiting-approval /
+       * awaiting-interaction — receipts belong to terminal results only).
+       * NOT a truth certificate — see `TrustReceipt` in `@reactive-agents/core`.
+       */
+      readonly receipt?: TrustReceipt;
     }
   | {
       /** Execution failed. Last event on a failed stream. */

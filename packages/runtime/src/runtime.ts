@@ -272,6 +272,10 @@ export const createRuntime = (options: RuntimeOptions) => {
     ...defaultReactiveAgentsConfig(options.agentId),
     defaultModel: resolvedModel,
     provider: options.provider,
+    // Trust-receipt signing key (Arc 1 Task 9) — reaches the streaming
+    // finalization path (execute-stream.ts) via this engine config so
+    // StreamCompleted.receipt is signed the same as AgentResult.receipt.
+    receiptSigningKey: options.receiptSigningKey,
     thinking: options.thinking,
     thinkingOptions: options.thinkingOptions,
     temperature: options.temperature,

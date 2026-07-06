@@ -142,6 +142,18 @@ export interface RuntimeOptions {
   thinkingOptions?: import("@reactive-agents/llm-provider").ThinkingOptions;
 
   /**
+   * Ed25519 private key (JWK) for trust-receipt signing (Arc 1 Task 9), from
+   * `.withReceiptSigning()`. Threaded into the engine config so the STREAMING
+   * finalization path (execute-stream.ts) can sign the receipt it attaches to
+   * `StreamCompleted` — the non-streaming path resolves the same builder key
+   * via `ReactiveAgent.config`. Absent → receipts unsigned (unless the
+   * `RA_RECEIPT_KEY` env fallback applies; see `resolveReceiptSigningKey`).
+   *
+   * Default: undefined (unsigned)
+   */
+  receiptSigningKey?: JsonWebKey;
+
+  /**
    * Override default LLM temperature (0.0-1.0).
    *
    * Default: undefined (uses provider default)
