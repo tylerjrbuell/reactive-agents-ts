@@ -348,6 +348,30 @@ export interface GroundingOptions {
 }
 
 /**
+ * Options for `.withReceiptSigning()` — opt-in Ed25519 provenance signature
+ * on the trust receipt (Arc 1 Task 9). Absent by default (unsigned receipt,
+ * zero overhead).
+ *
+ * HONEST-CLAIMS SCOPE: the signature certifies "this receipt, this run,
+ * untampered" — it never certifies the correctness of the agent's answer.
+ * See `TrustReceipt.signature`'s JSDoc in `@reactive-agents/core`.
+ *
+ * Also settable via the `RA_RECEIPT_KEY` env var (JWK JSON) — this option
+ * wins when both are present. Generate a key pair with
+ * `generateReceiptKeyPair()` from `@reactive-agents/runtime`.
+ *
+ * @example
+ * ```typescript
+ * const { privateKeyJwk } = await generateReceiptKeyPair();
+ * agent.withReceiptSigning({ privateKeyJwk });
+ * ```
+ */
+export interface ReceiptSigningOptions {
+    /** Ed25519 private key as a JWK — never logged or included in the receipt itself (only the derived public key is embedded). */
+    readonly privateKeyJwk: JsonWebKey;
+}
+
+/**
  * Options for `.withOutputSchema()` — opt-in typed structured output.
  *
  * When enabled, the runtime routes structured extraction through a

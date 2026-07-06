@@ -20,6 +20,7 @@ import {
     Fiber,
 } from 'effect'
 import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from './builder/helpers.js'
+import { resolveReceiptSigningKey, signReceipt } from './receipt-signing.js'
 import {
     CapabilityRegistry,
     type CapabilityAuditReport,
@@ -1754,6 +1755,24 @@ export class ReactiveAgent<TOut = unknown> {
                             ),
                         )
                     }),
+                )
+            }),
+            // Trust receipt signing (Arc 1 Task 9) — optional, additive. Signs
+            // the ALREADY-COMPUTED receipt (attached above, whichever branch
+            // produced this result) with the configured Ed25519 key, if any.
+            // Never fails the run: signing errors degrade to an unsigned
+            // receipt rather than surfacing a spurious failure to the caller.
+            // See receipt-signing.ts's honest-claims note — the signature
+            // certifies provenance/integrity of the receipt, never the
+            // correctness of `result.output`.
+            Effect.flatMap((result: AgentResult): Effect.Effect<AgentResult, never> => {
+                const key = resolveReceiptSigningKey(this.config['receiptSigningKey'])
+                const receipt = result.receipt
+                if (!key || !receipt) return Effect.succeed(result)
+                return Effect.promise(() =>
+                    signReceipt(receipt, key)
+                        .then((signed) => ({ ...result, receipt: signed }) satisfies AgentResult)
+                        .catch(() => result)
                 )
             }),
             Effect.mapError(

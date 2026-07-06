@@ -490,6 +490,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _budgetLimits: BudgetLimits | undefined = undefined
     /** Opt-in numeric evidence-grounding config. Absent = off (default). */
     private _groundingConfig: import('./builder/types.js').GroundingOptions | undefined = undefined
+    /** Opt-in Ed25519 receipt-signing private key (Arc 1 Task 9). Absent = unsigned receipt (default). */
+    private _receiptSigningKey: JsonWebKey | undefined = undefined
     /** Fabrication-guard mode. Absent = "block" (always-on default). */
     private _fabricationGuard: import('@reactive-agents/reasoning').FabricationGuardMode | undefined = undefined
     /** Stall/no-progress policy override. Absent = sensible defaults. */
@@ -987,6 +989,28 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withGrounding(options: import('./builder/types.js').GroundingOptions): this {
         this._groundingConfig = options
+        return this
+    }
+
+    /**
+     * Opt in to an Ed25519 provenance signature on the trust receipt
+     * (Arc 1 Task 9). Off by default — the receipt is unsigned unless a key
+     * is configured here or via the `RA_RECEIPT_KEY` env var (this option
+     * wins when both are present).
+     *
+     * HONEST-CLAIMS SCOPE: the signature certifies "this receipt, this run,
+     * untampered" — it NEVER certifies the correctness of the agent's
+     * answer. See `TrustReceipt.signature`'s JSDoc in `@reactive-agents/core`.
+     *
+     * @example
+     * ```typescript
+     * const { privateKeyJwk } = await generateReceiptKeyPair();
+     * agent.withReceiptSigning({ privateKeyJwk });
+     * ```
+     * @returns `this` for chaining
+     */
+    withReceiptSigning(options: import('./builder/types.js').ReceiptSigningOptions): this {
+        this._receiptSigningKey = options.privateKeyJwk
         return this
     }
 
@@ -2562,6 +2586,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
                     thinkingOptions: self._thinkingOptions,
                     provider: self._provider,
                     model: self._model,
+                    // Arc 1 Task 9: threaded through so buildRunTaskEffect can
+                    // resolve it via resolveReceiptSigningKey (config wins over
+                    // RA_RECEIPT_KEY env var).
+                    receiptSigningKey: self._receiptSigningKey,
                 },
             })
         }) as Effect.Effect<ReactiveAgent<TOut>, Error>

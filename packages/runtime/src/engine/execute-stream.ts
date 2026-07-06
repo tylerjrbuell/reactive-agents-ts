@@ -386,6 +386,16 @@ export const makeExecuteStream =
           // completion. Detected on the RAW awaiting descriptors (not the
           // durable-gated `paused` flags) so a pause never grades, durable or
           // not. Mirrors the receipt suppression in reactive-agent.ts.
+          //
+          // NOT SIGNED (Arc 1 Task 9): `TrustEvent` only carries `verdict` +
+          // `confidence` — by design (see this event's JSDoc in
+          // stream-types.ts), it never held the full `TrustReceipt` object.
+          // Ed25519 signing operates over the receipt's full canonical bytes,
+          // so there is nothing here to sign without a stream-protocol change
+          // (adding a full receipt payload to `TrustEvent`/`StreamCompleted`),
+          // which is out of scope for this task. Only the non-streaming
+          // `agent.run()` result (reactive-agent.ts's `buildRunTaskEffect`,
+          // where the full `AgentResult.receipt` exists) is signed.
           const isPausedRun = gate !== undefined || interaction !== undefined;
           const receiptSource = taskResult as {
             terminatedBy?: TerminatedBy

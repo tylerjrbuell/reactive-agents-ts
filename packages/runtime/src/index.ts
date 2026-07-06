@@ -119,6 +119,9 @@ export type { RunHandle, RunStatus, RunControllerLike } from "./run-controller.j
 // ─── Deployment ───
 export { createSigtermHandler, registerShutdownHandlers } from "./sigterm.js";
 
+// ─── Trust receipt signing (Arc 1 Task 9, opt-in) ───
+export { generateReceiptKeyPair, signReceipt, verifyReceipt } from "./receipt-signing.js";
+
 // ─── Agentic-UI kit: server endpoint helpers (Task 13) ───
 export {
   createAgentEndpoint,

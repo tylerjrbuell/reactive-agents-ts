@@ -30,6 +30,24 @@ export interface TrustReceipt {
   readonly modelId: string;
   readonly configHash?: string;
   readonly computedAt: number;
+  /**
+   * Optional Ed25519 provenance signature (Arc 1 Task 9). Absent by default
+   * (zero overhead) — set only when a signing key is configured via
+   * `.withReceiptSigning()` or the `RA_RECEIPT_KEY` env var.
+   *
+   * HONEST-CLAIMS SCOPE: this signature certifies "this receipt, this run,
+   * untampered" — that the receipt bytes were produced by the holder of the
+   * embedded public key and have not been altered since. It NEVER certifies
+   * the correctness of the agent's answer, nor does it change what
+   * `verdict` means (still an evidence-trail grade, not a truth claim).
+   */
+  readonly signature?: {
+    readonly alg: "ed25519";
+    /** Embedded public key as a JSON-stringified JWK, so verification is self-contained. */
+    readonly publicKey: string;
+    /** Base64url signature over the stable-stringified receipt (this field excluded). */
+    readonly sig: string;
+  };
 }
 
 /**
