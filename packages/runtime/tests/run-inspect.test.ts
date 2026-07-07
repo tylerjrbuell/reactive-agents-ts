@@ -165,7 +165,7 @@ describe("runStream() public handle — inspect() integration", () => {
                 tools: [
                     {
                         definition: makeToolDef("echo-tool"),
-                        handler: (args: { input: string }) => Effect.succeed(`echoed: ${args.input}`),
+                        handler: (args: Record<string, unknown>) => Effect.succeed(`echoed: ${String(args.input)}`),
                     },
                 ],
             })

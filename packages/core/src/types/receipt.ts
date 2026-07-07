@@ -8,6 +8,10 @@
  * so it is present even when tracing is disabled. `computeTrustReceipt` is a
  * pure function: the caller passes `now` (no `Date.now()` inside), so unit
  * tests are deterministic.
+ *
+ * Mirrored by `TrustReceiptWire` in `@reactive-agents/ui-core`
+ * (`packages/ui-core/src/protocol/events.ts`) for the wire/endpoint path —
+ * adding a REQUIRED field here requires updating that mirror too.
  */
 export interface TrustReceipt {
   /** Evidence grade for the final answer. */

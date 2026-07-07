@@ -940,7 +940,7 @@ export class ReactiveAgent<TOut = unknown> {
      * `loadForkPayload` — deliberately WITHOUT `resumeRun`'s config-hash
      * guard, since forking under a different config (or a different
      * `opts.model`) is the whole point, not an error. Creates a BRAND NEW
-     * run row (`${runId}-fork-<4 hex chars>`) stamped with THIS agent's
+     * run row (`${runId}-fork-<8 hex chars>`) stamped with THIS agent's
      * current config hash and `{ forkedFrom, forkedAtIteration }` provenance,
      * seeds the restored `KernelState`, and runs to completion — mirroring
      * `runDurable`'s create-row + checkpoint + resume-seed pipeline used by
@@ -980,8 +980,14 @@ export class ReactiveAgent<TOut = unknown> {
             loadForkPayload({ runId, dbPath, at: opts?.at }),
         )
 
-        // 2. Fresh identity for the forked run — never collides with the source.
-        const forkedRunId = `${runId}-fork-${crypto.randomUUID().slice(0, 4)}`
+        // 2. Fresh identity for the forked run — distinct from the source by
+        //    construction, and 8 hex chars (32 bits) of suffix entropy make
+        //    two forks of the SAME source colliding with each other
+        //    astronomically unlikely (4 hex chars/16 bits was too narrow:
+        //    `INSERT OR REPLACE` on a collision would clobber the earlier
+        //    fork's run row while its `run_checkpoints` rows stayed behind
+        //    under the reused runId — a stale-state rehydration hazard).
+        const forkedRunId = `${runId}-fork-${crypto.randomUUID().slice(0, 8)}`
         const task = opts?.task ?? payload.run.task
 
         // 3. Create the new row (this agent's CURRENT configHash) + seed the

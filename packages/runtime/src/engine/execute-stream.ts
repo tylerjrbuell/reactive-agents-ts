@@ -323,14 +323,6 @@ export const makeExecuteStream =
           const interaction = (taskResult as { awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string } }).awaitingInteractionFor;
           const pausedInteraction = interaction !== undefined && runStoreCtx !== undefined;
 
-          // Only mark a non-paused run as finished in the durable store.
-          // `finish` is fire-and-forget here (its own flush()-then-status-write
-          // sequencing is internal); the explicit `flushStep` below is what
-          // actually gates the emitted terminal event on checkpoint durability.
-          if (!paused && !pausedInteraction) {
-            void durableFinish?.(true);
-          }
-
           const debriefToolsUsed = (taskResult as { debrief?: { toolsUsed?: Array<{ name: string; calls: number; successRate: number }> } })
             .debrief?.toolsUsed;
           const toolSummary =
@@ -444,13 +436,28 @@ export const makeExecuteStream =
             : pausedInteraction && runStoreCtx !== undefined
               ? persistInteractionPause({ runStoreLayer: runStoreCtx.runStoreLayer, runId: runStoreCtx.runId, interaction: interaction! })
               : Effect.void;
-          // Durable checkpoint hardening (Arc 1 Task 4): await the last
-          // checkpoint's durability BEFORE yielding StreamCompleted — a
-          // fork/resume reader that reacts to this event must never race an
-          // in-flight checkpoint write. flush() never throws.
-          const flushStep = durableFlush
-            ? Effect.promise(() => durableFlush!())
-            : Effect.void;
+          // Durable checkpoint hardening (Arc 1 Task 4, extended in the
+          // final-review fix): await the durable write BEFORE yielding
+          // StreamCompleted — a fork/resume reader (or `rax attach`) that
+          // reacts to this event must never race an in-flight checkpoint
+          // write, and a consumer that simply exits on StreamCompleted (the
+          // normal CLI pattern) must never lose the final status write.
+          // On a NON-PAUSED terminal run we await `finish(true)` — it already
+          // does `flush()` THEN the status write internally (see
+          // run-controller.ts), so there is no separate flush left to do.
+          // Paused runs must NOT call finish() (that would mark an
+          // unfinished run "completed"); they keep the bare flush() so only
+          // checkpoint durability is awaited, ahead of the persistStep status
+          // write below. `.catch()` preserves "a status-write failure must
+          // never fail the stream".
+          const flushStep: Effect.Effect<void> =
+            !paused && !pausedInteraction
+              ? Effect.promise(() =>
+                  durableFinish ? durableFinish(true).catch(() => undefined) : Promise.resolve(),
+                )
+              : durableFlush
+                ? Effect.promise(() => durableFlush!())
+                : Effect.void;
           // TrustEvent must be queued BEFORE the terminal StreamCompleted:
           // the consumer's unfold loop stops reading the queue the instant it
           // sees a terminal tag, so anything offered after it would never be
@@ -465,7 +472,7 @@ export const makeExecuteStream =
                     _tag: "TrustEvent",
                     verdict: receipt.verdict,
                     confidence: receipt.confidence,
-                  } satisfies AgentStreamEvent as AgentStreamEvent)
+                  } satisfies AgentStreamEvent)
                 : Effect.void;
               const completed: AgentStreamEvent = receipt !== undefined
                 ? { ...completedEvent, receipt }
@@ -496,17 +503,19 @@ export const makeExecuteStream =
           );
         }),
         Effect.catchAll((err: unknown) => {
-          void durableFinish?.(false);
           const cause =
             typeof err === "object" && err !== null && "message" in err
               ? String((err as { message: unknown }).message)
               : String(err);
           const errorEvent: AgentStreamEvent = { _tag: "StreamError", cause };
-          // Same durability gate as the success path — the last checkpoint
-          // must be durable before a reader reacts to the terminal event.
-          const flushStep = durableFlush
-            ? Effect.promise(() => durableFlush!())
-            : Effect.void;
+          // Same durability gate as the success path — this is a hard
+          // failure (never a pause), so `finish(false)` is always awaited
+          // before the terminal event is offered. finish() flushes then
+          // writes the "failed" status internally; `.catch()` keeps a
+          // status-write failure from ever failing the stream.
+          const flushStep: Effect.Effect<void> = Effect.promise(() =>
+            durableFinish ? durableFinish(false).catch(() => undefined) : Promise.resolve(),
+          );
           const offer = flushStep.pipe(Effect.zipRight(Queue.offer(queue, errorEvent)));
           if (!eb) return offer;
           return offer.pipe(

@@ -153,10 +153,16 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     }, 700);
 
     let completed: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }> | undefined;
-    for await (const event of handle) {
-      if (event._tag === "StreamCompleted") completed = event;
+    try {
+      for await (const event of handle) {
+        if (event._tag === "StreamCompleted") completed = event;
+      }
+    } finally {
+      // Clear on every exit path, not just the happy one — a mid-stream
+      // throw from the for-await loop must not leak this interval (it would
+      // otherwise keep firing forever and hang the process).
+      clearInterval(sampler);
     }
-    clearInterval(sampler);
 
     if (!completed) throw new Error("stream ended without StreamCompleted");
     const runId = completed.runId;

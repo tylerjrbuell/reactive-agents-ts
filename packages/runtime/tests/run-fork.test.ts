@@ -153,6 +153,9 @@ describe("agent.fork() — end-to-end", () => {
           task: "compute the answer, take two",
         });
         expect(result.output).toContain("forty-two");
+        // T6→T8 cross-task contract: the fork's own AgentResult.receipt must
+        // carry the same forkedFrom provenance as the durable run row below.
+        expect(result.receipt?.forkedFrom).toBe(sourceRunId);
 
         const all = await agent.listRuns();
         const forked = all.find((r) => r.runId !== sourceRunId);
