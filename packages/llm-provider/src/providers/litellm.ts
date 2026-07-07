@@ -551,14 +551,8 @@ export const LiteLLMProviderLive = Layer.effect(
                   }
                 }
               } catch (error) {
-                const err = error as { message?: string };
-                emit.fail(
-                  new LLMError({
-                    message: err.message ?? String(error),
-                    provider: "litellm",
-                    cause: error,
-                  }),
-                );
+                // Hotfix 0.5-5: normalize stream errors (parity with complete()).
+                emit.fail(mapProviderError(error, "litellm", model));
               }
             };
             void doStream();

@@ -579,14 +579,8 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                 });
                 emit.end();
               } catch (error) {
-                const err = error as { message?: string };
-                emit.fail(
-                  new LLMError({
-                    message: err.message ?? String(error),
-                    provider: providerName,
-                    cause: error,
-                  }),
-                );
+                // Hotfix 0.5-5: normalize stream errors (parity with complete()).
+                emit.fail(mapProviderError(error, providerName, model));
               }
             };
             void doStream();

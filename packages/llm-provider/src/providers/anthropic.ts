@@ -449,14 +449,11 @@ export const AnthropicProviderLive = Layer.effect(
             });
 
             stream.on("error", (error: unknown) => {
-              const err = error as { message?: string };
-              emit.fail(
-                new LLMError({
-                  message: err.message ?? String(error),
-                  provider: "anthropic",
-                  cause: error,
-                }),
-              );
+              // Hotfix 0.5-5 (2026-07-07): route stream errors through the
+              // shared normalizer (one-line cause, no stack/JSON leak) — the
+              // complete() path already does; streams regressed to the raw
+              // err.message shape provider-error.ts was built to kill.
+              emit.fail(mapProviderError(error, "anthropic", model));
             });
           });
         }),

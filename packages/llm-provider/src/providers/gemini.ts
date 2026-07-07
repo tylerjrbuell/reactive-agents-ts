@@ -632,14 +632,8 @@ export const GeminiProviderLive = Layer.effect(
                 });
                 emit.end();
               } catch (error) {
-                const err = error as { message?: string };
-                emit.fail(
-                  new LLMError({
-                    message: err.message ?? String(error),
-                    provider: "gemini",
-                    cause: error,
-                  }),
-                );
+                // Hotfix 0.5-5: normalize stream errors (parity with complete()).
+                emit.fail(mapProviderError(error, "gemini", model));
               }
             })();
           });
