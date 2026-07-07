@@ -187,6 +187,12 @@ export const executePlanExecute = (
 
     let refinement = 0;
     let finalOutput: string | null = null;
+    // P3/FM#4 grounded-terminal (2026-07-07): an all-analysis plan can narrate
+    // SATISFIED with zero required-tool calls and ship status:success — the F1
+    // invariant only guarded the react loop. One redirect (feeds the existing
+    // augment machinery), then honest abstention instead of fabricated success.
+    let groundedRedirects = 0;
+    let groundedAbstained = false;
 
     // Extract plain goal text from taskDescription (may be JSON-wrapped)
     const goal = extractGoalText(input.taskDescription);
@@ -1019,12 +1025,32 @@ export const executePlanExecute = (
       // is met (e.g. a combined search may return incomplete data for each entity).
       // Re-execution of completed steps is already prevented by computeWaves skipping
       // them and by the augmentation path generating only NEW supplementary steps.
-      const satisfied = isSatisfied(reflectionContent);
+      let satisfied = isSatisfied(reflectionContent);
+      let reflectionForRefine = reflectionContent;
+      const grounded = evaluateGroundedSatisfaction({
+        satisfied,
+        requiredTools: input.requiredTools,
+        completedToolNames: new Set(
+          plan.steps
+            .filter((st) => st.status === "completed" && st.toolName)
+            .map((st) => st.toolName as string),
+        ),
+        redirectsSoFar: groundedRedirects,
+      });
+      if (grounded.verdict === "redirect") {
+        groundedRedirects++;
+        satisfied = false;
+        reflectionForRefine = `UNSATISFIED: required tools were never executed: ${grounded.missing.join(", ")}. Add tool_call steps that actually invoke them and ground the answer in their results before declaring the goal met.\n${reflectionContent}`;
+      } else if (grounded.verdict === "abstain") {
+        groundedAbstained = true;
+        finalOutput = `Unable to verify this answer: the required tools (${grounded.missing.join(", ")}) were never successfully executed, so the analysis below is ungrounded. ${reflectionContent}`;
+        break;
+      }
 
       steps.push(
         makeStep(
           "observation",
-          `[REFLECT ${refinement + 1}] ${satisfied ? "SATISFIED" : "UNSATISFIED"} — ${reflectionContent}`,
+          `[REFLECT ${refinement + 1}] ${satisfied ? "SATISFIED" : "UNSATISFIED"} — ${reflectionForRefine}`,
         ),
       );
 
@@ -1034,7 +1060,7 @@ export const executePlanExecute = (
         strategy: "plan-execute-reflect",
         step: steps.length,
         totalSteps: maxRefinements + 1,
-        thought: `[REFLECT ${refinement + 1}] ${satisfied ? "✓ SATISFIED" : "✗ UNSATISFIED — refining..."} ${reflectionContent}`,
+        thought: `[REFLECT ${refinement + 1}] ${satisfied ? "✓ SATISFIED" : "✗ UNSATISFIED — refining..."} ${reflectionForRefine}`,
         kernelPass: `plan-execute:reflect-${refinement + 1}`,
       });
 
@@ -1134,7 +1160,7 @@ export const executePlanExecute = (
         const augmentResult = yield* augmentPlan(
           plan,
           goal,
-          reflectionContent,
+          reflectionForRefine,
           input,
           llm,
           totalTokens,
@@ -1175,11 +1201,13 @@ export const executePlanExecute = (
         String(steps[steps.length - 1]?.content ?? "");
     }
 
-    if (finalOutput) {
+    if (finalOutput && !groundedAbstained) {
       // plan-execute's `finalOutput` already concatenates raw `[EXEC` tool
       // observations, so the gate operates on the draft directly (no separate
       // toolData harvest needed). Shared module upgrades synthesis to use
       // thinking-safe extraction, rescuing answers trapped inside <think>.
+      // Grounded abstention skips the gate: its output is a deliberate
+      // harness statement, not a draft to re-synthesize.
       const gated = yield* enforceQualityGate({
         llm,
         taskDescription: input.taskDescription,
@@ -1202,23 +1230,52 @@ export const executePlanExecute = (
       strategy: "plan-execute-reflect",
       steps,
       output: finalOutput,
-      status: finalOutput ? "completed" : "partial",
+      // Grounded abstention is an honest non-success: the output explains what
+      // could not be verified, and the status must not read as completed.
+      status: groundedAbstained ? "partial" : finalOutput ? "completed" : "partial",
       start,
       totalTokens,
       totalCost,
-      ...(lastRawTerminatedBy !== undefined
+      ...((groundedAbstained ? "abstained" : lastRawTerminatedBy) !== undefined
         ? {
             extraMetadata: {
               // Parallel open-string channel mirroring reactive strategy.
               // Drops through to AgentCompleted.terminationReason via
               // execution-engine ctx.metadata.rawTerminatedBy.
-              rawTerminatedBy: lastRawTerminatedBy,
+              rawTerminatedBy: groundedAbstained ? "abstained" : lastRawTerminatedBy,
             },
           }
         : {}),
     });
   });
 
+
+// ─── Grounded-Terminal Gate (P3/FM#4) ───
+
+/**
+ * Pure decision for plan-execute's grounded-terminal gate: a SATISFIED
+ * reflection is only acceptable when every required tool was actually
+ * executed. First violation redirects (feeds the augment machinery one
+ * chance to add real tool steps); a repeat violation abstains honestly
+ * instead of shipping an ungrounded success.
+ *
+ * @internal exported for unit testing.
+ */
+export function evaluateGroundedSatisfaction(args: {
+  satisfied: boolean;
+  requiredTools: readonly string[] | undefined;
+  completedToolNames: ReadonlySet<string>;
+  redirectsSoFar: number;
+}): { verdict: "accept" | "redirect" | "abstain"; missing: readonly string[] } {
+  if (!args.satisfied) return { verdict: "accept", missing: [] };
+  const missing = (args.requiredTools ?? []).filter(
+    (t) => !args.completedToolNames.has(t),
+  );
+  if (missing.length === 0) return { verdict: "accept", missing: [] };
+  return args.redirectsSoFar === 0
+    ? { verdict: "redirect", missing }
+    : { verdict: "abstain", missing };
+}
 
 // ─── Step Execution Helpers ───
 //
