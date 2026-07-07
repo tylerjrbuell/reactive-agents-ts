@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema } from "effect";
+import { Effect, Layer, Stream, Schema, Duration } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -26,23 +26,39 @@ import { selectAdapter } from "../adapter.js";
 import { deepClone } from "../schema-utils.js";
 import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
 import { resolveCapability } from "../capability-resolver.js";
+import { clampOutputBudget } from "../params/output-budget.js";
+import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
+import { mapStopReason } from "../params/stop-reason.js";
 
 // ─── Token-limit field selection ───
 // gpt-5.x / o-series reject `max_tokens` (400) and require `max_completion_tokens`
 // on every call — thinking merely adds the reserve + reasoning_effort on top.
 // Driven by the capability flag `requiresMaxCompletionTokens`; legacy models
 // (gpt-4o family) keep plain `max_tokens`.
-const buildTokenField = (
-  cap: { readonly requiresMaxCompletionTokens?: boolean },
+//
+// F1: the final wire value (budget + thinking reserve) is clamped against the
+// capability's authoritative output ceiling here — this is the single
+// wire-assembly point for all three methods × all openai-compat providers
+// (openai/groq/xai), and litellm reuses it for dialect parity (F6).
+/** @internal Exported for litellm reuse + unit testing only */
+export const buildTokenField = (
+  cap: {
+    readonly requiresMaxCompletionTokens?: boolean;
+    readonly maxOutputTokens?: number;
+    readonly source?: string;
+  },
   answerBudget: number,
   reserve: number | undefined,
   effort: string,
 ): Record<string, unknown> =>
   reserve !== undefined
-    ? { max_completion_tokens: answerBudget + reserve, reasoning_effort: effort }
+    ? {
+        max_completion_tokens: clampOutputBudget(answerBudget + reserve, cap),
+        reasoning_effort: effort,
+      }
     : cap.requiresMaxCompletionTokens
-      ? { max_completion_tokens: answerBudget }
-      : { max_tokens: answerBudget };
+      ? { max_completion_tokens: clampOutputBudget(answerBudget, cap) }
+      : { max_tokens: clampOutputBudget(answerBudget, cap) };
 
 // ─── OpenAI Message Conversion ───
 
@@ -273,8 +289,11 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
       : config.defaultModel;
 
     return LLMService.of({
-      complete: (request) =>
-        Effect.gen(function* () {
+      complete: (request) => {
+        // F4: one resolved binding drives BOTH Effect.timeout and the
+        // timeoutMs restated in the error — the two can never drift.
+        const timeoutMs = resolveCloudTimeoutMs(request, config);
+        return Effect.gen(function* () {
           const client = yield* Effect.promise(() => getClient());
           const model = typeof request.model === 'string'
             ? request.model
@@ -352,19 +371,21 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
           return mapped;
         }).pipe(
           Effect.retry(retryPolicy),
-          // G2: match local's 120s — 30s was too tight for thinking/reasoning
-          // models whose complete() calls (e.g. strategy expansions) exceed 30s.
-          Effect.timeout("120 seconds"),
+          // G2 default is 120s (30s was too tight for thinking/reasoning
+          // models); F4 makes it request/config-resolvable — see
+          // resolveCloudTimeoutMs.
+          Effect.timeout(Duration.millis(timeoutMs)),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: providerName,
-                timeoutMs: 120_000,
+                timeoutMs,
               }),
             ),
           ),
-        ),
+        );
+      },
 
       stream: (request) =>
         Effect.gen(function* () {
@@ -846,14 +867,11 @@ const mapOpenAIResponse = (
 
   const hasToolCalls = rawToolCalls && rawToolCalls.length > 0;
 
-  const stopReason =
-    response.choices[0]?.finish_reason === "tool_calls" || hasToolCalls
-      ? ("tool_use" as const)
-      : response.choices[0]?.finish_reason === "stop"
-        ? ("end_turn" as const)
-        : response.choices[0]?.finish_reason === "length"
-          ? ("max_tokens" as const)
-          : ("end_turn" as const);
+  // Shared table-driven mapping ("tool_calls" → tool_use lives in the table);
+  // the hasToolCalls override preserves the original ladder's short-circuit.
+  const stopReason = hasToolCalls
+    ? ("tool_use" as const)
+    : mapStopReason(response.choices[0]?.finish_reason, "openai");
 
   // M12 Hook 1/7 — give the calibrated/tier ProviderAdapter first crack at
   // normalizing tool calls (e.g., OpenAI nullable inputs, alternate field

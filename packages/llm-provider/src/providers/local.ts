@@ -24,6 +24,7 @@ import { emitToolCallComplete } from '../streaming-helpers.js'
 import { selectAdapter } from '../adapter.js'
 import { deepClone } from '../schema-utils.js'
 import { resolveThinkingEnabled } from '../thinking/index.js'
+import { mapStopReason } from '../params/stop-reason.js'
 
 // Module-scope cache so the inline probe runs at most once per (baseUrl, model)
 // per process. CalibrationStore write-through (cross-process) lands in S2.4.
@@ -443,6 +444,15 @@ export const LocalProviderLive = Layer.effect(
                         )
                     )
 
+                    // F7: bind num_ctx ONCE per call — used for the wire
+                    // `options.num_ctx` AND `resolvedParams.contextWindow`
+                    // below, so the two can never drift.
+                    // Precedence: request.numCtx → config.explicitNumCtx
+                    // (user override via .withModel/run) →
+                    // capability.recommendedNumCtx → config.defaultNumCtx
+                    // (unknown-model floor).
+                    const numCtx = resolveOllamaNumCtx(request, config, capability)
+
                     const response = yield* Effect.tryPromise({
                         // `signal` fires when the fiber is interrupted (e.g. by
                         // the timeout below) — forwarding it to getClient aborts
@@ -465,12 +475,6 @@ export const LocalProviderLive = Layer.effect(
                                 model,
                                 config.thinking
                             )
-
-                            // Precedence on num_ctx: request.numCtx →
-                            // config.explicitNumCtx (user override via
-                            // .withModel/run) → capability.recommendedNumCtx →
-                            // config.defaultNumCtx (unknown-model floor).
-                            const numCtx = resolveOllamaNumCtx(request, config, capability)
 
                             return client.chat({
                                 model,
@@ -581,13 +585,12 @@ export const LocalProviderLive = Layer.effect(
 
                     return {
                         content,
+                        // Shared table-driven done_reason mapping; the
+                        // hasToolCalls override preserves the original
+                        // ladder's short-circuit.
                         stopReason: hasToolCalls
                             ? ('tool_use' as const)
-                            : response.done_reason === 'stop'
-                            ? ('end_turn' as const)
-                            : response.done_reason === 'length'
-                            ? ('max_tokens' as const)
-                            : ('end_turn' as const),
+                            : mapStopReason(response.done_reason, 'ollama'),
                         usage: {
                             inputTokens,
                             outputTokens,
@@ -601,8 +604,8 @@ export const LocalProviderLive = Layer.effect(
                             : {}),
                         ...(logprobs ? { logprobs } : {}),
                         // Provider transparency: surface the exact context window used.
-                        ...(resolveOllamaNumCtx(request, config, capability) !== undefined
-                            ? { resolvedParams: { contextWindow: resolveOllamaNumCtx(request, config, capability)! } }
+                        ...(numCtx !== undefined
+                            ? { resolvedParams: { contextWindow: numCtx } }
                             : {}),
                     } satisfies CompletionResponse
                 }).pipe(
@@ -822,16 +825,15 @@ export const LocalProviderLive = Layer.effect(
                                         emit.single({
                                             type: 'content_complete',
                                             content: fullContent,
+                                            // Shared table-driven done_reason
+                                            // mapping (mirrors complete()).
                                             ...(hasToolCalls
                                                 ? { stopReason: 'tool_use' }
                                                 : {
-                                                      stopReason:
-                                                          doneReason === 'stop'
-                                                              ? 'end_turn'
-                                                              : doneReason ===
-                                                                'length'
-                                                              ? 'max_tokens'
-                                                              : 'end_turn',
+                                                      stopReason: mapStopReason(
+                                                          doneReason,
+                                                          'ollama',
+                                                      ),
                                                   }),
                                         } as any)
                                         if (accumulatedLogprobs.length > 0) {
@@ -855,8 +857,9 @@ export const LocalProviderLive = Layer.effect(
                                                 estimatedCost: 0,
                                             },
                                             // Provider transparency: exact context window used this call.
-                                            ...(resolveOllamaNumCtx(request, config, capability) !== undefined
-                                                ? { resolvedParams: { contextWindow: resolveOllamaNumCtx(request, config, capability)! } }
+                                            // F7: reuses the single numCtx binding from stream setup.
+                                            ...(numCtx !== undefined
+                                                ? { resolvedParams: { contextWindow: numCtx } }
                                                 : {}),
                                         })
                                         emit.end()

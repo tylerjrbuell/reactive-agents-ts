@@ -192,6 +192,14 @@ export {
 } from "./thinking/index.js";
 export type { ThinkingOptions } from "./thinking/index.js";
 
+// ─── Shared Param Resolution (F1/F4 + stopReason consolidation, 2026-07-07) ───
+export { clampOutputBudget } from "./params/output-budget.js";
+export {
+  resolveCloudTimeoutMs,
+  DEFAULT_CLOUD_TIMEOUT_MS,
+} from "./params/cloud-timeout.js";
+export { mapStopReason } from "./params/stop-reason.js";
+
 // ─── Embedding Cache ───
 export { makeEmbeddingCache } from "./embedding-cache.js";
 export type { EmbeddingCache } from "./embedding-cache.js";

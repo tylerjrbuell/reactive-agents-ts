@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema } from "effect";
+import { Effect, Layer, Stream, Schema, Duration } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -26,6 +26,9 @@ import {
   reserveThinkingBudget,
   buildAnthropicThinkingBody,
 } from "../thinking/index.js";
+import { clampOutputBudget } from "../params/output-budget.js";
+import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
+import { mapStopReason } from "../params/stop-reason.js";
 
 // ─── Anthropic Message Conversion Helpers ───
 
@@ -185,8 +188,11 @@ export const AnthropicProviderLive = Layer.effect(
     };
 
     return LLMService.of({
-      complete: (request) =>
-        Effect.gen(function* () {
+      complete: (request) => {
+        // F4: one resolved binding drives BOTH Effect.timeout and the
+        // timeoutMs restated in the error — the two can never drift.
+        const timeoutMs = resolveCloudTimeoutMs(request, config);
+        return Effect.gen(function* () {
           const client = yield* Effect.promise(() => getClient());
           const model = typeof request.model === 'string'
             ? request.model
@@ -209,7 +215,12 @@ export const AnthropicProviderLive = Layer.effect(
             try: () =>
               client.messages.create({
                 model,
-                max_tokens: reserve !== undefined ? answerBudget + reserve : answerBudget,
+                // F1: clamp the final wire value (answer + thinking reserve)
+                // against the model's authoritative output ceiling.
+                max_tokens: clampOutputBudget(
+                  reserve !== undefined ? answerBudget + reserve : answerBudget,
+                  cap,
+                ),
                 system: buildSystemParam(request.systemPrompt),
                 messages: toAnthropicMessages(request.messages),
                 stop_sequences: request.stopSequences
@@ -257,19 +268,21 @@ export const AnthropicProviderLive = Layer.effect(
           return mapped;
         }).pipe(
           Effect.retry(retryPolicy),
-          // G2: match local's 120s — 30s was too tight for thinking/reasoning
-          // models whose complete() calls (e.g. strategy expansions) exceed 30s.
-          Effect.timeout("120 seconds"),
+          // G2 default is 120s (30s was too tight for thinking/reasoning
+          // models); F4 makes it request/config-resolvable — see
+          // resolveCloudTimeoutMs.
+          Effect.timeout(Duration.millis(timeoutMs)),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "anthropic",
-                timeoutMs: 120_000,
+                timeoutMs,
               }),
             ),
           ),
-        ),
+        );
+      },
 
       stream: (request) =>
         Effect.gen(function* () {
@@ -311,10 +324,13 @@ export const AnthropicProviderLive = Layer.effect(
           return Stream.async<StreamEvent, LLMErrors>((emit) => {
             const stream = client.messages.stream({
               model,
-              max_tokens:
+              // F1: clamp the final wire value — mirrors complete().
+              max_tokens: clampOutputBudget(
                 streamReserve !== undefined
                   ? streamAnswerBudget + streamReserve
                   : streamAnswerBudget,
+                streamCap,
+              ),
               system: buildSystemParam(request.systemPrompt),
               messages: toAnthropicMessages(request.messages),
               tools: request.tools?.map((t, i) =>
@@ -521,10 +537,13 @@ export const AnthropicProviderLive = Layer.effect(
                 const client = await getClient();
                 return client.messages.create({
                   model: structuredModel,
-                  max_tokens:
+                  // F1: clamp the final wire value — mirrors complete().
+                  max_tokens: clampOutputBudget(
                     structuredReserve !== undefined
                       ? structuredAnswerBudget + structuredReserve
                       : structuredAnswerBudget,
+                    structuredCap,
+                  ),
                   system: buildSystemParam(request.systemPrompt),
                   messages: anthropicMsgs,
                   ...buildAnthropicThinkingBody(
@@ -730,16 +749,10 @@ const mapAnthropicResponse = (
         input: b.input,
       }));
 
-  const stopReason =
-    response.stop_reason === "end_turn"
-      ? ("end_turn" as const)
-      : response.stop_reason === "max_tokens"
-        ? ("max_tokens" as const)
-        : response.stop_reason === "stop_sequence"
-          ? ("stop_sequence" as const)
-          : response.stop_reason === "tool_use"
-            ? ("tool_use" as const)
-            : ("end_turn" as const);
+  // Shared table-driven mapping — the anthropic table passes the four
+  // canonical stop_reason tokens through and degrades the rest to end_turn,
+  // exactly like the original ladder (which had no hasToolCalls override).
+  const stopReason = mapStopReason(response.stop_reason, "anthropic");
 
   return {
     content: textContent,

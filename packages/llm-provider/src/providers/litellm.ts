@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema } from "effect";
+import { Effect, Layer, Stream, Schema, Duration } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -20,6 +20,11 @@ import { calculateCost, estimateTokenCount } from "../token-counter.js";
 import { retryPolicy } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
+import { resolveCapability } from "../capability-resolver.js";
+import { resolveThinkingEnabled, reserveThinkingBudget } from "../thinking/index.js";
+import { buildTokenField } from "./openai.js";
+import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
+import { mapStopReason } from "../params/stop-reason.js";
 
 /**
  * LiteLLM Provider — OpenAI-compatible adapter for LiteLLM proxy.
@@ -117,14 +122,11 @@ const mapLiteLLMResponse = (
   const rawToolCalls = message?.tool_calls;
   const hasToolCalls = rawToolCalls && rawToolCalls.length > 0;
 
-  const stopReason =
-    response.choices[0]?.finish_reason === "tool_calls" || hasToolCalls
-      ? ("tool_use" as const)
-      : response.choices[0]?.finish_reason === "stop"
-        ? ("end_turn" as const)
-        : response.choices[0]?.finish_reason === "length"
-          ? ("max_tokens" as const)
-          : ("end_turn" as const);
+  // Shared table-driven mapping ("tool_calls" → tool_use lives in the table);
+  // the hasToolCalls override preserves the original ladder's short-circuit.
+  const stopReason = hasToolCalls
+    ? ("tool_use" as const)
+    : mapStopReason(response.choices[0]?.finish_reason, "litellm");
 
   // M12 Hook 1/7 — give the calibrated/tier ProviderAdapter first crack at
   // normalizing tool calls. LiteLLM proxies many providers; calibration is
@@ -236,8 +238,11 @@ export const LiteLLMProviderLive = Layer.effect(
     const defaultModel = config.defaultModel;
 
     return LLMService.of({
-      complete: (request) =>
-        Effect.gen(function* () {
+      complete: (request) => {
+        // F4: one resolved binding drives BOTH Effect.timeout and the
+        // timeoutMs restated in the error — the two can never drift.
+        const timeoutMs = resolveCloudTimeoutMs(request, config);
+        return Effect.gen(function* () {
           const model =
             typeof request.model === "string"
               ? request.model
@@ -248,10 +253,29 @@ export const LiteLLMProviderLive = Layer.effect(
             messages.unshift({ role: "system", content: request.systemPrompt });
           }
 
+          // F6: thinking + capability parity with openai.ts — LiteLLM speaks
+          // the OpenAI dialect, so enablement resolves through the shared
+          // tri-state resolver (gated on capability.supportsThinkingMode) and
+          // the token field/reasoning_effort encoding reuses buildTokenField.
+          // Unknown proxied models resolve to the fallback capability
+          // (supportsThinkingMode=false) → thinking stays off, body unchanged.
+          const cap = resolveCapability("litellm", model);
+          const answerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const thinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, cap.supportsThinkingMode);
+          const reserve = reserveThinkingBudget(answerBudget, cap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: thinkEnabled,
+          });
+          const tokenField = buildTokenField(cap, answerBudget, reserve, config.thinkingOptions?.effort ?? "medium");
+
           const requestBody: Record<string, unknown> = {
             model,
-            max_tokens: request.maxTokens ?? config.defaultMaxTokens,
-            temperature: request.temperature ?? config.defaultTemperature,
+            ...tokenField,
+            // I1 parity (mirrors openai.ts): reasoning path (reserve set)
+            // omits temperature; non-reasoning path keeps it.
+            ...(reserve === undefined
+              ? { temperature: request.temperature ?? config.defaultTemperature }
+              : {}),
             messages,
             stop: request.stopSequences
               ? [...request.stopSequences]
@@ -275,18 +299,20 @@ export const LiteLLMProviderLive = Layer.effect(
           );
         }).pipe(
           Effect.retry(retryPolicy),
-          // G2: match local 120s — thinking/reasoning models exceed 30s.
-          Effect.timeout("120 seconds"),
+          // G2 default is 120s (thinking/reasoning models exceed 30s); F4
+          // makes it request/config-resolvable — see resolveCloudTimeoutMs.
+          Effect.timeout(Duration.millis(timeoutMs)),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "litellm",
-                timeoutMs: 120_000,
+                timeoutMs,
               }),
             ),
           ),
-        ),
+        );
+      },
 
       stream: (request) =>
         Effect.gen(function* () {
@@ -294,6 +320,16 @@ export const LiteLLMProviderLive = Layer.effect(
             typeof request.model === "string"
               ? request.model
               : request.model?.model ?? defaultModel;
+
+          // F6: thinking + capability parity — mirrors complete() above.
+          const streamCap = resolveCapability("litellm", model);
+          const streamAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const streamThinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, streamCap.supportsThinkingMode);
+          const streamReserve = reserveThinkingBudget(streamAnswerBudget, streamCap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: streamThinkEnabled,
+          });
+          const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium");
 
           // Adapter selection up-front for tool_calls normalization. When
           // the adapter supplies parseToolCalls we SUPPRESS per-chunk
@@ -329,10 +365,11 @@ export const LiteLLMProviderLive = Layer.effect(
 
                 const streamBody: Record<string, unknown> = {
                   model,
-                  max_tokens:
-                    request.maxTokens ?? config.defaultMaxTokens,
-                  temperature:
-                    request.temperature ?? config.defaultTemperature,
+                  ...streamTokenField,
+                  // I1 parity: omit temperature on the reasoning path.
+                  ...(streamReserve === undefined
+                    ? { temperature: request.temperature ?? config.defaultTemperature }
+                    : {}),
                   messages,
                   stream: true,
                   // OpenAI-compat: request usage on the final chunk so we
@@ -579,6 +616,21 @@ export const LiteLLMProviderLive = Layer.effect(
           const parseAttempts: ParseAttemptError[] = [];
           const maxRetries = request.maxParseRetries ?? 2;
 
+          // Loop-invariant: model + F6 thinking/capability chain (mirrors
+          // complete() above) resolve once, not per parse attempt.
+          const model =
+            typeof request.model === "string"
+              ? request.model
+              : request.model?.model ?? defaultModel;
+          const structuredCap = resolveCapability("litellm", model);
+          const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const structuredThinkEnabled = resolveThinkingEnabled("litellm", model, config.thinking, structuredCap.supportsThinkingMode);
+          const structuredReserve = reserveThinkingBudget(structuredAnswerBudget, structuredCap.supportsThinkingMode, {
+            ...(config.thinkingOptions ?? {}),
+            enabled: structuredThinkEnabled,
+          });
+          const structuredTokenField = buildTokenField(structuredCap, structuredAnswerBudget, structuredReserve, config.thinkingOptions?.effort ?? "medium");
+
           for (let attempt = 0; attempt <= maxRetries; attempt++) {
             const msgs =
               attempt === 0
@@ -595,11 +647,6 @@ export const LiteLLMProviderLive = Layer.effect(
                     },
                   ];
 
-            const model =
-              typeof request.model === "string"
-                ? request.model
-                : request.model?.model ?? defaultModel;
-
             const completeResult = yield* Effect.tryPromise({
               try: () =>
                 liteLLMFetch(
@@ -607,10 +654,11 @@ export const LiteLLMProviderLive = Layer.effect(
                   "/chat/completions",
                   {
                     model,
-                    max_tokens:
-                      request.maxTokens ?? config.defaultMaxTokens,
-                    temperature:
-                      request.temperature ?? config.defaultTemperature,
+                    ...structuredTokenField,
+                    // I1 parity: omit temperature on the reasoning path.
+                    ...(structuredReserve === undefined
+                      ? { temperature: request.temperature ?? config.defaultTemperature }
+                      : {}),
                     messages: toLiteLLMMessages(msgs),
                   },
                   apiKey,

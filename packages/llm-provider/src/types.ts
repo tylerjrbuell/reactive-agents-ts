@@ -817,8 +817,10 @@ export type CompletionRequest = {
    * generating. Falls back to `LLMConfig.ollamaTimeoutMs`, then to a
    * cold-load-tolerant default (see `providers/local.ts`).
    *
-   * No-op for cloud providers (Anthropic/OpenAI/Gemini/LiteLLM), which apply
-   * their own fixed ceiling.
+   * Cloud providers (Anthropic/OpenAI/Gemini/LiteLLM and OpenAI-compat
+   * siblings) honor it on `complete()` as the top of their own chain:
+   * `request.timeoutMs` → `LLMConfig.cloudTimeoutMs` → 120s default
+   * (see `params/cloud-timeout.ts`).
    */
   readonly timeoutMs?: number;
   /**

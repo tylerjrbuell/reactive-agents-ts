@@ -176,6 +176,23 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly ollamaTimeoutMs?: number;
 
     /**
+     * Per-call hard timeout (ms) for cloud providers
+     * (Anthropic/OpenAI/Gemini/LiteLLM and OpenAI-compat siblings).
+     *
+     * The cloud analogue of {@link ollamaTimeoutMs}: previously every cloud
+     * provider hardcoded a 120s ceiling (twice — the Effect.timeout and the
+     * timeoutMs restated in the error). F4 (2026-07-07) replaced those
+     * literals with one resolution chain.
+     *
+     * Precedence (see `params/cloud-timeout.ts` resolveCloudTimeoutMs):
+     * `request.timeoutMs` → `cloudTimeoutMs` → 120s default
+     * (DEFAULT_CLOUD_TIMEOUT_MS).
+     *
+     * @default undefined (cloud providers fall back to the 120s default)
+     */
+    readonly cloudTimeoutMs?: number;
+
+    /**
      * Enable/disable thinking mode for thinking-capable models.
      * - `true` — Always enable thinking (e.g., qwen3.5, DeepSeek-R1)
      * - `false` — Always disable thinking (e.g., cogito:14b that crashes with think:true)
@@ -352,6 +369,9 @@ export const llmConfigFromEnv = LLMConfig.of({
   timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 30_000),
   ...(process.env.OLLAMA_TIMEOUT_MS !== undefined
     ? { ollamaTimeoutMs: Number(process.env.OLLAMA_TIMEOUT_MS) }
+    : {}),
+  ...(process.env.LLM_CLOUD_TIMEOUT_MS !== undefined
+    ? { cloudTimeoutMs: Number(process.env.LLM_CLOUD_TIMEOUT_MS) }
     : {}),
   defaultMaxTokens: 4096,
   defaultTemperature: Number(process.env.LLM_DEFAULT_TEMPERATURE ?? 0.7),

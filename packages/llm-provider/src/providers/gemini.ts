@@ -1,4 +1,4 @@
-import { Effect, Layer, Stream, Schema } from "effect";
+import { Effect, Layer, Stream, Schema, Duration } from "effect";
 import { LLMService } from "../llm-service.js";
 import { LLMConfig } from "../llm-config.js";
 import type { ProviderCapabilities } from "../capabilities.js";
@@ -26,6 +26,9 @@ import {
   reserveThinkingBudget,
   type ThinkingOptions,
 } from "../thinking/index.js";
+import { clampOutputBudget } from "../params/output-budget.js";
+import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
+import { mapStopReason } from "../params/stop-reason.js";
 
 // ─── Gemini Message Conversion Helpers ───
 
@@ -208,7 +211,12 @@ const mapGeminiResponse = (
 
   return {
     content: response.text ?? "",
-    stopReason: toolCalls?.length ? "tool_use" : "end_turn",
+    // Shared table-driven mapping — gemini's table is intentionally empty
+    // (finishReason was never consulted here; non-OK reasons error out via
+    // the W22 guard), so this preserves the original tool_use/end_turn shape.
+    stopReason: toolCalls?.length
+      ? "tool_use"
+      : mapStopReason(response.candidates?.[0]?.finishReason, "gemini"),
     usage: {
       inputTokens,
       outputTokens,
@@ -280,7 +288,13 @@ export const buildGenerationConfig = (
   });
 
   const cfg: Record<string, unknown> = {
-    maxOutputTokens: reserve !== undefined ? answerBudget + reserve : answerBudget,
+    // F1: clamp the final wire value (answer + thinking reserve) against the
+    // model's authoritative output ceiling. Single wire-assembly point for
+    // complete/stream/completeStructured.
+    maxOutputTokens: clampOutputBudget(
+      reserve !== undefined ? answerBudget + reserve : answerBudget,
+      cap,
+    ),
     temperature: opts.temperature,
   };
 
@@ -356,8 +370,11 @@ export const GeminiProviderLive = Layer.effect(
       );
 
     return LLMService.of({
-      complete: (request) =>
-        Effect.gen(function* () {
+      complete: (request) => {
+        // F4: one resolved binding drives BOTH Effect.timeout and the
+        // timeoutMs restated in the error — the two can never drift.
+        const timeoutMs = resolveCloudTimeoutMs(request, config);
+        return Effect.gen(function* () {
           const client = yield* Effect.promise(() => getClient());
           let model = typeof request.model === 'string' 
             ? request.model 
@@ -405,22 +422,22 @@ export const GeminiProviderLive = Layer.effect(
           return mapGeminiResponse(response, model, config.pricingRegistry);
         }).pipe(
           Effect.retry(retryPolicy),
-          // G2: 30s was too tight for thinking-mode models — a single
-          // reasoning-heavy complete() (e.g. tree-of-thought expansion on
-          // gemini-2.5-pro) routinely needs >30s once the answer isn't being
-          // truncated, so the tight cap killed the very requests the
-          // thinking-budget fix is meant to let finish. Match local's 120s.
-          Effect.timeout("120 seconds"),
+          // G2 default is 120s: 30s was too tight for thinking-mode models —
+          // a single reasoning-heavy complete() (e.g. tree-of-thought
+          // expansion on gemini-2.5-pro) routinely needs >30s. F4 makes the
+          // ceiling request/config-resolvable — see resolveCloudTimeoutMs.
+          Effect.timeout(Duration.millis(timeoutMs)),
           Effect.catchTag("TimeoutException", () =>
             Effect.fail(
               new LLMTimeoutError({
                 message: "LLM request timed out",
                 provider: "gemini",
-                timeoutMs: 120_000,
+                timeoutMs,
               }),
             ),
           ),
-        ),
+        );
+      },
 
       stream: (request) =>
         Effect.gen(function* () {
