@@ -255,34 +255,10 @@ export const guidanceSection: PromptSection = {
   costTokensApprox: 80,
 };
 
-export function buildGuidanceText(guidance: GuidanceContext): string | null {
-  const signals: string[] = [];
-
-  if (guidance.requiredToolsPending.length > 0) {
-    signals.push(
-      `REQUIRED tools not yet called: ${guidance.requiredToolsPending.join(", ")}. Call these before giving a final answer.`,
-    );
-  }
-  if (guidance.loopDetected) {
-    signals.push(
-      guidance.loopDetectedMessage ??
-        "Loop detected: you are repeating the same tool calls. Try a different approach or synthesize what you have.",
-    );
-  }
-  if (guidance.icsGuidance) signals.push(guidance.icsGuidance);
-  if (guidance.oracleGuidance) signals.push(guidance.oracleGuidance);
-  if (guidance.errorRecovery) signals.push(guidance.errorRecovery);
-  if (guidance.actReminder) signals.push(guidance.actReminder);
-  if (guidance.qualityGateHint) signals.push(guidance.qualityGateHint);
-  if (guidance.evidenceGap) {
-    signals.push(
-      `Your answer contains claims not supported by tool results: ${guidance.evidenceGap}. Revise using only data from the Observations above.`,
-    );
-  }
-
-  if (signals.length === 0) return null;
-  return `Guidance:\n${signals.map((s) => `- ${s}`).join("\n")}`;
-}
+// Moved to the live home (hotfix 0.5-1): imported for local renderers,
+// re-exported for API stability.
+import { buildGuidanceText } from "./guidance.js";
+export { buildGuidanceText };
 
 // ── Ordered list (composition order) ──────────────────────────────────────────
 

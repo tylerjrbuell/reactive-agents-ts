@@ -38,26 +38,7 @@ import {
  * All mid-loop guidance that previously fired as stray USER messages now lives here,
  * rendered deterministically into the system prompt's Guidance: section.
  */
-export interface GuidanceContext {
-  /** Required tools not yet called this run. */
-  readonly requiredToolsPending: readonly string[];
-  /** True when the loop-detection oracle fired on this iteration. */
-  readonly loopDetected: boolean;
-  /** Custom nudge text produced by a harness nudge.loop-detected transform. Overrides the default when set. */
-  readonly loopDetectedMessage?: string;
-  /** Guidance from the Intelligent Context Synthesis (ICS) system. */
-  readonly icsGuidance?: string;
-  /** Guidance from the oracle / quality gate. */
-  readonly oracleGuidance?: string;
-  /** Recovery hint when an error occurred on the previous round. */
-  readonly errorRecovery?: string;
-  /** Post-act harness reminder surfaced after a tool round (progress / finish cues). */
-  readonly actReminder?: string;
-  /** Adapter quality-check hint rendered before accepting a prose final answer. */
-  readonly qualityGateHint?: string;
-  /** Reserved for Task 17 — evidence grounding redirect when claims lack tool support. */
-  readonly evidenceGap?: string;
-}
+export type { GuidanceContext } from "./guidance.js";
 
 /** Output of ContextManager.build() — the only two things the LLM sees. */
 export interface ContextManagerOutput {

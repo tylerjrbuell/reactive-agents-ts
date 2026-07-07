@@ -81,7 +81,7 @@ import {
   type KernelContext,
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
-import type { GuidanceContext } from "../../../context/context-manager.js";
+import { buildGuidanceText, type GuidanceContext } from "../../../context/guidance.js";
 
 import { META_TOOLS as META_TOOL_SET } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, sentinelDeliverable } from "@reactive-agents/core";
@@ -608,6 +608,12 @@ export function handleThinking(
     const parts = [systemPromptText];
     if (driverInstructions) parts.push(driverInstructions);
     if (rationaleInstructions) parts.push(rationaleInstructions);
+    // Hotfix 0.5-1 (2026-07-07): render harness guidance into the dynamic
+    // tail. GuidanceContext was previously assembled (and pendingGuidance
+    // cleared) but never passed to assembly — every guidance-channel signal
+    // was a silent no-op. Tail placement keeps the stable prefix intact.
+    const guidanceText = buildGuidanceText(guidance);
+    if (guidanceText) parts.push(guidanceText);
     const systemPromptWithDriver = parts.join("\n\n");
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
