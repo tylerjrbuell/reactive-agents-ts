@@ -1,12 +1,12 @@
 /**
  * Behavioral contract tests for requiresApproval() on ToolBuilder.
  *
- * IMPORTANT: Automatic enforcement is NOT implemented at the framework level.
- * requiresApproval() sets a boolean metadata flag on ToolDefinition. The
- * ToolService will execute a tool with requiresApproval: true without any
- * pause or prompt. Enforcement is the developer's responsibility — check
- * `definition.requiresApproval` in your own execution pipeline before
- * calling ToolService.execute().
+ * IMPORTANT: Automatic enforcement is OPT-IN. requiresApproval() sets a
+ * boolean metadata flag on ToolDefinition. With NO ToolApprovalGate provided
+ * (the case these tests cover), the ToolService executes a requiresApproval
+ * tool without any pause or prompt — the historical contract. Wire a
+ * ToolApprovalGate (hotfix 0.5-3) to enforce fail-closed at the service layer
+ * across every execute path; see tool-approval-gate.test.ts.
  */
 
 import { describe, it, expect } from "bun:test";

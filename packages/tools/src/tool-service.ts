@@ -22,6 +22,7 @@ import { validateToolInput } from "./validation/input-validator.js";
 import { EventBus } from "@reactive-agents/core";
 import { builtinTools } from "./skills/builtin.js";
 import { ToolResultCache } from "./caching/tool-result-cache.js";
+import { ToolApprovalGate, definitionRequiresApproval } from "./governance/tool-approval-gate.js";
 
 // ─── Service Tag ───
 
@@ -337,6 +338,36 @@ export const ToolServiceLive = Layer.effect(
           tool.definition,
           input.arguments,
         );
+
+        // Step 2.4: Authorization gate (hotfix 0.5-3, opt-in — ToolApprovalGate
+        // may not be provided). Fail closed for requiresApproval tools when a
+        // gate is wired; unprovided = today's behavior (no regression). This is
+        // the service-layer choke every execute path shares, closing the
+        // direct-caller bypass the kernel HITL gate never covered.
+        if (definitionRequiresApproval(tool.definition)) {
+          const gateOpt = yield* Effect.serviceOption(ToolApprovalGate);
+          if (Option.isSome(gateOpt)) {
+            const decision = yield* gateOpt.value.authorize({
+              toolName: input.toolName,
+              riskLevel: tool.definition.riskLevel,
+              requiresApproval: true,
+              arguments: validatedArgs,
+              agentId: input.agentId,
+              sessionId: input.sessionId,
+            });
+            if (!decision.approved) {
+              return yield* Effect.fail(
+                new ToolAuthorizationError({
+                  message:
+                    decision.reason ??
+                    `Tool "${input.toolName}" requires approval and was not authorized.`,
+                  toolName: input.toolName,
+                  agentId: input.agentId,
+                }),
+              );
+            }
+          }
+        }
 
         // Step 2.5: Check cache (opt-in — ToolResultCache may not be provided)
         const cacheOpt = yield* Effect.serviceOption(ToolResultCache);

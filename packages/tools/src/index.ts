@@ -136,6 +136,12 @@ export {
 } from "./skills/scratchpad.js";
 
 // ─── Caching ───
+export {
+  ToolApprovalGate,
+  definitionRequiresApproval,
+  type ToolApprovalRequest,
+  type ToolApprovalDecision,
+} from "./governance/tool-approval-gate.js";
 export { ToolResultCache, ToolResultCacheLive } from "./caching/index.js";
 export type { ToolResultCacheConfig, ToolCacheStats } from "./caching/index.js";
 
