@@ -25,9 +25,14 @@ describe("resolveStepReferences — reference projections (FM#3)", () => {
         expect(q).toContain("typescript support")
     })
 
-    test(":summary → 500-char slice (unchanged contract)", () => {
+    // rw-1 rerun (2026-07-07, trace 01KWYBZQ1VZWQEPXCHK94DS8QM): the model
+    // templated {{from_step:s1:summary}} into a web-search query; the raw
+    // 500-char slice kept the preview banner and still blew Tavily's 400 cap.
+    test(":summary → distilled (banner stripped) then 500-char slice", () => {
         const out = resolveStepReferences({ content: "{{from_step:s1:summary}}" }, [step("s1", preview)])
-        expect((out.content as string).length).toBeLessThanOrEqual(500)
+        const c = out.content as string
+        expect(c.length).toBeLessThanOrEqual(500)
+        expect(c).not.toContain("[web-search result — compressed preview]")
     })
 
     test(":full → verbatim result for content-transfer args", () => {

@@ -182,7 +182,12 @@ export const resolveStepReferences = (
           const step = completedSteps.find((s) => s.id === stepId);
           if (!step || step.result === undefined) return match;
           if (match.includes(":full}}")) return step.result;
-          if (match.includes(":summary}}")) return step.result.slice(0, 500);
+          // :summary gets the same banner-strip as bare refs: the rw-1 rerun
+          // (2026-07-07) showed models template :summary into search queries,
+          // and a raw preview slice still starts with the display banner and
+          // still blows Tavily's 400-char cap.
+          if (match.includes(":summary}}"))
+            return distillStepResult(step.result).slice(0, 500);
           // Discriminate by source-step kind: TOOL results are display-oriented
           // compressed previews (banner + URLs) that break short downstream args
           // (FM#3 — Tavily 400s); ANALYSIS outputs are authored content a

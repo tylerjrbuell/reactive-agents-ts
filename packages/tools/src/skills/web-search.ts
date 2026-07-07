@@ -344,6 +344,22 @@ async function searchDuckDuckGoInstant(
   return out.slice(0, maxResults);
 }
 
+/**
+ * Tavily hard-rejects queries over 400 characters (HTTP 400) and the other
+ * providers degrade badly on kilobyte queries. An oversize query is always
+ * upstream splice noise (e.g. a plan step templating a prior tool result into
+ * `query`), so clamp to the tightest provider cap at a word boundary rather
+ * than failing the entire provider chain on unsearchable input.
+ */
+const MAX_QUERY_CHARS = 400;
+
+export function clampQueryLength(query: string): string {
+  if (query.length <= MAX_QUERY_CHARS) return query;
+  const cut = query.slice(0, MAX_QUERY_CHARS);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > MAX_QUERY_CHARS / 2 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
 function formatWebSearchFailure(query: string, attempts: readonly string[]): Error {
   const summary =
     attempts.length > 0 ? attempts.join(" | ") : "No provider returned any rows.";
@@ -403,7 +419,7 @@ export const webSearchHandler = (
 ): Effect.Effect<WebSearchHandlerResult, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
-      const query = args.query as string;
+      const query = clampQueryLength(args.query as string);
       const maxResults = clampMaxResults((args.maxResults as number) ?? 5);
       const attempts: string[] = [];
 

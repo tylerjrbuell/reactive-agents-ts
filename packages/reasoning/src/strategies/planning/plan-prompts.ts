@@ -65,7 +65,7 @@ const PLAN_STEP_SCHEMA = `{
   "instruction": "string — what the LLM or tool should do",
   "type": "tool_call" | "analysis" | "composite",
   "toolName": "string (optional) — tool to call if type is tool_call",
-  "toolArgs": "object (optional) — ALL required arguments for the tool. Use {{from_step:sN}} to inject a SHORT distilled excerpt of a previous step result (capped ~380 chars — safe for queries/ids); use {{from_step:sN:full}} ONLY when transferring whole content (e.g. file contents to write); {{from_step:sN:summary}} gives a 500-char slice",
+  "toolArgs": "object (optional) — ALL required arguments for the tool. Use {{from_step:sN}} to inject a SHORT distilled excerpt of a previous step result (capped ~380 chars — safe for queries/ids); use {{from_step:sN:full}} ONLY when transferring whole content (e.g. file contents to write); {{from_step:sN:summary}} gives a 500-char distilled slice. NEVER template a search/tool result into a search query — extract the specific names or terms you need into a fresh, short query instead",
   "toolHints": ["string"] (optional) — tool names available for composite steps",
   "dependsOn": ["string"] (optional) — step IDs that must complete first",
   "rationale": { "why": "string (≤280 chars) — REQUIRED for tool_call steps: WHY this tool and these args advance the goal", "confidence": "number 0-1 (optional)" }
