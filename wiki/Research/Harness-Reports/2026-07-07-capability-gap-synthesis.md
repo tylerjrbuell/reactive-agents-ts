@@ -83,3 +83,20 @@ Goal: independent different-model review of the final answer BEFORE it ships (Cl
 - auditable: P7 (memory trace events, honesty labels in traces) still open — next after checker.
 - efficient: varied retries (retry with temperature bump / reword instead of byte-identical) — small, high-value, unowned.
 - flexible/powerful: capability-conditional scaffolding (the A1 through-line) is the strategic arc after the re-run gate verdict.
+
+## Full-session re-run #1 (post wave-2) — INVALID for gate, productive for bugs
+
+90 cells completed clean (zero timeouts — hard-kill works; max cell 344s). But the ra-full column was contaminated on 3/5 tasks by a **regression from the minimal-grounding fix**: kernel lazy tool disclosure (visible = required + relevant + used + meta) lost file-write when requiredTools narrowed to ["file-read"] and the weak-tier classifier returned nothing — the model literally could not write prices.md (rw-9 100%→0, 3/3 honest-failures), test files (rw-7 all-variants-0 for RA's part), or the rw-8 pipeline files. The old over-wide requiredTools floor had been *incidentally* providing visibility.
+
+**Fix (committed):** explicit `withTools({builtins:[...]})` = consumer intent → unioned into kernel `relevantTools` (lazy-disclosure floor) + adaptive-filter floor. Live verify: rw-9 0%/empty → **1.0/59s**.
+
+Legit findings from the same run:
+- rw-1 ra-full 66% vs bare 66% at session scale — research-task parity CONFIRMED with runs=3 (was −67).
+- rw-2 ra-full 20% vs bare 33% — red-herring analysis gap persists (open, model-reasoning class).
+- Competitor rw-1 zeros are legit refusals ("cannot perform live research… only file operations" — their by-design file-only toolset), judged 0 under partial credit.
+- rw-8 competitor 100s legit: their file tools write directly to tmpDir; deterministic verify passes.
+- Bench integrity: zombie contention gone; durations trustworthy.
+
+Lesson for the ledger: **grounding contract ≠ visibility floor.** requiredTools narrows what the terminal gate demands; it must never be the only thing keeping a tool visible. (Ideal-architecture pillar 6 — composition should be explicit, not incidental.)
+
+Gate verdict deferred to re-run #2 (post visibility fix + P3/P4 + todo).
