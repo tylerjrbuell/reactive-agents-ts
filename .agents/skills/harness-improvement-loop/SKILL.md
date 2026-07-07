@@ -46,6 +46,32 @@ The old probe scripts (Phase 2) remain valid for targeting a single subsystem th
 
 ---
 
+## Amplified loop mechanics (2026-07-07 — use these, they are the fast path)
+
+Session evidence: one un-aimed fix-verify cycle was costing GPU-hours. These four mechanics cut it to minutes-per-iteration:
+
+1. **Start aimed — weakness queue.** Fold the latest report into ranked targets (each row: severity, failure modes, evidence, traceIds, and the exact probe command):
+   ```bash
+   bun run packages/benchmarks/src/weakness-queue.ts <report.json> [--variant ra-full] [--top 10]
+   ```
+2. **Verify narrow — one cell, not the matrix.** `--task` AND `--variant` compose; a fix iteration costs 1 variant × 1 task × 1 run:
+   ```bash
+   bun run packages/benchmarks/src/run.ts --session <s> --task rw-2 --variant ra-full --runs 1 --output /tmp/claude-1000/<fix>-verify.json
+   ```
+   ALWAYS pass `--output` — without it per-cell evidence (judge inputs, error causes) is unrecoverable after the run.
+3. **Trust the clock again — timeouts hard-kill.** Cell timeouts abort the agent fiber via AbortSignal (runner.ts, 2026-07-07); zombie-fiber GPU contention no longer degrades later cells. If successful-cell durations climb monotonically across a session, that regression has returned — investigate before trusting aggregates.
+4. **Judge recipe (memorize):** `JUDGE_LAYER=live JUDGE_PROVIDER=openai JUDGE_MODEL=gpt-4o-mini bun run packages/judge-server/src/index.ts` — **without JUDGE_LAYER=live a silent STUB scores 0.95 on everything.** Health-check with a REAL `/judge` POST (`/version` stays up when the LLM backend is dead). Error/timeout cells are never judged (`scoreErrorCell`) — evidence says the true cause.
+
+**Ledger is not optional.** Every fix that touches harness behavior records weakness → hypothesis → verdict:
+```bash
+rax eval gate --report after.json --baseline bare-llm --candidate ra-full \
+  --ledger wiki/Research/Harness-Reports/improvement-ledger.json \
+  --weakness "<the failure mode>" --hypothesis "<the structural fix>"
+```
+A trace-level fix can be structurally correct yet reject on lift — record both facts.
+
+---
+
 ## Phase 1 — Orient (5 minutes, do not skip)
 
 Read these before forming hypotheses. Misdiagnosing happens when you reason about runtime behavior without knowing what the kernel is supposed to do.
