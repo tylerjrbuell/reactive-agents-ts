@@ -2250,6 +2250,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         // `.withReasoning()` the run row exists but is never checkpointed and
         // crash-resume silently can't rehydrate. Warn once, don't throw: the
         // run row + approval rails still work without the kernel path.
+        // Category-A sync fallback (see packages/core/src/errors/index.ts): sync build() config validation, no hydrated Effect runtime yet.
         if (this._durableRuns && !this._enableReasoning) {
             console.warn(
                 "[reactive-agents] .withDurableRuns() is configured but the run will NOT checkpoint: " +

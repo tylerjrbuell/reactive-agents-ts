@@ -94,7 +94,11 @@ const SCOPED_ROOTS = [
 //     sync fallback (kernel-codec.ts). The redundant durable-checkpoint
 //     console.warn in iterate-pass.ts (which already yielded Effect.logWarning)
 //     was removed in the same change, so net active sites = 10.
-const WARN_CEILING = 10;
+//   2026-07-06: bumped 10 → 11 for the Arc 1 Task 4 inert-durable-config
+//     warning in packages/runtime/src/builder.ts (.withDurableRuns() without
+//     .withReasoning() never checkpoints). Category-A: sync build() config
+//     validation, no hydrated Effect runtime yet.
+const WARN_CEILING = 11;
 // Sprint-1 (2026-06-02): bumped 0 → 3 to accommodate three diagnostic-gated
 // console.error sites (RA_ASSEMBLY_DEBUG trace in think.ts; two RA_OVERHAUL_DEBUG
 // traces in overhaul/context-projection.ts). All three are env-gated debug
