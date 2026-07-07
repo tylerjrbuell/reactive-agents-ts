@@ -11,6 +11,13 @@ tags: [decisions, index, trade-offs]
 
 ## Phase Gates & Major Milestones
 
+### CURRENT AUTHORITY (2026-07-07) — Adaptive Harness Architecture (Ratified ✅)
+- [[Decisions/2026-07-07-adaptive-harness-architecture-ratified|Adaptive Harness Architecture]] — 9-pillar centralization; harness composes per model+task, recomposes mid-run
+- **Design arbiter:** `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (v6.0, 2026-07-05) — supersedes North Star v3.0 references below
+- **Execution plan:** [[Planning/Implementation-Plans/2026-07-07-adaptive-harness-overhaul|7-phase overhaul]] (0.5 hotfixes + 1b SHIPPED 2026-07-07)
+- **Evidence:** `wiki/Research/Audit-Reports-2026-07-07/` (7-surface sweep + synthesis)
+- **Note:** entries below this line predate v6.0; where they conflict, the ratified decision + spec 08 win.
+
 ### Roadmap Realignment v0.12 → v1.0 (Accepted ✅)
 - [[Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0|Roadmap Realignment 2026-06-10]] — milestone arc: v0.12 "Durable & Honest" (durable exec + DX wave + memory default-off) → v0.13 "Receipts" (public local-model bench + LAUNCH) → v0.14 "Compounding" (recitation/experience-reuse, ablation-gated) → v1.0 polish
 - **Status:** ✅ Accepted (2026-06-10, 3 forks user-ratified)
