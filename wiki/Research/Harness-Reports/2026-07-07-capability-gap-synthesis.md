@@ -108,3 +108,13 @@ Gate verdict deferred to re-run #2 (post visibility fix + P3/P4 + todo).
 `rax eval gate` (ledgered): **OPT-IN** — +20.8pp lift (41.0→61.8), 640% token overhead, 1 tier. Lift is large and real; token cost + single-tier keep it below the default-on bar. This is precisely the case the Phase 6 policy compiler resolves: the full kernel earns its keep on hard-execution tasks but is too expensive to apply unconditionally — adaptive composition is the path to default-on.
 
 Publication posture: the headline is now defensible — RA best-of-six on qwen3:14b execution + resilience, research parity, with an honest OPT-IN gate verdict and the red-herring analysis gap (rw-2) named as open. The 0.5 hotfixes (guidance render, :full, governance, memory, stream errors) landed AFTER this run — re-run #3 post-hotfixes will show whether guidance-channel repair moves rw-1/rw-2/rw-7.
+
+## Full-session re-run #3 (post Phase 0.5 hotfixes) — guidance channel LIVE
+
+90 cells clean. **ra-full 71%** — best-of-six by +12pp over manual-react (59); mastra 48, langchain 44, vercel 40, bare 18. Session arc on the same bench: **35% (pre-fix, −22 behind manual) → 61% (re-run #2) → 71%**.
+
+Per-task ra-full (runs=3): rw-1 **77** (was 55 — evidence-gap/required-tools guidance now actually reaching the model), rw-2 13 (red-herring analysis gap, open), rw-7 **100** 3/3 (was 33 — guidance + memory-fidelity effects on the debug loop), rw-8 66 (was 100; one weak cell — variance to watch), rw-9 100 stable.
+
+Gate (ledgered, entry 3): **OPT-IN +53.1pp** (18.4→71.6), 609% tok, 1 tier. bare-llm collapsed to 18% this run (its fabrication-prone answers zeroed by the judge across runs — variance in the baseline, not the harness). Cross-run consistent story: ra-full 61→71 while every competitor stayed flat (±1-7) — the movement is the hotfixes, not judge drift.
+
+Open next: rw-2 red-herring reasoning (P6b checker candidate), rw-8 variance cell, Phase 1 gateway + Phase 2 tool-surface compiler.
