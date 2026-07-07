@@ -894,6 +894,9 @@ export interface MetaToolsConfig {
   find?: boolean;
   pulse?: boolean;
   recall?: boolean;
+  /** Universal task checklist (P6a) — model plans multi-step work and checks
+   *  items off; every call renders the full list. Default ON with tools. */
+  todo?: boolean;
   harnessSkill?: HarnessSkillConfig;
   findConfig?: FindConfig;
   pulseConfig?: PulseConfig;

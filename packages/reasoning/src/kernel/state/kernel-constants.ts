@@ -17,6 +17,7 @@ export const META_TOOLS = new Set([
   "context-status",
   "brief",
   "pulse",
+  "todo",
   "find",
   "recall",
   "checkpoint",
@@ -50,6 +51,7 @@ export const HARNESS_PSEUDO_TOOLS = new Set([
 export const INTROSPECTION_META_TOOLS = new Set([
   "brief",
   "pulse",
+  "todo",
   "find",
   "recall",
   "checkpoint",

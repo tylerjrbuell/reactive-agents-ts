@@ -16,6 +16,7 @@
  */
 import { Effect, Ref } from "effect";
 import {
+  applyTodoAction,
   scratchpadStoreRef,
   buildBriefResponse,
   mergeBriefAvailableSkills,
@@ -133,6 +134,29 @@ function handleActivateSkillTool(
   );
 }
 
+/**
+ * todo — universal task checklist (P6a, 2026-07-07). List state persists in
+ * the shared scratchpad keyed by taskId; the runner clears the key at run
+ * start (non-resume) so runs never inherit a prior checklist. The write goes
+ * to the shared Ref directly — act's end-of-round merge folds it back into
+ * KernelState.scratchpad, so checkpoints carry the list across crash-resume.
+ */
+function handleTodoTool(
+  tc: ToolCallSpec,
+  _state: KernelState,
+  context: KernelContext,
+  _allSteps: readonly ReasoningStep[],
+  _newToolsUsed: Set<string>,
+): Effect.Effect<MetaToolResult, never> {
+  return Effect.gen(function* () {
+    const key = `_todo:${context.input.taskId ?? "default"}`;
+    const store = yield* Ref.get(scratchpadStoreRef);
+    const result = applyTodoAction(store.get(key), tc.arguments ?? {});
+    store.set(key, JSON.stringify(result.list));
+    return { content: result.rendered, success: result.ok };
+  });
+}
+
 // ─── Abstain meta-tool ────────────────────────────────────────────────────────
 
 export const ABSTAIN_TOOL_NAME = "abstain";
@@ -155,5 +179,6 @@ export function handleAbstain(args: { reason: string; missing?: string[] }): Abs
 export const metaToolRegistry = new Map<string, MetaToolHandler>([
   ["brief", handleBriefTool],
   ["pulse", handlePulseTool],
+  ["todo", handleTodoTool],
   ["activate-skill", handleActivateSkillTool],
 ]);

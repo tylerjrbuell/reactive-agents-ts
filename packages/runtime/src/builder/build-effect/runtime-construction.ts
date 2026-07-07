@@ -250,6 +250,9 @@ export const buildBaseRuntimeAndEngine = (
             find: true,
             pulse: true,
             recall: true,
+            // todo (P6a) stays opt-in until it passes the cross-tier lift gate
+            // (default-on requires ablation per project rule — see
+            // wiki/Research/Harness-Reports/2026-07-07-capability-gap-synthesis.md).
             harnessSkill: true,
           }
         : undefined; // no tools enabled — no meta-tools either
@@ -282,6 +285,7 @@ export const buildBaseRuntimeAndEngine = (
         find: mt.find,
         pulse: mt.pulse,
         recall: mt.recall,
+        todo: mt.todo,
         // Overhaul A/B (branch overhaul/agentic-core): register write_result_to_file
         // when RA_OVERHAUL=1 so the model can materialize a deliverable by reference
         // instead of transcribing / copying the [STORED:] marker.

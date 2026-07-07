@@ -159,7 +159,7 @@ export const prepareReasoningToolSchemas = (
     if (config.adaptiveToolFiltering && availableToolSchemas.length > 10) {
       // Always include conductor tools and spawn-agent regardless of relevance filtering
       const ALWAYS_INCLUDE = new Set([
-        "recall", "find", "brief", "pulse",
+        "recall", "find", "brief", "pulse", "todo",
         "spawn-agent",
       ]);
 

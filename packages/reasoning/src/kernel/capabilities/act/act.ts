@@ -381,6 +381,7 @@ export function handleActing(
         if (metaHandler && (
           (tc.name === "brief" && input.metaTools?.brief) ||
           (tc.name === "pulse" && input.metaTools?.pulse) ||
+          (tc.name === "todo" && input.metaTools?.todo) ||
           tc.name === "activate-skill"
         )) {
           const { content, success } = yield* metaHandler(tc, state, context, allSteps, newToolsUsed);

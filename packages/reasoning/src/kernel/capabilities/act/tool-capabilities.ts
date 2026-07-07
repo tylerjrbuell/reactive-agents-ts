@@ -3,6 +3,7 @@ import {
   ToolService,
   briefTool,
   pulseTool,
+  todoTool,
   recallTool,
   makeRecallHandler,
   findTool,
@@ -74,6 +75,7 @@ export const resolveExecutableToolCapabilities = (input: {
 
     if (input.metaTools?.brief) append(toToolSchema(briefTool));
     if (input.metaTools?.pulse) append(toToolSchema(pulseTool));
+    if (input.metaTools?.todo) append(toToolSchema(todoTool));
 
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
     if (toolServiceOpt._tag === "Some") {

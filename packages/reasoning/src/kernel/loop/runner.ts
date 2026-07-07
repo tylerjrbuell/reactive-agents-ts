@@ -12,12 +12,12 @@
  *   5. Main loop: call kernel repeatedly until done/failed/maxIterations
  *   6. Terminal hooks: onDone / onError
  */
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService, DEFAULT_CAPABILITIES, selectAdapter } from "@reactive-agents/llm-provider";
 import { modelSynthesisDeliverable, harnessSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
-import { createToolCallResolver, selectToolCallingDriver, REQUEST_USER_INPUT_TOOL_NAME } from "@reactive-agents/tools";
+import { createToolCallResolver, selectToolCallingDriver, REQUEST_USER_INPUT_TOOL_NAME, scratchpadStoreRef } from "@reactive-agents/tools";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -256,6 +256,16 @@ export function runKernel(
 
     // ── 6. Create initial state ──────────────────────────────────────────────
     const baseState = initialKernelState(options);
+    // P6a todo rail (2026-07-07): the todo meta-tool persists its list in the
+    // shared scratchpad under `_todo:<taskId>`; that Ref outlives runs in the
+    // same process, so a fresh (non-resume) run must clear its own key or it
+    // inherits a prior run's checklist.
+    if (!effectiveInput.resumeState) {
+      yield* Ref.update(scratchpadStoreRef, (m) => {
+        m.delete(`_todo:${effectiveInput.taskId ?? "default"}`);
+        return m;
+      });
+    }
     // Durable resume (Phase C): a fully-restored checkpoint state wins over the
     // fresh seed. It is already a complete KernelState (iteration/steps/scratchpad/
     // toolsUsed/meta/tokens preserved) so it is used VERBATIM — NOT passed through

@@ -174,7 +174,10 @@ describe("withContract — modelFloor vs resolved capability (validateBuild)", (
       modelFloor: { thinking: true },
       success: successOracle,
     };
-    const res = validateBuild("ollama", "qwen3:14b", "qwen3:14b", true, false, {
+    // B2 (2026-07-07): qwen3:14b now correctly reports supportsThinkingMode
+    // (probe-verified), so it no longer violates a thinking floor — cogito:14b
+    // is the calibrated non-thinking fixture.
+    const res = validateBuild("ollama", "cogito:14b", "cogito:14b", true, false, {
       contract,
       exposedToolNames: exposed,
     });

@@ -30,6 +30,11 @@ export const KernelMetaToolsSchema = Schema.Struct({
   find: Schema.optional(Schema.Boolean),
   pulse: Schema.optional(Schema.Boolean),
   recall: Schema.optional(Schema.Boolean),
+  /** P6a (2026-07-07) — universal task checklist: model decomposes multi-step
+   *  work once, checks items off as it goes; every call renders the full list
+   *  so drift is visible. Strategy-agnostic (react/reflexion/code-action get
+   *  the tracking rail plan-execute always had). */
+  todo: Schema.optional(Schema.Boolean),
   /** Overhaul (RA_OVERHAUL) — register write_result_to_file: the model orchestrates
    *  a deliverable by REFERENCING a stored result; the system materializes the full
    *  data. Replaces the marker-copy / transcription path. */

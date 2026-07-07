@@ -822,7 +822,7 @@ export function extractFactDeterministic(
 // ── LLM-based observation fact extraction ─────────────────────────────────────
 
 const META_TOOL_NAMES = new Set([
-  "brief", "pulse", "recall", "find", "final-answer",
+  "brief", "pulse", "todo", "recall", "find", "final-answer",
 ]);
 
 const EXTRACTION_INPUT_LIMIT = 2000;
