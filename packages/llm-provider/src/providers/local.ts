@@ -280,6 +280,45 @@ export async function resolveThinking(
     return resolveThinkingEnabled('ollama', model, true, capable) ? true : undefined
 }
 
+// ─── Thinking-Aware Output Budget ───
+
+/**
+ * Extra num_predict headroom for thinking models (B2/P1, 2026-07-07).
+ *
+ * Ollama counts thinking tokens against num_predict, and thinking-capable
+ * models (qwen3 family) think BY DEFAULT even when the `think` param is
+ * omitted. A flat caller budget (2048–4096 across kernel/strategy call sites)
+ * is routinely consumed entirely inside <think>, yielding an empty-content
+ * `done_reason: length` turn that the caller retries with the same dead
+ * budget — the qwen3:14b bench measured 54 such exchanges (113k wasted output
+ * tokens, 37 min). num_predict is a cap, not a target: widening costs nothing
+ * on non-rambling turns and un-starves the visible answer on thinking turns.
+ *
+ * @internal exported for unit testing only.
+ */
+export const THINKING_NUM_PREDICT_ALLOWANCE = 6000
+
+/**
+ * Widen a resolved num_predict when thinking will consume part of it: either
+ * thinking was explicitly enabled (`think === true`), or the param is omitted
+ * and the model's capability says it runs a thinking mode by default.
+ *
+ * @internal exported for unit testing only.
+ */
+export function widenNumPredictForThinking(
+    numPredict: number | undefined,
+    think: boolean | undefined,
+    capability: { readonly supportsThinkingMode?: boolean },
+): number | undefined {
+    if (numPredict === undefined) return undefined
+    const thinkingActive =
+        think === true ||
+        (think === undefined && capability.supportsThinkingMode === true)
+    return thinkingActive
+        ? numPredict + THINKING_NUM_PREDICT_ALLOWANCE
+        : numPredict
+}
+
 // ─── Error Helpers ───
 
 /**
@@ -444,9 +483,12 @@ export const LocalProviderLive = Layer.effect(
                                     temperature:
                                         request.temperature ??
                                         config.defaultTemperature,
-                                    num_predict:
+                                    num_predict: widenNumPredictForThinking(
                                         request.maxTokens ??
-                                        config.defaultMaxTokens,
+                                            config.defaultMaxTokens,
+                                        think,
+                                        capability,
+                                    ),
                                     stop: request.stopSequences
                                         ? [...request.stopSequences]
                                         : undefined,
@@ -650,8 +692,12 @@ export const LocalProviderLive = Layer.effect(
                                             request.temperature ??
                                             config.defaultTemperature,
                                         num_predict:
-                                            request.maxTokens ??
-                                            config.defaultMaxTokens,
+                                            widenNumPredictForThinking(
+                                                request.maxTokens ??
+                                                    config.defaultMaxTokens,
+                                                think,
+                                                capability,
+                                            ),
                                         ...(numCtx !== undefined
                                             ? { num_ctx: numCtx }
                                             : {}),
@@ -924,9 +970,18 @@ export const LocalProviderLive = Layer.effect(
                                         temperature:
                                             request.temperature ??
                                             config.defaultTemperature,
+                                        // No `think` param on the structured-output
+                                        // path — default-thinking models (qwen3)
+                                        // still think under `format`, which is how
+                                        // flat structured-output budgets starved
+                                        // (A2: infer-required-tools dead exchanges).
                                         num_predict:
-                                            request.maxTokens ??
-                                            config.defaultMaxTokens,
+                                            widenNumPredictForThinking(
+                                                request.maxTokens ??
+                                                    config.defaultMaxTokens,
+                                                undefined,
+                                                capability,
+                                            ),
                                         ...(numCtx !== undefined
                                             ? { num_ctx: numCtx }
                                             : {}),
