@@ -181,7 +181,13 @@ export const resolveStepReferences = (
         (match, stepId, _offset, _full) => {
           const step = completedSteps.find((s) => s.id === stepId);
           if (!step || step.result === undefined) return match;
-          if (match.includes(":full}}")) return step.result;
+          // :full transfers WHOLE content (e.g. file-write `content`). Prefer
+          // step.fullResult — the uncompressed tool payload — over step.result,
+          // which for tool steps is the compressed preview. Hotfix 0.5-2
+          // (2026-07-07): returning step.result here silently truncated the
+          // exact case :full exists for (FM#3 sibling). Analysis steps have no
+          // fullResult and their result IS full, so the ?? falls through cleanly.
+          if (match.includes(":full}}")) return step.fullResult ?? step.result;
           // :summary gets the same banner-strip as bare refs: the rw-1 rerun
           // (2026-07-07) showed models template :summary into search queries,
           // and a raw preview slice still starts with the display banner and

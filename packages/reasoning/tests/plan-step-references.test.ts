@@ -9,6 +9,9 @@ const preview =
 const step = (id: string, result: string): PlanStep =>
     ({ id, instruction: "search", toolName: "web-search", status: "completed", retries: 0, tokensUsed: 0, result }) as unknown as PlanStep
 
+const toolStepWithFull = (id: string, preview: string, full: string): PlanStep =>
+    ({ id, instruction: "read", toolName: "file-read", status: "completed", retries: 0, tokensUsed: 0, result: preview, fullResult: full }) as unknown as PlanStep
+
 const analysisStep = (id: string, result: string): PlanStep =>
     ({ id, instruction: "analyze", status: "completed", retries: 0, tokensUsed: 0, result }) as unknown as PlanStep
 
@@ -38,6 +41,19 @@ describe("resolveStepReferences — reference projections (FM#3)", () => {
     test(":full → verbatim result for content-transfer args", () => {
         const out = resolveStepReferences({ content: "{{from_step:s1:full}}" }, [step("s1", preview)])
         expect(out.content).toBe(preview)
+    })
+
+    // Hotfix 0.5-2 (2026-07-07): for tool steps whose `result` is the compressed
+    // preview, :full must return the uncompressed `fullResult` — returning the
+    // preview silently truncated the exact content-transfer case :full exists for.
+    test(":full prefers fullResult over the compressed preview (tool steps)", () => {
+        const full = "line\n".repeat(500)
+        const out = resolveStepReferences(
+            { content: "{{from_step:s1:full}}" },
+            [toolStepWithFull("s1", "[file-read result — compressed preview] first 40 lines…", full)],
+        )
+        expect(out.content).toBe(full)
+        expect(out.content).not.toContain("compressed preview")
     })
 
     test("analysis-step output passes through whole (authored content, not preview junk)", () => {
