@@ -569,7 +569,11 @@ describe("Profile overrides for temperature and maxIterations", () => {
     // Profile maxIterations (3) should override config maxIterations (10)
     // Loop should stop at or before 3 iterations — loop detection may fire before max
     expect(callCount).toBeLessThanOrEqual(3);
-    expect(["partial", "failed"]).toContain(result.status);
+    // B1 (2026-07-07): "completed" joined the valid set — the unmet-required
+    // end_turn stonewall became redirect-then-accept, so this scenario can now
+    // finish via an accepted answer instead of grinding to the iteration cap.
+    // The maxIterations override itself is still verified by callCount above.
+    expect(["partial", "failed", "completed"]).toContain(result.status);
   });
 });
 

@@ -339,7 +339,13 @@ describe("llmEndTurnEvaluator", () => {
       requiredTools: ["web-search"],
       toolsUsed: new Set(),
     });
-    expect(llmEndTurnEvaluator.evaluate(ctx)).toBeNull();
+    // B1 (2026-07-07): was toBeNull() — the silent decline looped grounded
+    // answers to timeout (bench trace 01KWXQK2D001). First unmet-required
+    // end_turn now redirects with the gap named; see the B1 describe block.
+    const verdict = llmEndTurnEvaluator.evaluate(ctx);
+    expect(verdict).not.toBeNull();
+    expect(verdict!.action).toBe("redirect");
+    expect(verdict!.reason).toContain("web-search");
   });
 
   test("not end_turn stop reason → null", () => {
@@ -785,5 +791,56 @@ describe("controllerSignalVetoEvaluator (CHANGE A — Verdict-Override)", () => 
     const result = evaluateTermination(ctx, [controllerSignalVetoEvaluator, exitMedium]);
     expect(result.shouldExit).toBe(true);
     expect(result.action).toBe("exit"); // not "fail"
+  });
+});
+
+// ── B1 (2026-07-07) — remaining-required must redirect, not stonewall ─────────
+// Bench trace 01KWXQK2D001 (qwen3:14b, rw-2): model read the CSV (file-read ok),
+// produced the correct grounded answer via end_turn — and the evaluator returned
+// null forever because the convenience-exposed file-write was never used. The
+// run looped to the 420s timeout WITH the right answer in hand. The evaluator
+// now (a) emits ONE bounded redirect naming the unmet tools, (b) accepts the
+// next grounded end_turn once the redirect budget is spent.
+describe("llmEndTurnEvaluator — remaining-required redirect arm (B1)", () => {
+  test("first end_turn with unmet required tools → redirect naming the gap", () => {
+    const ctx = makeCtx({
+      stopReason: "end_turn",
+      thought: "The revenue drop was caused by the pricing bug; impact $12,400.",
+      requiredTools: ["file-read", "file-write"],
+      toolsUsed: new Set(["file-read"]),
+      redirectCount: 0,
+    });
+    const result = llmEndTurnEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("redirect");
+    expect(result!.reason).toContain("file-write");
+  });
+
+  test("second end_turn after the redirect budget is spent → accept the answer", () => {
+    const ctx = makeCtx({
+      stopReason: "end_turn",
+      thought: "The revenue drop was caused by the pricing bug; impact $12,400.",
+      requiredTools: ["file-read", "file-write"],
+      toolsUsed: new Set(["file-read"]),
+      redirectCount: 1,
+    });
+    const result = llmEndTurnEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
+    expect(result!.reason).toBe("llm_end_turn");
+    expect(result!.output).toContain("revenue drop");
+  });
+
+  test("all required tools used → exit unchanged (no redirect burned)", () => {
+    const ctx = makeCtx({
+      stopReason: "end_turn",
+      thought: "Answer.",
+      requiredTools: ["file-read"],
+      toolsUsed: new Set(["file-read"]),
+      redirectCount: 0,
+    });
+    const result = llmEndTurnEvaluator.evaluate(ctx);
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("exit");
   });
 });

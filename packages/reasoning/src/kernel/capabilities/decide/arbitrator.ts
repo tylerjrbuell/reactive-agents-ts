@@ -297,7 +297,24 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
     if (ctx.stopReason !== "end_turn") return null;
     if (ctx.thought.trim().length === 0) return null;
     const remainingRequired = ctx.requiredTools.filter((t) => !ctx.toolsUsed.has(t));
-    if (remainingRequired.length > 0) return null;
+    if (remainingRequired.length > 0) {
+      // B1 (2026-07-07): a silent null here was an invisible wall — bench trace
+      // 01KWXQK2D001 (qwen3:14b, rw-2) produced the correct grounded answer at
+      // iteration 1 and looped to the 420s timeout because the exit was
+      // declined with no feedback each turn. Bounded fix, mirroring the F1
+      // redirect-then-accept symmetry: name the gap ONCE (the "Not done yet"
+      // completion-guard message the redirect path already emits), then accept
+      // the next substantive end_turn. The F1 grounded-terminal gate still
+      // guards the zero-substantive-grounding case downstream.
+      if (ctx.redirectCount === 0) {
+        return {
+          action: "redirect",
+          confidence: "medium",
+          reason: `required tools not used yet: ${remainingRequired.join(", ")} — use them, or state explicitly why they are unnecessary and give your final answer`,
+        };
+      }
+      return { action: "exit", confidence: "medium", reason: "llm_end_turn", output: ctx.thought.trim() };
+    }
     return { action: "exit", confidence: "medium", reason: "llm_end_turn", output: ctx.thought.trim() };
   },
 };

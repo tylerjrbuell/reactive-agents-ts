@@ -628,7 +628,16 @@ async function runInternal(
         // root-cause report traced by hand; the concrete builtins list
         // computed above IS the grounding requirement for them.
         if (task.requiresTools) {
-          builder.withRequiredTools({ tools: builtins })
+          // requiredTools is an ALL-OF contract (llmEndTurnEvaluator refuses
+          // terminal end_turn answers while ANY listed tool is unused). Wire
+          // the MINIMAL grounding set — the declared tools, else file-read for
+          // fixture tasks — NOT the whole exposed toolbox. Passing the
+          // convenience file-write add-on here killed rw-2 on qwen3:14b
+          // (2026-07-07): the model read the CSV, produced the correct answer,
+          // and the kernel silently refused every terminal because file-write
+          // was never used by a task that never needed to write.
+          const groundingSet = declared ?? (task.fixtures?.length ? ["file-read"] : builtins)
+          builder.withRequiredTools({ tools: groundingSet })
         }
       } else {
         builder.withTools()
