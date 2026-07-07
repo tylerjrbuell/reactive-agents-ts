@@ -72,6 +72,7 @@ import {
 // the shared shape consumed by the outer orchestrator. See
 // ./plan-execute/step-executor.ts for the moved implementation.
 import { executeStep } from "./plan-execute/step-executor.js";
+import { SYNTHESIZER_PERSONA, PLANNER_PERSONA } from "./planning/shared-personas.js";
 
 interface PlanExecuteInput {
   readonly taskDescription: string;
@@ -225,8 +226,8 @@ export const executePlanExecute = (
       schema: LLMPlanOutputSchema,
       prompt: planPrompt,
       systemPrompt: input.systemPrompt
-        ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into structured steps.`
-        : "You are a planning agent. Decompose the goal into structured steps.",
+        ? `${input.systemPrompt}\n${PLANNER_PERSONA}`
+        : PLANNER_PERSONA,
       maxRetries: 2,
       temperature: 0.5,
       maxTokens: 4096,
@@ -277,7 +278,7 @@ export const executePlanExecute = (
         schema: LLMPlanOutputSchema,
         prompt: reminderPrompt,
         systemPrompt: input.systemPrompt
-          ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into structured steps. Rationale on tool_call steps is mandatory.`
+          ? `${input.systemPrompt}\n${PLANNER_PERSONA} Rationale on tool_call steps is mandatory.`
           : "You are a planning agent. Decompose the goal into structured steps. Rationale on tool_call steps is mandatory.",
         maxRetries: 1,
         temperature: 0.3,
@@ -1085,8 +1086,8 @@ export const executePlanExecute = (
             ],
             systemPrompt: withEnvContext(
               input.systemPrompt
-                ? `${input.systemPrompt}\n\nYou are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.`
-                : "You are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.",
+                ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
+                : SYNTHESIZER_PERSONA,
             ),
             maxTokens: 4096,
             temperature: 0.3,

@@ -1,3 +1,5 @@
+import { CONTEXT_PROFILES } from "../context/context-profile.js";
+
 export type Tier = "local" | "mid" | "large" | "frontier";
 
 export interface CapabilityInput {
@@ -39,11 +41,13 @@ export interface ResolvedCapability {
 
 const BUCKETS = [8192, 16384, 32768, 65536, 131072] as const;
 
+// Phase 1b (2026-07-07): single source of truth — derive from CONTEXT_PROFILES
+// instead of maintaining a mirror table that can drift (sweep report 02, F4).
 const TIER_TOOL_RESULT_PRESERVE: Record<Tier, number> = {
-  local: 4000,
-  mid: 1200,
-  large: 800,
-  frontier: 600,
+  local: CONTEXT_PROFILES.local.toolResultMaxChars ?? 4000,
+  mid: CONTEXT_PROFILES.mid.toolResultMaxChars ?? 1200,
+  large: CONTEXT_PROFILES.large.toolResultMaxChars ?? 800,
+  frontier: CONTEXT_PROFILES.frontier.toolResultMaxChars ?? 600,
 };
 
 export function resolveCapability(input: CapabilityInput): ResolvedCapability {

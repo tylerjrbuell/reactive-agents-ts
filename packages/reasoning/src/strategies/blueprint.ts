@@ -60,6 +60,7 @@ import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
+import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
 
 const STRATEGY = "blueprint" as const;
 
@@ -512,8 +513,8 @@ export const executeBlueprint = (
           ],
           systemPrompt: withEnvContext(
             input.systemPrompt
-              ? `${input.systemPrompt}\n\nYou are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.`
-              : "You are a synthesizer. Combine execution results into a clear, concise final answer. Exclude all internal agent metadata.",
+              ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
+              : SYNTHESIZER_PERSONA,
           ),
           maxTokens: 4096,
           temperature: 0.3,

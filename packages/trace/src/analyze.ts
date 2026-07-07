@@ -216,7 +216,7 @@ export function analyzeInterventions(
     totalTokens,
     failureModes,
     notDetectable: [
-      "dishonest-success (claimed done but artifact content wrong) — needs post-condition/artifact inspection; RA_POST_CONDITIONS currently OFF",
+      "dishonest-success (claimed done but artifact content wrong) — needs artifact CONTENT inspection; post-conditions are default-on live (existence/tool checks) but content-match is not traced",
     ],
   };
 }
