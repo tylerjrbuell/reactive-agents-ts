@@ -147,6 +147,7 @@ export interface CliArgs {
   model?: string
   tiers?: string[]
   taskIds?: string[]
+  variantIds?: string[]
   output?: string
   timeoutSec?: number
   // v2 flags
@@ -170,6 +171,7 @@ export function parseArgs(argv: string[]): CliArgs {
       case "--model":        args.model = next; i++; break
       case "--tier":         args.tiers = next?.split(","); i++; break
       case "--task":         args.taskIds = next?.split(","); i++; break
+      case "--variant":      args.variantIds = next?.split(","); i++; break
       case "--output":       args.output = next; i++; break
       case "--timeout":      args.timeoutSec = next ? parseInt(next, 10) : undefined; i++; break
       case "--session":      args.session = next; i++; break
@@ -198,6 +200,18 @@ async function main() {
 
     let session = args.runs ? { ...sessionDef, runs: args.runs } : sessionDef
     if (args.taskIds?.length) session = { ...session, taskIds: args.taskIds, tiers: undefined } as typeof session
+    // --variant: run a subset of the session's harness variants. The fix-
+    // iteration workhorse — verifying one kernel change against one failing
+    // cell costs 1 variant, not 6 (feedback-loop amplification, 2026-07-07).
+    if (args.variantIds?.length) {
+      const want = args.variantIds
+      const harnessVariants = (session.harnessVariants ?? []).filter(v => want.includes(v.id))
+      if (harnessVariants.length === 0) {
+        console.error(`--variant matched nothing. Session "${session.id}" has: ${(session.harnessVariants ?? []).map(v => v.id).join(", ")}`)
+        process.exit(1)
+      }
+      session = { ...session, harnessVariants } as typeof session
+    }
     if (args.verbose) session = { ...session, logLevel: "verbose" } as typeof session
     if (args.judgeUrl) session = { ...session, judgeUrl: args.judgeUrl } as typeof session
     // Filter the session's models to a subset (by id or model string), keeping

@@ -711,16 +711,42 @@ async function runInternal(
       const prompt = task.fixtures?.length
         ? `Working directory for this task: ${tmpDir}\n\n${resolvedPrompt}`
         : task.prompt
-      const timeoutP = new Promise<never>((_, r) => setTimeout(() => r(new Error("timeout")), timeoutMs))
-      const result = await Promise.race([agent.run(prompt), timeoutP])
-      return {
-        output: result.output,
-        tokensUsed: result.metadata.tokensUsed ?? 0,
-        durationMs: performance.now() - start,
-        iterations: result.metadata.stepsCount ?? 0,
-        status: "pass",
-        ...(traceDir ? { traceId: result.taskId } : {}),
-        ...(result.terminatedBy != null ? { terminatedBy: result.terminatedBy } : {}),
+      // Hard-kill on timeout (feedback-loop amplification, 2026-07-07): the old
+      // Promise.race abandoned the agent fiber, which kept consuming the GPU
+      // and degraded every later cell (qwen3:14b session: successful cell
+      // durations climbed 248s → 380s → cap as zombies accumulated). runStream
+      // carries an AbortSignal down to the kernel fiber, so a timed-out cell
+      // now actually frees the model.
+      const abort = new AbortController()
+      const killTimer = setTimeout(() => abort.abort(new Error("timeout")), timeoutMs)
+      try {
+        const handle = agent.runStream(prompt, { signal: abort.signal, density: "tokens" })
+        let completed:
+          | Extract<import("@reactive-agents/runtime").AgentStreamEvent, { _tag: "StreamCompleted" }>
+          | undefined
+        let streamError: string | undefined
+        for await (const ev of handle) {
+          if (ev._tag === "StreamCompleted") completed = ev
+          else if (ev._tag === "StreamError") streamError = ev.cause
+        }
+        if (!completed) throw new Error(streamError ?? "timeout")
+        const meta = completed.metadata as { tokensUsed?: number; stepsCount?: number; terminatedBy?: string }
+        const terminatedBy = completed.abstention ? "abstained" : meta.terminatedBy
+        return {
+          output: completed.output,
+          tokensUsed: meta.tokensUsed ?? 0,
+          durationMs: performance.now() - start,
+          iterations: meta.stepsCount ?? 0,
+          status: "pass",
+          ...(traceDir && completed.taskId ? { traceId: completed.taskId } : {}),
+          ...(terminatedBy != null ? { terminatedBy } : {}),
+        }
+      } finally {
+        clearTimeout(killTimer)
+        if (abort.signal.aborted) {
+          // Belt-and-braces: ensure the fiber is gone before the next cell.
+          try { (agent as { terminate?: () => Promise<void> }).terminate?.() } catch { /* disposed below */ }
+        }
       }
     } finally {
       await agent.dispose()
