@@ -253,6 +253,26 @@ async function scoreWithJudge(
  *   to route trap tasks through `scoreAbstention`. Optional for backward compatibility
  *   — omit or pass undefined for non-trap runs; scoring is unchanged.
  */
+/**
+ * Score a cell that produced NO completed run (timeout or crash).
+ *
+ * These cells must never reach the LLM judge: judging an empty string yields
+ * hallucinated evidence (observed 2026-07-07: a timed-out cell came back
+ * "at least one database is fabricated"). The cell still scores 0 on the
+ * task's dimensions — an end-to-end bench honestly counts a variant that
+ * produced nothing as a failure — but the evidence states the real cause so
+ * report readers can separate capability gaps from timeouts.
+ */
+export function scoreErrorCell(
+    task: BenchmarkTask,
+    cause: string,
+    durationMs: number,
+): ReadonlyArray<DimensionScore> {
+    const evidence = `no output produced (${cause} after ${Math.round(durationMs / 1000)}s) — cell not judged`
+    const dims = new Set<QualityDimension>(["accuracy", ...(task.primaryDimensions ?? [])])
+    return [...dims].map((dimension) => ({ dimension, score: 0, evidence }))
+}
+
 export async function scoreTask(
   output: string,
   task: BenchmarkTask,

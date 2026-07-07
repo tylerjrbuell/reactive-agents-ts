@@ -44,7 +44,7 @@ export function withConfigEnv(env: Readonly<Record<string, string>> | undefined)
     }
   };
 }
-import { scoreTask, computeReliability } from "./judge.js"
+import { scoreTask, scoreErrorCell, computeReliability } from "./judge.js"
 import { diagnoseRun, formatDiagnosisLine, trustVerdict } from "./diagnose.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
@@ -1122,7 +1122,11 @@ export async function runSession(
               abstainExpected: task.abstainExpected ?? false,
               abstained: result.terminatedBy === "abstained",
             })
-            const dimensions = await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations, undefined, result.terminatedBy)
+            // Timeout/crash cells never reach the judge — an empty output judged
+            // by an LLM yields hallucinated evidence (2026-07-07 forensic run).
+            const dimensions = result.status === "error"
+              ? scoreErrorCell(task, result.error ?? "error", result.durationMs)
+              : await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations, undefined, result.terminatedBy)
             const diagnosis = session.traceDir && result.traceId
               ? await diagnoseRun(session.traceDir, result.traceId)
               : undefined
