@@ -1075,8 +1075,8 @@ git commit -m "docs: process-model demo + receipt/fork/replay documentation"
 
 ## Final gate (whole-plan)
 
-- [ ] `bunx turbo run build` — all packages green (authoritative over tsc, memory: ignoreDeprecations).
-- [ ] `bun test` keyless from repo root with `.env` moved aside (`mv .env /tmp/claude-1000/.env.bak && bun test; mv /tmp/claude-1000/.env.bak .env`) — CI-parity check (memory: CI has no keys/Ollama).
-- [ ] `scripts/check-termination-paths.sh` — single-owner invariant intact.
-- [ ] Live smoke: demo script end-to-end on Ollama.
-- [ ] Launch-gate checklist vs spec §10: capture ✓ (T1-3), inspect+ps/attach ✓ (T5,7), fork v1 ✓ (T6), receipt v1 ✓ (T8-9). Item 5 (bench receipts) tracked in the public-competitor-bench thread.
+- [x] `bunx turbo run build` — all packages green (authoritative over tsc, memory: ignoreDeprecations).
+- [x] `bun test` keyless from repo root with `.env` moved aside (`mv .env /tmp/claude-1000/.env.bak && bun test; mv /tmp/claude-1000/.env.bak .env`) — CI-parity check (memory: CI has no keys/Ollama).
+- [x] `scripts/check-termination-paths.sh` — single-owner invariant intact.
+- [x] Live smoke: demo script end-to-end on Ollama.
+- [x] Launch-gate checklist vs spec §10: capture ✓ (T1-3), inspect+ps/attach ✓ (T5,7), fork v1 ✓ (T6), receipt v1 ✓ (T8-9). Item 5 (bench receipts) tracked in the public-competitor-bench thread.
