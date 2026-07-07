@@ -15,6 +15,17 @@ const buildJudgeMessages = (req: JudgeRequest): LLMMessage[] => {
     `Task input: ${JSON.stringify(req.taskInput)}`,
     `SUT response: ${req.sutResponse}`,
     req.taskCriteria ? `Criteria: ${req.taskCriteria}` : "",
+    // Partial-credit protocol (2026-07-07): rubrics phrased as "Score 1.0
+    // if (1)...(4); score 0.0 if X" leave the middle undefined, and judges
+    // were collapsing 3-of-4-satisfied responses to 0 while their own
+    // evidence said the zero condition did NOT hold (observed live: score 0
+    // with evidence "All databases mentioned exist").
+    "Scoring protocol:",
+    "1. Decompose the criteria into individual requirements.",
+    "2. Check each requirement against the response; record satisfied/violated with one line of evidence in layerResults (one entry per requirement).",
+    "3. If the criteria define an explicit zero condition, apply it ONLY when that condition actually holds.",
+    "4. Otherwise overallScore = fraction of requirements satisfied (partial credit is the default).",
+    "5. Your evidence must be consistent with the score: never pair a 0 score with only positive findings — name the specific violated requirement.",
     "Return ONLY a raw JSON object — no markdown, no prose, no code fences. Shape: {passed: boolean, overallScore: number 0-1, recommendation: 'accept'|'review'|'reject', layerResults: Array<{layerName, score, passed, details?}>}",
   ].filter(Boolean).join("\n");
   return [{ role: "user", content: promptText }];
