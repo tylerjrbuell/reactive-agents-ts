@@ -177,6 +177,18 @@ export const prepareReasoningToolSchemas = (
       }
       for (const name of ALWAYS_INCLUDE) filteredSet.add(name);
       for (const name of requiredSet) filteredSet.add(name);
+      // Explicitly opted-in builtins are consumer intent — a prune FLOOR, not
+      // classifier input. Regression (2026-07-07 rw-9/rw-7): the bench passed
+      // builtins:["file-read","file-write"] with a minimal requiredTools
+      // grounding set of ["file-read"]; the classifier missed file-write and
+      // this filter hid it, leaving the model unable to write prices.md /
+      // test files at all (3/3 cells, was 100% when the wider requiredTools
+      // floor incidentally protected it). `builtins: true` (legacy opt-in to
+      // everything) deliberately does NOT floor — that would disable
+      // filtering wholesale.
+      if (Array.isArray(builtinsOpt)) {
+        for (const name of builtinsOpt) filteredSet.add(name);
+      }
 
       // Filter schemas to only those in the filtered set
       const filtered = availableToolSchemas.filter(t => filteredSet.has(t.name));
