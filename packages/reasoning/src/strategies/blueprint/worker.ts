@@ -38,6 +38,7 @@ import {
 } from "../../types/plan.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
+import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { isParallelBatchSafeTool } from "../../kernel/capabilities/decide/tool-gating.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
@@ -310,14 +311,12 @@ function executeAnalysisStep(
       scopedTools: [],
     });
 
-    const response = yield* services.llm
-      .complete({
+    const response = yield* gatewayComplete(services.llm, { purpose: "synthesize" }, {
         messages: [{ role: "user", content: stepPrompt }],
         systemPrompt: withEnvContext(
           ctx.systemPrompt ??
             "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
         ),
-        maxTokens: 4096,
         temperature: 0.5,
         ...(ctx.taskId ? { traceContext: { taskId: ctx.taskId } } : {}),
       })

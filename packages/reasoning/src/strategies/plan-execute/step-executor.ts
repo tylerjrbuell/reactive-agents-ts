@@ -37,6 +37,7 @@ import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import type { KernelStateLike } from "@reactive-agents/core";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
+import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import {
@@ -261,18 +262,16 @@ export function executeStep(
     ? `${stepPrompt}\n\nPREVIOUS ATTEMPT FAILED: ${retryErrorContext}\nPlease try a different approach.`
     : stepPrompt;
 
-  // Analysis steps: single LLM call — no tool loop needed
-  // Note: maxTokens 4096 to accommodate thinking models where num_predict
-  // covers both thinking + content tokens combined.
+  // Analysis steps: single LLM call — no tool loop needed. The standard
+  // budget class (4096) accommodates thinking models where num_predict covers
+  // both thinking + content tokens combined.
   if (step.type === "analysis") {
-    return services.llm
-      .complete({
+    return gatewayComplete(services.llm, { purpose: "synthesize" }, {
         messages: [{ role: "user", content: taskText }],
         systemPrompt: withEnvContext(
           input.systemPrompt ??
             "You are a precise task executor. Produce the requested content directly. Never ask questions or offer to do something — just output the finished result.",
         ),
-        maxTokens: 4096,
         temperature: 0.5,
         // Correlate this direct (non-kernel) analysis call so the observable-LLM
         // chokepoint emits a ContextPressure keyed to the real run — analysis

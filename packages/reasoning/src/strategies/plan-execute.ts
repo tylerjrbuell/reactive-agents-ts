@@ -42,10 +42,8 @@ import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
-import {
-  extractThinkingSafeContent,
-  THINKING_SAFE_MIN_TOKENS,
-} from "../kernel/utils/stream-parser.js";
+import { gatewayComplete } from "../kernel/llm-gateway.js";
+import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -438,8 +436,7 @@ export const executePlanExecute = (
         kernelPass: `plan-execute:plan-1`,
       });
 
-      const genResponse = yield* llm
-        .complete({
+      const genResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
           messages: [
             {
               role: "user",
@@ -450,7 +447,6 @@ export const executePlanExecute = (
             input.systemPrompt ??
               "You are a precise task executor. Produce the complete, well-structured final answer directly. Never ask questions or offer to do something — just output the finished result.",
           ),
-          maxTokens: 4096,
           temperature: 0.5,
           ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
         })
@@ -1076,8 +1072,7 @@ export const executePlanExecute = (
           .filter((s) => s.result || s.fullResult)
           .map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
 
-        const synthLlmResponse = yield* llm
-          .complete({
+        const synthLlmResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
             messages: [
               {
                 role: "user",
@@ -1089,7 +1084,6 @@ export const executePlanExecute = (
                 ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
                 : SYNTHESIZER_PERSONA,
             ),
-            maxTokens: 4096,
             temperature: 0.3,
             ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
           })

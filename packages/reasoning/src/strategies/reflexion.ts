@@ -17,6 +17,7 @@ import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
+import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
 import { runPass } from "../kernel/loop/run-pass.js";
 import {
@@ -229,8 +230,7 @@ export const executeReflexion = (
       const synthPrompt = observationDigest
         ? `Task: ${input.taskDescription}\n\nInformation gathered so far:\n${observationDigest}\n\nUsing the information above, write your complete, final answer to the task now. Output only the answer.`
         : `Task: ${input.taskDescription}\n\nWrite your complete, final answer to the task now. Output only the answer.`;
-      const synthResponse = yield* llm
-        .complete({
+      const synthResponse = yield* gatewayComplete(llm, { purpose: "synthesize", budgetClass: "provider-default" }, {
           messages: [{ role: "user", content: synthPrompt }],
           systemPrompt:
             input.systemPrompt ??

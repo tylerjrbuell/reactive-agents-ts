@@ -14,6 +14,7 @@ import { Effect, Stream, FiberRef, Either, Ref } from "effect";
 import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
+import { gatewayStream } from "../../llm-gateway.js";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   toProviderMessage,
@@ -617,20 +618,6 @@ export function handleThinking(
     const systemPromptWithDriver = parts.join("\n\n");
 
     // ── STREAM (with text delta emission) ──────────────────────────────────
-    // Token budget adapts to model tier: frontier models get more room for
-    // sophisticated reasoning; local models are capped to avoid wasted tokens.
-    const tierMaxTokens: Record<string, number> = {
-      local: 1200,
-      mid: 2000,
-      large: 3000,
-      frontier: 4000,
-    };
-    // B2: thinking models spend their num_predict budget inside <think> before
-    // any visible content — a flat tier cap yields empty max_tokens turns that
-    // thrash the Stage-1 escalation and burn wall-clock (bench: two 2000-token
-    // empty turns = ~148s of a 420s budget). Give them room for think + answer.
-    const thinkingAllowance = profile.thinkingModel ? 6000 : 0;
-    const outputMaxTokens = (tierMaxTokens[profile.tier] ?? 1500) + thinkingAllowance;
     const llmTools = gatedToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
       description: ts.description,
@@ -657,11 +644,21 @@ export function handleThinking(
     // Request logprobs when entropy sensor may be active (modelId present in meta)
     const wantLogprobs = state.meta.entropy?.modelId !== undefined;
 
-    const llmStreamEffect = llm.stream({
+    // Budget resolution moved to the LLM gateway (Phase 1): tier-adaptive
+    // think budget + B2 thinking allowance live in resolveOutputBudget; a
+    // kernel pressure override (state.maxOutputTokensOverride) rides the
+    // explicit budgetTokens escape hatch.
+    const llmStreamEffect = gatewayStream(llm, {
+      purpose: "think",
+      tier: profile.tier,
+      thinkingModel: profile.thinkingModel === true,
+      ...(state.maxOutputTokensOverride !== undefined
+        ? { budgetTokens: state.maxOutputTokensOverride }
+        : {}),
+    }, {
       messages: conversationMessages,
       ...(input.modelId ? { model: input.modelId } : {}),
       systemPrompt: systemPromptWithDriver,
-      maxTokens: state.maxOutputTokensOverride ?? outputMaxTokens,
       temperature: temp,
       // Snapshot run correlation into the request so the observable-LLM wrapper
       // (below the kernel) can key the LLMExchange trace to the real run instead

@@ -15,6 +15,7 @@ import { ExecutionError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { runKernel } from "../kernel/loop/runner.js";
+import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildKernelInput, type CrossCuttingInput } from "../kernel/state/build-kernel-input.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep, makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
@@ -344,8 +345,11 @@ export const executeTreeOfThought = (
 
       for (const parent of frontier) {
         // Generate `breadth` candidate thoughts from this parent
-        const expansionResponse = yield* llm
-          .complete({
+        const expansionResponse = yield* gatewayComplete(llm, {
+            purpose: "plan",
+            // Breadth-scaled: each candidate needs ~800 tokens of room.
+            budgetTokens: Math.max(800 * breadth, THINKING_SAFE_MIN_TOKENS),
+          }, {
             messages: [
               {
                 role: "user",
@@ -367,7 +371,6 @@ export const executeTreeOfThought = (
                   : `You are exploring solution paths for: ${input.taskDescription}. Generate ${breadth} distinct approaches.`,
               ),
             ),
-            maxTokens: Math.max(800 * breadth, THINKING_SAFE_MIN_TOKENS),
             temperature: 0.8,
           })
           .pipe(
@@ -415,13 +418,14 @@ export const executeTreeOfThought = (
           // thinking model's single reasoning pass + N score lines — too tight a
           // budget truncates `<think>` before any score is emitted, collapsing
           // every candidate to the 0.5 default. Scale headroom with breadth.
-          const scoreResponse = yield* llm
-            .complete({
+          const scoreResponse = yield* gatewayComplete(llm, {
+              purpose: "verify",
+              budgetTokens: THINKING_SAFE_MIN_TOKENS + 512 * candidates.length,
+            }, {
               messages: [
                 { role: "user", content: buildBatchScoringPrompt(input.taskDescription, candidates, ancestorPath) },
               ],
               systemPrompt: scoringSystemPrompt,
-              maxTokens: THINKING_SAFE_MIN_TOKENS + 512 * candidates.length,
               temperature: 0.2,
             })
             .pipe(
@@ -450,13 +454,11 @@ export const executeTreeOfThought = (
           // collapse that makes pruning blind.
           if (!batch.ok) {
             for (let ci = 0; ci < candidates.length; ci++) {
-              const single = yield* llm
-                .complete({
+              const single = yield* gatewayComplete(llm, { purpose: "verify" }, {
                   messages: [
                     { role: "user", content: buildBatchScoringPrompt(input.taskDescription, [candidates[ci]!], ancestorPath) },
                   ],
                   systemPrompt: scoringSystemPrompt,
-                  maxTokens: THINKING_SAFE_MIN_TOKENS,
                   temperature: 0.2,
                 })
                 .pipe(

@@ -28,10 +28,8 @@ import { ToolNotFoundError } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { evaluateTransform } from "../../utils/tool-parsing.js";
 import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
-import {
-  extractThinkingSafeContent,
-  THINKING_SAFE_MIN_TOKENS,
-} from "../../utils/stream-parser.js";
+import { gatewayComplete } from "../../llm-gateway.js";
+import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
 import type { MaybeService, ToolServiceInstance, MemoryServiceInstance } from "../../../kernel/state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import type { SemanticEntry, MemoryId } from "@reactive-agents/memory";
@@ -866,7 +864,7 @@ export function extractObservationFacts(
 
   return Effect.gen(function* () {
     const llm = yield* LLMService;
-    const response = yield* llm.complete({
+    const response = yield* gatewayComplete(llm, { purpose: "extract", budgetClass: "terse" }, {
       messages: [{
         role: "user",
         content: [
@@ -878,7 +876,6 @@ export function extractObservationFacts(
         ].join("\n"),
       }],
       temperature: 0,
-      maxTokens: THINKING_SAFE_MIN_TOKENS,
       ...(traceContext ? { traceContext } : {}),
     });
 

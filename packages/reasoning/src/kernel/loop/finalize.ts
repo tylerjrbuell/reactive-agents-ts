@@ -31,10 +31,8 @@ import {
   buildSynthesisPrompt,
 } from "./output-synthesis.js";
 import { detectScaffoldLeak } from "../capabilities/verify/scaffold-leak.js";
-import {
-  extractThinkingSafeContent,
-  THINKING_SAFE_MIN_TOKENS,
-} from "../utils/stream-parser.js";
+import { gatewayComplete } from "../llm-gateway.js";
+import { extractThinkingSafeContent } from "../utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import type { KernelMessage } from "../state/kernel-state.js";
 
@@ -146,11 +144,9 @@ export function enforceQualityGate(input: {
     input.taskDescription,
   );
 
-  return input.llm
-    .complete({
+  return gatewayComplete(input.llm, { purpose: "synthesize", budgetClass: "terse" }, {
       messages: [{ role: "user", content: synthesisPrompt }],
       systemPrompt: withEnvContext(undefined),
-      maxTokens: THINKING_SAFE_MIN_TOKENS,
       temperature: 0.2,
       ...(input.traceContext ? { traceContext: input.traceContext } : {}),
     })

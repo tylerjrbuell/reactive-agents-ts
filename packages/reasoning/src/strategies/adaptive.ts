@@ -21,10 +21,8 @@ import { executeTreeOfThought } from "./tree-of-thought.js";
 import { executeBlueprint } from "./blueprint.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
-import {
-  extractThinkingSafeContent,
-  THINKING_SAFE_MIN_TOKENS,
-} from "../kernel/utils/stream-parser.js";
+import { gatewayComplete } from "../kernel/llm-gateway.js";
+import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { ContextProfile } from "../context/context-profile.js";
@@ -182,8 +180,7 @@ export const executeAdaptive = (
       {},
       classifyDefaultFallback,
     );
-    const analysisResponse = yield* llm
-      .complete({
+    const analysisResponse = yield* gatewayComplete(llm, { purpose: "classify" }, {
         messages: [
           {
             role: "user",
@@ -191,7 +188,6 @@ export const executeAdaptive = (
           },
         ],
         systemPrompt: classifySystemPrompt,
-        maxTokens: THINKING_SAFE_MIN_TOKENS,
         temperature: 0.2,
       })
       .pipe(

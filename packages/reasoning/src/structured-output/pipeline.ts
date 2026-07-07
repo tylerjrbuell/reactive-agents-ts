@@ -19,6 +19,7 @@ import { Effect, JSONSchema, Option, Schema } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { EventBus } from "@reactive-agents/core";
 import { extractJsonBlock, repairJson } from "./json-repair.js";
+import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { stripThinking } from "../kernel/utils/stream-parser.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { SchemaContract } from "./schema-contract.js";
@@ -196,11 +197,11 @@ export const extractStructuredOutput = <T>(
         ? `${config.systemPrompt}\n\nRespond with ONLY valid JSON. No markdown, no explanation, no thinking tags.`
         : "Respond with ONLY valid JSON. No markdown, no explanation, no thinking tags.";
 
-      // Layer 1: LLM call
-      const response = yield* llm.complete({
+      // Layer 1: LLM call — budgetTokens carries the caller-resolved budget
+      // (config.maxTokens ?? 4096, shared with the native path above).
+      const response = yield* gatewayComplete(llm, { purpose: "extract", budgetTokens: maxTokens }, {
         messages: [{ role: "user", content: prompt }],
         systemPrompt,
-        maxTokens,
         temperature: attempt === 0 ? temp : 0.1,
         ...(config.traceContext ? { traceContext: config.traceContext } : {}),
       }).pipe(

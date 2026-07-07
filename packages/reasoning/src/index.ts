@@ -251,3 +251,14 @@ export { createReasoningLayer } from "./runtime.js";
 
 // ─── Observable LLM (Task 7 — direct-LLM-call observability) ───
 export { makeObservableLLM } from "./kernel/observable-llm.js";
+
+// ─── LLM Gateway (Overhaul Phase 1 — single mediated model-call path) ───
+export {
+  gatewayComplete,
+  gatewayStream,
+  resolveOutputBudget,
+  type LlmCallIntent,
+  type LlmPurpose,
+  type BudgetClass,
+  type GatewayRequest,
+} from "./kernel/llm-gateway.js";

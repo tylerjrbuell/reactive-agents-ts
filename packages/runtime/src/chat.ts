@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentDebrief } from "./debrief.js";
 
@@ -196,12 +197,11 @@ export function directChat(
       { role: "user" as const, content: message },
     ];
 
-    const response = yield* llm
-      .complete({
+    // Conversational reply cap predates the gateway's class table; keep exact.
+    const response = yield* gatewayComplete(llm, { purpose: "synthesize", budgetTokens: 1024 }, {
         messages,
         systemPrompt,
         temperature: 0.7,
-        maxTokens: 1024,
       })
       .pipe(
         Effect.mapError((e) => new Error(String(e))),

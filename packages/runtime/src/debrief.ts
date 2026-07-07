@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { FinalAnswerCapture } from "@reactive-agents/tools";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -289,12 +290,11 @@ export function synthesizeDebrief(
       .filter(Boolean)
       .join("\n\n");
 
-    const llmResponse = yield* llm
-      .complete({
+    // Debrief JSON is deliberately tiny — 512 tokens, below any gateway class.
+    const llmResponse = yield* gatewayComplete(llm, { purpose: "extract", budgetTokens: 512 }, {
         messages: [{ role: "user", content: userPrompt }],
         systemPrompt: DEBRIEF_SYSTEM_PROMPT,
         temperature: 0.2,
-        maxTokens: 512,
       })
       .pipe(
         Effect.catchAll(() =>

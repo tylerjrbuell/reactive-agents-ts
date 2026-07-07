@@ -19,6 +19,7 @@ import {
   buildStrategyResult,
 } from "../kernel/capabilities/sense/step-utils.js";
 import { makeObservationResult } from "../kernel/utils/observation-helpers.js";
+import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { emitToCompose } from "@reactive-agents/core";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
@@ -118,7 +119,7 @@ export const executeCodeAction = (
 
     // ── Plan phase — initial LLM code generation ────────────────────────────
     const planResponse = yield* Effect.mapError(
-      llm.complete({
+      gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
         messages: [{ role: "user", content: user }],
         systemPrompt: withEnvContext(system),
         temperature: 0,
@@ -243,7 +244,7 @@ export const executeCodeAction = (
       ].join("\n\n");
 
       const retryResponse = yield* Effect.mapError(
-        llm.complete({
+        gatewayComplete(llm, { purpose: "plan", budgetClass: "provider-default" }, {
           messages: [
             { role: "user", content: user },
             { role: "assistant", content: `\`\`\`typescript\n${generatedCode}\n\`\`\`` },

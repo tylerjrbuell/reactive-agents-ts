@@ -24,6 +24,7 @@
  */
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
+import { gatewayComplete } from "../../llm-gateway.js";
 import {
   extractThinkingSafeContent,
   THINKING_SAFE_MIN_TOKENS,
@@ -89,11 +90,13 @@ export function critiqueMaxTokens(depth: CritiqueDepth): number {
 export function runCritiquePass(
   input: RunCritiquePassInput,
 ): Effect.Effect<CritiqueResult, ExecutionError, never> {
-  return input.llm
-    .complete({
+  return gatewayComplete(input.llm, {
+    purpose: "verify",
+    // Depth-derived cap predates the gateway's class table; keep it exact.
+    budgetTokens: critiqueMaxTokens(input.depth),
+  }, {
       messages: [{ role: "user", content: input.promptBody }],
       systemPrompt: withEnvContext(input.systemPrompt),
-      maxTokens: critiqueMaxTokens(input.depth),
       temperature: 0.3,
       ...(input.traceContext ? { traceContext: input.traceContext } : {}),
     })

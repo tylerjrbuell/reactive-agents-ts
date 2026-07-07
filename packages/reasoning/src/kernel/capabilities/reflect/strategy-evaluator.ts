@@ -13,10 +13,8 @@ import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { KernelState } from "../../../kernel/state/kernel-state.js";
 import { getPermanentlyFailedRequiredTools } from "../verify/requirement-state.js";
-import {
-  extractThinkingSafeContent,
-  THINKING_SAFE_MIN_TOKENS,
-} from "../../utils/stream-parser.js";
+import { gatewayComplete } from "../../llm-gateway.js";
+import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -143,8 +141,7 @@ export function evaluateStrategySwitch(
   return Effect.gen(function* () {
     const llm = yield* LLMService;
 
-    const content = yield* llm
-      .complete({
+    const content = yield* gatewayComplete(llm, { purpose: "classify" }, {
         messages: [
           {
             role: "system",
@@ -154,7 +151,6 @@ export function evaluateStrategySwitch(
           { role: "user", content: prompt },
         ],
         temperature: 0,
-        maxTokens: THINKING_SAFE_MIN_TOKENS,
       })
       .pipe(
         // Apply thinking-safe extraction BEFORE the markdown-fence strip +

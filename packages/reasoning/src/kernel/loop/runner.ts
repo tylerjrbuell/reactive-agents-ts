@@ -33,10 +33,8 @@ import {
   type ThoughtKernel,
 } from "../../kernel/state/kernel-state.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "./phase-hooks.js";
-import {
-  extractThinkingSafeContent,
-  THINKING_SAFE_MIN_TOKENS,
-} from "../../kernel/utils/stream-parser.js";
+import { gatewayComplete } from "../llm-gateway.js";
+import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
 import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/requirement-state.js";
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
@@ -1017,8 +1015,7 @@ export function runKernel(
           groundingDegradeWarning = outcome.guidance;
           break;
         }
-        const corrected = yield* llmOpt.value
-          .complete({
+        const corrected = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "terse" }, {
             messages: [
               {
                 role: "user",
@@ -1026,7 +1023,6 @@ export function runKernel(
                   `${buildSynthesisPrompt(state.output ?? "", taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
               },
             ],
-            maxTokens: THINKING_SAFE_MIN_TOKENS,
             temperature: 0.2,
           })
           .pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
@@ -1156,9 +1152,8 @@ export function runKernel(
         if (llmOpt._tag === "Some") {
           const synthesisFormat = taskIntent.format ?? "prose";
           const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent);
-          const synthesized = yield* llmOpt.value.complete({
+          const synthesized = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "terse" }, {
             messages: [{ role: "user", content: synthesisPrompt }],
-            maxTokens: THINKING_SAFE_MIN_TOKENS,
             temperature: 0.2,
           }).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));
 

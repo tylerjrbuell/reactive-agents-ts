@@ -50,6 +50,7 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { resolveProfile } from "../context/profile-resolver.js";
+import { gatewayComplete } from "../kernel/llm-gateway.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import { extractGoalText } from "./planning/plan-text.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -503,8 +504,7 @@ export const executeBlueprint = (
     } else if (stepResultTexts.length > 0 && !overBudget) {
       yield* emitLog({ _tag: "phase_started", phase: "blueprint:solve", timestamp: new Date() });
 
-      const solveResponse = yield* llm
-        .complete({
+      const solveResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
           messages: [
             {
               role: "user",
@@ -516,7 +516,6 @@ export const executeBlueprint = (
               ? `${input.systemPrompt}\n\n${SYNTHESIZER_PERSONA}`
               : SYNTHESIZER_PERSONA,
           ),
-          maxTokens: 4096,
           temperature: 0.3,
           ...(input.taskId ? { traceContext: { taskId } } : {}),
         })
