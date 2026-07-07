@@ -148,6 +148,26 @@ export function applyStrategySwitch(
     // Reset state — fresh iteration count, carry forward toolsUsed.
     let state = initialKernelState(currentOptions);
 
+    // P4 (2026-07-07, A2 #3): carry successful tool observations AND the
+    // toolsUsed ledger across the switch. Without them the new strategy both
+    // lacks the data (only 5 compressed keyObservations lines survive in
+    // priorContext) and gets redirected by the required-tools gate to re-call
+    // tools that already succeeded — observed ~2× run cost from re-executing
+    // completed tool calls after an escalation switch.
+    const carriedObservations = priorState.steps
+      .filter((s) => {
+        if (s.type !== "observation") return false;
+        const obs = s.metadata?.observationResult as { success?: boolean } | undefined;
+        return obs?.success === true;
+      })
+      .slice(-8);
+    if (carriedObservations.length > 0 || priorState.toolsUsed.size > 0) {
+      state = transitionState(state, {
+        steps: [...state.steps, ...carriedObservations],
+        toolsUsed: new Set(priorState.toolsUsed),
+      });
+    }
+
     // Inject synthetic failure observations so the new strategy immediately
     // knows which required tools are permanently unavailable, without having
     // to rediscover this through wasted retry iterations.
