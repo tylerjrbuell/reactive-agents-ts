@@ -189,3 +189,49 @@ describe("makeObservableLLM — stream argument capture", () => {
     expect(ev.response.toolCalls?.[0]).toEqual({ name: "no_arg_tool" });
   }, 15000);
 });
+
+describe("makeObservableLLM — stream stopReason capture (B4)", () => {
+  it("captures stopReason from content_complete (max_tokens truncation)", async () => {
+    const truncatedEvents: readonly StreamEvent[] = [
+      { type: "text_delta", text: "" },
+      // Ollama thinking-model num_predict exhaustion: empty visible content,
+      // done_reason=length → provider maps to stopReason "max_tokens" on the
+      // content_complete event (local.ts stream path).
+      { type: "content_complete", content: "", stopReason: "max_tokens" },
+      { type: "usage", usage: { inputTokens: 10, outputTokens: 2000, totalTokens: 2010, estimatedCost: 0 } },
+    ];
+    const truncatedInnerLLM = Layer.succeed(LLMService, {
+      complete: () => Effect.die("unused: complete"),
+      stream: () => Effect.succeed(Stream.fromIterable(truncatedEvents)),
+      completeStructured: () => Effect.die("unused: completeStructured"),
+      embed: () => Effect.die("unused: embed"),
+      countTokens: () => Effect.succeed(0),
+      getModelConfig: () => Effect.die("unused: getModelConfig"),
+      getStructuredOutputCapabilities: () => Effect.die("unused: getStructuredOutputCapabilities"),
+      capabilities: () => Effect.die("unused: capabilities"),
+    });
+
+    const captured = await Effect.runPromise(
+      Effect.gen(function* () {
+        const sink = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.on("LLMExchangeEmitted", (ev) => Ref.update(sink, (xs) => [...xs, ev]));
+        const llm = yield* LLMService;
+        const stream = yield* llm.stream({
+          messages: [{ role: "user", content: "think hard" }],
+          maxTokens: 2000,
+        } satisfies CompletionRequest);
+        yield* Stream.runDrain(stream);
+        return yield* Ref.get(sink);
+      }).pipe(
+        Effect.provide(
+          Layer.merge(makeObservableLLM().pipe(Layer.provide(truncatedInnerLLM)), EventBusLive),
+        ),
+      ),
+    );
+
+    expect(captured.length).toBe(1);
+    const ev = captured[0]! as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
+    expect(ev.response.stopReason).toBe("max_tokens");
+  }, 15000);
+});

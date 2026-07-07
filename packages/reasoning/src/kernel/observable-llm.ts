@@ -199,11 +199,21 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                   switch (event.type) {
                     case "text_delta":
                       return { ...s, content: s.content + event.text };
-                    case "content_complete":
+                    case "content_complete": {
                       // Prefer the provider's authoritative accumulated text
                       // when it arrives — text_delta sums may diverge for
-                      // providers that emit normalized completes.
-                      return { ...s, content: event.content };
+                      // providers that emit normalized completes. Also capture
+                      // the stop reason it carries (B4): without this, traces
+                      // recorded "end_turn" for max_tokens truncations and
+                      // masked thinking-token starvation during diagnosis.
+                      return {
+                        ...s,
+                        content: event.content,
+                        ...(event.stopReason !== undefined && s.stopReason === undefined
+                          ? { stopReason: event.stopReason }
+                          : {}),
+                      };
+                    }
                     case "tool_use_start":
                       return {
                         ...s,

@@ -973,6 +973,13 @@ export type StreamEvent =
       readonly type: "content_complete";
       /** Full accumulated response content */
       readonly content: string;
+      /**
+       * Stop reason for the completed response when the provider reports one
+       * at stream end (e.g. Ollama done_reason "length" → "max_tokens").
+       * Consumers use this to distinguish truncation from natural end_turn —
+       * critical for thinking models that exhaust the budget inside <think>.
+       */
+      readonly stopReason?: StopReason;
     }
   | {
       /** Token usage reported */
