@@ -1,5 +1,7 @@
 # Reactive Agents Build Memory
 
+
+- 2026-07-07 Harness bottleneck fix waves (LOCAL MAIN): B1-B5 + FM#3/3b (from_step splice + :summary distill + web-search query clamp) + P1 (widenNumPredictForThinking, Ollama choke point, all 12 flat-budget sites) + P2 (traceContext at 9 sites) + judge partial-credit protocol + plan-execute requirement-coverage prompts. Verified: rw-1 0->67% (bare parity), rw-2 420s-death->63s pass. Full-session re-run + rax eval gate pending; publication blocked until then. Detail: wiki/Research/Harness-Reports/2026-07-07-capability-gap-synthesis.md
 > **Status:** Reset 2026-04-28 on `refactor/overhaul`. Prior version (564 lines of layered sprint logs) preserved at commit `949bf81f^` — recover via `git show <sha>:.agents/MEMORY.md` if a specific historical claim needs lookup.
 
 ## ✅ v0.13.5 RELEASED (2026-07-05) — 36 pkgs on npm, publish.yml green

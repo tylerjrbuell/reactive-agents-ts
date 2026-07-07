@@ -15,7 +15,25 @@ The bench's winning "manual-react" variant is **RA's own minimal loop** (`.withT
 | B3 | Fabrication under forced grounding | Partial (evidence-rule prompt) — root cause was largely FM#3 |
 | B4 | Trace stopReason lied on truncation | **FIXED** |
 | B5 | Bench zombie fibers / timeout contamination | **FIXED** (AbortSignal hard-kill) + `--variant` + weakness-queue + judge/`--output` discipline |
-| FM#3 | `from_step` refs spliced preview blobs into chained tool args → deterministic Tavily 400s (real driver of rw-1 "noisy search") | **FIXED** (distilled bare refs, analysis pass-through, `:full` opt-in) — live verify in flight |
+| FM#3 | `from_step` refs spliced preview blobs into chained tool args → deterministic Tavily 400s (real driver of rw-1 "noisy search") | **FIXED + live-verified** (see wave 2) |
+
+## Fix wave 2 (same day, driven by single-cell verifies)
+
+The first rw-1 verify (trace `01KWYBZQ1VZWQEPXCHK94DS8QM`) showed the FM#3 fix incomplete: the model templated `{{from_step:s1:summary}}` — and the `:summary` projection still spliced a RAW 500-char slice (banner intact, over Tavily's 400 cap). Second wave, all committed to local main:
+
+| Fix | What | Evidence |
+|---|---|---|
+| FM#3b | `:summary` now distills before its 500 slice; web-search clamps >400-char queries at a word boundary instead of failing the provider chain; plan prompt forbids templating results into queries | rw-1 rerun: **9/9 web-searches succeeded**, zero Tavily 400s, all-real entities |
+| P1 | Thinking-aware `num_predict` widening at the Ollama choke point (`widenNumPredictForThinking`, +6000 when think on OR default-thinking model) — fixes all 12 flat-budget call sites in one place, incl. the structured-output format path | rw-2: 420s timeout-death → 207s (B1/B2) → **63s pass** — escalation double-pay gone |
+| Judge | Criterion-decomposition + partial-credit protocol (live judge had returned accuracy 0 with evidence "All databases mentioned exist") | probe: 2-of-3-satisfied → 0.667 with per-requirement layers |
+| Reqs | plan-execute reflect + synthesis now decompose the goal into explicit requirements (rw-1 dropped "identify conflicts" while declaring SATISFIED) | committed; verifies on next cell |
+| P2 | traceContext threaded at 9 sites (enforceQualityGate + extractObservationFacts + plan-execute/blueprint/reflexion synthesis) | closes the 36.5s/run llm-direct blind spot |
+
+**Verified cell movement (single-cell, runs=1, judge post-protocol-change — trace-level facts are judge-independent):**
+- rw-1 ra-full: 0% (fabricated EdgeVec/LiveBlocks, 3/3 Tavily 400s) → **67%** (parity with bare-llm's 67%; real grounded chain, ObjectBox/Chroma/Qdrant all verified real by judge)
+- rw-2 ra-full: error/420s/empty → **pass/63s**; accuracy 0.2 residual is an analysis-quality gap (model blames the red-herring discount instead of the ELEC-4K-TV-001 stock-out) — next-class target, not a harness death
+
+Caveat: the rw-1 0→67 delta bundles harness fixes + judge partial credit; the judge change applies to ALL variants equally in future sessions, so cross-variant comparisons stay fair, but pre/post absolute scores are not directly comparable. The full-session re-run + `rax eval gate` remains the authoritative verdict.
 
 ## Open gaps, ranked (evidence-weighted)
 
