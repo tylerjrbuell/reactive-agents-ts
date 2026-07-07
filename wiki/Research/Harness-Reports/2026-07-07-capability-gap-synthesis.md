@@ -100,3 +100,11 @@ Legit findings from the same run:
 Lesson for the ledger: **grounding contract ≠ visibility floor.** requiredTools narrows what the terminal gate demands; it must never be the only thing keeping a tool visible. (Ideal-architecture pillar 6 — composition should be explicit, not incidental.)
 
 Gate verdict deferred to re-run #2 (post visibility fix + P3/P4 + todo).
+
+## Full-session re-run #2 (post visibility fix) — AUTHORITATIVE GATE
+
+90 cells clean. **ra-full is now best-of-six at 61%** (manual-react 60, mastra 48, langchain 44, bare 41, vercel 40) — the qwen3:14b aggregate that was −22pp behind manual-react pre-session is now +1pp ahead and top overall. Per-task ra-full (runs=3): rw-1 55, rw-2 20, rw-7 33, rw-8 100, rw-9 100. rw-8/rw-9 at 100% across 3 runs confirm the visibility fix holds at scale.
+
+`rax eval gate` (ledgered): **OPT-IN** — +20.8pp lift (41.0→61.8), 640% token overhead, 1 tier. Lift is large and real; token cost + single-tier keep it below the default-on bar. This is precisely the case the Phase 6 policy compiler resolves: the full kernel earns its keep on hard-execution tasks but is too expensive to apply unconditionally — adaptive composition is the path to default-on.
+
+Publication posture: the headline is now defensible — RA best-of-six on qwen3:14b execution + resilience, research parity, with an honest OPT-IN gate verdict and the red-herring analysis gap (rw-2) named as open. The 0.5 hotfixes (guidance render, :full, governance, memory, stream errors) landed AFTER this run — re-run #3 post-hotfixes will show whether guidance-channel repair moves rw-1/rw-2/rw-7.
