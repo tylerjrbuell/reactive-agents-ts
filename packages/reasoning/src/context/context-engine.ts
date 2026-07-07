@@ -105,31 +105,8 @@ export function withEnvContext(
   return sp ? `${env}\n\n${systemPrompt}` : env;
 }
 
-export function buildStaticContext(input: StaticContextInput): string {
-  const { task, profile, availableToolSchemas, requiredTools } = input;
-  const sections: string[] = [];
-
-  // Environment context (date, time, timezone, platform, custom).
-  // Always injected — temporal context is critical for date-sensitive tasks.
-  // Without it agents hallucinate stale dates (e.g. search "December 2024" in 2026).
-  sections.push(buildEnvironmentContext(input.environmentContext));
-
-  // Tool reference
-  sections.push(
-    buildToolReference(task, availableToolSchemas, requiredTools, profile.toolSchemaDetail, profile.tier),
-  );
-
-  // Task description
-  sections.push(`Task: ${task}`);
-
-  // RULES block — still lazy-gated (verbose, adds noise for small models).
-  const lazyMode = process.env.RA_LAZY_TOOLS !== "0";
-  if (!lazyMode) {
-    sections.push(buildRules(availableToolSchemas, requiredTools, profile.tier));
-  }
-
-  return sections.join("\n\n");
-}
+// buildStaticContext wrapper deleted (Phase 1b, 2026-07-07) — only caller was
+// the dead APC stack; the primitives below are the live API.
 
 // ── Private Helpers ──────────────────────────────────────────────────────────
 

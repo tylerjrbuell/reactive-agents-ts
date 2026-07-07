@@ -10,10 +10,8 @@
  */
 import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
 import type { ContextProfile } from "../../../context/context-profile.js";
-import { applyMessageWindowWithCompact } from "../../../context/message-window.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { applyAgeAwareCuration, curationAgeAware } from "../attend/tool-formatting.js";
-import { applyOverhaulContextProjection, overhaulProjectionEnabled } from "../../../overhaul/context-projection.js";
 import type { KernelState, KernelMessage, KernelInput } from "../../../kernel/state/kernel-state.js";
 import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
 import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
@@ -184,148 +182,7 @@ export function buildToolSchemas(
   }
   return effectiveSchemas;
 }
-
-// ── buildConversationMessages ─────────────────────────────────────────────────
-
-/**
- * Sidecar carrying the data needed to construct a typed `CompressionApplied`
- * EventBus event at the Effect-context-capable caller (think.ts via
- * defaultContextCurator → ContextManager). Returned by
- * {@link buildConversationMessages} when a fresh CompressionRecommendation
- * was consumed.
- *
- * `taskId` is intentionally NOT carried here — the caller has access to
- * `state.taskId` and supplies it directly when publishing.
- *
- * Issue #119 closure (WS-4 Phase 7) — replaces the prior console.debug
- * fallback path with a typed publish lifted to the curator caller.
- */
-export interface CompressionAppliedSidecar {
-  readonly iteration: number;
-  readonly recommendedAtIteration: number;
-  readonly targetTokens: number;
-  readonly actualMessageCount: number;
-  readonly reason: string;
-}
-
-/**
- * Return value of {@link buildConversationMessages}.
- *
- * `compressionApplied` is present iff a fresh `CompressionRecommendation`
- * was consumed on this call. The caller (defaultContextCurator → think.ts)
- * uses the sidecar to publish a typed `CompressionApplied` event via
- * EventBus.
- */
-export interface BuildConversationMessagesResult {
-  readonly messages: LLMMessage[];
-  readonly compressionApplied?: CompressionAppliedSidecar;
-}
-
-/**
- * Build the conversation message list for this LLM turn.
- *
- * Applies the sliding message window + task framing on the first iteration.
- * Guidance signals are rendered in the system prompt Guidance: section by
- * think.ts via pendingGuidance — not injected as user messages here.
- *
- * Tool results are never auto-forwarded here — they live in the message thread
- * as-is. Distilled facts (observation extractedFact) are surfaced in the
- * system prompt's Prior work / Observations section, so sliding-window
- * compaction is safe without recall hints.
- *
- * When a fresh CompressionRecommendation is consumed, the return value
- * carries a `compressionApplied` sidecar so the Effect-context-capable
- * caller can publish the typed `CompressionApplied` EventBus event
- * (see `BuildConversationMessagesResult`).
- */
-export function buildConversationMessages(
-  state: KernelState,
-  input: KernelInput,
-  profile: ContextProfile,
-  adapter: ProviderAdapter,
-): BuildConversationMessagesResult {
-  // Issue #119 — Curator as sole prompt author. The reactive-observer's
-  // compress-messages patch demoted to advisory: it records a
-  // CompressionRecommendation on state.meta.pendingCompressionRecommendation.
-  // Here we consume that recommendation by clamping the effective budget to
-  // min(profile.maxTokens, recommendation.targetTokens) for THIS iteration's
-  // render. The recommendation must be fresh (this iteration or last
-  // iteration); stale recommendations are ignored.
-  const profileBudget = profile.maxTokens ?? Number.MAX_SAFE_INTEGER;
-  // state.meta is structurally typed but defensive lookup keeps the curator
-  // robust to call sites that synthesize partial states (tests, snapshot
-  // restore).
-  const rec = state.meta?.pendingCompressionRecommendation;
-  const recFresh = rec !== undefined && state.iteration - rec.recommendedAtIteration <= 1;
-  const effectiveBudget = recFresh ? Math.min(profileBudget, rec.targetTokens) : profileBudget;
-
-  // Spike 1 (curation ROOT) — age-aware tool-result curation. OPT-IN via
-  // RA_CURATION_AGEAWARE=1; default OFF = byte-identical (this block skipped).
-  // When ON, the single most-recent tool_result (K=1) is rehydrated FULL from
-  // the scratchpad up to a window-scaled ceiling (the synthesis target), and
-  // AGED tool_results are recompressed to preview + their existing reversible
-  // storedKey pointer. Runs on state.messages (storedKey still intact, before
-  // toProviderMessage strips it) and BEFORE windowing so applyMessageWindow-
-  // WithCompact keeps its tier-adaptive recent-turns-full guarantee on top.
-  const curatedMessages = curationAgeAware()
-    ? applyAgeAwareCuration(state.messages, state.scratchpad, profile, 1)
-    : state.messages;
-
-  // Overhaul (principle #1) — OPT-IN via RA_OVERHAUL=1; default OFF =
-  // byte-identical (curatedMessages passed straight through). When ON, stored
-  // tool_results whose full body OVERFLOWS the recency budget are rewritten to a
-  // clean system summary+ref (NO copyable marker/preview/recall) so weak models
-  // reference via write_result_to_file instead of transcribing. overflowBudget
-  // matches curation's recency budget so "overflows curation → projected".
-  const overflowBudget = Math.max(4000, Math.floor((profile.maxTokens ?? 32_768) * 0.35 * 4));
-  const projectedMessages = overhaulProjectionEnabled()
-    ? applyOverhaulContextProjection(curatedMessages, state.scratchpad, overflowBudget)
-    : curatedMessages;
-
-  const compactedMessages = applyMessageWindowWithCompact(
-    projectedMessages,
-    profile.tier ?? "mid",
-    effectiveBudget,
-  );
-  let workingMessages = compactedMessages;
-
-  // taskFraming hook — on first iteration, let adapter annotate the task message
-  // to help local models understand the full sequence of steps required.
-  if (
-    state.iteration === 0 &&
-    workingMessages.length === 1 &&
-    workingMessages[0]?.role === "user"
-  ) {
-    const framedTask = adapter.taskFraming?.({
-      task: workingMessages[0].content as string,
-      requiredTools: input.requiredTools ?? [],
-      tier: profile.tier ?? "mid",
-    });
-    if (framedTask) {
-      workingMessages = [{ role: "user" as const, content: framedTask }];
-    }
-  }
-
-  const messages = (workingMessages as readonly KernelMessage[]).map(toProviderMessage);
-
-  // Issue #119 closure (WS-4 Phase 7) — when a fresh recommendation was
-  // consumed, return a sidecar so the Effect-context-capable caller (think.ts
-  // via defaultContextCurator → ContextManager) can publish the typed
-  // `CompressionApplied` EventBus variant. The prior console.debug fallback
-  // is gone: typed events are the sole audit surface. `actualMessageCount`
-  // is sampled from the rendered thread length (post-window, post-framing)
-  // so observers see the same count the LLM does.
-  if (recFresh && rec !== undefined) {
-    return {
-      messages,
-      compressionApplied: {
-        iteration: state.iteration,
-        recommendedAtIteration: rec.recommendedAtIteration,
-        targetTokens: rec.targetTokens,
-        actualMessageCount: messages.length,
-        reason: rec.reason,
-      },
-    };
-  }
-  return { messages };
-}
+// buildConversationMessages + CompressionAppliedSidecar deleted (Phase 1b,
+// 2026-07-07): the entire ContextManager/APC chain had no live caller —
+// project() (assembly/) is the sole prompt pipeline. See
+// wiki/Research/Audit-Reports-2026-07-07/02-prompts-context-assembly.md.

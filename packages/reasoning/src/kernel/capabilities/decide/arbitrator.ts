@@ -423,13 +423,16 @@ export const controllerSignalVetoEvaluator: TerminationSignalEvaluator = {
 export const defaultEvaluators: readonly TerminationSignalEvaluator[] = [
   pendingToolCallEvaluator,
   controllerSignalVetoEvaluator,
-  finalAnswerToolEvaluator,
   entropyConvergenceEvaluator,
   reactiveControllerEarlyStopEvaluator,
   contentStabilityEvaluator,
   finalAnswerRegexEvaluator,
   llmEndTurnEvaluator,
-  completionGapEvaluator,
+  // finalAnswerToolEvaluator + completionGapEvaluator removed from the chain
+  // (Phase 1b, 2026-07-07): both unconditionally return null — a chain slot
+  // paid on every evaluateTermination call for no opinion. The exported
+  // symbols remain (deprecated) until the Phase 3 oracle merge deletes the
+  // legacy chain wholesale.
 ];
 
 // ─── Arbitrator — Sole Termination Authority (Sprint 3.3) ────────────────────

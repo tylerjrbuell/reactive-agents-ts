@@ -111,7 +111,6 @@ export {
   mergeProfile,
   resolveProfile,
   resolveProfileWithWindow,
-  buildStaticContext,
   buildEnvironmentContext,
   resolveEnvTimePrecision,
   buildRules,
@@ -122,27 +121,15 @@ export type {
   EnvTimePrecision,
 } from "./context/index.js";
 
-// ─── Message Window Compaction ───
-export { applyMessageWindowWithCompact } from "./context/message-window.js";
+// Message-window compaction + APC composer DELETED (Phase 1b, 2026-07-07) —
+// dead since the RA_ASSEMBLY flip; compactHistoryStage in assembly/ is the
+// live history compactor.
 
 // ContextCurator + curate() DELETED in Sprint-1 A3 (2026-06-02). Canonical
 // project() from assembly/ is the sole assembler. See spec
 // wiki/Architecture/Design-Specs/2026-06-02-canonical-contracts-and-invariants.md.
 
-// ─── Adaptive Prompt Composer (APC-2) ───
-export {
-  PromptSectionRegistry,
-  composePrompt,
-  auditPromptSections,
-  defaultPromptSectionRegistry,
-} from "./context/prompt-composer.js";
-export type {
-  PromptSection,
-  PromptSectionContext,
-  PromptSectionAuditEntry,
-  ComposeOptions,
-  ComposeResult,
-} from "./context/prompt-composer.js";
+
 
 // ─── Intelligent Context Synthesis (ICS) ───
 export type {
@@ -238,7 +225,7 @@ export type {
 } from "./kernel/capabilities/verify/verifier.js";
 
 // ─── Structured Output ───
-export { inferRequiredTools, classifyToolRelevance } from "./structured-output/infer-required-tools.js";
+export { classifyToolRelevance } from "./structured-output/infer-required-tools.js";
 export type { ToolSummary, InferRequiredToolsConfig, ToolClassificationResult } from "./structured-output/infer-required-tools.js";
 export { toSchemaContract } from "./structured-output/schema-contract.js";
 export type { SchemaContract, SchemaIssue, SchemaValidationResult } from "./structured-output/schema-contract.js";

@@ -18,7 +18,7 @@ import { StreamingTextCallback, ModelOverrideRef } from "@reactive-agents/core";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import { inferRequiredTools, classifyToolRelevance, filterToolsByRelevance, ReasoningService } from "@reactive-agents/reasoning";
+import { classifyToolRelevance, filterToolsByRelevance, ReasoningService } from "@reactive-agents/reasoning";
 import {
   ToolService,
   BUILTIN_TOOL_NAMES,
