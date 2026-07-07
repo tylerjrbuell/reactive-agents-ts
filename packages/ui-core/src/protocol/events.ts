@@ -25,6 +25,25 @@ export interface ResultMetadataWire {
   readonly [key: string]: unknown;
 }
 
+/**
+ * Wire mirror of the runtime's `TrustReceipt` (`@reactive-agents/core`) —
+ * re-declared structurally because ui-core stays dependency-free. Graded
+ * evidence about HOW the answer was produced; NOT a truth certificate
+ * (`verdict` grades the evidence trail, not factual correctness). Loose like
+ * `ResultMetadataWire` so additive server-side receipt fields (e.g. the
+ * optional Task 9 `signature`) pass through without a protocol bump.
+ */
+export interface TrustReceiptWire {
+  readonly verdict: string;
+  readonly method: string;
+  readonly confidence: number;
+  readonly toolsUsed: readonly string[];
+  readonly toolCallStats: { readonly ok: number; readonly failed: number };
+  readonly modelId: string;
+  readonly computedAt: number;
+  readonly [key: string]: unknown;
+}
+
 // ── Base tags (server-originated, exist today) ────────────────────────────
 export interface TextDelta {
   readonly _tag: "TextDelta";
@@ -51,6 +70,12 @@ export interface StreamCompleted {
   };
   readonly pendingInteraction?: PendingInteractionWire;
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
+  /**
+   * Full trust receipt (Arc 1 Task 8 closure) — present on terminal
+   * completions when the server runtime attaches it; absent on pause
+   * completions. See {@link TrustReceiptWire}.
+   */
+  readonly receipt?: TrustReceiptWire;
 }
 export interface StreamError {
   readonly _tag: "StreamError";
@@ -142,7 +167,10 @@ export interface LimitExceeded {
   readonly retryAfterMs?: number;
 }
 
-// ── Reserved tags (declared for forward-compat; NOT emitted in v1) ───────
+// ── Reserved / forward-compat tags ────────────────────────────────────────
+// ObjectDelta/UiTreeDelta/StepEvent: declared for forward-compat, NOT emitted
+// in v1. TrustEvent graduated out of "reserved" in Arc 1 Task 8 — it IS
+// emitted (alongside StreamCompleted) starting this version.
 export interface ObjectDelta {
   readonly _tag: "ObjectDelta";
   readonly partial: unknown;
@@ -151,11 +179,23 @@ export interface UiTreeDelta {
   readonly _tag: "UiTreeDelta";
   readonly partial: unknown;
 }
+/**
+ * Trust receipt summary (Arc 1 Task 8) — emitted alongside `StreamCompleted`
+ * on every run. `verdict`/`confidence` mirror `TrustReceipt` (see
+ * `@reactive-agents/core`); NOT a truth certificate — grades the evidence
+ * trail, not factual correctness.
+ *
+ * `claimId`/`sources` are reserved for a future per-claim grounding-check
+ * variant of this tag and are NOT populated by the run-level receipt event
+ * shipped in v1 — kept optional so a future producer can add them without
+ * another breaking shape change.
+ */
 export interface TrustEvent {
   readonly _tag: "TrustEvent";
-  readonly claimId: string;
   readonly verdict: string;
-  readonly sources: readonly string[];
+  readonly confidence: number;
+  readonly claimId?: string;
+  readonly sources?: readonly string[];
 }
 export interface StepEvent {
   readonly _tag: "StepEvent";

@@ -19,7 +19,8 @@ import {
     Context,
     Fiber,
 } from 'effect'
-import { deriveGoalAchieved } from './builder/helpers.js'
+import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from './builder/helpers.js'
+import { resolveReceiptSigningKey, signReceipt } from './receipt-signing.js'
 import {
     CapabilityRegistry,
     type CapabilityAuditReport,
@@ -34,10 +35,11 @@ import { unwrapError, toRunBoundaryError, KillSwitchTriggeredError } from './err
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult } from '@reactive-agents/core'
 import type { TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId, ResumeStateRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, ResumeStateRef, ModelOverrideRef, ApprovalDecisionRef, InteractionResponseRef, RunControllerRef, computeTrustReceipt, type TrustReceipt } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     loadResumePayload,
+    loadForkPayload,
     listDurableRuns,
     markRunStatus,
     decideApprovalRecord,
@@ -928,6 +930,81 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
+     * Fork a NEW run from any checkpoint of a prior run (Arc 1 Task 6) —
+     * a counterfactual restart, NEVER "time travel". Every LLM call made
+     * after the fork point is a live, fresh call against the current
+     * provider; nothing is replayed.
+     *
+     * Loads the checkpoint at-or-below `opts.at` (defaults to the source
+     * run's latest checkpoint, like `resumeRun`) from `runId`'s history via
+     * `loadForkPayload` — deliberately WITHOUT `resumeRun`'s config-hash
+     * guard, since forking under a different config (or a different
+     * `opts.model`) is the whole point, not an error. Creates a BRAND NEW
+     * run row (`${runId}-fork-<8 hex chars>`) stamped with THIS agent's
+     * current config hash and `{ forkedFrom, forkedAtIteration }` provenance,
+     * seeds the restored `KernelState`, and runs to completion — mirroring
+     * `runDurable`'s create-row + checkpoint + resume-seed pipeline used by
+     * `run()`/`approveRun`/`denyRun`.
+     *
+     * v1 scope: same agent instance/tools/system prompt as the source run.
+     * `opts.task` overrides the re-run input (defaults to the source run's
+     * original task — reusing it verbatim only makes sense against a fresh
+     * test scenario/replay; real providers regenerate live). `opts.model`
+     * overrides the model for this run only (see `ModelOverrideRef`); it has
+     * no effect when `.withModelRouting()` is also enabled, since that phase
+     * recomputes the selected model independently (known v1 gap).
+     *
+     * Caveat inherited from Task 4: a run that is currently paused
+     * (`awaiting-approval` / `awaiting-interaction`) does not flush its
+     * in-flight checkpoint write, so forking it may see a stale or absent
+     * checkpoint row.
+     *
+     * @param runId - The SOURCE run id to fork from.
+     * @throws Error if the agent was not built with `.withDurableRuns()`.
+     * @throws DurableRunNotFoundError if the source run / a qualifying checkpoint is unknown.
+     */
+    async fork(
+        runId: string,
+        opts?: { at?: number; model?: string; task?: string },
+    ): Promise<AgentResult> {
+        if (!this._durableResume) {
+            throw new Error(
+                'fork() requires .withDurableRuns() — this agent has no durable run store.',
+            )
+        }
+        const { dir } = this._durableResume
+        const dbPath = join(dir, 'runs.db')
+
+        // 1. Load the source checkpoint — any iteration, no config-hash guard.
+        const payload = await Effect.runPromise(
+            loadForkPayload({ runId, dbPath, at: opts?.at }),
+        )
+
+        // 2. Fresh identity for the forked run — distinct from the source by
+        //    construction, and 8 hex chars (32 bits) of suffix entropy make
+        //    two forks of the SAME source colliding with each other
+        //    astronomically unlikely (4 hex chars/16 bits was too narrow:
+        //    `INSERT OR REPLACE` on a collision would clobber the earlier
+        //    fork's run row while its `run_checkpoints` rows stayed behind
+        //    under the reused runId — a stale-state rehydration hazard).
+        const forkedRunId = `${runId}-fork-${crypto.randomUUID().slice(0, 8)}`
+        const task = opts?.task ?? payload.run.task
+
+        // 3. Create the new row (this agent's CURRENT configHash) + seed the
+        //    restored state + run to completion, same rail as run()/approveRun.
+        return this.runDurable({
+            input: task,
+            taskId: forkedRunId,
+            runId: forkedRunId,
+            task,
+            resume: { stateJson: payload.stateJson },
+            ...(opts?.model !== undefined ? { modelOverride: opts.model } : {}),
+            forkedFrom: runId,
+            forkedAtIteration: payload.iteration,
+        })
+    }
+
+    /**
      * List persisted durable runs (newest-updated first), optionally filtered by
      * lifecycle status. Requires `.withDurableRuns()`.
      */
@@ -1226,6 +1303,11 @@ export class ReactiveAgent<TOut = unknown> {
             readonly decision?: { gateId: string; status: 'approved' | 'denied'; reason?: string }
             readonly interaction?: { interactionId: string; valueJson: string }
         }
+        /** Per-run model override (Arc 1 Task 6) — seeded via `ModelOverrideRef`. */
+        readonly modelOverride?: string
+        /** Fork lineage (Arc 1 Task 6) — stamped onto the created run row. */
+        readonly forkedFrom?: string
+        readonly forkedAtIteration?: number
     }): Promise<AgentResult> {
         const { dir, configHash } = this._durableResume!
         const dbPath = join(dir, 'runs.db')
@@ -1241,6 +1323,8 @@ export class ReactiveAgent<TOut = unknown> {
                 agentId: this.agentId,
                 task: params.task,
                 configHash,
+                ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
+                ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
             }),
         )
 
@@ -1257,7 +1341,11 @@ export class ReactiveAgent<TOut = unknown> {
         let pipeline = this.buildRunTaskEffect(params.input, {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
+            ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
         }).pipe(Effect.locally(RunControllerRef, controller))
+        if (params.modelOverride !== undefined) {
+            pipeline = pipeline.pipe(Effect.locally(ModelOverrideRef, params.modelOverride))
+        }
         if (params.resume) {
             const resume = params.resume
             pipeline = pipeline.pipe(Effect.locally(ResumeStateRef, resume.stateJson))
@@ -1302,11 +1390,11 @@ export class ReactiveAgent<TOut = unknown> {
                     }),
                 )
             } else {
-                finish(true)
+                await finish(true)
             }
             return result
         } catch (e) {
-            finish(false)
+            await finish(false)
             throw unwrapError(e)
         }
     }
@@ -1316,7 +1404,12 @@ export class ReactiveAgent<TOut = unknown> {
      */
     private buildRunTaskEffect(
         input: string,
-        options?: { readonly taskId?: string; readonly durableRunId?: string }
+        options?: {
+            readonly taskId?: string
+            readonly durableRunId?: string
+            /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
+            readonly forkedFrom?: string
+        }
     ): Effect.Effect<AgentResult, Error> {
         // Pre-set the task description so sub-agents spawned on the first iteration
         // have access to the full user prompt (including phone numbers, URLs, etc.)
@@ -1389,17 +1482,53 @@ export class ReactiveAgent<TOut = unknown> {
                 // attaches the fiber here. debriefRich() awaits it lazily; the
                 // fiber is tracked so dispose() joins it (no dropped persist).
                 const debriefFiber = (r as { _debriefFiber?: Fiber.RuntimeFiber<{ debrief?: AgentDebrief; tokensUsed: number }, never> })._debriefFiber
+                const goalAchieved = deriveGoalAchieved(r.terminatedBy)
+                // Trust receipt (Arc 1 Task 8) — graded evidence about HOW the
+                // answer was produced, computed from in-memory run data (works
+                // without tracing). See @reactive-agents/core's TrustReceipt
+                // JSDoc: NOT a truth certificate.
+                // Receipts belong to TERMINAL results only: a run paused for
+                // approval/interaction is unfinished — grading it now would
+                // stamp a misleading verdict, and the resumed run produces its
+                // own receipt on completion. Mirrors the TrustEvent pause
+                // suppression in engine/execute-stream.ts.
+                const isPausedRun =
+                    r.awaitingApprovalFor !== undefined ||
+                    r.awaitingInteractionFor !== undefined
+                const receipt: TrustReceipt | undefined = isPausedRun
+                    ? undefined
+                    : computeTrustReceipt({
+                          toolCalls: deriveReceiptToolCalls(
+                              rawMetadata as {
+                                  reasoningSteps?: ReadonlyArray<{ type: string; metadata?: Record<string, unknown> }>
+                                  receiptToolCalls?: ReadonlyArray<{ name: string; ok: boolean }>
+                              },
+                          ),
+                          ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
+                          goalAchieved,
+                          abstained: r.terminatedBy === 'abstained',
+                          success: r.success,
+                          // Single shared source with the streaming site — see
+                          // deriveReceiptModelId's JSDoc (builder/helpers.ts).
+                          modelId: deriveReceiptModelId(this.config.model, this.config.provider),
+                          ...(this._durableResume?.configHash !== undefined
+                              ? { configHash: this._durableResume.configHash }
+                              : {}),
+                          ...(options?.forkedFrom !== undefined ? { forkedFrom: options.forkedFrom } : {}),
+                          now: Date.now(),
+                      })
                 const agentResult: AgentResult = {
                     output: String(r.output ?? ''),
                     success: r.success,
                     taskId: String(r.taskId),
                     agentId: String(r.agentId),
                     metadata: enrichedMetadata,
+                    ...(receipt !== undefined ? { receipt } : {}),
                     ...(r.format !== undefined ? { format: r.format } : {}),
                     ...(r.terminatedBy !== undefined
                         ? { terminatedBy: r.terminatedBy }
                         : {}),
-                    goalAchieved: deriveGoalAchieved(r.terminatedBy),
+                    goalAchieved,
                     ...(projectAbstention(r) !== undefined
                         ? { abstention: projectAbstention(r) }
                         : {}),
@@ -1634,6 +1763,24 @@ export class ReactiveAgent<TOut = unknown> {
                     }),
                 )
             }),
+            // Trust receipt signing (Arc 1 Task 9) — optional, additive. Signs
+            // the ALREADY-COMPUTED receipt (attached above, whichever branch
+            // produced this result) with the configured Ed25519 key, if any.
+            // Never fails the run: signing errors degrade to an unsigned
+            // receipt rather than surfacing a spurious failure to the caller.
+            // See receipt-signing.ts's honest-claims note — the signature
+            // certifies provenance/integrity of the receipt, never the
+            // correctness of `result.output`.
+            Effect.flatMap((result: AgentResult): Effect.Effect<AgentResult, never> => {
+                const key = resolveReceiptSigningKey(this.config['receiptSigningKey'])
+                const receipt = result.receipt
+                if (!key || !receipt) return Effect.succeed(result)
+                return Effect.promise(() =>
+                    signReceipt(receipt, key)
+                        .then((signed) => ({ ...result, receipt: signed }) satisfies AgentResult)
+                        .catch(() => result)
+                )
+            }),
             Effect.mapError(
                 (e: RuntimeErrors | TaskError | Error) =>
                     e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
@@ -1676,6 +1823,9 @@ export class ReactiveAgent<TOut = unknown> {
      * pause()     — freeze at next iteration boundary; await resume().
      * resume()    — continue from paused state.
      * status()    — current RunStatus.
+     * inspect()   — live kernel-state introspection (iteration/steps/messages/
+     *               pending tool calls/last thought); undefined before the
+     *               first iteration boundary.
      *
      * Note: streamed results do not carry the typed structured `object`; use `streamObject()` for streaming structured output.
      */
@@ -1716,6 +1866,7 @@ export class ReactiveAgent<TOut = unknown> {
             stop: (_opts?: { reason?: string }) => controller.stop(),
             terminate: (_opts?: { reason?: string }) => controller.terminate(),
             status: () => controller.status(),
+            inspect: () => controller.inspect(),
         }) as RunHandle;
     }
 

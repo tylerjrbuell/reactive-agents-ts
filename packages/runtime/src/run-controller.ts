@@ -29,11 +29,25 @@ export interface DurableCheckpointDeps {
  *
  * Installs `controller.onCheckpoint` so the kernel seam (which already no-ops
  * when `onCheckpoint` is absent) hands every Nth iteration's serialized
- * snapshot to the RunStore. Writes go through `Effect.runFork` — fire-and-forget,
- * never blocking the reasoning loop and never failing it (errors are swallowed
- * non-silently via `emitErrorSwallowed`, R11). Returns a `finish(success)`
- * callback the caller invokes at run end to flip the run status to
- * `completed` / `failed`.
+ * snapshot to the RunStore. Writes go through `Effect.runPromise` — the
+ * reasoning loop still never awaits them (still fire-and-forget from the
+ * loop's perspective, still never failing it: errors are swallowed
+ * non-silently via `emitErrorSwallowed`, R11) — but the resulting Promise is
+ * tracked in an in-flight set so {@link flush} can await durability on demand.
+ *
+ * Durable checkpoint hardening (Arc 1 Task 4): a crash immediately after an
+ * iteration used to lose the checkpoint silently because nothing ever waited
+ * on the write. `flush()` closes that gap for any caller that needs a
+ * durability boundary (run end, before a fork reads the latest checkpoint,
+ * etc.) without slowing down the per-iteration hot path.
+ *
+ * Returns:
+ *  - `flush()` — awaits every write started so far (checkpoints + any
+ *    in-flight status write). Never throws (writes already swallow their own
+ *    errors); resolves once everything currently in flight has settled.
+ *  - `finish(success)` — awaits `flush()` first (so the last checkpoint is
+ *    durable before the run flips to a terminal status), then persists the
+ *    `completed` / `failed` status row.
  *
  * Only called when `.withDurableRuns()` was set, so absent that opt-in the
  * controller's `onCheckpoint` stays undefined and the kernel pays zero cost.
@@ -41,15 +55,21 @@ export interface DurableCheckpointDeps {
 export function installDurableCheckpointing(
     controller: RunControllerLike,
     deps: DurableCheckpointDeps,
-): { finish: (success: boolean) => void } {
+): { finish: (success: boolean) => Promise<void>; flush: () => Promise<void> } {
     const { runId, runStoreLayer, checkpointEvery } = deps;
     const every = checkpointEvery >= 1 ? checkpointEvery : 1;
+
+    // In-flight write promises. `runWrite`'s Effect already swallows its own
+    // errors (catchAllDefect below), so every entry settles via fulfillment —
+    // the `.catch` here is defensive only, guarding against a future change
+    // that reintroduces a rejection path from leaving a dangling entry.
+    const inflight = new Set<Promise<void>>();
 
     const runWrite = (
         effect: Effect.Effect<void, never, RunStoreService>,
         site: string,
-    ): void => {
-        Effect.runFork(
+    ): Promise<void> => {
+        const write = Effect.runPromise(
             effect.pipe(
                 Effect.provide(runStoreLayer),
                 Effect.catchAllDefect((defect) =>
@@ -57,11 +77,17 @@ export function installDurableCheckpointing(
                 ),
             ),
         );
+        inflight.add(write);
+        write.catch(() => undefined).finally(() => inflight.delete(write));
+        return write;
     };
 
     controller.onCheckpoint = (serializedState: string, iteration: number): void => {
         if (iteration % every !== 0) return;
-        runWrite(
+        // The reasoning loop calls onCheckpoint synchronously and must never
+        // await it — `void` makes the fire-and-forget intent explicit.
+        // Durability is guaranteed via flush()/finish(), not here.
+        void runWrite(
             Effect.gen(function* () {
                 const store = yield* RunStoreService;
                 yield* store.putCheckpoint(runId, iteration, serializedState);
@@ -70,10 +96,19 @@ export function installDurableCheckpointing(
         );
     };
 
+    const flush = (): Promise<void> =>
+        Promise.allSettled([...inflight]).then(() => undefined);
+
     return {
-        finish: (success: boolean): void => {
+        flush,
+        finish: async (success: boolean): Promise<void> => {
+            // Await the last checkpoint's durability BEFORE flipping status —
+            // otherwise a reader (resume, or agent.fork()) could observe a
+            // `completed`/`failed` run whose latest checkpoint is still in
+            // flight or lost to a crash.
+            await flush();
             const status: RunStoreStatus = success ? "completed" : "failed";
-            runWrite(
+            await runWrite(
                 Effect.gen(function* () {
                     const store = yield* RunStoreService;
                     yield* store.setStatus(runId, status);
@@ -94,6 +129,13 @@ export type RunHandle = AsyncGenerator<AgentStreamEvent> & {
     stop(opts?: { reason?: string }): void;
     terminate(opts?: { reason?: string }): void;
     status(): RunStatus;
+    /**
+     * Live kernel-state introspection (Arc 1 Task 5) — projects the most
+     * recent iteration-boundary checkpoint into a small, stable shape.
+     * `undefined` before the first iteration boundary or on non-kernel paths
+     * (nothing has called `noteCheckpoint` yet); never throws.
+     */
+    inspect(): RunInspection | undefined;
 };
 
 export type RunStatus =
@@ -102,6 +144,27 @@ export type RunStatus =
     | "stopped"
     | "terminated"
     | "completed";
+
+/**
+ * Projection of the latest kernel-state checkpoint, produced by
+ * {@link RunController.inspect}. Deliberately small and stable — NOT a
+ * pass-through of the full (versioned, internal) `KernelState` codec
+ * envelope, so this shape doesn't need to change every time internal kernel
+ * fields do.
+ */
+export interface RunInspection {
+    /** The controller's own run status (running/paused/stopped/...), NOT the kernel's internal thinking/acting/... FSM state. */
+    readonly status: RunStatus;
+    readonly iteration: number;
+    readonly stepsCount: number;
+    readonly messagesCount: number;
+    /** Most recent thought text, truncated to 500 chars. Undefined if no thought has been recorded yet. */
+    readonly lastThought?: string;
+    /** Names of tool calls awaiting execution (native FC handoff between think → act). */
+    readonly pendingToolCalls: readonly string[];
+    /** Epoch ms when the underlying checkpoint was recorded (noteCheckpoint() time, not inspect() time). */
+    readonly capturedAt: number;
+}
 
 /**
  * Per-call control plane for an agent run.
@@ -122,6 +185,23 @@ export class RunController implements RunControllerLike { // RunControllerLike f
     private _pausePromise: Promise<void> | null = null;
     private _stopRequested = false;
     private readonly _abortController: AbortController;
+    /**
+     * Optional durable-checkpoint observer (see {@link RunControllerLike}).
+     * Declared here (not just inherited structurally from the interface) so
+     * `installDurableCheckpointing`'s assignment — and callers reading it back
+     * off a concrete `RunController` instance, e.g. in tests — typecheck.
+     * Undefined until `installDurableCheckpointing` wires it; the kernel's
+     * call site already no-ops when absent, so this stays zero-cost.
+     */
+    onCheckpoint?: (serializedState: string, iteration: number) => void;
+
+    /**
+     * Latest snapshot thunk noted by the kernel (Arc 1 Task 5). Stored, not
+     * invoked — `inspect()` is the only caller of `thunk()`, so a non-durable
+     * run that never calls `inspect()` pays zero serialization cost even
+     * though `noteCheckpoint` fires every iteration.
+     */
+    private _lastSnapshot?: { thunk: () => string; iteration: number; at: number };
 
     constructor(abortController: AbortController) {
         this._abortController = abortController;
@@ -194,5 +274,92 @@ export class RunController implements RunControllerLike { // RunControllerLike f
         this._pauseResolve?.();
         this._pauseResolve = null;
         this._pausePromise = null;
+    }
+
+    /**
+     * Store the latest iteration-boundary snapshot thunk (Arc 1 Task 5).
+     * NO serialization happens here — `snapshot` is invoked lazily, only if
+     * `inspect()` is later called. Called unconditionally by the kernel at
+     * every iteration boundary, independent of `onCheckpoint`/durability.
+     */
+    noteCheckpoint(snapshot: () => string, iteration: number): void {
+        this._lastSnapshot = { thunk: snapshot, iteration, at: Date.now() };
+    }
+
+    /**
+     * Project the most recent checkpoint into a small, stable
+     * {@link RunInspection}. Invokes the stored thunk (this is where the
+     * deferred serialization/parse cost actually happens). Never throws —
+     * a thrown thunk, corrupt JSON, or an envelope shape mismatch all
+     * resolve to `undefined` rather than propagating.
+     */
+    inspect(): RunInspection | undefined {
+        const snapshot = this._lastSnapshot;
+        if (!snapshot) return undefined;
+
+        let raw: string;
+        try {
+            raw = snapshot.thunk();
+        } catch {
+            return undefined;
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(raw);
+        } catch {
+            return undefined;
+        }
+        if (typeof parsed !== "object" || parsed === null) return undefined;
+
+        const state = (parsed as { state?: unknown }).state;
+        if (typeof state !== "object" || state === null) return undefined;
+        const s = state as Record<string, unknown>;
+
+        const steps = Array.isArray(s["steps"]) ? (s["steps"] as unknown[]) : [];
+        const messages = Array.isArray(s["messages"]) ? (s["messages"] as unknown[]) : [];
+        const meta =
+            typeof s["meta"] === "object" && s["meta"] !== null
+                ? (s["meta"] as Record<string, unknown>)
+                : {};
+
+        // meta.lastThought is the canonical field, but the act phase clears
+        // it to undefined once a thought has been acted on — fall back to
+        // the most recent steps[] entry of type "thought".
+        const metaLastThought = typeof meta["lastThought"] === "string" ? (meta["lastThought"] as string) : undefined;
+        let lastThought = metaLastThought;
+        if (lastThought === undefined) {
+            for (let i = steps.length - 1; i >= 0; i--) {
+                const step = steps[i];
+                if (
+                    step &&
+                    typeof step === "object" &&
+                    (step as Record<string, unknown>)["type"] === "thought"
+                ) {
+                    const content = (step as Record<string, unknown>)["content"];
+                    if (typeof content === "string") {
+                        lastThought = content;
+                        break;
+                    }
+                }
+            }
+        }
+
+        const pendingRaw = Array.isArray(meta["pendingNativeToolCalls"])
+            ? (meta["pendingNativeToolCalls"] as unknown[])
+            : [];
+        const pendingToolCalls = pendingRaw
+            .map((c) => (c && typeof c === "object" ? (c as Record<string, unknown>)["name"] : undefined))
+            .filter((n): n is string => typeof n === "string");
+
+        return {
+            status: this._status,
+            iteration: snapshot.iteration,
+            stepsCount: steps.length,
+            messagesCount: messages.length,
+            lastThought: lastThought !== undefined ? lastThought.slice(0, 500) : undefined,
+            pendingToolCalls,
+            capturedAt: snapshot.at,
+        };
     }
 }

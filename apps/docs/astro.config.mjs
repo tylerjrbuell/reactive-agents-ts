@@ -203,6 +203,11 @@ export default defineConfig({
                             link: 'features/streaming/',
                         },
                         {
+                            label: 'The Process Model',
+                            link: 'features/process-model/',
+                            badge: { text: 'New', variant: 'success' },
+                        },
+                        {
                             label: 'Chat & Sessions',
                             link: 'cookbook/chat-and-sessions/',
                         },

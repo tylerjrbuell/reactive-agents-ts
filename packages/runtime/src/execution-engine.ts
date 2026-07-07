@@ -12,7 +12,7 @@ import { LifecycleHookRegistry } from "./hooks.js";
 import type { LifecycleHook } from "./types.js";
 
 import type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
-import { StreamingTextCallback } from "@reactive-agents/core";
+import { StreamingTextCallback, ModelOverrideRef } from "@reactive-agents/core";
 
 // Import from other packages (type-only to avoid circular deps at runtime)
 import type { Task, TaskResult } from "@reactive-agents/core";
@@ -448,6 +448,12 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
             const executeCore = (): Effect.Effect<TaskResult, RuntimeErrors, any> =>
               Effect.gen(function* () {
 
+                // Per-run model override (Arc 1 Task 6): `ReactiveAgent.fork()`
+                // seeds this via `Effect.locally` when `opts.model` is supplied.
+                // Null on every normal run — falls back to `config.defaultModel`,
+                // so non-fork executions are unaffected.
+                const modelOverride = yield* FiberRef.get(ModelOverrideRef);
+
                 // Initialize context
                 let ctx: ExecutionContext = {
                   taskId: task.id,
@@ -462,7 +468,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   cost: 0,
                   tokensUsed: 0,
                   startedAt: now,
-                  selectedModel: config.defaultModel,
+                  selectedModel: modelOverride ?? config.defaultModel,
                   provider: config.provider,
                   metadata: {},
                 };
@@ -1154,6 +1160,16 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // Forward reasoning steps so chat() can access tool results and analysis.
                     // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.
                     ...(ctx.metadata.reasoningSteps ? { reasoningSteps: ctx.metadata.reasoningSteps } as Record<string, unknown> : {}),
+                    // Trust receipt (Arc 1 Task 8): forward `{name, ok}` tool-call
+                    // outcomes collected from ToolCallCompleted events. This is the
+                    // ONLY grounding source on the minimal/inline loop (which
+                    // executes tools but produces no reasoningSteps) — without it
+                    // the receipt falsely grades tool-using minimal runs
+                    // "ungrounded". Kernel runs carry both; the receipt sites
+                    // prefer step-derivation and use this as fallback.
+                    ...(toolCallLog.length > 0
+                      ? { receiptToolCalls: toolCallLog.map((t) => ({ name: t.toolName, ok: t.success })) } as Record<string, unknown>
+                      : {}),
                     ...(rr?.metadata?.confidence !== undefined ? {
                       confidence: (rr.metadata.confidence >= 0.7
                         ? "high"

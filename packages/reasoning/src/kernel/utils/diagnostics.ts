@@ -19,6 +19,11 @@
 import { Effect } from "effect";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { Rationale } from "@reactive-agents/core";
+import {
+  truncateExchangeText,
+  EXCHANGE_SYSTEM_PROMPT_MAX,
+  EXCHANGE_MESSAGE_MAX,
+} from "@reactive-agents/llm-provider";
 
 // ── KernelStateLike ─────────────────────────────────────────────────────────
 // Narrow structural surface accepted by `emitKernelStateSnapshot` — only the
@@ -57,22 +62,17 @@ export interface KernelStateLike {
 // `truncated: true` field so consumers know the data isn't full-fidelity.
 
 const PREVIEW_MAX = 240;
-const SYSTEM_PROMPT_MAX = 4_000;
-const MESSAGE_MAX = 2_000;
 const RESPONSE_MAX = 8_000;
+// Exchange-payload caps + truncation are shared with the exact-replay layer
+// (llm-provider/src/exchange-projection.ts) — replay hashes live requests
+// through the SAME projection, so these must never fork.
+const SYSTEM_PROMPT_MAX = EXCHANGE_SYSTEM_PROMPT_MAX;
+const MESSAGE_MAX = EXCHANGE_MESSAGE_MAX;
+const truncate = truncateExchangeText;
 
 function preview(text: string | null | undefined, max = PREVIEW_MAX): string {
   if (!text) return "";
   return text.length > max ? text.slice(0, max) : text;
-}
-
-function truncate(
-  text: string | undefined,
-  max: number,
-): { text: string | undefined; truncated: boolean } {
-  if (text === undefined) return { text: undefined, truncated: false };
-  if (text.length <= max) return { text, truncated: false };
-  return { text: text.slice(0, max), truncated: true };
 }
 
 // ── KernelStateSnapshot ──────────────────────────────────────────────────────

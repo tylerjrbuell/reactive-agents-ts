@@ -138,6 +138,12 @@ export { LiteLLMProviderLive } from "./providers/litellm.js";
 export { TestLLMService, TestLLMServiceLayer, type TestTurn, type ToolCallSpec, type ProviderQuirk } from "./testing.js";
 
 // ─── Utilities ───
+export {
+  messageContentToString,
+  truncateExchangeText,
+  EXCHANGE_SYSTEM_PROMPT_MAX,
+  EXCHANGE_MESSAGE_MAX,
+} from "./exchange-projection.js";
 export { estimateTokenCount, calculateCost } from "./token-counter.js";
 export type { CacheUsage } from "./token-counter.js";
 export { retryPolicy } from "./retry.js";

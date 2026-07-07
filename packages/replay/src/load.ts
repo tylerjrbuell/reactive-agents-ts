@@ -4,6 +4,7 @@ import { join, isAbsolute } from "node:path"
 import { loadTrace } from "@reactive-agents/trace"
 import type { TraceEvent } from "@reactive-agents/trace"
 import { buildToolTable } from "./tool-table.js"
+import { buildLLMTable } from "./llm-table.js"
 import type { RecordedRun } from "./types.js"
 
 const SEARCH_DIRS = [
@@ -29,6 +30,7 @@ export async function loadRecordedRun(idOrPath: string): Promise<RecordedRun> {
         throw new Error(`replay: no run-started event in ${path}`)
     }
     const toolTable = buildToolTable(trace.events)
+    const llmTable = buildLLMTable(trace.events)
     return {
         runId: trace.runId,
         task: runStarted.task,
@@ -37,6 +39,7 @@ export async function loadRecordedRun(idOrPath: string): Promise<RecordedRun> {
         config: runStarted.config,
         trace,
         toolTable,
+        llmTable,
     }
 }
 

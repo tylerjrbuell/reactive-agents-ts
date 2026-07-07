@@ -10,7 +10,7 @@
  * instead of closure-captured.
  */
 import { Effect, Layer, Option, Queue, Stream as EStream } from "effect";
-import type { Task, TaskResult, RunControllerLike, AgentEvent } from "@reactive-agents/core";
+import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import type { TaskError } from "@reactive-agents/core";
 import {
   StreamingTextCallback,
@@ -18,6 +18,7 @@ import {
   EventBus,
   emitErrorSwallowed,
   errorTag,
+  computeTrustReceipt,
 } from "@reactive-agents/core";
 import { hash } from "@reactive-agents/runtime-shim";
 import { homedir } from "node:os";
@@ -30,6 +31,13 @@ import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
+import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from "../builder/helpers.js";
+import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
+import type { TrustReceipt } from "@reactive-agents/core";
+
+/** The StreamCompleted member of the event union — narrowed so the receipt
+ * can be attached via spread after the async signing step. */
+type StreamCompletedEvent = Extract<AgentStreamEvent, { _tag: "StreamCompleted" }>;
 
 export interface ExecuteStreamDeps {
   readonly config: ReactiveAgentsConfig;
@@ -245,7 +253,13 @@ export const makeExecuteStream =
       // RunStore, plus a `finish(success)` to flip the run status at the end.
       // Absent the opt-in this whole block is skipped: no store, no run row, no
       // db file, and the controller's `onCheckpoint` stays undefined (zero cost).
-      let durableFinish: ((success: boolean) => void) | undefined;
+      let durableFinish: ((success: boolean) => Promise<void>) | undefined;
+      // Durable checkpoint hardening (Arc 1 Task 4): `flush()` awaits every
+      // checkpoint write started so far. We gate BOTH terminal events
+      // (StreamCompleted and StreamError) on it below so a downstream reader
+      // (resume, or agent.fork()) that reacts to the terminal event never
+      // races an in-flight checkpoint write.
+      let durableFlush: (() => Promise<void>) | undefined;
       let runStoreCtx: { runId: string; runStoreLayer: Layer.Layer<RunStoreService> } | undefined;
       if (config.durableRuns && options?.runController) {
         const agentId = config.agentId;
@@ -290,11 +304,13 @@ export const makeExecuteStream =
           ),
         );
 
-        durableFinish = installDurableCheckpointing(options.runController, {
+        const installed = installDurableCheckpointing(options.runController, {
           runId,
           runStoreLayer,
           checkpointEvery,
-        }).finish;
+        });
+        durableFinish = installed.finish;
+        durableFlush = installed.flush;
       }
 
       yield* execute(task).pipe(
@@ -307,18 +323,13 @@ export const makeExecuteStream =
           const interaction = (taskResult as { awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string } }).awaitingInteractionFor;
           const pausedInteraction = interaction !== undefined && runStoreCtx !== undefined;
 
-          // Only mark a non-paused run as finished in the durable store.
-          if (!paused && !pausedInteraction) {
-            durableFinish?.(true);
-          }
-
           const debriefToolsUsed = (taskResult as { debrief?: { toolsUsed?: Array<{ name: string; calls: number; successRate: number }> } })
             .debrief?.toolsUsed;
           const toolSummary =
             debriefToolsUsed && debriefToolsUsed.length > 0
               ? debriefToolsUsed.map((t) => ({ name: t.name, calls: t.calls, avgMs: 0 }))
               : [];
-          const completedEvent: AgentStreamEvent = {
+          const completedEvent: StreamCompletedEvent = {
             _tag: "StreamCompleted",
             output: String((taskResult as { output?: unknown }).output ?? ""),
             metadata:
@@ -360,6 +371,64 @@ export const makeExecuteStream =
                 }
               : {}),
           };
+          // Trust receipt (Arc 1 Task 8) — graded evidence about HOW the
+          // answer was produced, computed from this same in-memory taskResult
+          // (works without tracing). The FULL receipt is attached to
+          // `StreamCompleted.receipt` (Task 8 closure — streamed runs are
+          // runs; `AgentStream.collect()` reconstructs `AgentResult.receipt`
+          // from it), and a lean `TrustEvent` {verdict, confidence} is still
+          // emitted before it for progress consumers. NOT a truth certificate
+          // — see TrustReceipt's JSDoc in @reactive-agents/core.
+          //
+          // SUPPRESSED on pause paths (awaiting-approval / awaiting-interaction):
+          // receipts belong to terminal results only — a paused run is
+          // unfinished, and the resumed run emits its own receipt on
+          // completion. Detected on the RAW awaiting descriptors (not the
+          // durable-gated `paused` flags) so a pause never grades, durable or
+          // not. Mirrors the receipt suppression in reactive-agent.ts.
+          //
+          // SIGNED (Arc 1 Task 9) when a signing key is configured — same
+          // Ed25519 wiring as the non-stream site (reactive-agent.ts
+          // buildRunTaskEffect's signing step): signing failure degrades to
+          // the unsigned receipt and must NEVER fail the stream.
+          const isPausedRun = gate !== undefined || interaction !== undefined;
+          const receiptSource = taskResult as {
+            terminatedBy?: TerminatedBy
+            success?: boolean
+            metadata?: {
+              reasoningSteps?: ReadonlyArray<{
+                readonly type: string
+                readonly metadata?: Record<string, unknown>
+              }>
+              receiptToolCalls?: ReadonlyArray<{
+                readonly name: string
+                readonly ok: boolean
+              }>
+            }
+          };
+          const unsignedReceipt: TrustReceipt | undefined = isPausedRun
+            ? undefined
+            : computeTrustReceipt({
+                toolCalls: deriveReceiptToolCalls(receiptSource.metadata),
+                ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
+                goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
+                abstained: receiptSource.terminatedBy === "abstained",
+                success: receiptSource.success ?? true,
+                // Single shared source with the non-streaming site — see
+                // deriveReceiptModelId's JSDoc (builder/helpers.ts).
+                modelId: deriveReceiptModelId(config.defaultModel, config.provider),
+                now: Date.now(),
+              });
+          const signingKey = unsignedReceipt !== undefined
+            ? resolveReceiptSigningKey(config.receiptSigningKey)
+            : undefined;
+          const receiptStep: Effect.Effect<TrustReceipt | undefined> =
+            unsignedReceipt !== undefined && signingKey !== undefined
+              ? Effect.promise(() =>
+                  signReceipt(unsignedReceipt, signingKey).catch(() => unsignedReceipt),
+                )
+              : Effect.succeed(unsignedReceipt);
+
           // Persist the pause BEFORE emitting StreamCompleted so callers that
           // consume the event can immediately call decideApproval / respond.
           const persistStep = paused && runStoreCtx !== undefined
@@ -367,7 +436,50 @@ export const makeExecuteStream =
             : pausedInteraction && runStoreCtx !== undefined
               ? persistInteractionPause({ runStoreLayer: runStoreCtx.runStoreLayer, runId: runStoreCtx.runId, interaction: interaction! })
               : Effect.void;
-          const offer = persistStep.pipe(Effect.zipRight(Queue.offer(queue, completedEvent)));
+          // Durable checkpoint hardening (Arc 1 Task 4, extended in the
+          // final-review fix): await the durable write BEFORE yielding
+          // StreamCompleted — a fork/resume reader (or `rax attach`) that
+          // reacts to this event must never race an in-flight checkpoint
+          // write, and a consumer that simply exits on StreamCompleted (the
+          // normal CLI pattern) must never lose the final status write.
+          // On a NON-PAUSED terminal run we await `finish(true)` — it already
+          // does `flush()` THEN the status write internally (see
+          // run-controller.ts), so there is no separate flush left to do.
+          // Paused runs must NOT call finish() (that would mark an
+          // unfinished run "completed"); they keep the bare flush() so only
+          // checkpoint durability is awaited, ahead of the persistStep status
+          // write below. `.catch()` preserves "a status-write failure must
+          // never fail the stream".
+          const flushStep: Effect.Effect<void> =
+            !paused && !pausedInteraction
+              ? Effect.promise(() =>
+                  durableFinish ? durableFinish(true).catch(() => undefined) : Promise.resolve(),
+                )
+              : durableFlush
+                ? Effect.promise(() => durableFlush!())
+                : Effect.void;
+          // TrustEvent must be queued BEFORE the terminal StreamCompleted:
+          // the consumer's unfold loop stops reading the queue the instant it
+          // sees a terminal tag, so anything offered after it would never be
+          // delivered. `undefined` receipt = pause path (suppressed, see
+          // above) — no TrustEvent, no StreamCompleted.receipt.
+          const offer = flushStep.pipe(
+            Effect.zipRight(persistStep),
+            Effect.zipRight(receiptStep),
+            Effect.flatMap((receipt) => {
+              const trustStep = receipt !== undefined
+                ? Queue.offer(queue, {
+                    _tag: "TrustEvent",
+                    verdict: receipt.verdict,
+                    confidence: receipt.confidence,
+                  } satisfies AgentStreamEvent)
+                : Effect.void;
+              const completed: AgentStreamEvent = receipt !== undefined
+                ? { ...completedEvent, receipt }
+                : completedEvent;
+              return trustStep.pipe(Effect.zipRight(Queue.offer(queue, completed)));
+            }),
+          );
           if (!eb) return offer;
           return offer.pipe(
             Effect.tap(() =>
@@ -391,13 +503,20 @@ export const makeExecuteStream =
           );
         }),
         Effect.catchAll((err: unknown) => {
-          durableFinish?.(false);
           const cause =
             typeof err === "object" && err !== null && "message" in err
               ? String((err as { message: unknown }).message)
               : String(err);
           const errorEvent: AgentStreamEvent = { _tag: "StreamError", cause };
-          const offer = Queue.offer(queue, errorEvent);
+          // Same durability gate as the success path — this is a hard
+          // failure (never a pause), so `finish(false)` is always awaited
+          // before the terminal event is offered. finish() flushes then
+          // writes the "failed" status internally; `.catch()` keeps a
+          // status-write failure from ever failing the stream.
+          const flushStep: Effect.Effect<void> = Effect.promise(() =>
+            durableFinish ? durableFinish(false).catch(() => undefined) : Promise.resolve(),
+          );
+          const offer = flushStep.pipe(Effect.zipRight(Queue.offer(queue, errorEvent)));
           if (!eb) return offer;
           return offer.pipe(
             Effect.tap(() =>

@@ -180,7 +180,11 @@ export {
 // literals that silently drop {harnessPipeline, budgetLimits, calibration, …}.
 export { buildKernelInput } from "./kernel/state/build-kernel-input.js";
 export type { CrossCuttingInput, PerPassInput } from "./kernel/state/build-kernel-input.js";
-export { META_TOOLS, INTROSPECTION_META_TOOLS } from "./kernel/state/kernel-constants.js";
+export { META_TOOLS, INTROSPECTION_META_TOOLS, HARNESS_PSEUDO_TOOLS } from "./kernel/state/kernel-constants.js";
+// Termination meta-tool name (NOT in META_TOOLS) — exported so runtime receipt
+// derivation (Arc 1 Task 8) can exclude it from grounding evidence without a
+// hardcoded copy that could drift.
+export { ABSTAIN_TOOL_NAME } from "./kernel/capabilities/act/meta-tool-handlers.js";
 export { extractOutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
 export { classifyTask } from "./kernel/capabilities/comprehend/task-classification.js";
 export type { TaskClassification } from "./kernel/capabilities/comprehend/task-classification.js";

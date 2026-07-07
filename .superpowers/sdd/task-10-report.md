@@ -1,60 +1,59 @@
-# Task 10 + 11 Report — Durable Interaction Rail + `.withUserInteraction()`
+# Task 10 Report (Arc 1) — 90-second launch demo + docs + README
 
-Folded Task 11 into Task 10 (the e2e test needs the builder method). One commit.
+(Note: this file previously held the Agentic-UI plan's "Task 10+11 interaction rail" report, superseded here per dispatch — that work shipped long since.)
 
-## Files changed (each mirrors an approval-rail piece)
+**Status: DONE**
+**Commit: `b60a92a6` — "docs: process-model demo + receipt/fork/replay documentation" (7 files, +445/−1)**
 
-### packages/core
-- `src/streaming.ts` — added `InteractionResponse` interface + `InteractionResponseRef` FiberRef. **Mirrors** `ApprovalDecision` / `ApprovalDecisionRef`.
-- `src/index.ts` — export `InteractionResponseRef` + `InteractionResponse` type. Mirrors the `ApprovalDecisionRef` export.
+## Deliverables
 
-### packages/reasoning
-- `src/kernel/state/kernel-state.ts` — added `interactionResponse?` to `KernelInput`. **Mirrors** `approvalDecision?`.
-- `src/kernel/loop/runner.ts` — added the interaction resume re-entry block after the approval re-entry (`resolveApprovalReentry` site). **Mirrors** the approval re-entry, with the key semantic difference (see GAP-4): resets `status:"thinking"` + clears `output`/`terminatedBy` so the loop re-thinks, and synthesizes an assistant-call + `tool_result` message pair on `state.messages` (a bare observation step is invisible to the prompt assembler). Also imported `REQUEST_USER_INPUT_TOOL_NAME` + `KernelMessage`.
-- `src/strategies/reactive.ts` — added `interactionResponse` to `ReactiveInput` + threaded into `kernelInput`. **Mirrors** `approvalDecision`.
-- `src/services/reasoning-service.ts` — added `interactionResponse` to the execute-request type. **Mirrors** `approvalDecision`.
+### 1. Demo script — `apps/examples/src/advanced/process-model-demo.ts`
+- Durable + reasoning agent on Ollama `qwen3:4b`, custom `calculator` tool (no builtin of that name exists — registered via `.withTools({ tools: [...] })`, arithmetic-only expression validation, no arbitrary code execution).
+- Prompt forces tool use per `.probes-live/t5-inspect-smoke.ts` precedent ("You MUST use the calculator tool for every arithmetic step…").
+- Sequence: `runStream()` → `handle.inspect()` sampled on an interval (prints one line per new iteration — 5 samples in the verified run, brief asked for ≥2) → `StreamCompleted.receipt` → `agent.fork(runId, { at: 1 })` → `listRuns()` fork-row lineage → prints the `rax ps` / `rax attach` mirror line.
+- Graceful skip (exit 0, `passed: true`): Ollama unreachable (`/api/tags` probe, same pattern as `apps/cli/src/commands/demo.ts:detectOllama`), model not pulled, or offline suite mode (`provider === "test"`).
+- Registered as `A26` in `apps/examples/index.ts` with a comment explaining the Ollama pin + offline skip; row added to `apps/examples/src/advanced/README.md`. NOT a CI test — examples-suite registration only, verified `--offline` run skips it as PASS.
 
-### packages/runtime
-- `src/errors.ts` — added `InteractionStateError` tagged error + added to `RuntimeErrors` union. **Mirrors** `ApprovalStateError`.
-- `src/engine/durable-resume.ts` — added `persistInteractionPauseAt`, `decideInteractionRecord`, `getPendingInteractionAt`. **Mirror** `persistApprovalPauseAt` / `decideApprovalRecord` / `getPendingApprovalAt`.
-- `src/stream-types.ts` — added `pendingInteraction?` + `abstention?` to `StreamCompleted` (additive). Mirrors `pendingApproval?`.
-- `src/engine/execute-stream.ts` — added `persistInteractionPause` local + `safeParseSchema` helper + the `awaitingInteractionFor` detection/emit block. **Mirrors** `persistApprovalPause` + the `awaitingApprovalFor` block.
-- `src/engine/util.ts` — added `awaitingInteractionFor` to `ExecutionReasoningResult` metadata type + `normalizeReasoningResult`. **Mirrors** `awaitingApprovalFor`.
-- `src/execution-engine.ts` — forward `awaitingInteractionFor` from `rr.metadata` to the TaskResult. **Mirrors** the `awaitingApprovalFor` forward.
-- `src/engine/phases/agent-loop/reasoning-think.ts` — read `InteractionResponseRef` → forward as `interactionResponse`. **Mirrors** the `ApprovalDecisionRef` read.
-- `src/builder/types.ts` — `AgentResult.status` union += `"awaiting-interaction"`, added `pendingInteraction?`. Mirrors `pendingApproval?`.
-- `src/reactive-agent.ts` — imports + TaskResult type + result mapping (`status:"awaiting-interaction"` + `pendingInteraction`) + `runDurable` resume type (interaction variant) + FiberRef seeding + persist branch; new public `getDurableInfo()`, `listPendingInteractions()` (clone of `listPendingApprovals`), `respondToInteraction()` (clone of `decideAndResumeRun`).
-- `src/builder.ts` — (Task 11) `private _userInteraction = false`, `withUserInteraction()` method, `build()` validation throwing `/durable/i` when `_userInteraction && !_durableRuns`. **Mirrors** the approval-detach validation.
-- `src/builder/build-effect/runtime-construction.ts` — added `_userInteraction` to `BuilderRuntimeStateView` + threaded `userInteraction: true` into `kernelMetaTools` (incl. a fallback minimal payload when meta-tools are otherwise disabled).
+### 2. Docs page — `apps/docs/src/content/docs/features/process-model.md`
+Sections as briefed:
+- **The process model** — RunHandle verbs + `inspect()` shape (undefined pre-first-iteration / non-kernel path, lazy-thunk zero cost), `fork()` with honest scoping (counterfactual restart, live LLM calls post-fork, never "time-travel"), both v1 caveats (paused-run stale checkpoint; `model` override discarded under `.withModelRouting()` — explicitly warned, never combined in any example).
+- **The trust receipt** — verdict table straight from `computeTrustReceipt` JSDoc rules with confidences 0.95/0.95/**0.8**/0.6/0.8 (verifier-boosted 0.9 NOT mentioned anywhere — dead wiring per constraints); "substantive" definition footnote; `ok` = executor-level success footnote; Ed25519 signing scoped to provenance ("this receipt, this run, untampered" — never correctness).
+- **CLI** — `rax ps [--db|--all]` + `rax attach` with sample output (fork row shows `[FORKED-FROM <src>@1]`, matching `ps.ts` formatting).
+- **Exact replay** — `loadRecordedRun` → `run.llmTable` → `makeReplayLLMLayer`; exact-replay-only scoping, loud miss on any prompt/config drift, zero tokens; cross-links Snapshot & Replay for the tool-table `replay()` API.
+- Sidebar-registered in `astro.config.mjs` under "Ship to Production" (after Durable HITL), `sidebar.order: 22`.
 
-### tests (new)
-- `packages/runtime/tests/server/interaction-rail.test.ts` (Task 10 e2e).
-- `packages/runtime/tests/server/with-user-interaction.test.ts` (Task 11).
+### 3. README — "Agents are processes" section
+Inserted after Streaming (flows from `runStream`). 18 lines, code-first: `inspect()`/pause/resume, `result.receipt` with "not a truth certificate" + provenance-signing lines, `fork` with counterfactual-restart framing, `rax ps`/`attach` + exact-replay one-liner, links to docs page + demo source.
 
-### docs
-- `wiki/Research/2026-07-agentic-ui-gap-log.md` — GAP-4 (resume re-think needs manual status/message reconstruction; approval "observe" path is latently broken) + GAP-5 (brief's `new ReactiveAgentBuilder("name")` doesn't compile).
+### 4. One-line code fix
+`packages/core/src/types/receipt.ts` — `TrustReceipt.toolsUsed` JSDoc now defines "substantive" (kernel META/termination/memory-retrieval tools excluded; points at `isSubstantiveReceiptTool`). No behavior change.
 
-## Test output
-- `interaction-rail.test.ts` + `with-user-interaction.test.ts`: **written first, confirmed FAIL** (method missing), then implemented → **4/4 pass**.
-- `bun test packages/runtime/tests/server`: **8 pass, 0 fail** (3 files).
-- `bun test packages/runtime`: **1101 pass, 1 skip, 6 fail** classification:
-  - 2 fail = `model routing — builder reasoning path (C1 gate, EventBus seam)` — the KNOWN pre-existing network tests (need real API/network).
-  - 4 error = `Cannot find package 'reactive-agents'` (umbrella package) in capability-registry / debrief-integration / harness-profile / with-thinking tests — **confirmed pre-existing** (fail identically with my changes stashed). Import-resolution, independent of my logic.
-  - **No new failures.**
-- `bun test packages/reasoning`: **1868 pass, 4 todo, 0 fail**.
+## Verification evidence
 
-## tsc
-- `packages/runtime` `tsc --noEmit`: **exit 0** (after adapting the test constructor call per GAP-5).
-- `packages/reasoning` `tsc --noEmit`: **exit 0**.
-- `packages/core` `tsc --noEmit`: **exit 0**.
-- Rebuilt `core` + `reasoning` dist (`bunx turbo run build --filter=...`) before runtime tsc/tests — reasoning resolves from `dist` under Bun, so src edits were not live until rebuilt (GAP-3 / the brief's warning).
+**Live demo run** (`timeout 280 bun apps/examples/src/advanced/process-model-demo.ts`, ~40s wall):
 
-## Deviations
-1. **Folded Task 11 into Task 10** (single commit) — the e2e needs `.withUserInteraction()`.
-2. **Added `.withReasoning()` to the interaction e2e** — the `request_user_input` pause is intercepted in the reasoning kernel (`act.ts`); reasoning is default-off, and the approval e2e likewise uses `.withReasoning()`. Without it the run completes instead of pausing.
-3. **Test constructor** — brief's `new ReactiveAgentBuilder("name")` doesn't compile (0-arg constructor); used `.withName(...)` (GAP-5).
-4. **Resume re-entry is NOT a literal clone** of the approval observe block — it must reset terminal state + synthesize `tool_result` messages, else the injected value is silently dropped (GAP-4). The approval rail is a structural template, not a behavioral one for real pauses.
+```
+inspect() #1 — iteration=0 steps=0 messages=1 …
+inspect() #3 — iteration=2 steps=6 messages=5 …
+inspect() #5 — iteration=4 steps=10 … lastThought="The results of the steps are as follows: 1. **137 * 89**: 1"
+Step 2 — run completed. output: "**2378.285714285714**"   runId=2he5bx8bquo6k
+Step 3 — result.receipt: verdict=tool-grounded confidence=0.8 method=heuristic
+  toolsUsed=[calculator] toolCallStats={"ok":3,"failed":0}
+Step 4 — fork output: "**2378.285714285714**"  fork receipt.forkedFrom=2he5bx8bquo6k
+Step 5 — fork row runId=2he5bx8bquo6k-fork-acc1 forkedFrom=2he5bx8bquo6k forkedAtIteration=1 status=completed
+✓ PASS
+```
 
-## Concerns
-- GAP-4: the approval "observe"/real-pause resume path is latently broken the same way (masked by `injectPause` in its e2e). Flagged, not fixed (out of scope).
-- `abstention` was added to `StreamCompleted` (additive, per brief) but is not yet populated by `execute-stream.ts` — the non-streaming path already surfaces abstention via `AgentResult.abstention`; the streaming field is available for Task 12 to wire.
+(2378.285714285714 = ((137×89)+4455)/7 — correct; three real calculator calls, all ok.)
+
+**Docs build**: `cd apps/docs && bun run build` → green, 92 pages, "All internal links are valid."
+
+**Typecheck**: `bunx tsc --noEmit -p apps/examples/tsconfig.json` → zero errors in `process-model-demo.ts` (many PRE-EXISTING errors in other example files — untouched, out of scope).
+
+**Offline suite**: `bun run index.ts --offline --filter advanced` → A26 prints "SKIPPED: offline mode" and counts as PASS. Full offline suite 48/49; sole failure is pre-existing `[RS1] crypto-research-agent` (unrelated).
+
+## Concerns / notes for the coordinator
+- **Whole-plan final gate** (brief bottom): `bunx turbo run build`, keyless `bun test`, `scripts/check-termination-paths.sh` were NOT run here — this commit is docs + one JSDoc line + a non-CI example, and the gate reads as a plan-level close-out step. Live smoke (demo E2E) is done.
+- The examples runner's numeric filter (`/^\d+$/`) can't select lettered nums (`A26`) individually — pre-existing behavior affecting all A/R/I-numbered examples, not changed.
+- Advisor tool was unavailable this session (errored); self-review against the binding honest-claims constraints performed instead — all six verified present in copy.
+- `.superpowers/sdd/progress.md` was already modified before this session; left uncommitted (not mine).

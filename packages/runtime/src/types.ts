@@ -430,6 +430,14 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   defaultModel: Schema.optional(Schema.Unknown),
   /** LLM provider name */
   provider: Schema.optional(Schema.String),
+  /**
+   * Ed25519 private key (JWK) for trust-receipt signing (Arc 1 Task 9) —
+   * threaded from `.withReceiptSigning()` so the STREAMING finalization path
+   * (execute-stream.ts) can sign the receipt attached to `StreamCompleted`.
+   * `Unknown` in the schema (JWK is a structural web type); consumers narrow
+   * via `resolveReceiptSigningKey`.
+   */
+  receiptSigningKey: Schema.optional(Schema.Unknown),
   /** Memory system tier: "1" (light) or "2" (full) */
   memoryTier: Schema.Literal("1", "2"),
   /** Enable guardrails layer */

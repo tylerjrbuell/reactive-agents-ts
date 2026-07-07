@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@reactive-agents/core": "workspace:*",
+    "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/trace": "workspace:*",
     "@reactive-agents/tools": "workspace:*",
     "effect": "^3.10.0"

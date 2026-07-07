@@ -47,6 +47,19 @@ export interface RunControllerLike {
    * enabled.
    */
   onCheckpoint?(serializedState: string, iteration: number): void;
+  /**
+   * Always-on introspection seam (Arc 1 Task 5) — independent of
+   * `onCheckpoint`/durable persistence. The kernel invokes this at every
+   * iteration boundary with a LAZY snapshot thunk (not a pre-serialized
+   * string): the thunk is only invoked when a caller later calls
+   * `RunHandle.inspect()`. This keeps non-durable runs at zero
+   * per-iteration serialization cost — `RunController.inspect()` stores the
+   * thunk and defers execution until inspection is actually requested. On
+   * durable runs the kernel may pass `() => serialized` reusing the string
+   * already produced for `onCheckpoint` (no extra work either way). Must
+   * not throw and must not block the loop.
+   */
+  noteCheckpoint?(snapshot: () => string, iteration: number): void;
 }
 
 /**
@@ -70,6 +83,21 @@ export const RunControllerRef = FiberRef.unsafeMake<RunControllerLike | null>(nu
  * Null for normal runs, so non-resume executions pay zero cost.
  */
 export const ResumeStateRef = FiberRef.unsafeMake<string | null>(null);
+
+/**
+ * A per-run model override, carried into a pipeline by `ReactiveAgent.fork()`
+ * (via `Effect.locally`) when `opts.model` is supplied. Read once at
+ * execution-context initialization (`execution-engine.ts`) as the seed for
+ * `ctx.selectedModel`, falling back to `config.defaultModel` when unset —
+ * mirrors `ResumeStateRef`'s per-run FiberRef pattern. Null on every normal
+ * run, so non-fork executions pay zero cost. Arc 1 Task 6.
+ *
+ * v1 scope: this is a request-time seed, not integrated with the
+ * `cost-route` phase — when `.withModelRouting()` is also enabled on the
+ * agent, that phase recomputes `selectedModel` independently and will
+ * override this seed. Known gap, not fixed in v1.
+ */
+export const ModelOverrideRef = FiberRef.unsafeMake<string | null>(null);
 
 /**
  * A human's approval decision for a paused durable run, carried into a resumed

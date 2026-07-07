@@ -221,6 +221,10 @@ export const AgentStream = {
             taskId: event.taskId ?? "",
             agentId: event.agentId ?? "",
             metadata: event.metadata,
+            // Trust receipt (Arc 1 Task 8 closure): "equivalent to agent.run()"
+            // includes result.receipt — carried from StreamCompleted (absent
+            // only on pause completions, which never grade).
+            ...(event.receipt !== undefined ? { receipt: event.receipt } : {}),
           };
         }
         if (event._tag === "StreamError") {
@@ -251,6 +255,9 @@ export const AgentStream = {
                 taskId: event.taskId ?? "",
                 agentId: event.agentId ?? "",
                 metadata: event.metadata,
+                // Trust receipt (Arc 1 Task 8 closure) — mirrors the
+                // AsyncIterable branch above.
+                ...(event.receipt !== undefined ? { receipt: event.receipt } : {}),
               } as AgentResult,
             };
           }

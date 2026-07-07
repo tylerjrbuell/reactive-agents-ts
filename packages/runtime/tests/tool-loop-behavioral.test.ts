@@ -61,6 +61,14 @@ describe("tool loop behavioral tests", () => {
 
     expect(result.success).toBe(true);
     expect(toolCalls).toContain("hello");
+
+    // Trust receipt (Arc 1 Task 8, review-fix follow-up): the MINIMAL loop
+    // (no .withReasoning()) produces no reasoningSteps, so the receipt must
+    // fall back to the engine's ToolCallCompleted log (receiptToolCalls).
+    // Before that fallback, this exact run graded "ungrounded" despite the
+    // tool call above demonstrably executing.
+    expect(result.receipt?.verdict).toBe("tool-grounded");
+    expect(result.receipt?.toolsUsed).toEqual(["echo-tool"]);
   });
 
   it("agent calls two tools across sequential turns", async () => {

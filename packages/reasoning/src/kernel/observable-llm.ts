@@ -30,6 +30,7 @@ import { Effect, Layer, Ref, Stream } from "effect";
 import type { Context } from "effect";
 import {
   LLMService,
+  messageContentToString,
   type CompletionRequest,
   type StructuredCompletionRequest,
   type LLMMessage,
@@ -48,24 +49,9 @@ import { emitLLMExchange, emitContextPressure } from "./utils/diagnostics.js";
 const PLACEHOLDER_TASK_ID = "llm-direct";
 const PLACEHOLDER_ITERATION = 0;
 
-function messageContentToString(content: LLMMessage["content"]): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((b) => {
-        if (typeof b === "string") return b;
-        if (b && typeof b === "object") {
-          const blk = b as { type?: string; text?: string; name?: string };
-          if (blk.type === "text" && typeof blk.text === "string") return blk.text;
-          if (blk.type === "tool_use") return `[tool_use:${blk.name ?? "?"}]`;
-          if (blk.type === "tool_result") return `[tool_result]`;
-        }
-        return "";
-      })
-      .join("");
-  }
-  return "";
-}
+// Message-content flattening lives in @reactive-agents/llm-provider
+// (exchange-projection.ts) so the exact-replay layer can apply the IDENTICAL
+// projection when hashing live requests — record and replay must never drift.
 
 type ExchangeRole = "system" | "user" | "assistant" | "tool";
 
@@ -201,7 +187,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             const start = Date.now();
             const accum = yield* Ref.make<{
               content: string;
-              toolCalls: { name: string; id: string }[];
+              toolCalls: { name: string; id: string; argsJson: string }[];
               usage?: PartialCompletion["usage"];
               resolvedParams?: PartialCompletion["resolvedParams"];
               stopReason?: StopReason;
@@ -221,9 +207,24 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                     case "tool_use_start":
                       return {
                         ...s,
-                        toolCalls: [...s.toolCalls, { name: event.name, id: event.id }],
+                        toolCalls: [...s.toolCalls, { name: event.name, id: event.id, argsJson: "" }],
                         stopReason: "tool_use" as StopReason,
                       };
+                    case "tool_use_delta": {
+                      // Deltas attach to the most recently started call
+                      // (provider sequencing contract: tool_use_start always
+                      // precedes its tool_use_delta chunks, and providers
+                      // don't interleave deltas across concurrent calls).
+                      if (s.toolCalls.length === 0) return s;
+                      const last = s.toolCalls[s.toolCalls.length - 1]!;
+                      return {
+                        ...s,
+                        toolCalls: [
+                          ...s.toolCalls.slice(0, -1),
+                          { ...last, argsJson: last.argsJson + event.input },
+                        ],
+                      };
+                    }
                     case "usage":
                       return {
                         ...s,
@@ -256,6 +257,22 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               Stream.ensuring(
                 Effect.gen(function* () {
                   const s = yield* Ref.get(accum);
+                  // Parse each call's accumulated JSON argument chunks.
+                  // Unparseable JSON (or no deltas at all) never throws from
+                  // the observability path — falls back to the raw string,
+                  // or omits `arguments` entirely when nothing was captured.
+                  const toolCalls =
+                    s.toolCalls.length > 0
+                      ? s.toolCalls.map((tc) => {
+                          let args: unknown;
+                          try {
+                            args = tc.argsJson ? JSON.parse(tc.argsJson) : undefined;
+                          } catch {
+                            args = tc.argsJson;
+                          }
+                          return { name: tc.name, ...(args !== undefined ? { arguments: args } : {}) };
+                        })
+                      : undefined;
                   yield* emitForRequest(
                     request,
                     s.content,
@@ -263,7 +280,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                     "stream",
                     {
                       stopReason: s.stopReason ?? ("end_turn" as StopReason),
-                      toolCalls: s.toolCalls.length > 0 ? s.toolCalls : undefined,
+                      toolCalls,
                       usage: s.usage,
                       ...(s.resolvedParams ? { resolvedParams: s.resolvedParams } : {}),
                     },

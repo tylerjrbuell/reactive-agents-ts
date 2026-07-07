@@ -119,6 +119,9 @@ export type { RunHandle, RunStatus, RunControllerLike } from "./run-controller.j
 // ─── Deployment ───
 export { createSigtermHandler, registerShutdownHandlers } from "./sigterm.js";
 
+// ─── Trust receipt signing (Arc 1 Task 9, opt-in) ───
+export { generateReceiptKeyPair, signReceipt, verifyReceipt } from "./receipt-signing.js";
+
 // ─── Agentic-UI kit: server endpoint helpers (Task 13) ───
 export {
   createAgentEndpoint,
@@ -201,3 +204,16 @@ export {
   type HarnessProfilePatch,
   type HarnessProfileName,
 } from "./capabilities/profile.js";
+
+// ─── Durable RunStore substrate (Arc 1 Task 7: `rax ps` / `rax attach`) ───
+// `RunStatus` is already exported above (run-controller's own in-memory
+// running/paused/stopped/terminated/completed status) — alias the store's
+// persisted lifecycle status as `RunStoreStatus` to avoid a name collision,
+// mirroring the internal alias `run-controller.ts` already uses.
+export {
+  RunStoreLive,
+  RunStoreService,
+  type RunRecord,
+  type RunStatus as RunStoreStatus,
+} from "./services/run-store.js";
+export { listDurableRuns } from "./engine/durable-resume.js";

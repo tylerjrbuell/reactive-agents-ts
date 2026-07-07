@@ -10,6 +10,9 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Effect, type Context } from 'effect'
 import type { TerminatedBy } from '@reactive-agents/core'
+import { getProviderDefaultModel } from '@reactive-agents/llm-provider'
+import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME } from '@reactive-agents/reasoning'
+import { REQUEST_USER_INPUT_TOOL_NAME } from '@reactive-agents/tools'
 import type { AgentPersona } from './types.js'
 
 /**
@@ -72,6 +75,143 @@ export function deriveGoalAchieved(terminatedBy: TerminatedBy | undefined): bool
         case undefined:
             return null
     }
+}
+
+/**
+ * Whether a tool name counts as SUBSTANTIVE grounding evidence for the trust
+ * receipt (Arc 1 Task 8). Excluded, per the kernel's own "not real work"
+ * classification (live-smoke defect fix 2026-07-06):
+ *
+ * - `META_TOOLS` (kernel-constants.ts, the single source of truth): harness
+ *   inline tools — final-answer, task-complete, context-status, brief, pulse,
+ *   find, recall, checkpoint, activate-skill, discover-tools,
+ *   write_result_to_file. EVERY kernel run terminates via `final-answer`, so
+ *   counting it made verdict "ungrounded" unreachable on the kernel path and
+ *   graded pure-knowledge answers "tool-grounded" — inverting the receipt's
+ *   whole purpose.
+ * - `HARNESS_PSEUDO_TOOLS` (same file): harness-injected observation
+ *   pseudo-names (system, completion-guard, abstention-legitimacy). Its JSDoc
+ *   documents this exact masking hazard for the kernel's own grounded-terminal
+ *   invariant; excluded here defensively (they never appear as action
+ *   `toolCall` names or ToolCallCompleted events today).
+ * - `ABSTAIN_TOOL_NAME` ("abstain", meta-tool-handlers.ts — NOT in
+ *   META_TOOLS): termination meta-tool. Safe to exclude: verdict rule 1
+ *   (abstained) is driven by `terminatedBy === "abstained"`, never by
+ *   toolCalls.
+ * - `REQUEST_USER_INPUT_TOOL_NAME` ("request_user_input", tools pkg): the
+ *   interaction PAUSE tool — paused runs never grade (receipt suppressed),
+ *   but a resumed-then-completed run's steps can still contain it.
+ *
+ * All names import from their owning packages — no hardcoded copies to drift.
+ */
+const isSubstantiveReceiptTool = (name: string): boolean =>
+    !META_TOOLS.has(name) &&
+    !HARNESS_PSEUDO_TOOLS.has(name) &&
+    name !== ABSTAIN_TOOL_NAME &&
+    name !== REQUEST_USER_INPUT_TOOL_NAME
+
+/**
+ * Derive `{name, ok}` tool-call outcomes for the trust receipt (Arc 1 Task 8)
+ * from a run's result metadata. Meta/termination/pseudo tools are excluded at
+ * BOTH sources (see {@link isSubstantiveReceiptTool}) — only substantive
+ * calls are grounding evidence. Two sources, in preference order:
+ *
+ * 1. `reasoningSteps` (kernel path) — pairs each `action` step's
+ *    `metadata.toolCall.id` with the `observation` step carrying the matching
+ *    `metadata.toolCallId`, reading `metadata.observationResult.success` as
+ *    the ok/fail signal (see `packages/reasoning/.../act/tool-observe.ts` and
+ *    `act.ts`, which both stamp this exact shape on every tool call). Steps
+ *    are preferred because they also cover calls that never reached the
+ *    ToolCallCompleted event (e.g. allowedTools-blocked calls become a
+ *    failed action/observation pair).
+ * 2. `receiptToolCalls` (fallback) — `{name, ok}` outcomes forwarded by
+ *    execution-engine.ts from its ToolCallCompleted event log. This is the
+ *    ONLY source on the minimal/inline loop, which executes tools but
+ *    produces no reasoningSteps — without it, tool-using minimal runs would
+ *    falsely grade "ungrounded".
+ *
+ * An action step with no resolvable observation pairing (e.g. the run was
+ * interrupted mid-call) is conservatively treated as failed rather than
+ * dropped, so `toolCallStats` still accounts for every attempted call.
+ */
+export function deriveReceiptToolCalls(
+    metadata: {
+        readonly reasoningSteps?: ReadonlyArray<{
+            readonly type: string
+            readonly metadata?: Record<string, unknown>
+        }>
+        readonly receiptToolCalls?: ReadonlyArray<{
+            readonly name: string
+            readonly ok: boolean
+        }>
+    } | undefined
+): ReadonlyArray<{ readonly name: string; readonly ok: boolean }> {
+    const fromSteps = deriveFromSteps(metadata?.reasoningSteps)
+    if (fromSteps.length > 0) return fromSteps
+    return (metadata?.receiptToolCalls ?? []).filter((tc) =>
+        isSubstantiveReceiptTool(tc.name),
+    )
+}
+
+function deriveFromSteps(
+    reasoningSteps: ReadonlyArray<{
+        readonly type: string
+        readonly metadata?: Record<string, unknown>
+    }> | undefined
+): ReadonlyArray<{ readonly name: string; readonly ok: boolean }> {
+    if (!reasoningSteps || reasoningSteps.length === 0) return []
+
+    const okByCallId = new Map<string, boolean>()
+    for (const step of reasoningSteps) {
+        if (step.type !== "observation") continue
+        const callId = step.metadata?.toolCallId
+        const observationResult = step.metadata?.observationResult as
+            | { success?: boolean }
+            | undefined
+        if (typeof callId === "string" && typeof observationResult?.success === "boolean") {
+            okByCallId.set(callId, observationResult.success)
+        }
+    }
+
+    const result: Array<{ name: string; ok: boolean }> = []
+    for (const step of reasoningSteps) {
+        if (step.type !== "action") continue
+        const toolCall = step.metadata?.toolCall as
+            | { id?: string; name?: string }
+            | undefined
+        if (!toolCall?.name) continue
+        // Meta/termination/pseudo tools are not grounding evidence — see
+        // isSubstantiveReceiptTool (live-smoke defect: final-answer counted).
+        if (!isSubstantiveReceiptTool(toolCall.name)) continue
+        const ok = typeof toolCall.id === "string" ? okByCallId.get(toolCall.id) ?? false : false
+        result.push({ name: toolCall.name, ok })
+    }
+    return result
+}
+
+/**
+ * Resolve the `modelId` stamped on a TrustReceipt (Arc 1 Task 8) — the SINGLE
+ * source used by BOTH receipt-assembly sites (`reactive-agent.ts`
+ * buildRunTaskEffect and `engine/execute-stream.ts`), so the same run can
+ * never carry different `receipt.modelId` values across `.run()` vs
+ * `.runStream()`.
+ *
+ * Mirrors `createRuntime`'s model-resolution chain (runtime.ts:263-269)
+ * exactly: explicit model > `LLM_DEFAULT_MODEL` env > provider registry
+ * default > the same hardcoded final fallback. The stream site passes the
+ * already-resolved `config.defaultModel` (first branch returns it verbatim);
+ * the non-stream site passes the raw builder `_model` + provider and walks
+ * the identical chain — converging on the same value by construction.
+ */
+export function deriveReceiptModelId(model: unknown, provider: unknown): string {
+    if (typeof model === 'string' && model.length > 0) return model
+    const envModel = process.env.LLM_DEFAULT_MODEL
+    if (envModel !== undefined && envModel.length > 0) return envModel
+    if (typeof provider === 'string' && provider.length > 0) {
+        const providerDefault = getProviderDefaultModel(provider)
+        if (providerDefault !== undefined && providerDefault.length > 0) return providerDefault
+    }
+    return 'claude-sonnet-4-6'
 }
 
 // ─── Persona Composition Helper ───────────────────────────────────────────────
