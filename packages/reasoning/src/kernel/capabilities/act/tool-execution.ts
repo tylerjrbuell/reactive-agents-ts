@@ -511,7 +511,7 @@ export function executeToolCall(
     const toolStart = Date.now();
     yield* emitLog({ _tag: "tool_call", tool: toolRequest.tool, iteration: 0, timestamp: new Date() });
 
-    const result = yield* toolService
+    const result: ToolExecutionResult = yield* toolService
       .execute({
         toolName: toolRequest.tool,
         arguments: args,
@@ -606,10 +606,17 @@ export function executeToolCall(
 
     // Fire-and-forget semantic memory store — never blocks kernel hot path.
     if (memoryServiceOpt && result.observationResult.success) {
+      // Hotfix 0.5-4 (2026-07-07): store the FULL result, not the compressed
+      // preview. When compression fired, `result.content` is the preview and
+      // the full payload lives in the scratchpad under `storedKey`; recover it
+      // so memory stops persisting lossy previews.
+      const fullForMemory =
+        (result.storedKey ? scratchpadStore?.get(result.storedKey) : undefined) ??
+        result.content;
       yield* storeToolObservationSemantic(
         memoryServiceOpt,
         toolRequest.tool,
-        result.content,
+        fullForMemory,
         agentId ?? "reasoning-agent",
       );
     }
@@ -740,7 +747,14 @@ export function executeNativeToolCall(
           ? storeToolObservationSemantic(
               config.memoryService,
               toolCall.name,
-              result.content,
+              // Hotfix 0.5-4 (2026-07-07): store the FULL result, not the
+              // compressed preview. `content` here is the truncated display
+              // projection; `fullContent` is the complete normalized payload.
+              // storeToolObservationSemantic still prefers extractedFact and
+              // caps at 2000, so this only upgrades the no-fact fallback from
+              // "preview" to "full-capped" — memory of past tool calls stops
+              // persisting lossy previews.
+              result.fullContent ?? result.content,
               agentId,
               result.extractedFact,
             )

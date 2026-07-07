@@ -38,7 +38,8 @@ import {
  * All mid-loop guidance that previously fired as stray USER messages now lives here,
  * rendered deterministically into the system prompt's Guidance: section.
  */
-export type { GuidanceContext } from "./guidance.js";
+import type { GuidanceContext } from "./guidance.js";
+export type { GuidanceContext };
 
 /** Output of ContextManager.build() — the only two things the LLM sees. */
 export interface ContextManagerOutput {
