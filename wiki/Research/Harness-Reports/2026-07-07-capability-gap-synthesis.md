@@ -60,3 +60,26 @@ The kernel's value is real but conditional: **+11pp on weak models, −22pp on s
 ## Verification protocol
 
 Each P-fix: single-cell verify via weakness-queue probe command (minutes, post-amplification) → full-session re-run + `rax eval gate` lift verdict + ledger entry before default-on. Publication (launch-gate item 5) stays blocked until the re-run shows the post-fix story.
+
+## Fix wave 3 (same day — capability rails, user mandate: controllable/auditable/flexible/efficient/powerful)
+
+| Item | Status |
+|---|---|
+| P6a universal todo checklist meta-tool | **SHIPPED opt-in** (`.withMetaTools({todo:true})`) — pure core + inline handler + scratchpad persistence (checkpoint-safe, run-scoped); default-on pends the cross-tier lift gate |
+| P6b live independent checker | **DESIGN READY** (below) — implement after the full-session re-run verdict |
+
+### P6b design — live independent checker
+
+Goal: independent different-model review of the final answer BEFORE it ships (Claude-Code-advisor / Devin-verify pattern). RA's judge-server proves the value offline; this puts the same idea on the live path, opt-in.
+
+- **API**: `.withIndependentChecker({ provider, model, maxRedirects = 1 })` — builder constructs a SECOND provider stack (same `createLLMProviderLayer` machinery as judge-server's live layer) and threads a plain async callback `check(task, answer, evidenceDigest) → { approved, critique }` into kernel input (callback, not Layer — avoids dual-LLMService context plumbing).
+- **Integration point**: terminal acceptance, immediately after the F1 grounded-terminal arm accepts — same seam the verifier gates. On `!approved`: one redirect with the critique injected as harness guidance (reuse the B1 redirect mechanics); on repeat failure: ship WITH the checker verdict recorded — never silently, never a loop.
+- **Auditability**: new trace event `checker-verdict {approved, critique, model, durationMs}`; receipt gains `checkerVerdict` field (graded evidence, mirrors receipt copy discipline: not a truth certificate).
+- **Cost control**: single call per run terminal (plus ≤1 redirect), only when configured; capability-conditional default later (strong SUT → checker optional; weak SUT → recommended) once ablated.
+- **Verification**: bench ablation ra-full vs ra-full+checker on cogito:8b + qwen3:14b; gate lift rule decides default posture. Judge (gpt-4o-mini) stays Rule-4-separate from any checker model used in cells.
+
+### Remaining from user mandate mapping
+- controllable: killswitches/HITL exist; checker adds output-quality control point.
+- auditable: P7 (memory trace events, honesty labels in traces) still open — next after checker.
+- efficient: varied retries (retry with temperature bump / reword instead of byte-identical) — small, high-value, unowned.
+- flexible/powerful: capability-conditional scaffolding (the A1 through-line) is the strategic arc after the re-run gate verdict.
