@@ -154,7 +154,7 @@ export const extractStructuredOutput = <T>(
           if (eb) {
             yield* eb.publish({
               _tag: "ReasoningStepCompleted",
-              taskId: "structured-output",
+              taskId: config.traceContext?.taskId ?? "structured-output",
               strategy: "structured-output-native",
               step: 1,
               totalSteps: 1,
@@ -168,7 +168,7 @@ export const extractStructuredOutput = <T>(
         if (eb) {
           yield* eb.publish({
             _tag: "ReasoningStepCompleted",
-            taskId: "structured-output",
+            taskId: config.traceContext?.taskId ?? "structured-output",
             strategy: "structured-output-native",
             step: 1,
             totalSteps: 1,
@@ -211,7 +211,7 @@ export const extractStructuredOutput = <T>(
       if (eb) {
         yield* eb.publish({
           _tag: "ReasoningStepCompleted",
-          taskId: "structured-output",
+          taskId: config.traceContext?.taskId ?? "structured-output",
           strategy: "structured-output",
           step: attempt + 1,
           totalSteps: maxRetries + 1,

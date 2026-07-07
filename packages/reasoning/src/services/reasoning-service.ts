@@ -1,5 +1,6 @@
 // File: src/services/reasoning-service.ts
 import { Context, Effect, Layer } from "effect";
+import { CurrentRunContext } from "@reactive-agents/core";
 import type {
   ReasoningResult,
   ReasoningStrategy,
@@ -178,10 +179,18 @@ export const ReasoningServiceLive = (
             const strategyFn = yield* registry.get(strategyName);
 
             // ── Execute strategy, providing LLMService + ToolService ──
+            // Ambient run correlation (adaptive-harness wave 1): every LLM
+            // exchange under this fiber tree can fall back to this taskId
+            // when its call site did not thread request.traceContext.
             const result = yield* strategyFn({
               ...params,
               config,
-            }).pipe(Effect.provide(strategyLayer));
+            }).pipe(
+              Effect.provide(strategyLayer),
+              params.taskId
+                ? Effect.locally(CurrentRunContext, { taskId: params.taskId })
+                : (eff) => eff,
+            );
 
             return result;
           }),

@@ -38,6 +38,8 @@ import {
   type StopReason,
 } from "@reactive-agents/llm-provider";
 import { emitLLMExchange, emitContextPressure } from "./utils/diagnostics.js";
+import { FiberRef } from "effect";
+import { CurrentRunContext } from "@reactive-agents/core";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
 // layer so it cannot see taskId/iteration directly. Callers that CAN correlate
@@ -102,6 +104,26 @@ function emitForRequest(
   kind: "complete" | "stream" | "completeStructured",
   fullResponse?: PartialCompletion,
 ): Effect.Effect<void, never> {
+  // Adaptive-harness wave 1 (2026-07-07): ambient fallback for correlation.
+  // request.traceContext stays authoritative (record/replay hashes the request
+  // shape); the FiberRef catches call sites that never threaded it. On a fiber
+  // hop (streams) the ref reads null and we degrade to the old placeholder —
+  // never a wrong attribution.
+  return FiberRef.get(CurrentRunContext).pipe(
+    Effect.flatMap((ambient) =>
+      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient?.taskId),
+    ),
+  );
+}
+
+function emitForRequestWith(
+  request: CompletionRequest,
+  responseContent: string,
+  durationMs: number,
+  kind: "complete" | "stream" | "completeStructured",
+  fullResponse: PartialCompletion | undefined,
+  ambientTaskId: string | undefined,
+): Effect.Effect<void, never> {
   // Uniform ContextPressure: emit from this single chokepoint (all strategy
   // paths flow through here, including eventBus-less plan-execute/reflexion
   // sub-kernels) when the call is correlated to a real run (traceContext.taskId
@@ -109,7 +131,7 @@ function emitForRequest(
   // reported prompt tokens, AND surfaced the exact resolved context window.
   // Gated strictly on resolvedParams.contextWindow > 0 (no capability fallback):
   // the gauge must reflect the real provider window, not the model's assumed max.
-  const taskId = request.traceContext?.taskId;
+  const taskId = request.traceContext?.taskId ?? ambientTaskId;
   const tokensUsed = fullResponse?.usage?.inputTokens ?? 0;
   const contextWindow = fullResponse?.resolvedParams?.contextWindow ?? 0;
   const contextPressure =
@@ -118,7 +140,7 @@ function emitForRequest(
       : Effect.void;
 
   return emitLLMExchange({
-    taskId: request.traceContext?.taskId ?? PLACEHOLDER_TASK_ID,
+    taskId: request.traceContext?.taskId ?? ambientTaskId ?? PLACEHOLDER_TASK_ID,
     iteration: request.traceContext?.iteration ?? PLACEHOLDER_ITERATION,
     provider: typeof request.model === "string" ? (fullResponse?.model ?? "unknown") : (request.model?.provider ?? fullResponse?.model ?? "unknown"),
     model: typeof request.model === "string" ? request.model : (request.model?.model ?? fullResponse?.model ?? "unknown"),

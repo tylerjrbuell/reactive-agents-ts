@@ -32,6 +32,24 @@ export const StreamingTextCallback = FiberRef.unsafeMake<
   ((text: string) => Effect.Effect<void, never>) | null
 >(null);
 
+/**
+ * Ambient run correlation (adaptive-harness wave 1, 2026-07-07).
+ *
+ * Set once at the strategy dispatch point (reasoning-service) via
+ * Effect.locally; read as a FALLBACK by the observable-llm exchange emitter
+ * when a call site did not thread `request.traceContext` explicitly.
+ *
+ * Deliberately a fallback, not the authority: the request-field mechanism
+ * stays primary because exchange record/replay hashes the request shape, and
+ * stream consumption can hop fibers (the historical bun 1.3.14 FiberRef
+ * inheritance regression is why trace correlation avoided FiberRef entirely).
+ * Worst case on a fiber hop is exactly today's behavior (placeholder), never
+ * a wrong attribution — the value is run-scoped, not iteration-scoped.
+ */
+export const CurrentRunContext = FiberRef.unsafeMake<
+  { readonly taskId?: string } | null
+>(null);
+
 /** Minimal interface accessed by runner.ts for pause/stop control. */
 export interface RunControllerLike {
   checkpoint(): Promise<{ stop: true } | undefined>;
