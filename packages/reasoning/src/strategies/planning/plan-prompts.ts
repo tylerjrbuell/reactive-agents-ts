@@ -429,9 +429,13 @@ export function buildReflectionPrompt(goal: string, stepResults: StepResult[]): 
 
   sections.push(
     `Review the results above against the original goal.\n\n` +
+    // rw-1 rerun (2026-07-07): reflect declared SATISFIED while an explicit
+    // goal requirement ("identify data conflicts") was never addressed —
+    // step completion is not requirement coverage.
+    `Decompose the GOAL into its explicit requirements (every requested field, format, count, and any required meta-commentary such as noting conflicts, caveats, or unresolved items). Only respond SATISFIED if EVERY requirement is addressed by the results — steps completing without errors is NOT sufficient.\n\n` +
     `Your FIRST LINE must be exactly one of:\n` +
     `SATISFIED: <brief summary>\n` +
-    `UNSATISFIED: <what is missing or wrong>\n\n` +
+    `UNSATISFIED: <which requirement is missing or wrong>\n\n` +
     `Then optionally add details on a new line. The first word MUST be either SATISFIED or UNSATISFIED.`,
   );
 
