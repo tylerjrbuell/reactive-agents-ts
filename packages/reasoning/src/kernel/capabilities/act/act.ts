@@ -681,6 +681,7 @@ export function handleActing(
                   result.execResult.content,
                   batchCall.arguments as Record<string, unknown>,
                   compression.budget ?? 800,
+                  input.taskId ? { taskId: input.taskId, iteration: state.iteration } : undefined,
                 );
                 if (extracted) {
                   obsContent = `[${result.toolName} result — key facts]\n${extracted}`;

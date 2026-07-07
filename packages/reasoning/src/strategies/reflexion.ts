@@ -538,6 +538,7 @@ export const executeReflexion = (
       taskDescription: input.taskDescription,
       output: final.response,
       toolData: collectToolData(final.runningMessages),
+      ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
     });
     const finalTokens = final.totalTokens + gated.tokens;
     const finalCost = final.totalCost + gated.cost;

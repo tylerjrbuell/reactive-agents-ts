@@ -445,6 +445,7 @@ export const executePlanExecute = (
           ),
           maxTokens: 4096,
           temperature: 0.5,
+          ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
         })
         .pipe(
           Effect.mapError(
@@ -472,6 +473,7 @@ export const executePlanExecute = (
           llm,
           taskDescription: input.taskDescription,
           output: scOutput,
+          ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
         });
         scOutput = gated.output;
         totalTokens += gated.tokens;
@@ -1062,6 +1064,7 @@ export const executePlanExecute = (
             ),
             maxTokens: 4096,
             temperature: 0.3,
+            ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
           })
           .pipe(
             Effect.catchAll(() =>
@@ -1181,6 +1184,7 @@ export const executePlanExecute = (
         llm,
         taskDescription: input.taskDescription,
         output: finalOutput,
+        ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       });
       finalOutput = gated.output;
       totalTokens += gated.tokens;

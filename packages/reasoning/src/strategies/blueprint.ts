@@ -517,6 +517,7 @@ export const executeBlueprint = (
           ),
           maxTokens: 4096,
           temperature: 0.3,
+          ...(input.taskId ? { traceContext: { taskId } } : {}),
         })
         .pipe(
           Effect.catchAll(() =>

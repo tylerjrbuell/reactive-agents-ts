@@ -837,6 +837,7 @@ export function extractObservationFacts(
   rawResult: string,
   args: Record<string, unknown>,
   compressionBudget: number,
+  traceContext?: { taskId?: string; iteration?: number },
 ): Effect.Effect<string | undefined, never, LLMService> {
   if (META_TOOL_NAMES.has(toolName)) return Effect.succeed(undefined);
   if (rawResult.length <= compressionBudget) return Effect.succeed(undefined);
@@ -864,6 +865,7 @@ export function extractObservationFacts(
       }],
       temperature: 0,
       maxTokens: THINKING_SAFE_MIN_TOKENS,
+      ...(traceContext ? { traceContext } : {}),
     });
 
     const safe = extractThinkingSafeContent(response);

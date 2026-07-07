@@ -305,6 +305,7 @@ export function executeToolAndObserve(
         exec.content,
         args,
         config.compression?.budget ?? 800,
+        config.taskId ? { taskId: config.taskId } : undefined,
       );
       if (extracted) obsContent = `[${toolName} result — key facts]\n${extracted}`;
     }

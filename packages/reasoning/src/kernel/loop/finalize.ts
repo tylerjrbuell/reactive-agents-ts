@@ -120,6 +120,9 @@ export function enforceQualityGate(input: {
   taskDescription: string;
   output: string;
   toolData?: string;
+  /** P2 (2026-07-07): correlates this synthesis exchange to its run in traces
+   * — without it the call files under the `llm-direct` placeholder. */
+  traceContext?: { taskId?: string; iteration?: number };
 }): Effect.Effect<
   { output: string; tokens: number; cost: number },
   never,
@@ -149,6 +152,7 @@ export function enforceQualityGate(input: {
       systemPrompt: withEnvContext(undefined),
       maxTokens: THINKING_SAFE_MIN_TOKENS,
       temperature: 0.2,
+      ...(input.traceContext ? { traceContext: input.traceContext } : {}),
     })
     .pipe(
       Effect.map((response) => {
