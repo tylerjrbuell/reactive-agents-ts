@@ -56,6 +56,14 @@ export const ContextProfileSchema = Schema.Struct({
    * a per-tier one.
    */
   recentObservationsLimit: Schema.optional(Schema.Number),
+  /**
+   * B2 (2026-07-07) — true when the resolved model runs a thinking/reasoning
+   * mode (capability.supportsThinkingMode). The kernel widens its per-turn
+   * output budget for these models: thinking tokens count against num_predict,
+   * so a flat tier cap starves the visible answer (empty-content max_tokens
+   * turns → escalation thrash → timeout).
+   */
+  thinkingModel: Schema.optional(Schema.Boolean),
 });
 export type ContextProfile = typeof ContextProfileSchema.Type;
 
@@ -144,8 +152,13 @@ export function applyCapabilityMaxTokens(
   modelId: string | undefined,
   callerProvidedMaxTokens: number | undefined,
 ): ContextProfile {
-  if (callerProvidedMaxTokens !== undefined) return profile;
   if (!providerName || !modelId) return profile;
   const cap = resolveCapability(providerName, modelId);
-  return { ...profile, maxTokens: cap.recommendedNumCtx };
+  // thinkingModel threads regardless of the maxTokens resolution — it is
+  // orthogonal metadata the kernel needs for its per-turn output budget (B2).
+  const withThinking = cap.supportsThinkingMode
+    ? { ...profile, thinkingModel: true }
+    : profile;
+  if (callerProvidedMaxTokens !== undefined) return withThinking;
+  return { ...withThinking, maxTokens: cap.recommendedNumCtx };
 }

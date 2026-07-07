@@ -459,7 +459,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     tokenizerFamily: "llama",
     supportsPromptCaching: false,
     supportsVision: false,
-    supportsThinkingMode: false,
+    supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",
     source: "static-table",
@@ -479,7 +479,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     tokenizerFamily: "llama",
     supportsPromptCaching: false,
     supportsVision: false,
-    supportsThinkingMode: false,
+    supportsThinkingMode: true, // qwen3 thinks by default under Ollama (verified 2026-07-07: think:true yields thinking tokens, content empty at low num_predict, done_reason=length)
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",
     source: "static-table",

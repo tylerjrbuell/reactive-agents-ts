@@ -619,7 +619,12 @@ export function handleThinking(
       large: 3000,
       frontier: 4000,
     };
-    const outputMaxTokens = tierMaxTokens[profile.tier] ?? 1500;
+    // B2: thinking models spend their num_predict budget inside <think> before
+    // any visible content — a flat tier cap yields empty max_tokens turns that
+    // thrash the Stage-1 escalation and burn wall-clock (bench: two 2000-token
+    // empty turns = ~148s of a 420s budget). Give them room for think + answer.
+    const thinkingAllowance = profile.thinkingModel ? 6000 : 0;
+    const outputMaxTokens = (tierMaxTokens[profile.tier] ?? 1500) + thinkingAllowance;
     const llmTools = gatedToolSchemas.map((ts) => ({
       name: sanitizeToolName(ts.name),
       description: ts.description,
