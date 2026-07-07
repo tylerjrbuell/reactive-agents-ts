@@ -94,7 +94,7 @@ const healToolName = (
 
 // ─── #E / from_step reference scan ───
 
-const FROM_STEP_RE = /\{\{from_step:(s\d+)(?::summary)?\}\}/g;
+const FROM_STEP_RE = /\{\{from_step:(s\d+)(?::summary|:full)?\}\}/g;
 
 /** Collect every `{{from_step:sN}}` reference found in a step (args+instruction). */
 const collectStepRefs = (step: PlanStep): string[] => {

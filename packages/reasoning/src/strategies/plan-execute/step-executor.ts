@@ -142,7 +142,7 @@ export function executeStep(
       // with agentId={{from_step:s2}} where s2 is the current step).
       for (const [key, value] of Object.entries(resolvedArgs)) {
         if (typeof value === "string" && /\{\{from_step:s\d+\}\}/.test(value)) {
-          resolvedArgs[key] = value.replace(/\{\{from_step:s\d+(?::summary)?\}\}/g, "");
+          resolvedArgs[key] = value.replace(/\{\{from_step:s\d+(?::summary|:full)?\}\}/g, "");
         }
       }
 

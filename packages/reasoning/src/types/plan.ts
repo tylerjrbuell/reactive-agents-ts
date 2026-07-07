@@ -151,6 +151,24 @@ export const hydratePlan = (raw: LLMPlanOutput, context: PlanContext): Plan => {
 
 // ─── Resolve Step References ───
 
+/**
+ * Cap for the bare `{{from_step:sN}}` projection. Chained tool args are the
+ * consumer (search queries, ids, short values) — FM#3 (2026-07-07 census):
+ * splicing the FULL compressed-preview blob into a downstream web-search
+ * `query` blew Tavily's 400-char cap and 400'd deterministically (3/3 rw-1
+ * traces, 8 failures). 380 leaves headroom under that cap; use `:full` when a
+ * step genuinely transfers whole content (e.g. file-write `content`).
+ */
+const BARE_REF_MAX_CHARS = 380;
+
+/** Strip display-oriented noise (preview banners, whitespace runs) from a step
+ * result before it is spliced into a downstream tool argument. */
+const distillStepResult = (raw: string): string =>
+  raw
+    .replace(/^\[[^\]]{0,80}(?:preview|result)[^\]]{0,80}\]\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 export const resolveStepReferences = (
   args: Record<string, unknown>,
   completedSteps: PlanStep[],
@@ -159,13 +177,18 @@ export const resolveStepReferences = (
   for (const [key, value] of Object.entries(args)) {
     if (typeof value === "string") {
       result[key] = value.replace(
-        /\{\{from_step:(s\d+)(?::summary)?\}\}/g,
+        /\{\{from_step:(s\d+)(?::summary|:full)?\}\}/g,
         (match, stepId, _offset, _full) => {
-          const isSummary = match.includes(":summary}}");
           const step = completedSteps.find((s) => s.id === stepId);
           if (!step || step.result === undefined) return match;
-          if (isSummary) return step.result.slice(0, 500);
-          return step.result;
+          if (match.includes(":full}}")) return step.result;
+          if (match.includes(":summary}}")) return step.result.slice(0, 500);
+          // Discriminate by source-step kind: TOOL results are display-oriented
+          // compressed previews (banner + URLs) that break short downstream args
+          // (FM#3 — Tavily 400s); ANALYSIS outputs are authored content a
+          // downstream step consumes deliberately — pass those through whole.
+          if (step.toolName === undefined) return step.result;
+          return distillStepResult(step.result).slice(0, BARE_REF_MAX_CHARS);
         },
       );
     } else {
@@ -177,7 +200,7 @@ export const resolveStepReferences = (
 
 // ─── Dependency Analysis & Wave Scheduling ───
 
-const FROM_STEP_RE = /\{\{from_step:(s\d+)(?::summary)?\}\}/g;
+const FROM_STEP_RE = /\{\{from_step:(s\d+)(?::summary|:full)?\}\}/g;
 
 /**
  * Extract all step IDs that a step depends on, from both `dependsOn` and

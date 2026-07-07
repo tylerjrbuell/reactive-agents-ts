@@ -1,0 +1,48 @@
+import { describe, test, expect } from "bun:test"
+import { resolveStepReferences } from "../src/types/plan.js"
+import type { PlanStep } from "../src/types/plan.js"
+
+const preview =
+    "[web-search result — compressed preview] 1. 10 Best Vector Databases You Should Consider in 2025 ⤵️⤵️⤵️: https://www.example.com/best-vector-dbs  2. Top Edge Databases: https://spam.example/listicle  " +
+    "x".repeat(800)
+
+const step = (id: string, result: string): PlanStep =>
+    ({ id, instruction: "search", toolName: "web-search", status: "completed", retries: 0, tokensUsed: 0, result }) as unknown as PlanStep
+
+const analysisStep = (id: string, result: string): PlanStep =>
+    ({ id, instruction: "analyze", status: "completed", retries: 0, tokensUsed: 0, result }) as unknown as PlanStep
+
+// FM#3 (2026-07-07 failure-mode census): bare {{from_step:sN}} spliced the FULL
+// compressed-preview blob into chained tool args — a downstream web-search
+// `query` embedded ~1000 chars of banner/URL junk and Tavily's 400-char query
+// cap rejected it with HTTP 400, deterministically, in 3/3 rw-1 traces.
+describe("resolveStepReferences — reference projections (FM#3)", () => {
+    test("bare ref → cleaned distillate capped at 380 chars (arg-safe)", () => {
+        const out = resolveStepReferences({ query: "{{from_step:s1}} typescript support" }, [step("s1", preview)])
+        const q = out.query as string
+        expect(q.length).toBeLessThanOrEqual(380 + " typescript support".length)
+        expect(q).not.toContain("[web-search result — compressed preview]")
+        expect(q).toContain("typescript support")
+    })
+
+    test(":summary → 500-char slice (unchanged contract)", () => {
+        const out = resolveStepReferences({ content: "{{from_step:s1:summary}}" }, [step("s1", preview)])
+        expect((out.content as string).length).toBeLessThanOrEqual(500)
+    })
+
+    test(":full → verbatim result for content-transfer args", () => {
+        const out = resolveStepReferences({ content: "{{from_step:s1:full}}" }, [step("s1", preview)])
+        expect(out.content).toBe(preview)
+    })
+
+    test("analysis-step output passes through whole (authored content, not preview junk)", () => {
+        const long = "deliberate analysis output ".repeat(40)
+        const out = resolveStepReferences({ content: "{{from_step:s1}}" }, [analysisStep("s1", long)])
+        expect(out.content).toBe(long)
+    })
+
+    test("unresolved ref left intact", () => {
+        const out = resolveStepReferences({ q: "{{from_step:s9}}" }, [step("s1", preview)])
+        expect(out.q).toBe("{{from_step:s9}}")
+    })
+})
