@@ -45,6 +45,16 @@ export interface BenchmarkTask {
   readonly requiresDynamicSubAgents?: boolean;
   /** Override max iterations for this task (default: 30 for strategy tasks, 5 for single-shot). */
   readonly maxIterations?: number;
+  /**
+   * Per-task wall-clock timeout in SECONDS, overriding the session-level
+   * `timeoutMs` for this task only. Long-horizon tasks (≥40 iterations) exceed
+   * the shared 420s bench wall — that wall buys only ~7–20 local iterations —
+   * so they must carry their own budget. When unset, the run harness falls back
+   * to the session `timeoutMs` (existing tasks are byte-identical). Consumed by
+   * both the session run loop (`runSession`) and the single-model path
+   * (`runBenchmark`) in runner.ts.
+   */
+  readonly timeoutSec?: number;
   readonly successCriteria?: SuccessCriteria;
   readonly dimensionRubrics?: ReadonlyArray<DimensionRubric>;
   readonly fixtures?: ReadonlyArray<TaskFixture>;

@@ -49,6 +49,7 @@ export type {
  * @unstable See v2 Benchmark Surface section above.
  */
 export { REAL_WORLD_TASKS } from "./tasks/real-world.js"
+export { LONG_HORIZON_TASKS, LH1_QUESTION_IDS, LH1_MIN_SOURCES } from "./tasks/long-horizon.js"
 export { ABLATION_VARIANTS, resolveTasks, mergeConfigs, getVariant } from "./session.js"
 
 /**

@@ -59,6 +59,12 @@ export const publicCompetitorQwenSession: BenchmarkSession = {
   ...SHARED,
   id: "public-competitor-qwen3-14b",
   name: "Public Competitor Benchmark — qwen3:14b",
+  // lh-1 (long-horizon research + multi-file deliverable) is added to the
+  // qwen3:14b session ONLY — it is the largest local bench model, the one with
+  // enough headroom to sustain a 40+ iteration horizon. lh-1 carries its own
+  // timeoutSec (see task def), so the shared 420s wall does not apply to it.
+  // cogito:8b and the smoke session keep the fast 5-task set unchanged.
+  taskIds: [...SHARED.taskIds, "lh-1"],
   models: [
     { id: "qwen3-14b", provider: "ollama", model: "qwen3:14b", contextTier: "local" },
   ],

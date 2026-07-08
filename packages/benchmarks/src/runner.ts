@@ -24,6 +24,7 @@ import type {
 } from "./types.js"
 import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
 import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
+import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs } from "./session.js"
 import { checkCapabilitySourcePreflight } from "./preflight.js"
@@ -469,7 +470,9 @@ export const runBenchmarks = async (
     const task = tasks[i];
     writeProgress(i, tasks.length, `${task.tier} · ${task.name}`);
 
-    const result = await runTask(task, options.provider, resolvedModel, timeoutMs, logLevel);
+    // Honor per-task timeoutSec here too (fall back to the run-level wall).
+    const taskTimeoutMs = task.timeoutSec != null ? task.timeoutSec * 1000 : timeoutMs;
+    const result = await runTask(task, options.provider, resolvedModel, taskTimeoutMs, logLevel);
     results.push(result);
 
     if (result.status === "pass") passCount++;
@@ -561,7 +564,7 @@ export const runBenchmarks = async (
 
 // ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
 
-const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...CONTEXT_STRESS_TASKS] as const
+const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...CONTEXT_STRESS_TASKS, ...LONG_HORIZON_TASKS] as const
 
 function getGitSha(): string {
   try { return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim() }
@@ -1119,6 +1122,11 @@ export async function runSession(
   // ──────────────────────────────────────────────────────────────────────────
 
   for (const task of tasks) {
+    // Per-task wall override: long-horizon tasks (≥40 iterations) carry their
+    // own timeoutSec because the session wall (e.g. 420s) buys only a handful
+    // of local iterations. Unset → fall back to the session timeout, so every
+    // existing task keeps byte-identical behavior.
+    const taskTimeoutMs = task.timeoutSec != null ? task.timeoutSec * 1000 : timeoutMs
     for (const model of session.models) {
       // Per-cell capability-source preflight: resolve once per model. A fallback
       // source makes every cell for this model inconclusive (skip dispatch).
@@ -1170,7 +1178,7 @@ export async function runSession(
                 // sandbox — not the repo root — where scoreTask reads them and
                 // the per-cell `finally` cleans them up. Concurrency-safe (ALS).
                 result = await withFileRoot(tmpDir, () =>
-                  dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir),
+                  dispatch(task, model, variant, tmpDir, taskTimeoutMs, session.traceDir),
                 )
               } finally {
                 console.log = consoleLog;
@@ -1182,7 +1190,7 @@ export async function runSession(
               }
             } else {
               result = await withFileRoot(tmpDir, () =>
-                dispatch(task, model, variant, tmpDir, timeoutMs, session.traceDir),
+                dispatch(task, model, variant, tmpDir, taskTimeoutMs, session.traceDir),
               )
             }
             abstentionInputs.push({
