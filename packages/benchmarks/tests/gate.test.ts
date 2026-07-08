@@ -4,8 +4,12 @@ import type {
   SessionReport,
   TaskVariantReport,
 } from "../src/types.js";
-import { evaluateLiftGate, projectTierEvidence } from "../src/gate/gate.js";
-import { DEFAULT_LIFT_POLICY } from "../src/gate/types.js";
+import {
+  evaluateLiftGate,
+  LONG_HORIZON_TAG,
+  projectTierEvidence,
+} from "../src/gate/gate.js";
+import { DEFAULT_LIFT_POLICY, type LiftGateOptions } from "../src/gate/types.js";
 import { formatGateReceipt } from "../src/gate/receipt.js";
 import * as benchmarks from "../src/index.js";
 
@@ -243,5 +247,127 @@ describe("package export", () => {
     expect(typeof (benchmarks as { evaluateLiftGate?: unknown }).evaluateLiftGate).toBe(
       "function",
     );
+  });
+});
+
+// ── A3: per-task-class lift gate (long-horizon cost-per-verified-deliverable) ──
+describe("per-task-class lift gate — long-horizon", () => {
+  // A long-horizon task descriptor carries the discriminator tag.
+  const lhOptions: LiftGateOptions = {
+    tasks: [{ id: "lh-1", tags: ["research", LONG_HORIZON_TAG] }],
+  };
+
+  // Two-tier long-horizon report: the candidate spends +640% tokens but lifts
+  // the deliverable pass-rate +20.8pp (audit-06 shape). taskId = "lh-1" so the
+  // options classify it long-horizon.
+  function longHorizonReport(
+    baseAcc: number,
+    candAcc: number,
+    baseTokens = 1000,
+    candTokens = 7400,
+  ): SessionReport {
+    return makeReport([
+      tvr({ taskId: "lh-1", modelVariantId: "local", variantId: "base", accuracy: baseAcc, meanTokens: baseTokens }),
+      tvr({ taskId: "lh-1", modelVariantId: "local", variantId: "cand", accuracy: candAcc, meanTokens: candTokens }),
+      tvr({ taskId: "lh-1", modelVariantId: "frontier", variantId: "base", accuracy: baseAcc, meanTokens: baseTokens }),
+      tvr({ taskId: "lh-1", modelVariantId: "frontier", variantId: "cand", accuracy: candAcc, meanTokens: candTokens }),
+    ]);
+  }
+
+  it("token growth that buys deliverable is NOT penalized → default-on (short rule would opt-in)", () => {
+    const report = longHorizonReport(0.5, 0.708);
+
+    // Historical short rule: +640% tokens ≫ 15% cap → forced opt-in (the disease).
+    const asShort = evaluateLiftGate(report, "base", "cand");
+    expect(asShort.decision).toBe("opt-in");
+
+    // Long-horizon rule: cost-per-verified-deliverable, not raw token overhead.
+    const asLong = evaluateLiftGate(report, "base", "cand", DEFAULT_LIFT_POLICY, lhOptions);
+    expect(asLong.decision).toBe("default-on");
+  });
+
+  it("tags long-horizon rows with the class + a finite cost-per-verified-deliverable", () => {
+    const report = longHorizonReport(0.5, 0.708);
+    const v = evaluateLiftGate(report, "base", "cand", DEFAULT_LIFT_POLICY, lhOptions);
+    for (const row of v.perTier) {
+      expect(row.taskClass).toBe("long-horizon");
+      expect(row.passes).toBe(true);
+      expect(Number.isFinite(row.costPerDeliverable!)).toBe(true);
+      // CPD = candTokens / deliverable pass-rate = 7400 / 0.708.
+      expect(row.costPerDeliverable!).toBeCloseTo(7400 / 0.708, 3);
+    }
+  });
+
+  it("exposes a per-class breakdown on byClass", () => {
+    const report = longHorizonReport(0.5, 0.708);
+    const v = evaluateLiftGate(report, "base", "cand", DEFAULT_LIFT_POLICY, lhOptions);
+    expect(v.byClass).toBeDefined();
+    const longClass = v.byClass!.find((c) => c.taskClass === "long-horizon");
+    expect(longClass).toBeDefined();
+    expect(longClass!.decision).toBe("default-on");
+    expect(longClass!.aggregate.tiersCovered).toBe(2);
+  });
+
+  it("zero delivered deliverables → FAIL (infinite CPD, never default-on)", () => {
+    // Candidate banks ZERO verified deliverables (pass-rate 0) at huge token cost.
+    const report = longHorizonReport(0.5, 0.0, 1000, 7400);
+    const v = evaluateLiftGate(report, "base", "cand", DEFAULT_LIFT_POLICY, lhOptions);
+    expect(v.decision).not.toBe("default-on");
+    for (const row of v.perTier) {
+      expect(row.taskClass).toBe("long-horizon");
+      expect(row.passes).toBe(false);
+      expect(row.costPerDeliverable).toBe(Number.POSITIVE_INFINITY);
+    }
+  });
+
+  it("projectTierEvidence: a long-horizon tier passes on deliverable-per-token despite >15% token overhead", () => {
+    const report = makeReport([
+      tvr({ taskId: "lh-1", modelVariantId: "local", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+      tvr({ taskId: "lh-1", modelVariantId: "local", variantId: "cand", accuracy: 0.66, meanTokens: 5000 }),
+    ]);
+    // Short classification would fail this tier on token overhead (+400% > 15%).
+    const asShort = projectTierEvidence(report, "base", "cand", DEFAULT_LIFT_POLICY);
+    expect(asShort[0]!.taskClass).toBeUndefined();
+    expect(asShort[0]!.tokenOverheadPct).toBeCloseTo(400, 5);
+    expect(asShort[0]!.passes).toBe(false);
+
+    // Long-horizon classification passes it: +6pp deliverable lift banked.
+    const asLong = projectTierEvidence(report, "base", "cand", DEFAULT_LIFT_POLICY, lhOptions);
+    expect(asLong[0]!.taskClass).toBe("long-horizon");
+    expect(asLong[0]!.passes).toBe(true);
+    expect(asLong[0]!.costPerDeliverable).toBeCloseTo(5000 / 0.66, 3);
+  });
+
+  it("supplying options with no long-horizon tag leaves short-class behavior byte-identical", () => {
+    const report = makeReport([
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.66, meanTokens: 1010 }),
+      tvr({ modelVariantId: "frontier", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+      tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: 0.66, meanTokens: 1010 }),
+    ]);
+    const withoutOpts = evaluateLiftGate(report, "base", "cand");
+    const withShortOpts = evaluateLiftGate(report, "base", "cand", DEFAULT_LIFT_POLICY, {
+      tasks: [{ id: "t1", tags: ["research", "not-long"] }],
+    });
+    expect(withShortOpts.decision).toBe(withoutOpts.decision);
+    expect(withShortOpts.byClass).toBeUndefined();
+    expect(withShortOpts.perTier).toEqual(withoutOpts.perTier);
+  });
+
+  it("partitions a mixed-class report: short row on token rule, long row on CPD rule", () => {
+    const report = makeReport([
+      tvr({ taskId: "t1", modelVariantId: "local", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+      tvr({ taskId: "t1", modelVariantId: "local", variantId: "cand", accuracy: 0.66, meanTokens: 1010 }),
+      tvr({ taskId: "lh-1", modelVariantId: "local", variantId: "base", accuracy: 0.6, meanTokens: 1000 }),
+      tvr({ taskId: "lh-1", modelVariantId: "local", variantId: "cand", accuracy: 0.66, meanTokens: 5000 }),
+    ]);
+    const ev = projectTierEvidence(report, "base", "cand", DEFAULT_LIFT_POLICY, lhOptions);
+    expect(ev.length).toBe(2);
+    const shortRow = ev.find((r) => r.taskClass === undefined);
+    const longRow = ev.find((r) => r.taskClass === "long-horizon");
+    expect(shortRow!.passes).toBe(true); // +1% tokens, within cap
+    expect(longRow!.passes).toBe(true); // +400% tokens, but deliverable banked
+    const v = evaluateLiftGate(report, "base", "cand", DEFAULT_LIFT_POLICY, lhOptions);
+    expect(v.byClass!.length).toBe(2);
   });
 });
