@@ -108,6 +108,9 @@ export const codeExecuteTool: ToolDefinition = {
   timeoutMs: 30_000,
   requiresApproval: true,
   source: "builtin",
+  // CAN write files via fs/Bun calls in the code — recognized as a file
+  // producer so those writes become visible artifacts (audit 01-F1 / C2).
+  produces: "file",
 };
 
 /**

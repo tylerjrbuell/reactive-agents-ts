@@ -650,6 +650,8 @@ export const shellExecuteTool: ToolDefinition = {
   timeoutMs: 30_000,
   requiresApproval: true,
   source: "builtin",
+  // CAN write files via redirects / commands — file producer (audit 01-F1 / C2).
+  produces: "file",
 };
 
 // ── Handler factory ───────────────────────────────────────────────────

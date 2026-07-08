@@ -40,6 +40,7 @@ export const dockerExecuteTool: ToolDefinition = {
   timeoutMs: 30_000,
   requiresApproval: true,
   source: "builtin",
+  produces: "file",
 };
 
 /**

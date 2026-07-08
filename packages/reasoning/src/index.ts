@@ -205,6 +205,7 @@ export type {
   DeliverableCommitEntry,
 } from "./kernel/ledger/run-ledger.js";
 export { projectStepsToLedger, stepToEntries } from "./kernel/ledger/step-projection.js";
+export { deriveArtifactEntries, artifacts } from "./kernel/ledger/artifact-projection.js";
 export { recordTerminalVerdict, recordEvidenceClaims } from "./kernel/ledger/emit.js";
 export type { TerminalVerdictFact } from "./kernel/ledger/emit.js";
 export { deriveDeliverablePaths } from "./kernel/capabilities/verify/derive-conditions.js";

@@ -78,6 +78,7 @@ import {
   passthroughOutputDeliverable,
   deliverableTerminationReason,
   countDeliverableCandidates,
+  countArtifacts,
   buildEffectiveToolsUsed,
 } from "./runner-helpers/deliverable.js";
 
@@ -752,7 +753,16 @@ export function runKernel(
         (state.meta.synthesisRetryCount ?? 0) +
         (state.meta.groundingBlockRetry ?? 0) +
         (secondUngroundedTerminal ? groundingRedirects + 1 : 0);
-      const hasDeliverableForAbstain = countDeliverableCandidates(state) > 0;
+      // Deliverable-truth (Wave C / C2, audit 01-F1 item 7): a REAL file
+      // artifact (tool-declared ledger entry) is now an authoritative "we have a
+      // deliverable" signal, so abstention never forces over one — even a
+      // code-execute / shell write the old any-success heuristic would have
+      // recognized only via its observation. Evidence candidates remain the
+      // fallback so non-artifact tasks (research answers, no file) stay sane:
+      // the union is a superset of the prior signal, so no run that was
+      // previously protected loses protection (behavior pinned).
+      const hasDeliverableForAbstain =
+        countArtifacts(state) > 0 || countDeliverableCandidates(state) > 0;
 
       const forced = decideForcedAbstention({
         requiredToolUnavailable,

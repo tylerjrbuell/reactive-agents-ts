@@ -30,7 +30,12 @@ export interface ForceAbstentionInput {
    * iterationsRemaining as 0 — no iterations can fix a structurally missing tool.
    */
   readonly iterationsRemaining: number;
-  /** True when `countDeliverableCandidates(state) > 0`. Never forces over a real deliverable. */
+  /**
+   * True when the run has a real deliverable — a tool-declared file artifact
+   * (`countArtifacts > 0`, audit 01-F1) OR an evidence deliverable-candidate
+   * (`countDeliverableCandidates > 0`, the fallback for non-artifact research
+   * tasks). Never forces abstention over either.
+   */
   readonly hasDeliverable: boolean;
   /**
    * F1 — grounded-terminal invariant (2026-07-02). The declared required tools

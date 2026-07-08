@@ -58,6 +58,8 @@ export const fileReadTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: false,
   source: "builtin",
+  // Read-only — never produces a durable artifact (audit 01-F1 / C2).
+  produces: "none",
   // Sprint 3.4 Scaffold 1 — file-read reads ONE file per call. When a task
   // mentions multiple files, the classifier should multiply minCalls.
   cardinality: "per-entity",
@@ -157,6 +159,8 @@ export const fileWriteTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: true,
   source: "builtin",
+  // Produces a file artifact — path extracted from the path arg (audit 01-F1 / C2).
+  produces: "file",
 };
 
 export const fileWriteHandler = (

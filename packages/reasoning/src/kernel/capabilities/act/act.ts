@@ -18,8 +18,11 @@ import {
   type ToolCallSpec,
   runHealingPipeline,
   getFileRoot,
+  resolveProduces,
   REQUEST_USER_INPUT_TOOL_NAME,
 } from "@reactive-agents/tools";
+import { deriveArtifactEntries } from "../../../kernel/ledger/artifact-projection.js";
+import { appendEntries } from "../../../kernel/ledger/run-ledger.js";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
@@ -1011,11 +1014,29 @@ export function handleActing(
         }
       }
 
+      // ── Artifact truth (Wave C / C2, audit 01-F1) ────────────────────────────
+      // Emit `artifact` ledger entries for files this round produced, recognized
+      // by the tool's DECLARED `produces` field (resolveProduces) + the per-
+      // builtin path-extraction contract — not the old 4-name/15-key heuristic.
+      // Seeded via patch.ledger (the same seam the terminal-verdict/claim
+      // emitters use); the C1 chokepoint then appends this round's step-derived
+      // tool-invocation/tool-result entries on top. The chokepoint itself is
+      // untouched (C1 owns it). Only the NEW steps of this round are scanned.
+      const roundNewSteps = allSteps.slice(state.steps.length);
+      const artifactInputs = deriveArtifactEntries(
+        roundNewSteps,
+        resolveProduces,
+        state.iteration + 1,
+      );
+      const ledgerWithArtifacts =
+        artifactInputs.length > 0 ? appendEntries(state.ledger, artifactInputs) : undefined;
+
       // All native tool calls executed — transition back to thinking.
       // Any harness signals raised this round flow via pendingGuidance — think.ts
       // reads and clears them at the start of the next turn.
       return transitionState(state, {
         steps: allSteps,
+        ...(ledgerWithArtifacts ? { ledger: ledgerWithArtifacts } : {}),
         toolsUsed: newToolsUsed,
         scratchpad: mergedScratchpad,
         messages: newConversationHistory,

@@ -214,6 +214,24 @@ export const ToolDefinitionSchema = Schema.Struct({
    */
   source: Schema.Literal("builtin", "mcp", "function", "plugin"),
   /**
+   * Deliverable-truth declaration (Wave C / C2, audit 01-F1) — what KIND of
+   * durable output a successful call produces. This is how the harness's
+   * artifact ledger recognizes a produced file, REPLACING the old 4-name
+   * `WRITING_TOOL_NAMES` / 15-key path guess: artifact-ness now comes from the
+   * tool's own declaration, not a hardcoded name set.
+   *
+   * - `"file"` — Can write a durable file artifact (file-write, code-execute,
+   *   shell-execute, docker-execute). A successful call emits an `artifact`
+   *   ledger entry (path extracted per {@link extractArtifactFacts}).
+   * - `"data"` — Returns data into the run (search, http, MCP tools) — evidence,
+   *   not a durable deliverable. No artifact entry.
+   * - `"none"` — Read-only / no durable side effect (file-read). No artifact entry.
+   *
+   * When omitted the artifact resolver treats the tool as `"data"` (the safe,
+   * false-UNMET direction — an unknown tool never fabricates an artifact).
+   */
+  produces: Schema.optional(Schema.Literal("file", "data", "none")),
+  /**
    * Whether results from this tool can be cached for identical inputs.
    *
    * Side-effecting tools (file-write, code-execute, send-email) should set this to `false`.

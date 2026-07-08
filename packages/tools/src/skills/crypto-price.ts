@@ -173,6 +173,7 @@ export const cryptoPriceTool: ToolDefinition = {
   timeoutMs: 10_000,
   requiresApproval: false,
   source: "builtin",
+  produces: "data",
 };
 
 export const cryptoPriceHandler = (

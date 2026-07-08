@@ -50,6 +50,7 @@ export const writeResultToFileTool: ToolDefinition = {
   requiresApproval: false,
   source: "builtin",
   category: "data",
+  produces: "file",
 };
 
 export const makeWriteResultToFileHandler =

@@ -489,6 +489,9 @@ export const ToolServiceLive = Layer.effect(
               timeoutMs: 30_000,
               requiresApproval: false,
               source: "mcp",
+              // MCP tools return data into the run by default (audit 01-F1 / C2);
+              // a server that writes files can declare `produces: "file"`.
+              produces: "data",
             },
             (args) =>
               mcpClient.callTool(server.name, toolName, args).pipe(

@@ -70,6 +70,14 @@ export type {
 // ─── Validation ───
 export { validateToolInput } from "./validation/input-validator.js";
 
+// ─── Artifact truth (Wave C / C2) ───
+export {
+  resolveProduces,
+  extractArtifactFacts,
+  type ProducesKind,
+  type ArtifactFact,
+} from "./artifacts/artifact-contract.js";
+
 // ─── Skills ───
 export {
   builtinTools,

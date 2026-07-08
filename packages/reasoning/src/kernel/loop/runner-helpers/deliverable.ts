@@ -23,6 +23,7 @@ import {
   type KernelState,
   transitionState,
 } from "../../../kernel/state/kernel-state.js";
+import { artifacts } from "../../ledger/artifact-projection.js";
 import { META_TOOLS as RUNNER_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import {
   type Deliverable,
@@ -246,6 +247,21 @@ export function countDeliverableCandidates(state: KernelState): number {
   }
 
   return count;
+}
+
+/**
+ * Count REAL file artifacts produced this run — the tool-declared `artifact`
+ * ledger entries (Wave C / C2, audit 01-F1), NOT "any successful observation".
+ * This is the deliverable-truth signal the old `countDeliverableCandidates`
+ * conflated with evidence (5 web-searches counted as "5 artifacts").
+ *
+ * Consumers that must distinguish "produced a file" from "gathered evidence"
+ * read THIS; consumers that need substantive-output-of-any-kind (deliverable
+ * assembly for research answers) keep reading `countDeliverableCandidates` so
+ * non-artifact tasks stay sane. Empty ledger / no artifacts → 0.
+ */
+export function countArtifacts(state: KernelState): number {
+  return artifacts(state.ledger).length;
 }
 
 export function getDeliverableObservationContent(

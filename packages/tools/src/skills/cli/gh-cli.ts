@@ -33,6 +33,7 @@ export const ghCliTool: ToolDefinition = {
   timeoutMs: 30_000,
   requiresApproval: false,
   source: "builtin",
+  produces: "data",
 };
 
 export const makeGhCliHandler =
