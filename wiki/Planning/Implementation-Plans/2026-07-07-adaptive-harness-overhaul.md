@@ -82,7 +82,18 @@ The bench has no task >25 iterations, so every gate verdict to date is horizon-b
 
 **Exit:** lh-1 completes under the profile; rw-1..9 unchanged without it.
 
-## Phase 4 — Evidence Ledger (pillar 4)
+> **RATIFIED RESTRUCTURE 2026-07-08** ([[../../Decisions/2026-07-08-harness-meta-loop-ratified|meta-loop decision]], [[../../Architecture/Design-Specs/2026-07-08-harness-meta-loop-missing-pieces|spec]]): Phase 4 executes as **4a RunContract → 4b RunLedger → 4c Projector**; Phase 5 as **5a RunAssessment → 5b Control Plane**. The meta-loop DAG (Contract → Ledger → Assessment → Control/Policy → Actuators → Projector, one-directional) is the binding wiring contract for everything below.
+
+## Phase 4a — RunContract (harness comprehension) [META-LOOP]
+
+1. `RunContract {requirements: TaskRequirement[], deliverables: DeliverableSpec[], constraints, horizon, acceptance}` compiled at run start from task prose (upgraded deriveConditions), declared TaskContract, tool nominations, comprehend classification (+horizon axis).
+2. `TaskRequirement {id, kind: question-answered | artifact-produced | constraint-held | tool-coverage, spec, weight}` — grafts the judge's decomposition pattern onto the live PostCondition vocabulary. LLM-assisted decomposition allowed at COMPILE time; output typed + frozen; mid-run amendment only via ledger `contract-amended` entry.
+3. Consumers wired in this sub-phase: terminal gate check 2.5 (contract vs evidence, replacing tool-name sets), plan-execute reflect (free-text requirement list → contract refs), receipt `deliverables[]` (missing/produced).
+4. Enforcement: `scripts/check-run-contract.sh` — no done-ness inference (requiredTools sets, prompt regex for paths) outside the contract compiler.
+
+**Verify:** rw-8 partial-completion cell (1-of-3 files must terminate `partial` with the 2 missing deliverables named); lh-1. **Exit:** "what does done mean" has exactly one typed answer per run.
+
+## Phase 4b — RunLedger (pillar 4)
 
 1. `RunLedger`: append-only typed entries — tool-invocation(+result), claim, verdict, harness-signal, compaction-marker, checkpoint-marker. Grown FROM `steps[]` (steps become a projection, preserving the two-record insight).
 2. Projections: LLM-visible messages (curator), strategy views, receipts + honesty labels (queries — closes P7), trace (the ledger IS the trace source).
@@ -99,7 +110,28 @@ The bench has no task >25 iterations, so every gate verdict to date is horizon-b
 
 **Verify:** durable resume/replay equivalence tests; switch tests; compaction property tests (protected classes survive; context strictly shrinks or event fires); **[LH-AMEND] lh-1 cell + rw-8 partial-completion cell (1-of-3-files must NOT pass)**. **Exit:** steps/scratchpad/plan-state have single source of truth **and `artifacts()`/`outstanding()` are queryable mid-run**.
 
-## Phase 5 — Control Plane (pillar 8)
+## Phase 4c — Projector (attention authority) [META-LOOP]
+
+1. Single rendering authority for the LLM-visible window: `project(contract, ledger, assessment, plan) → messages`. Absorbs curator/assembly stages, guidance render, priorContext (H1 patch subsumed), todo render, preview emission.
+2. Two-way contract: **reachability** — every ledger entry reachable from the window via ONE `ref://` vocabulary (previews, recall gate, from_step all speak it; H2 patch subsumed); **traceability** — every rendered line carries entry provenance (compaction stubs enumerate exactly what they dropped).
+3. Render profiles keyed by assessment.phase: gathering = wide evidence; synthesize = full deliverable materials at full fidelity; contract.outstanding rendered as the standing goal frame every iteration.
+4. Trace event `projection-rendered {sections, refs, droppedRefs, chars}`.
+5. Enforcement: `scripts/check-projection.sh` — no prompt/message assembly outside the projector module.
+
+**Verify:** iteration-30 read-back test (iteration-3 fact retrievable via ref, no re-gathering); switch-blindness test (post-switch window contains handoff). **Exit:** rendered window is a pure function of (contract, ledger, assessment, plan).
+
+## Phase 5a — RunAssessment (harness perception) [META-LOOP]
+
+1. One pure estimator, recomputed per iteration: `assess(contract, ledger, budget) → {requirements: {satisfied, outstanding, blocked}, deliverables: {produced, missing}, evidenceDelta, phase: orient|gather|execute|synthesize|verify, pace: {burnRatio, band: green|economize|triage|terminal}, health}`.
+2. **The only home for counters and thresholds.** Existing signals fold in: entropy trajectory, budget signal, requirement-state scans, loop/stall/veto streaks — all become windowed, phase-scaled fields.
+3. Budget joins remaining work: pace computed FROM outstanding × burnRatio (bands 0.60/0.80/0.95 per audit 05 proposal).
+4. Run-phase model governs guard scaling (gathering tolerates repetition; synthesize protected from early-stop — H6 patch subsumed) and budget classes (synthesize = generous — H3 pattern generalized).
+5. Trace event `assessment` per iteration.
+6. Enforcement: `scripts/check-run-assessment.sh` — no count/streak/threshold state outside the estimator module.
+
+**Verify:** long-gathering false-positive test (15 distinct successful calls / 15 iterations → zero termination pressure). **Exit:** every guard is a pure function over RunAssessment.
+
+## Phase 5b — Control Plane (pillar 8)
 
 1. `ControlProposal = { actor, action (redirect|switch|abstain|budget|steer|stop), priority, reason }`.
 2. Loop detector, RI dispatcher, guards, budget monitor, F1/F3 all emit proposals; nothing acts directly.
@@ -150,9 +182,12 @@ Only after 1–6 hollow the strategies: plan-execute first (most duplication: 2 
 | 3 Terminal Authority | M | after 1 — **SHIPPED** |
 | 3.6 LH hotfix wave [LH-AMEND] | S (6 fixes, 0.5-class) | after 3 |
 | 3.5 LH instrument [LH-AMEND] | S (lh-1 + guard profile + lift-rule) | with 3.6 |
-| 4 Ledger (amended) | L (the big one) | after 3.5 gate exists |
-| 5 Control Plane (amended) | S–M | after 4 |
-| 6 Policy Compiler (amended) | M + ablation time | after 2,3,4 |
+| 4a RunContract [META-LOOP] | S–M | after 3.5 gate exists |
+| 4b RunLedger (amended) | L (the big one) | after 4a |
+| 4c Projector [META-LOOP] | M | after 4b |
+| 5a RunAssessment [META-LOOP] | M | after 4b (contract+ledger inputs) |
+| 5b Control Plane (amended) | S–M | after 5a |
+| 6 Policy Compiler (amended) | M + ablation time | after 4a-c, 5a |
 | 7 Strategy→Policy | L (amortized per strategy) | last |
 
 **[LH-AMEND] Durability rule:** every remaining phase ships its grep-able enforcement script (check-tool-surface, check-ledger-writes, check-control-plane, check-policy-compiler, check-single-loop, check-deliverable-truth). A phase without its invariant script is not done.
