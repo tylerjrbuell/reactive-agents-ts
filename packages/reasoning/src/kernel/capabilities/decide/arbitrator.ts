@@ -1280,6 +1280,7 @@ import type {
 import { transitionState } from "../../state/kernel-state.js";
 import { commitDeliverable } from "../../loop/runner-helpers/deliverable.js";
 import { modelSynthesisDeliverable } from "@reactive-agents/core";
+import { recordEvidenceClaims, recordTerminalVerdict } from "../../ledger/emit.js";
 
 /**
  * Apply a Verdict to KernelState. The single helper every termination
@@ -1303,8 +1304,23 @@ export function applyTermination(
       // output-only patch on a `done` state sticks per the transitionState
       // invariant), then funnel the output string through the single writer
       // commitDeliverable so the Arbitrator stops being a raw output writer.
+      // C1 — persist the terminal verdict + the answer's evidence claims that
+      // both gates used to compute and DISCARD (audit 01 / 01-F2). Threaded via
+      // patch.ledger so transitionState carries them (no new step is added).
+      const successLedger = recordEvidenceClaims(
+        recordTerminalVerdict(state.ledger, {
+          verified: true,
+          terminatedBy: verdict.terminatedBy,
+          iteration: state.iteration,
+        }),
+        verdict.output,
+        state.steps,
+        state.scratchpad,
+        state.iteration,
+      );
       const done = transitionState(state, {
         status: "done" as const,
+        ledger: successLedger,
         meta: {
           ...state.meta,
           terminatedBy: verdict.terminatedBy,
@@ -1323,9 +1339,17 @@ export function applyTermination(
       // verdict.output is nulled by the invariant), then — only when a payload
       // exists — route it through the single writer. `transitionToFailed` is
       // false on the already-failed state, so commitDeliverable's output sticks.
+      // C1 — persist the terminal (failure) verdict as a ledger fact.
+      const failedLedger = recordTerminalVerdict(state.ledger, {
+        verified: false,
+        terminatedBy: verdict.terminatedBy,
+        reason: verdict.error,
+        iteration: state.iteration,
+      });
       const failed = transitionState(state, {
         status: "failed" as const,
         error: verdict.error,
+        ledger: failedLedger,
         meta: {
           ...state.meta,
           terminatedBy: verdict.terminatedBy,

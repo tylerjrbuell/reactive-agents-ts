@@ -235,6 +235,38 @@ export function detectFabricatedMeasurement(
   return { ok: false, violations };
 }
 
+/** An empirical claim classified against the tool-observation corpus. */
+export interface ClassifiedClaim {
+  readonly phrase: string;
+  readonly value: number;
+  readonly grounded: boolean;
+}
+
+/**
+ * Classify EVERY empirical measurement claim in `output` against the corpus,
+ * returning each claim's phrase, value, and grounded flag. Same extraction +
+ * magnitude-corroboration logic as {@link detectFabricatedMeasurement} — but it
+ * surfaces ALL claims (grounded and not) instead of only violation messages, so
+ * the RunLedger can record them as first-class `claim` facts (audit 01-F2:
+ * claims were previously extracted and DISCARDED). Empty when no claims.
+ */
+export function classifyMeasurementClaims(
+  output: string,
+  evidence: string,
+  tolerance = 0.01,
+): ClassifiedClaim[] {
+  const claims = extractMeasurementClaims(output);
+  if (claims.length === 0) return [];
+  const corpus = extractAllNumbers(evidence);
+  return claims.map((claim) => ({
+    phrase: claim.phrase,
+    value: claim.value,
+    grounded: corpus.some(
+      (e) => Math.abs(claim.value - e) <= tolerance * Math.max(Math.abs(claim.value), Math.abs(e), 1),
+    ),
+  }));
+}
+
 /**
  * Numeric grounding (opt-in). A figure in `output` is grounded iff some figure
  * in `evidence` is within `tolerance` (fractional). Tolerant value-match — NOT

@@ -8,6 +8,8 @@
  */
 import { Effect } from "effect";
 import type { ReasoningStep } from "../../types/index.js";
+import type { RunLedger } from "../ledger/run-ledger.js";
+import { projectStepsToLedger } from "../ledger/step-projection.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { ResultCompressionConfig, ToolCallSpec, FinalAnswerCapture, ToolCallResolver, ToolCallingDriver } from "@reactive-agents/tools";
 import type { LLMService } from "@reactive-agents/llm-provider";
@@ -403,6 +405,19 @@ export interface KernelState {
 
   // Accumulation
   readonly steps: readonly ReasoningStep[];
+  /**
+   * The append-only RunLedger (Wave C / task C1) — the typed event store the
+   * meta-loop projects from (Assessment / Projector / Control). Grown FROM
+   * steps[] via dual-emit at `transitionState`: while this task ships, `steps`
+   * stays authoritative and this is an additive, queryable mirror of the
+   * high-value facts (tool calls/results, verdicts, claims, harness signals,
+   * plus the terminal verdict + evidence claims the gates used to discard).
+   * Optional so hand-built / legacy states need no change; readers guard with
+   * `?? []`. `initialKernelState` seeds it empty; the durable kernel-codec
+   * round-trips it (plain-data array) for crash-resume.
+   * TODO(C-final): steps becomes a projection OF this ledger (last step of Wave C).
+   */
+  readonly ledger?: RunLedger;
   readonly toolsUsed: ReadonlySet<string>;
   readonly scratchpad: ReadonlyMap<string, string>;
 
@@ -988,6 +1003,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     strategy: opts.strategy,
     kernelType: opts.kernelType,
     steps: [],
+    ledger: [],
     toolsUsed: new Set<string>(),
     scratchpad: new Map<string, string>(),
     iteration: 0,
@@ -1035,11 +1051,34 @@ export function transitionState(
   const transitionToFailed =
     patch.status === "failed" && state.status !== "failed";
   const outputUnspecified = !("output" in patch);
+
+  // ── Dual-emit chokepoint (Wave C / task C1) ──────────────────────────────
+  // The RunLedger grows FROM steps[] here — the single site every step writer
+  // funnels through. Steps are append-only (`[...prior, ...new]` at every
+  // writer), so the NEW steps of a transition are the positional tail beyond
+  // the prior length; we derive the matching ledger entries from them. `steps`
+  // itself is carried through UNCHANGED (byte-identical behavior). A caller
+  // that already appended non-step facts (e.g. the terminal verdict / evidence
+  // claims in applyTermination) passes them via `patch.ledger`, which becomes
+  // the base the step-derived entries extend.
+  // TODO(C-final): steps becomes a projection of this ledger — the flip happens HERE.
+  const baseLedger = patch.ledger ?? state.ledger ?? [];
+  const priorStepCount = state.steps?.length ?? 0;
+  const nextLedger: RunLedger =
+    patch.steps !== undefined && patch.steps.length > priorStepCount
+      ? projectStepsToLedger(
+          baseLedger,
+          patch.steps.slice(priorStepCount),
+          patch.iteration ?? state.iteration,
+        )
+      : baseLedger;
+
   const next = {
     ...state,
     ...patch,
     toolsUsed: patch.toolsUsed ?? state.toolsUsed,
     scratchpad: patch.scratchpad ?? state.scratchpad,
+    ledger: nextLedger,
   };
   if (transitionToFailed && outputUnspecified) {
     return { ...next, output: null };
@@ -1069,6 +1108,7 @@ export function serializeKernelState(state: KernelState): SerializedKernelState 
     strategy: state.strategy,
     kernelType: state.kernelType,
     steps: state.steps,
+    ledger: state.ledger,
     messages: state.messages,
     toolsUsed: [...state.toolsUsed].sort(),
     scratchpad: Object.fromEntries(state.scratchpad),
@@ -1099,6 +1139,7 @@ export function deserializeKernelState(raw: SerializedKernelState): KernelState 
     strategy: raw.strategy,
     kernelType: raw.kernelType,
     steps: raw.steps,
+    ledger: raw.ledger,
     messages: raw.messages,
     toolsUsed: new Set(raw.toolsUsed),
     scratchpad: new Map(Object.entries(raw.scratchpad)),

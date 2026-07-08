@@ -171,6 +171,42 @@ export type {
 } from "./kernel/contract/run-contract.js";
 export { decomposeRequirements, shouldDecompose } from "./kernel/contract/decompose.js";
 export type { DecomposeOptions } from "./kernel/contract/decompose.js";
+
+// ─── RunLedger — the append-only event store (meta-loop Phase 4b / task C1) ───
+// The SECOND node of the meta-loop DAG: the typed, append-only record of what
+// HAPPENED, grown FROM steps[] via dual-emit. The substrate later waves project
+// from (Assessment evidence deltas, Projector renders, Control re-entry).
+// Consumed by C2 (artifact entries), C3 (evidence facets), D1 (projector),
+// B2/receipt (deliverables), and Arc-1 convergence (C1b — trace/EventBus rebase).
+export {
+  appendEntry,
+  appendEntries,
+  entriesOfKind,
+  nextSeq,
+  ledgerSize,
+} from "./kernel/ledger/run-ledger.js";
+export type {
+  RunLedger,
+  LedgerEntry,
+  LedgerEntryKind,
+  LedgerEntryInput,
+  ToolInvocationEntry,
+  ToolResultEntry,
+  ArtifactEntry,
+  RequirementEntry,
+  RequirementStatus,
+  ClaimEntry,
+  VerdictEntry,
+  HarnessSignalEntry,
+  HandoffEntry,
+  ContractAmendedEntry,
+  CompactionMarkerEntry,
+  CheckpointMarkerEntry,
+  DeliverableCommitEntry,
+} from "./kernel/ledger/run-ledger.js";
+export { projectStepsToLedger, stepToEntries } from "./kernel/ledger/step-projection.js";
+export { recordTerminalVerdict, recordEvidenceClaims } from "./kernel/ledger/emit.js";
+export type { TerminalVerdictFact } from "./kernel/ledger/emit.js";
 export { deriveDeliverablePaths } from "./kernel/capabilities/verify/derive-conditions.js";
 export { classifyTaskHorizon, classifyHorizon } from "./kernel/capabilities/comprehend/task-horizon.js";
 export type { TaskHorizon, TaskHorizonClassification } from "./kernel/capabilities/comprehend/task-horizon.js";
