@@ -1,5 +1,7 @@
 # Adaptive Harness Overhaul — Implementation Plan (2026-07-07)
 
+> **Program position:** Strand K (kernel) of [[../../Architecture/Specs/09-UNIFIED-PROGRAM|09 — The Unified Program]], which owns cross-strand sequencing + convergence rulings (C1: RunLedger absorbs Arc 1's event log; C2: RunContract absorbs TaskContract; C7: v0.14 ships at the Wave A/B boundary).
+
 **Authority:** [[../../Decisions/2026-07-07-adaptive-harness-architecture-ratified|ratified decision]] + [[../../Architecture/Design-Specs/2026-07-07-ideal-harness-architecture|9-pillar spec]].
 **Evidence base:** every phase below maps to a root cause PROVEN in the 2026-07-07 fix waves — no speculative work.
 **Goal:** a harness that is dynamic — composed per model + task at build time, recomposable mid-run on evidence — for an OS that creates robust, capable, performant agents of all kinds.

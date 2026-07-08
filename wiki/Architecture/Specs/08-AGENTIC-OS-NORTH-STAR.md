@@ -2,6 +2,8 @@
 
 > **Status:** Ratified direction (2026-07-05). Successor to `05-DESIGN-NORTH-STAR.md` §6 for forward sequencing; the 8 pillars of `00-VISION.md` remain the constitution and are NOT amended — this spec is how they get fully realized.
 >
+> **2026-07-08 program note:** cross-strand SEQUENCING (arc ordering, release slicing) now lives in [[09-UNIFIED-PROGRAM|09 — The Unified Program]] — the kernel meta-loop overhaul (Strand K) executes before Arcs 2–4, and convergence rulings C1–C7 there bind this spec's overlaps (Arc 1 event log → RunLedger; receipt/contract/gate unifications). Arc CONTENT, exit gates, honest-claims law, and non-goals here are unchanged and authoritative.
+>
 > **One line:** Reactive Agents stops being a framework and becomes an **operating system for cognition** — runs are processes, execution history is version control, trust is a type, the runtime learns the model it drives, and every run can improve the platform. The model is the CPU; RA is everything that made CPUs usable.
 
 ---

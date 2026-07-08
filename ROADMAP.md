@@ -1,9 +1,9 @@
 # Reactive Agents — Roadmap
 
-> **Last updated:** 2026-07-05 (v0.13.0 published; direction re-ratified as the **Agentic OS program** — see `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md`)
+> **Last updated:** 2026-07-08 (unified program ratified — `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` now owns cross-strand sequencing: the kernel meta-loop overhaul executes ahead of Arcs 2-4; v0.14 = Arc 1 + harness meta-loop foundations, v0.15 = the self-aware kernel, v0.16 = Boundary+Gate, v0.17 = Team, v0.18 = Flywheel)
 > **The open-source agent framework built for control, not magic.**
 
-This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (north star v6.0, 2026-07-05) + `wiki/Decisions/2026-06-10-roadmap-realignment-v0.12-v1.0.md` (historical sequencing). When they disagree, the north-star spec wins and this doc is out of date — open an issue.
+This roadmap is the public-facing milestone tracker. The internal authoritative direction lives in `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md` (program sequencing + convergence rulings, 2026-07-08) over `wiki/Architecture/Specs/08-AGENTIC-OS-NORTH-STAR.md` (product-arc content, v6.0). When they disagree with this doc, the specs win and this doc is out of date — open an issue.
 
 **Live board:** [github.com/users/tylerjrbuell/projects/1](https://github.com/users/tylerjrbuell/projects/1)
 

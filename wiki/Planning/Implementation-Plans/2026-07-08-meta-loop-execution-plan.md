@@ -1,5 +1,7 @@
 # Meta-Loop Execution Plan — Subagent-Driven (2026-07-08)
 
+> **Program position:** dispatch layer of Strand K in [[../../Architecture/Specs/09-UNIFIED-PROGRAM|09 — The Unified Program]]. Wave C must honor convergence ruling C1 (Arc 1 log/receipt/replay re-base onto RunLedger projections — no second event store); Wave B lands C2 (RunContract absorbs TaskContract); v0.14 launch line opens at the Wave A/B boundary (C7).
+
 **Authority:** [[../../Decisions/2026-07-08-harness-meta-loop-ratified|meta-loop ratification]] + [[../../Architecture/Design-Specs/2026-07-08-harness-meta-loop-missing-pieces|spec]] + [[2026-07-07-adaptive-harness-overhaul|amended overhaul plan]].
 **Evidence:** [[../../Research/Audit-Reports-2026-07-08/00-SYNTHESIS-deliverables-longhorizon-sweep|2026-07-08 sweep]] (audits 01–06) + 2026-07-07 sweep.
 **Status ledger:** Phases 1–3 SHIPPED (`60b805fc`/`e0d7ce61`/`c102489a`/`3e2d3876`) · bench validity SHIPPED (`a9727e8c`) · Phase 3.6 hotfixes H1–H6 SHIPPED (`7bb5afdb`) · everything below is OPEN.
