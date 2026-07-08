@@ -93,6 +93,12 @@ import { evaluateStrategySwitch } from "../../kernel/capabilities/reflect/strate
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
 import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
+import {
+  assessmentFailuresAreArgVarying,
+  assessmentIsGatheringPhase,
+  nextLowDeltaCount,
+  nextStalledCount,
+} from "../../kernel/assessment/guard-adapters.js";
 import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
@@ -662,7 +668,17 @@ export function runIterationPass(
       const tokenDelta = state.tokens - prevTokens;
       if (state.tokens > 0 || prevTokens > 0) {
         const lowDelta = tokenDelta < tierGuards.tokenDeltaThreshold;
-        const newConsecutiveLowDelta = lowDelta ? (state.consecutiveLowDeltaCount ?? 0) + 1 : 0;
+        // E2 (audit 02-#3): a successful NEW gather is progress — token delta
+        // alone is blind to tool successes. Under the long-horizon profile, a
+        // low-delta iteration that produced new substantive evidence
+        // (assessment.evidenceDelta > 0) does NOT accrue toward the exit; the
+        // counter resets. OFF → byte-identical to the legacy expression.
+        const newConsecutiveLowDelta = nextLowDeltaCount(
+          state.consecutiveLowDeltaCount ?? 0,
+          lowDelta,
+          horizon !== undefined,
+          state.meta.assessment,
+        );
         state = transitionState(state, { consecutiveLowDeltaCount: newConsecutiveLowDelta });
 
         // Only fire the guard when there are remaining iterations to save
@@ -833,11 +849,20 @@ export function runIterationPass(
         const knownToolNames = new Set(
           (currentInput.availableToolSchemas ?? []).map((t) => t.name),
         );
+        // E2 (audit 02-#11): the F3 error class is arg-INSENSITIVE — it fires on
+        // (tool, errorClass) alone, so a model VARYING its arguments across
+        // failures (genuinely exploring fixes) gets the same immediate redirect
+        // as one blindly repeating a single bad call. Under the long-horizon
+        // profile, when the arg-normalized failure signal shows varying args
+        // (assessment.health.failureArgVariety > 1) suppress the immediate F3
+        // redirect and let the model keep searching. OFF → byte-identical.
+        const f3ArgVarying = assessmentFailuresAreArgVarying(horizon !== undefined, state.meta.assessment);
         if (
           repeated !== null &&
           repeated.lastIndex >= stepsAtPassStart &&
           knownToolNames.has(repeated.toolName) &&
-          failureRecoveryRedirects < maxFailureRecoveryRedirects
+          failureRecoveryRedirects < maxFailureRecoveryRedirects &&
+          !f3ArgVarying
         ) {
           const repeatedRecovery = getToolFailureRecovery(state, currentInput);
           if (repeatedRecovery.failedUnresolved.length > 0) {
@@ -896,7 +921,18 @@ export function runIterationPass(
       // useful data, it assembles and delivers the accumulated artifacts.
       const totalArtifacts = countDeliverableCandidates(state);
       const artifactDelta = Math.max(0, totalArtifacts - prevArtifactCount);
-      consecutiveStalled = artifactDelta > 0 ? 0 : consecutiveStalled + 1;
+      // E2 (audit 02-#3 stall staleness): the stall counter tracked new
+      // deliverable ARTIFACTS only — blind to a gathering iteration that
+      // produced new evidence but no file yet. Under the long-horizon profile,
+      // new substantive evidence (assessment.evidenceDelta > 0) also resets the
+      // stall counter so the harness does not take over mid-gather. OFF →
+      // byte-identical to the legacy expression.
+      consecutiveStalled = nextStalledCount(
+        consecutiveStalled,
+        artifactDelta,
+        horizon !== undefined,
+        state.meta.assessment,
+      );
       prevArtifactCount = totalArtifacts;
 
       // When reactive intelligence is active it needs at least iteration 2 before it
@@ -931,6 +967,11 @@ export function runIterationPass(
           verifier,
           emitLog,
           horizonIgnoredNudgeTolerance: horizon?.ignoredNudgeTolerance,
+          // E2 (audit 02-#6): a gathering-phase non-write must not count as an
+          // "ignored" required-tool nudge — the run is legitimately still
+          // collecting inputs before it can call a terminal write tool. OFF →
+          // false → the ignored-nudge definition is byte-identical.
+          gatheringPhase: assessmentIsGatheringPhase(horizon !== undefined, state.meta.assessment),
         });
         state = stallResult.state;
         requiredToolNudgeCount = stallResult.requiredToolNudgeCount;

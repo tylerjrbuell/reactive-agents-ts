@@ -1495,6 +1495,12 @@ export function handleThinking(
               redirectBudget: oracleHorizon.redirectBudget,
             }
           : {}),
+        // E2 — surface the assessment phase ONLY under the profile so
+        // controllerSignalVetoEvaluator stands down in synthesize (veto-at-
+        // finish-line). Absent off the profile → byte-identical.
+        ...(oracleHorizon && state.meta.assessment
+          ? { assessmentPhase: state.meta.assessment.phase }
+          : {}),
         toolsUsed: state.toolsUsed,
         requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
         allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],

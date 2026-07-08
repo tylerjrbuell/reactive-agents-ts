@@ -76,6 +76,14 @@ export interface TerminationContext {
    */
   readonly vetoDecisionWindow?: number;
   /**
+   * E2 (audit 02-#2 / #5) — the run's RunAssessment phase, surfaced ONLY under
+   * the long-horizon profile (absent off the profile → byte-identical). When
+   * `"synthesize"` the controller veto stands down: the run has reached the
+   * synthesis endgame and confiscating a finishing run's success on stale
+   * tactical churn is exactly the veto-at-finish-line misfire.
+   */
+  readonly assessmentPhase?: import("../../assessment/assess.js").RunPhase;
+  /**
    * A2 — grounding/coverage redirect budget for the terminal gate consulted by
    * llmEndTurnEvaluator (default 1 = one-shot; ≥30-iter long-horizon → 2).
    */
@@ -410,6 +418,11 @@ export const completionGapEvaluator: TerminationSignalEvaluator = {
 export const controllerSignalVetoEvaluator: TerminationSignalEvaluator = {
   name: "ControllerSignalVeto",
   evaluate: (ctx) => {
+    // E2 (audit 02-#2 veto-at-finish-line): under the long-horizon profile,
+    // never convert a SYNTHESIZE-phase run's success into a failure — the run
+    // reached the endgame; stale tactical churn must not amputate it. Absent
+    // (profile off) → falls through to today's behavior.
+    if (ctx.assessmentPhase === "synthesize") return null;
     // A2 — under the long-horizon profile the veto counts only the last N
     // decision-log entries (windowed); off → run-cumulative (window undefined).
     const log = windowDecisions(ctx.controllerDecisionLog ?? [], ctx.vetoDecisionWindow);
@@ -670,6 +683,13 @@ export interface ArbitrationContext {
    */
   readonly vetoDecisionWindow?: number;
   /**
+   * E2 (audit 02-#2 / #5) — the run's RunAssessment phase, surfaced ONLY under
+   * the long-horizon profile. `"synthesize"` ⇒ `shouldVetoSuccess` stands down
+   * (kills the veto-at-finish-line misfire). Absent off the profile →
+   * byte-identical.
+   */
+  readonly assessmentPhase?: import("../../assessment/assess.js").RunPhase;
+  /**
    * A2 — grounding/coverage redirect budget for the terminal gate (default 1).
    * Absent → one-shot (today). ≥30-iter long-horizon runs raise it to 2.
    */
@@ -746,6 +766,10 @@ export interface ArbitrationContext {
  * failed tool observations).
  */
 function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; readonly reason: string } | { readonly veto: false } {
+  // E2 (audit 02-#2 veto-at-finish-line): the synthesis endgame is off-limits
+  // to the veto under the long-horizon profile — a finishing run's success must
+  // not be flipped to failure on stale tactical churn. Absent → today's path.
+  if (ctx.assessmentPhase === "synthesize") return { veto: false };
   // A2 — windowed under the long-horizon profile; run-cumulative otherwise.
   const log = windowDecisions(ctx.controllerDecisionLog ?? [], ctx.vetoDecisionWindow);
   if (log.length === 0) return { veto: false };
@@ -1562,6 +1586,9 @@ export function arbitrationContextFromState(
     requiredTools: input.requiredTools ?? [],
     controllerDecisionLog: state.controllerDecisionLog,
     ...(horizon ? { vetoDecisionWindow: horizon.vetoDecisionWindow, redirectBudget: horizon.redirectBudget } : {}),
+    // E2 — surface the assessment phase ONLY under the profile so the veto can
+    // stand down in synthesize. Absent off the profile → byte-identical.
+    ...(horizon && state.meta.assessment ? { assessmentPhase: state.meta.assessment.phase } : {}),
     entropyComposite: entropyMeta?.latestScore?.composite,
     latestVerification: lastVerif,
     // Sprint 3.4 Scaffold 3 — surface the synthesis retry counter so the

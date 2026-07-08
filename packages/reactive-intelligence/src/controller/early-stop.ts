@@ -15,8 +15,17 @@ import type { ControllerDecision, ControllerEvalParams } from "../types.js";
 export function evaluateEarlyStop(
   params: ControllerEvalParams,
 ): (ControllerDecision & { decision: "early-stop" }) | null {
-  const { entropyHistory, config, calibration, iteration, maxIterations, hasUserOutput } = params;
+  const { entropyHistory, config, calibration, iteration, maxIterations, hasUserOutput, phase } = params;
   const convergenceCount = config.earlyStopConvergenceCount ?? 2;
+
+  // E2 (audit 02-#5 / H6 generalized): never early-stop during the SYNTHESIZE
+  // endgame. H6 already blocked the overflow-guard branch when the entropy shape
+  // showed active work; the phase generalizes that to ANY early-stop branch —
+  // once the run is composing its answer, confiscating the last iterations
+  // discards exactly the deliverable a long-horizon run exists to produce. The
+  // `phase` field is supplied ONLY under the long-horizon profile, so absent it
+  // this guard is inert and prior behavior is byte-identical.
+  if (phase === "synthesize") return null;
 
   // Empty-run invariant — applies to BOTH branches below.
   // Permissive default: when caller omits the flag, treat as `true` so outer-loop

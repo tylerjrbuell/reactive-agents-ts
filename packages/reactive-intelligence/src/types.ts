@@ -293,6 +293,17 @@ export type ControllerEvalParams = {
    * hardcoded `"local"` in stall-detect, making the per-tier table dead.
    */
   readonly tier?: "local" | "mid" | "large" | "frontier";
+  /**
+   * E2 (audit 02-#5 / H6 generalized) — the run's RunAssessment phase, supplied
+   * by the kernel `reactive-observer` ONLY under the long-horizon profile. When
+   * `"synthesize"` the run has reached the answer-composing endgame and
+   * `evaluateEarlyStop` MUST NOT fire — amputating the synthesis endgame is
+   * exactly the long-horizon failure the 2026-07-08 sweep found (H6 fixed the
+   * overflow-guard branch via entropy shape; E2 generalizes it to ANY early-stop
+   * branch via the phase). Omitted (profile off / outer-loop synthetic callers)
+   * → prior behavior is byte-identical.
+   */
+  readonly phase?: "orient" | "gather" | "execute" | "synthesize" | "verify";
 };
 
 export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {

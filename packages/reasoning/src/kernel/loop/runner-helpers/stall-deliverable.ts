@@ -81,6 +81,29 @@ export function buildRequiredToolNudge(
   );
 }
 
+/**
+ * Whether a required-tool nudge was IGNORED this iteration (StallPolicy A).
+ *
+ * Legacy definition: the still-missing required set did NOT shrink since the
+ * previous nudge (no progress toward it) — `prevMissing >= 0 && current >= prev`.
+ *
+ * E2 (audit 02-#6, required-tool-last): a GATHERING-phase iteration that has not
+ * yet called the required (usually terminal write) tool is NOT ignoring the
+ * nudge — the run is legitimately still collecting inputs it needs BEFORE it can
+ * produce. Counting those iterations as "ignored" fast-escalates a
+ * required-tool-LAST task to failure before the model ever reaches the write.
+ * When `gatheringPhase` is true the iteration is never "ignored". OFF
+ * (`gatheringPhase` falsy — profile off) → byte-identical to the legacy rule.
+ */
+export function isIgnoredNudge(
+  gatheringPhase: boolean,
+  prevMissingCount: number,
+  currentMissingCount: number,
+): boolean {
+  if (gatheringPhase) return false;
+  return prevMissingCount >= 0 && currentMissingCount >= prevMissingCount;
+}
+
 export interface StallStepArgs {
   readonly state: KernelState;
   readonly currentInput: KernelInput;
@@ -107,6 +130,15 @@ export interface StallStepArgs {
    * override still wins; this only replaces the DEFAULT_STALL_POLICY floor.
    */
   readonly horizonIgnoredNudgeTolerance?: number;
+  /**
+   * E2 (audit 02-#6) — the run is in the GATHERING phase (from the cached
+   * RunAssessment, resolved under the long-horizon profile). When true, a
+   * still-missing required (usually terminal write) tool is NOT treated as an
+   * "ignored" nudge: the model is legitimately collecting inputs before it can
+   * produce. `undefined`/`false` (profile off) → the ignored definition is
+   * byte-identical to today.
+   */
+  readonly gatheringPhase?: boolean;
 }
 
 export interface StallStepResult {
@@ -168,7 +200,14 @@ export function runStallDeliverableStep(
         args.horizonIgnoredNudgeTolerance ??
         policy.ignoredNudgeTolerance;
       const prevMissing = (state.meta.lastMissingRequiredCount as number | undefined) ?? -1;
-      const ignored = prevMissing >= 0 && missingRequiredByCount.length >= prevMissing;
+      // E2 (audit 02-#6): a gathering-phase iteration that hasn't yet called the
+      // required (terminal write) tool is NOT ignoring the nudge — don't accrue
+      // it toward fast-escalation. OFF (gatheringPhase falsy) → byte-identical.
+      const ignored = isIgnoredNudge(
+        args.gatheringPhase ?? false,
+        prevMissing,
+        missingRequiredByCount.length,
+      );
       const consecutiveIgnoredNudges = ignored
         ? ((state.meta.consecutiveIgnoredNudges as number | undefined) ?? 0) + 1
         : 0;

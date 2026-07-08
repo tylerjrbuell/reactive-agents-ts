@@ -260,6 +260,12 @@ export function runReactiveObserver(
           // correct tier-scaled stall window (mid=3/large=4/frontier=5) instead
           // of the hardcoded local=2 that caused premature give-up at iter 2.
           tier,
+          // E2 (audit 02-#5 / H6 generalized) — surface the RunAssessment phase
+          // ONLY under the long-horizon profile so RI early-stop stands down in
+          // the synthesize endgame. Absent off the profile → byte-identical.
+          ...(s.meta.horizonProfile === "long" && s.meta.assessment
+            ? { phase: s.meta.assessment.phase }
+            : {}),
         });
 
         for (const decision of decisions) {

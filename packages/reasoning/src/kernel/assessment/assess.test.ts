@@ -300,6 +300,46 @@ describe("assess — health", () => {
   });
 });
 
+// ── Arg-normalized failure identity (audit 02-#11 / F3) ─────────────────────
+
+describe("assess — failureArgVariety (F3 arg-normalized identity)", () => {
+  const contract = toolContract("file-write");
+
+  it("no trailing failure → 0", () => {
+    expect(assess(contract, gatherLedger(3), budget({ iteration: 3 })).health.failureArgVariety).toBe(0);
+  });
+
+  it("repeated IDENTICAL bad call (same args) → variety 1 (truly stuck)", () => {
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "file-write", args: { content: "x" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 1, toolName: "file-write", success: false, preview: "missing path", toolCallId: "c1" },
+      { kind: "tool-invocation", iteration: 2, toolName: "file-write", args: { content: "x" }, toolCallId: "c2" },
+      { kind: "tool-result", iteration: 2, toolName: "file-write", success: false, preview: "missing path", toolCallId: "c2" },
+    ]);
+    expect(assess(contract, ledger, budget({ iteration: 2 })).health.failureArgVariety).toBe(1);
+  });
+
+  it("VARYING args across failures → variety > 1 (exploring, not stuck)", () => {
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "file-write", args: { content: "a" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 1, toolName: "file-write", success: false, preview: "missing path", toolCallId: "c1" },
+      { kind: "tool-invocation", iteration: 2, toolName: "file-write", args: { content: "b", path: "x" }, toolCallId: "c2" },
+      { kind: "tool-result", iteration: 2, toolName: "file-write", success: false, preview: "missing path", toolCallId: "c2" },
+    ]);
+    expect(assess(contract, ledger, budget({ iteration: 2 })).health.failureArgVariety).toBeGreaterThan(1);
+  });
+
+  it("a trailing SUCCESS ends the streak → 0", () => {
+    const ledger = appendEntries(undefined, [
+      { kind: "tool-invocation", iteration: 1, toolName: "file-write", args: { content: "a" }, toolCallId: "c1" },
+      { kind: "tool-result", iteration: 1, toolName: "file-write", success: false, preview: "missing path", toolCallId: "c1" },
+      { kind: "tool-invocation", iteration: 2, toolName: "file-write", args: { content: "b", path: "x" }, toolCallId: "c2" },
+      { kind: "tool-result", iteration: 2, toolName: "file-write", success: true, preview: "ok", toolCallId: "c2" },
+    ]);
+    expect(assess(contract, ledger, budget({ iteration: 2 })).health.failureArgVariety).toBe(0);
+  });
+});
+
 // ── Determinism ─────────────────────────────────────────────────────────────
 
 describe("assess — determinism", () => {
