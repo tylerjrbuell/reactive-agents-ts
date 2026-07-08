@@ -1085,6 +1085,28 @@ export type AgentEvent =
     }
   | {
       /**
+       * RunAssessment recomputed at an iteration (meta-loop Phase 5a, 2026-07-08):
+       * the perception node of the meta-loop DAG. Surfaces where the run stands —
+       * run phase, pace band, the one evidenceDelta progress currency, and the
+       * requirement/deliverable tallies — so the contract → assessment → action
+       * chain is replayable from one trace, the way contract-compiled made the
+       * goal compiler replayable.
+       */
+      readonly _tag: "AssessmentEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly phase: string;
+      readonly band: string;
+      readonly evidenceDelta: number;
+      readonly requirementsSatisfied: number;
+      readonly requirementsOutstanding: number;
+      readonly deliverablesProduced: number;
+      readonly deliverablesMissing: number;
+      readonly burnRatio: number;
+    }
+  | {
+      /**
        * Decision point where multiple candidates were considered and one chosen
        * (v0.11.x). Surfaces the counterfactuals the model weighed.
        */

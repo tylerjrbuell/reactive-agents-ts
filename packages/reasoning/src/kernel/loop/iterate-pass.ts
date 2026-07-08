@@ -118,7 +118,9 @@ import {
   emitKernelStateSnapshot,
   emitGuardFired,
   emitHarnessSignalInjected,
+  emitAssessment,
 } from "../../kernel/utils/diagnostics.js";
+import { assess } from "../../kernel/assessment/assess.js";
 import {
   buildRecoverySteeringGuidance,
   getToolFailureRecovery,
@@ -433,6 +435,42 @@ export function runIterationPass(
         taskId: currentOptions.taskId ?? state.taskId,
         iteration: state.iteration,
       });
+
+      // RunAssessment (meta-loop Phase 5a / task E1) — the perception node. The
+      // ONE per-iteration site that recomputes where the run stands from
+      // contract × ledger × budget, caches it on state.meta.assessment, and
+      // emits the replayable `assessment` trace event. Pure READ (assess() never
+      // mutates / appends): the transitionState below only writes meta.assessment,
+      // carrying steps + ledger through unchanged — DAG-safe, no back-edge. Guarded
+      // on a compiled RunContract (the goal input assess() needs). E2 migrates the
+      // scattered guard counters to READ these fields (the D2 kill).
+      {
+        const contract = state.meta.runContract;
+        if (contract) {
+          const limits = state.meta.budgetLimits;
+          const assessment = assess(contract, state.ledger ?? [], {
+            iteration: state.iteration,
+            maxIterations: currentOptions.maxIterations,
+            tokensUsed: state.tokens,
+            costUsd: state.cost,
+            ...(limits?.tokenLimit !== undefined ? { tokenLimit: limits.tokenLimit } : {}),
+            ...(limits?.costLimit !== undefined ? { costLimit: limits.costLimit } : {}),
+          });
+          state = transitionState(state, { meta: { ...state.meta, assessment } });
+          yield* emitAssessment({
+            taskId: currentOptions.taskId ?? state.taskId,
+            iteration: state.iteration,
+            phase: assessment.phase,
+            band: assessment.pace.band,
+            evidenceDelta: assessment.evidenceDelta,
+            requirementsSatisfied: assessment.requirements.satisfied.length,
+            requirementsOutstanding: assessment.requirements.outstanding.length,
+            deliverablesProduced: assessment.deliverables.produced.length,
+            deliverablesMissing: assessment.deliverables.missing.length,
+            burnRatio: assessment.pace.burnRatio,
+          });
+        }
+      }
 
       // ── Recall capability — per-iter RecallService dispatch ──────────────
       // Issue #129 / North Star §4.3 / Audit G-C — the per-iter recall seam.

@@ -36,6 +36,8 @@ export type TraceEvent =
   | ToolSurfaceResolvedEvent
   // ─── Meta-loop Phase 4a (2026-07-08 — goal compiler) ───
   | ContractCompiledEvent
+  // ─── Meta-loop Phase 5a (2026-07-08 — progress estimator) ───
+  | AssessmentEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -344,6 +346,25 @@ export interface ContractCompiledEvent extends TraceEventBase {
   readonly requirements: readonly { readonly id: string; readonly kind: string }[]
   readonly deliverables: readonly { readonly id: string; readonly kind: string }[]
   readonly horizon: string
+}
+
+/**
+ * RunAssessment recomputed at an iteration (meta-loop Phase 5a, 2026-07-08): the
+ * perception node of the meta-loop DAG. Carries the run phase, pace band, the one
+ * evidenceDelta progress currency, and the requirement/deliverable tallies —
+ * making the contract → assessment → action chain replayable, the way
+ * `contract-compiled` made the goal compiler replayable.
+ */
+export interface AssessmentEvent extends TraceEventBase {
+  readonly kind: "assessment"
+  readonly phase: string
+  readonly band: string
+  readonly evidenceDelta: number
+  readonly requirementsSatisfied: number
+  readonly requirementsOutstanding: number
+  readonly deliverablesProduced: number
+  readonly deliverablesMissing: number
+  readonly burnRatio: number
 }
 
 /** Type-narrowing helper. */

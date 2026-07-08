@@ -29,6 +29,7 @@ import type {
   AlternativesConsideredEvent,
   ToolSurfaceResolvedEvent,
   ContractCompiledEvent,
+  AssessmentEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -323,6 +324,25 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         requirements: raw.requirements,
         deliverables: raw.deliverables,
         horizon: raw.horizon,
+      }
+      return ev
+    }
+
+    case "AssessmentEmitted": {
+      const ev: AssessmentEvent = {
+        kind: "assessment",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        phase: raw.phase,
+        band: raw.band,
+        evidenceDelta: raw.evidenceDelta,
+        requirementsSatisfied: raw.requirementsSatisfied,
+        requirementsOutstanding: raw.requirementsOutstanding,
+        deliverablesProduced: raw.deliverablesProduced,
+        deliverablesMissing: raw.deliverablesMissing,
+        burnRatio: raw.burnRatio,
       }
       return ev
     }

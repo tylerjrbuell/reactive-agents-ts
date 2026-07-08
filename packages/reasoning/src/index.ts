@@ -207,6 +207,26 @@ export type {
 export { projectStepsToLedger, stepToEntries } from "./kernel/ledger/step-projection.js";
 export { deriveArtifactEntries, artifacts } from "./kernel/ledger/artifact-projection.js";
 export { recordTerminalVerdict, recordEvidenceClaims } from "./kernel/ledger/emit.js";
+
+// ─── RunAssessment — the progress estimator (meta-loop Phase 5a / task E1) ───
+// The THIRD node of the meta-loop DAG: the pure perception of where the run
+// stands — requirements satisfied/outstanding, deliverables produced/missing,
+// the one evidenceDelta progress currency, run phase, pace band, windowed health.
+// Recomputed each iteration; the ONE HOME for run-progress counters (spec §2).
+// Consumed by E2 (guards read these fields — the D2 kill), E3 (pace actions),
+// F (control plane proposals), G (policy recompile).
+export { assess, PACE_ECONOMIZE, PACE_TRIAGE, PACE_TERMINAL } from "./kernel/assessment/assess.js";
+export type {
+  RunAssessment,
+  RequirementAssessment,
+  DeliverableAssessment,
+  ArtifactRef,
+  PaceAssessment,
+  PaceBand,
+  RunHealth,
+  RunPhase,
+  BudgetState,
+} from "./kernel/assessment/assess.js";
 export type { TerminalVerdictFact } from "./kernel/ledger/emit.js";
 export { deriveDeliverablePaths } from "./kernel/capabilities/verify/derive-conditions.js";
 export { classifyTaskHorizon, classifyHorizon } from "./kernel/capabilities/comprehend/task-horizon.js";

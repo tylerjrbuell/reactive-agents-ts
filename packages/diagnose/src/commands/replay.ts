@@ -148,6 +148,15 @@ function formatEventLine(ev: TraceEvent): string {
         : "";
       return `${ts} ${badge("contract", cyan)} horizon=${ev.horizon} requirements=${ev.requirements.length}${dim(delivStr)}`;
     }
+    case "assessment": {
+      // The perception node: where the run stands. Phase + pace band + the one
+      // progress currency (evidenceDelta) are the load-bearing payload.
+      const reqs = `req=${ev.requirementsSatisfied}/${ev.requirementsSatisfied + ev.requirementsOutstanding}`;
+      const deliv = ev.deliverablesProduced + ev.deliverablesMissing > 0
+        ? ` deliv=${ev.deliverablesProduced}/${ev.deliverablesProduced + ev.deliverablesMissing}`
+        : "";
+      return `${ts} ${badge("assess", cyan)} phase=${ev.phase} pace=${ev.band} Δ=${ev.evidenceDelta} ${reqs}${deliv}${dim(` burn=${ev.burnRatio.toFixed(2)}`)}`;
+    }
     default: {
       // Exhaustiveness via cast — keeps the switch open to future kinds.
       const e = ev as { kind: string };

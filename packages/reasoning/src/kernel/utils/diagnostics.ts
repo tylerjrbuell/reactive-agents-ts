@@ -300,6 +300,56 @@ export function emitContractCompiled(args: {
   });
 }
 
+// ── Assessment ───────────────────────────────────────────────────────────────
+
+/**
+ * Meta-loop Phase 5a (2026-07-08): the RunAssessment recomputed each iteration —
+ * the perception node of the meta-loop DAG. Mirrors emitContractCompiled: one
+ * trace line per iteration (phase, pace band, evidenceDelta, requirement +
+ * deliverable tallies, burnRatio) so the contract → assessment → action chain is
+ * replayable from a single trace via `rax diagnose replay`.
+ */
+export function emitAssessment(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly phase: string;
+  readonly band: string;
+  readonly evidenceDelta: number;
+  readonly requirementsSatisfied: number;
+  readonly requirementsOutstanding: number;
+  readonly deliverablesProduced: number;
+  readonly deliverablesMissing: number;
+  readonly burnRatio: number;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "AssessmentEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        phase: args.phase,
+        band: args.band,
+        evidenceDelta: args.evidenceDelta,
+        requirementsSatisfied: args.requirementsSatisfied,
+        requirementsOutstanding: args.requirementsOutstanding,
+        deliverablesProduced: args.deliverablesProduced,
+        deliverablesMissing: args.deliverablesMissing,
+        burnRatio: args.burnRatio,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitAssessment",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── VerifierVerdict ──────────────────────────────────────────────────────────
 
 export function emitVerifierVerdict(args: {

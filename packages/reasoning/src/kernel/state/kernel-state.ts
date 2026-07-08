@@ -396,6 +396,28 @@ export interface KernelMeta {
    */
   readonly runContract?: import("../contract/run-contract.js").RunContract;
 
+  // ── RunAssessment — the perception node (meta-loop Phase 5a / task E1) ─────────
+  /**
+   * The run's latest RunAssessment — the pure perception of where the run stands
+   * (requirements satisfied/outstanding, deliverables produced/missing, the one
+   * evidenceDelta progress currency, run phase, pace band, windowed health).
+   * Recomputed ONCE per iteration at iteration start by the loop (iterate-pass.ts)
+   * via `assess(runContract, ledger, budget)` and cached here so consumers read
+   * ONE object instead of re-deriving; emitted as the replayable `assessment`
+   * trace event. Absent until a RunContract exists (assess needs the contract as
+   * its goal input) — consumers guard with `?`.
+   *
+   * DAG law: the assessment is a pure READ of contract × ledger × budget; caching
+   * it on meta is not a control action and appends nothing to the ledger. Plain
+   * data (strings/numbers/arrays + frozen contract deliverable refs), so it rides
+   * the meta bag through kernel-codec for durable resume. Wave E2 migrates the
+   * scattered guard counters to read these fields (the D2 kill).
+   *
+   * Type-only import — no runtime cycle (assessment/ imports ledger/ + contract/ +
+   * assembly/, never state/).
+   */
+  readonly assessment?: import("../assessment/assess.js").RunAssessment;
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
