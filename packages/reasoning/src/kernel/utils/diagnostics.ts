@@ -223,6 +223,44 @@ export function emitAlternativesConsidered(args: {
   });
 }
 
+// ── ToolSurfaceResolved ──────────────────────────────────────────────────────
+
+/**
+ * Overhaul Phase 2 (2026-07-07): per-iteration tool-surface resolution with a
+ * per-tool reason map — the rw-9 "why is this tool invisible" diagnosis as one
+ * trace line instead of a debug tap.
+ */
+export function emitToolSurfaceResolved(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly visible: readonly string[];
+  readonly callable: readonly string[];
+  readonly reasons: readonly { readonly tool: string; readonly reason: string }[];
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "ToolSurfaceResolvedEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        visible: args.visible,
+        callable: args.callable,
+        reasons: args.reasons,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitToolSurfaceResolved",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── VerifierVerdict ──────────────────────────────────────────────────────────
 
 export function emitVerifierVerdict(args: {

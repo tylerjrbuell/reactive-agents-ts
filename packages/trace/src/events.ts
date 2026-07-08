@@ -32,6 +32,8 @@ export type TraceEvent =
   | AssumptionRecordedEvent
   | AlternativesConsideredEvent
   | CuratorDecisionEvent
+  // ─── Overhaul Phase 2 (2026-07-07 — tool-surface compiler) ───
+  | ToolSurfaceResolvedEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -314,6 +316,19 @@ export interface CuratorDecisionEvent extends TraceEventBase {
   readonly action: "kept" | "dropped" | "compressed" | "marked-untrusted"
   readonly targetRef: string                  // observation / scratchpad key
   readonly rationale: Rationale
+}
+
+/**
+ * Per-iteration tool-surface resolution (Overhaul Phase 2, 2026-07-07): what
+ * the model could see (`visible`) and call (`callable`) this turn, plus WHY
+ * each tool in the augmented set landed where it did. Replaces the debug-tap
+ * workflow the rw-9 visibility regression required.
+ */
+export interface ToolSurfaceResolvedEvent extends TraceEventBase {
+  readonly kind: "tool-surface-resolved"
+  readonly visible: readonly string[]
+  readonly callable: readonly string[]
+  readonly reasons: readonly { readonly tool: string; readonly reason: string }[]
 }
 
 /** Type-narrowing helper. */

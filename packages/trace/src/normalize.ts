@@ -27,6 +27,7 @@ import type {
   AssumptionRecordedEvent,
   CuratorDecisionEvent,
   AlternativesConsideredEvent,
+  ToolSurfaceResolvedEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -293,6 +294,20 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         seq,
         chosen: raw.chosen,
         alternatives: raw.alternatives,
+      }
+      return ev
+    }
+
+    case "ToolSurfaceResolvedEmitted": {
+      const ev: ToolSurfaceResolvedEvent = {
+        kind: "tool-surface-resolved",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        visible: raw.visible,
+        callable: raw.callable,
+        reasons: raw.reasons,
       }
       return ev
     }

@@ -18,10 +18,11 @@ import { gatewayStream } from "../../llm-gateway.js";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   toProviderMessage,
-  buildToolSchemas,
   sanitizeToolName,
   buildSanitizedReverseMap,
 } from "../attend/context-utils.js";
+import { resolveToolSurface } from "./tool-surface.js";
+import { emitToolSurfaceResolved } from "../../utils/diagnostics.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { fromKernelState } from "../../../assembly/from-kernel-state.js";
@@ -120,82 +121,10 @@ export function shouldNarrowToFinalAnswerOnly(opts: {
  * keep the loop going, costing one extra iteration. False positives (treat
  * planning as answer) are caught by the arbitrator's grounding check.
  */
-/**
- * Pure prune-set computation for the think-phase tool disclosure.
- *
- * Extracted so the RA_LAZY_TOOLS pruning is unit-testable without mocking the
- * full LLM effect. Determines which tools the model actually sees this step.
- *
- * Two load-bearing guarantees (P0 fix 2026-06-04, classifier-prunes-task-tool):
- *  - FLOOR: the caller's explicit `allowedTools` whitelist always survives the
- *    prune in BOTH the lazy and the non-lazy (RA_LAZY_TOOLS=0) arm. The floor
- *    only ADDS to the visible set — it never turns allowedTools into a hard
- *    restriction (that gate lives in act.ts).
- *  - NEVER-PRUNE-TO-META-ONLY: if the pre-prune set had ≥1 non-META domain tool
- *    but the post-prune set has 0, the classifier stranded the model — fall back
- *    to the unpruned set. Does NOT fire for legitimately pure-META tasks.
- */
-export function computePromptSchemas(opts: {
-  effectiveSchemas: readonly ToolSchema[];
-  lazyMode: boolean;
-  pressureCritical: boolean;
-  hasClassification: boolean;
-  classifiedRequired: readonly string[];
-  classifiedRelevant: readonly string[];
-  allowedTools: readonly string[];
-  toolsUsed: Iterable<string>;
-  discovered: Iterable<string>;
-  pruneMinTools: number;
-}): readonly ToolSchema[] {
-  const {
-    effectiveSchemas,
-    lazyMode,
-    pressureCritical,
-    hasClassification,
-    classifiedRequired,
-    classifiedRelevant,
-    allowedTools,
-    toolsUsed,
-    discovered,
-    pruneMinTools,
-  } = opts;
-
-  let promptSchemas: readonly ToolSchema[];
-  if (lazyMode) {
-    const allowed = new Set<string>([
-      ...classifiedRequired,
-      ...classifiedRelevant,
-      ...toolsUsed,
-      ...discovered,
-      ...allowedTools,
-    ]);
-    promptSchemas = effectiveSchemas.filter(
-      (ts) => allowed.has(ts.name) || META_TOOL_SET.has(ts.name),
-    );
-  } else {
-    promptSchemas =
-      hasClassification && !pressureCritical && effectiveSchemas.length > pruneMinTools
-        ? effectiveSchemas.filter(
-            (ts) =>
-              classifiedRequired.includes(ts.name) ||
-              classifiedRelevant.includes(ts.name) ||
-              allowedTools.includes(ts.name) ||
-              META_TOOL_SET.has(ts.name),
-          )
-        : effectiveSchemas;
-  }
-
-  // Never-prune-to-meta-only guard: when domain tools existed pre-prune but the
-  // prune left only META tools, the classifier stranded the model. Restore the
-  // unpruned set so the model can still act. Pure-META tasks (0 domain tools
-  // pre-prune) are legitimate and do not trip this.
-  const preNonMeta = effectiveSchemas.some((ts) => !META_TOOL_SET.has(ts.name));
-  const postNonMeta = promptSchemas.some((ts) => !META_TOOL_SET.has(ts.name));
-  if (preNonMeta && !postNonMeta) {
-    return effectiveSchemas;
-  }
-  return promptSchemas;
-}
+// computePromptSchemas moved to tool-surface.ts (Overhaul Phase 2) — the
+// resolver composes it with the pressure and gate-narrow stages. Re-exported
+// here so existing consumers/tests keep their import path.
+export { computePromptSchemas } from "./tool-surface.js";
 
 export function looksLikeFinalAnswer(content: string): boolean {
   const trimmed = content.trim();
@@ -240,9 +169,9 @@ export function looksLikeFinalAnswer(content: string): boolean {
  *
  * Display-only: the canonical `promptSchemas` are mapped to fresh spread copies
  * with sanitized names ONLY for the project() `{ schemas }` arg. The caller still
- * feeds the untouched `promptSchemas` to buildToolSchemas/the FC array, and the
- * inbound de-sanitization map is built from the canonical schemas — so FC names
- * and registry lookup are byte-identical to before.
+ * feeds the untouched surface (resolveToolSurface's callable set) to the FC
+ * array, and the inbound de-sanitization map is built from the canonical
+ * schemas — so FC names and registry lookup are byte-identical to before.
  */
 export function buildThinkProviderRequest(
   state: KernelState,
@@ -352,52 +281,51 @@ export function handleThinking(
         tier: profile.tier,
       });
 
-    // When lazy mode is active (default) the curator owns visibility — keep
-    // the full augmentedToolSchemas in effectiveSchemas and let the
-    // lazy-tools filter below produce the actual visible set (which already
-    // includes state.toolsUsed so the model can re-invoke tools it's
-    // already used). Pressure-narrowing-to-final-answer-only induces panic
-    // dumps on local models when fired prematurely.
+    // When lazy mode is active (default) the disclosure filter owns visibility
+    // (the visible set already includes state.toolsUsed so the model can
+    // re-invoke tools it's already used). Pressure-narrowing-to-final-answer-
+    // only induces panic dumps on local models when fired prematurely, so the
+    // resolver applies it only on the non-lazy arm.
     const lazyMode = process.env.RA_LAZY_TOOLS !== "0";
-    const effectiveSchemas: readonly ToolSchema[] = pressureCritical && !lazyMode
-      ? [{ name: finalAnswerTool.name, description: finalAnswerTool.description, parameters: finalAnswerTool.parameters }]
-      : augmentedToolSchemas;
 
-    // ── Classification-based tool pruning ────────────────────────────────────
-    // When the classify phase identified required/relevant tools for this task,
-    // prune the system prompt to only show those tools + meta tools.
-    // This dramatically reduces attention load for local/mid models
-    // (e.g. 38 GitHub MCP tools → 3 classified tools), preventing the model
-    // from hallucinating tool names or losing track of the correct ones.
-    //
-    // Only prune when the full set is large (> 15). For small capability-only
-    // tool sets the classifier output is incomplete and pruning hides valid tools.
+    // ── Tool surface resolution (Overhaul Phase 2) ───────────────────────────
+    // One resolver computes the entire per-iteration surface — classification
+    // pruning (attention-load reduction: e.g. 38 GitHub MCP tools → 3, only
+    // when the set is > 15 since small-set classifier output is incomplete),
+    // RA_LAZY_TOOLS per-iteration disclosure (default-on since 2026-04-26,
+    // visible = required + relevant + used + discovered + meta; the rest is
+    // reachable via discover-tools), and the required-tools gate FC narrowing
+    // — plus a per-tool reason map surfaced as the `tool-surface-resolved`
+    // trace event. See tool-surface.ts for the invariants.
     const PRUNE_MIN_TOOLS = 15;
     const classifiedRequired = input.requiredTools ?? [];
     const classifiedRelevant = input.relevantTools ?? [];
     const hasClassification = classifiedRequired.length > 0 || classifiedRelevant.length > 0;
-
-    // ── RA_LAZY_TOOLS — per-iteration lazy tool disclosure ───────────────────
-    // ALWAYS prune (no PRUNE_MIN_TOOLS gate, no classification requirement).
-    // Visible set = required + relevant + already-used + discovered +
-    // meta-tools. Anything else is reachable via discover-tools.
-    // Pydantic-AI-style per-step Toolset.get_tools() — see
-    // wiki/Research/Harness-Reports/oss-prompt-curation-research-2026-04-26.md.
-    // Default-on as of 2026-04-26 (curator empirical validation). Opt out
-    // via RA_LAZY_TOOLS=0.
     const discovered = yield* Ref.get(discoveredToolsStoreRef);
-    const promptSchemas = computePromptSchemas({
-      effectiveSchemas,
+    const gateBlockedTools =
+      (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
+    const toolSurface = resolveToolSurface({
+      augmented: augmentedToolSchemas,
+      finalAnswerSchema: {
+        name: finalAnswerTool.name,
+        description: finalAnswerTool.description,
+        parameters: finalAnswerTool.parameters,
+      } as ToolSchema,
       lazyMode,
       pressureCritical,
       hasClassification,
-      classifiedRequired,
-      classifiedRelevant,
+      requiredTools: classifiedRequired,
+      relevantTools: classifiedRelevant,
       allowedTools: input.allowedTools ?? [],
       toolsUsed: state.toolsUsed,
       discovered,
+      gateBlockedTools,
+      // Same missing-required computation the pressure gate used above — the
+      // gate narrowing keys off the identical unsatisfied set.
+      missingRequiredTools: missingRequiredForPressure,
       pruneMinTools: PRUNE_MIN_TOOLS,
     });
+    const promptSchemas = toolSurface.visible;
 
     // ── Harness skill injection ──────────────────────────────────────────────
     const harnessContent = input.metaTools?.harnessContent;
@@ -459,13 +387,12 @@ export function handleThinking(
     }
 
     // ── Native FC: convert tool schemas to LLM ToolDefinition format ──────
-    // When the required-tools gate has blocked a tool, narrow the FC tools
-    // parameter to only required (unsatisfied) + meta tools. This forces models
-    // like cogito:14b (which lack tool_choice support) to select the right tool
-    // instead of stubbornly re-selecting a previously successful one.
-    // Uses promptSchemas (classification-pruned) so FC definitions match the
-    // system prompt — the model can only call tools it can actually see.
-    const filteredToolSchemas = buildToolSchemas(state, input, profile, promptSchemas);
+    // The resolver already narrowed `callable` to missing-required + meta
+    // while the required-tools gate is blocking — forcing models like
+    // cogito:14b (no tool_choice support) to select the right tool instead of
+    // stubbornly re-selecting a previously successful one. `callable` ⊆
+    // `visible`, so FC definitions never offer a tool the prompt can't see.
+    const filteredToolSchemas = toolSurface.callable;
 
     // ContextCurator (S2.5): sole authority for the per-iteration prompt.
     // - Slice A: port + default wrapper (byte-identical with ContextManager).
@@ -543,6 +470,26 @@ export function handleThinking(
     const gatedToolSchemas = recallGateEnabled()
       ? filterRecallByOverflow(filteredToolSchemas, conversationMessages, recallForceOn)
       : filteredToolSchemas;
+
+    // ── tool-surface-resolved trace event (Overhaul Phase 2) ─────────────────
+    // The resolver's reason map, amended with the recall-overflow gate verdict
+    // (that gate runs here because it needs the assembled conversation window).
+    {
+      const surfaceReasons = new Map(toolSurface.reasons);
+      const gatedNames = new Set(gatedToolSchemas.map((ts) => ts.name));
+      for (const ts of filteredToolSchemas) {
+        if (!gatedNames.has(ts.name)) {
+          surfaceReasons.set(ts.name, "hidden: recall-overflow gate (no recallable key in window)");
+        }
+      }
+      yield* emitToolSurfaceResolved({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        visible: promptSchemas.map((ts) => ts.name),
+        callable: gatedToolSchemas.map((ts) => ts.name),
+        reasons: [...surfaceReasons].map(([tool, reason]) => ({ tool, reason })),
+      });
+    }
 
     // ── TextParseDriver: inject format instructions into system prompt ────────
     // When the driver is in text-parse mode (local models that can't reliably emit
@@ -1050,14 +997,14 @@ export function handleThinking(
       const resolverWithDialect = resolver.resolveWithDialect
         ? resolver.resolveWithDialect(
             resolverInput,
-            effectiveSchemas.map((ts) => ({
+            toolSurface.universe.map((ts) => ({
               name: ts.name,
               paramNames: ts.parameters?.map((p) => p.name) ?? [],
             })),
           )
         : resolver.resolve(
             resolverInput,
-            effectiveSchemas.map((ts) => ({
+            toolSurface.universe.map((ts) => ({
               name: ts.name,
               paramNames: ts.parameters?.map((p) => p.name) ?? [],
             })),

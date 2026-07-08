@@ -1054,6 +1054,21 @@ export type AgentEvent =
     }
   | {
       /**
+       * Per-iteration tool-surface resolution (Overhaul Phase 2, 2026-07-07):
+       * which tools the model can see/call this turn and WHY each tool in the
+       * augmented set is visible, hidden, or gate-narrowed. Turns rw-9-class
+       * "why is this tool invisible" diagnoses into one trace line.
+       */
+      readonly _tag: "ToolSurfaceResolvedEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly visible: readonly string[];
+      readonly callable: readonly string[];
+      readonly reasons: readonly { readonly tool: string; readonly reason: string }[];
+    }
+  | {
+      /**
        * Decision point where multiple candidates were considered and one chosen
        * (v0.11.x). Surfaces the counterfactuals the model weighed.
        */

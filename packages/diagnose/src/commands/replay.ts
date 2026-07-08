@@ -132,6 +132,14 @@ function formatEventLine(ev: TraceEvent): string {
       return `${ts} ${badge("patch", gray)} ${ev.patchKind}`;
     case "message-appended":
       return `${ts} ${badge("msg", gray)} ${ev.role} (${ev.tokenCount} tok)`;
+    case "tool-surface-resolved": {
+      // Hidden/narrowed reasons are the diagnostic payload; visible list stays terse.
+      const hidden = ev.reasons.filter((r) => !r.reason.startsWith("visible:"));
+      const hiddenStr = hidden.length
+        ? ` hidden=[${hidden.map((r) => `${r.tool}: ${r.reason}`).join("; ")}]`
+        : "";
+      return `${ts} ${badge("surface", cyan)} visible=[${ev.visible.join(",")}] callable=${ev.callable.length}/${ev.visible.length}${dim(hiddenStr)}`;
+    }
     default: {
       // Exhaustiveness via cast — keeps the switch open to future kinds.
       const e = ev as { kind: string };

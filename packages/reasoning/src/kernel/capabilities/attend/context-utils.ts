@@ -9,12 +9,7 @@
  * assembled by think.ts using buildStaticContext + buildGuidanceSection.
  */
 import type { LLMMessage, ProviderAdapter } from "@reactive-agents/llm-provider";
-import type { ContextProfile } from "../../../context/context-profile.js";
-import type { ToolSchema } from "../attend/tool-formatting.js";
-import { applyAgeAwareCuration, curationAgeAware } from "../attend/tool-formatting.js";
-import type { KernelState, KernelMessage, KernelInput } from "../../../kernel/state/kernel-state.js";
-import { getMissingRequiredToolsFromSteps } from "../verify/requirement-state.js";
-import { META_TOOLS as META_TOOL_NAMES } from "../../../kernel/state/kernel-constants.js";
+import type { KernelMessage } from "../../../kernel/state/kernel-state.js";
 
 // ── sanitizeToolName ──────────────────────────────────────────────────────────
 
@@ -150,38 +145,9 @@ export function toProviderMessage(msg: KernelMessage): LLMMessage {
   return { role: "user", content: msg.content };
 }
 
-// ── buildToolSchemas ──────────────────────────────────────────────────────────
-
-/**
- * Filter the available tool schemas based on the gate-blocked tools guard.
- * When required tools haven't been called yet and some tools are gate-blocked,
- * only required (unsatisfied) + meta tools are returned to force the model
- * to select the right tool.
- *
- * Accepts either a pre-augmented schema list (with meta-tools already added)
- * or derives it from `input.availableToolSchemas` when schemas is omitted.
- */
-export function buildToolSchemas(
-  state: KernelState,
-  input: KernelInput,
-  _profile: ContextProfile,
-  schemas?: readonly ToolSchema[],
-): readonly ToolSchema[] {
-  const effectiveSchemas = schemas ?? ((input.availableToolSchemas ?? []) as ToolSchema[]);
-  const gateBlockedTools = (state.meta.gateBlockedTools as readonly string[] | undefined) ?? [];
-  const missingRequired = getMissingRequiredToolsFromSteps(
-    state.steps,
-    input.requiredTools ?? [],
-    input.requiredToolQuantities,
-  );
-
-  if (gateBlockedTools.length > 0 && missingRequired.length > 0) {
-    return effectiveSchemas.filter((ts) =>
-      missingRequired.includes(ts.name) || META_TOOL_NAMES.has(ts.name),
-    );
-  }
-  return effectiveSchemas;
-}
+// buildToolSchemas deleted (Overhaul Phase 2, 2026-07-07): its gate-blocked
+// narrowing is Stage 3 of resolveToolSurface (reason/tool-surface.ts), which
+// also carries the per-tool reason map. Sole caller was think.ts.
 // buildConversationMessages + CompressionAppliedSidecar deleted (Phase 1b,
 // 2026-07-07): the entire ContextManager/APC chain had no live caller —
 // project() (assembly/) is the sole prompt pipeline. See
