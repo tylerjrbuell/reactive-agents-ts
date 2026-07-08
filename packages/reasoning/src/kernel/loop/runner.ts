@@ -39,7 +39,8 @@ import { buildSuccessfulToolCallCounts } from "../../kernel/capabilities/verify/
 import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../../kernel/capabilities/comprehend/task-intent.js";
 import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
-import { emitGuardFired, emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
+import { compileRunContract } from "../../kernel/contract/run-contract.js";
+import { emitContractCompiled, emitGuardFired, emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
 import {
   validateOutputFormat,
   validateContentCompleteness,
@@ -329,6 +330,25 @@ export function runKernel(
           meta: { ...state.meta, postConditions: derived },
         });
       }
+    }
+
+    // RunContract (meta-loop Phase 4a) — compile the run's goal ONCE here, at the
+    // FIRST node of the meta-loop DAG, from task inputs only (task prose +
+    // required tools + comprehend classification; no loop state). Deterministic
+    // FLOOR — no LLM. Emitted as one replayable `contract-compiled` trace event.
+    // B1 wires the compile + emission (observability, behavior-neutral); B2/4b
+    // wire the consumers (terminal gate check 2.5, receipts, projector).
+    {
+      const runContract = compileRunContract(effectiveInput.task, {
+        requiredTools: effectiveInput.requiredTools ?? [],
+      });
+      yield* emitContractCompiled({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        requirements: runContract.requirements.map((r) => ({ id: r.id, kind: r.kind })),
+        deliverables: runContract.deliverables.map((d) => ({ id: d.id, kind: d.kind })),
+        horizon: runContract.horizon,
+      });
     }
 
     // Mutable scratchpad mirror — synced from state.scratchpad (ReadonlyMap) after each kernel step.

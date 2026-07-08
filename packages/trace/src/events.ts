@@ -34,6 +34,8 @@ export type TraceEvent =
   | CuratorDecisionEvent
   // ─── Overhaul Phase 2 (2026-07-07 — tool-surface compiler) ───
   | ToolSurfaceResolvedEvent
+  // ─── Meta-loop Phase 4a (2026-07-08 — goal compiler) ───
+  | ContractCompiledEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -329,6 +331,19 @@ export interface ToolSurfaceResolvedEvent extends TraceEventBase {
   readonly visible: readonly string[]
   readonly callable: readonly string[]
   readonly reasons: readonly { readonly tool: string; readonly reason: string }[]
+}
+
+/**
+ * RunContract compiled at run start (meta-loop Phase 4a, 2026-07-08): the typed
+ * "what does DONE mean" object — its requirement + deliverable refs and the run
+ * horizon. The goal-compiler node of the meta-loop DAG, made replayable the way
+ * `tool-surface-resolved` made tool resolution replayable.
+ */
+export interface ContractCompiledEvent extends TraceEventBase {
+  readonly kind: "contract-compiled"
+  readonly requirements: readonly { readonly id: string; readonly kind: string }[]
+  readonly deliverables: readonly { readonly id: string; readonly kind: string }[]
+  readonly horizon: string
 }
 
 /** Type-narrowing helper. */

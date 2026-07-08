@@ -28,6 +28,7 @@ import type {
   CuratorDecisionEvent,
   AlternativesConsideredEvent,
   ToolSurfaceResolvedEvent,
+  ContractCompiledEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -308,6 +309,20 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         visible: raw.visible,
         callable: raw.callable,
         reasons: raw.reasons,
+      }
+      return ev
+    }
+
+    case "ContractCompiledEmitted": {
+      const ev: ContractCompiledEvent = {
+        kind: "contract-compiled",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        requirements: raw.requirements,
+        deliverables: raw.deliverables,
+        horizon: raw.horizon,
       }
       return ev
     }

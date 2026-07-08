@@ -146,6 +146,34 @@ export type { SynthesisConfigJson } from "./context/synthesis-schema.js";
 export { KernelMetaToolsSchema, StaticBriefInfoSchema } from "./types/kernel-meta-tools.js";
 export type { KernelMetaToolsConfig } from "./types/kernel-meta-tools.js";
 
+// ─── RunContract — the goal compiler (meta-loop Phase 4a) ───
+// The FIRST node of the meta-loop DAG: the typed, frozen answer to "what does
+// DONE mean for this run", grafted onto the live PostCondition vocabulary.
+// Consumed by Wave B/4b (terminal gate check 2.5, receipts, projector).
+export {
+  compileRunContract,
+  mergeLlmRequirements,
+  withRequirements,
+  amendContract,
+} from "./kernel/contract/run-contract.js";
+export type {
+  RunContract,
+  TaskRequirement,
+  RequirementSpec,
+  RequirementKind,
+  DeliverableSpec,
+  Constraint,
+  AcceptancePolicy,
+  AcceptanceTier,
+  CompileRunContractOptions,
+  ContractAmendment,
+} from "./kernel/contract/run-contract.js";
+export { decomposeRequirements, shouldDecompose } from "./kernel/contract/decompose.js";
+export type { DecomposeOptions } from "./kernel/contract/decompose.js";
+export { deriveDeliverablePaths } from "./kernel/capabilities/verify/derive-conditions.js";
+export { classifyTaskHorizon, classifyHorizon } from "./kernel/capabilities/comprehend/task-horizon.js";
+export type { TaskHorizon, TaskHorizonClassification } from "./kernel/capabilities/comprehend/task-horizon.js";
+
 // ─── Shared Utilities ───
 export { filterToolsByRelevance } from "./kernel/capabilities/attend/tool-formatting.js";
 export { planNextMoveBatches } from "./kernel/capabilities/decide/tool-gating.js";

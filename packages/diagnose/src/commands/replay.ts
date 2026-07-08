@@ -140,6 +140,14 @@ function formatEventLine(ev: TraceEvent): string {
         : "";
       return `${ts} ${badge("surface", cyan)} visible=[${ev.visible.join(",")}] callable=${ev.callable.length}/${ev.visible.length}${dim(hiddenStr)}`;
     }
+    case "contract-compiled": {
+      // The goal-compiler node: what DONE means for this run. Deliverables are
+      // the load-bearing payload (the outstanding items the projector renders).
+      const delivStr = ev.deliverables.length
+        ? ` deliverables=[${ev.deliverables.map((d) => d.id).join(",")}]`
+        : "";
+      return `${ts} ${badge("contract", cyan)} horizon=${ev.horizon} requirements=${ev.requirements.length}${dim(delivStr)}`;
+    }
     default: {
       // Exhaustiveness via cast — keeps the switch open to future kinds.
       const e = ev as { kind: string };

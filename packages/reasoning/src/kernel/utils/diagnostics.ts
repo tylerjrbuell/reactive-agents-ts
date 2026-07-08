@@ -261,6 +261,45 @@ export function emitToolSurfaceResolved(args: {
   });
 }
 
+// ── ContractCompiled ─────────────────────────────────────────────────────────
+
+/**
+ * Meta-loop Phase 4a (2026-07-08): the RunContract compiled at run start — the
+ * goal-compiler node of the meta-loop DAG. Mirrors emitToolSurfaceResolved: one
+ * trace line so the contract → assessment → action chain is replayable from a
+ * single trace via `rax diagnose replay`.
+ */
+export function emitContractCompiled(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly requirements: readonly { readonly id: string; readonly kind: string }[];
+  readonly deliverables: readonly { readonly id: string; readonly kind: string }[];
+  readonly horizon: string;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "ContractCompiledEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        requirements: args.requirements,
+        deliverables: args.deliverables,
+        horizon: args.horizon,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitContractCompiled",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── VerifierVerdict ──────────────────────────────────────────────────────────
 
 export function emitVerifierVerdict(args: {

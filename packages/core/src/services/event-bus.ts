@@ -1069,6 +1069,22 @@ export type AgentEvent =
     }
   | {
       /**
+       * RunContract compiled at run start (meta-loop Phase 4a, 2026-07-08): the
+       * typed answer to "what does DONE mean here" — the requirement + deliverable
+       * set and the run horizon. Compiled ONCE and frozen; this event makes the
+       * goal-compiler node of the meta-loop DAG replayable from one trace, the way
+       * tool-surface-resolved made tool resolution replayable.
+       */
+      readonly _tag: "ContractCompiledEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly requirements: readonly { readonly id: string; readonly kind: string }[];
+      readonly deliverables: readonly { readonly id: string; readonly kind: string }[];
+      readonly horizon: string;
+    }
+  | {
+      /**
        * Decision point where multiple candidates were considered and one chosen
        * (v0.11.x). Surfaces the counterfactuals the model weighed.
        */

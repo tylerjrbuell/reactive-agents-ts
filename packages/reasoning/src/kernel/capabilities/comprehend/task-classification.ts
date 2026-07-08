@@ -19,6 +19,7 @@ import {
   classifyTaskComplexity,
   type TaskComplexityClassification,
 } from "./task-complexity.js";
+import { classifyTaskHorizon, type TaskHorizonClassification } from "./task-horizon.js";
 import { extractOutputFormat, type TaskIntent } from "./task-intent.js";
 import { inferTaskShape, type TaskShape } from "./task-shape.js";
 
@@ -31,6 +32,13 @@ export interface TaskClassification {
    * sections per shape.
    */
   readonly shape: TaskShape;
+  /**
+   * Run-horizon axis (audit 04-#8, the first "upward gear"). Short vs long —
+   * the deterministic seed the RunContract carries and later waves' pace bands /
+   * horizon-scaled guard profiles consume. Additive: complexity/intent/shape are
+   * unchanged, so a consumer that ignores `horizon` behaves exactly as before.
+   */
+  readonly horizon: TaskHorizonClassification;
 }
 
 /**
@@ -45,5 +53,6 @@ export function classifyTask(task: string): TaskClassification {
   const complexity = classifyTaskComplexity(task);
   const intent = extractOutputFormat(task);
   const shape = inferTaskShape({ complexity, intent }, task);
-  return { complexity, intent, shape };
+  const horizon = classifyTaskHorizon(task);
+  return { complexity, intent, shape, horizon };
 }
