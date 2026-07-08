@@ -48,3 +48,22 @@ export type TerminateReason =
   // is unavailable. Non-failure terminal (goalAchieved=false, success=false but
   // not a crash). Task 5 (legitimacy gate) + Task 6 (forced path) extend this.
   | "abstained";
+
+/**
+ * The two templated reason families (Phase 3 vocabulary closure). Producers:
+ * `reactiveControllerEarlyStopEvaluator` ("controller_early_stop: <reason>"),
+ * the arbitrator's controller-early-stop / loop-detected intent branches, and
+ * the dispatcher intermediates. Consumers prefix-match.
+ */
+export type TemplatedTerminateReason =
+  | `controller_early_stop:${string}`
+  | `loop_detected:${string}`;
+
+/**
+ * Everything a kernel Verdict may carry as `terminatedBy` — the R23 closed
+ * vocabulary. `Verdict.terminatedBy` (arbitrator.ts) is constrained to this;
+ * the oracle-decision passthrough site carries the one documented narrow cast
+ * (evaluator reason vocabulary is closed over this union — see
+ * arbitrator.ts oracle-decision branch).
+ */
+export type RawTerminatedBy = TerminateReason | TemplatedTerminateReason;

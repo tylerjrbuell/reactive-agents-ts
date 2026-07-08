@@ -35,6 +35,10 @@ import {
 } from "../kernel/utils/service-utils.js";
 import { makeStep, buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import { isSatisfied, isCritiqueStagnant } from "../kernel/capabilities/verify/quality-utils.js";
+import {
+  evaluateTerminalGate,
+  REFLEXION_SATISFIED,
+} from "../kernel/capabilities/decide/terminal-gate.js";
 import { getMissingRequiredToolsFromSteps } from "../kernel/capabilities/verify/requirement-state.js";
 import { deriveConditions } from "../kernel/capabilities/verify/derive-conditions.js";
 import {
@@ -435,13 +439,30 @@ export const executeReflexion = (
             }
           }
 
-          if (isSatisfied(critique) && missingRequired.length === 0 && spineUnmet.length === 0) {
+          // Phase 3: the coverage DECISION lives in the kernel terminal gate.
+          // Reflexion semantics: uncapped redirect (every SATISFIED-with-missing
+          // forces another improve pass; the outer maxRetries loop is the
+          // bound), so redirectsSpent.coverage stays 0 — the exhaustion policy
+          // is unreachable here by construction.
+          const gateDecision = evaluateTerminalGate({
+            terminatedBy: REFLEXION_SATISFIED,
+            requiredTools: input.requiredTools ?? [],
+            coveredTools: new Set(
+              (input.requiredTools ?? []).filter((t) => !missingRequired.includes(t)),
+            ),
+            hasSubstantiveGrounding: true,
+            redirectsSpent: { grounding: 0, coverage: 0, checker: 0 },
+            coverageExhaustionPolicy: "abstain",
+            buildGroundingGuidance: () => "",
+            buildCoverageGuidance: (missing) => missing.join(", "),
+          });
+          if (isSatisfied(critique) && gateDecision.decision === "accept" && spineUnmet.length === 0) {
             return terminateWith(
               { ...s, totalTokens: tokensAfterCritique, totalCost: costAfterCritique },
               { kind: "satisfied", detail: `after ${attempt} attempts` },
             );
           }
-          if (isSatisfied(critique) && missingRequired.length > 0) {
+          if (isSatisfied(critique) && gateDecision.decision === "redirect") {
             yield* emitLog({
               _tag: "warning",
               message: `Critique reported SATISFIED but required tools not yet called: ${missingRequired.join(", ")} — forcing improve pass`,

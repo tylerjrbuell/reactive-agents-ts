@@ -57,4 +57,29 @@ if [ -n "$HITS" ]; then
 fi
 
 echo "✅ Termination invariant holds — all status:'done' transitions route through terminate() or Arbitrator."
+
+# ── Phase 3 (Terminal Authority): single-owner terminal-gate decisions ────────
+#
+# The accept/redirect/abstain decision for a candidate final answer is owned by
+# kernel/capabilities/decide/terminal-gate.ts. No other file may construct a
+# gate-decision literal — strategies and the arbitrator consume gate output
+# (mapping `gate.decision` variables is fine; deciding locally is not). This is
+# what killed the F1/B1/P3 three-implementations drift.
+GATE_HITS="$(grep -rn -E 'decision:\s*"(redirect|abstain)"' \
+  --include='*.ts' "$SEARCH_DIR" 2>/dev/null \
+  | grep -v 'kernel/capabilities/decide/terminal-gate.ts' \
+  | grep -E -v '\.(test|spec)\.ts:' \
+  || true)"
+
+if [ -n "$GATE_HITS" ]; then
+  echo "❌ Terminal-gate invariant violated. Gate-decision literals constructed outside terminal-gate.ts:"
+  echo ""
+  echo "$GATE_HITS"
+  echo ""
+  echo "Route the decision through \`evaluateTerminalGate()\` from"
+  echo "kernel/capabilities/decide/terminal-gate.ts and map its output instead."
+  exit 1
+fi
+
+echo "✅ Terminal-gate invariant holds — accept/redirect/abstain decisions constructed only in terminal-gate.ts."
 exit 0

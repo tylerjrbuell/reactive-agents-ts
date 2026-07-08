@@ -24,6 +24,10 @@ import {
   computeWaves,
 } from "../types/plan.js";
 import type { Plan, PlanStep, LLMPlanOutput } from "../types/plan.js";
+import {
+  evaluateTerminalGate,
+  PLAN_EXECUTE_SATISFIED,
+} from "../kernel/capabilities/decide/terminal-gate.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
@@ -1263,13 +1267,22 @@ export function evaluateGroundedSatisfaction(args: {
   redirectsSoFar: number;
 }): { verdict: "accept" | "redirect" | "abstain"; missing: readonly string[] } {
   if (!args.satisfied) return { verdict: "accept", missing: [] };
-  const missing = (args.requiredTools ?? []).filter(
-    (t) => !args.completedToolNames.has(t),
-  );
-  if (missing.length === 0) return { verdict: "accept", missing: [] };
-  return args.redirectsSoFar === 0
-    ? { verdict: "redirect", missing }
-    : { verdict: "abstain", missing };
+  // Phase 3: the decision lives in the kernel terminal gate (coverage check,
+  // plan-execute semantics: covered = COMPLETED steps, abstain on exhaustion).
+  // Grounding is held true — P3 never had an F1 arm; a SATISFIED plan with
+  // zero completed tool steps is exactly the missing-coverage case anyway.
+  const gate = evaluateTerminalGate({
+    terminatedBy: PLAN_EXECUTE_SATISFIED,
+    requiredTools: args.requiredTools ?? [],
+    coveredTools: args.completedToolNames,
+    hasSubstantiveGrounding: true,
+    redirectsSpent: { grounding: 0, coverage: args.redirectsSoFar, checker: 0 },
+    coverageExhaustionPolicy: "abstain",
+    buildGroundingGuidance: () => "",
+    buildCoverageGuidance: (missing) => missing.join(", "),
+  });
+  if (gate.decision === "accept") return { verdict: "accept", missing: [] };
+  return { verdict: gate.decision, missing: gate.missing };
 }
 
 // ─── Step Execution Helpers ───

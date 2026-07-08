@@ -296,24 +296,28 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
   evaluate: (ctx) => {
     if (ctx.stopReason !== "end_turn") return null;
     if (ctx.thought.trim().length === 0) return null;
-    const remainingRequired = ctx.requiredTools.filter((t) => !ctx.toolsUsed.has(t));
-    if (remainingRequired.length > 0) {
-      // B1 (2026-07-07): a silent null here was an invisible wall — bench trace
-      // 01KWXQK2D001 (qwen3:14b, rw-2) produced the correct grounded answer at
-      // iteration 1 and looped to the 420s timeout because the exit was
-      // declined with no feedback each turn. Bounded fix, mirroring the F1
-      // redirect-then-accept symmetry: name the gap ONCE (the "Not done yet"
-      // completion-guard message the redirect path already emits), then accept
-      // the next substantive end_turn. The F1 grounded-terminal gate still
-      // guards the zero-substantive-grounding case downstream.
-      if (ctx.redirectCount === 0) {
-        return {
-          action: "redirect",
-          confidence: "medium",
-          reason: `required tools not used yet: ${remainingRequired.join(", ")} — use them, or state explicitly why they are unnecessary and give your final answer`,
-        };
-      }
-      return { action: "exit", confidence: "medium", reason: "llm_end_turn", output: ctx.thought.trim() };
+    // B1 (2026-07-07): a silent null here was an invisible wall — bench trace
+    // 01KWXQK2D001 (qwen3:14b, rw-2) produced the correct grounded answer at
+    // iteration 1 and looped to the 420s timeout because the exit was
+    // declined with no feedback each turn. Bounded fix, mirroring the F1
+    // redirect-then-accept symmetry: name the gap ONCE, then accept the next
+    // substantive end_turn. Phase 3: the decision lives in the terminal
+    // gate's coverage check (kernel semantics: covered = attempted, policy =
+    // accept on exhaustion; the F1 arm downstream still guards the
+    // zero-substantive-grounding case, so grounding is held true here).
+    const gate = evaluateTerminalGate({
+      terminatedBy: "end_turn",
+      requiredTools: ctx.requiredTools,
+      coveredTools: ctx.toolsUsed,
+      hasSubstantiveGrounding: true,
+      redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
+      coverageExhaustionPolicy: "accept",
+      buildGroundingGuidance: () => "",
+      buildCoverageGuidance: (missing) =>
+        `required tools not used yet: ${missing.join(", ")} — use them, or state explicitly why they are unnecessary and give your final answer`,
+    });
+    if (gate.decision === "redirect") {
+      return { action: "redirect", confidence: "medium", reason: gate.guidance };
     }
     return { action: "exit", confidence: "medium", reason: "llm_end_turn", output: ctx.thought.trim() };
   },
@@ -499,12 +503,12 @@ export type Verdict =
   | {
       readonly action: "exit-success";
       readonly output: string;
-      readonly terminatedBy: string;
+      readonly terminatedBy: RawTerminatedBy;
     }
   | {
       readonly action: "exit-failure";
       readonly error: string;
-      readonly terminatedBy: string;
+      readonly terminatedBy: RawTerminatedBy;
       readonly output?: string;
     }
   | {
@@ -821,6 +825,8 @@ import {
   hasSuccessfulSubstantiveToolCall,
   buildGroundingRedirectGuidance,
 } from "../../loop/runner-helpers/grounded-terminal.js";
+import { evaluateTerminalGate } from "./terminal-gate.js";
+import type { RawTerminatedBy } from "../../loop/terminate-reason.js";
 import { makeStep } from "../sense/step-utils.js";
 
 // ─── PostCondition spine — deterministic state-grounded success authority ─────
@@ -932,15 +938,35 @@ function applyGroundedTerminalGate(
   if (ctx.requiredTools.length === 0) return null;
   if (hasSuccessfulSubstantiveToolCall(ctx.steps)) return null;
 
-  if ((ctx.groundingRedirectCount ?? 0) === 0) {
+  // Phase 3: the decision itself lives in the terminal gate (grounding check).
+  // This site only consults the F1 arm: coverage is vacuously satisfied here
+  // (B1 owns it pre-verdict in llmEndTurnEvaluator) and no checker is wired
+  // at this seam yet.
+  const gate = evaluateTerminalGate({
+    terminatedBy: verdict.terminatedBy,
+    requiredTools: ctx.requiredTools,
+    coveredTools: new Set(ctx.requiredTools),
+    hasSubstantiveGrounding: false,
+    redirectsSpent: {
+      grounding: ctx.groundingRedirectCount ?? 0,
+      coverage: 0,
+      checker: 0,
+    },
+    coverageExhaustionPolicy: "accept",
+    buildGroundingGuidance: () =>
+      buildGroundingRedirectGuidance(ctx.steps, ctx.requiredTools),
+    buildCoverageGuidance: (missing) => missing.join(", "),
+  });
+  if (gate.decision === "redirect" && gate.check === "grounding") {
     return {
       action: "escalate",
       nextStrategy: GROUNDING_REDIRECT,
-      reason: buildGroundingRedirectGuidance(ctx.steps, ctx.requiredTools),
+      reason: gate.guidance,
     };
   }
-  // Second ungrounded terminal attempt: accept so the loop exits; the runner's
-  // §7.5 forced-abstention path owns the conversion to "abstained".
+  // gate.decision === "abstain": accept the verdict verbatim so the loop
+  // exits; the runner's §7.5 forced-abstention path owns the conversion to
+  // "abstained" (unchanged mechanics).
   return verdict;
 }
 
@@ -1159,10 +1185,18 @@ function arbitrateInner(intent: TerminationIntent, ctx: ArbitrationContext): Ver
         // reason starting with "content_stable" or "entropy_converged"
         // is a stability-based exit ⇒ "end_turn" downstream.
         const reason = intent.decision.reason ?? "oracle";
-        const terminatedBy =
+        // Documented narrow cast (Phase 3 vocabulary closure): the evaluator
+        // exit-reason vocabulary is closed over RawTerminatedBy — producers are
+        // entropyConvergenceEvaluator ("entropy_converged"),
+        // contentStabilityEvaluator ("content_stable"),
+        // reactiveControllerEarlyStopEvaluator ("controller_early_stop: …"),
+        // llmEndTurnEvaluator ("llm_end_turn"), finalAnswerRegexEvaluator
+        // ("final_answer_regex") — all members of the union or its templates.
+        const terminatedBy = (
           reason === "content_stable" || reason.startsWith("entropy_converged")
             ? "llm_end_turn"
-            : reason;
+            : reason
+        ) as RawTerminatedBy;
         return {
           action: "exit-success",
           output: intent.decision.output ?? intent.output,
