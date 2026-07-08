@@ -14,6 +14,7 @@
 // Pure — no Effect, no state, no I/O. Reads only the step + its metadata.
 
 import type { ReasoningStep } from "../../types/index.js";
+import { evidenceFromStep } from "../../assembly/evidence-entry.js";
 import {
   appendEntries,
   type LedgerEntryInput,
@@ -85,16 +86,21 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
     case "observation": {
       const obs = meta?.observationResult;
       const toolName = obs?.toolName ?? meta?.toolUsed;
+      // C3 (2026-07-08): the `tool-result` ledger entry is a PROJECTION of the
+      // unified EvidenceEntry facet — preview + the (recallable-only) storedKey +
+      // extractedFact all come from ONE builder rather than being re-derived
+      // inline here (audit 03-#14).
+      const ev = evidenceFromStep(step, PREVIEW_MAX);
       const entries: LedgerEntryInput[] = [
         {
           kind: "tool-result",
           iteration,
           success: obs?.success ?? true,
-          preview: step.content.slice(0, PREVIEW_MAX),
+          preview: ev.preview,
           ...(toolName !== undefined ? { toolName } : {}),
           ...(meta?.toolCallId !== undefined ? { toolCallId: meta.toolCallId } : {}),
-          ...(meta?.storedKey !== undefined ? { storedKey: meta.storedKey } : {}),
-          ...(meta?.extractedFact !== undefined ? { extractedFact: meta.extractedFact } : {}),
+          ...(ev.storedKey !== undefined ? { storedKey: ev.storedKey } : {}),
+          ...(ev.extractedFact !== undefined ? { extractedFact: ev.extractedFact } : {}),
           stepId: step.id,
         },
       ];

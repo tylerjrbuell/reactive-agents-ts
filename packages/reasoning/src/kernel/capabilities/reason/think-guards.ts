@@ -22,6 +22,7 @@ import {
   type ToolCallSpec,
 } from "@reactive-agents/tools";
 import { computeNoveltyRatio } from "../attend/tool-formatting.js";
+import { SURFACED_RECALL_REF } from "../../../assembly/ref-grammar.js";
 import {
   buildEvidenceCorpusFromSteps,
   validateNumericGrounding,
@@ -540,8 +541,13 @@ export function guardEvidenceGrounding(
  * Matching the prefix (not one specific arg) keeps the gate fail-safe: when a key
  * is genuinely surfaced in ANY format, recall stays callable. Inline (≤cap) tool
  * results carry NO `recall(` marker, so they are still correctly gated out.
+ *
+ * C3 (2026-07-08): this matcher is now the SHARED one from the ref-grammar
+ * module — the SAME source the projector's recall-hint minter comes from, so the
+ * gate and the minter can never drift (assembly/ref-grammar.ts round-trip
+ * invariant). Re-exported here under the historical name for caller stability.
  */
-const SURFACED_RECALL_KEY = /recall\("[^"]+"/;
+const SURFACED_RECALL_KEY = SURFACED_RECALL_REF;
 
 /**
  * True iff some message in the current window surfaces a usable recall key

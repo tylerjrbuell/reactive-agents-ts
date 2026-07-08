@@ -373,6 +373,7 @@ export function handleThinking(
       actReminder: pending?.actReminder,
       qualityGateHint: pending?.qualityGateHint,
       evidenceGap: pending?.evidenceGap,
+      gatherDedup: pending?.gatherDedup,
     };
     if (guidance.loopDetected && pipeline) {
       const defaultNudge = "Loop detected: you are repeating the same tool calls. Try a different approach or synthesize what you have.";

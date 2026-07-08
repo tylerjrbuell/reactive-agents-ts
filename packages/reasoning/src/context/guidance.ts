@@ -37,6 +37,9 @@ export interface GuidanceContext {
   readonly qualityGateHint?: string;
   /** Evidence grounding redirect when claims lack tool support. */
   readonly evidenceGap?: string;
+  /** Advisory gather-dedup nudge — a repeated (tool, args) gather was detected;
+   *  hands back the existing recallable ref instead of re-fetching (C3). */
+  readonly gatherDedup?: string;
 }
 
 /**
@@ -62,6 +65,7 @@ export function buildGuidanceText(guidance: GuidanceContext): string | null {
   if (guidance.errorRecovery) signals.push(guidance.errorRecovery);
   if (guidance.actReminder) signals.push(guidance.actReminder);
   if (guidance.qualityGateHint) signals.push(guidance.qualityGateHint);
+  if (guidance.gatherDedup) signals.push(guidance.gatherDedup);
   if (guidance.evidenceGap) {
     signals.push(
       `Your answer contains claims not supported by tool results: ${guidance.evidenceGap}. Revise using only data from the Observations above.`,

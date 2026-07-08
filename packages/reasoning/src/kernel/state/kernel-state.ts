@@ -70,6 +70,9 @@ export interface PendingGuidance {
   readonly qualityGateHint?: string;
   /** Reserved for Task 17 — evidence grounding redirect when claims lack tool support. */
   readonly evidenceGap?: string;
+  /** Advisory gather-dedup nudge (C3) — a repeated (tool, args) gather was
+   *  detected; hands back the existing recallable ref instead of re-fetching. */
+  readonly gatherDedup?: string;
 }
 
 // ── KernelMeta — typed strategy-specific metadata bag ─────────────────────────

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { renderValue, describeShape, type ResultFormat } from "@reactive-agents/tools";
+import { renderRecallHint } from "./ref-grammar.js";
 
 export interface StoredResult {
   readonly ref: string;
@@ -53,7 +54,7 @@ export class ResultStore {
     // (think-guards.ts SURFACED_RECALL_KEY). Before this, previews only taught
     // write_result_to_file, the gate never saw its marker on the canonical
     // assembly path, and the stored-evidence read path was structurally dead.
-    const readHint = s.recallable ? ` Re-read the full data with recall("${ref}", full: true).` : "";
+    const readHint = s.recallable ? ` Re-read the full data with ${renderRecallHint(ref, "full")}.` : "";
     return (
       `${s.tool} result stored as result_ref="${ref}" (${describeShape(s.value)}). ` +
       `Full data held system-side; act on it by reference (e.g. write_result_to_file(result_ref="${ref}", path)). Do not retype it.${readHint}`
@@ -91,7 +92,7 @@ export class ResultStore {
     if (fullText.length <= budgetChars) return fullText;
 
     // H2: recall read-hint in the gate-matched vocabulary (see summarize()).
-    const readHint = s.recallable ? ` Re-read any section with recall("${ref}", start: 0, maxChars: 2000).` : "";
+    const readHint = s.recallable ? ` Re-read any section with ${renderRecallHint(ref, "segment")}.` : "";
     const footer =
       `\n\n[content truncated — ${fullText.length} chars total; full data held ` +
       `system-side as result_ref="${ref}". Summarize from the sections shown above; ` +

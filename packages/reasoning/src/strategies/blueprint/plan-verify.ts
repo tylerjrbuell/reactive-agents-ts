@@ -24,6 +24,7 @@ import {
   type Plan,
   type PlanStep,
 } from "../../types/plan.js";
+import { fromStepRe } from "../../assembly/ref-grammar.js";
 
 // ─── Result Types ───
 
@@ -94,7 +95,9 @@ const healToolName = (
 
 // ─── #E / from_step reference scan ───
 
-const FROM_STEP_RE = /\{\{from_step:(s\d+)(?::summary|:full)?\}\}/g;
+// C3 (2026-07-08): shared from_step grammar (assembly/ref-grammar.ts).
+// matchAll clones its regex → a single module instance is lastIndex-safe.
+const FROM_STEP_RE = fromStepRe();
 
 /** Collect every `{{from_step:sN}}` reference found in a step (args+instruction). */
 const collectStepRefs = (step: PlanStep): string[] => {

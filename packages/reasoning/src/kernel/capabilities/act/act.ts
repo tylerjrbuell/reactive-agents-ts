@@ -23,6 +23,11 @@ import {
 } from "@reactive-agents/tools";
 import { deriveArtifactEntries } from "../../../kernel/ledger/artifact-projection.js";
 import { appendEntries } from "../../../kernel/ledger/run-ledger.js";
+import {
+  detectDuplicateGathers,
+  buildDedupNudge,
+  dedupSignalEntries,
+} from "../../../assembly/gather-dedup.js";
 import { metaToolRegistry } from "./meta-tool-handlers.js";
 import { makeStep } from "../sense/step-utils.js";
 import { executeNativeToolCall, extractObservationFacts } from "../act/tool-execution.js";
@@ -992,10 +997,30 @@ export function handleActing(
         }
         newConversationHistory = transformed;
       }
-      const actGuidance: { actReminder?: string; errorRecovery?: string } = {};
+      // ── Gather-dedup (Wave C / C3, audit 03-F6) ──────────────────────────────
+      // Flag this round's gathering calls that repeat an EARLIER successful gather
+      // (same tool + same normalized args, against the PRIOR-round ledger) and
+      // nudge the model to reuse the stored ref instead of re-fetching. ADVISORY:
+      // the call is NOT blocked — this only adds a ledger flag + a guidance nudge.
+      const duplicateGathers = detectDuplicateGathers(
+        state.ledger,
+        normalizedPendingCalls.map((tc) => ({
+          toolName: tc.name,
+          args: tc.arguments as Record<string, unknown> | undefined,
+          toolCallId: tc.id,
+        })),
+      );
+      const dedupNudge = buildDedupNudge(duplicateGathers);
+      const dedupSignals = dedupSignalEntries(duplicateGathers, state.iteration + 1);
+
+      const actGuidance: { actReminder?: string; errorRecovery?: string; gatherDedup?: string } = {};
       if (conversationAssembly.actReminder) actGuidance.actReminder = conversationAssembly.actReminder;
       if (conversationAssembly.errorRecovery) actGuidance.errorRecovery = conversationAssembly.errorRecovery;
-      const hasActGuidance = actGuidance.actReminder !== undefined || actGuidance.errorRecovery !== undefined;
+      if (dedupNudge) actGuidance.gatherDedup = dedupNudge;
+      const hasActGuidance =
+        actGuidance.actReminder !== undefined ||
+        actGuidance.errorRecovery !== undefined ||
+        actGuidance.gatherDedup !== undefined;
 
       // 'after act' hooks
       {
@@ -1028,8 +1053,15 @@ export function handleActing(
         resolveProduces,
         state.iteration + 1,
       );
+      // Seed the ledger via patch.ledger (the C1-owned chokepoint then appends
+      // this round's step-derived tool-invocation/tool-result entries on top):
+      // artifact entries (C2) + gather-dedup harness-signal flags (C3). The
+      // chokepoint spine is untouched — this is the append-only seam.
+      let seededLedger = state.ledger;
+      if (artifactInputs.length > 0) seededLedger = appendEntries(seededLedger, artifactInputs);
+      if (dedupSignals.length > 0) seededLedger = appendEntries(seededLedger, dedupSignals);
       const ledgerWithArtifacts =
-        artifactInputs.length > 0 ? appendEntries(state.ledger, artifactInputs) : undefined;
+        artifactInputs.length > 0 || dedupSignals.length > 0 ? seededLedger : undefined;
 
       // All native tool calls executed — transition back to thinking.
       // Any harness signals raised this round flow via pendingGuidance — think.ts

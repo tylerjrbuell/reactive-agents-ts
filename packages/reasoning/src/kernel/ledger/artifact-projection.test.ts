@@ -108,18 +108,20 @@ describe("act.ts final-transition composition (artifacts via patch.ledger + chok
     });
 
     // Exactly one artifact, correct path, linked to the call.
-    const arts = artifacts(next.ledger);
+    expect(next.ledger).toBeDefined();
+    const ledger = next.ledger ?? [];
+    const arts = artifacts(ledger);
     expect(arts.map((a) => a.path)).toEqual(["report.md"]);
     expect(arts[0]!.toolCallId).toBe("c1");
 
     // The chokepoint still emitted the tool-invocation + tool-result for the round.
-    const kinds = next.ledger.map((e) => e.kind);
+    const kinds = ledger.map((e) => e.kind);
     expect(kinds).toContain("tool-invocation");
     expect(kinds).toContain("tool-result");
     expect(kinds).toContain("artifact");
 
     // seq is dense + monotonic across the whole ledger (no collisions).
-    expect(next.ledger.map((e) => e.seq)).toEqual(next.ledger.map((_, i) => i));
+    expect(ledger.map((e) => e.seq)).toEqual(ledger.map((_, i) => i));
   });
 });
 

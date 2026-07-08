@@ -1,5 +1,6 @@
 // File: src/types/plan.ts
 import { Schema } from "effect";
+import { fromStepRe } from "../assembly/ref-grammar.js";
 
 // ─── Short ID Generator ───
 
@@ -177,7 +178,7 @@ export const resolveStepReferences = (
   for (const [key, value] of Object.entries(args)) {
     if (typeof value === "string") {
       result[key] = value.replace(
-        /\{\{from_step:(s\d+)(?::summary|:full)?\}\}/g,
+        fromStepRe(),
         (match, stepId, _offset, _full) => {
           const step = completedSteps.find((s) => s.id === stepId);
           if (!step || step.result === undefined) return match;
@@ -211,7 +212,10 @@ export const resolveStepReferences = (
 
 // ─── Dependency Analysis & Wave Scheduling ───
 
-const FROM_STEP_RE = /\{\{from_step:(s\d+)(?::summary|:full)?\}\}/g;
+// C3 (2026-07-08): the from_step grammar is the ONE shared with the recall/ref
+// grammar module (assembly/ref-grammar.ts). matchAll clones its regex, so a
+// single module-level instance stays lastIndex-safe.
+const FROM_STEP_RE = fromStepRe();
 
 /**
  * Extract all step IDs that a step depends on, from both `dependsOn` and

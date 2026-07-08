@@ -36,6 +36,7 @@ import {
   buildSuccessfulToolCallCounts,
   getEffectiveMissingRequiredTools,
 } from "../verify/requirement-state.js";
+import { renderRecallHint } from "../../../assembly/ref-grammar.js";
 
 const REQUIRED_TOOLS_SATISFIED_PREFIX = "Required tool calls are satisfied";
 
@@ -115,7 +116,7 @@ export function assembleConversation(args: {
       resolvedContent =
         fullFromScratchpad.slice(0, TOOL_RESULT_INLINE_CAP) +
         `\n  ...truncated (${fullFromScratchpad.length - TOOL_RESULT_INLINE_CAP} chars).` +
-        (storedKey ? ` Full available via recall("${storedKey}", full: true).` : "");
+        (storedKey ? ` Full available via ${renderRecallHint(storedKey, "full")}.` : "");
     }
     const msg: KernelMessage = {
       role: "tool_result" as const,

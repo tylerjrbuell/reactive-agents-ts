@@ -11,11 +11,17 @@ import {
   type KernelInput,
 } from "../../../kernel/state/kernel-state.js";
 import { getEffectiveMissingRequiredTools } from "../../../kernel/capabilities/verify/requirement-state.js";
+import { scratchpadRecallRefRe } from "../../../assembly/ref-grammar.js";
 
 /** Keys embedded in compressed tool observations (`[STORED: _tool_result_N | tool]`) */
 export const STORED_TOOL_KEY_RE = /\[STORED:\s*(_tool_result_\d+)\s*\|/g;
-/** Keys referenced by compression hints (e.g. `recall("_tool_result_5", ...)`). */
-export const RECALL_TOOL_KEY_RE = /recall\("(_tool_result_\d+)"/g;
+/**
+ * Keys referenced by compression hints (e.g. `recall("_tool_result_5", ...)`).
+ * C3 (2026-07-08): sourced from the shared ref-grammar (scratchpad-scoped
+ * variant) so this resolver tracks the ONE recall grammar. Kept as a getter
+ * because the `g` flag is stateful — each caller gets a fresh RegExp.
+ */
+export const RECALL_TOOL_KEY_RE = scratchpadRecallRefRe();
 
 export function missingRequiredToolsForInput(
   steps: KernelState["steps"],
