@@ -249,6 +249,167 @@ export async function runPipeline(state: PipelineState): Promise<string[]> {
 `
 }
 
+/**
+ * rw-7 hidden reference tests — written into tmpDir AFTER the agent run,
+ * immediately before scoring (see `hiddenFixtures` on BenchmarkTask). The
+ * agent never sees this file, so it can neither satisfy it with fabricated
+ * trivia nor poison it. One describe block per planted bug, exactly one test
+ * per bug, so `bun test` partial credit (pass/total) tracks bugs-fixed:
+ * 0/3 unfixed, 1/3 per bug, 3/3 = exit 0 = score 1.0.
+ *
+ * Verified empirically (2026-07-07, scratchpad replay): buggy fixtures score
+ * 0/3; validator-only-fixed scores 1/3; canonical fixes score 3/3 / exit 0.
+ *
+ * Pipeline-bug note: the planted `Promise.all` race is NOT behaviorally
+ * observable under Node/Bun scheduling — both timers resolve in registration
+ * order and microtasks drain between timer callbacks, so the buggy code
+ * deterministically produces the same output as the fixed code (confirmed
+ * 50/50 runs). The discriminator is therefore a Promise.all/allSettled spy
+ * around the `runPipeline` call (the task's canonical fix per the accuracy
+ * rubric is sequential awaits), combined with the behavioral contract so a
+ * "fix" that breaks output still fails.
+ */
+function generateHiddenReferenceTests(): string {
+  return `// hidden-reference.test.ts — reference tests for the three planted bugs.
+// Written by the benchmark scorer AFTER the agent run. Not agent-authored.
+import { describe, it, expect } from "bun:test"
+import { validate } from "./src/validator.ts"
+import { filterLargeList } from "./src/processor.ts"
+import { runPipeline } from "./src/pipeline.ts"
+
+describe("validator bug (falsy-but-valid values)", () => {
+  it("accepts present-but-falsy required values and still rejects missing fields", () => {
+    // Discriminator: buggy \`!obj[field]\` rejects 0 / "" / false.
+    const falsy = validate({ count: 0, label: "", active: false }, { required: ["count", "label", "active"] })
+    expect(falsy.valid).toBe(true)
+    expect(falsy.errors).toEqual([])
+    // Regression guard bundled into the same test: a genuinely missing field
+    // must still be rejected — and ONLY that field (an over-broad "fix" that
+    // stops rejecting anything fails here).
+    const missing = validate({ present: 1 }, { required: ["present", "missing"] })
+    expect(missing.valid).toBe(false)
+    expect(missing.errors.length).toBe(1)
+    expect(missing.errors[0]!.includes("missing")).toBe(true)
+  })
+})
+
+describe("processor bug (off-by-one threshold)", () => {
+  it("filters lists of exactly 10 items (>= 10) and passes small lists through", () => {
+    // Discriminator: buggy \`> 10\` returns a 10-item list unfiltered.
+    const boundary = filterLargeList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], (n) => n % 2 === 0)
+    expect(boundary).toEqual([2, 4, 6, 8, 10])
+    // Regression guards: >10 still filters; <10 still passes through.
+    const large = filterLargeList([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], (n) => n % 2 === 0)
+    expect(large).toEqual([2, 4, 6, 8, 10])
+    const small = filterLargeList([1, 2, 3], (n) => n % 2 === 0)
+    expect(small).toEqual([1, 2, 3])
+  })
+})
+
+describe("pipeline bug (race condition)", () => {
+  it("runs stages sequentially (no concurrent launch) and produces correct output", async () => {
+    // The planted race is not observable via output under Bun's deterministic
+    // timer/microtask ordering, so spy on concurrent-launch primitives for the
+    // duration of the call. The canonical fix (per the task rubric) is
+    // sequential awaits — any sequential rewrite passes; Promise.all or
+    // Promise.allSettled over the stages fails.
+    const origAll = Promise.all.bind(Promise)
+    const origAllSettled = Promise.allSettled.bind(Promise)
+    let concurrentLaunch = false
+    ;(Promise as { all: unknown }).all = (...args: unknown[]) => {
+      concurrentLaunch = true
+      return (origAll as (...a: unknown[]) => unknown)(...args)
+    }
+    ;(Promise as { allSettled: unknown }).allSettled = (...args: unknown[]) => {
+      concurrentLaunch = true
+      return (origAllSettled as (...a: unknown[]) => unknown)(...args)
+    }
+    try {
+      const state = { count: 0, results: [] as string[] }
+      const out = await runPipeline(state)
+      expect(concurrentLaunch).toBe(false)
+      expect(out).toEqual(["first-1", "second-1"])
+      expect(state.count).toBe(1)
+    } finally {
+      ;(Promise as { all: unknown }).all = origAll
+      ;(Promise as { allSettled: unknown }).allSettled = origAllSettled
+    }
+  })
+})
+`
+}
+
+/**
+ * rw-4 hidden runtime check — replaces the former \`bun check output.ts\`
+ * criterion, which was doubly broken: (1) \`bun check\` is not a bun
+ * subcommand ("error: Script not found" — the task could NEVER score 1.0
+ * deterministically), and (2) even a working typecheck passes on a trivial
+ * hand-written module that never touched the API. This check imports the
+ * agent's output.ts (catches syntax/runtime errors — bun does not typecheck)
+ * and asserts the exported const array actually models the task: all 10
+ * posts by JSONPlaceholder user 3, each enriched with a numeric comment
+ * count (field name not pinned by the prompt, so any /comment/i-named
+ * numeric field is accepted).
+ */
+function generateRw4HiddenCheck(): string {
+  return `// hidden-check.ts — scorer-written validation of output.ts. Not agent-authored.
+const mod: Record<string, unknown> = await import("./output.ts")
+const arrays = Object.values(mod).filter((v): v is unknown[] => Array.isArray(v))
+if (arrays.length === 0) {
+  console.error("FAIL: output.ts exports no array")
+  process.exit(1)
+}
+// The prompt pins: all posts by user 3 (JSONPlaceholder has exactly 10),
+// each enriched with its comment count.
+const posts = arrays.find((a) => a.length > 0) ?? arrays[0]!
+if (posts.length !== 10) {
+  console.error(\`FAIL: expected 10 posts for userId 3, got \${posts.length}\`)
+  process.exit(1)
+}
+for (const p of posts) {
+  const post = p as Record<string, unknown>
+  if (post.userId !== 3) {
+    console.error(\`FAIL: post has userId \${String(post.userId)}, expected 3\`)
+    process.exit(1)
+  }
+  if (typeof post.id !== "number" || typeof post.title !== "string" || post.title.length === 0) {
+    console.error("FAIL: post missing numeric id or non-empty title")
+    process.exit(1)
+  }
+  const hasCommentCount = Object.entries(post).some(
+    ([k, v]) => /comment/i.test(k) && typeof v === "number" && v >= 1,
+  )
+  if (!hasCommentCount) {
+    console.error("FAIL: post not enriched with a numeric comment count field")
+    process.exit(1)
+  }
+}
+console.log("hidden-check: output.ts exports 10 enriched posts for userId 3")
+`
+}
+
+/**
+ * rw-8 hidden runner — replaces \`bun run generate.ts && bun run validate.ts\`.
+ * scoreVerifiable spawns WITHOUT a shell (spawnSync(cmd, args)), so "&&" was
+ * passed as a literal argv to generate.ts and validate.ts NEVER ran — the
+ * task scored 1.0 whenever generate.ts alone exited 0 (verified empirically
+ * 2026-07-07: validate.ts with process.exit(1) still yielded status 0). This
+ * runner executes both scripts sequentially and fails if either fails.
+ */
+function generateRw8HiddenCheck(): string {
+  return `// hidden-check.ts — scorer-written sequential runner. Not agent-authored.
+import { spawnSync } from "node:child_process"
+for (const script of ["generate.ts", "validate.ts"]) {
+  const r = spawnSync("bun", ["run", script], { cwd: import.meta.dir, encoding: "utf8", timeout: 12_000 })
+  if (r.status !== 0) {
+    console.error(\`\${script} failed (exit \${String(r.status)}):\\n\${r.stdout ?? ""}\\n\${r.stderr ?? ""}\`)
+    process.exit(1)
+  }
+}
+console.log("hidden-check: generate.ts and validate.ts both exited 0")
+`
+}
+
 function generateFallbackPrices(): string {
   return JSON.stringify({
     note: "Static fallback snapshot — use when live API is unavailable",
@@ -376,9 +537,21 @@ Note: some sources you find may have conflicting benchmark data for the same dat
     prompt: `Using the JSONPlaceholder API at https://jsonplaceholder.typicode.com, fetch all posts by user ID 3, enrich each post with its comment count, and write a TypeScript module to output.ts that exports a typed EnrichedPost[] array as a const. The module must compile without errors.`,
     requiresTools: true,
     maxIterations: 15,
+    // 2026-07-07 verifiable-criteria audit: `bun check output.ts` was not a
+    // real bun subcommand ("error: Script not found \"check\"") — the task
+    // could never score above 0 deterministically. And even a working
+    // typecheck would pass on a trivial hand-written module that never
+    // touched the API. The hidden check imports output.ts and asserts the
+    // exported data actually models the task (10 posts, userId 3, enriched
+    // comment counts). Type-level compile checking is not restored (no tsc
+    // exists in the bare tmpDir); runtime import + shape assertions are a
+    // strictly stronger signal against fabrication.
+    hiddenFixtures: [
+      { path: "hidden-check.ts", content: generateRw4HiddenCheck() },
+    ],
     successCriteria: {
       type: "verifiable",
-      command: "bun check output.ts",
+      command: "bun hidden-check.ts",
     },
     primaryDimensions: ["tool-mastery", "accuracy", "efficiency"],
     dimensionRubrics: [
@@ -473,8 +646,33 @@ Note: some sources you find may have conflicting benchmark data for the same dat
     name: "Multi-file debug, no test suite",
     domain: "execution",
     strategy: "react",
-    prompt: `The TypeScript package in src/ has bugs. No test suite is provided. Write tests to find the bugs, fix all of them, and verify your tests pass. Do not stop until \`bun test\` exits 0.`,
+    // Fixture files are named explicitly so the runner's absolute-path
+    // substitution (runner.ts fixture-path rewrite) fires — previously the
+    // prompt only said "in src/" and the agent had no way to discover the
+    // filenames (no directory-listing tool exists; `find` is semantic doc
+    // search), so models fabricated their own workspaces. Exported signatures
+    // are pinned so the hidden reference tests can import them.
+    prompt: `The TypeScript package in your working directory has bugs in src/validator.ts, src/processor.ts, and src/pipeline.ts. No test suite is provided. Write tests to find the bugs, fix all of the bugs in place, and verify your tests pass. Keep the exported function names and signatures unchanged. Do not stop until \`bun test\` exits 0.`,
     requiresTools: true,
+    // Tool contract (2026-07-07 reward-hack fix):
+    //  - file-read / file-write are REQUIRED — genuinely mandatory: the task
+    //    cannot be honestly attempted without reading the fixtures and writing
+    //    fixes in place. They form the minimal ALL-OF grounding set (see the
+    //    rw-2 lesson at the runner's withRequiredTools callsite).
+    //  - code-execute is AVAILABLE, deliberately NOT required, despite the
+    //    prompt demanding `bun test` exit 0. Rationale: requiredTools is an
+    //    ALL-OF terminal gate — making code-execute required would refuse the
+    //    terminal answer of a model that fixed all three bugs correctly but
+    //    verified by reasoning instead of executing. The hidden reference
+    //    tests now provide authoritative execution-based verification at
+    //    scoring time, so forcing the agent to execute adds terminal-refusal
+    //    risk without adding grading signal; the tool-mastery rubric already
+    //    rewards models that actually run their tests.
+    tools: [
+      { kind: "required", name: "file-read" },
+      { kind: "required", name: "file-write" },
+      { kind: "available", name: "code-execute" },
+    ],
     maxIterations: 25,
     fixtures: [
       { path: "src/validator.ts",  content: generateValidatorBug() },
@@ -483,9 +681,26 @@ Note: some sources you find may have conflicting benchmark data for the same dat
       { path: "package.json",      content: JSON.stringify({ name: "buggy-pkg", type: "module", devDependencies: { "bun-types": "latest" } }, null, 2) },
       { path: "tsconfig.json",     content: JSON.stringify({ compilerOptions: { strict: true, module: "ESNext", moduleResolution: "bundler", target: "ES2022" } }, null, 2) },
     ],
+    // Hidden reference tests (anti-reward-hack, 2026-07-07): the command runs
+    // ONLY the scorer-written hidden-reference.test.ts (bun test <filter>
+    // matches test file paths), so agent-authored trivial tests can't inflate
+    // the grade and agent-authored broken tests can't poison it. If the agent
+    // broke a fixture file while "fixing" it (e.g. syntax error), the hidden
+    // tests fail on import — correct behavior. Previously `bun test` graded
+    // whatever tests the agent itself wrote: traces 01KWXTV1DNF / 01KWZKRZ3G
+    // scored 1.0 via `expect(true).toBe(true)` and a self-planted bug
+    // respectively, with zero fixture bugs touched.
+    hiddenFixtures: [
+      { path: "hidden-reference.test.ts", content: generateHiddenReferenceTests() },
+    ],
     successCriteria: {
       type: "verifiable",
-      command: "bun test",
+      // Exact-path form, not a bare filter: `bun test hidden-reference` is a
+      // SUBSTRING filter, so an agent file that happened to contain
+      // "hidden-reference" in its name would join the run and dilute partial
+      // credit with its own passing tests. The ./-prefixed exact path runs
+      // only the reference file.
+      command: "bun test ./hidden-reference.test.ts",
       partialCredit: true,
     },
     primaryDimensions: ["tool-mastery", "resilience", "accuracy"],
@@ -527,9 +742,23 @@ Phase 4: Write a validator (validate.ts) that checks all constraints are met
 Phase 5: Run the validator against the generated data and report results`,
     requiresTools: true,
     maxIterations: 25,
+    // 2026-07-07 verifiable-criteria audit: the previous command
+    // `bun run generate.ts && bun run validate.ts` was spawned WITHOUT a
+    // shell, so "&&" and everything after it were passed as literal argv to
+    // generate.ts — validate.ts NEVER ran and the task scored 1.0 whenever
+    // generate.ts alone exited 0 (empirically verified). The hidden runner
+    // executes both scripts sequentially and fails if either fails. Residual
+    // exploit (documented, not closed here): an agent writing no-op
+    // generate.ts/validate.ts still passes the deterministic check — the
+    // constraint semantics are only graded by the memory-fidelity/accuracy
+    // LLM rubrics, because the prompt does not pin the data interchange
+    // format a reference test could hook.
+    hiddenFixtures: [
+      { path: "hidden-check.ts", content: generateRw8HiddenCheck() },
+    ],
     successCriteria: {
       type: "verifiable",
-      command: "bun run generate.ts && bun run validate.ts",
+      command: "bun hidden-check.ts",
     },
     primaryDimensions: ["memory-fidelity", "reliability", "accuracy"],
     dimensionRubrics: [

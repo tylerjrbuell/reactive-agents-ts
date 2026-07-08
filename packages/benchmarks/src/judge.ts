@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process"
-import { readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
 import type { BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
 import type { JudgeLayerResult, JudgeRequest, JudgeResponse } from "@reactive-agents/judge-server"
 
@@ -157,6 +157,25 @@ export function parsePartialCreditScore(output: string): number {
   return total === 0 ? 0.0 : pass / total
 }
 
+// ── Hidden reference fixtures (anti-reward-hack) ─────────────────────────────
+
+/**
+ * Materialize `task.hiddenFixtures` into `tmpDir`. Called by `scoreTask`
+ * AFTER the agent run has completed and BEFORE any scoring branch executes,
+ * so the agent never sees these files but every verifiable-command path
+ * (normal accuracy branch AND the abstention branch) runs against them.
+ *
+ * Overwrites any same-named agent-written file by design: the reference
+ * content must win, otherwise an agent could poison the reference channel.
+ */
+export function writeHiddenFixtures(task: BenchmarkTask, tmpDir: string): void {
+  for (const fixture of task.hiddenFixtures ?? []) {
+    const dest = join(tmpDir, fixture.path)
+    mkdirSync(dirname(dest), { recursive: true })
+    writeFileSync(dest, fixture.content, "utf8")
+  }
+}
+
 // ── Verifiable scoring — runs a command in tmpDir ────────────────────────────
 
 export async function scoreVerifiable(
@@ -284,15 +303,23 @@ export async function scoreTask(
 ): Promise<ReadonlyArray<DimensionScore>> {
   const scores: DimensionScore[] = []
 
+  // Hidden reference fixtures FIRST: written post-run/pre-scoring so every
+  // scoring branch below (verifiable accuracy, abstention answerCorrect,
+  // judge deliverable collection) sees them, while the agent never did.
+  writeHiddenFixtures(task, tmpDir)
+
   // The blob the LLM judge grades: final text + produced working-dir files.
   // Used ONLY for llm-judge dimensions (accuracy llm-judge + dimensionRubrics).
   // The deterministic branches (verifiable runs a command; schema does
   // JSON.parse; regex/expected match) must read the RAW `output` — dumping file
   // contents into those would break JSON.parse and cause false regex matches.
+  // Hidden fixtures are excluded alongside declared fixtures — they are
+  // scoring apparatus, not agent deliverables, and must not be attributed to
+  // the agent in the judge prompt.
   const judgeDeliverable = collectJudgeDeliverable(
     output,
     tmpDir,
-    (task.fixtures ?? []).map((f) => f.path),
+    [...(task.fixtures ?? []), ...(task.hiddenFixtures ?? [])].map((f) => f.path),
   )
 
   // ── Trap-task abstention routing ─────────────────────────────────────────────

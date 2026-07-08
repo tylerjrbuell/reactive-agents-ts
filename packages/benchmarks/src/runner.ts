@@ -568,12 +568,41 @@ function getGitSha(): string {
   catch { return "unknown" }
 }
 
-function writeFixtures(task: BenchmarkTask, dir: string): void {
+/**
+ * Materialize the agent-VISIBLE fixtures before the run. Deliberately does
+ * NOT write `task.hiddenFixtures` — those are scoring apparatus written by
+ * `scoreTask` (judge.ts `writeHiddenFixtures`) after the run completes, and
+ * must never be observable by the agent. Exported for the seam test.
+ */
+export function writeFixtures(task: BenchmarkTask, dir: string): void {
   for (const fixture of task.fixtures ?? []) {
     const dest = join(dir, fixture.path)
     mkdirSync(join(dir, fixture.path.split("/").slice(0, -1).join("/")), { recursive: true })
     writeFileSync(dest, fixture.content, "utf8")
   }
+}
+
+/**
+ * The ALL-OF grounding set fed to `.withRequiredTools()` for a task.
+ *
+ * requiredTools is an ALL-OF contract (llmEndTurnEvaluator refuses terminal
+ * end_turn answers while ANY listed tool is unused), so the set must stay
+ * MINIMAL — see the rw-2 lesson at the callsite. When the task declares an
+ * explicit TaskContract `tools` list, only its `kind: "required"` entries
+ * ground the terminal gate; `available` tools are exposed but must NOT enter
+ * the gate (an exposed-but-optional code-execute would otherwise refuse the
+ * terminal of a model that legitimately never executed). Legacy tasks
+ * (no `tools` field) keep the fixtures-heuristic. Pure; exported for tests.
+ */
+export function computeGroundingSet(
+  task: BenchmarkTask,
+  declared: readonly string[] | undefined,
+  builtins: readonly string[],
+): readonly string[] {
+  if (task.tools) {
+    return task.tools.filter((t) => t.kind === "required").map((t) => t.name)
+  }
+  return declared ?? (task.fixtures?.length ? ["file-read"] : builtins)
 }
 
 async function runInternal(
@@ -630,14 +659,17 @@ async function runInternal(
         if (task.requiresTools) {
           // requiredTools is an ALL-OF contract (llmEndTurnEvaluator refuses
           // terminal end_turn answers while ANY listed tool is unused). Wire
-          // the MINIMAL grounding set — the declared tools, else file-read for
-          // fixture tasks — NOT the whole exposed toolbox. Passing the
-          // convenience file-write add-on here killed rw-2 on qwen3:14b
-          // (2026-07-07): the model read the CSV, produced the correct answer,
-          // and the kernel silently refused every terminal because file-write
-          // was never used by a task that never needed to write.
-          const groundingSet = declared ?? (task.fixtures?.length ? ["file-read"] : builtins)
-          builder.withRequiredTools({ tools: groundingSet })
+          // the MINIMAL grounding set — the contract's `required` tools when
+          // declared, else file-read for fixture tasks — NOT the whole
+          // exposed toolbox. Passing the convenience file-write add-on here
+          // killed rw-2 on qwen3:14b (2026-07-07): the model read the CSV,
+          // produced the correct answer, and the kernel silently refused
+          // every terminal because file-write was never used by a task that
+          // never needed to write. Same reasoning excludes `available`
+          // contract tools (e.g. rw-7's code-execute) from the gate — see
+          // computeGroundingSet.
+          const groundingSet = computeGroundingSet(task, declared, builtins)
+          if (groundingSet.length > 0) builder.withRequiredTools({ tools: [...groundingSet] })
         }
       } else {
         builder.withTools()

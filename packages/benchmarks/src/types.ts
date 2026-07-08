@@ -48,6 +48,23 @@ export interface BenchmarkTask {
   readonly successCriteria?: SuccessCriteria;
   readonly dimensionRubrics?: ReadonlyArray<DimensionRubric>;
   readonly fixtures?: ReadonlyArray<TaskFixture>;
+  /**
+   * Hidden reference files written into the run's tmpDir AFTER the agent run
+   * completes and immediately BEFORE scoring — never visible to the agent.
+   *
+   * Kills the fabricated-test reward hack on `verifiable` tasks (observed on
+   * rw-7, traces 01KWXTV1DNF / 01KWZKRZ3G, 2026-07-07): with a bare
+   * `bun test` criterion the agent could author its own trivial tests
+   * (`expect(true).toBe(true)`) — or plant a bug and "fix" it — and score 1.0
+   * without touching a single fixture bug. Reference tests the agent can
+   * neither see, satisfy, nor poison close that channel.
+   *
+   * Materialized by `scoreTask` (see `writeHiddenFixtures` in judge.ts) so
+   * EVERY scoring path for verifiable criteria — including the abstention
+   * branch — sees them. If a hidden path collides with an agent-written file,
+   * the hidden content overwrites it (the reference must win).
+   */
+  readonly hiddenFixtures?: ReadonlyArray<TaskFixture>;
   readonly optimalHarnessConfig?: HarnessConfig;
   readonly primaryDimensions?: ReadonlyArray<QualityDimension>;
   readonly domain?: string;
