@@ -65,6 +65,10 @@ import {
   TIER_GUARD_THRESHOLDS,
   resolveMaxSameTool,
 } from "./runner-helpers/tier-guards.js";
+import {
+  resolveHorizonProfile,
+  type HorizonProfile,
+} from "./runner-helpers/horizon-profile.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import { decideGroundingBlockOutcome } from "./runner-helpers/grounding-block.js";
 import {
@@ -335,12 +339,23 @@ export function runKernel(
     // run and flow into the iteration body via `iterationConfig` below.
     const loopCfg = options.loopDetection;
     const tierGuards = TIER_GUARD_THRESHOLDS[profile.tier] ?? TIER_GUARD_THRESHOLDS["mid"];
+    // A2 — opt-in long-horizon guard scaling. `undefined` unless
+    // options.horizonProfile === "long"; every consumer below falls back to its
+    // existing literal when absent, so a run without the profile is
+    // byte-identical to today.
+    const horizon: HorizonProfile | undefined = resolveHorizonProfile({
+      horizonProfile: options.horizonProfile,
+      maxIterations: options.maxIterations,
+    });
     const maxSameTool = resolveMaxSameTool(
       loopCfg?.maxSameToolCalls ?? tierGuards.maxSameToolDefault,
       effectiveInput.requiredToolQuantities,
     );
     const maxRepeatedThought = loopCfg?.maxRepeatedThoughts ?? 3;
-    const maxConsecutiveThoughts = loopCfg?.maxConsecutiveThoughts ?? 3;
+    // Explicit loopDetection config wins over the profile; profile wins over the
+    // absolute default 3.
+    const maxConsecutiveThoughts =
+      loopCfg?.maxConsecutiveThoughts ?? horizon?.maxConsecutiveThoughts ?? 3;
 
     // Required tools floor + retry/nudge budgets. The carrier counters
     // `requiredToolRedirects` and `requiredToolNudgeCount` mirror the
@@ -357,7 +372,8 @@ export function runKernel(
     // nudges injected by stall detection and loop detection paths combined.
     // Without this, the stall and loop paths can compound nudges indefinitely
     // when the model refuses to (or cannot) satisfy the required tool quota.
-    const maxRequiredToolNudges = maxRequiredToolRetries + 2;
+    const maxRequiredToolNudges =
+      maxRequiredToolRetries + (horizon?.requiredToolNudgeBonus ?? 2);
 
     // Required-tools availability guard (pre-loop)
     // If required tools are declared but not available in this run's tool schemas,
@@ -621,6 +637,7 @@ export function runKernel(
       effectiveInput,
       input,
       emitLog,
+      horizon,
     };
 
     while (

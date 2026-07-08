@@ -256,3 +256,57 @@ describe("ordering invariants", () => {
     expect(d).toMatchObject({ decision: "redirect", check: "checker" });
   });
 });
+
+// A2 — long-horizon redirect budget. A budget of N accepts redirects while
+// `spent < N`. Default (undefined) = 1 = today's one-shot behavior.
+describe("A2 redirect budget (grounding)", () => {
+  const groundingViolation = (over: Partial<TerminalGateInput>) =>
+    baseInput({
+      requiredTools: ["web-search"],
+      hasSubstantiveGrounding: false,
+      redirectsSpent: { grounding: 1, coverage: 0, checker: 0 },
+      ...over,
+    });
+
+  it("OFF (default budget 1): a spent grounding redirect abstains", () => {
+    const d = evaluateTerminalGate(groundingViolation({}));
+    expect(d).toMatchObject({ decision: "abstain", check: "grounding" });
+  });
+
+  it("ON (budget 2): a once-spent grounding redirect redirects again", () => {
+    const d = evaluateTerminalGate(groundingViolation({ redirectBudget: 2 }));
+    expect(d).toMatchObject({ decision: "redirect", check: "grounding" });
+  });
+
+  it("ON (budget 2): a twice-spent grounding redirect finally abstains", () => {
+    const d = evaluateTerminalGate(
+      groundingViolation({
+        redirectBudget: 2,
+        redirectsSpent: { grounding: 2, coverage: 0, checker: 0 },
+      }),
+    );
+    expect(d).toMatchObject({ decision: "abstain", check: "grounding" });
+  });
+});
+
+describe("A2 redirect budget (coverage)", () => {
+  const coverageViolation = (over: Partial<TerminalGateInput>) =>
+    baseInput({
+      requiredTools: ["web-search"],
+      coveredTools: new Set<string>(),
+      hasSubstantiveGrounding: true,
+      redirectsSpent: { grounding: 0, coverage: 1, checker: 0 },
+      coverageExhaustionPolicy: "accept",
+      ...over,
+    });
+
+  it("OFF (default budget 1): a spent coverage redirect exhausts (accept, B1)", () => {
+    const d = evaluateTerminalGate(coverageViolation({}));
+    expect(d).toMatchObject({ decision: "accept", check: "coverage" });
+  });
+
+  it("ON (budget 2): a once-spent coverage redirect redirects again", () => {
+    const d = evaluateTerminalGate(coverageViolation({ redirectBudget: 2 }));
+    expect(d).toMatchObject({ decision: "redirect", check: "coverage" });
+  });
+});

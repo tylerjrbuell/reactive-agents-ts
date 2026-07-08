@@ -117,6 +117,22 @@ describe("tier-aware shouldForceOracleExit", () => {
     expect(shouldForceOracleExit({ oracleReady: false, readyToAnswerNudgeCount: 5, tier: "local" })).toBe(false)
     expect(shouldForceOracleExit({ oracleReady: false, readyToAnswerNudgeCount: 5, tier: "frontier" })).toBe(false)
   })
+
+  // A2 — long-horizon nudgeLimitOverride: when provided, it replaces the tier
+  // lookup so the oracle nudges more times before force-exit. Absent → tier.
+  it("OFF (no override): mid tier still force-exits at 2 nudges", () => {
+    expect(shouldForceOracleExit({ oracleReady: true, readyToAnswerNudgeCount: 2, tier: "mid" })).toBe(true)
+  })
+
+  it("ON (override 5): does NOT force-exit at 2 nudges, DOES at 5", () => {
+    // mid tier base 2 + long-horizon oracleNudgeBonus 3 = 5.
+    expect(
+      shouldForceOracleExit({ oracleReady: true, readyToAnswerNudgeCount: 2, tier: "mid", nudgeLimitOverride: 5 }),
+    ).toBe(false)
+    expect(
+      shouldForceOracleExit({ oracleReady: true, readyToAnswerNudgeCount: 5, tier: "mid", nudgeLimitOverride: 5 }),
+    ).toBe(true)
+  })
 })
 
 describe("resolveMaxSameTool", () => {

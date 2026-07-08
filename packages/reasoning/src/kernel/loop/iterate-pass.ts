@@ -92,6 +92,7 @@ import {
 import { evaluateStrategySwitch } from "../../kernel/capabilities/reflect/strategy-evaluator.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
+import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
 import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
@@ -241,6 +242,12 @@ export interface IterationConfig {
   input: KernelInput;
   /** Closure-bound log emit — re-created in runner.ts and threaded through. */
   emitLog: (event: LogEvent) => Effect.Effect<void, never>;
+  /**
+   * A2 — resolved long-horizon guard scaling, or `undefined` when the profile
+   * is off. When present, the stall threshold + oracle nudge limit scale with
+   * `maxIterations`; when absent every read below keeps its literal.
+   */
+  horizon?: HorizonProfile;
 }
 
 /**
@@ -314,6 +321,7 @@ export function runIterationPass(
       effectiveInput,
       input,
       emitLog,
+      horizon,
     } = cfg;
     // eventBus is destructured here to mirror the original runner.ts pre-loop
     // shape `const { toolService, eventBus, memoryService } = services;`. Only
@@ -326,7 +334,7 @@ export function runIterationPass(
     void maxSameTool; void maxRepeatedThought; void maxConsecutiveThoughts;
     void requiredTools; void maxRequiredToolRetries; void maxRequiredToolNudges;
     void maxFailureRecoveryRedirects; void verifier; void options; void context;
-    void effectiveInput; void input; void emitLog; void eventBus;
+    void effectiveInput; void input; void emitLog; void eventBus; void horizon;
 
     // ── Sync helper — write locals back to carrier ─────────────────────────
     // Called immediately before every `return "break" | "continue"` so the
@@ -859,7 +867,11 @@ export function runIterationPass(
       // Detection is purely structural — `services.reactiveController._tag === "Some"`
       // avoids importing anything from the reactive-intelligence package.
       const riActive = services.reactiveController._tag === "Some";
-      const stallThreshold = riActive ? 4 : 2;
+      // A2 — under the long-horizon profile the stall threshold scales with
+      // maxIterations (max(2, 10% of maxIter); RI floor 4). Off → literals 4/2.
+      const stallThreshold = riActive
+        ? (horizon?.stallThresholdRI ?? 4)
+        : (horizon?.stallThreshold ?? 2);
 
       const stallTriggered =
         consecutiveStalled >= stallThreshold &&
@@ -880,6 +892,7 @@ export function runIterationPass(
           maxFailureRecoveryRedirects,
           verifier,
           emitLog,
+          horizonIgnoredNudgeTolerance: horizon?.ignoredNudgeTolerance,
         });
         state = stallResult.state;
         requiredToolNudgeCount = stallResult.requiredToolNudgeCount;
@@ -919,6 +932,12 @@ export function runIterationPass(
       //   Stage 2: after N ignored nudges (tier-dependent), force-exit with "oracle_forced".
       if (state.status !== "done" && state.status !== "failed") {
         const nudgeCount = state.readyToAnswerNudgeCount ?? 0;
+        // A2 — effective oracle nudge limit: tier base + long-horizon bonus (0
+        // when the profile is off → tier base, byte-identical). Computed once so
+        // the force-exit gate and the nudge builder's "last chance" footer agree.
+        const effectiveOracleNudgeLimit =
+          (TIER_GUARD_THRESHOLDS[profile.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit +
+          (horizon?.oracleNudgeBonus ?? 0);
         const shouldNudgeForOracle = shouldInjectOracleNudge({
           lane: laneDecision.lane,
           oracleReady,
@@ -926,7 +945,12 @@ export function runIterationPass(
 
         if (
           shouldNudgeForOracle &&
-          shouldForceOracleExit({ oracleReady, readyToAnswerNudgeCount: nudgeCount, tier: profile.tier })
+          shouldForceOracleExit({
+            oracleReady,
+            readyToAnswerNudgeCount: nudgeCount,
+            tier: profile.tier,
+            nudgeLimitOverride: effectiveOracleNudgeLimit,
+          })
         ) {
           // Stage 2: force exit — model has been nudged twice and still hasn't called final-answer
           yield* emitGuardFired({
@@ -975,10 +999,9 @@ export function runIterationPass(
           // builder `buildOracleNudge` (Spec: 2026-05-06-intelligent-default-builders).
           // The builder owns the M3 Pivot B "describe vs emit" example
           // pair and the final-attempt escalation footer.
-          const nudgeLimit = (TIER_GUARD_THRESHOLDS[profile.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit;
           const mandatoryNudge = buildOracleNudge({
             nudgeCount,
-            nudgeLimit,
+            nudgeLimit: effectiveOracleNudgeLimit,
           });
           state = transitionState(state, {
             readyToAnswerNudgeCount: nudgeCount + 1,

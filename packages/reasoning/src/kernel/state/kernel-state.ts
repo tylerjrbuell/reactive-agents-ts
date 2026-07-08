@@ -110,6 +110,14 @@ export interface KernelMeta {
   // ── Iteration control ──
   readonly maxIterations?: number;
   readonly requiredTools?: readonly string[];
+  /**
+   * Opt-in "long horizon" guard profile (A2). Mirrored from
+   * {@link KernelRunOptions.horizonProfile} at kernel start so state-only
+   * consumers (`arbitrationContextFromState`, `think.ts` oracle context) can
+   * resolve the scaled guard constants without threading options through every
+   * call site. Absent → today's absolute-count guards (byte-identical).
+   */
+  readonly horizonProfile?: "long";
 
   // ── HS-115 / Audit G-E — tool nomination (anti-scaffold F4 closure) ──
   /**
@@ -920,6 +928,15 @@ export interface KernelRunOptions {
   /** When true, exit the kernel loop as soon as all scoped tools have been called successfully.
    *  Used by plan-execute composite steps to avoid looping after all tool hints are satisfied. */
   readonly exitOnAllToolsCalled?: boolean;
+  /**
+   * Opt-in "long horizon" guard profile (A2 / plan G1). When `"long"`, the
+   * audit-02-#12 guard constants scale proportionally to `maxIterations`
+   * instead of using absolute counts (see {@link
+   * import("../loop/runner-helpers/horizon-profile.js").resolveHorizonProfile}).
+   * Absent (default) → today's absolute-count guards, byte-identical. Set by
+   * the `.withLongHorizon()` wither / the Phase 6 policy compiler.
+   */
+  readonly horizonProfile?: "long";
 }
 
 // ── Factory functions ────────────────────────────────────────────────────────
@@ -960,6 +977,7 @@ export function initialKernelState(opts: KernelRunOptions): KernelState {
     meta: {
       ...(opts.meta ?? {}),
       maxIterations: opts.maxIterations,
+      ...(opts.horizonProfile ? { horizonProfile: opts.horizonProfile } : {}),
       ...(entropyMeta ? { entropy: entropyMeta } : {}),
     },
     controllerDecisionLog: [],

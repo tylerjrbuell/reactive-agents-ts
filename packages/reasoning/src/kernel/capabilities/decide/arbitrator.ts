@@ -69,6 +69,17 @@ export interface TerminationContext {
    * activity that should override an apparent successful exit.
    */
   readonly controllerDecisionLog?: readonly string[];
+  /**
+   * A2 — long-horizon veto window: only the last N `controllerDecisionLog`
+   * entries count toward controllerSignalVetoEvaluator's stall/inject
+   * thresholds. Absent → run-cumulative (today's behavior).
+   */
+  readonly vetoDecisionWindow?: number;
+  /**
+   * A2 — grounding/coverage redirect budget for the terminal gate consulted by
+   * llmEndTurnEvaluator (default 1 = one-shot; ≥30-iter long-horizon → 2).
+   */
+  readonly redirectBudget?: number;
 }
 
 export interface SignalVerdict {
@@ -311,6 +322,7 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
       coveredTools: ctx.toolsUsed,
       hasSubstantiveGrounding: true,
       redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
+      redirectBudget: ctx.redirectBudget,
       coverageExhaustionPolicy: "accept",
       buildGroundingGuidance: () => "",
       buildCoverageGuidance: (missing) =>
@@ -377,7 +389,9 @@ export const completionGapEvaluator: TerminationSignalEvaluator = {
 export const controllerSignalVetoEvaluator: TerminationSignalEvaluator = {
   name: "ControllerSignalVeto",
   evaluate: (ctx) => {
-    const log = ctx.controllerDecisionLog ?? [];
+    // A2 — under the long-horizon profile the veto counts only the last N
+    // decision-log entries (windowed); off → run-cumulative (window undefined).
+    const log = windowDecisions(ctx.controllerDecisionLog ?? [], ctx.vetoDecisionWindow);
     if (log.length === 0) return null;
 
     // Extract decision types — entries are formatted "decisionType: reason".
@@ -629,6 +643,16 @@ export interface ArbitrationContext {
   readonly requiredTools: readonly string[];
   /** Run-wide controller decision history (state.controllerDecisionLog). */
   readonly controllerDecisionLog?: readonly string[];
+  /**
+   * A2 — long-horizon veto window: only the last N decision-log entries count
+   * toward the stall/inject veto thresholds. Absent → run-cumulative (today).
+   */
+  readonly vetoDecisionWindow?: number;
+  /**
+   * A2 — grounding/coverage redirect budget for the terminal gate (default 1).
+   * Absent → one-shot (today). ≥30-iter long-horizon runs raise it to 2.
+   */
+  readonly redirectBudget?: number;
   /** Latest entropy score, for the veto check. */
   readonly entropyComposite?: number;
   /** Verifier output for the most recent observation, if any. */
@@ -701,7 +725,8 @@ export interface ArbitrationContext {
  * failed tool observations).
  */
 function shouldVetoSuccess(ctx: ArbitrationContext): { readonly veto: true; readonly reason: string } | { readonly veto: false } {
-  const log = ctx.controllerDecisionLog ?? [];
+  // A2 — windowed under the long-horizon profile; run-cumulative otherwise.
+  const log = windowDecisions(ctx.controllerDecisionLog ?? [], ctx.vetoDecisionWindow);
   if (log.length === 0) return { veto: false };
 
   const decisionTypes = log.map((e) => e.split(":", 1)[0]?.trim() ?? "");
@@ -826,6 +851,10 @@ import {
   buildGroundingRedirectGuidance,
 } from "../../loop/runner-helpers/grounded-terminal.js";
 import { evaluateTerminalGate } from "./terminal-gate.js";
+import {
+  resolveHorizonProfile,
+  windowDecisions,
+} from "../../loop/runner-helpers/horizon-profile.js";
 import type { RawTerminatedBy } from "../../loop/terminate-reason.js";
 import { makeStep } from "../sense/step-utils.js";
 
@@ -952,6 +981,7 @@ function applyGroundedTerminalGate(
       coverage: 0,
       checker: 0,
     },
+    redirectBudget: ctx.redirectBudget,
     coverageExhaustionPolicy: "accept",
     buildGroundingGuidance: () =>
       buildGroundingRedirectGuidance(ctx.steps, ctx.requiredTools),
@@ -1470,6 +1500,14 @@ export function arbitrationContextFromState(
     limits: budgetLimits,
   });
 
+  // A2 — resolve the long-horizon guard scaling from the mirrored meta fields
+  // (state.meta.horizonProfile + maxIterations). `undefined` off the profile →
+  // the veto stays run-cumulative and the terminal gate stays one-shot.
+  const horizon = resolveHorizonProfile({
+    horizonProfile: state.meta.horizonProfile,
+    maxIterations: (state.meta.maxIterations as number | undefined) ?? 0,
+  });
+
   return {
     iteration: state.iteration,
     maxIterations: state.meta.maxIterations as number | undefined,
@@ -1478,6 +1516,7 @@ export function arbitrationContextFromState(
     toolsUsed: state.toolsUsed,
     requiredTools: input.requiredTools ?? [],
     controllerDecisionLog: state.controllerDecisionLog,
+    ...(horizon ? { vetoDecisionWindow: horizon.vetoDecisionWindow, redirectBudget: horizon.redirectBudget } : {}),
     entropyComposite: entropyMeta?.latestScore?.composite,
     latestVerification: lastVerif,
     // Sprint 3.4 Scaffold 3 — surface the synthesis retry counter so the

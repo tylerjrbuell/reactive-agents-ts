@@ -93,6 +93,14 @@ export type TerminalGateInput = {
     readonly checker: number;
   };
   /**
+   * A2 — redirect budget for the grounding + coverage checks: the number of
+   * redirects allowed before the check exhausts. Default 1 (today's one-shot
+   * behavior — byte-identical). The long-horizon profile raises it to 2 for
+   * ≥30-iteration runs so a redirect is not spent before the run has oriented.
+   * The checker slot keeps its own one-shot budget (not scaled by A2).
+   */
+  readonly redirectBudget?: number;
+  /**
    * What happens when coverage is violated AND its redirect is spent:
    * `"accept"` = kernel/B1 semantics (F1+§7.5 still guard zero-grounding),
    * `"abstain"` = plan-execute/P3 semantics (refuse ungrounded SATISFIED).
@@ -134,6 +142,10 @@ const GATED_REASONS: ReadonlySet<string> = new Set([
 // ── The ordered pipeline ──────────────────────────────────────────────────────
 
 export function evaluateTerminalGate(input: TerminalGateInput): TerminalGateDecision {
+  // A2 — redirect budget for the grounding/coverage checks (default 1 =
+  // today's one-shot). A budget of N accepts redirects while `spent < N`.
+  const redirectBudget = input.redirectBudget ?? 1;
+
   // 0) Exemption — harness give-ups and non-answer terminals pass untouched.
   if (!GATED_REASONS.has(input.terminatedBy)) {
     return { decision: "accept", check: "exemption" };
@@ -152,7 +164,7 @@ export function evaluateTerminalGate(input: TerminalGateInput): TerminalGateDeci
     input.requiredTools.length > 0 &&
     !input.hasSubstantiveGrounding
   ) {
-    if (input.redirectsSpent.grounding === 0) {
+    if (input.redirectsSpent.grounding < redirectBudget) {
       return {
         decision: "redirect",
         check: "grounding",
@@ -176,7 +188,7 @@ export function evaluateTerminalGate(input: TerminalGateInput): TerminalGateDeci
     (t) => !input.coveredTools.has(t),
   );
   if (!isDeliberateToolExit && missing.length > 0) {
-    if (input.redirectsSpent.coverage === 0) {
+    if (input.redirectsSpent.coverage < redirectBudget) {
       return {
         decision: "redirect",
         check: "coverage",

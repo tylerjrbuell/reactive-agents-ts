@@ -72,6 +72,7 @@ import {
   type TerminationContext,
 } from "../decide/arbitrator.js";
 import { assembleOutput } from "../../../kernel/loop/output-assembly.js";
+import { resolveHorizonProfile } from "../../../kernel/loop/runner-helpers/horizon-profile.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
 import { extractThinking, rescueFromThinking } from "../../utils/stream-parser.js";
 import { makeStep } from "../sense/step-utils.js";
@@ -1439,6 +1440,13 @@ export function handleThinking(
         (s) => s.type === "observation" && s.content.startsWith("\u26A0\uFE0F") && s.content.includes("final-answer"),
       ).length;
 
+      // A2 — resolve the long-horizon guard scaling from mirrored meta so the
+      // veto windows and the coverage gate budget match the arbitrate path.
+      // `undefined` off the profile → run-cumulative veto + one-shot redirect.
+      const oracleHorizon = resolveHorizonProfile({
+        horizonProfile: state.meta.horizonProfile,
+        maxIterations: (state.meta.maxIterations as number | undefined) ?? 0,
+      });
       const oracleCtx: TerminationContext = {
         thought: thought.trim(),
         thinking: thinking?.trim(),
@@ -1454,6 +1462,12 @@ export function handleThinking(
         // controllerSignalVetoEvaluator can detect pathological tactical
         // activity that should override an apparent successful exit.
         controllerDecisionLog: state.controllerDecisionLog,
+        ...(oracleHorizon
+          ? {
+              vetoDecisionWindow: oracleHorizon.vetoDecisionWindow,
+              redirectBudget: oracleHorizon.redirectBudget,
+            }
+          : {}),
         toolsUsed: state.toolsUsed,
         requiredTools: (state.meta.requiredTools as string[]) ?? (input.requiredTools as string[]) ?? [],
         allToolSchemas: input.allToolSchemas ?? input.availableToolSchemas ?? [],

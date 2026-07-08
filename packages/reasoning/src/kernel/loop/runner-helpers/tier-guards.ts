@@ -78,8 +78,16 @@ export function shouldForceOracleExit(opts: {
   oracleReady: boolean
   readyToAnswerNudgeCount: number
   tier?: string
+  /**
+   * A2 — resolved oracle nudge limit override. When provided (long-horizon
+   * profile: tier limit + scaled bonus) it replaces the tier lookup so the
+   * force-exit gate and the nudge builder share one limit. Absent → tier limit.
+   */
+  nudgeLimitOverride?: number
 }): boolean {
-  const nudgeLimit = (TIER_GUARD_THRESHOLDS[opts.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit;
+  const nudgeLimit =
+    opts.nudgeLimitOverride ??
+    (TIER_GUARD_THRESHOLDS[opts.tier ?? "mid"] ?? TIER_GUARD_THRESHOLDS["mid"]).oracleNudgeLimit;
   return opts.oracleReady && opts.readyToAnswerNudgeCount >= nudgeLimit
 }
 

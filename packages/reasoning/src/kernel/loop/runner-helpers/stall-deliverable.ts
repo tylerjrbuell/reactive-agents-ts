@@ -101,6 +101,12 @@ export interface StallStepArgs {
   readonly maxFailureRecoveryRedirects: number;
   readonly verifier: Verifier;
   readonly emitLog: (event: LogEvent) => Effect.Effect<void, never>;
+  /**
+   * A2 — long-horizon-scaled `ignoredNudgeTolerance`, or `undefined` when the
+   * profile is off. Precedence: an explicit `currentInput.stallPolicy`
+   * override still wins; this only replaces the DEFAULT_STALL_POLICY floor.
+   */
+  readonly horizonIgnoredNudgeTolerance?: number;
 }
 
 export interface StallStepResult {
@@ -155,12 +161,18 @@ export function runStallDeliverableStep(
       // (deliver-or-fail) instead of burning iterations up to the full cap.
       // Counters persist across iterations via state.meta (no carrier change).
       const policy = { ...DEFAULT_STALL_POLICY, ...(currentInput.stallPolicy ?? {}) };
+      // A2 — resolve the effective ignored-nudge tolerance. Precedence:
+      // explicit user stallPolicy > long-horizon scaled value > default (2).
+      const ignoredNudgeTolerance =
+        currentInput.stallPolicy?.ignoredNudgeTolerance ??
+        args.horizonIgnoredNudgeTolerance ??
+        policy.ignoredNudgeTolerance;
       const prevMissing = (state.meta.lastMissingRequiredCount as number | undefined) ?? -1;
       const ignored = prevMissing >= 0 && missingRequiredByCount.length >= prevMissing;
       const consecutiveIgnoredNudges = ignored
         ? ((state.meta.consecutiveIgnoredNudges as number | undefined) ?? 0) + 1
         : 0;
-      const fastEscalate = consecutiveIgnoredNudges >= policy.ignoredNudgeTolerance;
+      const fastEscalate = consecutiveIgnoredNudges >= ignoredNudgeTolerance;
 
       if (requiredToolNudgeCount > maxRequiredToolNudges || fastEscalate) {
         const escReason = fastEscalate
