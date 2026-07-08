@@ -186,10 +186,21 @@ export const extractStructuredOutput = <T>(
     const jsonSchemaString = computeJsonSchemaString(config, effectSchema);
 
     let lastError: string | null = null;
+    // H4 (2026-07-08 sweep, audit 05-E10 / A2 remedy #1): retrying an
+    // exhausted budget re-buys the same dead exchange (observed 3×115s of
+    // empty responses when thinking consumed the whole output budget). On an
+    // empty post-thinking payload: escalate the budget ONCE, and if the next
+    // attempt is empty again, fail fast with the real cause instead of
+    // burning the remaining retries.
+    let effectiveMaxTokens = maxTokens;
+    let budgetEscalated = false;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // Build prompt
-      const prompt = attempt === 0
+      // Explicit annotation: lastError now derives from response.stopReason
+      // (H4), which would otherwise create a prompt→response→lastError→prompt
+      // inference cycle (TS7022).
+      const prompt: string = attempt === 0
         ? buildStructuredPrompt(config, jsonSchemaString)
         : buildRetryPrompt(config, lastError ?? "Unknown error", jsonSchemaString);
 
@@ -199,7 +210,7 @@ export const extractStructuredOutput = <T>(
 
       // Layer 1: LLM call — budgetTokens carries the caller-resolved budget
       // (config.maxTokens ?? 4096, shared with the native path above).
-      const response = yield* gatewayComplete(llm, { purpose: "extract", budgetTokens: maxTokens }, {
+      const response = yield* gatewayComplete(llm, { purpose: "extract", budgetTokens: effectiveMaxTokens }, {
         messages: [{ role: "user", content: prompt }],
         systemPrompt,
         temperature: attempt === 0 ? temp : 0.1,
@@ -223,6 +234,25 @@ export const extractStructuredOutput = <T>(
 
       // Strip <think>...</think> blocks before JSON extraction (thinking models)
       const raw = stripThinking(response.content);
+
+      // H4 fail-fast: empty post-thinking payload = the budget died before any
+      // JSON could be emitted (typically stopReason "max_tokens" with thinking
+      // eating the window). A same-budget retry cannot succeed.
+      if (raw.trim().length === 0) {
+        if (!budgetEscalated) {
+          budgetEscalated = true;
+          effectiveMaxTokens = effectiveMaxTokens * 2;
+          lastError = `empty content (stopReason=${response.stopReason}) — escalating output budget to ${effectiveMaxTokens}`;
+          continue;
+        }
+        return yield* Effect.fail(
+          new Error(
+            `Structured output failed: empty content twice (stopReason=${response.stopReason}); ` +
+              `output budget ${effectiveMaxTokens} exhausted before any JSON — likely thinking consumed the window. Not retrying.`,
+          ),
+        );
+      }
+
       let repaired = false;
 
       // Layer 2: Extract and repair JSON

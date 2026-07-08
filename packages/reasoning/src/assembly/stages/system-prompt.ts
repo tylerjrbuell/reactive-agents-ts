@@ -59,6 +59,12 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
     buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
   );
   if (goal) parts.push(`\nGoal: ${goal}`);
+  // H1 (2026-07-08): render carried prior context (switch handoffs, ToT
+  // selected approach, reflexion hints, memory bootstrap). Placed after the
+  // goal so the frame stays goal-first; fenced so it reads as context, not
+  // instruction. Strategies already fence untrusted memory content themselves.
+  const prior = c.priorContext?.trim();
+  if (prior) parts.push(`\nPrior context (from earlier work on this task):\n${prior}`);
   if (remaining.length) parts.push(`Remaining steps: ${remaining.join(", ")}`);
   if (process.env.RA_LAZY_TOOLS === "0") {
     parts.push(buildRules(schemas, c.tools.requiredTools, c.capability.tier));

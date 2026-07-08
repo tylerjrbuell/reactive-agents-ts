@@ -112,6 +112,30 @@ describe("evaluateEarlyStop", () => {
     expect(result!.iterationsSaved).toBe(2);
   });
 
+  it("H6: overflow does NOT amputate a productive endgame — diverging trajectory near max is left to run", () => {
+    // 2026-07-08 sweep, audit 02-#5: the unconditional overflow guard
+    // confiscated the synthesis endgame of every run. A diverging trajectory
+    // near the ceiling = actively covering new ground; the hard
+    // max_iterations stop is one step away regardless.
+    const params = makeParams({
+      entropyHistory: [makeEntry(0.6, "flat"), makeEntry(0.7, "diverging")],
+      iteration: 8,
+      maxIterations: 10,
+      hasUserOutput: true,
+    });
+    expect(evaluateEarlyStop(params)).toBeNull();
+  });
+
+  it("H6: overflow does NOT fire on v-recovery near max (recovering run keeps its endgame)", () => {
+    const params = makeParams({
+      entropyHistory: [makeEntry(0.8, "diverging"), makeEntry(0.5, "v-recovery")],
+      iteration: 8,
+      maxIterations: 10,
+      hasUserOutput: true,
+    });
+    expect(evaluateEarlyStop(params)).toBeNull();
+  });
+
   it("overflow does NOT fire at iteration === maxIterations - iterationsBeforeMax - 1 (one below boundary)", () => {
     // iteration=7, maxIterations=10 → 7 < 10 - 2 → does NOT fire
     const params = makeParams({

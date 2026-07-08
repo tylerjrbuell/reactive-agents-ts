@@ -47,6 +47,12 @@ export function fromKernelState(
    * present, unlike the conditional `state.meta.taskDescription`.
    */
   task?: string,
+  /**
+   * H1: carried prior context (KernelInput.priorContext) — switch handoffs,
+   * ToT approach summaries, reflexion hints, memory bootstrap. Threaded to
+   * AssemblyInput so systemPromptStage can render it (audit 03-F1).
+   */
+  priorContext?: string,
 ): AssemblyInput {
   // ── 1. Seed ResultStore from scratchpad ──────────────────────────────────
   //
@@ -146,5 +152,12 @@ export function fromKernelState(
   const personaWithEnv = state.environmentContext
     ? { ...persona, environmentContext: state.environmentContext }
     : persona;
-  return { log, capability, store, persona: personaWithEnv, tools: toolsWithPolicy };
+  return {
+    log,
+    capability,
+    store,
+    persona: personaWithEnv,
+    tools: toolsWithPolicy,
+    ...(priorContext?.trim() ? { priorContext } : {}),
+  };
 }

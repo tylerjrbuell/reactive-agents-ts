@@ -67,7 +67,7 @@ const tools = { schemas: [{ name: "write_result_to_file" }, { name: "github/list
 const profile = CONTEXT_PROFILES.mid;
 
 describe("golden trace — deterministic overflow projection", () => {
-  it("a 126k-char overflow result projects to preview+ref (no marker, no recall hint)", () => {
+  it("a 126k-char overflow result projects to preview+ref (recall hint in gate vocabulary)", () => {
     const { request, trace } = project(fromKernelState(overflowState, profile, persona, tools));
 
     // The big result is the failure that experiment (b) chased: it MUST be projected
@@ -79,7 +79,12 @@ describe("golden trace — deterministic overflow projection", () => {
     const tr = request.messages.find((m) => m.role === "tool_result")!;
     expect(tr.content).toContain(`result_ref="${STORED_KEY}"`);
     expect(tr.content).not.toContain("[STORED:");
-    expect(tr.content).not.toContain("recall(");
+    // H2 (2026-07-08, audit 03-F2): scratchpad-backed overflow previews now
+    // ADVERTISE the read path in the recall gate's exact vocabulary. The old
+    // pin ("no recall hint") froze the disease: the gate scanned for
+    // `recall("` while previews only ever emitted result_ref= — the
+    // stored-evidence read path was structurally dead.
+    expect(tr.content).toContain(`recall("${STORED_KEY}"`);
     // Bounded: a 126k-char result must not inline whole.
     expect(tr.content.length).toBeLessThan(126_000 / 2);
 

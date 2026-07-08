@@ -93,3 +93,45 @@ describe("ResultStore.preview() — content-aware bounded overflow projection", 
     expect(s.preview(ref, 1500)).toContain(ref);
   });
 });
+
+// ── H2 (2026-07-08 sweep, audit 03-F2): recall read-hint vocabulary ───────────
+// The recall-overflow gate (think-guards SURFACED_RECALL_KEY) matches
+// `recall("<key>"`. Previews on the canonical assembly path only ever emitted
+// `result_ref="…"`, so the gate never saw a marker and the stored-evidence
+// read path was structurally dead. Scratchpad-backed refs (putWithRef) now
+// advertise recall in the gate's exact vocabulary; minted content-hash refs
+// (put) must NOT — recall cannot resolve them (blind-recall lure).
+import { recallKeyVisibleInWindow } from "../../src/kernel/capabilities/reason/think-guards.js";
+
+describe("H2 — recall read-hint on scratchpad-backed refs", () => {
+  const big = Array.from({ length: 400 }, (_, i) => ({ sha: `sha${i}`, msg: `commit message ${i}` }));
+
+  it("putWithRef (scratchpad key): summarize + preview advertise recall(\"<ref>\"", () => {
+    const s = new ResultStore();
+    s.putWithRef("_tool_result_3", "github/list_commits", big);
+    expect(s.summarize("_tool_result_3")).toContain('recall("_tool_result_3"');
+    const p = s.preview("_tool_result_3", 500);
+    expect(p).toContain('recall("_tool_result_3"');
+  });
+
+  it("put (minted res_ ref): NO recall hint — recall cannot resolve it", () => {
+    const s = new ResultStore();
+    const ref = s.put("github/list_commits", big);
+    expect(s.summarize(ref)).not.toContain("recall(");
+    expect(s.preview(ref, 500)).not.toContain("recall(");
+  });
+
+  it("gate integration: a preview footer in a tool_result unlocks the recall gate", () => {
+    const s = new ResultStore();
+    s.putWithRef("_tool_result_7", "web-search", big);
+    const content = s.preview("_tool_result_7", 600);
+    expect(
+      recallKeyVisibleInWindow([{ role: "tool_result", content }]),
+    ).toBe(true);
+    // Minted refs must NOT unlock it.
+    const minted = s.put("web-search", big);
+    expect(
+      recallKeyVisibleInWindow([{ role: "tool_result", content: s.preview(minted, 600) }]),
+    ).toBe(false);
+  });
+});

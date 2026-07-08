@@ -179,13 +179,15 @@ export function buildThinkProviderRequest(
   systemPrompt: string,
   promptSchemas: readonly ToolSchema[],
   task: string,
+  /** H1: KernelInput.priorContext — rendered by systemPromptStage (03-F1). */
+  priorContext?: string,
 ): Projection {
   const displaySchemas = promptSchemas.map((ts) => ({
     ...ts,
     name: sanitizeToolName(ts.name),
   }));
   return project(
-    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task),
+    fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext),
   );
 }
 
@@ -427,6 +429,7 @@ export function handleThinking(
       effectiveSystemPrompt ?? "",
       promptSchemas,
       input.task,
+      input.priorContext,
     );
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);

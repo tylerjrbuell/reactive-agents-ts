@@ -969,6 +969,14 @@ export function runKernel(
         grounding: effectiveInput.grounding,
         fabricationGuard: effectiveInput.fabricationGuard,
         scratchpad: state.scratchpad,
+        // H5 (2026-07-08 sweep, audit 02-#4, trace 01KWZ811 seq 1920-1926):
+        // without terminatedBy, the authoritative terminal verify cannot see
+        // harness authorship — the stall path's own verdict correctly failed
+        // output-is-model-authored (escalate), then THIS context re-verified
+        // the same harness-assembled output as "9 checks passed" two seqs
+        // later with no new model turn, and the run shipped success. The
+        // verifier's check 3a keys on terminatedBy=harness_deliverable.
+        terminatedBy: state.meta.terminatedBy,
       });
       let verdict = yield* verifyAndEmit({
         verifier,
@@ -1015,7 +1023,9 @@ export function runKernel(
           groundingDegradeWarning = outcome.guidance;
           break;
         }
-        const corrected = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "terse" }, {
+        // H3 (2026-07-08, audit 05-E2): grounding-corrected re-synthesis IS the
+        // deliverable when it succeeds — terse (2048) truncated it.
+        const corrected = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "generous" }, {
             messages: [
               {
                 role: "user",
@@ -1078,7 +1088,30 @@ export function runKernel(
         //   - warn     : advisory (grounding miss). Surface with metadata;
         //                do NOT nullify output. Identical to legacy
         //                softFail path.
-        if (verdictSeverity === "escalate") {
+        // H5 refinement (2026-07-08, audit 02-#4): when the ONLY failed check
+        // is harness authorship (output-is-model-authored on a
+        // harness_deliverable terminal), the run legitimately delivered
+        // partial artifacts after budget/nudge exhaustion — killing it would
+        // erase real progress. The defect being fixed is the LIE, not the
+        // delivery: pre-fix, a context missing terminatedBy re-verified the
+        // same output as "9 checks passed" (trace 01KWZ811 seq 1920→1923).
+        // Ship it HONESTLY LABELED instead: verified stays false in the
+        // verdict record, a verification warning + harnessAuthoredOutput
+        // surface to receipts/telemetry, and no clean-success flip occurs.
+        const onlyHarnessAuthorshipFailed =
+          state.meta.terminatedBy === "harness_deliverable" &&
+          verdict.checks.every((c) => c.passed || c.name === "output-is-model-authored");
+        if (onlyHarnessAuthorshipFailed) {
+          state = transitionState(state, {
+            meta: {
+              ...state.meta,
+              verifierRejected: false,
+              verificationWarning: verdict.summary,
+              verifierVerdict: verdict.summary,
+              harnessAuthoredOutput: true,
+            } as KernelState["meta"],
+          });
+        } else if (verdictSeverity === "escalate") {
           state = transitionState(state, {
             status: "failed",
             error: `Verifier escalated output: ${verdict.summary}`,
@@ -1152,7 +1185,9 @@ export function runKernel(
         if (llmOpt._tag === "Some") {
           const synthesisFormat = taskIntent.format ?? "prose";
           const synthesisPrompt = buildSynthesisPrompt(state.output, synthesisFormat, effectiveInput.task, taskIntent);
-          const synthesized = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "terse" }, {
+          // H3 (2026-07-08, audit 05-E2): format/quality re-synthesis replaces
+          // state.output wholesale — the deliverable render, not a side call.
+          const synthesized = yield* gatewayComplete(llmOpt.value, { purpose: "synthesize", budgetClass: "generous" }, {
             messages: [{ role: "user", content: synthesisPrompt }],
             temperature: 0.2,
           }).pipe(Effect.catchAll(() => Effect.succeed({ content: "" })));

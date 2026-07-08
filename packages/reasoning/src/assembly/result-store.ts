@@ -5,6 +5,14 @@ export interface StoredResult {
   readonly ref: string;
   readonly tool: string;
   readonly value: unknown;
+  /**
+   * H2 (2026-07-08 sweep, audit 03-F2): true when `ref` is a live scratchpad
+   * key (`putWithRef` path — e.g. `_tool_result_N`) that the `recall` meta-tool
+   * can actually resolve. Minted content-hash refs (`put` path) live only in
+   * this per-render store, so advertising `recall` for them would recreate the
+   * blind-recall lure (found:false on invented keys).
+   */
+  readonly recallable: boolean;
 }
 
 export class ResultStore {
@@ -13,7 +21,7 @@ export class ResultStore {
   put(tool: string, value: unknown): string {
     const hash = createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 12);
     const ref = `res_${hash}`;
-    if (!this.map.has(ref)) this.map.set(ref, { ref, tool, value });
+    if (!this.map.has(ref)) this.map.set(ref, { ref, tool, value, recallable: false });
     return ref;
   }
 
@@ -25,7 +33,7 @@ export class ResultStore {
    * present.
    */
   putWithRef(ref: string, tool: string, value: unknown): string {
-    if (!this.map.has(ref)) this.map.set(ref, { ref, tool, value });
+    if (!this.map.has(ref)) this.map.set(ref, { ref, tool, value, recallable: true });
     return ref;
   }
 
@@ -40,9 +48,15 @@ export class ResultStore {
   summarize(ref: string): string {
     const s = this.map.get(ref);
     if (!s) return `[unknown result_ref="${ref}"]`;
+    // H2: for scratchpad-backed refs, advertise the READ path in the exact
+    // `recall("<key>"` vocabulary the recall-overflow gate matches
+    // (think-guards.ts SURFACED_RECALL_KEY). Before this, previews only taught
+    // write_result_to_file, the gate never saw its marker on the canonical
+    // assembly path, and the stored-evidence read path was structurally dead.
+    const readHint = s.recallable ? ` Re-read the full data with recall("${ref}", full: true).` : "";
     return (
       `${s.tool} result stored as result_ref="${ref}" (${describeShape(s.value)}). ` +
-      `Full data held system-side; act on it by reference (e.g. write_result_to_file(result_ref="${ref}", path)). Do not retype it.`
+      `Full data held system-side; act on it by reference (e.g. write_result_to_file(result_ref="${ref}", path)). Do not retype it.${readHint}`
     );
   }
 
@@ -76,11 +90,13 @@ export class ResultStore {
     const fullText = renderValue(s.value, "bullets");
     if (fullText.length <= budgetChars) return fullText;
 
+    // H2: recall read-hint in the gate-matched vocabulary (see summarize()).
+    const readHint = s.recallable ? ` Re-read any section with recall("${ref}", start: 0, maxChars: 2000).` : "";
     const footer =
       `\n\n[content truncated — ${fullText.length} chars total; full data held ` +
       `system-side as result_ref="${ref}". Summarize from the sections shown above; ` +
       `act on the complete data by reference (e.g. write_result_to_file(result_ref="${ref}", path)). ` +
-      `Do not retype it.]`;
+      `Do not retype it.${readHint}]`;
     const body = Math.max(0, budgetChars - footer.length);
 
     const lines = fullText.split("\n");

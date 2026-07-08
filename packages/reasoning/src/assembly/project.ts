@@ -14,6 +14,14 @@ export interface AssemblyInput {
   readonly capability: ResolvedCapability;
   readonly store: ResultStore;
   readonly persona: { system: string; environmentContext?: Readonly<Record<string, string>> };
+  /**
+   * H1 (2026-07-08 sweep, audit 03-F1): carried context from BEFORE this
+   * kernel pass — strategy-switch handoffs, ToT selected-approach summaries,
+   * reflexion param hints, memory bootstrap. Composed by every strategy but
+   * WRITE-ONLY since the APC deletion removed its only renderer; the model
+   * restarted blind after every switch. systemPromptStage now renders it.
+   */
+  readonly priorContext?: string;
   readonly tools: {
     schemas: readonly unknown[];
     /** Tools the dispatcher requires — drives the tier-adaptive in-prompt

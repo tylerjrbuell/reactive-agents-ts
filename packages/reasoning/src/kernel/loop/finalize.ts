@@ -144,7 +144,12 @@ export function enforceQualityGate(input: {
     input.taskDescription,
   );
 
-  return gatewayComplete(input.llm, { purpose: "synthesize", budgetClass: "terse" }, {
+  // H3 (2026-07-08 sweep, audit 05-E2): this call RENDERS THE DELIVERABLE —
+  // the end-of-loop synthesis every run's output rides on. It was classed
+  // "terse" (2048), silently truncating long-horizon deliverables, while
+  // "generous" had zero call sites. The deliverable render is the one place
+  // spend is always justified.
+  return gatewayComplete(input.llm, { purpose: "synthesize", budgetClass: "generous" }, {
       messages: [{ role: "user", content: synthesisPrompt }],
       systemPrompt: withEnvContext(undefined),
       temperature: 0.2,
