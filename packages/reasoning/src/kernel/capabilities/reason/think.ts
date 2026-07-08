@@ -29,6 +29,7 @@ import { fromKernelState } from "../../../assembly/from-kernel-state.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import type { Projection } from "../../../assembly/project.js";
 import { toLLMMessages } from "../../../assembly/to-llm-messages.js";
+import { recordCompactionMarker, recordCompactionNoShrink } from "../../ledger/emit.js";
 import { StreamingTextCallback } from "@reactive-agents/core";
 import {
   finalAnswerTool,
@@ -435,6 +436,31 @@ export function handleThinking(
     );
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);
+
+    // ── C4: record the compaction-marker fact (audit 03-F4) ───────────────────
+    // project() re-projected the window with protected classes; when it dropped
+    // exchanges, persist the dropped-ref enumeration as a `compaction-marker`
+    // ledger fact (append via patch.ledger — the C1-owned chokepoint appends).
+    // De-dup lives in the emitter. A compaction that could not shrink (all
+    // protected) records a `compaction-no-shrink` harness-signal instead of a
+    // silent no-op.
+    if (trace.compaction) {
+      if (trace.compaction.droppedRefs.length > 0) {
+        state = transitionState(state, {
+          ledger: recordCompactionMarker(
+            state.ledger,
+            trace.compaction.droppedRefs,
+            state.iteration,
+            "recency-window overflow",
+          ),
+        });
+      }
+      if (trace.compaction.noShrinkEvent) {
+        state = transitionState(state, {
+          ledger: recordCompactionNoShrink(state.ledger, state.iteration),
+        });
+      }
+    }
     if (process.env.RA_ASSEMBLY_DEBUG === "1") {
       console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }

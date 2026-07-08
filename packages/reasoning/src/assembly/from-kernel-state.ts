@@ -77,6 +77,23 @@ export function fromKernelState(
     store.putWithRef(storedKey, toolName, parsed);
   }
 
+  // ── 1b. Read `preserveOnCompaction` off observation steps (C4, audit 03-F4) ──
+  //
+  // The flag is SET by makeObservationResult (preserve when !success ||
+  // category==="error") but was READ BY NOTHING. Build a toolCallId→preserve map
+  // from the observation steps so it can ride the EventLog `tool_result` event
+  // into the compaction path (which now honors it). Observation steps link back
+  // to their originating tool call via `metadata.toolCallId`.
+  const preserveByCallId = new Map<string, boolean>();
+  for (const step of state.steps) {
+    if (step.type !== "observation") continue;
+    const callId = step.metadata?.toolCallId;
+    const preserve = step.metadata?.observationResult?.preserveOnCompaction;
+    if (typeof callId === "string" && preserve === true) {
+      preserveByCallId.set(callId, true);
+    }
+  }
+
   // ── 2. Build EventLog ────────────────────────────────────────────────────
   //
   // The goal text lives in the first user message (the kernel seeds messages
@@ -123,6 +140,7 @@ export function fromKernelState(
         callId: msg.toolCallId,
         ref,
         shape: "result",
+        ...(preserveByCallId.get(msg.toolCallId) === true ? { preserve: true } : {}),
       });
     }
   }

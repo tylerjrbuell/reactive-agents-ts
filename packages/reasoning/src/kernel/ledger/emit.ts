@@ -45,6 +45,63 @@ export function recordTerminalVerdict(
 }
 
 /**
+ * Record a compaction as a `compaction-marker` fact (C4, audit 03-F4). The
+ * dropped-ref enumeration turns the old "summarized" lie into a checkable
+ * record: every ref here remains resolvable in the store (recallable refs also
+ * via the `recall` meta-tool). No-op when nothing was dropped.
+ *
+ * De-duped against the most recent `compaction-marker`: because compaction
+ * re-runs every over-budget iteration, an identical dropped-ref set would
+ * otherwise append a redundant marker each turn. Only a CHANGED set (or the
+ * first marker) is recorded — the ledger stays a log of distinct compactions.
+ */
+export function recordCompactionMarker(
+  ledger: RunLedger | undefined,
+  droppedRefs: readonly string[],
+  iteration: number,
+  reason?: string,
+): RunLedger {
+  if (droppedRefs.length === 0) return ledger ?? [];
+  const base = ledger ?? [];
+  const lastMarker = [...base].reverse().find((e) => e.kind === "compaction-marker");
+  if (lastMarker && lastMarker.kind === "compaction-marker") {
+    const prev = lastMarker.droppedRefs;
+    if (prev.length === droppedRefs.length && prev.every((r, i) => r === droppedRefs[i])) {
+      return base;
+    }
+  }
+  return appendEntry(base, {
+    kind: "compaction-marker",
+    iteration,
+    droppedRefs: [...droppedRefs],
+    ...(reason !== undefined ? { reason } : {}),
+  });
+}
+
+/**
+ * Record a compaction that ran but could NOT shrink the window — everything in
+ * the thread was a protected class (C4 shrink self-check). A `harness-signal`
+ * fact so the run is never silently stuck at the window ceiling. De-duped so a
+ * persistent no-shrink condition records once, not every iteration.
+ */
+export function recordCompactionNoShrink(
+  ledger: RunLedger | undefined,
+  iteration: number,
+): RunLedger {
+  const base = ledger ?? [];
+  const last = [...base].reverse().find(
+    (e) => e.kind === "harness-signal" && e.signal === "compaction-no-shrink",
+  );
+  if (last) return base;
+  return appendEntry(base, {
+    kind: "harness-signal",
+    iteration,
+    signal: "compaction-no-shrink",
+    detail: "compaction attempted but window did not shrink (all entries protected)",
+  });
+}
+
+/**
  * Record the empirical measurement claims asserted in the final output, each
  * classified (grounded|not) against the tool-observation corpus built from the
  * run's steps. Previously extracted by the fabrication guard and discarded
