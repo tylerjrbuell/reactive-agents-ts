@@ -9,9 +9,9 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Effect, type Context } from 'effect'
-import type { TerminatedBy } from '@reactive-agents/core'
+import type { DeliverableReceipt, TaskContract, TerminatedBy } from '@reactive-agents/core'
 import { getProviderDefaultModel } from '@reactive-agents/llm-provider'
-import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME } from '@reactive-agents/reasoning'
+import { META_TOOLS, HARNESS_PSEUDO_TOOLS, ABSTAIN_TOOL_NAME, compileRunContract, computeDeliverableReport, type ReasoningStep } from '@reactive-agents/reasoning'
 import { REQUEST_USER_INPUT_TOOL_NAME } from '@reactive-agents/tools'
 import type { AgentPersona } from './types.js'
 
@@ -134,6 +134,34 @@ const isSubstantiveReceiptTool = (name: string): boolean =>
  * interrupted mid-call) is conservatively treated as failed rather than
  * dropped, so `toolCallStats` still accounts for every attempted call.
  */
+/**
+ * Compute the receipt's `deliverables[]` (meta-loop 4a / B2) — the declared
+ * deliverables × produced-status. Compiles the run's RunContract from the SAME
+ * task inputs the kernel used (task prose + required tools + declared
+ * TaskContract; deterministic, DAG-clean) and verifies each deliverable against
+ * the run's reasoning steps with the pure `computeDeliverableReport` gate. A
+ * partial multi-file run (rw-8: 1 of 3) names the two missing files here.
+ *
+ * Returns `undefined` when the contract declares no deliverable (pure Q&A) — the
+ * caller then leaves `receipt.deliverables` absent, so those receipts stay
+ * byte-identical to v1.
+ */
+export function deriveReceiptDeliverables(args: {
+    readonly task: string
+    readonly requiredTools?: readonly string[]
+    readonly taskContract?: TaskContract
+    readonly reasoningSteps?: readonly ReasoningStep[]
+    readonly output: string
+}): readonly DeliverableReceipt[] | undefined {
+    const contract = compileRunContract(args.task, {
+        ...(args.requiredTools ? { requiredTools: args.requiredTools } : {}),
+        ...(args.taskContract ? { taskContract: args.taskContract } : {}),
+    })
+    if (contract.deliverables.length === 0) return undefined
+    const report = computeDeliverableReport(contract, args.reasoningSteps ?? [], args.output)
+    return report.length > 0 ? report : undefined
+}
+
 export function deriveReceiptToolCalls(
     metadata: {
         readonly reasoningSteps?: ReadonlyArray<{

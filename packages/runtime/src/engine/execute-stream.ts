@@ -31,9 +31,10 @@ import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
-import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from "../builder/helpers.js";
+import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from "../builder/helpers.js";
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
+import type { ReasoningStep } from "@reactive-agents/reasoning";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -406,10 +407,23 @@ export const makeExecuteStream =
               }>
             }
           };
+          // B2 (meta-loop 4a): declared deliverables × produced-status, from the
+          // run's RunContract (recompiled from the task inputs) × the reasoning
+          // steps. Partial multi-file runs name their missing files.
+          const receiptDeliverables = isPausedRun
+            ? undefined
+            : deriveReceiptDeliverables({
+                task: String((task.input as { question?: unknown })?.question ?? task.id),
+                ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
+                ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
+                reasoningSteps: (taskResult as { metadata?: { reasoningSteps?: readonly ReasoningStep[] } }).metadata?.reasoningSteps,
+                output: String((taskResult as { output?: unknown }).output ?? ""),
+              });
           const unsignedReceipt: TrustReceipt | undefined = isPausedRun
             ? undefined
             : computeTrustReceipt({
                 toolCalls: deriveReceiptToolCalls(receiptSource.metadata),
+                ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),
                 ...(receiptSource.terminatedBy !== undefined ? { terminatedBy: receiptSource.terminatedBy } : {}),
                 goalAchieved: deriveGoalAchieved(receiptSource.terminatedBy),
                 abstained: receiptSource.terminatedBy === "abstained",

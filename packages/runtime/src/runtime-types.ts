@@ -631,6 +631,14 @@ export interface RuntimeOptions {
   };
 
   /**
+   * The declared TaskContract (from `.withContract()`), threaded to the kernel
+   * so `compileRunContract` (meta-loop 4a / C2) folds its required/forbidden
+   * tools + outputShape into the run's RunContract requirements + constraints.
+   * Absent → the contract compiles from task prose + requiredTools alone.
+   */
+  taskContract?: import("@reactive-agents/core").TaskContract;
+
+  /**
    * Whitelist of tool names to expose. When set, only these tools are available —
    * all others (built-in, MCP, custom) are filtered out at the ToolService level.
    * All consumers (reasoning strategies, execution engine) see the filtered set.

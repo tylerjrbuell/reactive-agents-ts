@@ -411,7 +411,11 @@ export function buildStepExecutionPrompt(input: StepExecutionInput): string {
  * Lists all step results with status. Asks the LLM to evaluate whether
  * the goal was achieved. If all steps succeeded, respond with SATISFIED.
  */
-export function buildReflectionPrompt(goal: string, stepResults: StepResult[]): string {
+export function buildReflectionPrompt(
+  goal: string,
+  stepResults: StepResult[],
+  requirements?: readonly string[],
+): string {
   const sections: string[] = [];
 
   sections.push(`GOAL: ${goal}`);
@@ -427,12 +431,23 @@ export function buildReflectionPrompt(goal: string, stepResults: StepResult[]): 
 
   sections.push(`STEP RESULTS:\n${resultLines}`);
 
+  // B2 (audit 04-#7): when the RunContract has already decomposed the goal into
+  // explicit requirements, RENDER that list instead of asking the model to
+  // re-derive it free-text (re-derivation drifts — rw-1 rerun 2026-07-07 shipped
+  // SATISFIED while "identify data conflicts" was never addressed). The compiled
+  // requirements are the single source of truth; the model only checks coverage.
+  const rendered = (requirements ?? []).filter((r) => r.trim().length > 0);
+  const requirementInstruction =
+    rendered.length > 0
+      ? `The GOAL's explicit requirements (from the run contract) are:\n${rendered
+          .map((r, i) => `${i + 1}. ${r}`)
+          .join("\n")}\n\nOnly respond SATISFIED if EVERY requirement above is addressed by the results — steps completing without errors is NOT sufficient.`
+      : // Fallback (no contract requirements available): the model decomposes.
+        `Decompose the GOAL into its explicit requirements (every requested field, format, count, and any required meta-commentary such as noting conflicts, caveats, or unresolved items). Only respond SATISFIED if EVERY requirement is addressed by the results — steps completing without errors is NOT sufficient.`;
+
   sections.push(
     `Review the results above against the original goal.\n\n` +
-    // rw-1 rerun (2026-07-07): reflect declared SATISFIED while an explicit
-    // goal requirement ("identify data conflicts") was never addressed —
-    // step completion is not requirement coverage.
-    `Decompose the GOAL into its explicit requirements (every requested field, format, count, and any required meta-commentary such as noting conflicts, caveats, or unresolved items). Only respond SATISFIED if EVERY requirement is addressed by the results — steps completing without errors is NOT sufficient.\n\n` +
+    `${requirementInstruction}\n\n` +
     `Your FIRST LINE must be exactly one of:\n` +
     `SATISFIED: <brief summary>\n` +
     `UNSATISFIED: <which requirement is missing or wrong>\n\n` +

@@ -131,6 +131,8 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
       /** Stall/no-progress policy (.withStallPolicy) — spread to the strategy → KernelInput.stallPolicy. */
       readonly stallPolicy?: import("../kernel/state/kernel-state.js").StallPolicy;
+      /** Declared TaskContract (.withContract) — spread to the strategy → KernelInput.taskContract → compileRunContract (C2). */
+      readonly taskContract?: import("@reactive-agents/core").TaskContract;
     }) => Effect.Effect<ReasoningResult, ReasoningErrors>;
 
     /** Register a custom strategy function. */

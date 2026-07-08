@@ -434,6 +434,13 @@ export const buildBaseRuntimeAndEngine = (
       // task-contract.ts:33-34 forbidden = "MUST NOT be visible to the LLM";
       // tool-schemas.ts reads this and drops the names AFTER MCP discovery.
       forbiddenTools: contractForbiddenTools(state._taskContract),
+      // C2: the FULL declared TaskContract → reasoning-think → reasoning-service
+      // → strategy → KernelInput.taskContract → compileRunContract. Required/
+      // forbidden tools are also flattened above (requiredTools/forbiddenTools)
+      // for the execute-time gate; this carries the whole contract (incl.
+      // outputShape.mustInclude) so the RunContract compiles declared output
+      // sections as deterministic requirements.
+      taskContract: state._taskContract,
       adaptiveToolFiltering: state._toolsOptions?.adaptive,
       builtins: state._toolsOptions?.builtins,
       enableMemory: state._enableMemory,

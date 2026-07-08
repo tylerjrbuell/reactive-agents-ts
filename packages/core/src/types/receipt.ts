@@ -13,6 +13,20 @@
  * (`packages/ui-core/src/protocol/events.ts`) for the wire/endpoint path —
  * adding a REQUIRED field here requires updating that mirror too.
  */
+/**
+ * One declared deliverable's completion status, named on the receipt (B2 /
+ * meta-loop 4a). Computed from the RunContract's deliverable specs × the
+ * step-based artifact scan: `produced: false` names a MISSING deliverable so a
+ * partial multi-file run reports exactly which outputs never landed (rw-8
+ * partial-truth: 1 of 3 files → 2 entries with `produced: false`).
+ */
+export interface DeliverableReceipt {
+  /** Human-readable deliverable spec (e.g. "produce the file ./report.md"). */
+  readonly spec: string;
+  /** True iff the ledger/steps scan verified this deliverable was produced. */
+  readonly produced: boolean;
+}
+
 export interface TrustReceipt {
   /** Evidence grade for the final answer. */
   readonly verdict: "tool-grounded" | "partially-grounded" | "ungrounded" | "abstained" | "failed";
@@ -24,6 +38,14 @@ export interface TrustReceipt {
   readonly toolsUsed: readonly string[];
   /** Successful / total tool calls. */
   readonly toolCallStats: { readonly ok: number; readonly failed: number };
+  /**
+   * Declared deliverables and whether each was produced (B2 / meta-loop 4a).
+   * Present only when the RunContract declared at least one concrete
+   * deliverable — absent for pure Q&A runs, so receipts for tasks with no
+   * deliverable spec stay byte-identical to v1. A partial run (some
+   * `produced: false`) names the missing outputs here.
+   */
+  readonly deliverables?: readonly DeliverableReceipt[];
   /** Terminal reason (mirrors AgentResult.terminatedBy). */
   readonly terminatedBy?: string;
   /** Verifier verdict when the terminal verifier ran. */
@@ -80,6 +102,14 @@ export function computeTrustReceipt(input: {
   readonly modelId: string;
   readonly configHash?: string;
   readonly forkedFrom?: string;
+  /**
+   * Declared deliverables × produced-status, computed by the caller from the
+   * RunContract and the run's step-based artifact scan. Passed through verbatim
+   * onto the receipt. Omit (or pass empty) for runs with no declared
+   * deliverable — the field then stays absent and the receipt is byte-identical
+   * to v1.
+   */
+  readonly deliverables?: readonly DeliverableReceipt[];
   readonly now: number;
 }): TrustReceipt {
   const ok = input.toolCalls.filter((tc) => tc.ok).length;
@@ -126,6 +156,9 @@ export function computeTrustReceipt(input: {
     ...(input.terminatedBy !== undefined ? { terminatedBy: input.terminatedBy } : {}),
     ...(input.verifierVerdict !== undefined ? { verifierVerdict: input.verifierVerdict } : {}),
     ...(input.forkedFrom !== undefined ? { forkedFrom: input.forkedFrom } : {}),
+    ...(input.deliverables !== undefined && input.deliverables.length > 0
+      ? { deliverables: input.deliverables }
+      : {}),
     modelId: input.modelId,
     ...(input.configHash !== undefined ? { configHash: input.configHash } : {}),
     computedAt: input.now,

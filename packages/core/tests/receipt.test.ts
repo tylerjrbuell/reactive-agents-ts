@@ -26,4 +26,32 @@ describe("computeTrustReceipt", () => {
     const r = computeTrustReceipt({ ...base, verifierVerdict: "pass", toolCalls: [{ name: "calculator", ok: true }] });
     expect(r.confidence).toBeGreaterThanOrEqual(0.9);
   });
+
+  // ── B2 (meta-loop 4a): deliverables[] passthrough ──
+  test("deliverables absent by default (byte-identical to v1)", () => {
+    const r = computeTrustReceipt({ ...base, toolCalls: [{ name: "calculator", ok: true }] });
+    expect(r.deliverables).toBeUndefined();
+    expect("deliverables" in r).toBe(false);
+  });
+  test("empty deliverables array stays absent", () => {
+    const r = computeTrustReceipt({ ...base, toolCalls: [], deliverables: [] });
+    expect(r.deliverables).toBeUndefined();
+  });
+  test("names missing deliverables verbatim (rw-8 partial: 1 of 3)", () => {
+    const r = computeTrustReceipt({
+      ...base,
+      toolCalls: [{ name: "file-write", ok: true }],
+      deliverables: [
+        { spec: "produce the file ./report.md", produced: true },
+        { spec: "produce the file ./findings.json", produced: false },
+        { spec: "produce the file ./sources.md", produced: false },
+      ],
+    });
+    expect(r.deliverables).toHaveLength(3);
+    const missing = (r.deliverables ?? []).filter((d) => !d.produced).map((d) => d.spec);
+    expect(missing).toEqual([
+      "produce the file ./findings.json",
+      "produce the file ./sources.md",
+    ]);
+  });
 });

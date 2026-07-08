@@ -55,6 +55,7 @@ export type CrossCuttingInput = Pick<
   | "grounding"
   | "fabricationGuard"
   | "stallPolicy"
+  | "taskContract"
 >;
 
 /**

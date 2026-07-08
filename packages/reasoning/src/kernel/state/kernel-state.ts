@@ -375,6 +375,22 @@ export interface KernelMeta {
    */
   readonly postConditions?: readonly import("../capabilities/verify/post-conditions.js").PostCondition[];
 
+  // ── RunContract — the compiled, frozen goal (meta-loop Phase 4a / B1+B2) ──────
+  /**
+   * The run's compiled RunContract — the typed, frozen answer to "what does DONE
+   * mean for this run?" (requirements, deliverables, constraints, horizon).
+   * Compiled ONCE at kernel-start by runner.ts from task inputs only (task prose
+   * + required tools + declared TaskContract + comprehend classification; no loop
+   * state — DAG law). Stored here so downstream consumers read ONE object instead
+   * of re-deriving: the terminal gate's check 2.5 (contract-aware coverage) and
+   * the receipt's `deliverables[]`. Absent when contract compilation is skipped —
+   * consumers then fall back to today's behavior (byte-identical).
+   *
+   * Type-only import — no runtime cycle (contract/ imports verify/ + comprehend/,
+   * never state/).
+   */
+  readonly runContract?: import("../contract/run-contract.js").RunContract;
+
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────
@@ -523,6 +539,15 @@ export const DEFAULT_STALL_POLICY: Required<StallPolicy> = {
 
 export interface KernelInput {
   readonly task: string;
+  /**
+   * The declared TaskContract, when the caller has one (C2 ruling: RunContract
+   * absorbs TaskContract). Threaded from the runtime builder state so runner.ts's
+   * `compileRunContract` folds declared required/forbidden tools + outputShape
+   * into the run's requirements + constraints. Optional — callers/strategies that
+   * do not declare a contract leave it unset and the contract compiles from task
+   * prose + requiredTools alone.
+   */
+  readonly taskContract?: import("@reactive-agents/core").TaskContract;
   readonly systemPrompt?: string;
   readonly availableToolSchemas?: readonly ToolSchema[];
   /** Full unfiltered tool schemas — used by completion guard to detect all MCP namespaces */

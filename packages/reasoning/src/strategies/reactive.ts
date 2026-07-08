@@ -129,6 +129,8 @@ interface ReactiveInput {
   readonly fabricationGuard?: import("../kernel/capabilities/verify/evidence-grounding.js").FabricationGuardMode;
   /** Stall/no-progress policy (.withStallPolicy) → KernelInput.stallPolicy. Absent ⇒ defaults. */
   readonly stallPolicy?: import("../kernel/state/kernel-state.js").StallPolicy;
+  /** Declared TaskContract (.withContract) → KernelInput.taskContract → compileRunContract (C2). */
+  readonly taskContract?: import("@reactive-agents/core").TaskContract;
 }
 
 // ── executeReactive ───────────────────────────────────────────────────────────
@@ -249,6 +251,9 @@ export const executeReactive = (
       grounding: input.grounding,
       fabricationGuard: input.fabricationGuard,
       stallPolicy: input.stallPolicy,
+      // C2: declared TaskContract → compileRunContract (runner.ts) folds its
+      // required/forbidden tools + outputShape into the RunContract.
+      taskContract: input.taskContract,
     };
 
     const pass = yield* runPass(reactKernel, kernelInput, {

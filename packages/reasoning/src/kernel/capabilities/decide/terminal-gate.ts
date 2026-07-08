@@ -35,7 +35,13 @@
  *      pass `coveredTools` computed with their own semantics.
  */
 
+import type { ReasoningStep } from "../../../types/index.js";
 import { TERMINAL_ANSWER_REASONS } from "../../loop/runner-helpers/grounded-terminal.js";
+import {
+  describeUnmet,
+  verify,
+  type PostCondition,
+} from "../verify/post-conditions.js";
 
 // ── Decision vocabulary ───────────────────────────────────────────────────────
 
@@ -107,6 +113,39 @@ export type TerminalGateInput = {
    */
   readonly coverageExhaustionPolicy: "accept" | "abstain";
   /**
+   * B2 (meta-loop 4a) — check 2.5. When a RunContract is supplied ALONGSIDE
+   * `evidence`, the coverage check (2) consumes REQUIREMENT satisfaction —
+   * every requirement's deterministic PostCondition verified against the run's
+   * step ledger with the same pure `verify()` gate (artifact-produced via the
+   * `isArtifactProduced` scan; tool-coverage via ToolCalled) — instead of the
+   * tool-name diff. `missing` then names the UNSATISFIED requirements.
+   *
+   * Absent (or `evidence` absent) → the tool-name coverage path below runs
+   * exactly as pre-B2, so a run without a contract is byte-identical. Only the
+   * requirements' deterministic `condition`s participate; the base
+   * self-critique answer requirement (no condition) never blocks the gate.
+   *
+   * Structurally a subset of `RunContract` (the full contract is assignable).
+   */
+  readonly contract?: {
+    readonly requirements: readonly {
+      readonly spec: {
+        readonly condition?: PostCondition;
+        readonly description: string;
+      };
+    }[];
+    readonly postConditions: readonly PostCondition[];
+  };
+  /**
+   * B2 — the ledger + assembled output the contract's requirements are verified
+   * against. Consulted ONLY when `contract` is also present. `steps` is the run
+   * ledger (`state.steps`); `output` feeds OutputContains requirements.
+   */
+  readonly evidence?: {
+    readonly steps: readonly ReasoningStep[];
+    readonly output: string;
+  };
+  /**
    * P6b slot: verdict from the independent checker, if one is configured AND
    * the caller already ran it for this candidate. `undefined` = no checker —
    * slot is inert (default; today's shipped behavior).
@@ -138,6 +177,33 @@ const GATED_REASONS: ReadonlySet<string> = new Set([
   PLAN_EXECUTE_SATISFIED,
   REFLEXION_SATISFIED,
 ]);
+
+// ── B2 check-2.5 requirement coverage ─────────────────────────────────────────
+
+/**
+ * The contract's UNSATISFIED requirement descriptions — the requirement-aware
+ * coverage set. Verifies every requirement's deterministic PostCondition
+ * against the run ledger with the pure `verify()` gate, then names each unmet
+ * condition by its owning requirement's description (falling back to a
+ * description of the condition itself). Requirements with no `condition` (the
+ * base self-critique answer) contribute nothing — they are not deterministically
+ * checkable and must never block the gate.
+ */
+function unsatisfiedRequirements(
+  contract: NonNullable<TerminalGateInput["contract"]>,
+  evidence: NonNullable<TerminalGateInput["evidence"]>,
+): readonly string[] {
+  const { unmet } = verify(contract.postConditions, evidence.steps, {
+    output: evidence.output,
+  });
+  return unmet.map((c) => {
+    const key = JSON.stringify(c);
+    const req = contract.requirements.find(
+      (r) => r.spec.condition && JSON.stringify(r.spec.condition) === key,
+    );
+    return req?.spec.description ?? describeUnmet([c]);
+  });
+}
 
 // ── The ordered pipeline ──────────────────────────────────────────────────────
 
@@ -184,9 +250,13 @@ export function evaluateTerminalGate(input: TerminalGateInput): TerminalGateDeci
   }
 
   // 2) Requirement coverage (B1/P3): some required tools never succeeded.
-  const missing = input.requiredTools.filter(
-    (t) => !input.coveredTools.has(t),
-  );
+  //    B2 check 2.5: with a RunContract + evidence, coverage consumes
+  //    REQUIREMENT satisfaction (verify against the ledger); otherwise the
+  //    tool-name diff (byte-identical to pre-B2).
+  const missing =
+    input.contract && input.evidence
+      ? unsatisfiedRequirements(input.contract, input.evidence)
+      : input.requiredTools.filter((t) => !input.coveredTools.has(t));
   if (!isDeliberateToolExit && missing.length > 0) {
     if (input.redirectsSpent.coverage < redirectBudget) {
       return {

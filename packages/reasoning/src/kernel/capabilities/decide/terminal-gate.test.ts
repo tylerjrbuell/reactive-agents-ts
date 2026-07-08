@@ -310,3 +310,96 @@ describe("A2 redirect budget (coverage)", () => {
     expect(d).toMatchObject({ decision: "redirect", check: "coverage" });
   });
 });
+
+// ── B2 check 2.5 — contract-aware requirement coverage ────────────────────────
+import { compileRunContract } from "../../contract/run-contract.js";
+import type { ObservationResult, ReasoningStep } from "../../../types/index.js";
+
+const RW8_PROMPT = `Phase 2: Write a TypeScript type definition file (types.ts) for User, Order, Product
+Phase 3: Write a data generator (generate.ts) that creates 5 sample records of each type
+Phase 4: Write a validator (validate.ts) that checks all constraints are met`;
+
+function writeSteps(path: string, n: number): ReasoningStep[] {
+  return [
+    {
+      id: `act-${n}` as ReasoningStep["id"],
+      type: "action",
+      content: `file-write(${path})`,
+      timestamp: new Date(),
+      metadata: { toolCall: { id: `tc-${n}`, name: "file-write", arguments: { path, content: "x" } } },
+    },
+    {
+      id: `obs-${n}` as ReasoningStep["id"],
+      type: "observation",
+      content: "ok",
+      timestamp: new Date(),
+      metadata: {
+        toolCallId: `tc-${n}`,
+        observationResult: {
+          success: true,
+          toolName: "file-write",
+          displayText: "ok",
+          category: "file-write",
+          resultKind: "side-effect",
+          preserveOnCompaction: true,
+          trustLevel: "untrusted",
+        } as ObservationResult,
+      },
+    },
+  ];
+}
+
+describe("B2 check 2.5 — contract coverage", () => {
+  it("rw-9 pin: NO contract → decision byte-identical to today (tool-name path)", () => {
+    // A coverage violation resolved solely by the tool-name diff, no contract.
+    const withoutContract = evaluateTerminalGate(
+      baseInput({
+        requiredTools: ["web-search", "file-write"],
+        coveredTools: new Set(["web-search"]),
+      }),
+    );
+    expect(withoutContract).toEqual({
+      decision: "redirect",
+      check: "coverage",
+      guidance: "COVERAGE-GUIDANCE: file-write",
+      missing: ["file-write"],
+    });
+  });
+
+  it("rw-8 partial: contract coverage names the 2 unsatisfied artifact requirements", () => {
+    const contract = compileRunContract(RW8_PROMPT);
+    const d = evaluateTerminalGate(
+      baseInput({
+        terminatedBy: "end_turn",
+        requiredTools: [],
+        contract,
+        evidence: { steps: writeSteps("./types.ts", 1), output: "" },
+      }),
+    );
+    expect(d.decision).toBe("redirect");
+    if (d.decision === "redirect") {
+      expect([...d.missing].sort()).toEqual([
+        "produce the file ./generate.ts",
+        "produce the file ./validate.ts",
+      ]);
+    }
+  });
+
+  it("contract fully satisfied → accept (no missing requirements)", () => {
+    const contract = compileRunContract(RW8_PROMPT);
+    const steps = [
+      ...writeSteps("./types.ts", 1),
+      ...writeSteps("./generate.ts", 2),
+      ...writeSteps("./validate.ts", 3),
+    ];
+    const d = evaluateTerminalGate(
+      baseInput({ requiredTools: [], contract, evidence: { steps, output: "" } }),
+    );
+    expect(d.decision).toBe("accept");
+  });
+
+  it("no contract + no required tools → accept (unchanged vacuous path)", () => {
+    const d = evaluateTerminalGate(baseInput({ requiredTools: [] }));
+    expect(d.decision).toBe("accept");
+  });
+});

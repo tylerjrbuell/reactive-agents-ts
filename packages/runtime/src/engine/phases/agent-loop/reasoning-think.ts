@@ -316,6 +316,10 @@ export const runReasoningThink = (
       fabricationGuard: config.fabricationGuard,
       // Stall/no-progress policy. Propagated from `.withStallPolicy()`.
       stallPolicy: config.stallPolicy,
+      // Declared TaskContract (.withContract) → KernelInput.taskContract →
+      // compileRunContract (C2): declared required/forbidden tools + outputShape
+      // become RunContract requirements + constraints.
+      taskContract: config.taskContract,
       // Long-horizon guard profile. Propagated from `.withLongHorizon()`. The
       // reasoning strategy forwards this to `KernelRunOptions.horizonProfile`.
       horizonProfile: config.horizonProfile,

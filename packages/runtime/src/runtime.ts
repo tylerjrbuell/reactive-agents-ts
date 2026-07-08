@@ -318,6 +318,9 @@ export const createRuntime = (options: RuntimeOptions) => {
           maxRetries: options.requiredTools.maxRetries,
         }
       : undefined,
+    // C2: the declared TaskContract → config.taskContract → reasoning-think →
+    // strategy → KernelInput.taskContract → compileRunContract.
+    taskContract: options.taskContract,
     adaptiveToolFiltering: options.adaptiveToolFiltering,
     allowedTools: options.allowedTools,
     builtins: options.builtins,

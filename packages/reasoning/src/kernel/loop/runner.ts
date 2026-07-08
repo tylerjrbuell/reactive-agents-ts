@@ -341,6 +341,19 @@ export function runKernel(
     {
       const runContract = compileRunContract(effectiveInput.task, {
         requiredTools: effectiveInput.requiredTools ?? [],
+        // C2 ruling: RunContract absorbs the declared TaskContract — its
+        // required/forbidden tools + outputShape become requirements +
+        // constraints. Threaded from the runtime layer (KernelInput.taskContract);
+        // absent on strategies/callers that do not populate it.
+        ...(effectiveInput.taskContract !== undefined
+          ? { taskContract: effectiveInput.taskContract }
+          : {}),
+      });
+      // B2: store the compiled contract on state.meta so the CONSUMERS reach it
+      // (terminal gate check 2.5, receipt deliverables). Frozen + JSON-plain, so
+      // it rides the meta bag through kernel-codec for durable resume.
+      state = transitionState(state, {
+        meta: { ...state.meta, runContract },
       });
       yield* emitContractCompiled({
         taskId: state.taskId,

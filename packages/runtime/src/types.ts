@@ -770,6 +770,15 @@ export type ReactiveAgentsConfig = Schema.Schema.Type<typeof ReactiveAgentsConfi
    */
   readonly forbiddenTools?: readonly string[];
   /**
+   * The declared TaskContract (from `.withContract()`). Carries a function-free
+   * shape but lives on the non-Schema intersection because it is threaded to the
+   * kernel as-is (not serialised through the config schema). `reasoning-think.ts`
+   * forwards it to `KernelInput.taskContract` → `compileRunContract` (C2), so
+   * declared required/forbidden tools + outputShape become RunContract
+   * requirements + constraints.
+   */
+  readonly taskContract?: import("@reactive-agents/core").TaskContract;
+  /**
    * Opt-in for built-in tools in the base schema. See `ToolsOptions.builtins`
    * for full semantics. Default `undefined`/`false`: built-ins are excluded
    * from the LLM-facing schema (still registered + discoverable via

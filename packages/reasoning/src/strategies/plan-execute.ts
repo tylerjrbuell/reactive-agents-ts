@@ -28,6 +28,7 @@ import {
   evaluateTerminalGate,
   PLAN_EXECUTE_SATISFIED,
 } from "../kernel/capabilities/decide/terminal-gate.js";
+import { compileRunContract } from "../kernel/contract/run-contract.js";
 import { extractStructuredOutput } from "../structured-output/pipeline.js";
 import {
   buildPlanGenerationPrompt,
@@ -199,6 +200,14 @@ export const executePlanExecute = (
 
     // Extract plain goal text from taskDescription (may be JSON-wrapped)
     const goal = extractGoalText(input.taskDescription);
+
+    // B2 (audit 04-#7): compile the RunContract ONCE (pure, deterministic, no
+    // LLM) so the reflect gate renders the goal's requirements from contract
+    // refs instead of asking the model to re-derive them each pass. Descriptions
+    // only — the reflect prompt lists them for the model's coverage check.
+    const reflectRequirements = compileRunContract(goal, {
+      requiredTools: input.requiredTools ?? [],
+    }).requirements.map((r) => r.spec.description);
 
     // Convert tool schemas to ToolSummary for prompts (mark optional params with ?)
     const toolSummaries: ToolSummary[] = (
@@ -841,6 +850,7 @@ export const executePlanExecute = (
       const reflectionPrompt = buildReflectionPrompt(
         goal,
         stepResults,
+        reflectRequirements,
       );
 
       const reflectSystemPrompt = input.systemPrompt

@@ -19,7 +19,7 @@ import {
     Context,
     Fiber,
 } from 'effect'
-import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId } from './builder/helpers.js'
+import { deriveGoalAchieved, deriveReceiptToolCalls, deriveReceiptModelId, deriveReceiptDeliverables } from './builder/helpers.js'
 import { resolveReceiptSigningKey, signReceipt } from './receipt-signing.js'
 import {
     CapabilityRegistry,
@@ -1495,6 +1495,25 @@ export class ReactiveAgent<TOut = unknown> {
                 const isPausedRun =
                     r.awaitingApprovalFor !== undefined ||
                     r.awaitingInteractionFor !== undefined
+                // B2 (meta-loop 4a): declared deliverables × produced-status,
+                // computed from the run's RunContract (recompiled here from the
+                // same task inputs) × the reasoning-step artifact scan. A partial
+                // multi-file run names its missing files on the receipt.
+                const receiptDeliverables = isPausedRun
+                    ? undefined
+                    : deriveReceiptDeliverables({
+                          task: input,
+                          ...((this.config['requiredTools'] as { tools?: readonly string[] } | undefined)?.tools
+                              ? { requiredTools: (this.config['requiredTools'] as { tools?: readonly string[] }).tools }
+                              : {}),
+                          ...(this.config['taskContract'] !== undefined
+                              ? { taskContract: this.config['taskContract'] as import('@reactive-agents/core').TaskContract }
+                              : {}),
+                          reasoningSteps: (rawMetadata as {
+                              reasoningSteps?: readonly ReasoningStep[]
+                          }).reasoningSteps,
+                          output: String(r.output ?? ''),
+                      })
                 const receipt: TrustReceipt | undefined = isPausedRun
                     ? undefined
                     : computeTrustReceipt({
@@ -1504,6 +1523,7 @@ export class ReactiveAgent<TOut = unknown> {
                                   receiptToolCalls?: ReadonlyArray<{ name: string; ok: boolean }>
                               },
                           ),
+                          ...(receiptDeliverables !== undefined ? { deliverables: receiptDeliverables } : {}),
                           ...(r.terminatedBy !== undefined ? { terminatedBy: r.terminatedBy } : {}),
                           goalAchieved,
                           abstained: r.terminatedBy === 'abstained',

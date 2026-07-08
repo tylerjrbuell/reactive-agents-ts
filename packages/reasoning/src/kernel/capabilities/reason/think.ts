@@ -1474,6 +1474,11 @@ export function handleThinking(
         redirectCount: priorRedirects,
         priorFinalAnswerAttempts: priorFAAttempts,
         taskDescription: input.task,
+        // B2 check 2.5: hand the compiled RunContract to the terminal gate's
+        // coverage check (via llmEndTurnEvaluator). Absent → tool-name coverage.
+        ...(state.meta.runContract !== undefined
+          ? { runContract: state.meta.runContract }
+          : {}),
       };
 
       const decision = evaluateTermination(oracleCtx, defaultEvaluators);

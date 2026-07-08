@@ -80,6 +80,14 @@ export interface TerminationContext {
    * llmEndTurnEvaluator (default 1 = one-shot; ≥30-iter long-horizon → 2).
    */
   readonly redirectBudget?: number;
+  /**
+   * B2 check 2.5 — the run's compiled RunContract (from state.meta.runContract).
+   * When present, the terminal gate's coverage check consumes REQUIREMENT
+   * satisfaction (verify against `steps`) instead of the tool-name diff. Absent
+   * → today's tool-name coverage (byte-identical). Threaded by think.ts from
+   * state.meta.runContract.
+   */
+  readonly runContract?: import("../../contract/run-contract.js").RunContract;
 }
 
 export interface SignalVerdict {
@@ -324,9 +332,22 @@ export const llmEndTurnEvaluator: TerminationSignalEvaluator = {
       redirectsSpent: { grounding: 0, coverage: ctx.redirectCount, checker: 0 },
       redirectBudget: ctx.redirectBudget,
       coverageExhaustionPolicy: "accept",
+      // B2 check 2.5: when a RunContract is present, coverage consumes
+      // requirement satisfaction (verify against the ledger + this candidate
+      // answer) instead of the tool-name diff. Absent → tool-name path.
+      ...(ctx.runContract !== undefined
+        ? {
+            contract: ctx.runContract,
+            evidence: { steps: ctx.steps, output: ctx.thought.trim() },
+          }
+        : {}),
       buildGroundingGuidance: () => "",
+      // No-contract wording is unchanged (rw-9 byte-identity); the contract path
+      // names outstanding REQUIREMENTS (may be artifacts, not just tools).
       buildCoverageGuidance: (missing) =>
-        `required tools not used yet: ${missing.join(", ")} — use them, or state explicitly why they are unnecessary and give your final answer`,
+        ctx.runContract !== undefined
+          ? `outstanding requirements not yet satisfied: ${missing.join("; ")} — address them, or state explicitly why they are unnecessary and give your final answer`
+          : `required tools not used yet: ${missing.join(", ")} — use them, or state explicitly why they are unnecessary and give your final answer`,
     });
     if (gate.decision === "redirect") {
       return { action: "redirect", confidence: "medium", reason: gate.guidance };

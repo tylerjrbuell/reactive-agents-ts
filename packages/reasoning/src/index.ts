@@ -156,6 +156,7 @@ export {
   withRequirements,
   amendContract,
 } from "./kernel/contract/run-contract.js";
+export { computeDeliverableReport } from "./kernel/contract/deliverable-report.js";
 export type {
   RunContract,
   TaskRequirement,
