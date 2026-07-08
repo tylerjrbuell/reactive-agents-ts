@@ -214,6 +214,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
   grounding: { mode: "warn", tolerance: 0.05, maxRetries: 2 },
   fabricationGuard: "warn",
   stallPolicy: { ignoredNudgeTolerance: 1, escalateNudgeContent: true },
+  horizonProfile: "long",
   outputSchemaOptions: { mode: "grounded", onParseFail: "throw", abstainBelow: 0.4 },
   requiredTools: { tools: ["file-write"], adaptive: true, maxRetries: 2 },
   budget: { tokenLimit: 100_000, costLimit: 5, warningRatio: 0.75 },

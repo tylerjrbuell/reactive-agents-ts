@@ -161,7 +161,13 @@ export const LONG_HORIZON_TASKS: readonly BenchmarkTask[] = [
     tier: "real-world",
     name: "Long-horizon research + multi-file deliverable",
     domain: "research",
-    strategy: "plan-execute",
+    // reactive (not plan-execute): the long-horizon disease this instrument
+    // measures — premature guard-kills over a 40+ iteration run (the rw-7
+    // stall_deliverable kill at iter 5) and A2's horizon-scaled guard profile
+    // that fixes it — both live in the reactive kernel's iterate-pass guards.
+    // plan-execute runs its own orchestration loop and bypasses them, so it
+    // would mask exactly what lh-1 exists to catch.
+    strategy: "react",
     // Six web-researchable questions on an evergreen systems topic (WASI). The
     // deliverable FORMAT is pinned precisely so the deterministic hidden checks
     // are fair (mirrors rw-7 pinning function signatures): findings.json shape,
@@ -248,7 +254,7 @@ Do not fabricate sources or facts. If sources conflict or a question cannot be f
         rubric: "Where sources conflict or a question cannot be fully answered, does the agent flag it explicitly rather than fabricating a confident answer or inventing sources?",
       },
     ],
-    optimalHarnessConfig: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true, strategy: "plan-execute" },
+    optimalHarnessConfig: { tools: true, reasoning: true, reactiveIntelligence: true, memory: true, strategy: "react" },
     tags: ["long-horizon", "research", "multi-file-deliverable", "web-search", "horizon:long"],
   },
 ]

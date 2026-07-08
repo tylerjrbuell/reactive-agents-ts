@@ -498,6 +498,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _fabricationGuard: import('@reactive-agents/reasoning').FabricationGuardMode | undefined = undefined
     /** Stall/no-progress policy override. Absent = sensible defaults. */
     private _stallPolicy: import('@reactive-agents/reasoning').StallPolicy | undefined = undefined
+    /** Opt-in long-horizon guard profile. false = today's absolute-count guards (default). */
+    private _longHorizon: boolean = false
     /** Opt-in cost-aware model routing. Absent = off (default). */
     private _modelRouting: import('./builder/types.js').ModelRoutingOptions | undefined = undefined
     /** Opt-in typed structured output config. Absent = off (default). */
@@ -1057,6 +1059,27 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withStallPolicy(policy: import('@reactive-agents/reasoning').StallPolicy): this {
         this._stallPolicy = policy
+        return this
+    }
+
+    /**
+     * Opt in to the **long-horizon guard profile** (off by default). A mode
+     * toggle — no arguments; the kernel scales its audit-02-#12 guard constants
+     * proportionally to `maxIterations` (via `resolveHorizonProfile`) instead of
+     * using absolute counts, so a run configured for ≥40 iterations of
+     * tool-using work is not tripped by guards tuned for short runs.
+     *
+     * Flows through to `KernelRunOptions.horizonProfile = "long"` (read by the
+     * reasoning kernel). Zero cost when not called: `horizonProfile` stays unset
+     * and behaviour is byte-identical to today.
+     *
+     * Forward note: the Phase 6 policy compiler (plan G1) will subsume this
+     * wither — the `horizonProfile` config field is the durable interface.
+     *
+     * @returns `this` for chaining
+     */
+    withLongHorizon(): this {
+        this._longHorizon = true
         return this
     }
 

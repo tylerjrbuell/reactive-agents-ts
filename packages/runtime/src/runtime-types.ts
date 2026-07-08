@@ -255,6 +255,15 @@ export interface RuntimeOptions {
   stallPolicy?: import("@reactive-agents/reasoning").StallPolicy;
 
   /**
+   * Opt-in long-horizon guard profile. Absent ⇒ today's absolute-count guards
+   * (byte-identical default). Set via `.withLongHorizon()`; threaded into
+   * `ReactiveAgentsConfig.horizonProfile` → `KernelRunOptions.horizonProfile`,
+   * where the kernel scales its audit-02-#12 guards proportionally to
+   * `maxIterations` instead of using absolute counts.
+   */
+  horizonProfile?: "long";
+
+  /**
    * Opt-in durable run persistence. Absent ⇒ off (zero overhead, default).
    * Populated by `.withDurableRuns()`; threaded into
    * `ReactiveAgentsConfig.durableRuns`. When set, the runtime persists a

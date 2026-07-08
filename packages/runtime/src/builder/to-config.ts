@@ -84,6 +84,7 @@ export interface BuilderStateForSerialization {
   _groundingConfig?: { mode: "block" | "warn"; tolerance?: number; maxRetries?: number };
   _fabricationGuard?: "off" | "warn" | "block";
   _stallPolicy?: { ignoredNudgeTolerance?: number; escalateNudgeContent?: boolean };
+  _longHorizon?: boolean;
   _taskContext?: Record<string, string>;
   _outputSchemaConfig?: {
     options?: {
@@ -291,6 +292,9 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (state._stallPolicy.escalateNudgeContent !== undefined) sp["escalateNudgeContent"] = state._stallPolicy.escalateNudgeContent;
     config["stallPolicy"] = sp;
   }
+
+  // Long-horizon guard profile (opt-in; absent = off)
+  if (state._longHorizon) config["horizonProfile"] = "long";
 
   // Structured-output behavioural options. The schema object itself is not
   // JSON-serializable, but the options round-trip OUT so a config snapshot is

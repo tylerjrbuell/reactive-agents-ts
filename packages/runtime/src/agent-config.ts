@@ -312,6 +312,8 @@ export const AgentConfigSchema = Schema.Struct({
       escalateNudgeContent: Schema.optional(Schema.Boolean),
     })
   ),
+  /** Opt-in long-horizon guard profile. Absent = absolute-count guards (default). */
+  horizonProfile: Schema.optional(Schema.Literal("long")),
   /**
    * Behavioural options for typed structured output (mode, onParseFail, abstainBelow).
    *
@@ -572,6 +574,11 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   // Stall/no-progress policy (defaults apply; declarative override)
   if (config.stallPolicy) {
     builder = builder.withStallPolicy(config.stallPolicy);
+  }
+
+  // Long-horizon guard profile (opt-in; declarative override)
+  if (config.horizonProfile === "long") {
+    builder = builder.withLongHorizon();
   }
 
   // Execution

@@ -121,6 +121,8 @@ export interface BuilderState {
   _fabricationGuard: import("@reactive-agents/reasoning").FabricationGuardMode | undefined;
   /** Stall/no-progress policy override. Absent = sensible defaults. */
   _stallPolicy: import("@reactive-agents/reasoning").StallPolicy | undefined;
+  /** Opt-in long-horizon guard profile. false = absolute-count guards (default). */
+  _longHorizon: boolean;
   /** Opt-in cost-aware model routing. Absent = off (default). */
   _modelRouting: ModelRoutingOptions | undefined;
   /** Opt-in durable run persistence. Absent = off (zero overhead, default). */

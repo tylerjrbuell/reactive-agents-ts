@@ -88,6 +88,16 @@ const matchesExpected = (output: string, expected?: string): boolean => {
 };
 
 /**
+ * A4 — decide whether a task should run under the long-horizon guard profile.
+ * lh-* long-horizon instruments carry the `horizon:long` tag; every other task
+ * is left on the default absolute-count guards. Kept as a pure predicate so the
+ * per-build-path decision is unit-testable without a real agent build.
+ */
+export const shouldUseLongHorizon = (task: {
+  readonly tags?: ReadonlyArray<string>;
+}): boolean => task.tags?.includes("horizon:long") ?? false;
+
+/**
  * Run a single benchmark task against a real LLM.
  * Returns a TaskResult with real timing, token usage, cost, and pass/fail status.
  */
@@ -128,6 +138,12 @@ const runTask = async (
 
     if (task.requiresGuardrails) {
       builder.withGuardrails();
+    }
+
+    // A4: long-horizon tasks (tagged `horizon:long`, e.g. lh-1) run under the
+    // scaled guard profile so ≥40-iteration work is not tripped by short-run guards.
+    if (shouldUseLongHorizon(task)) {
+      builder.withLongHorizon();
     }
 
     // Suppress build-validation console.log (provider/model/key info)
@@ -706,6 +722,10 @@ async function runInternal(
     if (config.thinking !== undefined) builder.withThinking(config.thinking)
 
     if (traceDir) builder.withTracing({ dir: traceDir })
+
+    // A4: long-horizon tasks (tagged `horizon:long`, e.g. lh-1) run under the
+    // scaled guard profile so ≥40-iteration work is not tripped by short-run guards.
+    if (shouldUseLongHorizon(task)) builder.withLongHorizon()
 
     const _log = console.log; console.log = () => {}
     const agent = await builder.build()

@@ -614,6 +614,12 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
     })
   ),
   /**
+   * Opt-in long-horizon guard profile. Absent ⇒ absolute-count guards (default).
+   * Populated by `.withLongHorizon()`; threaded into
+   * `KernelRunOptions.horizonProfile` where guards scale to `maxIterations`.
+   */
+  horizonProfile: Schema.optional(Schema.Literal("long")),
+  /**
    * Opt-in durable run persistence (Phase B). Absent ⇒ off (zero overhead).
    * Populated by `.withDurableRuns()`; when set, the runtime persists a
    * serialized kernel-state snapshot to a SQLite RunStore every

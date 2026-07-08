@@ -74,6 +74,9 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly modelId?: string;
       /** Task category for per-category entropy scoring adjustments */
       readonly taskCategory?: string;
+      /** Opt-in long-horizon guard profile (A2) — spread via `...params` into the
+       *  strategy input, then forwarded to KernelRunOptions.horizonProfile. */
+      readonly horizonProfile?: "long";
       /** LLM sampling temperature — forwarded to entropy sensor for weight adjustment */
       readonly temperature?: number;
       /** Custom environment context key-value pairs injected into system prompt */

@@ -316,6 +316,9 @@ export const runReasoningThink = (
       fabricationGuard: config.fabricationGuard,
       // Stall/no-progress policy. Propagated from `.withStallPolicy()`.
       stallPolicy: config.stallPolicy,
+      // Long-horizon guard profile. Propagated from `.withLongHorizon()`. The
+      // reasoning strategy forwards this to `KernelRunOptions.horizonProfile`.
+      horizonProfile: config.horizonProfile,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

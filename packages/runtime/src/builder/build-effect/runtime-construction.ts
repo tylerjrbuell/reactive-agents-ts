@@ -183,6 +183,8 @@ export interface BuilderRuntimeStateView {
   readonly _fabricationGuard: import("@reactive-agents/reasoning").FabricationGuardMode | undefined;
   /** Stall/no-progress policy override. Absent = sensible defaults. */
   readonly _stallPolicy: import("@reactive-agents/reasoning").StallPolicy | undefined;
+  /** Opt-in long-horizon guard profile. false = absolute-count guards (default). */
+  readonly _longHorizon: boolean;
   /** Opt-in cost-aware model routing. Absent = off (default). */
   readonly _modelRouting: ModelRoutingOptions | undefined;
   /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
@@ -491,6 +493,7 @@ export const buildBaseRuntimeAndEngine = (
       grounding: state._groundingConfig,
       fabricationGuard: state._fabricationGuard,
       stallPolicy: state._stallPolicy,
+      horizonProfile: state._longHorizon ? "long" : undefined,
       modelRouting: state._modelRouting,
       durableRuns: state._durableRuns,
       approvalPolicy: state._approvalPolicy

@@ -77,6 +77,10 @@ interface ReactiveInput {
   readonly modelId?: string;
   /** Task category for per-category entropy scoring adjustments */
   readonly taskCategory?: string;
+  /** Opt-in long-horizon guard profile (A2) — forwarded to KernelRunOptions so
+   *  the reactive kernel scales its guard constants by maxIterations. Absent →
+   *  today's absolute-count guards (byte-identical). */
+  readonly horizonProfile?: "long";
   /** LLM sampling temperature — forwarded to entropy sensor */
   readonly temperature?: number;
   /** Custom environment context key-value pairs injected into system prompt */
@@ -249,6 +253,7 @@ export const executeReactive = (
 
     const pass = yield* runPass(reactKernel, kernelInput, {
       maxIterations: maxIter,
+      horizonProfile: input.horizonProfile,
       strategy: "reactive",
       kernelType: "react",
       taskId: input.taskId ?? "reactive",
