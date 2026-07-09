@@ -23,7 +23,7 @@ import {
   buildSanitizedReverseMap,
 } from "../attend/context-utils.js";
 import { resolveToolSurface } from "./tool-surface.js";
-import { emitToolSurfaceResolved } from "../../utils/diagnostics.js";
+import { emitToolSurfaceResolved, emitProjectionRendered } from "../../utils/diagnostics.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
 import { fromKernelState } from "../../../assembly/from-kernel-state.js";
@@ -463,6 +463,21 @@ export function handleThinking(
         });
       }
     }
+    // ── D1: projection-rendered trace event (the projector boundary) ──────────
+    // The Projector is the last DAG node; emit its render as a replayable trace
+    // line (sections + reachable refs + dropped refs + size) mirroring
+    // contract-compiled / assessment. Best-effort: no bus → no-op.
+    if (trace.projection) {
+      yield* emitProjectionRendered({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        sections: trace.projection.sections.map((s) => s.name),
+        refs: trace.projection.refs,
+        droppedRefs: trace.projection.droppedRefs,
+        chars: trace.projection.chars,
+      });
+    }
+
     if (process.env.RA_ASSEMBLY_DEBUG === "1") {
       console.error(`[RA_ASSEMBLY_TRACE] ${JSON.stringify({ taskId: state.taskId, iteration: state.iteration, capability: trace.capability, stages: trace.stages, messages: trace.messages, tools: trace.tools })}`);
     }

@@ -157,6 +157,12 @@ function formatEventLine(ev: TraceEvent): string {
         : "";
       return `${ts} ${badge("assess", cyan)} phase=${ev.phase} pace=${ev.band} Δ=${ev.evidenceDelta} ${reqs}${deliv}${dim(` burn=${ev.burnRatio.toFixed(2)}`)}`;
     }
+    case "projection-rendered": {
+      // The projection node (last DAG node): what the model actually saw. Dropped
+      // refs are the load-bearing diagnostic (evidence pushed out of the window).
+      const dropped = ev.droppedRefs.length ? ` dropped=[${ev.droppedRefs.join(",")}]` : "";
+      return `${ts} ${badge("project", cyan)} sections=[${ev.sections.join(",")}] refs=${ev.refs.length} chars=${ev.chars}${dim(dropped)}`;
+    }
     default: {
       // Exhaustiveness via cast — keeps the switch open to future kinds.
       const e = ev as { kind: string };

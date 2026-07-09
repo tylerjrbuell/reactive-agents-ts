@@ -350,6 +350,50 @@ export function emitAssessment(args: {
   });
 }
 
+// ── ProjectionRendered ───────────────────────────────────────────────────────
+
+/**
+ * Meta-loop Phase 4c (2026-07-08, task D1): the Projector rendered the LLM window
+ * — the LAST node of the meta-loop DAG. Mirrors emitAssessment: one trace line
+ * per render carrying the section names, the refs reachable from the window, the
+ * refs compaction dropped, and the total rendered size — so the contract →
+ * assessment → projection chain is replayable from one trace via
+ * `rax diagnose replay`. The traceability half of the projector's two-way
+ * contract (reachability is enforced by construction + the projection tests).
+ */
+export function emitProjectionRendered(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly sections: readonly string[];
+  readonly refs: readonly string[];
+  readonly droppedRefs: readonly string[];
+  readonly chars: number;
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "ProjectionRenderedEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        sections: args.sections,
+        refs: args.refs,
+        droppedRefs: args.droppedRefs,
+        chars: args.chars,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitProjectionRendered",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── VerifierVerdict ──────────────────────────────────────────────────────────
 
 export function emitVerifierVerdict(args: {

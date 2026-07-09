@@ -38,6 +38,8 @@ export type TraceEvent =
   | ContractCompiledEvent
   // ─── Meta-loop Phase 5a (2026-07-08 — progress estimator) ───
   | AssessmentEvent
+  // ─── Meta-loop Phase 4c (2026-07-08 — projector / attention authority) ───
+  | ProjectionRenderedEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -365,6 +367,21 @@ export interface AssessmentEvent extends TraceEventBase {
   readonly deliverablesProduced: number
   readonly deliverablesMissing: number
   readonly burnRatio: number
+}
+
+/**
+ * The Projector rendered the LLM window (meta-loop Phase 4c, 2026-07-08): the
+ * LAST node of the meta-loop DAG. Carries the rendered section names, the refs
+ * reachable from the window, the refs compaction dropped, and the total rendered
+ * size — making the contract → assessment → projection chain replayable, the way
+ * `assessment` made perception replayable.
+ */
+export interface ProjectionRenderedEvent extends TraceEventBase {
+  readonly kind: "projection-rendered"
+  readonly sections: readonly string[]
+  readonly refs: readonly string[]
+  readonly droppedRefs: readonly string[]
+  readonly chars: number
 }
 
 /** Type-narrowing helper. */

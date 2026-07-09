@@ -3,6 +3,10 @@ import type { ResultStore } from "./result-store.js";
 import type { ResolvedCapability } from "./capability.js";
 import type { ProviderRequest } from "./types.js";
 import { emptyTrace, type AssemblyTrace } from "./trace.js";
+import type { StandingFrameSection } from "./standing-frame.js";
+import type { RunContract } from "../kernel/contract/run-contract.js";
+import type { RunLedger } from "../kernel/ledger/run-ledger.js";
+import type { RunAssessment } from "../kernel/assessment/assess.js";
 import { systemPromptStage } from "./stages/system-prompt.js";
 import { selectToolsStage } from "./stages/select-tools.js";
 import { projectResultsStage } from "./stages/project-results.js";
@@ -22,6 +26,19 @@ export interface AssemblyInput {
    * restarted blind after every switch. systemPromptStage now renders it.
    */
   readonly priorContext?: string;
+  /**
+   * D1 (Projector): the upstream meta-loop DAG nodes the projector RENDERS from.
+   * All optional — absent → byte-identical pre-D1 behavior. The projector reads
+   * them (never mutates): `ledger` supplies handoff entries (audit 03-F5) +
+   * requirement-satisfaction for the outstanding frame; `contract` supplies the
+   * outstanding requirements (standing goal frame); `assessment` selects the
+   * phase render profile; `longHorizon` is the opt-in gate for the outstanding
+   * frame + phase profiles (default profile stays byte-identical).
+   */
+  readonly contract?: RunContract;
+  readonly ledger?: RunLedger;
+  readonly assessment?: RunAssessment;
+  readonly longHorizon?: boolean;
   readonly tools: {
     schemas: readonly unknown[];
     /** Tools the dispatcher requires — drives the tier-adaptive in-prompt
@@ -37,6 +54,9 @@ export interface AssemblyCtx extends AssemblyInput {
   messages: ProviderRequest["messages"];
   toolSchemas: readonly unknown[];
   trace: AssemblyTrace;
+  /** Standing-frame sections rendered by systemPromptStage (D1). finalizeStage
+   *  reads these to build the `projection` trace (section provenance). */
+  standingSections?: readonly StandingFrameSection[];
 }
 
 export interface Projection {

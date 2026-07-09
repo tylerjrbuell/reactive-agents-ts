@@ -3,6 +3,7 @@ import { pushStage } from "../trace.js";
 import { buildEnvironmentContext, buildToolReference, buildRules } from "../../context/context-engine.js";
 import { buildSystemPrompt } from "../../kernel/capabilities/attend/context-utils.js";
 import type { ToolSchema, ToolParamSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
+import { renderStandingFrame, type StandingFrameSection } from "../standing-frame.js";
 
 /**
  * Narrow an unknown schema list to `ToolSchema[]` without `any`. Schemas arrive
@@ -59,16 +60,37 @@ export const systemPromptStage = (c: AssemblyCtx): AssemblyCtx => {
     buildToolReference(goal, schemas, c.tools.requiredTools, c.tools.detail, c.capability.tier),
   );
   if (goal) parts.push(`\nGoal: ${goal}`);
-  // H1 (2026-07-08): render carried prior context (switch handoffs, ToT
-  // selected approach, reflexion hints, memory bootstrap). Placed after the
-  // goal so the frame stays goal-first; fenced so it reads as context, not
-  // instruction. Strategies already fence untrusted memory content themselves.
-  const prior = c.priorContext?.trim();
-  if (prior) parts.push(`\nPrior context (from earlier work on this task):\n${prior}`);
+  // D1 (Projector): the SINGLE standing-frame render authority. Placed after the
+  // goal so the frame stays goal-first. Retires the H1 patch (the inline
+  // priorContext block that used to live here) into standing-frame.ts, and adds
+  // the ledger-sourced handoff render (audit 03-F5) + the contract.outstanding
+  // goal frame (gated behind the long-horizon profile). With only priorContext
+  // set (no ledger handoff, default profile) the pushed part is byte-identical to
+  // the pre-D1 priorContext block.
+  const frame = renderStandingFrame({
+    priorContext: c.priorContext,
+    ledger: c.ledger,
+    contract: c.contract,
+    assessment: c.assessment,
+    longHorizon: c.longHorizon,
+  });
+  const standingSections: StandingFrameSection[] = [];
+  for (const s of frame.sections) {
+    parts.push(s.text);
+    standingSections.push(s);
+  }
   if (remaining.length) parts.push(`Remaining steps: ${remaining.join(", ")}`);
   if (process.env.RA_LAZY_TOOLS === "0") {
     parts.push(buildRules(schemas, c.tools.requiredTools, c.capability.tier));
   }
   const systemPrompt = parts.join("\n");
-  return { ...c, systemPrompt, trace: pushStage(c.trace, "systemPrompt", `env+persona+tools+goal+${remaining.length} remaining`) };
+  const frameNote = standingSections.length
+    ? ` +frame[${standingSections.map((s) => s.name).join(",")}]`
+    : "";
+  return {
+    ...c,
+    systemPrompt,
+    standingSections,
+    trace: pushStage(c.trace, "systemPrompt", `env+persona+tools+goal+${remaining.length} remaining${frameNote}`),
+  };
 };

@@ -1107,6 +1107,24 @@ export type AgentEvent =
     }
   | {
       /**
+       * The Projector rendered the LLM window (meta-loop Phase 4c, 2026-07-08):
+       * the LAST node of the meta-loop DAG. Surfaces the rendered section names,
+       * the refs reachable from the window (result_ref pointers / recall hints /
+       * handoff seqs / requirement ids), the refs compaction dropped, and the
+       * total rendered size — so the contract → assessment → projection chain is
+       * replayable from one trace, the way `assessment` made perception replayable.
+       */
+      readonly _tag: "ProjectionRenderedEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly sections: readonly string[];
+      readonly refs: readonly string[];
+      readonly droppedRefs: readonly string[];
+      readonly chars: number;
+    }
+  | {
+      /**
        * Decision point where multiple candidates were considered and one chosen
        * (v0.11.x). Surfaces the counterfactuals the model weighed.
        */

@@ -30,6 +30,7 @@ import type {
   ToolSurfaceResolvedEvent,
   ContractCompiledEvent,
   AssessmentEvent,
+  ProjectionRenderedEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -343,6 +344,21 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         deliverablesProduced: raw.deliverablesProduced,
         deliverablesMissing: raw.deliverablesMissing,
         burnRatio: raw.burnRatio,
+      }
+      return ev
+    }
+
+    case "ProjectionRenderedEmitted": {
+      const ev: ProjectionRenderedEvent = {
+        kind: "projection-rendered",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        sections: raw.sections,
+        refs: raw.refs,
+        droppedRefs: raw.droppedRefs,
+        chars: raw.chars,
       }
       return ev
     }

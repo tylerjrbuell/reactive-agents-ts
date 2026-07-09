@@ -170,6 +170,17 @@ export function fromKernelState(
   const personaWithEnv = state.environmentContext
     ? { ...persona, environmentContext: state.environmentContext }
     : persona;
+  // ── D1 (Projector): thread the upstream DAG nodes off state ────────────────
+  // The projector RENDERS from (contract, ledger, assessment) — read here (never
+  // mutated). `longHorizon` is the opt-in profile gate. All optional → absent
+  // (no contract/ledger/assessment/profile) reproduces pre-D1 output byte-for-byte.
+  const dagInputs = {
+    ...(state.meta.runContract ? { contract: state.meta.runContract } : {}),
+    ...(state.ledger && state.ledger.length > 0 ? { ledger: state.ledger } : {}),
+    ...(state.meta.assessment ? { assessment: state.meta.assessment } : {}),
+    ...(state.meta.horizonProfile === "long" ? { longHorizon: true } : {}),
+  };
+
   return {
     log,
     capability,
@@ -177,5 +188,6 @@ export function fromKernelState(
     persona: personaWithEnv,
     tools: toolsWithPolicy,
     ...(priorContext?.trim() ? { priorContext } : {}),
+    ...dagInputs,
   };
 }
