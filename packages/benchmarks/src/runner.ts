@@ -718,6 +718,19 @@ async function runInternal(
       ;(builder as unknown as Record<string, () => void>)["withMemory"]!()
     }
 
+    // G3 adaptive-harness ablation: opt into the policy compiler (compileHarnessPlan
+    // at run-start + recompileOnAssessment mid-run). Additive — variants WITHOUT
+    // config.adaptiveHarness never call the wither, so their build is byte-identical
+    // to today (the `ra-adaptive ≥ max(ra-minimal, ra-full)` gate depends on this).
+    //
+    // G2 purpose→tier routing (.withModelRouting()) is deliberately NOT wired here:
+    // the bench builder has never wired it, and the adaptive-ablation runs ONE
+    // resident model per cell (local qwen3:14b / cogito:8b), so there is no model
+    // pool for the plan to route across — routing would be structurally inert.
+    // Threading `.withModelRouting()` is deferred to a future multi-model routing
+    // ablation (it would add a `config.modelRouting` passthrough at this same site).
+    if (config.adaptiveHarness) builder.withAdaptiveHarness()
+
     // Cross-tier thinking ablation: explicit enable/disable when set in config.
     if (config.thinking !== undefined) builder.withThinking(config.thinking)
 

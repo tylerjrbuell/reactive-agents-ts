@@ -313,6 +313,17 @@ export interface HarnessConfig {
    * Omitted → harness default (no call; provider-level default applies).
    */
   readonly thinking?: boolean;
+  /**
+   * Opt into the adaptive harness / policy compiler (meta-loop Phase 6 / G1).
+   * `true` → builder.withAdaptiveHarness(): the run compiles ONE HarnessPlan at
+   * run-start (`compileHarnessPlan` from capability + calibration + contract
+   * horizon + task classification) and recompiles it mid-run on live
+   * RunAssessment evidence (DEEPEN on struggle, LEAN on flow). Undefined
+   * (default) → the wither is NEVER called, so the build path is byte-identical
+   * to a non-adaptive variant. Used by the G3 `adaptive-ablation` session to
+   * measure `ra-adaptive ≥ max(ra-minimal, ra-full)`.
+   */
+  readonly adaptiveHarness?: boolean;
 }
 
 export interface InternalVariant {
