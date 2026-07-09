@@ -76,7 +76,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { checkpointStoreRef } from "@reactive-agents/tools";
 import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
 import { resolveControlPlane, type ControlProposal } from "../control/control-plane.js";
-import { proposeFromLoopDetector } from "../control/emitters.js";
+import { proposeFromErrorRecovery, proposeFromLoopDetector } from "../control/emitters.js";
 import { inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
@@ -980,13 +980,77 @@ export function runIterationPass(
         ) {
           const repeatedRecovery = getToolFailureRecovery(state, currentInput);
           if (repeatedRecovery.failedUnresolved.length > 0) {
-            failureRecoveryRedirects++;
+            // The redirect this seam WANTS. Built before the control plane runs so
+            // it can be offered as a proposal rather than forced; the counter is
+            // only committed if the redirect actually wins (below).
+            const prospectiveRedirects = failureRecoveryRedirects + 1;
             const guidance = buildRecoverySteeringGuidance(
               repeatedRecovery,
-              failureRecoveryRedirects,
+              prospectiveRedirects,
               maxFailureRecoveryRedirects,
               "stall",
             );
+
+            // ── Control plane (F3 seam) — resolve redirect vs abstain ──────────
+            // This seam used to FORCE its redirect and `return "continue"`, so the
+            // in-loop abstain signal (built only at the strategy-switch seam, which
+            // needs the loop detector to trip) never got to compete. The resolver's
+            // documented total order ranks abstain(1) STRICTLY above redirect(4):
+            // a run whose grounding is structurally impossible must decline
+            // honestly, not be re-steered until the redirect budget runs out. Same
+            // precedence inversion as P5, at a different seam.
+            //
+            // `proposeFromErrorRecovery` had zero production callers before this —
+            // it was unit-tested in emitters.test.ts and never invoked. OFF the
+            // long-horizon profile the block is skipped entirely, so the default
+            // path is byte-identical (the redirect fires exactly as today).
+            if (horizon !== undefined) {
+              const recoveryProposal = proposeFromErrorRecovery({
+                repeatedFailureTool: repeated.toolName,
+                errorClass: repeated.errorClass,
+                failedTools: repeatedRecovery.failedUnresolved,
+                guidance,
+                horizonActive: true,
+                assessment: state.meta.assessment,
+              });
+              const { proposal: abstainProposal, forced } = inLoopAbstentionProposal(
+                state,
+                currentInput,
+                requiredTools,
+                currentOptions.maxIterations,
+              );
+              const proposals: ControlProposal[] = [];
+              if (recoveryProposal) proposals.push(recoveryProposal);
+              if (abstainProposal) proposals.push(abstainProposal);
+              if (proposals.length > 0) {
+                const resolution = resolveControlPlane(proposals);
+                yield* emitControlResolution({
+                  taskId: currentOptions.taskId ?? state.taskId,
+                  iteration: state.iteration,
+                  action: resolution.action,
+                  reason: resolution.reason,
+                  proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
+                });
+                if (resolution.action === "abstain" && forced !== null) {
+                  // Abstain won — stand down the redirect (its counter was never
+                  // committed) and force the honest decline through the
+                  // single-owner terminate() abstain path, exactly as the
+                  // strategy-switch seam does.
+                  state = transitionState(state, { error: null });
+                  state = terminate(state, {
+                    reason: "abstained",
+                    deliverable: sentinelDeliverable("no_substantive_output"),
+                    extraMeta: {
+                      abstention: { reason: forced.reason, missing: forced.missing },
+                    },
+                  });
+                  sync();
+                  return "break";
+                }
+              }
+            }
+
+            failureRecoveryRedirects++;
             yield* emitHarnessSignalInjected({
               taskId: currentOptions.taskId ?? state.taskId,
               iteration: state.iteration,
