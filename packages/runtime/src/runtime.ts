@@ -362,6 +362,8 @@ export const createRuntime = (options: RuntimeOptions) => {
     stallPolicy: options.stallPolicy,
     // Opt-in long-horizon guard profile. Propagated from `.withLongHorizon()`.
     horizonProfile: options.horizonProfile,
+    // Opt-in adaptive harness / policy compiler. Propagated from `.withAdaptiveHarness()`.
+    adaptiveHarness: options.adaptiveHarness,
     // Opt-in cost-aware model routing. Propagated from `.withModelRouting()`.
     modelRouting: options.modelRouting,
     // Opt-in durable run persistence. Propagated from `.withDurableRuns()`.

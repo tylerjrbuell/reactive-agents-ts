@@ -620,6 +620,13 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
    */
   horizonProfile: Schema.optional(Schema.Literal("long")),
   /**
+   * Opt-in adaptive harness / policy compiler (Phase 6 / G1). Absent ⇒ off, no
+   * plan compiled, config byte-identical. Populated by `.withAdaptiveHarness()`;
+   * threaded into `KernelRunOptions.adaptiveHarness` where runner.ts compiles +
+   * recompiles the per-run `HarnessPlan`.
+   */
+  adaptiveHarness: Schema.optional(Schema.Boolean),
+  /**
    * Opt-in durable run persistence (Phase B). Absent ⇒ off (zero overhead).
    * Populated by `.withDurableRuns()`; when set, the runtime persists a
    * serialized kernel-state snapshot to a SQLite RunStore every

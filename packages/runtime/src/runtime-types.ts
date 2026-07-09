@@ -264,6 +264,15 @@ export interface RuntimeOptions {
   horizonProfile?: "long";
 
   /**
+   * Opt-in adaptive harness / policy compiler (Phase 6 / G1). Absent ⇒ off, no
+   * plan compiled (byte-identical default). Set via `.withAdaptiveHarness()`;
+   * threaded into `ReactiveAgentsConfig.adaptiveHarness` →
+   * `KernelRunOptions.adaptiveHarness`, where runner.ts compiles the per-run
+   * `HarnessPlan` at run-start and recompiles it mid-run on RunAssessment.
+   */
+  adaptiveHarness?: boolean;
+
+  /**
    * Opt-in durable run persistence. Absent ⇒ off (zero overhead, default).
    * Populated by `.withDurableRuns()`; threaded into
    * `ReactiveAgentsConfig.durableRuns`. When set, the runtime persists a

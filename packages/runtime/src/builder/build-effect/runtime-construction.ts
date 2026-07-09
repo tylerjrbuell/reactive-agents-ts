@@ -185,6 +185,8 @@ export interface BuilderRuntimeStateView {
   readonly _stallPolicy: import("@reactive-agents/reasoning").StallPolicy | undefined;
   /** Opt-in long-horizon guard profile. false = absolute-count guards (default). */
   readonly _longHorizon: boolean;
+  /** Opt-in adaptive harness (Phase 6 / G1). false = no plan compiled (default). */
+  readonly _adaptiveHarness: boolean;
   /** Opt-in cost-aware model routing. Absent = off (default). */
   readonly _modelRouting: ModelRoutingOptions | undefined;
   /** Opt-in durable run persistence config. Absent = off (zero overhead, default). */
@@ -501,6 +503,7 @@ export const buildBaseRuntimeAndEngine = (
       fabricationGuard: state._fabricationGuard,
       stallPolicy: state._stallPolicy,
       horizonProfile: state._longHorizon ? "long" : undefined,
+      adaptiveHarness: state._adaptiveHarness || undefined,
       modelRouting: state._modelRouting,
       durableRuns: state._durableRuns,
       approvalPolicy: state._approvalPolicy

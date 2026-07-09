@@ -40,6 +40,12 @@ import { extractOutputFormat, nominateRequiredTools, type TaskIntent } from "../
 import { defaultVerifier, resolveResultSeverity, verifyAndEmit } from "../../kernel/capabilities/verify/verifier.js";
 import { deriveConditions } from "../../kernel/capabilities/verify/derive-conditions.js";
 import { compileRunContract } from "../../kernel/contract/run-contract.js";
+import { classifyTask } from "../../kernel/capabilities/comprehend/task-classification.js";
+import {
+  applyExplicitOverrides,
+  compileHarnessPlan,
+  type PlanStrategy,
+} from "../../kernel/policy/harness-plan.js";
 import { emitContractCompiled, emitGuardFired, emitKernelStateSnapshot } from "../../kernel/utils/diagnostics.js";
 import {
   validateOutputFormat,
@@ -333,6 +339,12 @@ export function runKernel(
       }
     }
 
+    // The horizon profile the A2 guard bundle resolves from. Defaults to the
+    // wither-set `options.horizonProfile` (byte-identical); the adaptive-harness
+    // plan below may set it from `contract.horizon` when `.withAdaptiveHarness()`
+    // is on (an explicit `.withLongHorizon()` still wins — see the override).
+    let effectiveHorizonProfile: "long" | undefined = options.horizonProfile;
+
     // RunContract (meta-loop Phase 4a) — compile the run's goal ONCE here, at the
     // FIRST node of the meta-loop DAG, from task inputs only (task prose +
     // required tools + comprehend classification; no loop state). Deterministic
@@ -363,6 +375,42 @@ export function runKernel(
         deliverables: runContract.deliverables.map((d) => ({ id: d.id, kind: d.kind })),
         horizon: runContract.horizon,
       });
+
+      // HarnessPlan (meta-loop Phase 6 / task G1) — the policy compiler. Only when
+      // `.withAdaptiveHarness()` is on; OFF (default) → no plan, and
+      // `effectiveHorizonProfile` below stays `options.horizonProfile`, so the
+      // whole guard-resolution path is byte-identical to today.
+      //
+      // The plan is compiled from what the run KNOWS about itself (the resolved
+      // capability tier + calibration, the contract's horizon, the task
+      // classification), then explicit withers OVERRIDE the compiled defaults
+      // (`.withLongHorizon()` → horizonProfile; `.withStrategy()` → strategy;
+      // `.withBudget()`/maxIterations). The plan's `horizonProfile` then drives
+      // the A2 guard bundle below (subsuming A2's flag), and is mirrored onto
+      // `state.meta.horizonProfile` for the live consumers (RI observer).
+      if (options.adaptiveHarness) {
+        const compiled = compileHarnessPlan({
+          capability: { tier: profile.tier },
+          ...(effectiveInput.calibration ? { calibration: effectiveInput.calibration } : {}),
+          horizon: runContract.horizon,
+          classification: classifyTask(effectiveInput.task),
+        });
+        const harnessPlan = applyExplicitOverrides(compiled, {
+          ...(options.horizonProfile ? { horizonProfile: options.horizonProfile } : {}),
+          ...(options.strategy ? { strategy: options.strategy as PlanStrategy } : {}),
+          maxIterations: options.maxIterations,
+        });
+        effectiveHorizonProfile = harnessPlan.guard.horizonProfile;
+        state = transitionState(state, {
+          meta: {
+            ...state.meta,
+            harnessPlan,
+            ...(harnessPlan.guard.horizonProfile
+              ? { horizonProfile: harnessPlan.guard.horizonProfile }
+              : {}),
+          },
+        });
+      }
     }
 
     // Mutable scratchpad mirror — synced from state.scratchpad (ReadonlyMap) after each kernel step.
@@ -378,7 +426,7 @@ export function runKernel(
     // existing literal when absent, so a run without the profile is
     // byte-identical to today.
     const horizon: HorizonProfile | undefined = resolveHorizonProfile({
-      horizonProfile: options.horizonProfile,
+      horizonProfile: effectiveHorizonProfile,
       maxIterations: options.maxIterations,
     });
     const maxSameTool = resolveMaxSameTool(

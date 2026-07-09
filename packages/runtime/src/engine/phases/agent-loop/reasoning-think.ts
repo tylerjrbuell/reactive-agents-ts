@@ -323,6 +323,9 @@ export const runReasoningThink = (
       // Long-horizon guard profile. Propagated from `.withLongHorizon()`. The
       // reasoning strategy forwards this to `KernelRunOptions.horizonProfile`.
       horizonProfile: config.horizonProfile,
+      // Adaptive harness / policy compiler. Propagated from `.withAdaptiveHarness()`.
+      // The reasoning strategy forwards this to `KernelRunOptions.adaptiveHarness`.
+      adaptiveHarness: config.adaptiveHarness,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

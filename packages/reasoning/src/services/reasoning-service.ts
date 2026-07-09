@@ -77,6 +77,9 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Opt-in long-horizon guard profile (A2) — spread via `...params` into the
        *  strategy input, then forwarded to KernelRunOptions.horizonProfile. */
       readonly horizonProfile?: "long";
+      /** Opt-in adaptive harness (G1) — spread via `...params` into the strategy
+       *  input, then forwarded to KernelRunOptions.adaptiveHarness. */
+      readonly adaptiveHarness?: boolean;
       /** LLM sampling temperature — forwarded to entropy sensor for weight adjustment */
       readonly temperature?: number;
       /** Custom environment context key-value pairs injected into system prompt */

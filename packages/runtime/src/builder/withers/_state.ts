@@ -123,6 +123,8 @@ export interface BuilderState {
   _stallPolicy: import("@reactive-agents/reasoning").StallPolicy | undefined;
   /** Opt-in long-horizon guard profile. false = absolute-count guards (default). */
   _longHorizon: boolean;
+  /** Opt-in adaptive harness (Phase 6 / G1). false = no plan compiled (default). */
+  _adaptiveHarness: boolean;
   /** Opt-in cost-aware model routing. Absent = off (default). */
   _modelRouting: ModelRoutingOptions | undefined;
   /** Opt-in durable run persistence. Absent = off (zero overhead, default). */

@@ -500,6 +500,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _stallPolicy: import('@reactive-agents/reasoning').StallPolicy | undefined = undefined
     /** Opt-in long-horizon guard profile. false = today's absolute-count guards (default). */
     private _longHorizon: boolean = false
+    /** Opt-in adaptive harness (Phase 6 / G1). false = no plan compiled, config byte-identical (default). */
+    private _adaptiveHarness: boolean = false
     /** Opt-in cost-aware model routing. Absent = off (default). */
     private _modelRouting: import('./builder/types.js').ModelRoutingOptions | undefined = undefined
     /** Opt-in typed structured output config. Absent = off (default). */
@@ -1080,6 +1082,32 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withLongHorizon(): this {
         this._longHorizon = true
+        return this
+    }
+
+    /**
+     * Opt in to the **adaptive harness** (off by default) — the Phase 6 policy
+     * compiler (plan G1). A mode toggle, no arguments. When enabled, the kernel
+     * compiles a single `HarnessPlan` at run-start from what the run KNOWS about
+     * itself (the model's capability tier + calibration, the compiled contract's
+     * horizon, and the task classification): strategy, budget class, guard/horizon
+     * profile, tool surface, verifier tier, memory posture. The plan supplies the
+     * DEFAULTS; any explicit wither you set (`.withStrategy`, `.withLongHorizon`,
+     * budget withers, …) OVERRIDES the corresponding plan field. Mid-run, the plan
+     * is recompiled on live progress evidence — DEEPENING scaffolding when the run
+     * struggles (repeated failures / no new evidence) and LEANING when it flows —
+     * each recompile recorded as a ledger `harness-signal`.
+     *
+     * `horizonProfile` becomes a plan output: the compiler sets it to "long" when
+     * `contract.horizon === "long"`; `.withLongHorizon()` still forces it on.
+     *
+     * Flows through to `KernelRunOptions.adaptiveHarness = true`. Zero cost when
+     * not called: no plan is compiled and the config path is byte-identical.
+     *
+     * @returns `this` for chaining
+     */
+    withAdaptiveHarness(): this {
+        this._adaptiveHarness = true
         return this
     }
 

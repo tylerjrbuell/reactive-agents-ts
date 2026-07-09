@@ -81,6 +81,9 @@ interface ReactiveInput {
    *  the reactive kernel scales its guard constants by maxIterations. Absent →
    *  today's absolute-count guards (byte-identical). */
   readonly horizonProfile?: "long";
+  /** Opt-in adaptive harness (G1) — forwarded to KernelRunOptions so runner.ts
+   *  compiles + recompiles a HarnessPlan. Absent → off (byte-identical). */
+  readonly adaptiveHarness?: boolean;
   /** LLM sampling temperature — forwarded to entropy sensor */
   readonly temperature?: number;
   /** Custom environment context key-value pairs injected into system prompt */
@@ -259,6 +262,7 @@ export const executeReactive = (
     const pass = yield* runPass(reactKernel, kernelInput, {
       maxIterations: maxIter,
       horizonProfile: input.horizonProfile,
+      adaptiveHarness: input.adaptiveHarness,
       strategy: "reactive",
       kernelType: "react",
       taskId: input.taskId ?? "reactive",

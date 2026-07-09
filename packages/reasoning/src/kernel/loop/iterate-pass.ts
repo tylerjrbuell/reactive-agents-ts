@@ -136,6 +136,8 @@ import {
   emitControlResolution,
 } from "../../kernel/utils/diagnostics.js";
 import { assess } from "../../kernel/assessment/assess.js";
+import { recompileOnAssessment } from "../../kernel/policy/harness-plan.js";
+import { appendEntry } from "../../kernel/ledger/run-ledger.js";
 import {
   buildRecoverySteeringGuidance,
   getToolFailureRecovery,
@@ -484,6 +486,49 @@ export function runIterationPass(
             deliverablesMissing: assessment.deliverables.missing.length,
             burnRatio: assessment.pace.burnRatio,
           });
+
+          // ── HarnessPlan mid-run recompile (meta-loop Phase 6 / task G1) ──────
+          // The adaptive lever: on a cadence, recompile the run's HarnessPlan from
+          // the just-computed assessment — DEEPEN scaffolding when the run is
+          // struggling (repeated failures / no new evidence), LEAN when it flows.
+          // OPT-IN behind `.withAdaptiveHarness()`; OFF (default, no
+          // `meta.harnessPlan`) → this whole block is skipped → byte-identical.
+          // DAG-safe: a pure READ of the assessment (E1); the only writes are the
+          // updated plan on meta + a logged `harness-signal` ledger entry. Bounded
+          // by recompileOnAssessment (one step/call, scaffolding clamped) AND the
+          // cadence gate below. Cadence 3 = responsive without recomputing the
+          // plan every iteration (the assessment itself is already per-iteration).
+          const HARNESS_RECOMPILE_CADENCE = 3;
+          if (
+            currentOptions.adaptiveHarness === true &&
+            state.meta.harnessPlan &&
+            state.iteration > 0 &&
+            state.iteration % HARNESS_RECOMPILE_CADENCE === 0
+          ) {
+            const recompiled = recompileOnAssessment(state.meta.harnessPlan, assessment);
+            if (recompiled.changed) {
+              const ledgerWithSignal = appendEntry(state.ledger, {
+                kind: "harness-signal",
+                iteration: state.iteration,
+                signal: "harness-recompiled",
+                detail: recompiled.reason,
+              });
+              state = transitionState(state, {
+                ledger: ledgerWithSignal,
+                meta: {
+                  ...state.meta,
+                  harnessPlan: recompiled.plan,
+                  // Escalate the live horizon profile when the recompile deepened
+                  // it (read by the RI observer). Deescalation of the already-
+                  // resolved guard bundle mid-run is out of scope — the leaner
+                  // plan still stands on meta for downstream/receipt consumers.
+                  ...(recompiled.plan.guard.horizonProfile
+                    ? { horizonProfile: recompiled.plan.guard.horizonProfile }
+                    : {}),
+                },
+              });
+            }
+          }
 
           // ── E3 pace ACTIONS — turn the just-computed pace band into actuator
           // actions (meta-loop Phase 5a / task E3). DAG-safe: READS

@@ -141,7 +141,21 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 // down (HS-34: 4 Layer.merge casts → typed `widen` helper; HS-35: 2 stale
 // reactive-observer casts removed), so this increment reflects only the real
 // new feature surface, not carried smells.
-const CEILING = 76;
+// 2026-07-08: bumped 76 → 78. Two increments, both accounted for:
+//   • +1 (76 → 77): a pre-existing UNDOCUMENTED site already on main at the time
+//     of the G1 work — the recorded ceiling (76) had drifted below the actual
+//     count (77) before this change (a prior tranche landed a site without a
+//     bump). Recorded here to re-sync the pin with reality rather than leave the
+//     guard silently red.
+//   • +1 (77 → 78): ONE LEGITIMATE test-double widening added by the G1
+//     policy-compiler mid-run recompile integration test
+//     (reasoning/src/kernel/loop/harness-recompile.integration.test.ts:44 — a
+//     partial `ToolService` mock `… as unknown as Parameters<typeof ToolService.of>[0]`).
+//     Canonical test-double boundary (the test owns the absorbing side), SAME
+//     category as the 2026-06-06 global-`fetch` stub bump and the existing
+//     pace-terminal.integration.test.ts ToolService mock; routing through a
+//     helper still leaves one cast, so §5.5 "design it out" does not apply.
+const CEILING = 78;
 
 interface Hit {
   file: string;

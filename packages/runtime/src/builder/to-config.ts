@@ -85,6 +85,7 @@ export interface BuilderStateForSerialization {
   _fabricationGuard?: "off" | "warn" | "block";
   _stallPolicy?: { ignoredNudgeTolerance?: number; escalateNudgeContent?: boolean };
   _longHorizon?: boolean;
+  _adaptiveHarness?: boolean;
   _taskContext?: Record<string, string>;
   _outputSchemaConfig?: {
     options?: {
@@ -295,6 +296,9 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
 
   // Long-horizon guard profile (opt-in; absent = off)
   if (state._longHorizon) config["horizonProfile"] = "long";
+
+  // Adaptive harness / policy compiler (opt-in; absent = off, byte-identical)
+  if (state._adaptiveHarness) config["adaptiveHarness"] = true;
 
   // Structured-output behavioural options. The schema object itself is not
   // JSON-serializable, but the options round-trip OUT so a config snapshot is

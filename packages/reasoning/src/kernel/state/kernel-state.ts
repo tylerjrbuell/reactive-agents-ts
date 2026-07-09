@@ -422,6 +422,23 @@ export interface KernelMeta {
    */
   readonly assessment?: import("../assessment/assess.js").RunAssessment;
 
+  // ── HarnessPlan — the compiled per-run harness config (meta-loop Phase 6 / G1) ─
+  /**
+   * The run's current compiled HarnessPlan — the ONE object the per-run harness
+   * config (strategy, budget class, guard/horizon profile, tool surface, verifier
+   * tier, memory posture) is compiled into from what the run KNOWS about itself
+   * (capability + calibration + contract.horizon + task classification). Compiled
+   * ONCE at run-start by runner.ts when `.withAdaptiveHarness()` is on, then
+   * recompiled mid-run by iterate-pass.ts on RunAssessment evidence (deepen on
+   * struggle, lean on flow) — each recompile logged as a `harness-signal` ledger
+   * entry. Absent (default) → adaptive harness off, config byte-identical.
+   *
+   * Plain data (strings/numbers/nested objects), so it rides the meta bag through
+   * kernel-codec for durable resume. Type-only import — no runtime cycle (policy/
+   * imports assessment/ + contract/ + comprehend/, never state/).
+   */
+  readonly harnessPlan?: import("../policy/harness-plan.js").HarnessPlan;
+
   // ── E3 pace actions (meta-loop Phase 5a / task E3) ────────────────────────────
   /**
    * Signature of the last OUTSTANDING requirement set the triage pace-action
@@ -1030,6 +1047,15 @@ export interface KernelRunOptions {
    * the `.withLongHorizon()` wither / the Phase 6 policy compiler.
    */
   readonly horizonProfile?: "long";
+  /**
+   * Opt-in adaptive harness (Phase 6 / task G1). When true, runner.ts compiles a
+   * {@link import("../policy/harness-plan.js").HarnessPlan} at run-start from the
+   * model's capability + calibration + the contract's horizon + task
+   * classification, and recompiles it mid-run on RunAssessment evidence (deepen
+   * on struggle, lean on flow). Absent/false (default) → no plan is compiled and
+   * the config path is byte-identical to today. Set by `.withAdaptiveHarness()`.
+   */
+  readonly adaptiveHarness?: boolean;
 }
 
 // ── Factory functions ────────────────────────────────────────────────────────

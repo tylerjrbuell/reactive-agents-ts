@@ -314,6 +314,8 @@ export const AgentConfigSchema = Schema.Struct({
   ),
   /** Opt-in long-horizon guard profile. Absent = absolute-count guards (default). */
   horizonProfile: Schema.optional(Schema.Literal("long")),
+  /** Opt-in adaptive harness / policy compiler (G1). Absent = off (byte-identical). */
+  adaptiveHarness: Schema.optional(Schema.Boolean),
   /**
    * Behavioural options for typed structured output (mode, onParseFail, abstainBelow).
    *
@@ -579,6 +581,11 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   // Long-horizon guard profile (opt-in; declarative override)
   if (config.horizonProfile === "long") {
     builder = builder.withLongHorizon();
+  }
+
+  // Adaptive harness / policy compiler (opt-in; declarative override)
+  if (config.adaptiveHarness) {
+    builder = builder.withAdaptiveHarness();
   }
 
   // Execution

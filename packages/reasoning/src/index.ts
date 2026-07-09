@@ -228,6 +228,32 @@ export type {
   BudgetState,
 } from "./kernel/assessment/assess.js";
 export type { TerminalVerdictFact } from "./kernel/ledger/emit.js";
+
+// ─── HarnessPlan — the policy compiler (meta-loop Phase 6 / task G1) ──────────
+// The adaptive crown (convergence ruling C6). Compiles the per-run harness config
+// from capability + calibration + contract.horizon + task classification; withers
+// become plan overrides; recompiles mid-run on RunAssessment (deepen/lean).
+export {
+  compileHarnessPlan,
+  applyExplicitOverrides,
+  recompileOnAssessment,
+  MAX_SCAFFOLDING,
+} from "./kernel/policy/harness-plan.js";
+export type {
+  HarnessPlan,
+  HarnessPlanInputs,
+  HarnessBudgetPlan,
+  HarnessGuardPlan,
+  PlanOverrides,
+  PlanStrategy,
+  PlanBudgetClass,
+  VerifierTier,
+  MemoryPosture,
+  PlanSource,
+  RecompileResult,
+  RecompileDirection,
+  RecompileOptions,
+} from "./kernel/policy/harness-plan.js";
 export { deriveDeliverablePaths } from "./kernel/capabilities/verify/derive-conditions.js";
 export { classifyTaskHorizon, classifyHorizon } from "./kernel/capabilities/comprehend/task-horizon.js";
 export type { TaskHorizon, TaskHorizonClassification } from "./kernel/capabilities/comprehend/task-horizon.js";
