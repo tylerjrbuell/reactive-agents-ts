@@ -43,7 +43,20 @@ function assessment(overrides: {
   };
 }
 
+// A real, actionable requirement (deterministic acceptance) — the kind triage/
+// terminal steering should name. The self-critique floor is exercised separately.
 function req(id: string, description: string): TaskRequirement {
+  return {
+    id,
+    kind: "question-answered",
+    spec: { description, acceptance: "deterministic" },
+    weight: 1,
+  };
+}
+
+// The always-outstanding self-critique "answer" floor (F3): assess() can never
+// mark a condition-less requirement met, so it must be EXCLUDED from steer text.
+function selfCritiqueReq(id: string, description: string): TaskRequirement {
   return {
     id,
     kind: "question-answered",
@@ -164,5 +177,22 @@ describe("outstandingDescriptions — shared pure helper", () => {
     expect(
       outstandingDescriptions(c, assessment({ outstanding: ["r2", "r1"] })),
     ).toEqual(["produce ./report.md", "answer question one"]);
+  });
+
+  it("F3: excludes the self-critique answer floor, keeps real requirements", () => {
+    const withFloor = contract([
+      req("r2", "produce ./report.md"),
+      selfCritiqueReq("answer", "produce a substantive answer that addresses the task"),
+    ]);
+    // The floor is always outstanding; it must NOT appear in the steer text.
+    expect(
+      outstandingDescriptions(withFloor, assessment({ outstanding: ["r2", "answer"] })),
+    ).toEqual(["produce ./report.md"]);
+  });
+
+  it("F3: an unmatched id still falls back to the raw id (no signal dropped)", () => {
+    expect(
+      outstandingDescriptions(c, assessment({ outstanding: ["r1", "ghost"] })),
+    ).toEqual(["answer question one", "ghost"]);
   });
 });

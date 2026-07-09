@@ -46,14 +46,25 @@ export function downshiftBudgetBand(
  * contract order. Pure — used by both the triage steer and the terminal partial
  * label. An id with no matching contract requirement falls back to the raw id
  * (never drops a signal).
+ *
+ * F3: the self-critique "answer" floor (`acceptance: "self-critique"`, no
+ * deterministic condition) is ALWAYS outstanding by construction — assess() can
+ * never mark a condition-less requirement met. It carries no actionable steering
+ * ("produce a substantive answer" is a tautology at triage/terminal), so it is
+ * excluded from the steer/partial text. The pace BAND already ignores it
+ * (assess() escalates only on deterministic outstanding work), so this only
+ * de-noises the wording — it never changes when triage/terminal fire.
  */
 export function outstandingDescriptions(
   contract: RunContract,
   assessment: RunAssessment,
 ): readonly string[] {
-  return assessment.requirements.outstanding.map(
-    (id) => contract.requirements.find((r) => r.id === id)?.spec.description ?? id,
-  );
+  return assessment.requirements.outstanding
+    .map((id) => ({ id, req: contract.requirements.find((r) => r.id === id) }))
+    // Drop the self-critique floor; keep unmatched ids (id fallback) so a real
+    // requirement whose contract entry is missing is never silently dropped.
+    .filter(({ req }) => req?.spec.acceptance !== "self-critique")
+    .map(({ id, req }) => req?.spec.description ?? id);
 }
 
 /**

@@ -1141,10 +1141,25 @@ export function transitionState(
   // claims in applyTermination) passes them via `patch.ledger`, which becomes
   // the base the step-derived entries extend.
   // TODO(C-final): steps becomes a projection of this ledger — the flip happens HERE.
+  //
+  // INVARIANT (F2): the tail-derivation is correct ONLY while steps are strictly
+  // append-only within a state lineage (`[...prior, ...new]`). The length-growth
+  // guard below already makes replace/reorder safe (a same-or-shorter `patch.steps`
+  // derives nothing — no mis-derivation, just no new entries). The one remaining
+  // hazard is growth WITH a mutated prefix (append + rewrite an earlier step in
+  // one transition), which would slice the wrong tail. `appendOnly` is an O(1)
+  // guard against that: the boundary step (last of the prior lineage) must retain
+  // its identity at its old index. If a future writer ever mutates the prefix, this
+  // degrades safely to no-derivation (steps stay authoritative) instead of
+  // silently corrupting the ledger.
   const baseLedger = patch.ledger ?? state.ledger ?? [];
   const priorStepCount = state.steps?.length ?? 0;
+  const appendOnly =
+    priorStepCount === 0 ||
+    (patch.steps !== undefined &&
+      patch.steps[priorStepCount - 1] === state.steps[priorStepCount - 1]);
   const nextLedger: RunLedger =
-    patch.steps !== undefined && patch.steps.length > priorStepCount
+    appendOnly && patch.steps !== undefined && patch.steps.length > priorStepCount
       ? projectStepsToLedger(
           baseLedger,
           patch.steps.slice(priorStepCount),

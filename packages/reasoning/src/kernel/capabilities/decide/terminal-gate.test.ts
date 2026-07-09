@@ -398,6 +398,55 @@ describe("B2 check 2.5 — contract coverage", () => {
     expect(d.decision).toBe("accept");
   });
 
+  it("attempted-but-FAILED required tool → contract path reports it unmet (delta b, intended)", () => {
+    // Delta (b), audit F1: the pre-overhaul tool-name diff counted a tool as
+    // covered from state.toolsUsed (written at ATTEMPT time), so a required tool
+    // that was called but FAILED counted as satisfied. The contract path judges
+    // tool-coverage via verify()'s ToolCalled = SUCCESSFUL observations only, so a
+    // failed required tool is unmet → one redirect. This is DELIBERATE and more
+    // correct (a failed tool did not actually ground the answer). Pinned here so
+    // the intended default-on behavior can't silently drift.
+    const contract = compileRunContract("Search the web for X and answer.", {
+      requiredTools: ["web-search"],
+    });
+    const failedSearch: ReasoningStep[] = [
+      {
+        id: "act-f" as ReasoningStep["id"],
+        type: "action",
+        content: "web-search(X)",
+        timestamp: new Date(),
+        metadata: { toolCall: { id: "tc-f", name: "web-search", arguments: { query: "X" } } },
+      },
+      {
+        id: "obs-f" as ReasoningStep["id"],
+        type: "observation",
+        content: "error",
+        timestamp: new Date(),
+        metadata: {
+          toolCallId: "tc-f",
+          observationResult: {
+            success: false,
+            toolName: "web-search",
+            displayText: "search failed",
+            category: "error",
+            resultKind: "error",
+            preserveOnCompaction: true,
+            trustLevel: "trusted",
+          } as ObservationResult,
+        },
+      },
+    ];
+    const d = evaluateTerminalGate(
+      baseInput({
+        terminatedBy: "end_turn",
+        requiredTools: [],
+        contract,
+        evidence: { steps: failedSearch, output: "" },
+      }),
+    );
+    expect(d.decision).toBe("redirect");
+  });
+
   it("no contract + no required tools → accept (unchanged vacuous path)", () => {
     const d = evaluateTerminalGate(baseInput({ requiredTools: [] }));
     expect(d.decision).toBe("accept");
