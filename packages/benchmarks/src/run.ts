@@ -4,6 +4,9 @@ import { dirname, join } from "node:path"
 import type { MultiModelReport } from "./types.js"
 import { runBenchmarks } from "./runner.js"
 import { runSession } from "./runner.js"
+import { gateReceiptFor, powerWarningFor } from "./gate/on-path.js"
+import { DEFAULT_LIFT_POLICY } from "./gate/types.js"
+import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { regressionGateSession } from "./sessions/regression-gate.js"
 import { realWorldFullSession } from "./sessions/real-world-full.js"
 import { competitorComparisonSession } from "./sessions/competitor-comparison.js"
@@ -151,6 +154,8 @@ export interface CliArgs {
   taskIds?: string[]
   variantIds?: string[]
   output?: string
+  /** `[baselineVariantId, candidateVariantId]` for the on-path lift gate. */
+  gate?: string[]
   timeoutSec?: number
   // v2 flags
   session?: string
@@ -184,6 +189,10 @@ export function parseArgs(argv: string[]): CliArgs {
       case "--baseline":     args.baselinePath = next; i++; break
       case "--verbose":      args.verbose = true; break
       case "--judge-url":    args.judgeUrl = next; i++; break
+      // `--gate <baselineVariantId>,<candidateVariantId>` — print the lift-gate
+      // verdict for this session's report instead of leaving the means to be
+      // eyeballed. The gate had zero production callers before 2026-07-09.
+      case "--gate":         args.gate = next?.split(","); i++; break
     }
   }
   return args
@@ -243,6 +252,23 @@ async function main() {
 
     const report = await runSession(session, args.output ? outputPath : undefined)
     printSessionSummary(report)
+
+    // The gate is ON the session path (wiring audit 2026-07-09). The power
+    // warning is unconditional: a multi-variant table whose cells are too thin
+    // to compare must never be printed without saying so.
+    const warning = powerWarningFor(report)
+    if (warning) console.log(warning)
+    if (args.gate) {
+      const [baseline, candidate] = args.gate
+      if (baseline && candidate) {
+        console.log("")
+        // Only the long-horizon tags matter for class routing; untagged tasks
+        // are judged under the short-class (token-overhead) rule.
+        console.log(gateReceiptFor(report, baseline, candidate, DEFAULT_LIFT_POLICY, {
+          tasks: LONG_HORIZON_TASKS.map(t => ({ id: t.id, tags: [...(t.tags ?? [])] })),
+        }))
+      }
+    }
 
     if (args.saveBaseline) {
       const allVariantReports = report.ablation?.flatMap(a => a.variants) ?? []

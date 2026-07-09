@@ -2,7 +2,14 @@
 // Lift-gate verdict types (canonical evaluation system, layer Lg).
 import type { QualityDimension } from "../types.js";
 
-export type GateDecision = "default-on" | "opt-in" | "reject";
+/**
+ * `underpowered` is NOT a synonym for "no effect". It means the comparison did
+ * not carry enough samples to distinguish an effect from noise at the policy's
+ * `minLiftPp`. Before it existed, an under-sampled run silently reported
+ * `opt-in` ("we looked, nothing there") or — at n=1, where the old stddev noise
+ * bar collapsed to 0pp — `default-on` ("noise promoted to law").
+ */
+export type GateDecision = "default-on" | "opt-in" | "reject" | "underpowered";
 
 /**
  * Task class for the per-task-class lift gate (audit 06 — the long-horizon
@@ -60,8 +67,22 @@ export interface LiftPolicy {
   readonly maxTokenOverheadPct: number;
   /** Minimum distinct model tiers that must be covered by both variants. */
   readonly minTiers: number;
-  /** Significance multiplier: |liftPp| must exceed significanceK × stddev(×100) to count. */
+  /**
+   * Significance multiplier: |liftPp| must exceed `significanceK × standardError
+   * (×100)` to count. The standard error is of the DIFFERENCE of the two arms'
+   * means, so this is a z-multiplier: 1 ≈ 68%, 1.96 ≈ 95%.
+   *
+   * NOTE: this used to multiply a standard DEVIATION, which is not an
+   * uncertainty about a mean — it never shrank with n, and collapsed to exactly
+   * 0 at n=1. See `gate-significance.test.ts`.
+   */
   readonly significanceK: number;
+  /**
+   * Minimum runs per cell before a tier may be judged at all. Below this the
+   * tier is `underpowered` and can neither pass nor regress — "we did not look
+   * hard enough" is reported as itself, not as "no effect".
+   */
+  readonly minRuns: number;
 }
 
 export const DEFAULT_LIFT_POLICY: LiftPolicy = {
@@ -70,6 +91,7 @@ export const DEFAULT_LIFT_POLICY: LiftPolicy = {
   maxTokenOverheadPct: 15,
   minTiers: 2,
   significanceK: 1,
+  minRuns: 3,
 };
 
 /** Per-model-tier evidence: baseline vs candidate on the success metric. */
@@ -84,8 +106,22 @@ export interface TierEvidence {
   readonly liftPp: number;
   /** (candidateTokens − baselineTokens) / baselineTokens × 100. */
   readonly tokenOverheadPct: number;
-  /** Max stddev (0..1 score units) across the cells for this tier — the noise floor. */
+  /**
+   * Max stddev (0..1 score units) across the cells for this tier. RETAINED for
+   * receipts/back-compat only — it is NOT the noise floor any more, because a
+   * standard deviation does not shrink with n. Use `noisePp`.
+   */
   readonly variance: number;
+  /** The significance bar in points: `significanceK × SE(difference) × 100`. */
+  readonly noisePp: number;
+  /** Standard error of the difference of the two arms' means, in points. */
+  readonly stdErrPp: number;
+  /** Fewest runs observed in any contributing cell of this tier. */
+  readonly minRunsObserved: number;
+  /** `minRunsObserved < policy.minRuns` → this tier cannot pass OR regress. */
+  readonly underpowered: boolean;
+  /** Approx runs/arm needed to resolve `policy.minLiftPp` at this spread. */
+  readonly runsNeeded: number;
   /** |liftPp| exceeds the noise floor. */
   readonly significant: boolean;
   /** A cell was preflight-violated or the metric was missing → cannot judge this tier. */

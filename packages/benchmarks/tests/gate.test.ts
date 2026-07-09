@@ -18,6 +18,22 @@ function scores(accuracy: number): DimensionScore[] {
   return [{ dimension: "accuracy", score: accuracy }];
 }
 
+// `n` runs whose accuracy averages to `accuracy`. The gate's significance bar is
+// a standard ERROR, so a cell must carry its sample size: `runs: []` means "no
+// evidence", and a tier built from such cells is `underpowered` by policy. The
+// default of 200 is what it actually takes to resolve the ~6.5pp lifts these
+// fixtures assert on — see gate-significance.test.ts for why.
+function runsOf(accuracy: number, n: number) {
+  const ones = Math.round(accuracy * n);
+  return Array.from({ length: n }, (_, i) => ({
+    runIndex: i,
+    dimensions: [{ dimension: "accuracy", score: i < ones ? 1 : 0 }],
+    tokensUsed: 1000,
+    durationMs: 10,
+    status: "success" as const,
+  }));
+}
+
 function tvr(p: {
   taskId?: string;
   modelVariantId: string;
@@ -25,16 +41,19 @@ function tvr(p: {
   accuracy?: number;
   meanTokens?: number;
   variance?: number;
+  /** Runs per cell. Drives the standard-error bar and the underpowered guard. */
+  n?: number;
   inconclusive?: boolean;
   noMetric?: boolean;
 }): TaskVariantReport {
+  const accuracy = p.accuracy ?? 0.5;
   return {
     taskId: p.taskId ?? "t1",
     modelVariantId: p.modelVariantId,
     variantId: p.variantId,
     variantLabel: p.variantId,
-    runs: [],
-    meanScores: p.noMetric ? [] : scores(p.accuracy ?? 0.5),
+    runs: runsOf(accuracy, p.n ?? 200) as TaskVariantReport["runs"],
+    meanScores: p.noMetric ? [] : scores(accuracy),
     variance: p.variance ?? 0,
     meanTokens: p.meanTokens ?? 1000,
     meanDurationMs: 100,
@@ -116,11 +135,14 @@ describe("projectTierEvidence", () => {
 
   it("treats lift within the noise floor as not significant", () => {
     const report = makeReport([
-      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.60, variance: 0.10 }),
-      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.64, variance: 0.10 }),
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: 0.60, n: 20 }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: 0.64, n: 20 }),
     ]);
-    // liftPp = 4.0; noise = significanceK(1) × variance(0.10) × 100 = 10pp → not significant.
+    // liftPp = 4.0. At n=20/arm the standard error of the difference is ≈15pp,
+    // so a 4pp lift is indistinguishable from noise — sampled enough to look
+    // (n ≥ minRuns), not enough to conclude anything but "no effect found".
     const ev = projectTierEvidence(report, "base", "cand", DEFAULT_LIFT_POLICY);
+    expect(ev[0]!.underpowered).toBe(false);
     expect(ev[0]!.significant).toBe(false);
     expect(ev[0]!.passes).toBe(false);
   });
@@ -141,13 +163,13 @@ describe("evaluateLiftGate", () => {
     baseAcc: number,
     candAcc: number,
     candTokens = 1000,
-    variance = 0,
+    n = 200,
   ): SessionReport {
     return makeReport([
-      tvr({ modelVariantId: "local", variantId: "base", accuracy: baseAcc, meanTokens: 1000, variance }),
-      tvr({ modelVariantId: "local", variantId: "cand", accuracy: candAcc, meanTokens: candTokens, variance }),
-      tvr({ modelVariantId: "frontier", variantId: "base", accuracy: baseAcc, meanTokens: 1000, variance }),
-      tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: candAcc, meanTokens: candTokens, variance }),
+      tvr({ modelVariantId: "local", variantId: "base", accuracy: baseAcc, meanTokens: 1000, n }),
+      tvr({ modelVariantId: "local", variantId: "cand", accuracy: candAcc, meanTokens: candTokens, n }),
+      tvr({ modelVariantId: "frontier", variantId: "base", accuracy: baseAcc, meanTokens: 1000, n }),
+      tvr({ modelVariantId: "frontier", variantId: "cand", accuracy: candAcc, meanTokens: candTokens, n }),
     ]);
   }
 
@@ -202,7 +224,10 @@ describe("evaluateLiftGate", () => {
   });
 
   it("returns opt-in when lift is real but within the noise floor", () => {
-    const v = evaluateLiftGate(twoTier(0.6, 0.66, 1000, 0.10), "base", "cand"); // 6pp < 10pp noise
+    // 6pp lift at n=20/arm → SE(diff) ≈ 15pp. Adequately sampled to judge, but
+    // the effect is inside the floor: "we looked, and found nothing" (opt-in) —
+    // distinct from "we did not look hard enough" (underpowered).
+    const v = evaluateLiftGate(twoTier(0.6, 0.66, 1000, 20), "base", "cand");
     expect(v.decision).toBe("opt-in");
   });
 

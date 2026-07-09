@@ -27,6 +27,33 @@ function maxOf(xs: readonly number[]): number {
   return xs.reduce((m, x) => (x > m ? x : m), 0);
 }
 
+/**
+ * The spread (0..1 score units) of a single cell's per-run metric.
+ *
+ * Why not just the sample standard deviation: it is 0 whenever every run in the
+ * cell scored alike — trivially true at n=1, and common for saturated cells
+ * ([1,1,1]). A zero spread makes the noise floor zero, and a zero floor means
+ * any difference at all reads as "significant". That was the original defect.
+ *
+ * So we use the Agresti-smoothed Bernoulli spread √(p̃(1−p̃)) with
+ * p̃ = (x+1)/(n+2). It is strictly positive for every n, and because every
+ * metric here is bounded to [0,1], p(1−p) upper-bounds the true variance of a
+ * graded score with the same mean — the estimate is conservative by
+ * construction. It also converges toward the observed rate as n grows.
+ */
+function cellSpread(r: TaskVariantReport, metric: string): number {
+  const n = r.runs?.length ?? 0;
+  const p = metricScore(r, metric) ?? 0;
+  const pTilde = (p * n + 1) / (n + 2);
+  return Math.sqrt(pTilde * (1 - pTilde));
+}
+
+/** Standard error of one cell's mean: sd/√n. `n=0` (no runs) → treat as n=1. */
+function cellStdErr(r: TaskVariantReport, metric: string): number {
+  const n = Math.max(1, r.runs?.length ?? 0);
+  return cellSpread(r, metric) / Math.sqrt(n);
+}
+
 function metricScore(r: TaskVariantReport, metric: string): number | undefined {
   return r.meanScores.find((s) => s.dimension === metric)?.score;
 }
@@ -77,8 +104,40 @@ function computeEvidence(
     ...base.map((r) => r.variance),
     ...cand.map((r) => r.variance),
   ]);
-  const noisePp = policy.significanceK * variance * 100;
-  const significant = Math.abs(liftPp) > noisePp;
+
+  // ── Significance: standard ERROR of the difference, not standard deviation ──
+  // A stddev describes the spread of individual runs; it never shrinks with n
+  // and is exactly 0 when n=1 (or when every run in a cell scored alike). Using
+  // it as a noise floor made the gate rubber-stamp noise at n=1 (bar 0pp) and
+  // reject every achievable effect at n>1 (bar ≈ 50pp on Bernoulli cells).
+  //
+  // The uncertainty about a MEAN is se = sd/√n, and the uncertainty about the
+  // DIFFERENCE of two independent means is √(se_b² + se_c²). Both shrink as
+  // √n — which is what makes "run it more times" a way to earn a verdict.
+  const seOfGroup = (rows: readonly TaskVariantReport[]): number => {
+    if (rows.length === 0) return 0;
+    // Variance of a mean-of-k-cell-means = (1/k²)·Σ se_i².
+    const sumSq = rows.reduce((acc, r) => acc + cellStdErr(r, policy.metric) ** 2, 0);
+    return Math.sqrt(sumSq) / rows.length;
+  };
+  const stdErr = Math.sqrt(seOfGroup(base) ** 2 + seOfGroup(cand) ** 2);
+  const stdErrPp = stdErr * 100;
+  const noisePp = policy.significanceK * stdErrPp;
+
+  const minRunsObserved = Math.min(
+    ...[...base, ...cand].map((r) => r.runs?.length ?? 0),
+  );
+  const underpowered = minRunsObserved < policy.minRuns;
+
+  // Runs/arm to resolve `minLiftPp` at the observed spread (equal-n, z=K).
+  const sd = maxOf([...base, ...cand].map((r) => cellSpread(r, policy.metric)));
+  const delta = policy.minLiftPp / 100;
+  const runsNeeded =
+    delta > 0 ? Math.ceil((2 * policy.significanceK ** 2 * sd ** 2) / delta ** 2) : 0;
+
+  // An underpowered tier may neither pass nor regress: we did not look hard
+  // enough to say anything, and saying "no effect" would be a lie.
+  const significant = !underpowered && Math.abs(liftPp) > noisePp;
 
   // Cost half of the bar — the sole class-dependent decision.
   let costOk: boolean;
@@ -99,8 +158,8 @@ function computeEvidence(
   }
 
   const passes =
-    !inconclusive && significant && liftPp >= policy.minLiftPp && costOk;
-  const regresses = !inconclusive && significant && liftPp < 0;
+    !inconclusive && !underpowered && significant && liftPp >= policy.minLiftPp && costOk;
+  const regresses = !inconclusive && !underpowered && significant && liftPp < 0;
 
   // NOTE: when `inconclusive` is true, the numeric fields below are not meaningful — consumers MUST gate on `inconclusive` before reading liftPp/tokenOverheadPct.
   return {
@@ -110,6 +169,11 @@ function computeEvidence(
     liftPp,
     tokenOverheadPct,
     variance,
+    noisePp,
+    stdErrPp,
+    minRunsObserved,
+    underpowered,
+    runsNeeded,
     significant,
     inconclusive,
     passes,
@@ -186,7 +250,12 @@ function decide(
 
   let decision: GateDecision;
   if (perTier.some((t) => t.regresses)) {
+    // A confirmed regression at adequate n outranks everything.
     decision = "reject";
+  } else if (perTier.some((t) => t.underpowered)) {
+    // Not "no effect" — not enough samples to say. Reported as itself so an
+    // under-sampled run can never masquerade as evidence in either direction.
+    decision = "underpowered";
   } else if (
     !partial &&
     tiersCovered >= policy.minTiers &&
@@ -210,6 +279,8 @@ function buildRationale(
   const lift = aggregate.liftPp.toFixed(1);
   const tok = aggregate.tokenOverheadPct.toFixed(1);
   const base = `${decision.toUpperCase()} · ${aggregate.tiersCovered} tier(s) · ${lift}pp lift · ${tok}% tok`;
+  if (decision === "underpowered")
+    return `${base} — too few runs to resolve ≥${policy.minLiftPp}pp; this is NOT evidence of no effect`;
   if (decision === "reject") return `${base} — a tier significantly regresses`;
   if (decision === "default-on") return `${base} — clears ≥${policy.minLiftPp}pp ∧ ≤${policy.maxTokenOverheadPct}% on all tiers`;
   if (partial) return `${base} — inconclusive tier blocks promotion`;

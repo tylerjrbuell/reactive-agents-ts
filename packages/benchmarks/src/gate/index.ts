@@ -11,3 +11,9 @@ export {
 } from "./types.js";
 export { evaluateLiftGate, LONG_HORIZON_TAG, projectTierEvidence } from "./gate.js";
 export { formatGateReceipt } from "./receipt.js";
+export {
+  gateReceiptFor,
+  minRunsInReport,
+  powerWarningFor,
+  variantIdsIn,
+} from "./on-path.js";
