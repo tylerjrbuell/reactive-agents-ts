@@ -76,7 +76,11 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { checkpointStoreRef } from "@reactive-agents/tools";
 import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
 import { resolveControlPlane, type ControlProposal } from "../control/control-plane.js";
-import { proposeFromErrorRecovery, proposeFromLoopDetector } from "../control/emitters.js";
+import {
+  proposeFromErrorRecovery,
+  proposeFromLoopDetector,
+  proposeFromStallGuard,
+} from "../control/emitters.js";
 import { inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
@@ -1129,6 +1133,60 @@ export function runIterationPass(
         consecutiveStalled >= stallThreshold &&
         state.iteration >= 2 &&
         state.status === "thinking";
+
+      // ── Control plane (stall seam) — resolve steer vs abstain ───────────────
+      // Same precedence inversion as the F3 seam. `runStallDeliverableStep`
+      // forces its own action: a `steer` (required-tool nudge / recovery
+      // steering) or a harness-deliverable `terminate`. Both rank BELOW `abstain`
+      // in the resolver's total order (abstain(1) < terminate(2) < steer(5)), yet
+      // a run with no deliverable and exhausted ungrounded-synthesis retries — one
+      // that provably cannot ground its answer — was nudged instead of declining.
+      //
+      // `proposeFromStallGuard` exists for exactly this seam and had zero
+      // production callers (every reference lived in emitters.test.ts). OFF the
+      // long-horizon profile the block is skipped, so the default path is
+      // byte-identical.
+      if (horizon !== undefined && stallTriggered) {
+        const stallProposal = proposeFromStallGuard({
+          stallTriggered: true,
+          missingRequiredTools: laneDecision.missingRequiredTools,
+          horizonActive: true,
+          assessment: state.meta.assessment,
+        });
+        const { proposal: abstainProposal, forced } = inLoopAbstentionProposal(
+          state,
+          currentInput,
+          requiredTools,
+          currentOptions.maxIterations,
+        );
+        const proposals: ControlProposal[] = [];
+        if (stallProposal) proposals.push(stallProposal);
+        if (abstainProposal) proposals.push(abstainProposal);
+        if (proposals.length > 0) {
+          const resolution = resolveControlPlane(proposals);
+          yield* emitControlResolution({
+            taskId: currentOptions.taskId ?? state.taskId,
+            iteration: state.iteration,
+            action: resolution.action,
+            reason: resolution.reason,
+            proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
+          });
+          if (resolution.action === "abstain" && forced !== null) {
+            // Abstain won — stand down the stall guard and decline honestly via
+            // the single-owner terminate() abstain path.
+            state = transitionState(state, { error: null });
+            state = terminate(state, {
+              reason: "abstained",
+              deliverable: sentinelDeliverable("no_substantive_output"),
+              extraMeta: {
+                abstention: { reason: forced.reason, missing: forced.missing },
+              },
+            });
+            sync();
+            return "break";
+          }
+        }
+      }
       {
         const stallResult = yield* runStallDeliverableStep({
           state,
