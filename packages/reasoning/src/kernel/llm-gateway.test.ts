@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { resolveOutputBudget } from "./llm-gateway.js";
+import { Effect } from "effect";
+import { TestLLMService } from "@reactive-agents/llm-provider";
+import {
+  resolveOutputBudget,
+  gatewayComplete,
+  applyModelRouting,
+  CurrentModelRouting,
+  type GatewayRequest,
+} from "./llm-gateway.js";
+import type { ModelRoutingPool } from "./policy/purpose-routing.js";
 import { THINKING_SAFE_MIN_TOKENS } from "./utils/stream-parser.js";
 
 // Phase 1 gateway (2026-07-07). These pins encode the BEHAVIOR-IDENTICAL
@@ -118,5 +127,63 @@ describe("resolveOutputBudget — E3 economize downshift", () => {
     expect(
       resolveOutputBudget({ purpose: "synthesize", budgetClass: "provider-default", paceBand: "economize" }),
     ).toBeUndefined();
+  });
+});
+
+// G2 purpose→tier model routing (meta-loop Phase 6). `applyModelRouting` is the
+// pure request-shaping core the gateway applies after reading the ambient pool.
+// OFF (pool undefined) → byte-identical (request unchanged). ON → gathering→cheap,
+// synthesis→strong. An explicit per-call model always wins.
+describe("applyModelRouting — purpose→tier request shaping", () => {
+  const POOL: ModelRoutingPool = { cheap: "cheap-model", strong: "strong-model" };
+  const req: GatewayRequest = { messages: [] };
+
+  test("routing OFF: request is returned unchanged (byte-identical)", () => {
+    expect(applyModelRouting(req, "extract", undefined)).toBe(req);
+    expect(applyModelRouting(req, "synthesize", undefined).model).toBeUndefined();
+  });
+
+  test("routing OFF preserves an explicit per-call model", () => {
+    const pinned: GatewayRequest = { messages: [], model: "pinned" };
+    expect(applyModelRouting(pinned, "extract", undefined).model).toBe("pinned");
+  });
+
+  test("routing ON: a gathering purpose routes to the cheap tier", () => {
+    expect(applyModelRouting(req, "extract", POOL).model).toBe("cheap-model");
+    expect(applyModelRouting(req, "classify", POOL).model).toBe("cheap-model");
+  });
+
+  test("routing ON: a synthesize purpose routes to the strong tier", () => {
+    expect(applyModelRouting(req, "synthesize", POOL).model).toBe("strong-model");
+    expect(applyModelRouting(req, "think", POOL).model).toBe("strong-model");
+  });
+
+  test("routing ON: an explicit per-call model still wins over the pool", () => {
+    const pinned: GatewayRequest = { messages: [], model: "pinned" };
+    expect(applyModelRouting(pinned, "extract", POOL).model).toBe("pinned");
+  });
+});
+
+// End-to-end: gatewayComplete reads the ambient CurrentModelRouting FiberRef at
+// request-build time. Proves the FiberRef read path executes (OFF and ON) using
+// the real typed TestLLMService — no cast, no crash, success preserved.
+describe("gatewayComplete — reads the ambient model-routing FiberRef", () => {
+  const POOL: ModelRoutingPool = { cheap: "cheap-model", strong: "strong-model" };
+  const llm = TestLLMService([{ text: "ok" }]);
+
+  test("OFF (no FiberRef set): completes normally", async () => {
+    const res = await Effect.runPromise(
+      gatewayComplete(llm, { purpose: "extract" }, { messages: [] }),
+    );
+    expect(res.content).toBe("ok");
+  });
+
+  test("ON (FiberRef set): completes normally under the routing scope", async () => {
+    const res = await Effect.runPromise(
+      gatewayComplete(llm, { purpose: "extract" }, { messages: [] }).pipe(
+        Effect.locally(CurrentModelRouting, POOL),
+      ),
+    );
+    expect(res.content).toBe("ok");
   });
 });

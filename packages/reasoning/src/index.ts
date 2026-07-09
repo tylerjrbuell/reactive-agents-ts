@@ -369,8 +369,17 @@ export {
   gatewayComplete,
   gatewayStream,
   resolveOutputBudget,
+  CurrentModelRouting,
   type LlmCallIntent,
   type LlmPurpose,
   type BudgetClass,
   type GatewayRequest,
 } from "./kernel/llm-gateway.js";
+
+// ─── Purpose→tier model routing (meta-loop Phase 6 / task G2) ─────────────────
+export {
+  mapPurposeToTier,
+  resolveRoutedModel,
+  type RoutingTier,
+  type ModelRoutingPool,
+} from "./kernel/policy/purpose-routing.js";

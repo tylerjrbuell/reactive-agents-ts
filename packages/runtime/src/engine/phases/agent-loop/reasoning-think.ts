@@ -28,6 +28,7 @@ import {
   type ExecutionReasoningResult,
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
+import { resolveAdaptiveModelPool } from "../adaptive-model-pool.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
@@ -237,6 +238,24 @@ export const runReasoningThink = (
     // value + re-thinks. Null on normal runs (zero cost). Mirrors approvalDecision.
     const interactionResponse = (yield* FiberRef.get(InteractionResponseRef)) ?? undefined;
 
+    // G2: the run's strong-tier model (what runs today) — also the `modelId`
+    // threaded to the kernel below.
+    const resolvedModelId = String(
+      getSelectedModelName(asThinkContext(c).selectedModel) ?? config.defaultModel ?? "",
+    );
+    // G2 purpose→tier pool. `undefined` unless the run is adaptive AND has a
+    // configured routable multi-model pool → then the reasoning-service arms the
+    // ambient CurrentModelRouting FiberRef. Reuses the cost capability rail.
+    const modelRoutingPool = resolveAdaptiveModelPool({
+      adaptiveHarness: config.adaptiveHarness,
+      modelRouting: config.modelRouting,
+      provider: config.provider,
+      strongModel: resolvedModelId,
+      estimatedPromptTokens: Math.ceil(
+        (extractTaskText(task.input).length + (config.systemPrompt?.length ?? 0)) / 4,
+      ),
+    });
+
     const executeRequest = {
       taskDescription: extractTaskText(task.input),
       taskType: task.type,
@@ -271,7 +290,7 @@ export const runReasoningThink = (
       maxCallsPerTool: Object.keys(autoMaxCallsPerTool).length > 0 ? autoMaxCallsPerTool : undefined,
       maxRequiredToolRetries: config.requiredTools?.maxRetries,
       strategySwitching: config.strategySwitching,
-      modelId: String(getSelectedModelName(asThinkContext(c).selectedModel) ?? config.defaultModel ?? ""),
+      modelId: resolvedModelId,
       taskCategory,
       temperature: config.contextProfile?.temperature as number | undefined,
       environmentContext: config.environmentContext as Record<string, string> | undefined,
@@ -326,6 +345,10 @@ export const runReasoningThink = (
       // Adaptive harness / policy compiler. Propagated from `.withAdaptiveHarness()`.
       // The reasoning strategy forwards this to `KernelRunOptions.adaptiveHarness`.
       adaptiveHarness: config.adaptiveHarness,
+      // G2 purpose→tier model pool (undefined unless adaptive + routable pool).
+      // The reasoning-service arms the ambient CurrentModelRouting FiberRef when
+      // this is present, so the gateway routes gathering→cheap, synthesis→strong.
+      modelRoutingPool,
     } as unknown as ReasoningExecuteRequest;
 
     const strategyEffect = reasoningService.execute(executeRequest);

@@ -14,6 +14,8 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
 import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
+import { CurrentModelRouting } from "../kernel/llm-gateway.js";
+import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
 
 // ─── Service Tag ───
 
@@ -80,6 +82,16 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Opt-in adaptive harness (G1) — spread via `...params` into the strategy
        *  input, then forwarded to KernelRunOptions.adaptiveHarness. */
       readonly adaptiveHarness?: boolean;
+      /**
+       * G2 purpose→tier model pool. Resolved by the runtime from the existing
+       * `.withModelRouting()` config (cost-route capability rail) when the run is
+       * adaptive + has a routable multi-model pool. When present (AND
+       * `adaptiveHarness`), the reasoning-service sets the ambient
+       * `CurrentModelRouting` FiberRef so the gateway routes gathering purposes
+       * to the cheap tier and synthesis to the strong tier. Absent → no routing,
+       * every request uses the configured model (byte-identical).
+       */
+      readonly modelRoutingPool?: ModelRoutingPool;
       /** LLM sampling temperature — forwarded to entropy sensor for weight adjustment */
       readonly temperature?: number;
       /** Custom environment context key-value pairs injected into system prompt */
@@ -190,6 +202,13 @@ export const ReasoningServiceLive = (
             // Ambient run correlation (adaptive-harness wave 1): every LLM
             // exchange under this fiber tree can fall back to this taskId
             // when its call site did not thread request.traceContext.
+            // G2 purpose→tier routing: activate the ambient model pool ONLY when
+            // the run is adaptive AND the runtime resolved a pool (routable
+            // provider + configured multi-model routing). Absent either → the
+            // FiberRef default (undefined) stands and every request uses the
+            // configured model (byte-identical).
+            const routingActive =
+              params.adaptiveHarness === true && params.modelRoutingPool !== undefined;
             const result = yield* strategyFn({
               ...params,
               config,
@@ -197,6 +216,9 @@ export const ReasoningServiceLive = (
               Effect.provide(strategyLayer),
               params.taskId
                 ? Effect.locally(CurrentRunContext, { taskId: params.taskId })
+                : (eff) => eff,
+              routingActive
+                ? Effect.locally(CurrentModelRouting, params.modelRoutingPool)
                 : (eff) => eff,
             );
 

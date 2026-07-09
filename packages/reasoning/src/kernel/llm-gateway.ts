@@ -30,7 +30,7 @@
  * `gatewayComplete` / `gatewayStream`.
  */
 
-import type { Effect, Stream } from "effect";
+import { Effect, FiberRef, type Stream } from "effect";
 import type {
   CompletionRequest,
   CompletionResponse,
@@ -40,6 +40,7 @@ import type {
 } from "@reactive-agents/llm-provider";
 import { THINKING_SAFE_MIN_TOKENS } from "./utils/stream-parser.js";
 import type { PaceBand } from "./assessment/assess.js";
+import { resolveRoutedModel, type ModelRoutingPool } from "./policy/purpose-routing.js";
 
 /** What the call is FOR — drives the default budget class. */
 export type LlmPurpose =
@@ -178,10 +179,54 @@ function applyEconomizeDownshift(
   return base === undefined ? ECONOMIZE_MAX_BUDGET : Math.min(base, ECONOMIZE_MAX_BUDGET);
 }
 
+// ─── G2: purpose→tier model routing ──────────────────────────────────────────
+
+/**
+ * Ambient per-run model pool (meta-loop Phase 6 / task G2). Set ONCE at the
+ * reasoning-service boundary via `Effect.locally`, gated on the adaptive plan +
+ * a configured multi-model pool + a routable provider (see reasoning-service).
+ * Default `undefined` → the gateway performs NO tier selection and every request
+ * uses the configured model exactly as today (byte-identical).
+ *
+ * Read at request-BUILD time (synchronously inside the gateway Effect, before
+ * any streaming) — so it is immune to the fiber-hop FiberRef inheritance hazard
+ * that pushed trace correlation onto the request field: the value is captured
+ * into `request.model` before `llm.stream`/`llm.complete` runs.
+ */
+export const CurrentModelRouting = FiberRef.unsafeMake<ModelRoutingPool | undefined>(
+  undefined,
+);
+
+/**
+ * Apply purpose→tier routing to a request. When no pool is active → returns the
+ * request UNCHANGED (byte-identical). When a pool is active, the tier's model is
+ * set ONLY if the caller did not already pin `request.model` — an explicit
+ * per-call model wins over the plan (mirrors G1's wither-override philosophy).
+ */
+export function applyModelRouting(
+  request: GatewayRequest,
+  purpose: LlmPurpose,
+  pool: ModelRoutingPool | undefined,
+): GatewayRequest {
+  if (pool === undefined) return request;
+  if (request.model !== undefined) return request;
+  return { ...request, model: resolveRoutedModel(pool, purpose) };
+}
+
 /** A CompletionRequest whose budget the gateway owns. */
 export type GatewayRequest = Omit<CompletionRequest, "maxTokens">;
 
 type LLMServiceShape = LLMService["Type"];
+
+/** Finalize the wire request: apply the gateway-owned budget to a routed request. */
+function withBudget(
+  request: GatewayRequest,
+  budget: number | undefined,
+): CompletionRequest {
+  return budget === undefined
+    ? (request as CompletionRequest)
+    : { ...request, maxTokens: budget };
+}
 
 /**
  * Mediated `complete()` — resolves the budget from intent, delegates to the
@@ -193,8 +238,10 @@ export function gatewayComplete(
   request: GatewayRequest,
 ): Effect.Effect<CompletionResponse, LLMErrors> {
   const budget = resolveOutputBudget(intent);
-  return llm.complete(
-    budget === undefined ? (request as CompletionRequest) : { ...request, maxTokens: budget },
+  return FiberRef.get(CurrentModelRouting).pipe(
+    Effect.flatMap((pool) =>
+      llm.complete(withBudget(applyModelRouting(request, intent.purpose, pool), budget)),
+    ),
   );
 }
 
@@ -208,7 +255,9 @@ export function gatewayStream(
   request: GatewayRequest,
 ): Effect.Effect<Stream.Stream<StreamEvent, LLMErrors>, LLMErrors> {
   const budget = resolveOutputBudget(intent);
-  return llm.stream(
-    budget === undefined ? (request as CompletionRequest) : { ...request, maxTokens: budget },
+  return FiberRef.get(CurrentModelRouting).pipe(
+    Effect.flatMap((pool) =>
+      llm.stream(withBudget(applyModelRouting(request, intent.purpose, pool), budget)),
+    ),
   );
 }
