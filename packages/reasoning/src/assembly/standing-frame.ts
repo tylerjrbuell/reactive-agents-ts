@@ -124,9 +124,25 @@ function handoffEntries(ledger: RunLedger | undefined): readonly HandoffEntry[] 
   return (ledger ?? []).filter((e): e is HandoffEntry => e.kind === "handoff");
 }
 
-/** Ids of requirements the ledger records as satisfied. */
-function satisfiedRequirementIds(ledger: RunLedger | undefined): ReadonlySet<string> {
-  const ids = new Set<string>();
+/**
+ * Ids of requirements this run has already satisfied.
+ *
+ * The RunAssessment is AUTHORITATIVE: `assess()` recomputes satisfaction every
+ * iteration from post-conditions and artifact facts, and the assessment is
+ * already threaded to the projector (from-kernel-state → project → system-prompt).
+ *
+ * The ledger `requirement` entries are the intended long-term substrate, but
+ * NOTHING mints them today (kind declared at run-ledger.ts:97, zero writers).
+ * Reading only the ledger meant `satisfied` was always empty, so the standing
+ * frame re-listed finished work as outstanding and told the model to redo it
+ * (wiring audit 2026-07-09). We prefer the assessment and keep the ledger read
+ * as a union, so this becomes a no-op the day an emitter lands.
+ */
+function satisfiedRequirementIds(
+  ledger: RunLedger | undefined,
+  assessment: RunAssessment | undefined,
+): ReadonlySet<string> {
+  const ids = new Set<string>(assessment?.requirements.satisfied ?? []);
   for (const e of ledger ?? []) {
     if (e.kind === "requirement" && e.status === "satisfied") ids.add(e.requirementId);
   }
@@ -174,7 +190,7 @@ export function renderStandingFrame(input: StandingFrameInput): StandingFrame {
   //    the selected profile (default profile → not shown → byte-identical).
   const profile = selectProfile(input);
   if (profile.showOutstanding && input.contract) {
-    const satisfied = satisfiedRequirementIds(input.ledger);
+    const satisfied = satisfiedRequirementIds(input.ledger, input.assessment);
     const outstanding = input.contract.requirements.filter((r) => !satisfied.has(r.id));
     if (outstanding.length > 0) {
       const lines = outstanding.map((r) => `- [${r.id}] ${r.spec.description}`).join("\n");
