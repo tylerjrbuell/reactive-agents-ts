@@ -131,6 +131,13 @@ export interface ToolSurfaceInputs {
   /** Required tools still unsatisfied (drives the gate narrowing). */
   readonly missingRequiredTools: readonly string[];
   readonly pruneMinTools: number;
+  /**
+   * Contract-declared deny-list (`RunContract.constraints.forbidden-tool`, via
+   * `forbiddenTools(contract)`). A HARD boundary: it is applied last and beats
+   * every floor — required, allowed, and META alike. Absent/empty → the surface
+   * is byte-identical to a run without a contract.
+   */
+  readonly forbiddenTools?: readonly string[];
 }
 
 export interface ResolvedToolSurface {
@@ -182,13 +189,24 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   const usedSet = new Set(inputs.toolsUsed);
   const discoveredSet = new Set(inputs.discovered);
 
+  // Stage 0 — contract deny-list. Applied to the schema universe BEFORE any
+  // floor can re-admit a tool, because `universe` is what the tool-call
+  // resolver heals model-named calls against: a hallucinated forbidden name
+  // must not resolve back into an executable call. Deny therefore beats
+  // required / allowed / META by construction, not by ordering luck.
+  const denied = new Set(inputs.forbiddenTools ?? []);
+  const permitted = (xs: readonly ToolSchema[]): readonly ToolSchema[] =>
+    denied.size === 0 ? xs : xs.filter((ts) => !denied.has(ts.name));
+
+  const augmented = permitted(inputs.augmented);
+
   // Stage 1 — context-pressure hard gate (non-lazy arm only; under lazy mode
   // the disclosure filter owns visibility and premature narrowing induces
   // panic dumps on local models).
   const effectiveSchemas: readonly ToolSchema[] =
     inputs.pressureCritical && !inputs.lazyMode
-      ? [inputs.finalAnswerSchema]
-      : inputs.augmented;
+      ? permitted([inputs.finalAnswerSchema])
+      : augmented;
 
   // Stage 2 — lazy disclosure / classification pruning (+ floors + guard).
   const visible = computePromptSchemas({
@@ -226,7 +244,9 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
     ...(inputs.pressureCritical && !inputs.lazyMode ? [inputs.finalAnswerSchema.name] : []),
   ]);
   for (const name of allNames) {
-    if (!visibleNames.has(name)) {
+    if (denied.has(name)) {
+      reasons.set(name, "hidden: forbidden-by-contract (declared deny-list)");
+    } else if (!visibleNames.has(name)) {
       if (inputs.pressureCritical && !inputs.lazyMode) {
         reasons.set(name, "hidden: pressure-critical (final-answer only)");
       } else if (inputs.lazyMode) {

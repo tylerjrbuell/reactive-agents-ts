@@ -88,6 +88,22 @@ export type Constraint =
   | { readonly kind: "forbidden-tool"; readonly tool: string }
   | { readonly kind: "output-format"; readonly format: string };
 
+/**
+ * The declared deny-list: tool names the contract forbids. This is the ONLY
+ * read path for `constraints.forbidden-tool`, and it backs the hard guarantee
+ * documented on `TaskContract.tools` ("the tool MUST NOT be visible to the
+ * LLM"). Consumed by the tool-surface resolver, where deny beats every
+ * visibility floor (required / allowed / meta).
+ *
+ * An absent contract yields an empty list, so the default surface is unchanged.
+ */
+export function forbiddenTools(contract: RunContract | undefined): readonly string[] {
+  if (contract === undefined) return [];
+  return contract.constraints
+    .filter((c): c is { kind: "forbidden-tool"; tool: string } => c.kind === "forbidden-tool")
+    .map((c) => c.tool);
+}
+
 /** Stakes-tiered acceptance policy: deterministic checks > checker > self-critique. */
 export interface AcceptancePolicy {
   /** Verification tiers, strongest first. */

@@ -23,6 +23,7 @@ import {
   buildSanitizedReverseMap,
 } from "../attend/context-utils.js";
 import { resolveToolSurface } from "./tool-surface.js";
+import { forbiddenTools } from "../../contract/run-contract.js";
 import { emitToolSurfaceResolved, emitProjectionRendered } from "../../utils/diagnostics.js";
 import type { LLMMessage } from "@reactive-agents/llm-provider";
 import { project } from "../../../assembly/project.js";
@@ -322,6 +323,10 @@ export function handleThinking(
       requiredTools: classifiedRequired,
       relevantTools: classifiedRelevant,
       allowedTools: input.allowedTools ?? [],
+      // The contract's declared deny-list — the read path for
+      // `constraints.forbidden-tool`. Empty without a contract, so the default
+      // surface is unchanged.
+      forbiddenTools: forbiddenTools(state.meta.runContract),
       toolsUsed: state.toolsUsed,
       discovered,
       gateBlockedTools,
