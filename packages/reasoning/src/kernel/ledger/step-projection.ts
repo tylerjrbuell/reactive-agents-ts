@@ -54,6 +54,25 @@ function toolNameFromContent(content: string): string {
  *   - harness_signal   → [harness-signal]
  *   - thought/plan/reflection/critique → [] (not high-value ledger facts)
  */
+/**
+ * The mid-loop verification gates, keyed by the pseudo-`toolName` each one
+ * stamps on its observation step via `makeObservationResult(<gate>, ok, msg)`.
+ *
+ * These are the sites where the harness inspects a PROPOSED completion and can
+ * push the run back into the loop:
+ *   - `completion-guard`        — think.ts:1595 ("Not done yet — …", redirect)
+ *   - `abstention-legitimacy`   — think.ts:1284 (illegitimate abstain → nudge)
+ *
+ * A rejection here is exactly "the run tried to finish and verification said no",
+ * which is what `assess()` reads to enter the `verify` phase. Deliberately a
+ * closed set, not a catch-all: ordinary tool observations must NOT mint verdicts
+ * (they already project a `tool-result`), or the phase would pin to `verify`.
+ */
+const IN_LOOP_VERDICT_GATES: ReadonlySet<string> = new Set([
+  "completion-guard",
+  "abstention-legitimacy",
+]);
+
 export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEntryInput[] {
   const meta = step.metadata as
     | {
@@ -115,6 +134,24 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
           gate: "per-step",
           verified: verif.verified,
           ...(verif.summary !== undefined ? { reason: verif.summary } : {}),
+        });
+      }
+      // The MID-LOOP verification gates. `gate: "in-loop"` was declared on
+      // VerdictEntry and had zero writers, so `assess()`'s only verify-phase
+      // signal was the TERMINAL verdict — which is minted exclusively by the
+      // arbitrator's exit transitions and therefore never exists while the loop
+      // is still running. The verify phase was unreachable (wiring audit
+      // 2026-07-09). These guards already record their outcome as an observation
+      // step tagged with the gate name; projecting it here makes the verdict a
+      // queryable ledger fact WITHOUT any guard hand-building a ledger entry, so
+      // the ledger single-writer invariant (check-ledger-writes.sh) still holds.
+      if (toolName !== undefined && IN_LOOP_VERDICT_GATES.has(toolName)) {
+        entries.push({
+          kind: "verdict",
+          iteration,
+          gate: "in-loop",
+          verified: obs?.success ?? false,
+          reason: step.content,
         });
       }
       return entries;

@@ -287,7 +287,28 @@ export function assess(
   );
   const detOutstandingCount = detRequirements.filter((r) => outstandingSet.has(r.id)).length;
 
-  const hasTerminalVerdict = entriesOfKind(ledger, "verdict").some((v) => v.gate === "terminal");
+  // Is the run VERIFYING right now?
+  //
+  // A `terminal` verdict means the run reached the terminal gate. It is minted
+  // only by the arbitrator's exit transitions (`done`/`failed`), so it cannot be
+  // observed from inside the loop — it is kept here for post-loop/replay
+  // assessments, and is NOT what makes the phase reachable.
+  //
+  // The live signal is the latest `in-loop` verdict: the completion-guard and
+  // the abstention-legitimacy gate record whether a PROPOSED completion was
+  // accepted. A rejection ⇒ the run is in verify/repair. An acceptance ⇒ it is
+  // about to terminate, so it must NOT pin the phase to `verify`. Reading
+  // `.verified` (not merely `.gate`) is what makes this distinction — before the
+  // fix, gate presence alone decided, and the field was inert (wiring audit
+  // 2026-07-09). `per-step` verdicts are excluded: they fire on ordinary tool
+  // observations and would pin every run to `verify`.
+  const gateVerdicts = entriesOfKind(ledger, "verdict").filter(
+    (v) => v.gate === "terminal" || v.gate === "in-loop",
+  );
+  const latestGateVerdict = gateVerdicts[gateVerdicts.length - 1];
+  const isVerifying =
+    latestGateVerdict !== undefined &&
+    (latestGateVerdict.gate === "terminal" || latestGateVerdict.verified === false);
   const substantiveInvocations = invocations.filter(
     (i): i is typeof i & { toolName: string } => typeof i.toolName === "string" && !META_TOOLS.has(i.toolName),
   );
@@ -298,7 +319,7 @@ export function assess(
   const lastIsMutating = lastSubstantive !== undefined && !isGatheringTool(lastSubstantive.toolName);
   const anyEvidence = substantiveInvocations.length > 0;
 
-  const phase: RunPhase = hasTerminalVerdict
+  const phase: RunPhase = isVerifying
     ? "verify"
     : detRequirements.length > 0 && detOutstandingCount === 0
       ? "synthesize"
