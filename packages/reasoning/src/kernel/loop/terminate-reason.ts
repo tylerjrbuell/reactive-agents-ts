@@ -47,7 +47,15 @@ export type TerminateReason =
   // O3: model honestly declined — cannot ground a response or a required input
   // is unavailable. Non-failure terminal (goalAchieved=false, success=false but
   // not a crash). Task 5 (legitimacy gate) + Task 6 (forced path) extend this.
-  | "abstained";
+  | "abstained"
+  // E3 (meta-loop Phase 5a): the pace-terminal actuator forced a final generous
+  // synthesis when the run hit the terminal budget band (burnRatio ≥ 0.95),
+  // pre-empting the `budget_exceeded` cliff that would DISCARD the answer (audit
+  // 05-#1). A NON-FAILURE terminal reason: the terminal post-condition gate
+  // passes it through (a partial-but-real answer ships instead of being nulled),
+  // and `deriveTerminatedBy` narrows it to `end_turn` → honest `goalAchieved`
+  // unknown (never a false success). Set only under the long-horizon profile.
+  | "budget_terminal";
 
 /**
  * The two templated reason families (Phase 3 vocabulary closure). Producers:

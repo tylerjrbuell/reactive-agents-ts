@@ -40,6 +40,9 @@ export interface GuidanceContext {
   /** Advisory gather-dedup nudge — a repeated (tool, args) gather was detected;
    *  hands back the existing recallable ref instead of re-fetching (C3). */
   readonly gatherDedup?: string;
+  /** E3 triage pace-action steer — names the outstanding requirements when the
+   *  run is burning budget fast with work remaining (long-horizon profile). */
+  readonly triageSteer?: string;
 }
 
 /**
@@ -62,6 +65,7 @@ export function buildGuidanceText(guidance: GuidanceContext): string | null {
   }
   if (guidance.icsGuidance) signals.push(guidance.icsGuidance);
   if (guidance.oracleGuidance) signals.push(guidance.oracleGuidance);
+  if (guidance.triageSteer) signals.push(guidance.triageSteer);
   if (guidance.errorRecovery) signals.push(guidance.errorRecovery);
   if (guidance.actReminder) signals.push(guidance.actReminder);
   if (guidance.qualityGateHint) signals.push(guidance.qualityGateHint);

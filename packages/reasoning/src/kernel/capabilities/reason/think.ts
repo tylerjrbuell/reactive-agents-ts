@@ -15,6 +15,7 @@ import { discoveredToolsStoreRef } from "@reactive-agents/tools";
 import { ExecutionError } from "../../../errors/errors.js";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
 import { gatewayStream } from "../../llm-gateway.js";
+import { downshiftBudgetBand } from "../../assessment/pace-actions.js";
 import type { StopReason } from "@reactive-agents/llm-provider";
 import {
   toProviderMessage,
@@ -370,6 +371,7 @@ export function handleThinking(
       loopDetected: pending?.loopDetected ?? false,
       icsGuidance: pending?.icsGuidance,
       oracleGuidance: pending?.oracleGuidance,
+      triageSteer: pending?.triageSteer,
       errorRecovery: pending?.errorRecovery,
       actReminder: pending?.actReminder,
       qualityGateHint: pending?.qualityGateHint,
@@ -626,10 +628,20 @@ export function handleThinking(
     // think budget + B2 thinking allowance live in resolveOutputBudget; a
     // kernel pressure override (state.maxOutputTokensOverride) rides the
     // explicit budgetTokens escape hatch.
+    //
+    // E3 economize actuator: under the long-horizon profile, a non-`green` pace
+    // band downshifts this NON-synthesis think budget at the gateway (cap at
+    // `standard`). OFF, or a `green` band → `paceBand` undefined → the gateway
+    // resolves the budget byte-identically to today.
+    const economizeBand = downshiftBudgetBand(
+      state.meta.horizonProfile === "long",
+      state.meta.assessment,
+    );
     const llmStreamEffect = gatewayStream(llm, {
       purpose: "think",
       tier: profile.tier,
       thinkingModel: profile.thinkingModel === true,
+      ...(economizeBand ? { paceBand: economizeBand } : {}),
       ...(state.maxOutputTokensOverride !== undefined
         ? { budgetTokens: state.maxOutputTokensOverride }
         : {}),

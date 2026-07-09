@@ -99,6 +99,11 @@ import {
   nextLowDeltaCount,
   nextStalledCount,
 } from "../../kernel/assessment/guard-adapters.js";
+import {
+  shouldForceTerminalSynthesis,
+  triageSteerText,
+} from "../../kernel/assessment/pace-actions.js";
+import { forceTerminalSynthesis } from "./runner-helpers/pace-terminal.js";
 import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
 import { coordinateICS } from "../../kernel/utils/ics-coordinator.js";
 import { runReactiveObserver } from "../../kernel/capabilities/reflect/reactive-observer.js";
@@ -475,6 +480,67 @@ export function runIterationPass(
             deliverablesMissing: assessment.deliverables.missing.length,
             burnRatio: assessment.pace.burnRatio,
           });
+
+          // ── E3 pace ACTIONS — turn the just-computed pace band into actuator
+          // actions (meta-loop Phase 5a / task E3). DAG-safe: READS
+          // assessment.pace.band (E1, this iteration), acts on the guidance +
+          // terminal actuators, never recomputes assessment / mutates the ledger.
+          // OPT-IN behind the long-horizon profile (`horizon !== undefined`); OFF
+          // → this whole block is skipped → byte-identical to today.
+          //
+          // Gate on status "thinking" (the ICS/stall convention): on an "acting"
+          // sub-pass a tool call is pending but not yet executed, so acting here
+          // would pre-empt in-flight evidence gathering — let the tool complete;
+          // the next thinking pass catches the band with the evidence in hand.
+          if (horizon !== undefined && state.status === "thinking") {
+            // terminal (burnRatio ≥ 0.95): force a generous synthesis NOW, before
+            // the next think turn can push spend over the budget_exceeded cliff
+            // that would discard the answer (audit 05-#1). Pre-empts at iter-start.
+            if (shouldForceTerminalSynthesis(true, assessment)) {
+              const llmOpt = yield* Effect.serviceOption(LLMService);
+              state = yield* forceTerminalSynthesis({
+                state,
+                task: currentInput.task,
+                llm: llmOpt._tag === "Some" ? llmOpt.value : undefined,
+                contract,
+                assessment,
+                taskId: currentOptions.taskId ?? state.taskId,
+                emitLog,
+              });
+              sync();
+              return "break";
+            }
+            // triage (burnRatio ≥ 0.80): steer the model to the OUTSTANDING
+            // requirements via the guidance channel. Rendered by THIS pass's think
+            // turn (guidance is set at iter-start, consumed+cleared by think).
+            // Emitted once per distinct outstanding set (dedup on signature) so a
+            // run sitting in the triage band does not re-steer every iteration.
+            const steer = triageSteerText(true, contract, assessment);
+            if (steer) {
+              const signature = assessment.requirements.outstanding.join(",");
+              if (state.meta.lastTriageSignature !== signature) {
+                yield* emitHarnessSignalInjected({
+                  taskId: currentOptions.taskId ?? state.taskId,
+                  iteration: state.iteration,
+                  signalKind: "redirect",
+                  origin: "loop/iterate-pass.ts:E3-triage",
+                  content: steer,
+                  metadata: {
+                    trigger: "pace-triage",
+                    band: assessment.pace.band,
+                    outstanding: assessment.requirements.outstanding.length,
+                    burnRatio: assessment.pace.burnRatio,
+                  },
+                });
+                state = transitionState(state, {
+                  steps: [...state.steps, makeStep("harness_signal", `⚠️ ${steer}`)],
+                  // Merge — never clobber guidance a prior pass queued for this think.
+                  pendingGuidance: { ...(state.pendingGuidance ?? {}), triageSteer: steer },
+                  meta: { ...state.meta, lastTriageSignature: signature },
+                });
+              }
+            }
+          }
         }
       }
 

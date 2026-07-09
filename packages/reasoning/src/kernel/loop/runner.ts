@@ -813,6 +813,15 @@ export function runKernel(
     // failure, verifier, quality gate, output synthesis) must be skipped — the
     // run honestly declined and there is nothing to verify or synthesize.
     const isAbstained = state.meta.terminatedBy === "abstained";
+    // E3 (meta-loop Phase 5a): a `budget_terminal` run already ran its forced
+    // generous synthesis at the terminal budget band and shipped an HONEST —
+    // partial when requirements remain — answer. The post-loop finalization
+    // blocks (required-tools failure, §9.0 verifier, output-quality synthesis)
+    // must be skipped: re-verifying could null the partial answer (the exact
+    // discard audit 05-#1 fixes) and re-synthesizing would double the spend.
+    // Mirrors the isAbstained skip. `budget_terminal` is only produced under the
+    // long-horizon profile → off the profile this is always false → byte-identical.
+    const isBudgetTerminal = state.meta.terminatedBy === "budget_terminal";
 
     // Fire 'complete' phase hooks once after loop exits normally.
     yield* Effect.promise(() =>
@@ -828,7 +837,8 @@ export function runKernel(
       requiredTools.length > 0 &&
       !isAwaitingApproval &&
       !isAwaitingInteraction &&
-      !isAbstained
+      !isAbstained &&
+      !isBudgetTerminal
     ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state.steps, currentInput);
@@ -998,7 +1008,8 @@ export function runKernel(
       state.output &&
       !isAwaitingApproval &&
       !isAwaitingInteraction &&
-      !isAbstained
+      !isAbstained &&
+      !isBudgetTerminal
     ) {
       // availableUserTools — pass through the user-registered tool list
       // so the verifier can run classifier-independent "agent-took-action"
@@ -1216,7 +1227,8 @@ export function runKernel(
       state.output &&
       !isAwaitingApproval &&
       !isAwaitingInteraction &&
-      !isAbstained
+      !isAbstained &&
+      !isBudgetTerminal
     ) {
       // `harness_synthesis` (introduced when assembleDeliverable picks a
       // substantive model thought) is treated as a MODEL output here — the

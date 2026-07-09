@@ -39,6 +39,7 @@ import type {
   StreamEvent,
 } from "@reactive-agents/llm-provider";
 import { THINKING_SAFE_MIN_TOKENS } from "./utils/stream-parser.js";
+import type { PaceBand } from "./assessment/assess.js";
 
 /** What the call is FOR — drives the default budget class. */
 export type LlmPurpose =
@@ -75,7 +76,26 @@ export interface LlmCallIntent {
   readonly tier?: string;
   /** Whether the resolved model runs a thinking mode (profile.thinkingModel). */
   readonly thinkingModel?: boolean;
+  /**
+   * E3 economize actuator — the run's pace band, populated ONLY by call sites
+   * under the long-horizon profile (`downshiftBudgetBand`). When present and NOT
+   * `green`, and the purpose is NOT synthesis, the resolved output budget is
+   * downshifted (capped at the `standard` class) so gathering/thinking calls
+   * conserve budget while the run is burning fast — synthesis (the deliverable
+   * render) is NEVER downshifted. Absent (the default) → resolution is
+   * byte-identical to today.
+   */
+  readonly paceBand?: PaceBand;
 }
+
+/**
+ * E3 economize cap: under a non-`green` pace band, NON-synthesis output budgets
+ * are capped at the `standard` class. Chosen as a MONOTONE cap (via `Math.min`):
+ * it can only lower a budget, never raise one — so a small tier-think budget
+ * stays put while the expensive thinking-model allowance (up to +6000) and the
+ * `generous` class (8192) are trimmed. That is where the spend actually is.
+ */
+const ECONOMIZE_MAX_BUDGET = 4096; // === CLASS_BUDGET.standard
 
 /**
  * Tier-adaptive budget for main-loop think turns — moved verbatim from
@@ -122,6 +142,12 @@ const PURPOSE_DEFAULT_CLASS: Record<LlmPurpose, BudgetClass> = {
  * tier) → budgetClass → purpose default class.
  */
 export function resolveOutputBudget(intent: LlmCallIntent): number | undefined {
+  const base = resolveBaseBudget(intent);
+  return applyEconomizeDownshift(base, intent);
+}
+
+/** The pre-economize budget resolution — the original precedence chain. */
+function resolveBaseBudget(intent: LlmCallIntent): number | undefined {
   if (intent.budgetTokens !== undefined) return intent.budgetTokens;
   if (intent.budgetClass === "provider-default") return undefined;
   if (intent.purpose === "think" && intent.budgetClass === undefined && intent.tier !== undefined) {
@@ -130,6 +156,26 @@ export function resolveOutputBudget(intent: LlmCallIntent): number | undefined {
   }
   const cls = intent.budgetClass ?? PURPOSE_DEFAULT_CLASS[intent.purpose];
   return cls === "provider-default" ? undefined : CLASS_BUDGET[cls];
+}
+
+/**
+ * E3 economize actuator. When the intent carries a non-`green` pace band (set
+ * only under the long-horizon profile) AND the purpose is NOT synthesis, cap the
+ * output budget at the `standard` class — a monotone reduction that trims the
+ * expensive thinking-model allowance / `generous` class without ever raising a
+ * budget. Synthesis (the deliverable render) is exempt. Absent band → the base
+ * budget is returned unchanged (byte-identical).
+ */
+function applyEconomizeDownshift(
+  base: number | undefined,
+  intent: LlmCallIntent,
+): number | undefined {
+  if (intent.paceBand === undefined || intent.paceBand === "green") return base;
+  if (intent.purpose === "synthesize") return base;
+  // provider-default (base === undefined, an UNBOUNDED budget) becomes bounded
+  // under economize — the one case where the cap adds a limit rather than
+  // lowering one; still a conservation, never an increase.
+  return base === undefined ? ECONOMIZE_MAX_BUDGET : Math.min(base, ECONOMIZE_MAX_BUDGET);
 }
 
 /** A CompletionRequest whose budget the gateway owns. */

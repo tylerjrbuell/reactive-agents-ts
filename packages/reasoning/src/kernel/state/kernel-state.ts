@@ -73,6 +73,10 @@ export interface PendingGuidance {
   /** Advisory gather-dedup nudge (C3) — a repeated (tool, args) gather was
    *  detected; hands back the existing recallable ref instead of re-fetching. */
   readonly gatherDedup?: string;
+  /** E3 triage pace-action steer — names the OUTSTANDING requirements when the
+   *  run enters the triage band (burnRatio ≥ 0.80). Set only under the
+   *  long-horizon profile; absent → byte-identical. */
+  readonly triageSteer?: string;
 }
 
 // ── KernelMeta — typed strategy-specific metadata bag ─────────────────────────
@@ -417,6 +421,30 @@ export interface KernelMeta {
    * assembly/, never state/).
    */
   readonly assessment?: import("../assessment/assess.js").RunAssessment;
+
+  // ── E3 pace actions (meta-loop Phase 5a / task E3) ────────────────────────────
+  /**
+   * Signature of the last OUTSTANDING requirement set the triage pace-action
+   * steered on (`requirements.outstanding.join(",")`). Dedup key so the triage
+   * steer emits once per distinct outstanding set instead of every iteration the
+   * run sits in the triage band. Set only under the long-horizon profile.
+   */
+  readonly lastTriageSignature?: string;
+  /**
+   * True when a `budget_terminal` forced-synthesis termination shipped a PARTIAL
+   * answer — the budget ran out with requirements still outstanding. The honest
+   * partial marker (the answer is preserved, the status is not a clean success):
+   * paired with `verificationWarning`, which names what stayed unmet.
+   */
+  readonly budgetTerminalPartial?: boolean;
+  /**
+   * Advisory verification warning surfaced ALONGSIDE a preserved answer (never a
+   * hard failure). Set by the block-mode grounding degrade, the H5 harness-
+   * authorship path, and the E3 `budget_terminal` partial synthesis. Previously
+   * written via `as KernelState["meta"]` casts; declared here so those writes are
+   * type-checked.
+   */
+  readonly verificationWarning?: string;
 
 }
 

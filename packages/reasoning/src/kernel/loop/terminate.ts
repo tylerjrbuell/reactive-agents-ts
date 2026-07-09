@@ -120,10 +120,18 @@ function applyTerminalPostConditionGate(
   // are moot (no iterations could have met them when grounding was structurally
   // impossible). Pass through so `status:"done"` + `terminatedBy:"abstained"` is
   // set cleanly without the gate re-demoting to `status:"failed"`.
+  // E3 (meta-loop Phase 5a): a `budget_terminal` forced synthesis is an
+  // intentional HONEST PARTIAL delivery — the run hit the terminal budget band
+  // and synthesized the best answer it could before the `budget_exceeded` cliff.
+  // Demoting it to `status:"failed"` here would null the answer (the very
+  // discard audit 05-#1 fixes), so it passes through like abstention: the answer
+  // ships, `meta.budgetTerminalPartial` + `verificationWarning` carry the honest
+  // partial label. Set only under the long-horizon profile → byte-identical off.
   if (
     opts.reason === "awaiting-approval" ||
     opts.reason === "awaiting-interaction" ||
-    opts.reason === "abstained"
+    opts.reason === "abstained" ||
+    opts.reason === "budget_terminal"
   )
     return null;
   const conditions = state.meta.postConditions;
