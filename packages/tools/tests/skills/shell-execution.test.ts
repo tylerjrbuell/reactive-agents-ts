@@ -986,11 +986,24 @@ describe("shell-execute tool", () => {
 
       const result = (await Effect.runPromise(
         handler({ command: 'bun --eval "console.log(42)"' }),
-      )) as { executed: boolean; dockerEscalated?: boolean; output?: string };
+      )) as {
+        executed: boolean;
+        dockerEscalated?: boolean;
+        output?: string;
+        error?: string;
+      };
 
-      // If Docker is available, result should reflect Docker execution
-      if (result.dockerEscalated) {
+      // `dockerEscalated` means escalation was ATTEMPTED, not that it succeeded —
+      // without Docker the handler honestly returns `executed:false` + an `error`.
+      // Gating the assertion on `dockerEscalated` therefore demanded output "42"
+      // from a run that never happened, so this test failed on every box (and CI)
+      // without Docker. Gate on `executed` instead, and assert in BOTH worlds so
+      // the test is never vacuous.
+      expect(result.dockerEscalated).toBe(true);
+      if (result.executed) {
         expect(result.output).toContain("42");
+      } else {
+        expect(result.error ?? "").toMatch(/docker/i);
       }
     }, 15000);
   });
