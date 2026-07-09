@@ -145,6 +145,50 @@ await verifyReceipt(result.receipt!);      // true — public key is embedded in
 
 The signature certifies **provenance**: *this receipt, for this run, untampered* — the receipt bytes were produced by the holder of the embedded key and haven't been altered since. It never certifies that the answer is correct, and it doesn't change what `verdict` means. Unsigned is the default (zero overhead).
 
+## The evidence ledger
+
+The receipt, the deliverable check, the terminal gate, and the `rax diagnose replay` view are all **projections of one substrate**: the run's append-only evidence ledger. It is the second node of the reasoning [meta-loop DAG](/concepts/architecture/#the-meta-loop) (`Contract → Ledger → Assessment → Control → Actuators → Projector`) and the single source of run history — populated on every kernel run (`.withReasoning()`), no opt-in required.
+
+Each entry is a typed, plain-data **fact** with a dense, monotonic, append-assigned `seq` (its stable address) and the `iteration` it was recorded at. There are twelve fact families:
+
+| Kind | Records |
+| --- | --- |
+| `tool-invocation` / `tool-result` | a tool call issued / returned (with executor-level success) |
+| `artifact` | a file/output written — path **plus a content digest** (by the built-in file-write tool and by code-execute / shell / MCP tools) |
+| `requirement` | a contract requirement surfaced for the run |
+| `claim` | an evidence claim the model asserted |
+| `verdict` | a verifier verdict (grounding, post-conditions, …) |
+| `harness-signal` | a control-plane signal, e.g. a mid-run harness recompile |
+| `handoff` | a strategy-switch / sub-agent handoff |
+| `contract-amended` | a mid-run change to the compiled contract |
+| `compaction-marker` | a re-projection of history (see below) |
+| `checkpoint-marker` | a durable checkpoint boundary |
+| `deliverable-commit` | a declared deliverable committed as produced |
+
+**Append-only, never mutated.** Appending returns a *new* ledger; prior entries keep their identity and their `seq`. This is what makes downstream reads pure functions of the ledger — and therefore replayable.
+
+**Honest compaction.** When old history is compacted, it is **re-projected, not rewritten**: compaction is recorded as a new `compaction-marker` entry rather than editing or deleting the facts it summarizes. History is never silently altered.
+
+**Crash-resume.** The ledger lives on the kernel state as a plain readonly array of plain-data entries, so the durable kernel codec round-trips it automatically — a run resumed with [`.withDurableRuns()`](/guides/durable-execution/) restores its full evidence trail, not just its message thread.
+
+## Run assessment
+
+Between the ledger and the loop's control decisions sits **run assessment** — one *pure function*, recomputed each iteration, that answers *where does this run stand?* from `contract × ledger × budget`. It is the perception node of the meta-loop DAG. It never mutates state, never appends to the ledger, and never reads loop-control state beyond its three inputs.
+
+The result is cached on the kernel state and emitted every iteration as an `AssessmentEmitted` event (on the EventBus, and in the trace `rax diagnose replay` reads). It carries:
+
+| Field | Meaning |
+| --- | --- |
+| `phase` | run phase — `orient` / `gather` / `execute` / `synthesize` / `verify` |
+| `pace.band` | budget-vs-work pace — `green` / `economize` / `triage` / `terminal` |
+| `pace.burnRatio` | fraction of the token/cost/iteration budget consumed |
+| `evidenceDelta` | how much **new** evidence this iteration produced (dedup-aware — reuses the same normalized-args notion of "seen" the gather dedup index uses) |
+| `requirements` | contract requirements partitioned into satisfied / outstanding / blocked |
+| `deliverables` | declared deliverables partitioned into produced / missing (the same data the receipt's `deliverables[]` reports) |
+| `health` | windowed run-health signals (repeated failures, stalls) |
+
+Assessment is **default-on**: it runs on every kernel run that compiled a contract (all of them). What is opt-in is the *reaction* to it — [`.withLongHorizon()`](/reference/builder-api/) turns the pace band into budget-aware actions, and [`.withAdaptiveHarness()`](/reference/builder-api/) recompiles the harness plan from the assessment on a cadence (deepen scaffolding when the run struggles, lean when it flows). Both only *read* the assessment; the assessment itself is always computed and always traced. `.withAdaptiveHarness()` remains experimental — its cross-tier ablation was inconclusive, so it is not default-on.
+
 ## CLI: `rax ps` and `rax attach`
 
 Durable runs live in `~/.reactive-agents/<agentId>/runs.db` (or the `.withDurableRuns({ dir })` you configured). The CLI reads the same substrate:
