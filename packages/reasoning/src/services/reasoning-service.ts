@@ -8,6 +8,7 @@ import type {
 import type { ReasoningConfig } from "../types/config.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { StrategyRegistry, type StrategyFn } from "./strategy-registry.js";
+import { selectStrategyName } from "./strategy-selection.js";
 import type { ReasoningErrors } from "../errors/errors.js";
 import type { ContextProfile } from "../context/context-profile.js";
 import { LLMService } from "@reactive-agents/llm-provider";
@@ -187,13 +188,15 @@ export const ReasoningServiceLive = (
       return {
         execute: (params) =>
           Effect.gen(function* () {
-            // ── Determine which strategy to use ──
-            // adaptive.enabled takes priority: routes every task through the
-            // adaptive classifier which picks the best sub-strategy per task.
-            // Explicit params.strategy and config.defaultStrategy are used otherwise.
-            const strategyName: ReasoningStrategy = config.adaptive.enabled
-              ? "adaptive"
-              : (params.strategy ?? config.defaultStrategy);
+            // ── Determine which strategy to use (Phase 7: Strategy→Policy) ──
+            // Precedence (highest→lowest): config.adaptive.enabled (the runtime
+            // sub-strategy PICKER) > explicit params.strategy (.withStrategy)
+            // > compiled plan.strategy (NEW, only when params.adaptiveHarness)
+            // > config.defaultStrategy. When adaptiveHarness is OFF (default)
+            // this reduces to the exact pre-Phase-7 expression — byte-identical.
+            // The plan-drive is a PURE dispatch-time compile (DAG law); see
+            // strategy-selection.ts for the interaction rationale.
+            const strategyName: ReasoningStrategy = selectStrategyName(params, config);
 
             // ── Get strategy function from registry ──
             const strategyFn = yield* registry.get(strategyName);
