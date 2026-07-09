@@ -186,9 +186,33 @@ describe("recompileOnAssessment", () => {
     expect(rc.changed).toBe(true);
     expect(rc.direction).toBe("deepen");
     expect(rc.plan.guard.scaffoldingLevel).toBe(leanBase.guard.scaffoldingLevel + 1);
-    expect(rc.plan.guard.horizonProfile).toBe("long");
     expect(rc.plan.source).toBe("recompiled");
     expect(rc.reason).toContain("deepen");
+  });
+
+  // P0 (2026-07-09 ablation): DEEPEN used to set `horizonProfile: "long"`
+  // unconditionally. `horizonProfile` is the ONE plan field any consumer reads
+  // (runner.ts:403 at run-start; arbitrator.ts:1575 re-reads state.meta.horizonProfile
+  // on EVERY arbitration to resolve the veto window + terminal-gate redirect
+  // budget). So on a SHORT contract a struggling run silently swapped in
+  // long-horizon guard tolerances — loosening the stall/loop/redirect guards
+  // exactly when the run was stuck. Measured: ra-adaptive accuracy 22% vs
+  // ra-full 39%, loop-intelligence 13% vs 20%, resilience 15% vs 8% (cogito:8b,
+  // n=3, 5 rw tasks). The horizon is a property of the CONTRACT, not of how
+  // badly the run is going: deepening scaffolding must never re-declare it.
+  it("P0: DEEPEN preserves a SHORT contract's horizonProfile (never fabricates 'long')", () => {
+    expect(leanBase.guard.horizonProfile).toBeUndefined();
+    const rc = recompileOnAssessment(leanBase, steadyAssessment({ consecutiveFailures: 3 }));
+    expect(rc.direction).toBe("deepen");
+    expect(rc.plan.guard.horizonProfile).toBeUndefined();
+  });
+
+  it("P0: DEEPEN preserves a LONG contract's horizonProfile ('long' stays 'long')", () => {
+    const longBase = compileHarnessPlan(inputs({ capability: { tier: "frontier" }, horizon: "long" }));
+    expect(longBase.guard.horizonProfile).toBe("long");
+    const rc = recompileOnAssessment(longBase, steadyAssessment({ consecutiveFailures: 3 }));
+    expect(rc.direction).toBe("deepen");
+    expect(rc.plan.guard.horizonProfile).toBe("long");
   });
 
   it("no new evidence for several iterations DEEPENS the plan", () => {

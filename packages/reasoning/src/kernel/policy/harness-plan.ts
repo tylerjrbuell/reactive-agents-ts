@@ -368,12 +368,10 @@ export function recompileOnAssessment(
     const nextScaffold = clamp(plan.guard.scaffoldingLevel + 1, 0, MAX_SCAFFOLDING);
     const nextVerifier = step(VERIFIER_LADDER, plan.verifierTier, 1);
     const nextBudget = step(BUDGET_LADDER, plan.budget.budgetClass, 1);
-    const alreadyLong = plan.guard.horizonProfile === "long";
     const changed =
       nextScaffold !== plan.guard.scaffoldingLevel ||
       nextVerifier !== plan.verifierTier ||
-      nextBudget !== plan.budget.budgetClass ||
-      !alreadyLong;
+      nextBudget !== plan.budget.budgetClass;
     if (!changed) {
       return { plan, changed: false, direction: "none", reason: "already at max scaffolding" };
     }
@@ -381,7 +379,12 @@ export function recompileOnAssessment(
     return {
       plan: freezePlan({
         ...plan,
-        guard: { horizonProfile: "long", scaffoldingLevel: nextScaffold },
+        // `horizonProfile` is PRESERVED, never fabricated. The horizon is a
+        // property of the compiled contract; a struggling run is not a
+        // long-horizon run. Overwriting it here swapped in long-horizon guard
+        // tolerances (arbitrator veto window, terminal-gate redirect budget)
+        // on short tasks precisely when the guards were needed most.
+        guard: { ...plan.guard, scaffoldingLevel: nextScaffold },
         verifierTier: nextVerifier,
         budget: { ...plan.budget, budgetClass: nextBudget },
         source: "recompiled",
