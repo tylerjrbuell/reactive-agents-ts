@@ -680,7 +680,14 @@ Canonical project skills live in `.agents/skills/`:
 ## Current Framework Snapshot (v0.12.0)
 
 - Monorepo scale: **36 packages + 6 apps** (cli, cortex, docs, examples, advocate, stackblitz)
-- Verified quality: **7,190 tests / 908 files, 0 fail** (2026-07-05 pre-v0.13.5 baseline) — run `bun test` for the authoritative count before release
+- Verified quality: **7,671 pass / 7,698 tests across 974 files** (2026-07-09) — run `bun test` for the authoritative count before release
+
+> **Meta-loop overhaul on `main` (UNRELEASED — `main` is ahead of the v0.13.5 tag).** The reasoning harness was rebuilt as a one-directional loop (Contract → Ledger → Assessment → Control → Actuators → Projector). Split into two truth-classes when documenting or releasing:
+>
+> - **Default-on + verified** (in every reasoning run now): append-only evidence ledger (rides crash-resume), deliverable-truth (typed contract + contract-driven terminal gate + `result.receipt.deliverables[]`), honest compaction (dropped refs enumerated), recall round-trip (one reference grammar), per-iteration run `assessment` trace event, and the Phase 3.6 reliability fixes (prior context renders across strategy switches, generous final-synthesis budget, structured-output retry-once, verifier-aware stall guard, non-amputating early-stop).
+> - **Opt-in + experimental** (NOT default, NOT "better"): `.withLongHorizon()` (scales guards to `maxIterations`; verified to finish long runs but not lift-gated for default-on) and `.withAdaptiveHarness()` (run-start policy compiler + mid-run recompile; cross-tier ablation **INCONCLUSIVE** — n=1 dev-box noise — so it stays opt-in under the lift-gate veto). `.withContract()` pre-existed but is now load-bearing.
+>
+> Do not describe the opt-in pair as recommended/default, and do not claim the adaptive harness improves results. CHANGELOG / ROADMAP / version bump belong to the v0.14 release step, not this snapshot.
 - Public facade: `reactive-agents` built on Effect-TS layered runtime
 - Built-in tools: **9 capability tools** (web-search, crypto-price, http-get, file-read, file-write, code-execute, git-cli, gh-cli, gws-cli) + **9 meta-tools** (context-status, task-complete, final-answer, brief, find, pulse, recall, checkpoint, discover-tools) — *shell-execute is gated via `.withTerminalTools()`, not auto-registered*
 

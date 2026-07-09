@@ -17,7 +17,7 @@ Built on Effect-TS — schema-validated boundaries, tagged errors, no untyped th
 | **41 packages & apps**       | 36 packages + 5 apps — 33 published to npm, all opt-in, no hidden coupling |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM 40+, Test |
 | **7 reasoning strategies**   | ReAct · Blueprint · Reflexion · Plan-Execute · Tree-of-Thought · Adaptive · Code-Action (@exp) |
-| **7,190 tests · 908 files**  | Verified with `bun test` on every PR                            |
+| **7,671 tests · 974 files**  | Verified with `bun test` on every PR                            |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -124,6 +124,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Harness-forced abstention** — when grounding is structurally impossible (a required tool is missing, or synthesis is repeatedly rejected as ungrounded), the run ends honestly with `terminatedBy: "abstained"` and `result.abstention { reason, missing }` instead of fabricating or grinding to `max_iterations`
 -   **Cost controls** — 27-signal complexity router, semantic cache, budget enforcement (persists across restarts), dynamic pricing via OpenRouter
 -   **Required tools guard** — ensure critical tools are called before answering, with `maxCallsPerTool` budgets to prevent research loops
+-   **Evidence ledger + deliverable-truth** — every run keeps an append-only ledger (tool invocations, artifacts with path + content digest — including files written by code-execute / shell / MCP tools — verifier verdicts, and the answer's evidence claims) that rides crash-resume. It also compiles a typed contract of what "done" means from the task; the terminal gate checks requirement satisfaction against the ledger, and `result.receipt.deliverables[]` names each declared output as **produced or missing** — a partial multi-file run reports exactly which outputs never landed instead of claiming success. **Default-on** in a reasoning run
 
 ### 🔭 Observability
 -   **12-phase execution engine** — deterministic lifecycle with `before` / `after` / `on-error` hooks per phase
@@ -131,6 +132,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 -   **Distributed tracing** (OTLP) + structured logging via `withLogging({ level, format, filePath })`
 -   **Cortex Studio live reporting** — `.withCortex(url?)` streams runtime telemetry over WebSocket
 -   **Streaming + SSE** — `agent.runStream()` with `AbortSignal` cancellation; one-line SSE endpoint via `AgentStream.toSSE()`
+-   **Per-iteration run assessment** — every iteration emits an `assessment` trace event (requirements satisfied/outstanding, deliverables, evidence delta, run phase — orient/gather/execute/synthesize/verify — pace band, health), visible in `rax diagnose replay`. The measurement is always on; its consumption by adaptive pacing is behind the opt-in flags below
 
 ### 🧩 Composition & Multi-Agent
 -   **Builder API** — chains capabilities in one place; **Agent-as-data** via `toConfig()` / `fromJSON()` for save/share/restore
@@ -145,6 +147,8 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - **`defineTool`** typed tool authoring — Standard Schema input (Effect Schema / Zod / Valibot / ArkType) + a plain async handler with arg types inferred from the schema; malformed options (`parameters`/`execute` instead of `input`/`handler`) fail fast with a typed error
 - **ToolBuilder** fluent API — define tools without raw schema objects
 - **Dynamic tool registration** — `agent.registerTool()` / `agent.unregisterTool()` at runtime
+- **`.withLongHorizon()`** *(opt-in, off by default)* — scales the guard thresholds (stall, consecutive-thoughts, redirect/nudge budgets) proportionally to `maxIterations` so a 40+ iteration research run isn't tripped by guards tuned for short runs. Verified to let a long-horizon task run to completion; **not yet lift-gated for default-on**. When not called, behavior is byte-identical to the default
+- **`.withAdaptiveHarness()`** *(opt-in, experimental)* — a policy compiler derives the run's harness (strategy, guard depth, horizon profile) from model tier + task classification + horizon at run-start, and recompiles mid-run on progress evidence; explicit `.withX()` withers override the compiled plan. **Under active validation** — its cross-tier ablation was inconclusive (n=1 dev-hardware noise), so it is not default-on and sits under a lift-gate veto
 
 ### 🌐 Frontend Integration
 - **`@reactive-agents/ui-core`** — headless, framework-agnostic core: versioned wire protocol, resumable stream client (cursor reconnect), run state machine, safe generative-UI trees, durable human-in-the-loop rails, and zero-token fixture testing. The engine the bindings share.
@@ -154,7 +158,7 @@ Grouped by capability. **Every layer is opt-in** — call `.with*()` only for wh
 - All build on `ui-core` and consume `AgentStream.toSSE()` + the durable endpoint helpers from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **7,190 tests** across 908 files — verified `bun test` on every PR
+- **7,671 tests** across 974 files — verified `bun test` on every PR
 - **Strict TypeScript** — Effect-TS schemas validate every service boundary; explicit tagged errors, no untyped throws
 
 ## Quick Start
@@ -422,7 +426,7 @@ How Reactive Agents compares to other TypeScript agent frameworks on shipped, wo
 | Agent-as-data config          |       Yes       |      --      |      --       |   --    |
 | Functional composition        |       Yes       |     Yes      |      --       |   --    |
 | Dynamic tool registration     |       Yes       |     Yes      |      --       |   --    |
-| Test suite                    |   7,190 tests   |      --      |      --       |   --    |
+| Test suite                    |   7,671 tests   |      --      |      --       |   --    |
 
 <sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-06. `--` means we found no first-party equivalent, not that none exists. Corrections welcome — [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
 
@@ -870,7 +874,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (7,190 tests / 908 files, ~95s)
+bun test                 # Run full test suite (7,671 tests / 974 files, ~95s)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

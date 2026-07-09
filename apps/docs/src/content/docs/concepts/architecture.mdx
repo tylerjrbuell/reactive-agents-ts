@@ -39,6 +39,25 @@ The reasoning kernel was reorganized in v0.10 to group code by capability. If yo
 
 The single-owner termination invariant (M9 mechanism, 100% path coverage) is enforced by `kernel/loop/terminate.ts` plus a CI lint guard at `scripts/check-termination-paths.sh` — no path bypasses the arbitrator.
 
+## The meta-loop
+
+Internally the reasoning harness is a **one-directional loop** — a small DAG where each stage reads only from the stage before it, with no back-edges. This is what makes a run's decisions replayable: given the same ledger, every downstream read is a pure function.
+
+```
+Contract → Ledger → Assessment → Control → Actuators → Projector
+```
+
+| Stage | Role |
+| --- | --- |
+| **Contract** | The typed goal — "what does DONE mean for this run?" Compiled once at run start from the task (plus any declared [`.withContract()`](/reference/builder-api/)) and then **frozen**: requirements, deliverables, constraints, horizon, acceptance policy. |
+| **Ledger** | The append-only event store everything else projects from — tool invocations, artifacts (path + content digest), verifier verdicts, evidence claims. It is the single source of run history and rides crash-resume. |
+| **Assessment** | A **pure, per-iteration read** of where the run stands, derived from contract × ledger: requirements satisfied/outstanding, deliverables produced/missing, evidence delta, run phase (orient / gather / execute / synthesize / verify), pace band, health. Emitted as an `assessment` trace event every iteration. |
+| **Control** | One proposal → resolver that picks a **single action per iteration** from a documented total order (continue, nudge, switch strategy, redirect, escalate, terminate). No two subsystems race to steer the loop. |
+| **Actuators** | The effects that carry out the chosen action — guards, strategy switch, the terminal gate (which consults contract requirement satisfaction against the ledger). |
+| **Projector** | The single authority that renders the prompt window each turn — deciding what context, references, and outstanding requirements the model sees. One reference grammar is shared by the projector, the recall gate, and step references, so every reference rendered into the prompt is resolvable via `recall(...)`. |
+
+Each subsystem is fenced by a grep-able enforcement script in `scripts/`, so a change that reintroduces a back-edge (e.g. Assessment reading loop state directly, or a second termination owner) fails CI rather than drifting silently. The receipt's [`deliverables[]`](/features/process-model/) and the `rax diagnose replay` view are both projections of this same ledger.
+
 ## Layer Stack
 
 ```

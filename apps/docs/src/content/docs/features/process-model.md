@@ -92,6 +92,20 @@ result.receipt;
 
 It is computed from in-memory run data at result assembly — present even with tracing disabled — and attached on both the promise path (`result.receipt`) and the streaming path (`StreamCompleted.receipt`, plus a `TrustEvent` before it; `AgentStream.collect()` carries it through). Paused runs (awaiting approval/interaction) get **no** receipt: receipts belong to terminal results only.
 
+### Deliverable truth (`receipt.deliverables[]`)
+
+When the run's compiled contract declared at least one concrete deliverable (a file to write, an answer section, a structured object), the receipt carries a `deliverables[]` array naming each one as produced or missing:
+
+```typescript
+result.receipt?.deliverables;
+// [
+//   { spec: "produce the file ./report.md",  produced: true  },
+//   { spec: "produce the file ./summary.md", produced: false },  // never landed
+// ]
+```
+
+Each entry is `{ spec: string; produced: boolean }`. `produced: false` names a **missing** output — so a partial multi-file run reports exactly which deliverables never landed instead of claiming success. The check runs against the run's append-only evidence ledger (which records artifacts written by the built-in file-write tool as well as by code-execute / shell / MCP tools, each with a content digest). The field is **absent** for pure Q&A runs that declared no deliverable, keeping those receipts byte-identical to before. Declare deliverables explicitly with [`.withContract()`](/reference/builder-api/); the harness also infers them from task phrasing that names files or outputs.
+
 ### Verdicts
 
 Deterministic rules, evaluated in order — first match wins:
