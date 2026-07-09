@@ -23,27 +23,21 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { mockToolServiceLayer } from "../../testing/tool-service-mock.js";
 import { reactKernel } from "./react-kernel.js";
 import { runPass } from "./run-pass.js";
 import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
 
-const toolLayer = Layer.succeed(
-  ToolService,
-  ToolService.of({
-    execute: (req: { toolName: string; args?: Record<string, unknown> }) =>
-      Effect.succeed({
-        success: true,
-        result: { finding: `KEY FACT from ${req.toolName}(${JSON.stringify(req.args ?? {})})` },
-      }),
-    getTool: (name: string) =>
-      Effect.succeed({ name, description: "test", parameters: [{ name: "q", type: "string", required: true }] }),
-    register: () => Effect.void,
-    listTools: () => Effect.succeed([]),
-    deregister: () => Effect.void,
-  } as unknown as Parameters<typeof ToolService.of>[0]),
-);
+const toolLayer = mockToolServiceLayer({
+  execute: (req: { toolName: string; args?: unknown }) =>
+    Effect.succeed({
+      success: true,
+      result: { finding: `KEY FACT from ${req.toolName}(${JSON.stringify(req.args ?? {})})` },
+    }),
+  getTool: (name: string) =>
+    Effect.succeed({ name, description: "test", parameters: [{ name: "q", type: "string", required: true }] }),
+});
 
 const SCHEMAS = [
   { name: "alpha", description: "gather a", parameters: [{ name: "q", type: "string", required: true }] },

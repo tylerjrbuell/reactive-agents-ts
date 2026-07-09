@@ -17,10 +17,10 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
 import { reactKernel } from "./react-kernel.js";
 import { runPass } from "./run-pass.js";
 import { compileRunContract } from "../contract/run-contract.js";
+import { succeedingToolLayer } from "../../testing/tool-service-mock.js";
 import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
 
 // A gather tool the model calls to accumulate evidence (never the write path, so
@@ -31,22 +31,9 @@ const GATHER_SCHEMA = {
   parameters: [{ name: "q", type: "string", required: true }],
 };
 
-const gatherToolLayer = Layer.succeed(
-  ToolService,
-  ToolService.of({
-    execute: (req: { toolName: string }) => {
-      void req;
-      return Effect.succeed({
-        success: true,
-        result: { finding: "KEY FACT: the topic's core metric rose 12% last quarter." },
-      });
-    },
-    getTool: (name: string) =>
-      Effect.succeed({ name, description: "test", parameters: GATHER_SCHEMA.parameters }),
-    register: () => Effect.void,
-    listTools: () => Effect.succeed([]),
-    deregister: () => Effect.void,
-  } as unknown as Parameters<typeof ToolService.of>[0]),
+const gatherToolLayer = succeedingToolLayer(
+  { finding: "KEY FACT: the topic's core metric rose 12% last quarter." },
+  GATHER_SCHEMA.parameters,
 );
 
 // iter 0: the task prompt (mentions report.md) → gather tool call, burning tokens.

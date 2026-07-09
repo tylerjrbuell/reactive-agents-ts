@@ -1221,6 +1221,11 @@ export function runKernel(
           state.meta.terminatedBy === "harness_deliverable" &&
           verdict.checks.every((c) => c.passed || c.name === "output-is-model-authored");
         if (onlyHarnessAuthorshipFailed) {
+          // `harnessAuthoredOutput` is now a DECLARED meta field with a real
+          // consumer: `resolveCompletionStatus` degrades this run to `partial`,
+          // so the caller sees `success:false` beside the preserved answer. It
+          // used to be an untyped stowaway that nothing read, and the run
+          // reported a clean success (H5 / wiring audit 2026-07-09).
           state = transitionState(state, {
             meta: {
               ...state.meta,
@@ -1228,7 +1233,7 @@ export function runKernel(
               verificationWarning: verdict.summary,
               verifierVerdict: verdict.summary,
               harnessAuthoredOutput: true,
-            } as KernelState["meta"],
+            },
           });
         } else if (verdictSeverity === "escalate") {
           state = transitionState(state, {

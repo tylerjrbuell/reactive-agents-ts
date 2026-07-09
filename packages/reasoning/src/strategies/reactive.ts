@@ -15,6 +15,10 @@ import { reactKernel, deriveTerminatedBy } from "../kernel/loop/react-kernel.js"
 import { runPass } from "../kernel/loop/run-pass.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage, KernelState } from "../kernel/state/kernel-state.js";
+import {
+  honestPartialMetadata,
+  resolveCompletionStatus,
+} from "../kernel/state/completion-status.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -303,7 +307,9 @@ export const executeReactive = (
 
     yield* emitLog({
       _tag: "completion",
-      success: state.status === "done",
+      // Same honest rule as the returned status — the log must not claim a
+      // success the result does not.
+      success: resolveCompletionStatus(state) === "completed",
       summary: `Reactive strategy terminated: ${terminatedBy}`,
       timestamp: new Date(),
     });
@@ -312,12 +318,10 @@ export const executeReactive = (
       strategy: "reactive",
       steps: pass.steps,
       output,
-      status:
-        state.status === "done"
-          ? "completed"
-          : state.status === "failed"
-            ? "failed"
-            : "partial",
+      // H5: `done` degrades to `partial` when the harness shipped output the
+      // terminal verifier did not bless (harness-authored deliverable, or a
+      // budget-terminal partial). `success` is derived from this downstream.
+      status: resolveCompletionStatus(state),
       start,
       totalTokens: pass.tokens,
       totalInputTokens: pass.inputTokens,
@@ -326,6 +330,8 @@ export const executeReactive = (
       error: state.error,
       extraMetadata: {
         terminatedBy,
+        // H5: the honesty fields cross the result boundary. Empty on a clean run.
+        ...honestPartialMetadata(state.meta),
         // Parallel open-string channel preserving raw kernel meta.
         // Carries dynamic killswitch reasons (e.g.
         // "budget-limit:tokens:1/0") that don't fit the closed

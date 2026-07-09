@@ -20,7 +20,10 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { ToolService } from "@reactive-agents/tools";
+import { failingToolLayer, succeedingToolLayer } from "../../testing/tool-service-mock.js";
+
+const FAILING = failingToolLayer("connection refused: search backend unreachable");
+const SUCCEEDING = succeedingToolLayer({ items: ["result-1", "result-2"] });
 import { reactKernel } from "./react-kernel.js";
 import { runPass } from "./run-pass.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
@@ -68,32 +71,12 @@ const WS_SCHEMA = {
   parameters: [{ name: "query", type: "string", required: true }],
 };
 
-const failingToolLayer = Layer.succeed(
-  ToolService,
-  ToolService.of({
-    execute: () => Effect.fail(new Error("connection refused: search backend unreachable")),
-    getTool: (name: string) => Effect.succeed({ name, description: "test", parameters: [] }),
-    register: () => Effect.void,
-    listTools: () => Effect.succeed([]),
-    deregister: () => Effect.void,
-  } as unknown as Parameters<typeof ToolService.of>[0]),
-);
 
-const succeedingToolLayer = Layer.succeed(
-  ToolService,
-  ToolService.of({
-    execute: () => Effect.succeed({ success: true, result: { items: ["result-1", "result-2"] } }),
-    getTool: (name: string) => Effect.succeed({ name, description: "test", parameters: [] }),
-    register: () => Effect.void,
-    listTools: () => Effect.succeed([]),
-    deregister: () => Effect.void,
-  } as unknown as Parameters<typeof ToolService.of>[0]),
-);
 
 const runReactive = (
   input: KernelInput,
   llmLayer: ReturnType<typeof TestLLMServiceLayer>,
-  toolLayer: typeof failingToolLayer,
+  toolLayer: typeof FAILING,
   maxIterations = 8,
 ) =>
   Effect.runPromise(
@@ -325,7 +308,7 @@ describe("F1 integration — grounded-terminal invariant (react kernel full loop
         availableToolSchemas: [WS_SCHEMA],
       },
       llm,
-      failingToolLayer,
+      FAILING,
     );
 
     // Exactly ONE grounding redirect signal was injected (cap: 1 per run).
@@ -349,7 +332,7 @@ describe("F1 integration — grounded-terminal invariant (react kernel full loop
         availableToolSchemas: [WS_SCHEMA],
       },
       llm,
-      succeedingToolLayer,
+      SUCCEEDING,
     );
 
     expect(groundingSignals(pass.state.steps).length).toBe(1);
@@ -370,7 +353,7 @@ describe("F1 integration — grounded-terminal invariant (react kernel full loop
         availableToolSchemas: [WS_SCHEMA],
       },
       llm,
-      succeedingToolLayer,
+      SUCCEEDING,
     );
 
     expect(pass.state.status).toBe("done");
@@ -387,7 +370,7 @@ describe("F1 integration — grounded-terminal invariant (react kernel full loop
     const pass = await runReactive(
       { task: "Summarize the tradeoffs of tabs versus spaces" },
       llm,
-      succeedingToolLayer,
+      SUCCEEDING,
       3,
     );
 
@@ -412,7 +395,7 @@ describe("F3 integration — repeated identical failure escalates immediately", 
         availableToolSchemas: [WS_SCHEMA],
       },
       llm,
-      failingToolLayer,
+      FAILING,
       6,
     );
 

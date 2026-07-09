@@ -462,7 +462,36 @@ export interface KernelMeta {
    * type-checked.
    */
   readonly verificationWarning?: string;
-
+  /**
+   * True when the terminal verifier failed ONLY `output-is-model-authored` — the
+   * harness concatenated a deliverable the model never wrote (runner.ts:1220,
+   * trace 01KWZ811). The answer is preserved, but the run is NOT a clean
+   * success: `resolveCompletionStatus` degrades it to `partial`, which makes
+   * `result.success === false` downstream.
+   *
+   * Previously written through an `as KernelState["meta"]` cast and never
+   * declared here — an untyped stowaway with zero readers. Declared so the write
+   * is type-checked and the read path is discoverable.
+   */
+  readonly harnessAuthoredOutput?: boolean;
+  /**
+   * The terminal verifier's human-readable summary. Consumed by the receipt
+   * (`@reactive-agents/core` → `receipt.ts:52`).
+   *
+   * Previously written via an `as KernelState["meta"]` cast; declared so the
+   * write is type-checked.
+   */
+  readonly verifierVerdict?: string;
+  /**
+   * Whether the terminal verifier rejected the answer.
+   *
+   * ⚠ WRITE-ONLY TODAY: written at five sites in `runner.ts`, read by NO
+   * production consumer (only `grounding-block-mode.test.ts:121`). It is
+   * declared rather than deleted because a test pins it, but it earns no
+   * behavior. Wire it or delete it in the inert-surface pass — do not add
+   * readers casually. See wiki/Research/Audit-Reports-2026-07-09.
+   */
+  readonly verifierRejected?: boolean;
 }
 
 // ── KernelState — Immutable, serializable reasoning state ────────────────────

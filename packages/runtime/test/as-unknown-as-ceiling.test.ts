@@ -155,7 +155,16 @@ const PACKAGES_ROOT = join(REPO_ROOT, "packages");
 //     category as the 2026-06-06 global-`fetch` stub bump and the existing
 //     pace-terminal.integration.test.ts ToolService mock; routing through a
 //     helper still leaves one cast, so §5.5 "design it out" does not apply.
-const CEILING = 78;
+// 2026-07-09: LOWERED 78 → 75. The above "§5.5 does not apply" reasoning was
+//   wrong: routing through a helper leaves one cast IN TOTAL, not one per test.
+//   The H5 honest-partial work needed a FIFTH partial `ToolService` double,
+//   which made the duplication obvious. The five identical
+//   `… as unknown as Parameters<typeof ToolService.of>[0]` mocks (pace-terminal,
+//   harness-recompile, grounded-terminal ×2, honest-partial) are now ONE helper
+//   — `reasoning/src/testing/tool-service-mock.ts` — with a single sanctioned
+//   widening. Net −3 against the recorded pin; the 2026-07-08 (+1) bump above is
+//   retired by it. Design it out beats bumping it up.
+const CEILING = 75;
 
 interface Hit {
   file: string;

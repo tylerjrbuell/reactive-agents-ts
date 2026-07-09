@@ -27,6 +27,7 @@ import { runKernel } from "../kernel/loop/runner.js";
 import { reactKernel } from "../kernel/loop/react-kernel.js";
 import { buildStrategyResult } from "../kernel/capabilities/sense/step-utils.js";
 import type { KernelInput, KernelMessage } from "../kernel/state/kernel-state.js";
+import { resolveCompletionStatus } from "../kernel/state/completion-status.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { makeStrategyEmitLog, emitPhaseEnd } from "../kernel/utils/service-utils.js";
 
@@ -185,7 +186,7 @@ export const executeDirect = (
 
     yield* emitLog({
       _tag: "completion",
-      success: state.status === "done",
+      success: resolveCompletionStatus(state) === "completed",
       summary: `Direct strategy completed (${maxIter} iter cap)`,
       timestamp: new Date(),
     });
@@ -194,7 +195,8 @@ export const executeDirect = (
       strategy: "direct",
       steps: state.steps,
       output,
-      status: state.status === "failed" ? "failed" : state.status === "done" ? "completed" : "partial",
+      // H5: an unverified ship is `partial`, never `completed`.
+      status: resolveCompletionStatus(state),
       start,
       totalTokens: state.tokens ?? 0,
       totalCost: 0,
