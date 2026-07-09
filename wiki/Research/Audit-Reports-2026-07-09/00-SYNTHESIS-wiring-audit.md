@@ -76,9 +76,30 @@ Program law (09-UNIFIED-PROGRAM §6): *"one owner module + one grep-able enforce
 
 No CI workflow runs any of them. `eval.yml` is `workflow_dispatch`-only and self-describes as *"Disabled auto-triggers (always failing)."*
 
-**`check-policy-compiler.sh` is RED on main right now** — red since Phase 7 (`66c5d1b3`) landed, verified by checking out that commit. The law degraded from *"the script must pass"* to *"the script must exist."*
+**`check-policy-compiler.sh` was RED on main** — red since Phase 7 (`66c5d1b3`) landed, verified by checking out that commit. The law degraded from *"the script must pass"* to *"the script must exist."*
 
-The violation it flags is real: `strategy-selection.ts:103` compiles the harness plan a **second time** at dispatch, from `classification.horizon`, while `runner.ts:395` compiles it at run-start from `runContract.horizon`. Two compiles, two horizon sources, one run. (Observed live: `rw-8` classifies `horizon=long` at dispatch → `plan-execute-reflect`.)
+The violation it flags is real: `strategy-selection.ts:103` called `compileHarnessPlan` from `services/`, while the script requires the Policy Compiler to be its sole caller. Two callers of a single-owner primitive.
+
+> **Correction (post-audit).** An earlier draft of this report claimed the two compile sites read *different horizon sources*. That is wrong. `compileRunContract` and the dispatch-time nomination both bottom out in the same `classifyTaskHorizon(task)`, so they agree by construction. The violation was **structural**, not semantic. The observed `rw-8 → plan-execute-reflect` behavior is the plan driving strategy at dispatch, not a horizon disagreement.
+
+**Status: FIXED** (`385bb686`). The compile moved behind `kernel/policy/strategy-nomination.ts`; all 8 scripts now pass, are spawned by `packages/reasoning/tests/enforcement-scripts.test.ts` (which discovers them, and asserts it found ≥8 so it cannot pass vacuously), and run in CI under `set -e`.
+
+---
+
+## P0 — `result.success === true` ships with `verified: false`, and the "honest label" reaches no one
+
+Phase 3.6's H5 is **overstated** in the status board. What shipped: `runner.ts:1098` now passes `terminatedBy` into the terminal verify context, so the specific 01KWZ811 lie ("9 checks passed") is gone. What did **not** ship: the audit's actual requirement.
+
+At `runner.ts:1220-1232`, when `terminatedBy === "harness_deliverable"` and the only failed check is `output-is-model-authored`, the code deliberately does not set `status:"failed"`. `status` stays `"done"`, so `reactive.ts:306` (`success: state.status === "done"`) yields **`result.success === true` with `verified: false`.**
+
+The compensating "honest label" the code comment promises — *"a verification warning + harnessAuthoredOutput surface to receipts/telemetry"* — does not happen:
+
+- `harnessAuthoredOutput` — **zero readers** anywhere in `packages/` or `apps/` (written once, at `runner.ts:1230`).
+- `verificationWarning` — never consumed; not in `reactive.ts`'s `extraMetadata`, not surfaced at the result boundary.
+
+So the caller sees a clean success, and the honesty is confined to a code comment. In a framework whose thesis is honest reporting, this is the most consequential instance of the disease.
+
+**Also:** H3 (terse→generous synthesis) and H4 (structured-output fail-fast) shipped, but **neither has a revert-catching test**. The H5 verifier test (`verifier.test.ts:455`) passes `terminatedBy` directly, so deleting the `runner.ts:1098` wiring breaks nothing — the same unit-tests-the-function-not-the-call gap as everywhere else. H1, H2, H6 are shipped *and* properly pinned.
 
 ---
 
@@ -151,12 +172,26 @@ Healthy, default-on, genuinely behavior-changing (for contrast): `RunContract.po
 
 ---
 
-## Recommended order
+## Execution status
 
-1. **Forbidden-tool enforcement** (P0, security-adjacent, small, user-visible).
-2. **Gate: standard error + n-guard + on-path** (P0, unblocks every future default-on decision — nothing else can be validated until this works).
-3. **Run the 8 enforcement scripts in CI / a test** (P1, cheap, permanently prevents recurrence; fix `check-policy-compiler.sh` red by resolving the double-compile).
-4. **Mint `requirement` + `handoff` entries, or delete the kinds and their readers** (P1, closes D1's read-side and the dormant projector section).
-5. **Decide the inert surface:** wire the plan levers / control emitters / acceptance policy, or delete them. Do this *after* (2), so the decision has evidence.
+| # | Item | State |
+|---|---|---|
+| 1 | Forbidden-tool enforcement | ✅ **DONE** `a042e2f9` — deny beats every floor, applied to `universe` too; wiring pinned by a test that drives real `handleThinking`, verified by mutation |
+| 2 | Gate: standard error + n-guard + on-path | ✅ **DONE** `8407e955` — SE-of-difference bar, Agresti-smoothed spread (strictly positive at every n), new `underpowered` verdict, `--gate` flag + unconditional power warning; verified live |
+| 3 | Run the 8 enforcement scripts | ✅ **DONE** `385bb686` — discovered + spawned by a test (asserts ≥8 found), plus a CI step; `check-policy-compiler.sh` fixed by moving the compile into `kernel/policy/strategy-nomination.ts` |
+| 4 | `result.success===true` with `verified:false` (H5) | ⬜ **NEXT** — P0 honesty defect; surface `verificationWarning`/`harnessAuthoredOutput` at the result boundary, or fail the run |
+| 5 | Mint `requirement` + `handoff` entries | ⬜ closes D1's read-side and the dormant projector section |
+| 6 | Wire the inert surface (plan levers, 6 control emitters, acceptance policy, `TaskRequirement.weight`) | ⬜ **owner's ruling: wire each, verify with the now-working gate.** Every wiring is a behavior change, so each needs an end-to-end pin and a gate verdict before it counts as done. |
+| 7 | Revert-catching tests for H3 / H4 / the H5 runner wiring | ⬜ currently unit-tested in isolation; deleting the call sites breaks nothing |
 
-Items 1–3 are small and independently verifiable. Item 2 is the keystone: while the gate is broken, no "improvement" to this framework can be honestly claimed.
+Item 2 was the keystone: while the gate was broken, no "improvement" to this framework could be honestly claimed — and none was. The ImprovementLedger's three entries contain **zero `adopted`**.
+
+## The standing rule (owner, 2026-07-09)
+
+> Ensure this trend of unfinished wiring stops and all future work is verified end to end and fully test covered.
+
+A mechanism is **done** only when all three hold:
+
+1. A non-test **consumer reads** the value, and it **changes behavior**. A read that only feeds a trace, receipt, or log is still *write-only for the loop* — say so out loud.
+2. A test **fails when the wiring is cut**, not merely when the unit is wrong. Unit-testing `f()` does not pin that `f()` is called.
+3. If an invariant script guards it, **something executes that script**.
