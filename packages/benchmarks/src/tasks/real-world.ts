@@ -1,3 +1,4 @@
+import { gradedCheckHarness } from "./graded-check.js"
 import type { BenchmarkTask } from "../types.js"
 
 // ── Fixture generators ────────────────────────────────────────────────────────
@@ -352,39 +353,42 @@ describe("pipeline bug (race condition)", () => {
  * numeric field is accepted).
  */
 function generateRw4HiddenCheck(): string {
+  // GRADED (2026-07-09): four independent requirements, each scored. The old
+  // fail-fast form exited on the first miss, so "exported an array of 10 posts
+  // but forgot the comment count" scored 0.0 — identical to producing nothing.
+  // That all-or-nothing shape is what made per-run accuracy Bernoulli (sd≈0.5)
+  // and the 3pp lift rule unmeasurable. See src/tasks/graded-check.ts.
   return `// hidden-check.ts — scorer-written validation of output.ts. Not agent-authored.
-const mod: Record<string, unknown> = await import("./output.ts")
+${gradedCheckHarness()}
+let posts: Record<string, unknown>[] = []
+
+// An import failure leaves \`mod\` empty, so every check below fails honestly
+// (score 0.0) instead of crashing the scorer.
+const mod: Record<string, unknown> = await import("./output.ts").catch(() => ({}))
 const arrays = Object.values(mod).filter((v): v is unknown[] => Array.isArray(v))
-if (arrays.length === 0) {
-  console.error("FAIL: output.ts exports no array")
-  process.exit(1)
-}
-// The prompt pins: all posts by user 3 (JSONPlaceholder has exactly 10),
-// each enriched with its comment count.
-const posts = arrays.find((a) => a.length > 0) ?? arrays[0]!
-if (posts.length !== 10) {
-  console.error(\`FAIL: expected 10 posts for userId 3, got \${posts.length}\`)
-  process.exit(1)
-}
-for (const p of posts) {
-  const post = p as Record<string, unknown>
-  if (post.userId !== 3) {
-    console.error(\`FAIL: post has userId \${String(post.userId)}, expected 3\`)
-    process.exit(1)
-  }
-  if (typeof post.id !== "number" || typeof post.title !== "string" || post.title.length === 0) {
-    console.error("FAIL: post missing numeric id or non-empty title")
-    process.exit(1)
-  }
-  const hasCommentCount = Object.entries(post).some(
-    ([k, v]) => /comment/i.test(k) && typeof v === "number" && v >= 1,
-  )
-  if (!hasCommentCount) {
-    console.error("FAIL: post not enriched with a numeric comment count field")
-    process.exit(1)
-  }
-}
-console.log("hidden-check: output.ts exports 10 enriched posts for userId 3")
+
+check("output.ts exports a non-empty array", () => {
+  if (arrays.length === 0) throw new Error("output.ts exports no array")
+  posts = (arrays.find((a) => a.length > 0) ?? arrays[0]!) as Record<string, unknown>[]
+  return posts.length > 0
+})
+
+// The prompt pins: all posts by user 3 (JSONPlaceholder has exactly 10).
+check("exactly 10 posts", () => posts.length === 10)
+
+check("every post belongs to userId 3", () =>
+  posts.length > 0 && posts.every((p) => p.userId === 3))
+
+check("every post has a numeric id and a non-empty title", () =>
+  posts.length > 0 &&
+  posts.every((p) => typeof p.id === "number" && typeof p.title === "string" && p.title.length > 0))
+
+check("every post is enriched with a numeric comment count", () =>
+  posts.length > 0 &&
+  posts.every((p) =>
+    Object.entries(p).some(([k, v]) => /comment/i.test(k) && typeof v === "number" && v >= 1)))
+
+report()
 `
 }
 
@@ -397,16 +401,27 @@ console.log("hidden-check: output.ts exports 10 enriched posts for userId 3")
  * runner executes both scripts sequentially and fails if either fails.
  */
 function generateRw8HiddenCheck(): string {
+  // GRADED (2026-07-09): the two scripts are INDEPENDENT requirements. Fail-fast
+  // scored "generate.ts works, validate.ts is broken" the same as "neither
+  // exists". Now each is worth half. See src/tasks/graded-check.ts.
   return `// hidden-check.ts — scorer-written sequential runner. Not agent-authored.
+${gradedCheckHarness()}
 import { spawnSync } from "node:child_process"
-for (const script of ["generate.ts", "validate.ts"]) {
+
+function runs(script: string): boolean {
   const r = spawnSync("bun", ["run", script], { cwd: import.meta.dir, encoding: "utf8", timeout: 12_000 })
   if (r.status !== 0) {
-    console.error(\`\${script} failed (exit \${String(r.status)}):\\n\${r.stdout ?? ""}\\n\${r.stderr ?? ""}\`)
-    process.exit(1)
+    throw new Error(\`\${script} exit \${String(r.status)}: \${(r.stderr ?? "").slice(0, 160)}\`)
   }
+  return true
 }
-console.log("hidden-check: generate.ts and validate.ts both exited 0")
+
+// validate.ts still runs even when generate.ts fails: a run that wrote a correct
+// validator but a broken generator earns credit for the validator.
+check("generate.ts runs cleanly", () => runs("generate.ts"))
+check("validate.ts runs cleanly", () => runs("validate.ts"))
+
+report()
 `
 }
 
@@ -552,6 +567,7 @@ Note: some sources you find may have conflicting benchmark data for the same dat
     successCriteria: {
       type: "verifiable",
       command: "bun hidden-check.ts",
+      partialCredit: true,
     },
     primaryDimensions: ["tool-mastery", "accuracy", "efficiency"],
     dimensionRubrics: [
@@ -759,6 +775,7 @@ Phase 5: Run the validator against the generated data and report results`,
     successCriteria: {
       type: "verifiable",
       command: "bun hidden-check.ts",
+      partialCredit: true,
     },
     primaryDimensions: ["memory-fidelity", "reliability", "accuracy"],
     dimensionRubrics: [
