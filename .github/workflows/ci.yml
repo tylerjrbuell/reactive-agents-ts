@@ -68,6 +68,17 @@ jobs:
         run: bun run scripts/test-bun-exports.ts
       - name: Check capability manifest
         run: bun run scripts/check-capabilities.ts
+      # Architectural invariants (09-UNIFIED-PROGRAM §6: "no script → not done").
+      # Six of these were never executed by anything until 2026-07-09, and
+      # check-policy-compiler.sh sat red on main for a day. Belt and braces: the
+      # same scripts are also spawned by packages/reasoning/tests/enforcement-scripts.test.ts.
+      - name: Enforce architectural invariants
+        run: |
+          set -e
+          for s in scripts/check-*.sh; do
+            echo "── $s"
+            bash "$s"
+          done
       - run: bun test
       # T1.5 — North Star Test Gate (Tier 1). On failure, the formatted
       # output (weakness ID, closing commit, recovery commands) is captured

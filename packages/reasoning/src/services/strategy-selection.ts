@@ -35,13 +35,11 @@
 //   config.adaptive.enabled ? "adaptive" : (params.strategy ?? config.defaultStrategy)
 
 import type { ReasoningStrategy } from "../types/index.js";
-import type { ContextProfile, ModelTier } from "../context/context-profile.js";
+import type { ContextProfile } from "../context/context-profile.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
-import {
-  classifyTask,
-  type TaskClassification,
-} from "../kernel/capabilities/comprehend/task-classification.js";
-import { compileHarnessPlan, type PlanStrategy } from "../kernel/policy/harness-plan.js";
+import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
+import type { PlanStrategy } from "../kernel/policy/harness-plan.js";
+import { nominatePlanStrategy } from "../kernel/policy/strategy-nomination.js";
 
 /**
  * Map a compiled {@link PlanStrategy} to the registry's {@link ReasoningStrategy}
@@ -76,20 +74,6 @@ export interface StrategySelectionParams {
   readonly calibration?: ModelCalibration;
 }
 
-/**
- * Resolve the dispatch-time model tier the SAME way runner.ts does when it
- * compiles its own guard plan: an explicit `contextProfile.tier` wins, else
- * Ollama defaults to "local" and everything else to "mid". Note the plan's
- * strategy nomination does not actually read the tier (it keys off horizon +
- * complexity), but we compute it faithfully so the compile call is well-formed
- * and future tier-sensitive nominations stay correct.
- */
-function dispatchTier(params: StrategySelectionParams): ModelTier {
-  return (
-    params.contextProfile?.tier ?? (params.providerName === "ollama" ? "local" : "mid")
-  );
-}
-
 /** The minimal config shape `selectStrategyName` reads — a structural subset of
  *  `ReasoningConfig` so the full config (and any partial config in tests) fits. */
 export interface StrategySelectionConfig {
@@ -97,15 +81,16 @@ export interface StrategySelectionConfig {
   readonly defaultStrategy: ReasoningStrategy;
 }
 
-/** Compile the plan's nominated strategy at dispatch time (pure). */
+/**
+ * Compile the plan's nominated strategy at dispatch time (pure).
+ *
+ * The compile itself lives in `kernel/policy/strategy-nomination.ts` — the
+ * Policy Compiler is the single owner of `compileHarnessPlan`
+ * (`scripts/check-policy-compiler.sh`). Calling it from here directly is what
+ * turned that invariant script red the day Phase 7 landed.
+ */
 function compilePlanStrategy(params: StrategySelectionParams): PlanStrategy {
-  const classification = params.taskClassification ?? classifyTask(params.taskDescription);
-  return compileHarnessPlan({
-    capability: { tier: dispatchTier(params) },
-    ...(params.calibration ? { calibration: params.calibration } : {}),
-    horizon: classification.horizon.horizon,
-    classification,
-  }).strategy;
+  return nominatePlanStrategy(params);
 }
 
 /**
