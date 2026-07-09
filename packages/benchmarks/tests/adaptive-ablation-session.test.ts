@@ -73,21 +73,21 @@ describe("G3 adaptive ablation — config shape", () => {
     expect(ids).toEqual(["lh-1", "rw-1", "rw-2", "rw-7", "rw-8", "rw-9"]);
   });
 
-  it("session runs both local models (qwen3:14b + cogito:8b, contextTier local)", () => {
+  it("session runs local models incl. the dev-box fitting tier (14b canonical + 8b + 4b, contextTier local)", () => {
     const models = adaptiveAblationSession.models;
-    expect(models.map(m => m.model).sort()).toEqual(["cogito:8b", "qwen3:14b"]);
+    expect(models.map(m => m.model).sort()).toEqual(["cogito:8b", "qwen3:14b", "qwen3:4b"]);
     for (const m of models) expect(m.contextTier).toBe("local");
   });
 
-  it("dry-run fan-out: 2 models × 3 variants × 6 tasks × 3 runs = 108 tuples", () => {
+  it("dry-run fan-out: 3 models × 3 variants × 6 tasks × 3 runs = 162 tuples", () => {
     const tasks = resolveTasks(adaptiveAblationSession, ALL_TASKS);
     const models = adaptiveAblationSession.models;
     const variants = adaptiveAblationSession.harnessVariants;
     const runs = adaptiveAblationSession.runs ?? 1;
-    expect(models.length).toBe(2);
+    expect(models.length).toBe(3);
     expect(variants.length).toBe(3);
     expect(tasks.length).toBe(6);
     expect(runs).toBe(3);
-    expect(models.length * variants.length * tasks.length * runs).toBe(108);
+    expect(models.length * variants.length * tasks.length * runs).toBe(162);
   });
 });

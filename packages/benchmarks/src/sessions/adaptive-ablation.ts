@@ -81,6 +81,11 @@ export const adaptiveAblationSession: BenchmarkSession = {
   models: [
     { id: "qwen3-14b", provider: "ollama", model: "qwen3:14b", contextTier: "local" },
     { id: "cogito-8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
+    // Dev-box fitting tier: qwen3:14b OOMs on a 16GB box, so the two-tier gate is
+    // run here as cogito:8b (8B) + qwen3:4b (4B) — two DISTINCT local tiers that
+    // both fit VRAM. On adequate hardware run cogito-8b + qwen3-14b for the
+    // canonical bar. Select the fitting pair with `--models cogito-8b,qwen3-4b`.
+    { id: "qwen3-4b", provider: "ollama", model: "qwen3:4b", contextTier: "local" },
   ],
   harnessVariants: [
     raMinimalVariant,
