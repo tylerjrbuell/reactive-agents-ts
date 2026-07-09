@@ -394,6 +394,46 @@ export function emitProjectionRendered(args: {
   });
 }
 
+// ── ControlResolution ─────────────────────────────────────────────────────────
+
+/**
+ * Meta-loop Phase 5b (2026-07-08, task F1): the control plane resolved competing
+ * proposals into ONE action — the action-selection node of the meta-loop DAG.
+ * Mirrors emitAssessment: one trace line per resolution (the proposals in, the
+ * action out, and why) so the contract → assessment → CONTROL → action chain is
+ * replayable from a single trace via `rax diagnose replay`.
+ */
+export function emitControlResolution(args: {
+  readonly taskId: string;
+  readonly iteration: number;
+  readonly action: string;
+  readonly reason: string;
+  readonly proposals: readonly { readonly source: string; readonly action: string }[];
+}): Effect.Effect<void, never> {
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    yield* busOpt.value
+      .publish({
+        _tag: "ControlResolutionEmitted",
+        taskId: args.taskId,
+        iteration: args.iteration,
+        timestamp: Date.now(),
+        action: args.action,
+        reason: args.reason,
+        proposals: args.proposals,
+      })
+      .pipe(
+        Effect.catchAll((err) =>
+          emitErrorSwallowed({
+            site: "reasoning/src/kernel/utils/diagnostics.ts:emitControlResolution",
+            tag: errorTag(err),
+          }),
+        ),
+      );
+  });
+}
+
 // ── VerifierVerdict ──────────────────────────────────────────────────────────
 
 export function emitVerifierVerdict(args: {

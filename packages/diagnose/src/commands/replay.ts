@@ -163,6 +163,14 @@ function formatEventLine(ev: TraceEvent): string {
       const dropped = ev.droppedRefs.length ? ` dropped=[${ev.droppedRefs.join(",")}]` : "";
       return `${ts} ${badge("project", cyan)} sections=[${ev.sections.join(",")}] refs=${ev.refs.length} chars=${ev.chars}${dim(dropped)}`;
     }
+    case "control-resolution": {
+      // The action-selection node: competing proposals → ONE action. The proposal
+      // set (source→action) is the load-bearing diagnostic (what was overruled).
+      const proposed = ev.proposals.length
+        ? ` in=[${ev.proposals.map((p) => `${p.source}:${p.action}`).join(",")}]`
+        : "";
+      return `${ts} ${badge("control", yellow)} → ${ev.action}${dim(proposed)} ${dim(ev.reason)}`;
+    }
     default: {
       // Exhaustiveness via cast — keeps the switch open to future kinds.
       const e = ev as { kind: string };

@@ -74,7 +74,10 @@ import { Effect, FiberRef } from "effect";
 import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { checkpointStoreRef } from "@reactive-agents/tools";
-import { modelSynthesisDeliverable } from "@reactive-agents/core";
+import { modelSynthesisDeliverable, sentinelDeliverable } from "@reactive-agents/core";
+import { resolveControlPlane, type ControlProposal } from "../control/control-plane.js";
+import { proposeFromLoopDetector } from "../control/emitters.js";
+import { inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { terminate } from "./terminate.js";
@@ -130,6 +133,7 @@ import {
   emitGuardFired,
   emitHarnessSignalInjected,
   emitAssessment,
+  emitControlResolution,
 } from "../../kernel/utils/diagnostics.js";
 import { assess } from "../../kernel/assessment/assess.js";
 import {
@@ -1209,6 +1213,59 @@ export function runIterationPass(
             yield* hooks.onStrategySwitchEvaluated(state, evaluation);
 
             if (evaluation.shouldSwitch && evaluation.recommendedStrategy) {
+              // ── Control plane (F1) — resolve switch vs abstain (the P5 fix) ──
+              // Before F1 the strategy switch fired here unconditionally while
+              // forced abstention only ran POST-loop (§7.5), so a run that
+              // qualified for BOTH switched first and burned a strategy's budget
+              // only to abstain later (the P5 race). Now the switch is ONE
+              // proposal; under the long-horizon profile the in-loop abstain
+              // signal is another; the resolver's documented total order ranks
+              // abstain STRICTLY above strategy-switch, so an honest decline
+              // pre-empts the wasted switch. OFF the profile → the block is
+              // skipped entirely → byte-identical (switch proceeds as today).
+              if (horizon !== undefined) {
+                const switchProposal = proposeFromLoopDetector({
+                  loopDetected: true,
+                  switchingViable: true,
+                  horizonActive: true,
+                  assessment: state.meta.assessment,
+                });
+                const { proposal: abstainProposal, forced } = inLoopAbstentionProposal(
+                  state,
+                  currentInput,
+                  requiredTools,
+                  currentOptions.maxIterations,
+                );
+                const proposals: ControlProposal[] = [];
+                if (switchProposal) proposals.push(switchProposal);
+                if (abstainProposal) proposals.push(abstainProposal);
+                if (proposals.length > 0) {
+                  const resolution = resolveControlPlane(proposals);
+                  yield* emitControlResolution({
+                    taskId: currentOptions.taskId ?? state.taskId,
+                    iteration: state.iteration,
+                    action: resolution.action,
+                    reason: resolution.reason,
+                    proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
+                  });
+                  if (resolution.action === "abstain" && forced !== null) {
+                    // Abstain won — stand down the switch and force the honest
+                    // decline via the single-owner terminate() abstain path
+                    // (identical mechanics to runner §7.5; the post-loop block
+                    // then skips because terminatedBy === "abstained").
+                    state = transitionState(state, { error: null });
+                    state = terminate(state, {
+                      reason: "abstained",
+                      deliverable: sentinelDeliverable("no_substantive_output"),
+                      extraMeta: {
+                        abstention: { reason: forced.reason, missing: forced.missing },
+                      },
+                    });
+                    sync();
+                    return "break";
+                  }
+                }
+              }
               const fromStrategy = triedStrategies[triedStrategies.length - 1] ?? "unknown";
               const switchResult = yield* applyStrategySwitch({
                 state,

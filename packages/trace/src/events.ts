@@ -40,6 +40,8 @@ export type TraceEvent =
   | AssessmentEvent
   // ─── Meta-loop Phase 4c (2026-07-08 — projector / attention authority) ───
   | ProjectionRenderedEvent
+  // ─── Meta-loop Phase 5b (2026-07-08 — control plane / action selection) ───
+  | ControlResolutionEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -382,6 +384,20 @@ export interface ProjectionRenderedEvent extends TraceEventBase {
   readonly refs: readonly string[]
   readonly droppedRefs: readonly string[]
   readonly chars: number
+}
+
+/**
+ * Control plane resolved competing proposals into ONE action (meta-loop Phase 5b,
+ * 2026-07-08, task F1): the action-selection node of the meta-loop DAG. Carries
+ * the proposals considered (source→action), the ONE action chosen, and why —
+ * making the contract → assessment → CONTROL → action chain replayable, the way
+ * `assessment` made perception replayable.
+ */
+export interface ControlResolutionEvent extends TraceEventBase {
+  readonly kind: "control-resolution"
+  readonly action: string
+  readonly reason: string
+  readonly proposals: readonly { readonly source: string; readonly action: string }[]
 }
 
 /** Type-narrowing helper. */

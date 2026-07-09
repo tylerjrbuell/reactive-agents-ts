@@ -31,6 +31,7 @@ import type {
   ContractCompiledEvent,
   AssessmentEvent,
   ProjectionRenderedEvent,
+  ControlResolutionEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -359,6 +360,20 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         refs: raw.refs,
         droppedRefs: raw.droppedRefs,
         chars: raw.chars,
+      }
+      return ev
+    }
+
+    case "ControlResolutionEmitted": {
+      const ev: ControlResolutionEvent = {
+        kind: "control-resolution",
+        runId: raw.taskId,
+        timestamp: raw.timestamp,
+        iter: raw.iteration,
+        seq,
+        action: raw.action,
+        reason: raw.reason,
+        proposals: raw.proposals,
       }
       return ev
     }

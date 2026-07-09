@@ -1125,6 +1125,22 @@ export type AgentEvent =
     }
   | {
       /**
+       * Control plane resolved competing proposals into ONE action (meta-loop
+       * Phase 5b, 2026-07-08, task F1): the action-selection node of the meta-loop
+       * DAG. Surfaces the proposals in (source→action), the ONE action out, and
+       * why — so the contract → assessment → CONTROL → action chain is replayable
+       * from one trace, the way `assessment` made perception replayable.
+       */
+      readonly _tag: "ControlResolutionEmitted";
+      readonly taskId: string;
+      readonly iteration: number;
+      readonly timestamp: number;
+      readonly action: string;
+      readonly reason: string;
+      readonly proposals: readonly { readonly source: string; readonly action: string }[];
+    }
+  | {
+      /**
        * Decision point where multiple candidates were considered and one chosen
        * (v0.11.x). Surfaces the counterfactuals the model weighed.
        */
