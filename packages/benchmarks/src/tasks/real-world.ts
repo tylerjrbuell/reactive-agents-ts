@@ -425,6 +425,57 @@ report()
 `
 }
 
+/**
+ * rw-9 hidden check — DETERMINISTIC, GRADED accuracy (2026-07-09).
+ *
+ * rw-9 used `type: "llm-judge"` whose rubric literally instructed a binary
+ * verdict ("Score 1.0 if … Score 0.0 if …"). Measured per-run accuracy was
+ * exactly Bernoulli: [0,1,0,1,1,0,1,0,1,0], p=0.50, sd=0.50 — the worst possible
+ * spread for a bounded score, and the reason a 3pp lift needed ~556 runs/arm.
+ *
+ * The task IS deterministically checkable: the mock price API (runner.ts:843)
+ * and `fallback-prices.json` serve the SAME values, so whichever path the agent
+ * takes, the expected numbers are fixed. Accuracy therefore moves off the LLM
+ * judge entirely — no judge noise, no judge cost, no JUDGE_LAYER footgun. The
+ * `resilience` and `tool-mastery` dimensions keep their judge rubrics; only
+ * `accuracy` becomes deterministic.
+ *
+ * Fairness over strictness: market-cap FORMAT is unpinned by the prompt (an
+ * agent may reasonably write "$1.35T" or "1,347,000,000,000"), so we check that
+ * market cap is REPORTED rather than demanding a literal form. Price and 24h
+ * change are pinned to their digits, comma/underscore-insensitive.
+ */
+function generateRw9HiddenCheck(): string {
+  return `// hidden-check.ts — scorer-written validation of prices.md. Not agent-authored.
+${gradedCheckHarness()}
+import { readFileSync, existsSync } from "node:fs"
+import { join } from "node:path"
+
+const path = join(import.meta.dir, "prices.md")
+const raw = existsSync(path) ? readFileSync(path, "utf8") : ""
+// Comma/underscore-insensitive digit matching: "68,450.21" ≡ "68450.21".
+const norm = raw.replace(/[,_]/g, "")
+const lower = raw.toLowerCase()
+
+const ASSETS = [
+  { name: "BTC", aliases: ["btc", "bitcoin"], price: "68450", change: "2.34" },
+  { name: "ETH", aliases: ["eth", "ethereum"], price: "3512", change: "0.87" },
+  { name: "SOL", aliases: ["sol", "solana"], price: "172", change: "4.12" },
+]
+
+check("prices.md exists and is non-empty", () => raw.trim().length > 0)
+check("prices.md reports market cap", () => /market\\s*cap/i.test(raw))
+
+for (const a of ASSETS) {
+  check(\`\${a.name}: asset is named\`, () => a.aliases.some((x) => lower.includes(x)))
+  check(\`\${a.name}: current price is reported\`, () => norm.includes(a.price))
+  check(\`\${a.name}: 24h change is reported\`, () => norm.includes(a.change))
+}
+
+report()
+`
+}
+
 function generateFallbackPrices(): string {
   return JSON.stringify({
     note: "Static fallback snapshot — use when live API is unavailable",
@@ -806,10 +857,19 @@ Phase 5: Run the validator against the generated data and report results`,
     requiresTools: true,
     maxIterations: 15,
     fixtures: [{ path: "fallback-prices.json", content: generateFallbackPrices() }],
+    hiddenFixtures: [{ path: "hidden-check.ts", content: generateRw9HiddenCheck() }],
+    // METRIC CHANGE (2026-07-09, owner-approved, declared in the improvement
+    // ledger). Was `type: "llm-judge"` with a rubric that literally instructed a
+    // binary verdict ("Score 1.0 if … Score 0.0 if …"). Measured per-run accuracy
+    // was exactly Bernoulli (p=0.50, sd=0.50), which put a 3pp lift verdict at
+    // ~556 runs/arm. The task's expected values are FIXED (mock API and
+    // fallback-prices.json serve identical numbers), so accuracy is now
+    // deterministic AND graded — 11 independent checks, partial credit.
+    // `resilience` and `tool-mastery` keep their judge rubrics below.
     successCriteria: {
-      type: "llm-judge",
-      rubric: "Score 1.0 if prices.md exists with prices for BTC, ETH, and SOL including a 24h change figure. Accepts either live or clearly-labeled fallback data. Score 0.0 if prices.md is missing or incomplete.",
-      passThreshold: 0.6,
+      type: "verifiable",
+      command: "bun hidden-check.ts",
+      partialCredit: true,
     },
     primaryDimensions: ["resilience", "tool-mastery", "accuracy"],
     dimensionRubrics: [

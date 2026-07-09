@@ -210,6 +210,54 @@ describe("rw-4 — five independent requirements", () => {
   });
 });
 
+// rw-9: the task whose Bernoulli scores started this whole investigation.
+// Converted llm-judge -> deterministic graded (owner-approved metric change).
+describe("rw-9 — deterministic graded accuracy, and FAIR to a correct agent", () => {
+  const GOOD = `# Crypto Prices
+
+| Asset | Price | 24h Change | Market Cap |
+|-------|-------|-----------|------------|
+| BTC (bitcoin) | $68,450.21 | +2.34% | $1.35T |
+| ETH (ethereum) | $3,512.88 | -0.87% | $422B |
+| SOL (solana) | $172.44 | +4.12% | $79B |
+`;
+
+  it("declares partialCredit and no longer uses the llm-judge", () => {
+    expect(partialCreditOf("rw-9")).toBe(true);
+    const t = REAL_WORLD_TASKS.find((x) => x.id === "rw-9") as unknown as {
+      successCriteria?: { type?: string };
+    };
+    expect(t.successCriteria?.type).toBe("verifiable");
+  });
+
+  it("a fully correct prices.md scores 1.0 (the check is not gratuitously strict)", () => {
+    expect(scoreTaskCheck("rw-9", { "prices.md": GOOD })).toBe(1.0);
+  });
+
+  it("comma-formatted and bare numbers are both accepted", () => {
+    const bare = GOOD.replace(/,/g, "");
+    expect(scoreTaskCheck("rw-9", { "prices.md": bare })).toBe(1.0);
+  });
+
+  it("two of three assets reported → partial credit, not zero", () => {
+    const missingSol = GOOD.split("\n").filter((l) => !/solana/i.test(l)).join("\n");
+    const s = scoreTaskCheck("rw-9", { "prices.md": missingSol });
+    expect(s).toBeGreaterThan(0.5);
+    expect(s).toBeLessThan(1.0);
+  });
+
+  it("prices present but no 24h change → partial credit", () => {
+    const noChange = GOOD.replace(/[+-]?\d+\.\d+%/g, "n/a");
+    const s = scoreTaskCheck("rw-9", { "prices.md": noChange });
+    expect(s).toBeGreaterThan(0.4);
+    expect(s).toBeLessThan(1.0);
+  });
+
+  it("prices.md missing entirely → 0.0", () => {
+    expect(scoreTaskCheck("rw-9", {})).toBe(0.0);
+  });
+});
+
 describe("variance: why this matters", () => {
   it("graded scores land strictly between the Bernoulli endpoints", () => {
     // sd of a bounded [0,1] score is maximized at the endpoints (p(1-p) at p=.5
