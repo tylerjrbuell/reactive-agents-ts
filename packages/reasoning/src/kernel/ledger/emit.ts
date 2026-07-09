@@ -102,6 +102,26 @@ export function recordCompactionNoShrink(
 }
 
 /**
+ * Record a mid-run adaptive-harness recompile (Wave G / G1). The policy compiler
+ * re-derived the HarnessPlan from the live RunAssessment (deepen on repeated
+ * failure / stall, lean on a clean trajectory); this logs WHY as a queryable
+ * ledger fact. Keeps the append primitive in the ledger home so
+ * check-ledger-writes.sh holds.
+ */
+export function recordHarnessRecompiled(
+  ledger: RunLedger | undefined,
+  iteration: number,
+  detail: string,
+): RunLedger {
+  return appendEntry(ledger ?? [], {
+    kind: "harness-signal",
+    iteration,
+    signal: "harness-recompiled",
+    detail,
+  });
+}
+
+/**
  * Record the empirical measurement claims asserted in the final output, each
  * classified (grounded|not) against the tool-observation corpus built from the
  * run's steps. Previously extracted by the fabrication guard and discarded

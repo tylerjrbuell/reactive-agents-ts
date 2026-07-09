@@ -137,7 +137,7 @@ import {
 } from "../../kernel/utils/diagnostics.js";
 import { assess } from "../../kernel/assessment/assess.js";
 import { recompileOnAssessment } from "../../kernel/policy/harness-plan.js";
-import { appendEntry } from "../../kernel/ledger/run-ledger.js";
+import { recordHarnessRecompiled } from "../../kernel/ledger/emit.js";
 import {
   buildRecoverySteeringGuidance,
   getToolFailureRecovery,
@@ -507,12 +507,11 @@ export function runIterationPass(
           ) {
             const recompiled = recompileOnAssessment(state.meta.harnessPlan, assessment);
             if (recompiled.changed) {
-              const ledgerWithSignal = appendEntry(state.ledger, {
-                kind: "harness-signal",
-                iteration: state.iteration,
-                signal: "harness-recompiled",
-                detail: recompiled.reason,
-              });
+              const ledgerWithSignal = recordHarnessRecompiled(
+                state.ledger,
+                state.iteration,
+                recompiled.reason,
+              );
               state = transitionState(state, {
                 ledger: ledgerWithSignal,
                 meta: {
