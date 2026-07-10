@@ -175,6 +175,12 @@ export function handleActing(
       readonly description: string;
       readonly parameters: readonly { readonly name: string; readonly type: string; readonly description?: string; readonly required?: boolean }[];
     }[];
+    // Memoised so the per-call error path doesn't rebuild it. The model's real
+    // toolbox for this turn: what a recovery hint is allowed to name.
+    let exposedToolNamesCache: ReadonlySet<string> | undefined
+    const exposedToolNames = (): ReadonlySet<string> =>
+      (exposedToolNamesCache ??= new Set(filteredToolSchemas.map((s) => s.name)))
+
     // Full registry — used for HealingPipeline so fuzzy name matching works even when a tool was pruned from context
     const allHealingSchemas = (input.allToolSchemas ?? input.availableToolSchemas ?? []) as typeof filteredToolSchemas;
 
@@ -623,7 +629,16 @@ export function handleActing(
                   batchCall,
                   input.agentId ?? "reasoning-agent",
                   input.sessionId ?? "reasoning-session",
-                  { compression, scratchpad: sharedScratchpad, memoryService, profile },
+                  {
+                    compression,
+                    scratchpad: sharedScratchpad,
+                    memoryService,
+                    profile,
+                    // The pruned schemas actually shown to the model this turn.
+                    // A recovery hint may name a tool only from this set — the
+                    // registry also holds built-ins the schema withheld.
+                    exposedToolNames: exposedToolNames(),
+                  },
                 );
                 const durationMs = Date.now() - startMs;
                 yield* emitLog({
@@ -860,6 +875,11 @@ export function handleActing(
             // Healing already ran upstream (act.ts HealingPipeline). Pass the
             // precomputed flag rather than re-healing inside the primitive.
             healed: healResult.actions.length > 0,
+            // `ctx.schemas` is declared REQUIRED on ExecuteAndObserveCtx and was
+            // never passed from here, so the primitive read `undefined`. It is
+            // the model's toolbox for the turn — the recovery hint needs it to
+            // know which tools it may name.
+            schemas: filteredToolSchemas,
           },
           {
             compression,

@@ -93,18 +93,17 @@ export const fileReadHandler = (
         );
       }
 
-      // Retry logic with exponential backoff (up to 3 attempts)
+      // A missing file is not a transient fault. Retrying ENOENT only burned
+      // 300ms of backoff before returning the same answer; retry the faults
+      // that can actually change (EBUSY / EAGAIN / EMFILE on a busy fs).
       let lastError: Error | null = null;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           return await fs.readFile(resolved, { encoding });
         } catch (e) {
           lastError = e instanceof Error ? e : new Error(String(e));
-          if (attempt < 3) {
-            // Exponential backoff: 100ms, 200ms
-            const delayMs = 100 * Math.pow(2, attempt - 1);
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-          }
+          if (!isTransientFsError(lastError) || attempt === 3) break;
+          await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempt - 1)));
         }
       }
 
@@ -112,8 +111,86 @@ export const fileReadHandler = (
     },
     catch: (e) =>
       new ToolExecutionError({
-        message: `File read failed: ${e}`,
+        // `${e}` on an Error yields "Error: ENOENT: ..." — a second "Error:"
+        // prefix once wrapped, and a bare errno with no way to act on it.
+        // Name the root, because a relative path the model invented is
+        // meaningless without knowing what it resolved against.
+        message: `File read failed: ${e instanceof Error ? e.message : String(e)} (working root: ${getFileRoot()})`,
         toolName: "file-read",
+        cause: e,
+      }),
+  });
+
+const TRANSIENT_FS_CODES = new Set(["EBUSY", "EAGAIN", "EMFILE", "ENFILE"]);
+
+/** ENOENT/EACCES will not change between attempts; contention errors might. */
+function isTransientFsError(e: Error): boolean {
+  const code = (e as NodeJS.ErrnoException).code;
+  return typeof code === "string" && TRANSIENT_FS_CODES.has(code);
+}
+
+export const listDirectoryTool: ToolDefinition = {
+  name: "list-directory",
+  description:
+    "List the files and subdirectories at a path. " +
+    "Use this BEFORE guessing a path, and immediately after any file-read fails — " +
+    "it shows you what actually exists instead of making you guess again. " +
+    "Returns { root, path, entries: [{ name, type, bytes }] }.",
+  parameters: [
+    {
+      name: "path",
+      type: "string",
+      description:
+        "Directory to list, relative to the working root. Default: '.' (the root itself). " +
+        "Examples: '.', './data', './src/config'.",
+      required: false,
+      default: ".",
+    },
+  ],
+  returnType: "{ root: string, path: string, entries: { name: string, type: 'file'|'dir', bytes?: number }[] }",
+  category: "file",
+  riskLevel: "low",
+  timeoutMs: 5_000,
+  requiresApproval: false,
+  source: "builtin",
+  produces: "none",
+};
+
+export const listDirectoryHandler = (
+  args: Record<string, unknown>,
+): Effect.Effect<unknown, ToolExecutionError> =>
+  Effect.tryPromise({
+    try: async () => {
+      const requested = typeof args.path === "string" && args.path.length > 0 ? args.path : ".";
+
+      const allowedBase = getFileRoot();
+      const resolved = path.isAbsolute(requested)
+        ? path.resolve(requested)
+        : path.resolve(allowedBase, requested);
+      if (!path.normalize(resolved).startsWith(path.normalize(allowedBase))) {
+        throw new Error(
+          `Path traversal detected: ${requested} resolves outside of ${allowedBase}`,
+        );
+      }
+
+      const dirents = await fs.readdir(resolved, { withFileTypes: true });
+      const entries = await Promise.all(
+        dirents.map(async (d) => {
+          const type = d.isDirectory() ? "dir" : "file";
+          if (type === "dir") return { name: d.name, type };
+          const stat = await fs.stat(path.join(resolved, d.name)).catch(() => undefined);
+          return stat ? { name: d.name, type, bytes: stat.size } : { name: d.name, type };
+        }),
+      );
+      // Codepoint order, not localeCompare — the listing a model sees must not
+      // depend on the host's locale.
+      entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      return { root: allowedBase, path: resolved, entries };
+    },
+    catch: (e) =>
+      new ToolExecutionError({
+        message: `List directory failed: ${e instanceof Error ? e.message : String(e)}`,
+        toolName: "list-directory",
         cause: e,
       }),
   });

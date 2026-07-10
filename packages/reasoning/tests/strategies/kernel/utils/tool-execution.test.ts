@@ -138,6 +138,9 @@ describe("executeToolCall", () => {
               { name: "content", type: "string", required: true },
             ],
           }),
+        // Required by ToolServiceInstance; the error path now consults it to
+        // decide whether a recovery hint may name a tool (e.g. list-directory).
+        listTools: () => Effect.succeed([]),
       },
     };
 
@@ -162,6 +165,9 @@ describe("executeToolCall", () => {
       value: {
         execute: (_input) => Effect.fail(new Error("connection refused")),
         getTool: (_name) => Effect.fail(new Error("tool registry unavailable")),
+        // Required by ToolServiceInstance; the error path now consults it to
+        // decide whether a recovery hint may name a tool (e.g. list-directory).
+        listTools: () => Effect.succeed([]),
       },
     };
 

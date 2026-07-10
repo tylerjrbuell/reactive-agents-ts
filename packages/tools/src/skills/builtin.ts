@@ -8,6 +8,7 @@ import { cryptoPriceTool, cryptoPriceHandler } from "./crypto-price.js";
 import { httpGetTool, httpGetHandler } from "./http-client.js";
 import { fileReadTool, fileReadHandler } from "./file-operations.js";
 import { fileWriteTool, fileWriteHandler } from "./file-operations.js";
+import { listDirectoryTool, listDirectoryHandler } from "./file-operations.js";
 import { codeExecuteTool, codeExecuteHandler } from "./code-execution.js";
 import { gitCliTool, gitCliHandler } from "./cli/git-cli.js";
 import { ghCliTool, ghCliHandler } from "./cli/gh-cli.js";
@@ -161,6 +162,7 @@ export const builtinTools: ReadonlyArray<{
   { definition: cryptoPriceTool, handler: cryptoPriceHandler },
   { definition: httpGetTool, handler: httpGetHandler },
   { definition: fileReadTool, handler: fileReadHandler },
+  { definition: listDirectoryTool, handler: listDirectoryHandler },
   { definition: fileWriteTool, handler: fileWriteHandler },
   { definition: codeExecuteTool, handler: codeExecuteHandler },
   { definition: gitCliTool, handler: gitCliHandler },

@@ -100,6 +100,8 @@ export {
   fileReadHandler,
   fileWriteTool,
   fileWriteHandler,
+  listDirectoryTool,
+  listDirectoryHandler,
   withFileRoot,
   getFileRoot,
 } from "./skills/file-operations.js";

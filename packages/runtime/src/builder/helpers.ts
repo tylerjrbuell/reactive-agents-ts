@@ -162,6 +162,27 @@ export function deriveReceiptDeliverables(args: {
     return report.length > 0 ? report : undefined
 }
 
+/**
+ * A stable fingerprint of what a tool call was ABOUT, so the trust receipt can
+ * tell a retry of the same attempt from a call to something else entirely. Two
+ * `file-read`s are the same evidence attempt only when they name the same file.
+ *
+ * Key order is normalised, because a model may emit the same arguments in a
+ * different order across turns and that must not read as a different target.
+ */
+export function toolCallTarget(args: unknown): string | undefined {
+    if (args === null || typeof args !== 'object' || Array.isArray(args)) return undefined
+    const entries = Object.entries(args as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    if (entries.length === 0) return undefined
+    try {
+        return JSON.stringify(entries)
+    } catch {
+        return undefined // circular / non-serialisable — no fingerprint, stays unresolved
+    }
+}
+
 export function deriveReceiptToolCalls(
     metadata: {
         readonly reasoningSteps?: ReadonlyArray<{
@@ -173,7 +194,7 @@ export function deriveReceiptToolCalls(
             readonly ok: boolean
         }>
     } | undefined
-): ReadonlyArray<{ readonly name: string; readonly ok: boolean }> {
+): ReadonlyArray<{ readonly name: string; readonly ok: boolean; readonly target?: string }> {
     const fromSteps = deriveFromSteps(metadata?.reasoningSteps)
     if (fromSteps.length > 0) return fromSteps
     return (metadata?.receiptToolCalls ?? []).filter((tc) =>
@@ -186,7 +207,7 @@ function deriveFromSteps(
         readonly type: string
         readonly metadata?: Record<string, unknown>
     }> | undefined
-): ReadonlyArray<{ readonly name: string; readonly ok: boolean }> {
+): ReadonlyArray<{ readonly name: string; readonly ok: boolean; readonly target?: string }> {
     if (!reasoningSteps || reasoningSteps.length === 0) return []
 
     const okByCallId = new Map<string, boolean>()
@@ -201,18 +222,19 @@ function deriveFromSteps(
         }
     }
 
-    const result: Array<{ name: string; ok: boolean }> = []
+    const result: Array<{ name: string; ok: boolean; target?: string }> = []
     for (const step of reasoningSteps) {
         if (step.type !== "action") continue
         const toolCall = step.metadata?.toolCall as
-            | { id?: string; name?: string }
+            | { id?: string; name?: string; arguments?: unknown }
             | undefined
         if (!toolCall?.name) continue
         // Meta/termination/pseudo tools are not grounding evidence — see
         // isSubstantiveReceiptTool (live-smoke defect: final-answer counted).
         if (!isSubstantiveReceiptTool(toolCall.name)) continue
         const ok = typeof toolCall.id === "string" ? okByCallId.get(toolCall.id) ?? false : false
-        result.push({ name: toolCall.name, ok })
+        const target = toolCallTarget(toolCall.arguments)
+        result.push({ name: toolCall.name, ok, ...(target !== undefined ? { target } : {}) })
     }
     return result
 }

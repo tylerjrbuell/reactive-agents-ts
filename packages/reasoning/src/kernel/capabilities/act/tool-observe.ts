@@ -264,6 +264,11 @@ export function executeToolAndObserve(
         ...(config.profile ? { profile: config.profile } : {}),
         ...(config.preprocess ? { preprocess: config.preprocess } : {}),
         ...(config.memoryService ? { memoryService: config.memoryService } : {}),
+        // The model's ACTUAL toolbox this turn. A recovery hint may name a tool
+        // only if it is here — the registry lists built-ins the schema withheld.
+        // Absent schemas ⇒ empty set ⇒ hints name no tool, which is the safe
+        // direction (see getRecoveryHint).
+        exposedToolNames: new Set((ctx.schemas ?? []).map((s) => s.name)),
       },
     );
     const durationMs = Date.now() - startMs;

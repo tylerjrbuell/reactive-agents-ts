@@ -67,6 +67,11 @@ export interface ToolExecutionConfig {
    * (embedding + SQLite write) must never block the kernel hot path.
    */
   readonly memoryService?: MaybeService<MemoryServiceInstance>;
+  /**
+   * The tool names EXPOSED to the model this turn (the LLM schema), not the
+   * registry. A recovery hint may name a tool only if it appears here.
+   */
+  readonly exposedToolNames?: ReadonlySet<string>;
 }
 
 // ── Semantic memory persistence — forked daemon helper ───────────────────────
@@ -171,17 +176,45 @@ export function truncateForDisplay(result: string, maxChars: number): string {
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
+/** The recovery tool a failed file path points at, when the agent has it. */
+const LIST_DIRECTORY_TOOL = "list-directory";
+
+// NOTE on where the toolbox comes from. `toolService.listTools()` is the
+// REGISTRY, not the model's toolbox: built-ins are registered but withheld from
+// the LLM schema unless opted in via `withTools({builtins})`. Keying the hint
+// off the registry reproduced the very bug it was meant to fix — `list-directory`
+// was registered, absent from the schema, named in the hint, and the model
+// looped on "Tool call used unavailable name(s)". The exposed schema
+// (`ctx.schemas` in tool-observe) is the only honest source, so callers pass it.
+
 /**
  * Map common tool error patterns to actionable recovery hints.
  * Helps the LLM understand what went wrong and how to fix it.
  */
-function getRecoveryHint(toolName: string, errorMsg: string): string {
+function getRecoveryHint(
+  toolName: string,
+  errorMsg: string,
+  /** Names the model may actually call — the EXPOSED schema, not the registry. */
+  exposedTools?: ReadonlySet<string>,
+): string {
   const msg = errorMsg.toLowerCase();
 
-  // File not found
+  // File not found. "Verify the file exists" was advice the model could not
+  // act on: there was no way to look. Point at the tool that can — but ONLY if
+  // the agent actually has it.
+  //
+  // Naming an absent tool is worse than saying nothing. Measured 2026-07-09:
+  // an unconditional hint sent claude-haiku-4-5 chasing `list-directory` when
+  // the toolbox held only file-read/file-write. It retried until
+  // max_iterations, output "Tool call used unavailable name(s)", and wrote
+  // nothing. The old vague hint at least did not send it anywhere.
   if (msg.includes("enoent") || msg.includes("not found") || msg.includes("no such file")) {
     if (toolName === "file-read" || toolName === "file-write") {
-      return " → Try a different path or verify the file exists.";
+      // Absent `exposedTools` ⇒ we cannot prove the tool is callable ⇒ do not
+      // name it. Silence beats sending the model after a tool it does not have.
+      return exposedTools?.has(LIST_DIRECTORY_TOOL) === true
+        ? ` → Call ${LIST_DIRECTORY_TOOL}({"path": "."}) to see what actually exists, then use the real path. Do not guess again.`
+        : " → No file exists at that path, relative to the working root named above. Re-read the task for the correct path; the same path will fail again.";
     }
     return " → The requested resource was not found.";
   }
@@ -570,7 +603,7 @@ export function executeToolCall(
               : typeof e === "object" && e !== null && "message" in e
                 ? String((e as { message: unknown }).message)
                 : String(e);
-          const hint = getRecoveryHint(toolRequest.tool, msg);
+          const hint = getRecoveryHint(toolRequest.tool, msg, config?.exposedToolNames);
           return toolService.getTool(toolRequest.tool).pipe(
             Effect.map((toolDef) => {
               const paramHints = toolDef.parameters
@@ -661,6 +694,11 @@ export function executeNativeToolCall(
      * unaffected — see `storeToolObservationSemantic`.
      */
     memoryService?: MaybeService<MemoryServiceInstance>;
+    /**
+     * The tool names EXPOSED to the model this turn (the LLM schema), not the
+     * registry. A recovery hint may name a tool only if it appears here.
+     */
+    exposedToolNames?: ReadonlySet<string>;
     /**
      * Optional caller-supplied transform applied to the raw stringified tool
      * result BEFORE normalizeObservation/compression. plan-execute binds its
@@ -774,8 +812,13 @@ export function executeNativeToolCall(
             success: false,
           });
         }
+        // The recovery hint used to fire only on the legacy text-parse path,
+        // so every capable model (native FC is the default) got a bare errno
+        // and no next step. This is the one channel that reaches the model's
+        // context — steps and control flow cannot make it smarter, a better
+        // tool_result can.
         return Effect.succeed({
-          content: `[Tool error: ${msg}]`,
+          content: `[Tool error: ${msg}${getRecoveryHint(toolCall.name, msg, config?.exposedToolNames)}]`,
           success: false,
         });
       }),
