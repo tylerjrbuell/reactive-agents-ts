@@ -65,8 +65,13 @@ export const longHorizonArmSession: BenchmarkSession = {
   // ab-trap-1..3 declare no requiredTools, so the grounded-terminal gate is
   // skipped and the model simply answers -- accuracy 0.0 in BOTH arms. They
   // measure fabrication, not the abstention machinery the seams changed.
-  // rw-9 is the deterministic no-regression control.
-  taskIds: ["ab-trap-4", "rw-9"],
+  // ab-trap-5 is the MID-LOOP fixture: `file-read` is required, exists, and
+  // always fails (the file never exists). The run stays ungrounded, the
+  // grounded-terminal gate redirects, F3 trips on the identical failures, and
+  // forced abstention qualifies DURING the loop -- where the F3 and stall seams
+  // rank abstain above their own redirect/steer. This is the cell that measures
+  // the seams. rw-9 is the deterministic no-regression control.
+  taskIds: ["ab-trap-4", "ab-trap-5", "rw-9"],
   models: [
     { id: "cogito-8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
   ],

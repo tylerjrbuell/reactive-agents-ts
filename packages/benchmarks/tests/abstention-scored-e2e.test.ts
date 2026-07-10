@@ -88,3 +88,41 @@ describe("ab-trap-4 — a harness-forced abstention is SCORED as correct", () =>
     expect(accuracyOf(cell)).toBe(0);
   }, 90_000);
 });
+
+// ─── ab-trap-5: the MID-LOOP fixture (shape pinned; behaviour needs a model) ──
+//
+// ab-trap-4 abstains at iteration 0, so it never reaches the F3 / stall seams.
+// ab-trap-5 requires `file-read` — a tool that EXISTS and always fails, because
+// the file never does. The run stays ungrounded, the grounded-terminal gate
+// redirects, and forced abstention can qualify DURING the loop.
+//
+// There is no deterministic pin for its BEHAVIOUR: reaching the seams requires
+// the model to actually emit a tool call. Measured 2026-07-09:
+//
+//   cogito:8b   → 0.0 in both arms. It NARRATED ("I'll call file-read…") and
+//                 never emitted a tool call, so no failure streak, no redirect.
+//                 With this model the task measures tool-calling, not abstention.
+//   qwen3:14b   → 1.0 in both arms (correct decline), ra-full 5720 tok vs
+//                 ra-long-horizon 6550 tok. Gate: +0.0pp, +14.5% tok,
+//                 "within the noise floor; no measurable effect".
+//
+// The shape is pinned here so the fixture cannot silently stop being a trap.
+
+describe("ab-trap-5 — required tool exists but always fails", () => {
+  it("requires file-read, and no fixture ever provides the file", () => {
+    const t = ABSTENTION_TRAP_TASKS.find((x) => x.id === "ab-trap-5") as unknown as {
+      abstainExpected?: boolean;
+      tools?: ReadonlyArray<{ kind: string; name: string }>;
+      fixtures?: ReadonlyArray<{ path: string }>;
+    };
+    expect(t.abstainExpected).toBe(true);
+    expect(t.tools?.some((r) => r.kind === "required" && r.name === "file-read")).toBe(true);
+    // If a fixture ever ships ledger.json the tool would SUCCEED and the task
+    // would stop being a trap — silently, with the score still looking fine.
+    expect(t.fixtures?.some((f) => f.path.includes("ledger.json"))).toBeFalsy();
+  });
+
+  it("is reachable from ALL_TASKS", () => {
+    expect(ABSTENTION_TRAP_TASKS.map((t) => t.id)).toContain("ab-trap-5");
+  });
+});
