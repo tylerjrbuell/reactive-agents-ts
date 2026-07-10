@@ -62,6 +62,10 @@ export const featureCoverageSession: BenchmarkSession = {
     withFeature("ra-verification", "RA Full + Verification pass", { verification: true }),
     withFeature("ra-meta-tools", "RA Full + Meta Tools", { metaTools: true }),
     withFeature("ra-stall-policy", "RA Full + Stall Policy", { stallPolicy: { ignoredNudgeTolerance: 2 } }),
+    // The profile that gates the whole assessment -> control -> projector chain.
+    // Until 2026-07-09 it was reachable only via a task tag that exactly ONE task
+    // carries, so it could never be an arm.
+    withFeature("ra-long-horizon", "RA Full + Long-Horizon profile", { longHorizon: true }),
     // The low-overhead arm: NOT ra-full + a feature, but the minimal guard set.
     // Included because the +224% token overhead above makes "what does the full
     // harness cost?" a first-class question, not a footnote.

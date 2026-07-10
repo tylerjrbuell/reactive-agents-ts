@@ -22,6 +22,7 @@ import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
 import { publicCompetitorQwenSession, publicCompetitorCogitoSession, publicCompetitorSmokeSession } from "./sessions/public-competitor-bench.js"
 import { featureCoverageSession } from "./sessions/feature-coverage.js"
+import { longHorizonArmSession } from "./sessions/long-horizon-arm.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold, baselineCells, assertBaselineCells } from "./ci.js"
 import { resolveTasks, assertNonEmptySelection } from "./session.js"
 import { ALL_TASKS } from "./runner.js"
@@ -137,6 +138,7 @@ function printSessionSummary(report: SessionReport): void {
 
 const SESSIONS: Record<string, BenchmarkSession> = {
   "feature-coverage":      featureCoverageSession,
+  "long-horizon-arm":      longHorizonArmSession,
   "regression-gate":       regressionGateSession,
   "real-world-full":       realWorldFullSession,
   "competitor-comparison": competitorComparisonSession,

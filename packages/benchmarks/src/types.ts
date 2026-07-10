@@ -335,6 +335,16 @@ export interface HarnessConfig {
   /** `.withVerification()` — the explicit verification pass. */
   readonly verification?: boolean;
   /**
+   * `.withLongHorizon()` — the scaled guard profile.
+   *
+   * Previously reachable ONLY via a task's `horizon:long` tag, and exactly one
+   * task carries it. That made the profile impossible to ABLATE: there was no
+   * way to run the same task with it on and off. Everything gated behind it —
+   * the assessment/phase/projector chain, both control-plane seams, the
+   * adaptive harness — was invisible to the bench by construction.
+   */
+  readonly longHorizon?: boolean;
+  /**
    * Arbitrary env vars to set for the duration of this variant's run (set before
    * agent build, restored in finally). Used for env-gated arms like the context
    * assembly A/B (`{ RA_ASSEMBLY: "0" }`). Generalizes the verifier:"noop" pattern.

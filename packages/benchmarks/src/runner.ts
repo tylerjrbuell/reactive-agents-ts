@@ -22,7 +22,7 @@ import type {
   DimensionScore, QualityDimension, HarnessConfig, TaskRunResult,
   SessionReproducibility,
 } from "./types.js"
-import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
+import { REAL_WORLD_TASKS, ABSTENTION_TRAP_TASKS } from "./tasks/real-world.js"
 import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
@@ -590,7 +590,13 @@ export const runBenchmarks = async (
 
 // ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
 
-export const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...CONTEXT_STRESS_TASKS, ...LONG_HORIZON_TASKS] as const
+// ABSTENTION_TRAP_TASKS was authored and then never referenced: it appeared in
+// no ALL_TASKS spread and no session, so `ab-trap-*` was unreachable from any
+// bench cell (found 2026-07-09 by the long-horizon arm test). These are the
+// only tasks that exercise forced abstention — the path both control-plane
+// seam fixes changed — and they are scored deterministically by
+// `scoreAbstention` (abstain => 1.0, any answer => 0.0), no LLM judge.
+export const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...ABSTENTION_TRAP_TASKS, ...CONTEXT_STRESS_TASKS, ...LONG_HORIZON_TASKS] as const
 
 function getGitSha(): string {
   try { return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim() }
@@ -760,7 +766,12 @@ async function runInternal(
 
     // A4: long-horizon tasks (tagged `horizon:long`, e.g. lh-1) run under the
     // scaled guard profile so ≥40-iteration work is not tripped by short-run guards.
-    if (shouldUseLongHorizon(task)) builder.withLongHorizon()
+    //
+    // `config.longHorizon` (2026-07-09) makes the profile a VARIANT knob too, so
+    // the same task can be run with it on and off. Without this the profile could
+    // never be ablated — only `lh-1` carries the tag — and every mechanism gated
+    // behind it was unmeasurable no matter how many runs we bought.
+    if (shouldUseLongHorizon(task) || config.longHorizon) builder.withLongHorizon()
 
     const _log = console.log; console.log = () => {}
     const agent = await builder.build()
