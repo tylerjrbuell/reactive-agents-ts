@@ -1,6 +1,7 @@
 // Lift gate (canonical evaluation system, layer Lg). @unstable.
 export {
   DEFAULT_LIFT_POLICY,
+  DEFAULT_PROMOTION_SIGNIFICANCE_K,
   type ClassVerdict,
   type GateDecision,
   type GateVerdict,

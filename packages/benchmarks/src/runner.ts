@@ -27,7 +27,7 @@ import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs, assertNonEmptySelection } from "./session.js"
-import { completionRateOf, solveRateOf } from "./report-format.js"
+import { completionRateOf, passKOf, PASS_K_VALUES, solveRateOf } from "./report-format.js"
 import { checkCapabilitySourcePreflight } from "./preflight.js"
 
 /**
@@ -657,6 +657,16 @@ async function runInternal(
       .withModel(model.model)
       .withMaxIterations(maxIter)
 
+    // T0a scripting seam: hand the deterministic provider its per-task turn
+    // script. `withTestScenario` is the runtime's existing wither (it swaps in
+    // TestLLMServiceLayer); this is just the bench-side hookup. Guarded on the
+    // provider so live cells never read the field, and a "test" cell without a
+    // script keeps the provider default ({text: ""}).
+    if (model.provider === "test") {
+      const turns = model.scenarios?.[task.id]
+      if (turns?.length) builder.withTestScenario([...turns])
+    }
+
     if (config.tools) {
       // Sprint-1 TaskContract bridge: prefer explicit task.tools when present
       // (toolsToExpose returns required+available names + auto-adds file-read
@@ -968,7 +978,45 @@ export function aggregateRuns(
     meanDurationMs: Math.round(runs.reduce((a, r) => a + r.durationMs, 0) / runs.length),
     passRate: completionRateOf(runs),
     solveRate: solveRateOf(runs),
+    passK: passKOf(runs),
   }
+}
+
+/**
+ * Session-level pass^k: per variant, the mean of per-task estimates. A k is
+ * emitted ONLY when every measured cell (runs > 0) of that variant carries it
+ * — averaging over whichever tasks happened to have n ≥ k would compare
+ * different task subsets across variants, the same composition bug the paired
+ * gate exists to kill. Returns `undefined` when nothing is measurable.
+ */
+export function aggregatePassKByVariant(
+  reports: ReadonlyArray<TaskVariantReport>,
+): SessionReport["passKByVariant"] {
+  const byVariant = new Map<string, TaskVariantReport[]>()
+  for (const r of reports) {
+    if (r.inconclusive || r.runs.length === 0) continue
+    if (!byVariant.has(r.variantId)) byVariant.set(r.variantId, [])
+    byVariant.get(r.variantId)!.push(r)
+  }
+  if (byVariant.size === 0) return undefined
+
+  const out: Array<{ variantId: string; passK: Array<{ k: number; estimate: number }> }> = []
+  for (const [variantId, cells] of byVariant) {
+    const passK: Array<{ k: number; estimate: number }> = []
+    for (const k of PASS_K_VALUES) {
+      const estimates: number[] = []
+      let everyCellCarriesK = true
+      for (const c of cells) {
+        const e = (c.passK ?? passKOf(c.runs)).find(x => x.k === k)?.estimate
+        if (e === undefined) { everyCellCarriesK = false; break } // this cell has n < k
+        estimates.push(e)
+      }
+      if (!everyCellCarriesK) continue
+      passK.push({ k, estimate: estimates.reduce((a, b) => a + b, 0) / estimates.length })
+    }
+    out.push({ variantId, passK })
+  }
+  return out
 }
 
 export function computeAllAblation(reports: ReadonlyArray<TaskVariantReport>): ReadonlyArray<AblationResult> {
@@ -1325,6 +1373,7 @@ export async function runSession(
 
   const ablation = computeAllAblation(measuredReports)
   const dimensionSummary = summarizeDimensions(measuredReports)
+  const passKByVariant = aggregatePassKByVariant(measuredReports)
 
   const hasTrapTasks = abstentionInputs.some((r) => r.abstainExpected)
   const abstentionMetrics = hasTrapTasks ? aggregateAbstention(abstentionInputs) : undefined
@@ -1345,6 +1394,7 @@ export async function runSession(
       abstentionAccuracy: abstentionMetrics.abstentionAccuracy,
       fabricationUnderTrapRate: abstentionMetrics.fabricationUnderTrapRate,
     } : {}),
+    ...(passKByVariant !== undefined ? { passKByVariant } : {}),
   }
 
   if (outputPath) {

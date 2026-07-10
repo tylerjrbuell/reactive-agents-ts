@@ -1,7 +1,9 @@
 // File: src/gate/gate.ts
+import { isSolved, passKEstimate } from "../report-format.js";
 import type { SessionReport, TaskVariantReport } from "../types.js";
 import {
   DEFAULT_LIFT_POLICY,
+  DEFAULT_PROMOTION_SIGNIFICANCE_K,
   type ClassVerdict,
   type GateDecision,
   type GateVerdict,
@@ -78,6 +80,18 @@ function longHorizonIds(options: LiftGateOptions | undefined): ReadonlySet<strin
  *   higher pass-rate. Raw token growth alone never fails the gate; zero
  *   delivery (infinite CPD) always does.
  */
+/**
+ * Per-cell pass^8: prefer the producer's estimate (`TaskVariantReport.passK`),
+ * else compute from the raw runs — old persisted reports carry runs but not
+ * passK. `undefined` when the cell has fewer than 8 runs.
+ */
+function cellPass8(r: TaskVariantReport): number | undefined {
+  const fromReport = r.passK?.find((e) => e.k === 8)?.estimate;
+  if (fromReport !== undefined) return fromReport;
+  const runs = r.runs ?? [];
+  return passKEstimate(runs.length, runs.filter(isSolved).length, 8);
+}
+
 function computeEvidence(
   model: string,
   base: readonly TaskVariantReport[],
@@ -85,59 +99,126 @@ function computeEvidence(
   policy: LiftPolicy,
   taskClass: TaskClass,
 ): TierEvidence {
+  const promotionK = policy.promotionSignificanceK ?? DEFAULT_PROMOTION_SIGNIFICANCE_K;
+
+  // ── Paired per-task join (arXiv:2411.00640) ────────────────────────────────
+  // The old code compared POOLED arm means. If a task was measured in one arm
+  // only (errored, or simply not run), the two arms silently compared
+  // DIFFERENT task sets and the "lift" was an artifact of composition. Every
+  // estimate below is built from tasks present in BOTH arms; the rest are
+  // excluded AND reported on `unpairedTaskIds` — never silently pooled.
+  //
+  // One cell per (task × model × variant) by construction (SessionReport
+  // contract); should a duplicate ever appear, the first cell wins.
+  const byTask = (rows: readonly TaskVariantReport[]): Map<string, TaskVariantReport> => {
+    const m = new Map<string, TaskVariantReport>();
+    for (const r of rows) if (!m.has(r.taskId)) m.set(r.taskId, r);
+    return m;
+  };
+  const baseByTask = byTask(base);
+  const candByTask = byTask(cand);
+  const allTaskIds = [...new Set([...baseByTask.keys(), ...candByTask.keys()])];
+  const pairs = allTaskIds
+    .filter((id) => baseByTask.has(id) && candByTask.has(id))
+    .map((id) => ({ id, b: baseByTask.get(id)!, c: candByTask.get(id)! }));
+  const unpairedTaskIds = allTaskIds
+    .filter((id) => !(baseByTask.has(id) && candByTask.has(id)))
+    .sort();
+  const pairedBase = pairs.map((p) => p.b);
+  const pairedCand = pairs.map((p) => p.c);
+  const pairedCells = [...pairedBase, ...pairedCand];
+
+  // Zero pairs = the arms share no task at all: there is nothing to compare,
+  // and fabricating a lift from disjoint task sets is exactly the disease.
   const inconclusive =
-    base.some((r) => r.inconclusive !== undefined) ||
-    cand.some((r) => r.inconclusive !== undefined) ||
-    base.some((r) => metricScore(r, policy.metric) === undefined) ||
-    cand.some((r) => metricScore(r, policy.metric) === undefined);
+    pairs.length === 0 ||
+    pairedCells.some((r) => r.inconclusive !== undefined) ||
+    pairedCells.some((r) => metricScore(r, policy.metric) === undefined);
 
-  const baselineMetric = mean(base.map((r) => metricScore(r, policy.metric) ?? 0));
-  const candidateMetric = mean(cand.map((r) => metricScore(r, policy.metric) ?? 0));
-  const liftPp = (candidateMetric - baselineMetric) * 100;
+  // Per task t: d_t = p̂_cand,t − p̂_base,t, se_t² = se_base,t² + se_cand,t².
+  const perTask = pairs.map(({ id, b, c }) => ({
+    taskId: id,
+    dPp:
+      ((metricScore(c, policy.metric) ?? 0) - (metricScore(b, policy.metric) ?? 0)) * 100,
+    sePp:
+      Math.sqrt(
+        cellStdErr(b, policy.metric) ** 2 + cellStdErr(c, policy.metric) ** 2,
+      ) * 100,
+  }));
+  const T = perTask.length;
 
-  const baseTokens = mean(base.map((r) => r.meanTokens));
-  const candTokens = mean(cand.map((r) => r.meanTokens));
+  const baselineMetric = mean(pairedBase.map((r) => metricScore(r, policy.metric) ?? 0));
+  const candidateMetric = mean(pairedCand.map((r) => metricScore(r, policy.metric) ?? 0));
+  // D̄ = mean of per-task diffs. With identical task sets in both arms this
+  // equals the old difference-of-pooled-means, so well-formed reports are
+  // numerically unchanged; they diverge exactly when composition diverges.
+  const dBar = mean(perTask.map((p) => p.dPp / 100));
+  const liftPp = dBar * 100;
+
+  const baseTokens = mean(pairedBase.map((r) => r.meanTokens));
+  const candTokens = mean(pairedCand.map((r) => r.meanTokens));
   const tokenOverheadPct =
     baseTokens === 0 ? 0 : ((candTokens - baseTokens) / baseTokens) * 100;
 
-  const variance = maxOf([
-    ...base.map((r) => r.variance),
-    ...cand.map((r) => r.variance),
-  ]);
+  const variance = maxOf(pairedCells.map((r) => r.variance));
 
-  // ── Significance: standard ERROR of the difference, not standard deviation ──
-  // A stddev describes the spread of individual runs; it never shrinks with n
-  // and is exactly 0 when n=1 (or when every run in a cell scored alike). Using
-  // it as a noise floor made the gate rubber-stamp noise at n=1 (bar 0pp) and
-  // reject every achievable effect at n>1 (bar ≈ 50pp on Bernoulli cells).
-  //
-  // The uncertainty about a MEAN is se = sd/√n, and the uncertainty about the
-  // DIFFERENCE of two independent means is √(se_b² + se_c²). Both shrink as
-  // √n — which is what makes "run it more times" a way to earn a verdict.
-  const seOfGroup = (rows: readonly TaskVariantReport[]): number => {
-    if (rows.length === 0) return 0;
-    // Variance of a mean-of-k-cell-means = (1/k²)·Σ se_i².
-    const sumSq = rows.reduce((acc, r) => acc + cellStdErr(r, policy.metric) ** 2, 0);
-    return Math.sqrt(sumSq) / rows.length;
-  };
-  const stdErr = Math.sqrt(seOfGroup(base) ** 2 + seOfGroup(cand) ** 2);
+  // ── SE(D̄): the larger of two noise sources ────────────────────────────────
+  // Within-cell: √(Σ se_t²)/T — sampling noise inside each cell, shrinks with
+  // runs. Between-task (clustered): sd(d_t)/√T — how much the tasks DISAGREE
+  // about the effect; more runs per cell never shrinks it, only more tasks do.
+  // Taking the max means a task-heterogeneous "effect" cannot buy significance
+  // by hammering the same two tasks with more runs.
+  const within = T === 0 ? 0 : Math.sqrt(perTask.reduce((a, p) => a + (p.sePp / 100) ** 2, 0)) / T;
+  const between =
+    T >= 2
+      ? Math.sqrt(perTask.reduce((a, p) => a + (p.dPp / 100 - dBar) ** 2, 0) / (T - 1)) /
+        Math.sqrt(T)
+      : 0;
+  const stdErr = Math.max(within, between);
   const stdErrPp = stdErr * 100;
   const noisePp = policy.significanceK * stdErrPp;
+  const promotionNoisePp = promotionK * stdErrPp;
 
-  const minRunsObserved = Math.min(
-    ...[...base, ...cand].map((r) => r.runs?.length ?? 0),
-  );
+  const minRunsObserved =
+    pairedCells.length === 0
+      ? 0
+      : Math.min(...pairedCells.map((r) => r.runs?.length ?? 0));
   const underpowered = minRunsObserved < policy.minRuns;
 
   // Runs/arm to resolve `minLiftPp` at the observed spread (equal-n, z=K).
-  const sd = maxOf([...base, ...cand].map((r) => cellSpread(r, policy.metric)));
+  // Uses the PROMOTION band: this number is printed as advice on underpowered
+  // receipts, and the bar the re-run must actually clear is the promotion one.
+  const sd = maxOf(pairedCells.map((r) => cellSpread(r, policy.metric)));
   const delta = policy.minLiftPp / 100;
   const runsNeeded =
-    delta > 0 ? Math.ceil((2 * policy.significanceK ** 2 * sd ** 2) / delta ** 2) : 0;
+    delta > 0 ? Math.ceil((2 * promotionK ** 2 * sd ** 2) / delta ** 2) : 0;
 
   // An underpowered tier may neither pass nor regress: we did not look hard
   // enough to say anything, and saying "no effect" would be a lie.
+  //
+  // `significant` stays on the EXPLORATORY band (significanceK, default 1σ):
+  // it feeds `regresses` (a 1σ regression still rejects — conservative) and
+  // the receipt's "we saw something" read. PROMOTION (`passes` → default-on)
+  // demands the 95% band: a 68% band promotes a coin flip ~1 time in 3.
   const significant = !underpowered && Math.abs(liftPp) > noisePp;
+  const promotable = !underpowered && Math.abs(liftPp) > promotionNoisePp;
+
+  // ── pass^8 reliability hook (tau-bench) ────────────────────────────────────
+  // Present only when EVERY paired cell in BOTH arms carries n ≥ 8. A mean
+  // lift bought by gutting run-to-run consistency must not reach default-on;
+  // when the data cannot support pass^8 the receipt says "underpowered" and
+  // the hook never blocks.
+  let passK: TierEvidence["passK"];
+  if (T > 0) {
+    const basePass8 = pairedBase.map(cellPass8);
+    const candPass8 = pairedCand.map(cellPass8);
+    if (basePass8.every((e) => e !== undefined) && candPass8.every((e) => e !== undefined)) {
+      const baseline = mean(basePass8.map((e) => e ?? 0));
+      const candidate = mean(candPass8.map((e) => e ?? 0));
+      passK = { k: 8, baseline, candidate, nonRegression: candidate >= baseline - 0.01 };
+    }
+  }
+  const passKOk = passK === undefined || passK.nonRegression;
 
   // Cost half of the bar — the sole class-dependent decision.
   let costOk: boolean;
@@ -157,8 +238,16 @@ function computeEvidence(
     costOk = tokenOverheadPct <= policy.maxTokenOverheadPct;
   }
 
+  // Promotion demands the 95% band (`promotable`) AND pass^8 non-regression
+  // when measurable; the exploratory band still drives `regresses` so a 1σ
+  // regression keeps its veto (stricter in both directions, never looser).
   const passes =
-    !inconclusive && !underpowered && significant && liftPp >= policy.minLiftPp && costOk;
+    !inconclusive &&
+    !underpowered &&
+    promotable &&
+    liftPp >= policy.minLiftPp &&
+    costOk &&
+    passKOk;
   const regresses = !inconclusive && !underpowered && significant && liftPp < 0;
 
   // NOTE: when `inconclusive` is true, the numeric fields below are not meaningful — consumers MUST gate on `inconclusive` before reading liftPp/tokenOverheadPct.
@@ -170,7 +259,10 @@ function computeEvidence(
     tokenOverheadPct,
     variance,
     noisePp,
+    promotionNoisePp,
     stdErrPp,
+    perTask,
+    unpairedTaskIds,
     minRunsObserved,
     underpowered,
     runsNeeded,
@@ -178,6 +270,7 @@ function computeEvidence(
     inconclusive,
     passes,
     regresses,
+    ...(passK !== undefined ? { passK } : {}),
     ...longHorizonFields,
   };
 }

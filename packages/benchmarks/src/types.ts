@@ -3,6 +3,7 @@
  * Benchmark types — task definitions, run results, and report shape.
  */
 import type { ToolRequirement, PreFlightViolation, QualityDimension, DimensionScore } from "@reactive-agents/core";
+import type { TestTurn } from "@reactive-agents/llm-provider";
 
 // Canonical quality taxonomy now lives in @reactive-agents/core (2026-06-25 unification).
 export type { QualityDimension, DimensionScore };
@@ -187,6 +188,16 @@ export interface TaskVariantReport {
    */
   readonly solveRate: number;
   /**
+   * pass^k reliability estimates (tau-bench): for `c` solves in `n` runs,
+   * pass^k = C(c,k)/C(n,k) — the probability that k runs drawn without
+   * replacement from the observed n are ALL solves. Emitted for k ∈ {1,2,4,8}
+   * where n ≥ k; a k the cell cannot support is ABSENT, never a fabricated 0.
+   * Added 2026-07-10 (instrument audit): the mean hides run-to-run
+   * consistency — 4-of-8 on every run and all-or-nothing across runs carry
+   * the same mean and very different shipping behavior.
+   */
+  readonly passK?: ReadonlyArray<{ readonly k: number; readonly estimate: number }>;
+  /**
    * Set when the cell was NOT measured because a preflight contract was
    * violated (today: capability source=fallback). An inconclusive cell carries
    * `runs: []` and zeroed scores — it is excluded from aggregation, ablation,
@@ -287,6 +298,17 @@ export interface SessionReport extends MultiModelReport {
    * abstain). Complement of abstentionAccuracy. Populated by Task-8 aggregation.
    */
   readonly fabricationUnderTrapRate?: number;
+  /**
+   * Session-level pass^k reliability: for each variant, the mean of the
+   * per-task pass^k estimates. A k is emitted ONLY when every measured cell of
+   * that variant carries it (n ≥ k everywhere) — a mean over a shifting task
+   * subset would not be comparable across variants. Undefined when no cell
+   * carries pass^k data. See {@link TaskVariantReport.passK}.
+   */
+  readonly passKByVariant?: ReadonlyArray<{
+    readonly variantId: string;
+    readonly passK: ReadonlyArray<{ readonly k: number; readonly estimate: number }>;
+  }>;
 }
 
 export interface DriftReport {
@@ -390,9 +412,24 @@ export type HarnessVariant = InternalVariant | CompetitorVariant
 
 export interface ModelVariant {
   readonly id: string;
-  readonly provider: "anthropic" | "openai" | "gemini" | "ollama" | "litellm" | "groq" | "xai";
+  /**
+   * `"test"` is the deterministic scripted provider (T0a, 2026-07-10): real
+   * kernel + real scoring, zero network. It resolves capability from the
+   * `test/test` static-table entry (capability.ts), so preflight passes only
+   * when `model` is exactly `"test"`. Live sessions never use it.
+   */
+  readonly provider: "anthropic" | "openai" | "gemini" | "ollama" | "litellm" | "groq" | "xai" | "test";
   readonly model: string;
   readonly contextTier?: "local" | "standard" | "large" | "frontier";
+  /**
+   * Scripted turn scenarios for the deterministic `"test"` provider, keyed by
+   * task id. When set AND `provider === "test"`, `runInternal` hands the task's
+   * turns to `builder.withTestScenario()` — the runtime's existing seam that
+   * swaps in `TestLLMServiceLayer`. Invisible to live providers: the field is
+   * never read unless `provider === "test"`, and a "test" cell without a
+   * scenario falls back to the provider's default empty-text turn.
+   */
+  readonly scenarios?: Readonly<Record<string, ReadonlyArray<TestTurn>>>;
 }
 
 export interface BenchmarkSession {

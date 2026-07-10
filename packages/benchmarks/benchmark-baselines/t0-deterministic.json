@@ -1,0 +1,288 @@
+{
+  "gitSha": "247b5339",
+  "reports": [
+    {
+      "taskId": "ab-trap-5",
+      "modelVariantId": "scripted-test",
+      "variantId": "bare-llm",
+      "variantLabel": "Bare LLM",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 71,
+      "meanDurationMs": 102,
+      "passRate": 1,
+      "solveRate": 0,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 71,
+          "durationMs": 102.08235400000001,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "ab-trap-5",
+      "modelVariantId": "scripted-test",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 799,
+      "meanDurationMs": 254,
+      "passRate": 1,
+      "solveRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 799,
+          "durationMs": 254.024227,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "ab-trap-4",
+      "modelVariantId": "scripted-test",
+      "variantId": "bare-llm",
+      "variantLabel": "Bare LLM",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 43,
+      "meanDurationMs": 20,
+      "passRate": 1,
+      "solveRate": 0,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 43,
+          "durationMs": 20.31878400000005,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "ab-trap-4",
+      "modelVariantId": "scripted-test",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 94,
+      "passRate": 1,
+      "solveRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 0,
+          "durationMs": 93.664983,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "cs-overflow-transcribe",
+      "modelVariantId": "scripted-test",
+      "variantId": "bare-llm",
+      "variantLabel": "Bare LLM",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 24,
+      "passRate": 0,
+      "solveRate": 0,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "error",
+          "tokensUsed": 0,
+          "durationMs": 24.187813000000006,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "no output produced (Task 01KX6NGYAQZR4PF3HCFQK473VV exceeded max iterations (1) after 0s) — cell not judged"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "cs-overflow-transcribe",
+      "modelVariantId": "scripted-test",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 1
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2951,
+      "meanDurationMs": 130,
+      "passRate": 1,
+      "solveRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 2951,
+          "durationMs": 129.98269699999992,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "cs-recall-temptation",
+      "modelVariantId": "scripted-test",
+      "variantId": "bare-llm",
+      "variantLabel": "Bare LLM",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 0,
+      "meanDurationMs": 22,
+      "passRate": 0,
+      "solveRate": 0,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "error",
+          "tokensUsed": 0,
+          "durationMs": 22.02917500000001,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "no output produced (Task 01KX6NGYFMNEQJQV0VZYBP7C20 exceeded max iterations (1) after 0s) — cell not judged"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "cs-recall-temptation",
+      "modelVariantId": "scripted-test",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 15641,
+      "meanDurationMs": 122,
+      "passRate": 1,
+      "solveRate": 0,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 15641,
+          "durationMs": 121.78781400000003,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "savedAt": "2026-07-10T18:44:32.004Z"
+}

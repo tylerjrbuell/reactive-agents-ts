@@ -5,7 +5,7 @@ import type { MultiModelReport } from "./types.js"
 import { runBenchmarks } from "./runner.js"
 import { runSession } from "./runner.js"
 import { gateReceiptFor, powerWarningFor } from "./gate/on-path.js"
-import { statusCell } from "./report-format.js"
+import { formatPassKSummary, statusCell } from "./report-format.js"
 import { DEFAULT_LIFT_POLICY } from "./gate/types.js"
 import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { regressionGateSession } from "./sessions/regression-gate.js"
@@ -23,6 +23,7 @@ import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
 import { publicCompetitorQwenSession, publicCompetitorCogitoSession, publicCompetitorSmokeSession } from "./sessions/public-competitor-bench.js"
 import { featureCoverageSession } from "./sessions/feature-coverage.js"
 import { longHorizonArmSession } from "./sessions/long-horizon-arm.js"
+import { t0DeterministicSession } from "./sessions/t0-deterministic.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold, baselineCells, assertBaselineCells } from "./ci.js"
 import { resolveTasks, assertNonEmptySelection } from "./session.js"
 import { ALL_TASKS } from "./runner.js"
@@ -133,10 +134,17 @@ function printSessionSummary(report: SessionReport): void {
     }
   }
 
+  // pass^k reliability (tau-bench): only prints when every measured cell of a
+  // variant has n >= k for some k — absent at n=1, so most sessions gain a
+  // line only at runs >= 2.
+  const passK = formatPassKSummary(report)
+  if (passK) console.log(`\n${passK}`)
+
   console.log("\n  └─────────────────────────────────────────────────────────────┘\n")
 }
 
 const SESSIONS: Record<string, BenchmarkSession> = {
+  "t0-deterministic":      t0DeterministicSession,
   "feature-coverage":      featureCoverageSession,
   "long-horizon-arm":      longHorizonArmSession,
   "regression-gate":       regressionGateSession,

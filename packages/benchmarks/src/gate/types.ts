@@ -78,6 +78,16 @@ export interface LiftPolicy {
    */
   readonly significanceK: number;
   /**
+   * Significance multiplier for the PROMOTION path (a tier's `passes`, hence
+   * `default-on`). Defaults to 1.96 (95%) when omitted. `significanceK`
+   * (default 1 ≈ 68%) keeps the exploratory read — the `significant` flag,
+   * `regresses`, and the rationale text — so a 1σ regression still rejects and
+   * a 1σ effect still shows up as "we saw something", but PROMOTING a
+   * mechanism to default-on demands the 95% band. A 68% band promotes a coin
+   * flip roughly one time in three (instrument audit 2026-07-10).
+   */
+  readonly promotionSignificanceK?: number;
+  /**
    * Minimum runs per cell before a tier may be judged at all. Below this the
    * tier is `underpowered` and can neither pass nor regress — "we did not look
    * hard enough" is reported as itself, not as "no effect".
@@ -91,8 +101,12 @@ export const DEFAULT_LIFT_POLICY: LiftPolicy = {
   maxTokenOverheadPct: 15,
   minTiers: 2,
   significanceK: 1,
+  promotionSignificanceK: 1.96,
   minRuns: 3,
 };
+
+/** The promotion band used when a policy omits `promotionSignificanceK`. */
+export const DEFAULT_PROMOTION_SIGNIFICANCE_K = 1.96;
 
 /** Per-model-tier evidence: baseline vs candidate on the success metric. */
 export interface TierEvidence {
@@ -112,10 +126,51 @@ export interface TierEvidence {
    * standard deviation does not shrink with n. Use `noisePp`.
    */
   readonly variance: number;
-  /** The significance bar in points: `significanceK × SE(difference) × 100`. */
+  /** The EXPLORATORY significance bar in points: `significanceK × SE(D̄) × 100`. */
   readonly noisePp: number;
-  /** Standard error of the difference of the two arms' means, in points. */
+  /**
+   * The PROMOTION bar in points: `promotionSignificanceK × SE(D̄) × 100`.
+   * `passes` (and therefore `default-on`) requires |liftPp| to clear THIS bar;
+   * `noisePp` only feeds the exploratory `significant` flag.
+   */
+  readonly promotionNoisePp: number;
+  /**
+   * Standard error of the PAIRED per-task mean difference D̄, in points:
+   * max( √(Σ se_t²)/T , sd(d_t)/√T ) — the within-cell term and the
+   * between-task clustered term, whichever is LARGER. Two tasks that disagree
+   * hard about an effect are evidence of heterogeneity, not of precision.
+   */
   readonly stdErrPp: number;
+  /**
+   * The paired per-task differences this tier's estimate is built from
+   * (arXiv:2411.00640): d_t = p̂_cand,t − p̂_base,t in points, with
+   * se_t = √(se_base,t² + se_cand,t²). `liftPp` is the mean of `dPp`.
+   */
+  readonly perTask: ReadonlyArray<{
+    readonly taskId: string;
+    readonly dPp: number;
+    readonly sePp: number;
+  }>;
+  /**
+   * Tasks measured in exactly ONE arm (e.g. errored in the other). EXCLUDED
+   * from the paired estimate — comparing arms over different task sets makes
+   * the lift an artifact of composition — and reported here so the exclusion
+   * is never silent.
+   */
+  readonly unpairedTaskIds: ReadonlyArray<string>;
+  /**
+   * pass^8 reliability comparison (tau-bench), present ONLY when every paired
+   * cell in BOTH arms carries n ≥ 8. `nonRegression` = candidate pass^8 ≥
+   * baseline pass^8 − 1pp; when false the tier cannot pass (a mean lift that
+   * guts run-to-run consistency is not a win). Absent → noted as
+   * "passK: underpowered" in the receipt and NEVER blocks.
+   */
+  readonly passK?: {
+    readonly k: number;
+    readonly baseline: number;
+    readonly candidate: number;
+    readonly nonRegression: boolean;
+  };
   /** Fewest runs observed in any contributing cell of this tier. */
   readonly minRunsObserved: number;
   /** `minRunsObserved < policy.minRuns` → this tier cannot pass OR regress. */

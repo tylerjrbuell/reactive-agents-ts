@@ -21,8 +21,11 @@ function scores(accuracy: number): DimensionScore[] {
 // `n` runs whose accuracy averages to `accuracy`. The gate's significance bar is
 // a standard ERROR, so a cell must carry its sample size: `runs: []` means "no
 // evidence", and a tier built from such cells is `underpowered` by policy. The
-// default of 200 is what it actually takes to resolve the ~6.5pp lifts these
-// fixtures assert on — see gate-significance.test.ts for why.
+// default of 1000 is what it takes to resolve the ~6.5pp lifts these fixtures
+// assert on at the PROMOTION band (1.96σ, instrument audit 2026-07-10 — was
+// 200 when the bar was 1σ; the ~6.5pp fixtures sit between the two bars:
+// 1.96×SE(diff) ≈ 9.5pp at n=200, ≈ 4.2pp at n=1000). Legitimately stricter:
+// promoting default-on now demands 95% confidence, not 68%.
 function runsOf(accuracy: number, n: number) {
   const ones = Math.round(accuracy * n);
   return Array.from({ length: n }, (_, i) => ({
@@ -52,7 +55,7 @@ function tvr(p: {
     modelVariantId: p.modelVariantId,
     variantId: p.variantId,
     variantLabel: p.variantId,
-    runs: runsOf(accuracy, p.n ?? 200) as TaskVariantReport["runs"],
+    runs: runsOf(accuracy, p.n ?? 1000) as TaskVariantReport["runs"],
     meanScores: p.noMetric ? [] : scores(accuracy),
     variance: p.variance ?? 0,
     meanTokens: p.meanTokens ?? 1000,
@@ -163,7 +166,9 @@ describe("evaluateLiftGate", () => {
     baseAcc: number,
     candAcc: number,
     candTokens = 1000,
-    n = 200,
+    // 1000 (was 200): the 6pp default-on fixtures must clear the 1.96σ
+    // promotion bar — see the runsOf comment above.
+    n = 1000,
   ): SessionReport {
     return makeReport([
       tvr({ modelVariantId: "local", variantId: "base", accuracy: baseAcc, meanTokens: 1000, n }),
