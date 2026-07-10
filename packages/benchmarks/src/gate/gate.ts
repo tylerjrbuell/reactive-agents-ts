@@ -275,6 +275,8 @@ function buildRationale(
   aggregate: GateVerdict["aggregate"],
   partial: boolean,
   policy: LiftPolicy,
+  /** True when at least one tier's |lift| cleared its noise bar. */
+  anySignificant = true,
 ): string {
   const lift = aggregate.liftPp.toFixed(1);
   const tok = aggregate.tokenOverheadPct.toFixed(1);
@@ -284,6 +286,12 @@ function buildRationale(
   if (decision === "reject") return `${base} — a tier significantly regresses`;
   if (decision === "default-on") return `${base} — clears ≥${policy.minLiftPp}pp ∧ ≤${policy.maxTokenOverheadPct}% on all tiers`;
   if (partial) return `${base} — inconclusive tier blocks promotion`;
+  // A result inside the noise band measured NOTHING. Printing "below the
+  // promotion bar" makes it read as a near-miss, and "opt-in" reads as a weak
+  // endorsement — both wrong. Observed on a real ablation whose two n=3 runs of
+  // the SAME comparison flipped sign (+4.5pp, then -10.6pp).
+  if (!anySignificant)
+    return `${base} — within the noise floor; no measurable effect (NOT evidence of equivalence)`;
   return `${base} — below the promotion bar`;
 }
 
@@ -332,7 +340,13 @@ export function evaluateLiftGate(
     perTier,
     aggregate: top.aggregate,
     partial: top.partial,
-    rationale: buildRationale(top.decision, top.aggregate, top.partial, policy),
+    rationale: buildRationale(
+      top.decision,
+      top.aggregate,
+      top.partial,
+      policy,
+      perTier.some((t) => t.significant),
+    ),
     baselineVariantId,
     candidateVariantId,
     ...(byClass ? { byClass } : {}),
