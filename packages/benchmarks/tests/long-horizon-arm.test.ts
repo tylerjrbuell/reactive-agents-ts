@@ -75,14 +75,16 @@ describe("the long-horizon ablation session pairs the SAME tasks under both prof
     expect(candCfg).toEqual(baseCfg);
   });
 
-  it("includes the abstention TRAP tasks — the only cells where today's seam fixes fire", () => {
-    // The F3 + stall seams change behaviour only when forced abstention
-    // qualifies (ungrounded, no deliverable). Trap tasks are scored
-    // deterministically by scoreAbstention: abstain => 1.0, answer => 0.0.
+  it("includes ab-trap-4 — the only task that even ATTEMPTS harness-forced abstention", () => {
+    // MEASURED 2026-07-09: cogito:8b answered ab-trap-1..3 in every run of both
+    // profiles (accuracy 0.0 across the board). Those traps declare no
+    // requiredTools, and the grounded-terminal gate is skipped entirely when
+    // `ctx.requiredTools.length === 0`; model-INITIATED abstention was cut. They
+    // measure fabrication, not the abstention machinery the seam fixes changed.
+    // ab-trap-4 declares a REQUIRED tool that is never provided, which is the
+    // one documented route into decideForcedAbstention.
     const ids = longHorizonArmSession.taskIds ?? [];
-    expect(ids).toContain("ab-trap-1");
-    expect(ids).toContain("ab-trap-2");
-    expect(ids).toContain("ab-trap-3");
+    expect(ids).toContain("ab-trap-4");
   });
 
   it("includes deterministic graded tasks too (so the profile is not judged only on traps)", () => {
@@ -94,7 +96,17 @@ describe("the long-horizon ablation session pairs the SAME tasks under both prof
     const abstainers = ABSTENTION_TRAP_TASKS.filter(
       (t) => (t as { abstainExpected?: boolean }).abstainExpected === true,
     );
-    expect(abstainers.length).toBeGreaterThanOrEqual(3);
+    expect(abstainers.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("ab-trap-4 declares a REQUIRED tool that the agent is never given", () => {
+    // This is the mechanism: `computeGroundingSet` passes declared `required`
+    // names through verbatim, so an unavailable name reaches
+    // `.withRequiredTools()` and then decideForcedAbstention's first branch.
+    const t = ABSTENTION_TRAP_TASKS.find((x) => x.id === "ab-trap-4") as unknown as {
+      tools?: ReadonlyArray<{ kind: string; name: string }>;
+    };
+    expect(t.tools?.some((r) => r.kind === "required" && r.name === "employee-directory")).toBe(true);
   });
 
   it("REGRESSION: the trap tasks are reachable from ALL_TASKS at all", () => {
@@ -102,7 +114,7 @@ describe("the long-horizon ablation session pairs the SAME tasks under both prof
     // `ab-trap-*` matched no cell in any session. This session would have
     // silently run rw-9 alone — the non-empty guard passes on one task.
     const ids = ALL_TASKS.map((t) => t.id);
-    for (const id of ["ab-trap-1", "ab-trap-2", "ab-trap-3"]) expect(ids).toContain(id);
+    for (const id of ["ab-trap-1", "ab-trap-2", "ab-trap-3", "ab-trap-4"]) expect(ids).toContain(id);
   });
 });
 
