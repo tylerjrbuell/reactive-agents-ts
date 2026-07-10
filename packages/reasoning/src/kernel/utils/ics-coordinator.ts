@@ -55,15 +55,30 @@ export function coordinateICS(
       lines.push(`Completed: ${completedRequired.map((t) => `${t} ✓`).join(", ")}`)
     }
 
+    // Wire-verified 2026-07-10: this block used to append "— skip this tool,
+    // use data from other calls" to every error — an instruction to substitute
+    // other data for evidence the task named, i.e. to fabricate. It landed in
+    // the same request as the tool error's own recovery hint ("Do not guess
+    // again"), so the model was told opposite things in one prompt. Both live
+    // fabrication runs (haiku 174.7912, qwen 199.75) followed this
+    // instruction. Name the error; never order a substitution.
     for (const err of lastErrors) {
-      lines.push(`Error: ${err} — skip this tool, use data from other calls`)
+      lines.push(`Error: ${err} — resolve this before finishing; do not substitute values you did not obtain.`)
     }
 
     const iterationsLeft = maxIterations - iteration
     const urgency = iterationsLeft <= 2 ? ` (${iterationsLeft} iterations remaining)` : ""
 
-    if (missingTools.length > 0) {
+    // The quota push is per tool NAME, so one successful file-read marks
+    // "file-read ✓" even when the task still needs a second, different file.
+    // Pushing "Now call file-write" while the model is mid-recovery from a
+    // failed read is exactly the premature-write instruction observed on the
+    // wire (req-02: "Now call file-write" with rates.json unread). While a
+    // fresh error is unresolved, recovery outranks the quota.
+    if (missingTools.length > 0 && lastErrors.length === 0) {
       lines.push(`Now call ${missingTools[0]} with the appropriate arguments.${urgency}`)
+    } else if (missingTools.length > 0) {
+      lines.push(`Still required before finishing: ${missingTools.join(", ")}.`)
     }
 
     return { steeringNudge: lines.length > 0 ? lines.join("\n") : undefined }

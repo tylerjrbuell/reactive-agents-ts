@@ -109,6 +109,17 @@ export function fromKernelState(
 
   for (const msg of state.messages) {
     if (msg.role === "assistant") {
+      // The model's own reasoning. conversation-assembly stores it verbatim
+      // (`content: assistantThought`), and until 2026-07-10 this walk dropped
+      // it — the `thought` event kind was declared with zero writers, and
+      // every replayed assistant turn rendered `content: ""`. Wire-captured:
+      // a 6-iteration run whose every assistant turn was 0 chars, while the
+      // persona instructed "think step by step". Whether the projector
+      // RENDERS these is a separate, flag-gated decision (project-results);
+      // recording what happened is not.
+      if (typeof msg.content === "string" && msg.content.trim().length > 0) {
+        log = log.append({ kind: "thought", text: msg.content });
+      }
       for (const tc of msg.toolCalls ?? []) {
         // ToolCallSpec.arguments is Record<string,unknown> by convention; use
         // a guard so we never cast to any.

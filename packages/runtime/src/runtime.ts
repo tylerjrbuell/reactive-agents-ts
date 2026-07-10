@@ -585,6 +585,14 @@ export const createRuntime = (options: RuntimeOptions) => {
       };
     }
   }
+  // Whether ANY configured feature needs the memory stack in the ambient
+  // runtime. `.session({persist})` and skill persistence are gated on
+  // enableMemory already; experience/consolidation carry their own flags.
+  const memoryStackNeeded =
+    (options.enableMemory ?? false) ||
+    (options.enableExperienceLearning ?? false) ||
+    (options.enableMemoryConsolidation ?? false);
+
   // Bridge LLMService.embed into MemoryLLM so semantic memory auto-generates embeddings
   const memoryLayer = Layer.unwrapEffect(
     Effect.gen(function* () {
@@ -1045,7 +1053,15 @@ export const createRuntime = (options: RuntimeOptions) => {
       coreLayer,
       eventBusLayer,
       observableLlmLayer,
-      memoryLayer,
+      // Memory is DEFAULT-OFF, but this merge was unconditional — so every
+      // run still built the full memory stack, and the memory-flush phase
+      // (which gates on serviceOption presence, not on the option) ran a
+      // "memory extraction assistant" LLM call per non-trivial run. Wire-
+      // captured 2026-07-10: request #7 of a 6-iteration memory-off run was
+      // a 2,252-char extraction prompt. Feature-dependent layers below
+      // (experience/consolidation/session/skill) provide memoryLayer to
+      // THEMSELVES, so they are unaffected by gating the ambient merge.
+      memoryStackNeeded ? memoryLayer : Layer.empty,
       hookLayer,
       engineLayer,
       CapabilityRegistryLive, // MOVE-2 M2.1 — default-on capability metadata + audit surface backing

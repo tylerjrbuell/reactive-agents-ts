@@ -55,11 +55,30 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   // carried. The recency split preserves the latest result's content (large
   // budget, model can act) while still collapsing accumulated history.
   let pending: Array<{ id: string; name: string; arguments: Record<string, unknown> }> = [];
+  // Thought continuity (RA_THOUGHT_CONTINUITY=1, experimental pending
+  // ablation). Default OFF: every replayed assistant turn renders
+  // `content: ""`, so the model re-reads its tool calls but never a word of
+  // its own reasoning — plans and derivations are re-derived from scratch
+  // each turn while the persona says "think step by step". ON: the thought
+  // event recorded for the turn is rendered as the assistant content, capped
+  // so accumulated prose cannot crowd out tool results. A trailing thought
+  // with no following tool call is NOT rendered — that is the terminal
+  // answer, which reaches the caller by its own path.
+  const renderThoughts = process.env.RA_THOUGHT_CONTINUITY === "1";
+  const THOUGHT_CAP = 600;
+  let pendingThought: string | undefined;
   const flush = () => {
     if (pending.length === 0) return;
-    messages = [...messages, { role: "assistant", content: "", toolCalls: pending }];
-    trace = recordMessage(trace, { role: "assistant", chars: 0 });
+    const thought =
+      renderThoughts && pendingThought !== undefined
+        ? pendingThought.length > THOUGHT_CAP
+          ? `${pendingThought.slice(0, THOUGHT_CAP)}…`
+          : pendingThought
+        : "";
+    messages = [...messages, { role: "assistant", content: thought, toolCalls: pending }];
+    trace = recordMessage(trace, { role: "assistant", chars: thought.length });
     pending = [];
+    pendingThought = undefined;
   };
 
   // Pre-pass: index the last tool_result event so we can route it to the
@@ -69,7 +88,9 @@ export const projectResultsStage = (c: AssemblyCtx): AssemblyCtx => {
   let resultSeen = 0;
 
   for (const e of c.log.events) {
-    if (e.kind === "tool_called") {
+    if (e.kind === "thought") {
+      pendingThought = e.text;
+    } else if (e.kind === "tool_called") {
       pending.push({ id: e.callId, name: e.tool, arguments: e.args });
     } else if (e.kind === "tool_result") {
       flush(); // close the assistant turn before emitting its result(s)

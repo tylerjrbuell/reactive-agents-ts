@@ -17,7 +17,7 @@
  * or wrap themselves in spans.
  */
 import { Effect, Ref } from "effect";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, CurrentRunContext } from "@reactive-agents/core";
 import {
   ExecutionError,
   KillSwitchTriggeredError,
@@ -327,4 +327,15 @@ export const runPipeline = (
 ): Effect.Effect<ExecutionContext, RuntimeErrors> =>
   Effect.reduce(phases, initialCtx, (ctx, phase) =>
     runGuardedPhase(phase, ctx, deps),
+  ).pipe(
+    // Run-correlate every LLM call made by ANY phase. CurrentRunContext was
+    // set only around the kernel loop (reasoning-service.ts), so calls made
+    // from engine phases — memory extraction, debrief synthesis — fell back
+    // to the "llm-direct" placeholder and landed in an unbounded, runId-less
+    // catch-all trace (110k+ events when audited 2026-07-10). A hidden
+    // per-run LLM call lived there for months, invisible to
+    // `rax diagnose <runId>`. Every call a run causes must attribute to it.
+    initialCtx.taskId
+      ? Effect.locally(CurrentRunContext, { taskId: initialCtx.taskId })
+      : (eff) => eff,
   );
