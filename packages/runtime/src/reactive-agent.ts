@@ -78,13 +78,11 @@ export const withHistoryBlock = (input: string, history?: readonly ChatMessage[]
     if (!block) return input
     return `${block}\n\n--- Current message ---\n${input}`
 }
-/** Project the run-level abstention surface from a kernel result. */
-export function projectAbstention(
-    r: { terminatedBy?: TerminatedBy; abstention?: { reason: string; missing: readonly string[] } },
-): { reason: string; missing: readonly string[] } | undefined {
-    if (r.terminatedBy !== "abstained" || r.abstention === undefined) return undefined
-    return { reason: r.abstention.reason, missing: r.abstention.missing }
-}
+// The abstention projection moved to `engine/abstention-projection.ts` so the
+// STREAMING path can share it. It used to live only here, which is why
+// `StreamCompleted.abstention` was declared and never written.
+import { projectAbstention } from "./engine/abstention-projection.js"
+export { projectAbstention }
 
 import type { RunHandle } from './run-controller.js'
 import {

@@ -11,6 +11,7 @@
  */
 import { Effect, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
+import { projectAbstention } from "./abstention-projection.js";
 import type { TaskError } from "@reactive-agents/core";
 import {
   StreamingTextCallback,
@@ -330,6 +331,14 @@ export const makeExecuteStream =
             debriefToolsUsed && debriefToolsUsed.length > 0
               ? debriefToolsUsed.map((t) => ({ name: t.name, calls: t.calls, avgMs: 0 }))
               : [];
+          // The abstention surface + terminatedBy were DECLARED on StreamCompleted
+          // and never written, so `runStream()` reported an honest decline as an
+          // ordinary answer. The benchmark reads `completed.abstention` (and falls
+          // back to `metadata.terminatedBy`), so every abstention-trap task scored
+          // 0 through the streaming path regardless of harness behaviour.
+          const streamAbstention = projectAbstention(
+            taskResult as { terminatedBy?: TerminatedBy; abstention?: { reason: string; missing: readonly string[] } },
+          );
           const completedEvent: StreamCompletedEvent = {
             _tag: "StreamCompleted",
             output: String((taskResult as { output?: unknown }).output ?? ""),
@@ -340,6 +349,7 @@ export const makeExecuteStream =
                 tokensUsed: 0,
                 stepsCount: 0,
               },
+            ...(streamAbstention !== undefined ? { abstention: streamAbstention } : {}),
             taskId: String(task.id),
             agentId: String(task.agentId),
             ...(toolSummary.length > 0 ? { toolSummary } : {}),

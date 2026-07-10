@@ -60,9 +60,13 @@ export const longHorizonArmSession: BenchmarkSession = {
   id: "long-horizon-arm",
   name: "Long-horizon profile ablation (assessment chain + control-plane seams)",
   version: "1.0.0",
-  // Trap tasks fire the abstention path the seam fixes changed; rw-9 is the
-  // deterministic no-regression control.
-  taskIds: ["ab-trap-1", "ab-trap-2", "ab-trap-3", "rw-9"],
+  // ab-trap-4 is the ONLY task that reaches harness-FORCED abstention (it
+  // declares a required tool that does not exist). Measured 2026-07-09:
+  // ab-trap-1..3 declare no requiredTools, so the grounded-terminal gate is
+  // skipped and the model simply answers -- accuracy 0.0 in BOTH arms. They
+  // measure fabrication, not the abstention machinery the seams changed.
+  // rw-9 is the deterministic no-regression control.
+  taskIds: ["ab-trap-4", "rw-9"],
   models: [
     { id: "cogito-8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
   ],
