@@ -301,6 +301,24 @@ export interface HarnessConfig {
    */
   readonly verifier?: "default" | "noop";
   /**
+   * Harness capability toggles added by the 2026-07-09 feature-coverage audit.
+   * The bench could reach 10 of the builder's 90 methods; these close the
+   * highest-value gaps so an ablation can attribute lift to a named mechanism
+   * rather than to "ra-full" as an opaque bundle. See `feature-matrix.ts`.
+   */
+  /** `.withGrounding({ mode })` — evidence-grounding gate on the terminal answer. */
+  readonly grounding?: "block" | "warn";
+  /** `.withFabricationGuard(mode)` — blocks unsupported numeric/factual claims. */
+  readonly fabricationGuard?: "off" | "warn" | "block";
+  /** `.withStallPolicy(policy)` — fast-escalate after repeatedly ignored nudges. */
+  readonly stallPolicy?: { readonly ignoredNudgeTolerance?: number };
+  /** `.withLeanHarness()` — minimal guard set (the low-overhead arm). */
+  readonly leanHarness?: boolean;
+  /** `.withMetaTools()` — recall/store meta-tools exposed to the model. */
+  readonly metaTools?: boolean;
+  /** `.withVerification()` — the explicit verification pass. */
+  readonly verification?: boolean;
+  /**
    * Arbitrary env vars to set for the duration of this variant's run (set before
    * agent build, restored in finally). Used for env-gated arms like the context
    * assembly A/B (`{ RA_ASSEMBLY: "0" }`). Generalizes the verifier:"noop" pattern.

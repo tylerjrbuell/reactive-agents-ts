@@ -20,6 +20,7 @@ import { clusterAGateSession } from "./sessions/cluster-a-gate.js"
 import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
 import { publicCompetitorQwenSession, publicCompetitorCogitoSession, publicCompetitorSmokeSession } from "./sessions/public-competitor-bench.js"
+import { featureCoverageSession } from "./sessions/feature-coverage.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
 import { resolveTasks, assertNonEmptySelection } from "./session.js"
 import { ALL_TASKS } from "./runner.js"
@@ -131,6 +132,7 @@ function printSessionSummary(report: SessionReport): void {
 }
 
 const SESSIONS: Record<string, BenchmarkSession> = {
+  "feature-coverage":      featureCoverageSession,
   "regression-gate":       regressionGateSession,
   "real-world-full":       realWorldFullSession,
   "competitor-comparison": competitorComparisonSession,

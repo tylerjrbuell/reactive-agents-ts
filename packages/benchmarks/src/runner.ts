@@ -723,9 +723,21 @@ async function runInternal(
 
     if (config.reactiveIntelligence) builder.withReactiveIntelligence()
 
-    if (config.memory && "withMemory" in builder && typeof (builder as unknown as Record<string, unknown>)["withMemory"] === "function") {
-      ;(builder as unknown as Record<string, () => void>)["withMemory"]!()
-    }
+    // `withMemory` used to be invoked through a stringly-typed
+    // `as unknown as Record<string, unknown>` lookup, which (a) violates the
+    // no-`any` rule and (b) made the call invisible to the feature-coverage
+    // audit's `builder.withX(` scan. Call it directly.
+    if (config.memory) builder.withMemory()
+
+    // ── Harness capability toggles (feature-coverage audit, 2026-07-09) ───────
+    // Each is additive and opt-in: a variant that does not set the key never
+    // calls the wither, so existing arms build byte-identically.
+    if (config.grounding) builder.withGrounding({ mode: config.grounding })
+    if (config.fabricationGuard) builder.withFabricationGuard(config.fabricationGuard)
+    if (config.stallPolicy) builder.withStallPolicy(config.stallPolicy)
+    if (config.leanHarness) builder.withLeanHarness()
+    if (config.metaTools) builder.withMetaTools()
+    if (config.verification) builder.withVerification()
 
     // G3 adaptive-harness ablation: opt into the policy compiler (compileHarnessPlan
     // at run-start + recompileOnAssessment mid-run). Additive — variants WITHOUT
