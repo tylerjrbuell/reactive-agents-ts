@@ -98,10 +98,16 @@ export const applyWithMCP = (
 };
 
 /**
- * Apply `.withMetaTools(config)` — register the Conductor's Suite
- * meta-tools (brief, find, pulse, recall) + harness skill. Passing `false`
- * explicitly disables. When unspecified, all four meta-tools + harness
- * skill enable.
+ * Apply `.withMetaTools(config)` — register meta-tools + harness skill.
+ *
+ * Four tiers (2026-07-10 — wire measurement showed the old always-on suite
+ * consumed 67% of the tool-schema budget per request with zero calls):
+ * - not called        → task-facing default (recall; find only when
+ *                       `.withDocuments()` present; brief/pulse OFF) —
+ *                       resolved in runtime-construction.ts
+ * - `.withMetaTools()`      → the FULL suite (explicit opt-in to all four)
+ * - `.withMetaTools({...})` → exactly what you name
+ * - `.withMetaTools(false)` → none
  */
 export const applyWithMetaTools = (
   builder: ReactiveAgentBuilder,

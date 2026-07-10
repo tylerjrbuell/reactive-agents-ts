@@ -57,6 +57,8 @@ import type {
  */
 export interface BuilderRuntimeStateView {
   readonly _provider: ProviderName;
+  /** `.withDocuments()` accumulator — presence turns `find` on by default (its retrieval surface). */
+  readonly _documents: ReadonlyArray<unknown>;
   readonly _model?: string;
   /** Ed25519 private JWK from `.withReceiptSigning()` (Arc 1 Task 9) — threaded to the engine config for the streaming receipt-signing path. */
   readonly _receiptSigningKey?: JsonWebKey;
@@ -240,8 +242,24 @@ export const buildBaseRuntimeAndEngine = (
   const { agentId, composedSystemPrompt, state } = deps;
 
   return Effect.gen(function* () {
-    // Meta-tools are on by default when tools are enabled.
-    // Only skip if explicitly disabled via .withMetaTools(false) (which sets _metaTools to false).
+    // Task-facing defaults only (2026-07-10). Wire measurement: the old
+    // default set (brief+find+pulse+recall) consumed 67% of the tool-schema
+    // budget on EVERY request while live traces showed zero meta-tool calls —
+    // and `find`'s scope:"auto" silently fell back to WEB SEARCH on a run
+    // whose caller allowlisted two file tools. Leading harnesses (Claude
+    // Agent SDK / Claude Code) expose task tools only; harness state is
+    // INJECTED into the prompt, never offered back to the model as callable
+    // schemas.
+    //
+    // - brief/pulse: opt-in. Introspection the harness already knows and can
+    //   inject; asking the model to fetch it costs schema tokens every turn.
+    // - find: on ONLY when documents are configured — then it is their
+    //   retrieval surface. Otherwise opt-in, which also removes the silent
+    //   web-egress default. (Post-build `agent.ingest()` users enable via
+    //   .withMetaTools({ find: true }).)
+    // - recall: stays. Load-bearing — tool-result preview+ref projections
+    //   instruct "use recall(<key>)" for overflow data.
+    // Explicit .withMetaTools(config|false) still overrides everything.
     const effectiveMetaTools:
       | import("../../types.js").MetaToolsConfig
       | false
@@ -250,9 +268,9 @@ export const buildBaseRuntimeAndEngine = (
         ? state._metaTools // explicit config or false
         : state._enableTools
         ? {
-            brief: true,
-            find: true,
-            pulse: true,
+            brief: false,
+            find: state._documents.length > 0,
+            pulse: false,
             recall: true,
             // todo (P6a) stays opt-in until it passes the cross-tier lift gate
             // (default-on requires ablation per project rule — see
@@ -278,8 +296,16 @@ export const buildBaseRuntimeAndEngine = (
         const { resolveHarnessSkill } = yield* Effect.promise(
           () => import("../../harness-resolver.js"),
         );
+        // The skill text is GENERATED from the enabled set so the prompt can
+        // never teach a tool the model cannot call (harness-resolver.ts).
         const resolved = yield* Effect.promise(() =>
-          resolveHarnessSkill(mt.harnessSkill ?? true, tier),
+          resolveHarnessSkill(mt.harnessSkill ?? true, tier, {
+            brief: mt.brief === true,
+            find: mt.find === true,
+            pulse: mt.pulse === true,
+            recall: mt.recall === true,
+            todo: mt.todo === true,
+          }),
         );
         if (resolved) harnessContent = resolved;
       }

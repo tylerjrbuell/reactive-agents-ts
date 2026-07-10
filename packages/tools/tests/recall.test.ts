@@ -12,18 +12,12 @@ beforeEach(() => Effect.runSync(Effect.gen(function* () {
 
 describe("recall tool definition", () => {
   it("has name 'recall'", () => expect(recallTool.name).toBe("recall"));
-  it("has retrieval and segmentation parameters", () => {
+  it("ADVERTISES only the four modes; segmentation stays runtime-only", () => {
+    // 2026-07-10: the six segmented-read params were removed from the schema
+    // the model pays for (~423 tok/request, zero observed segmented reads) —
+    // the handler still honors them, pinned below.
     const names = recallTool.parameters.map(p => p.name);
-    expect(names).toContain("key");
-    expect(names).toContain("content");
-    expect(names).toContain("query");
-    expect(names).toContain("full");
-    expect(names).toContain("start");
-    expect(names).toContain("maxChars");
-    expect(names).toContain("lineStart");
-    expect(names).toContain("lineCount");
-    expect(names).toContain("arrayStart");
-    expect(names).toContain("arrayCount");
+    expect(names.sort()).toEqual(["content", "full", "key", "query"]);
   });
 });
 

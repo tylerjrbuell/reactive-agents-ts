@@ -171,6 +171,9 @@ describe("receipt meta-tool exclusion — keyless kernel integration", () => {
                     },
                 ],
             })
+            // pulse went opt-in on 2026-07-10 (task-facing default set); this
+            // repro NEEDS a meta-tool call, so opt in explicitly.
+            .withMetaTools({ pulse: true })
             .withReasoning({ defaultStrategy: "reactive" })
             // Scenario alignment (see trust-event-stream.test.ts): the adaptive
             // classifier would consume the first scenario turn pre-kernel.
