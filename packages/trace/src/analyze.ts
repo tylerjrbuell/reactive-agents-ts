@@ -370,6 +370,34 @@ export interface CoverageReport {
   readonly blindSpots: readonly { readonly metric: string; readonly reason: string }[];
 }
 
+/**
+ * What actually crossed the provider boundary, summarized per run — the
+ * closed-loop replacement for hand-rolled logging proxies.
+ *
+ * Born 2026-07-10: three wire-level defects (empty assistant prose, a 67%
+ * meta-tool schema share, a hidden memory-extraction call) were invisible to
+ * every existing report even though `llm-exchange` RECORDED the evidence —
+ * nobody asked the questions. This section asks them on every run.
+ */
+export interface WireVisibility {
+  /** Provider requests this run sent (mirror of llmExchangeCount). */
+  readonly exchanges: number;
+  /** Assistant turns replayed across all requests. */
+  readonly assistantTurns: number;
+  /**
+   * Chars of the model's OWN PROSE re-shown to it across assistant turns
+   * (placeholders like `[tool_use:x]` excluded). 0 with multiple turns means
+   * the model never re-reads a word of its reasoning (thought continuity OFF).
+   */
+  readonly assistantProseChars: number;
+  /** Distinct tool schemas the model was offered, across the run. */
+  readonly toolSchemaNames: readonly string[];
+  /** Mean schemas per request — the per-turn schema tax. */
+  readonly avgToolSchemasPerRequest: number;
+  /** Wire-level anomalies worth a human look. */
+  readonly flags: readonly string[];
+}
+
 export interface RunAnalysis {
   readonly runId: string;
   readonly status?: RunCompletedEvent["status"];
@@ -386,6 +414,8 @@ export interface RunAnalysis {
   readonly coverage: CoverageReport;
   /** Count of llm-exchange events in this run — proxy for model round-trips. */
   readonly llmExchangeCount: number;
+  /** What crossed the provider boundary (undefined when no exchanges recorded). */
+  readonly wire?: WireVisibility;
 }
 
 /** Emitters verified (this session) to have zero call sites. */
@@ -516,7 +546,9 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
   const coverage: CoverageReport = { present, knownDeadEmitters: KNOWN_DEAD_EMITTERS, blindSpots };
 
   // ── LLM exchange count ──────────────────────────────────────────────────
-  const llmExchangeCount = ev.filter(isLLMExchange).length;
+  const exchanges = ev.filter(isLLMExchange);
+  const llmExchangeCount = exchanges.length;
+  const wire = analyzeWire(exchanges);
 
   return {
     runId: trace.runId,
@@ -526,6 +558,58 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
     failureModes: interventions.failureModes,
     coverage,
     llmExchangeCount,
+    ...(wire !== undefined ? { wire } : {}),
+  };
+}
+
+/** `messageContentToString` placeholders — NOT the model's own prose. */
+const EXCHANGE_PLACEHOLDER = /\[tool_use:[^\]]*\]|\[tool_result\]/g;
+
+/**
+ * Summarize what crossed the provider boundary. Every input here was already
+ * on disk when the 2026-07-10 wire audit ran; the defect was that no report
+ * read it. See {@link WireVisibility}.
+ */
+export function analyzeWire(
+  exchanges: readonly LLMExchangeEvent[],
+): WireVisibility | undefined {
+  if (exchanges.length === 0) return undefined;
+
+  let assistantTurns = 0;
+  let assistantProseChars = 0;
+  const schemaUnion = new Set<string>();
+  let schemaTotal = 0;
+
+  for (const e of exchanges) {
+    for (const n of e.toolSchemaNames) schemaUnion.add(n);
+    schemaTotal += e.toolSchemaNames.length;
+    for (const m of e.messages) {
+      if (m.role !== "assistant") continue;
+      assistantTurns++;
+      assistantProseChars += m.content.replace(EXCHANGE_PLACEHOLDER, "").trim().length;
+    }
+  }
+
+  const flags: string[] = [];
+  if (assistantTurns >= 2 && assistantProseChars === 0) {
+    flags.push(
+      "assistant turns carry NO prose — the model never re-reads its own reasoning (thought continuity OFF; RA_THOUGHT_CONTINUITY=1 to trial)",
+    );
+  }
+  const avg = schemaTotal / exchanges.length;
+  if (avg >= 8) {
+    flags.push(
+      `high schema tax: ${avg.toFixed(1)} tool schemas per request — check for unused meta-tools`,
+    );
+  }
+
+  return {
+    exchanges: exchanges.length,
+    assistantTurns,
+    assistantProseChars,
+    toolSchemaNames: [...schemaUnion].sort(),
+    avgToolSchemasPerRequest: Math.round(avg * 10) / 10,
+    flags,
   };
 }
 
@@ -549,6 +633,12 @@ export function renderRunReport(a: RunAnalysis): string {
     L.push(`FAILURE MODES:`);
     for (const f of a.failureModes) L.push(`  🔴 ${f.mode}: ${f.evidence}`);
   } else L.push(`FAILURE MODES: none trace-detectable`);
+  if (a.wire) {
+    L.push(
+      `WIRE: ${a.wire.exchanges} request(s); assistant prose re-shown=${a.wire.assistantProseChars}ch across ${a.wire.assistantTurns} turn(s); ~${a.wire.avgToolSchemasPerRequest} schemas/request [${a.wire.toolSchemaNames.join(",")}]`,
+    );
+    for (const f of a.wire.flags) L.push(`  ⚠ ${f}`);
+  }
   L.push(`COVERAGE:`);
   L.push(`  present: ${Object.entries(a.coverage.present).map(([k, v]) => `${k}:${v}`).join(" ")}`);
   if (a.coverage.blindSpots.length) {
