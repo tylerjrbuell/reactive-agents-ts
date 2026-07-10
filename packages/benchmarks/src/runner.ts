@@ -26,7 +26,7 @@ import { REAL_WORLD_TASKS } from "./tasks/real-world.js"
 import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
-import { resolveTasks, mergeConfigs } from "./session.js"
+import { resolveTasks, mergeConfigs, assertNonEmptySelection } from "./session.js"
 import { checkCapabilitySourcePreflight } from "./preflight.js"
 
 /**
@@ -383,6 +383,15 @@ export const runBenchmarks = async (
   if (options.taskIds?.length) {
     tasks = tasks.filter((t) => options.taskIds!.includes(t.id));
   }
+  // Never run (and never REPORT) an empty benchmark. This path filters
+  // BENCHMARK_TASKS, which does not contain the `rw-*` real-world ids — so a
+  // `--task rw-9` without `--session` used to select nothing and still exit 0
+  // with a report of zeros.
+  assertNonEmptySelection({
+    tasks,
+    ...(options.taskIds ? { requestedTaskIds: options.taskIds } : {}),
+    available: BENCHMARK_TASKS.map((t) => t.id),
+  });
 
   const resolvedModel = options.model ?? defaultModel[options.provider] ?? "default";
   const timeoutMs = options.timeoutMs ?? 300_000;
@@ -580,7 +589,7 @@ export const runBenchmarks = async (
 
 // ── v2: runSession() — multi-variant, multi-model, multi-run session runner ──
 
-const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...CONTEXT_STRESS_TASKS, ...LONG_HORIZON_TASKS] as const
+export const ALL_TASKS = [...BENCHMARK_TASKS, ...REAL_WORLD_TASKS, ...CONTEXT_STRESS_TASKS, ...LONG_HORIZON_TASKS] as const
 
 function getGitSha(): string {
   try { return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim() }

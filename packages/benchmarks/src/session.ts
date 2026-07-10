@@ -45,6 +45,46 @@ export const ABLATION_VARIANTS: ReadonlyArray<HarnessVariant> = [
   // [...ABLATION_VARIANTS]) with an arm only one ablation needs.
 ]
 
+// ── Selection integrity ───────────────────────────────────────────────────────
+
+/**
+ * A benchmark that measured nothing must FAIL, not report zeros.
+ *
+ * Executed 2026-07-09: `run.ts --task rw-4,rw-8,rw-9` without `--session` took
+ * the legacy path, which filters `BENCHMARK_TASKS` (a different, smaller list
+ * with no `rw-*`). Every id matched nothing, and the run printed
+ * "All 0 tasks completed", wrote a report of zeros, and exited 0.
+ *
+ * A green bench over an empty cell set is worse than a red one: the report it
+ * writes becomes the baseline that later runs diff against, so a silent
+ * no-op eventually certifies a regression as a win.
+ */
+export function assertNonEmptySelection(sel: {
+  readonly tasks: readonly { readonly id: string }[];
+  readonly variants?: readonly { readonly id: string }[];
+  readonly requestedTaskIds?: readonly string[];
+  readonly requestedVariantIds?: readonly string[];
+  readonly available?: readonly string[];
+}): void {
+  if (sel.tasks.length === 0) {
+    const requested = sel.requestedTaskIds?.length
+      ? ` Requested: ${sel.requestedTaskIds.join(", ")}.`
+      : "";
+    const available = sel.available?.length ? ` Available: ${sel.available.join(", ")}.` : "";
+    throw new Error(
+      `Benchmark selection is empty — no tasks matched, so nothing would be measured.${requested}${available}`,
+    );
+  }
+  if (sel.variants !== undefined && sel.variants.length === 0) {
+    const requested = sel.requestedVariantIds?.length
+      ? ` Requested: ${sel.requestedVariantIds.join(", ")}.`
+      : "";
+    throw new Error(
+      `Benchmark selection is empty — no variants matched, so nothing would be measured.${requested}`,
+    );
+  }
+}
+
 // ── Session utilities ─────────────────────────────────────────────────────────
 
 /**

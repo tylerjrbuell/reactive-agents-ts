@@ -21,6 +21,8 @@ import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
 import { publicCompetitorQwenSession, publicCompetitorCogitoSession, publicCompetitorSmokeSession } from "./sessions/public-competitor-bench.js"
 import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
+import { resolveTasks, assertNonEmptySelection } from "./session.js"
+import { ALL_TASKS } from "./runner.js"
 import type { BenchmarkSession, SessionReport } from "./types.js"
 
 // Load workspace-root .env. Bun loads .env relative to cwd, but `bun run bench`
@@ -211,6 +213,10 @@ async function main() {
 
     let session = args.runs ? { ...sessionDef, runs: args.runs } : sessionDef
     if (args.taskIds?.length) session = { ...session, taskIds: args.taskIds, tiers: undefined } as typeof session
+    // A CLI run that would measure NOTHING must fail here, before a report of
+    // zeros is printed and written. (A zero-cell `runSession` is still a legal
+    // library call — preflight/reproducibility tests use it deliberately — so
+    // the guard lives at the reporting boundary, not inside runSession.)
     // --variant: run a subset of the session's harness variants. The fix-
     // iteration workhorse — verifying one kernel change against one failing
     // cell costs 1 variant, not 6 (feedback-loop amplification, 2026-07-07).
@@ -247,6 +253,13 @@ async function main() {
         session = { ...session, models: [{ id: model, provider, model, contextTier: session.models[0]?.contextTier ?? "standard" }] } as typeof session
       }
     }
+    assertNonEmptySelection({
+      tasks: resolveTasks(session, ALL_TASKS),
+      variants: session.harnessVariants,
+      ...(session.taskIds ? { requestedTaskIds: session.taskIds } : {}),
+      ...(args.variantIds ? { requestedVariantIds: args.variantIds } : {}),
+      available: ALL_TASKS.map((t) => t.id),
+    })
     const outputPath = args.output ?? "apps/docs/src/data/benchmark-report.json"
     const baselinePath = args.baselinePath ?? `benchmark-baselines/${args.session}.json`
 
