@@ -1,0 +1,566 @@
+{
+  "gitSha": "0b3d3b3b",
+  "reports": [
+    {
+      "taskId": "rw-4",
+      "modelVariantId": "cogito:8b",
+      "variantId": "manual-react",
+      "variantLabel": "Manual ReAct Loop",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "efficiency",
+          "score": 1
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.5
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2796,
+      "meanDurationMs": 6770,
+      "passRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 2689,
+          "durationMs": 7502.683456999999,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n5 fail\nFAIL: output.ts exports a non-empty array — output.ts exports no array\nFAIL: exactly 10 posts\nFAIL: every post belongs to userId 3\nFAIL: every post has a numeric id and a non-empty title"
+            },
+            {
+              "dimension": "efficiency",
+              "score": 1,
+              "evidence": "2689 tokens used (baseline 7500)"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "http-get is not defined correctly; it should be a function to fetch data."
+            }
+          ]
+        },
+        {
+          "runIndex": 1,
+          "status": "pass",
+          "tokensUsed": 2779,
+          "durationMs": 5741.801486999999,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n5 fail\nFAIL: output.ts exports a non-empty array — output.ts exports no array\nFAIL: exactly 10 posts\nFAIL: every post belongs to userId 3\nFAIL: every post has a numeric id and a non-empty title"
+            },
+            {
+              "dimension": "efficiency",
+              "score": 1,
+              "evidence": "2779 tokens used (baseline 7500)"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response mentions using `http-get` to fetch posts but does not correctly handle fetching the associated comments."
+            }
+          ]
+        },
+        {
+          "runIndex": 2,
+          "status": "pass",
+          "tokensUsed": 2921,
+          "durationMs": 7065.661483,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n5 fail\nFAIL: output.ts exports a non-empty array — output.ts exports no array\nFAIL: exactly 10 posts\nFAIL: every post belongs to userId 3\nFAIL: every post has a numeric id and a non-empty title"
+            },
+            {
+              "dimension": "efficiency",
+              "score": 1,
+              "evidence": "2921 tokens used (baseline 7500)"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The agent used http-get correctly to fetch posts, but did not define the function correctly for comments. There is also a lack of error handling for failed requests."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "rw-4",
+      "modelVariantId": "cogito:8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "efficiency",
+          "score": 0.586962962962963
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.06666666666666667
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 12358,
+      "meanDurationMs": 33856,
+      "passRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 26883,
+          "durationMs": 18823.413153,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n5 fail\nFAIL: output.ts exports a non-empty array — output.ts exports no array\nFAIL: exactly 10 posts\nFAIL: every post belongs to userId 3\nFAIL: every post has a numeric id and a non-empty title"
+            },
+            {
+              "dimension": "efficiency",
+              "score": 0,
+              "evidence": "26883 tokens used (baseline 7500)"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "evidence": "The response does not show any http-get request to fetch posts, indicating that posts were not retrieved using the API."
+            }
+          ]
+        },
+        {
+          "runIndex": 1,
+          "status": "pass",
+          "tokensUsed": 4532,
+          "durationMs": 46843.4597,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n5 fail\nFAIL: output.ts exports a non-empty array — output.ts exports no array\nFAIL: exactly 10 posts\nFAIL: every post belongs to userId 3\nFAIL: every post has a numeric id and a non-empty title"
+            },
+            {
+              "dimension": "efficiency",
+              "score": 0.9304888888888889,
+              "evidence": "4532 tokens used (baseline 7500)"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.2,
+              "evidence": "Did not demonstrate fetching posts and comments using http-get."
+            }
+          ]
+        },
+        {
+          "runIndex": 2,
+          "status": "pass",
+          "tokensUsed": 5658,
+          "durationMs": 35900.33523499999,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n5 fail\nFAIL: output.ts exports a non-empty array — output.ts exports no array\nFAIL: exactly 10 posts\nFAIL: every post belongs to userId 3\nFAIL: every post has a numeric id and a non-empty title"
+            },
+            {
+              "dimension": "efficiency",
+              "score": 0.8304,
+              "evidence": "5658 tokens used (baseline 7500)"
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "evidence": "The response does not show any use of HTTP GET requests to fetch posts or comments from the JSONPlaceholder API."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "rw-8",
+      "modelVariantId": "cogito:8b",
+      "variantId": "manual-react",
+      "variantLabel": "Manual ReAct Loop",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "memory-fidelity",
+          "score": 0.7000000000000001
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 3423,
+      "meanDurationMs": 10866,
+      "passRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 3502,
+          "durationMs": 11759.259304999985,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n2 fail\nFAIL: generate.ts runs cleanly — generate.ts exit 1: error: Module not found \"generate.ts\"\n\nFAIL: validate.ts runs cleanly — validate.ts exit 1: error: Module not found \"validate.ts\"\n\n"
+            },
+            {
+              "dimension": "memory-fidelity",
+              "score": 0.6,
+              "evidence": "All monetary values use integer cents, all timestamps use Unix epoch milliseconds, and all IDs are prefixed correctly."
+            }
+          ]
+        },
+        {
+          "runIndex": 1,
+          "status": "pass",
+          "tokensUsed": 3321,
+          "durationMs": 9794.63930499999,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n2 fail\nFAIL: generate.ts runs cleanly — generate.ts exit 1: error: Module not found \"generate.ts\"\n\nFAIL: validate.ts runs cleanly — validate.ts exit 1: error: Module not found \"validate.ts\"\n\n"
+            },
+            {
+              "dimension": "memory-fidelity",
+              "score": 0.75,
+              "evidence": "All monetary values use integer cents, timestamps are in epoch milliseconds, and IDs are prefixed correctly."
+            }
+          ]
+        },
+        {
+          "runIndex": 2,
+          "status": "pass",
+          "tokensUsed": 3447,
+          "durationMs": 11043.568151999993,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n2 fail\nFAIL: generate.ts runs cleanly — generate.ts exit 1: error: Module not found \"generate.ts\"\n\nFAIL: validate.ts runs cleanly — validate.ts exit 1: error: Module not found \"validate.ts\"\n\n"
+            },
+            {
+              "dimension": "memory-fidelity",
+              "score": 0.75,
+              "evidence": "All types use integer cents for monetary values and prefixed IDs."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "rw-8",
+      "modelVariantId": "cogito:8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "memory-fidelity",
+          "score": 0.7333333333333334
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 4491,
+      "meanDurationMs": 16864,
+      "passRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 3966,
+          "durationMs": 14984.16538000002,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n2 fail\nFAIL: generate.ts runs cleanly — generate.ts exit 1: 1 | ```typescript\n    ^\nTypeError: \"\" is not a function (near '...\"\"`typescript\n// types.ts\nexport interface BaseRecord {\n  id: strin"
+            },
+            {
+              "dimension": "memory-fidelity",
+              "score": 1,
+              "evidence": "All monetary values use integer cents, all timestamps use Unix epoch milliseconds, and all IDs are prefixed correctly."
+            }
+          ]
+        },
+        {
+          "runIndex": 1,
+          "status": "pass",
+          "tokensUsed": 4056,
+          "durationMs": 15220.549251000019,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n2 fail\nFAIL: generate.ts runs cleanly — generate.ts exit 1: 1 | ✓ file-write completed successfully\n    ^\nerror: Unexpected ✓\n    at /home/tylerbuell/Documents/AIProjects/reactive-agents-ts/pac"
+            },
+            {
+              "dimension": "memory-fidelity",
+              "score": 0.6,
+              "evidence": [
+                "Monetary values must be integers in cents: Total_cents in Order and Price_cents in Product are defined as number, which may imply floating-point.",
+                "Timestamps must be Unix epoch milliseconds: created_at fields in all types are defined as number, which is acceptable.",
+                "IDs must follow the format: 'user_', 'order_', or 'product_': ID fields in all types are defined as string, which meets the requirement."
+              ]
+            }
+          ]
+        },
+        {
+          "runIndex": 2,
+          "status": "pass",
+          "tokensUsed": 5451,
+          "durationMs": 20385.819908999983,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n2 fail\nFAIL: generate.ts runs cleanly — generate.ts exit 1: 1 | ```typescript\n    ^\nTypeError: \"\" is not a function (near '...\"\"`typescript\ntype User = {\n  id: string;\n  name: string;\n  email: "
+            },
+            {
+              "dimension": "memory-fidelity",
+              "score": 0.6,
+              "evidence": "All monetary values are in integer cents, timestamps are in Unix epoch milliseconds, and IDs are correctly prefixed."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "rw-9",
+      "modelVariantId": "cogito:8b",
+      "variantId": "manual-react",
+      "variantLabel": "Manual ReAct Loop",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0
+        },
+        {
+          "dimension": "resilience",
+          "score": 0.43333333333333335
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.6166666666666667
+        },
+        {
+          "dimension": "reliability",
+          "score": 1
+        }
+      ],
+      "variance": 0,
+      "meanTokens": 2820,
+      "meanDurationMs": 5603,
+      "passRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 2942,
+          "durationMs": 6756.265002,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n11 fail\nFAIL: prices.md exists and is non-empty\nFAIL: prices.md reports market cap\nFAIL: BTC: asset is named\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: as"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "Response does not implement a retry mechanism after an HTTP 503 error."
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.75,
+              "evidence": "The response correctly attempts to fetch data from the API."
+            }
+          ]
+        },
+        {
+          "runIndex": 1,
+          "status": "pass",
+          "tokensUsed": 2592,
+          "durationMs": 3468.785376999993,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n11 fail\nFAIL: prices.md exists and is non-empty\nFAIL: prices.md reports market cap\nFAIL: BTC: asset is named\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: as"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.4,
+              "evidence": "Response does not include logic for retrying after receiving HTTP 503."
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not mention handling a 503 status as a transient error requiring a retry."
+            }
+          ]
+        },
+        {
+          "runIndex": 2,
+          "status": "pass",
+          "tokensUsed": 2927,
+          "durationMs": 6585.2142030000105,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n11 fail\nFAIL: prices.md exists and is non-empty\nFAIL: prices.md reports market cap\nFAIL: BTC: asset is named\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: as"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.4,
+              "evidence": "The response does not implement a retry mechanism for HTTP 503 errors."
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.6,
+              "evidence": "The response does not include a retry mechanism for handling HTTP 503 errors."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "taskId": "rw-9",
+      "modelVariantId": "cogito:8b",
+      "variantId": "ra-full",
+      "variantLabel": "RA Full Harness",
+      "meanScores": [
+        {
+          "dimension": "accuracy",
+          "score": 0.15151515151515152
+        },
+        {
+          "dimension": "resilience",
+          "score": 0.25
+        },
+        {
+          "dimension": "tool-mastery",
+          "score": 0.3333333333333333
+        },
+        {
+          "dimension": "reliability",
+          "score": 0.5714504356445167
+        }
+      ],
+      "variance": 0.21427478217774165,
+      "meanTokens": 12464,
+      "meanDurationMs": 21814,
+      "passRate": 1,
+      "runs": [
+        {
+          "runIndex": 0,
+          "status": "pass",
+          "tokensUsed": 8670,
+          "durationMs": 22618.37211899995,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n11 fail\nFAIL: prices.md exists and is non-empty\nFAIL: prices.md reports market cap\nFAIL: BTC: asset is named\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: as"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0,
+              "evidence": "The response does not mention any retry mechanism after receiving HTTP 503."
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0,
+              "evidence": "Response does not indicate any handling of a 503 error or a retry mechanism."
+            }
+          ]
+        },
+        {
+          "runIndex": 1,
+          "status": "pass",
+          "tokensUsed": 12896,
+          "durationMs": 20645.32250999997,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0.45454545454545453,
+              "evidence": "exit 1: 5 pass\n6 fail\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: current price is reported\nFAIL: ETH: 24h change is reported\nFAIL: SOL: current price is reported\nFAIL: S"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.25,
+              "evidence": "No evidence of retrying after receiving HTTP 503."
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not indicate a retry mechanism for the 503 error."
+            }
+          ]
+        },
+        {
+          "runIndex": 2,
+          "status": "pass",
+          "tokensUsed": 15825,
+          "durationMs": 22179.28565799998,
+          "dimensions": [
+            {
+              "dimension": "accuracy",
+              "score": 0,
+              "evidence": "exit 1: 0 pass\n11 fail\nFAIL: prices.md exists and is non-empty\nFAIL: prices.md reports market cap\nFAIL: BTC: asset is named\nFAIL: BTC: current price is reported\nFAIL: BTC: 24h change is reported\nFAIL: ETH: as"
+            },
+            {
+              "dimension": "resilience",
+              "score": 0.5,
+              "evidence": "Response does not include retry logic specifically for HTTP 503 errors."
+            },
+            {
+              "dimension": "tool-mastery",
+              "score": 0.5,
+              "evidence": "The response does not correctly handle a 503 error as a transient issue; it only handles generic request exceptions."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "savedAt": "2026-07-10T01:05:28.995Z"
+}

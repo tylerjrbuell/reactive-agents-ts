@@ -295,6 +295,10 @@ export interface DriftReport {
   readonly improvements: ReadonlyArray<ScoreDelta>;
   readonly hasRegressions: boolean;
   readonly maxRegressionDelta: number;
+  /** Baseline cells the current run did not measure. A coverage regression. */
+  readonly droppedCells: ReadonlyArray<{ readonly taskId: string; readonly variantId: string }>;
+  /** Cells present now and absent from the baseline. Added coverage; never fails. */
+  readonly newCells: ReadonlyArray<{ readonly taskId: string; readonly variantId: string }>;
 }
 
 export interface HarnessConfig {

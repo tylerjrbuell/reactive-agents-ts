@@ -9,7 +9,9 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots",
-    "bench": "bun run src/run.ts"
+    "bench": "bun run src/run.ts",
+    "bench:baseline": "bun run src/run.ts --session real-world-full --provider ollama --model cogito:8b --task rw-4,rw-8,rw-9 --variant manual-react,ra-full --runs 3 --save-baseline",
+    "bench:drift": "bun run src/run.ts --session real-world-full --provider ollama --model cogito:8b --task rw-4,rw-8,rw-9 --variant manual-react,ra-full --runs 3 --ci"
   },
   "dependencies": {
     "effect": "^3.10.0",

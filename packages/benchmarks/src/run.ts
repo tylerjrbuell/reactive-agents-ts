@@ -22,7 +22,7 @@ import { crossTierStressSession } from "./sessions/cross-tier-stress.js"
 import { thinkingAblationSession } from "./sessions/thinking-ablation.js"
 import { publicCompetitorQwenSession, publicCompetitorCogitoSession, publicCompetitorSmokeSession } from "./sessions/public-competitor-bench.js"
 import { featureCoverageSession } from "./sessions/feature-coverage.js"
-import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold } from "./ci.js"
+import { saveBaseline, loadBaseline, computeDrift, exceedsThreshold, baselineCells, assertBaselineCells } from "./ci.js"
 import { resolveTasks, assertNonEmptySelection } from "./session.js"
 import { ALL_TASKS } from "./runner.js"
 import type { BenchmarkSession, SessionReport } from "./types.js"
@@ -290,18 +290,25 @@ async function main() {
     }
 
     if (args.saveBaseline) {
-      const allVariantReports = report.ablation?.flatMap(a => a.variants) ?? []
-      saveBaseline(allVariantReports, report.gitSha, baselinePath)
-      console.log(`Baseline saved to ${baselinePath}`)
+      const cells = baselineCells(report)
+      assertBaselineCells(cells)
+      saveBaseline(cells, report.gitSha, baselinePath)
+      console.log(`Baseline saved to ${baselinePath} (${cells.length} cells @ ${report.gitSha})`)
     }
 
     if (args.ci) {
       const baseline = loadBaseline(baselinePath)
       if (!baseline) {
-        console.warn("No baseline found — skipping drift check. Run with --save-baseline first.")
+        // "No baseline" used to WARN and pass. A drift gate that greens itself
+        // when the comparison is missing is not a gate.
+        console.error(`CI FAIL: no baseline at ${baselinePath}. Run --save-baseline first, or drop --ci.`)
+        process.exit(1)
       } else {
-        const allVariantReports = report.ablation?.flatMap(a => a.variants) ?? []
-        const drift = computeDrift(baseline.reports, allVariantReports, baseline.gitSha)
+        const drift = computeDrift(baseline.reports, baselineCells(report), baseline.gitSha)
+        if (drift.droppedCells.length > 0) {
+          console.error(`CI FAIL: ${drift.droppedCells.length} baseline cell(s) were not measured this run:`)
+          for (const c of drift.droppedCells) console.error(`  ${c.taskId} / ${c.variantId}`)
+        }
         if (exceedsThreshold(drift)) {
           console.error(`CI FAIL: ${drift.regressions.length} regressions detected. Max delta: ${drift.maxRegressionDelta.toFixed(3)}`)
           for (const r of drift.regressions) {
