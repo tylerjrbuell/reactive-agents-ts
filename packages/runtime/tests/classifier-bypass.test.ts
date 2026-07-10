@@ -37,4 +37,41 @@ describe("literalMentionRequired", () => {
     expect(literalMentionRequired("", tools)).toEqual([]);
     expect(literalMentionRequired("some task", [])).toEqual([]);
   });
+
+  // ── Inflection tolerance (2026-07-10 regression, trace 01KX6KY8ANMXC1BSQ1SNJN3DAP) ──
+  // "several individual web searches" failed the \b adjacency match against
+  // "web-search" (plural on the final segment), demoting a classifier-required
+  // tool to relevant — which the builtins opt-in filter then stripped entirely.
+  it("matches trailing-s plural on the final segment (web searches → web-search)", () => {
+    expect(
+      literalMentionRequired(
+        "Research the show and make several individual web searches, then save to ./show.md",
+        ["web-search"],
+      ),
+    ).toEqual(["web-search"]);
+  });
+
+  it("matches trailing-es plural on the final segment", () => {
+    expect(
+      literalMentionRequired("perform two code-executes in a row", ["code-execute"]),
+    ).toEqual(["code-execute"]);
+  });
+
+  it("still matches 'search the web' via segment fallback (both segments present)", () => {
+    expect(literalMentionRequired("search the web for prices", tools)).toEqual([
+      "web-search",
+    ]);
+  });
+
+  it("does not false-positive on unrelated inflected text", () => {
+    // "searchlights"/"webs" must not trip web-search; "researching" has no
+    // word-boundary "search"; plural tolerance must not loosen \b anchoring.
+    expect(
+      literalMentionRequired("the searchlights swept over the webs while researching", tools),
+    ).toEqual([]);
+  });
+
+  it("does not match gerunds (web searching) — only s/es plurals are tolerated", () => {
+    expect(literalMentionRequired("try web searching later", ["web-search"])).toEqual([]);
+  });
 });

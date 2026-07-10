@@ -138,6 +138,17 @@ export interface ToolSurfaceInputs {
    * is byte-identical to a run without a contract.
    */
   readonly forbiddenTools?: readonly string[];
+  /**
+   * The FULL run-level tool catalog (`KernelInput.allToolSchemas`) — the set
+   * discover-tools lists from. `augmented` is the engine's PRE-FILTERED subset;
+   * a discovered tool whose schema lives only here must still surface, or
+   * discovery is a dead-end for exactly the built-ins the runtime filter
+   * withholds (live regression 01KX6KY8ANMXC1BSQ1SNJN3DAP, 2026-07-10: model
+   * called discover-tools 4 consecutive iterations, handler said "now
+   * callable", surface never changed). Only names in `discovered` are resolved
+   * from here — the catalog alone discloses nothing.
+   */
+  readonly catalog?: readonly ToolSchema[];
 }
 
 export interface ResolvedToolSurface {
@@ -198,7 +209,19 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   const permitted = (xs: readonly ToolSchema[]): readonly ToolSchema[] =>
     denied.size === 0 ? xs : xs.filter((ts) => !denied.has(ts.name));
 
-  const augmented = permitted(inputs.augmented);
+  // Discovered-from-catalog union (01KX6KY8 fix): a name the model discovered
+  // whose schema exists ONLY in the full catalog joins the pre-prune set —
+  // otherwise "Tools you discover become callable in your next response" is a
+  // lie for every tool the runtime pre-filter withheld. Dedupe by name: the
+  // `augmented` schema wins when both carry it. Runs BEFORE `permitted`, so
+  // the contract deny-list beats discovery by construction; the pressure arm
+  // below still replaces the whole set, so discovery never re-widens it.
+  const augmentedNames = new Set(inputs.augmented.map((ts) => ts.name));
+  const discoveredFromCatalog: readonly ToolSchema[] = (inputs.catalog ?? []).filter(
+    (ts) => discoveredSet.has(ts.name) && !augmentedNames.has(ts.name),
+  );
+
+  const augmented = permitted([...inputs.augmented, ...discoveredFromCatalog]);
 
   // Stage 1 — context-pressure hard gate (non-lazy arm only; under lazy mode
   // the disclosure filter owns visibility and premature narrowing induces
@@ -241,6 +264,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   const callableNames = new Set(callable.map((ts) => ts.name));
   const allNames = new Set([
     ...inputs.augmented.map((ts) => ts.name),
+    ...discoveredFromCatalog.map((ts) => ts.name),
     ...(inputs.pressureCritical && !inputs.lazyMode ? [inputs.finalAnswerSchema.name] : []),
   ]);
   for (const name of allNames) {

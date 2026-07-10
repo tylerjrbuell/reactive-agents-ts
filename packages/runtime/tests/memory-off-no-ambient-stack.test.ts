@@ -51,7 +51,7 @@ describe("memory OFF ⇒ no ambient memory stack (no hidden extraction call)", (
     const agent = await ReactiveAgents.create()
       .withProvider("test")
       .withTools({ builtins: ["file-read"] })
-      .withReasoning({ strategy: "reactive" })
+      .withReasoning({ defaultStrategy: "reactive" })
       .withMaxIterations(3)
       .build();
     const result = await agent.run("read ./x.json and report its contents");

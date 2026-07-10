@@ -3,7 +3,11 @@
  * Used when classifierReliability is "low" — skips the LLM classifier call.
  *
  * Matches tool names (with hyphens treated as optional separators) as
- * whole-word boundaries in the task text. Case-insensitive.
+ * whole-word boundaries in the task text. Case-insensitive. The adjacent
+ * form tolerates a trailing "s"/"es" plural on the final segment
+ * ("several web searches" matches "web-search") — deterministic suffix
+ * tolerance only, no stemming (2026-07-10 regression fix; gerunds like
+ * "web searching" intentionally do NOT match).
  */
 export function literalMentionRequired(
   taskText: string,
@@ -13,8 +17,9 @@ export function literalMentionRequired(
   const lower = taskText.toLowerCase();
   return availableToolNames.filter((name) => {
     // Try exact match first: "web-search" or "web search" adjacent (hyphen as optional separator).
-    // Use word boundaries around the whole tool name.
-    const adjacentPattern = name.replace(/-/g, "[\\s-]?");
+    // Use word boundaries around the whole tool name. The optional plural
+    // suffix binds to the pattern tail, i.e. the final segment only.
+    const adjacentPattern = `${name.replace(/-/g, "[\\s-]?")}(?:es|s)?`;
     const adjacentRe = new RegExp(`\\b${adjacentPattern}\\b`, "i");
     if (adjacentRe.test(lower)) return true;
 

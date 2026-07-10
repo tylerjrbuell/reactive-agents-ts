@@ -56,7 +56,7 @@ const exposedToolNames = async (
   const agent = await configure(
     ReactiveAgents.create()
       .withProvider("test")
-      .withReasoning({ strategy: "reactive" })
+      .withReasoning({ defaultStrategy: "reactive" })
       .withMaxIterations(2),
   ).build();
   try {
@@ -96,7 +96,7 @@ describe("DEFAULT (no .withMetaTools): task-facing set only", () => {
     const names = await exposedToolNames((b) =>
       b
         .withTools({ builtins: ["file-read"] })
-        .withDocuments([{ content: "Refund policy: 30 days.", title: "policy" }]),
+        .withDocuments([{ content: "Refund policy: 30 days.", source: "policy" }]),
     );
     expect(names.has("find")).toBe(true);
     expect(names.has("brief")).toBe(false); // documents do not drag the rest in

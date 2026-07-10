@@ -100,6 +100,15 @@ export const prepareReasoningToolSchemas = (
     // the consumer's intent regardless of the builtins opt-in default.
     for (const name of effectiveAllowedTools) optedInBuiltins.add(name);
     for (const name of effectiveRequiredTools ?? []) optedInBuiltins.add(name);
+    // Classifier-relevant built-ins stay VISIBLE (not enforced) — this is
+    // the documented contract above ("Required + relevant + meta-tools are
+    // unaffected"). Regression (2026-07-10, trace 01KX6KY8ANMXC1BSQ1SNJN3DAP):
+    // web-search was classified relevant for a research task but stripped
+    // here, leaving the LLM schema without any search tool and the run
+    // dying on an unmet required-tool quota. Relevance is classifier-gated
+    // per task, so the 2026-05-06 rationale (no gratuitous built-in writes
+    // on unrelated tasks) is preserved.
+    for (const name of classifiedRelevantTools ?? []) optedInBuiltins.add(name);
     if (builtinsOpt !== true) {
       availableToolSchemas = availableToolSchemas.filter((ts) =>
         !BUILTIN_TOOL_NAMES.has(ts.name) || optedInBuiltins.has(ts.name),

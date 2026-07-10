@@ -67,6 +67,10 @@ export interface ToolObserveContext {
   /** Set by callers that pre-heal upstream (kernel). When a `heal` config is
    *  supplied instead, the primitive computes this itself. */
   readonly healed?: boolean;
+  /** The model's ACTUAL toolbox this turn (filtered prompt schemas). Recovery
+   *  hints may only name tools present here — the registry also lists
+   *  built-ins the schema withheld. Absent ⇒ hints name no tool. */
+  readonly schemas?: readonly ToolSchemaLite[];
 }
 
 export interface ToolObserveHealConfig {

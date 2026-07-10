@@ -329,6 +329,14 @@ export function handleThinking(
       forbiddenTools: forbiddenTools(state.meta.runContract),
       toolsUsed: state.toolsUsed,
       discovered,
+      // The FULL catalog discover-tools lists from (tool-capabilities.ts
+      // registers the handler with `catalog = input.allToolSchemas`).
+      // Discovered names resolve their schema here when the engine's
+      // pre-filtered availableToolSchemas withheld it — without this,
+      // discovery was a dead-end for catalog-only built-ins (live
+      // regression 01KX6KY8ANMXC1BSQ1SNJN3DAP: 4 consecutive
+      // discover-tools calls, surface never changed).
+      catalog: input.allToolSchemas ?? [],
       gateBlockedTools,
       // Same missing-required computation the pressure gate used above — the
       // gate narrowing keys off the identical unsatisfied set.
