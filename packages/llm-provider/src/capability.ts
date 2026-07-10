@@ -137,6 +137,33 @@ export type Capability = typeof CapabilitySchema.Type;
  * spec, Google Gemini docs, Ollama model library.
  */
 export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.freeze({
+  // ── Deterministic test provider ──────────────────────────────────────────
+  // `TestLLMService` is a real provider in the ProviderName union, but it had no
+  // capability entry, so `resolveCapability` fell through to `source: "fallback"`.
+  // The bench's preflight treats a fallback source as a CONTRACT VIOLATION and
+  // marks every cell `inconclusive` with zero runs — which meant no benchmark
+  // e2e test could use the deterministic provider at all (found 2026-07-09 while
+  // pinning the abstention rail). The remedy is the one the resolver's own error
+  // message prescribes: give it a static entry.
+  //
+  // Values describe the stub, not a model: it returns scripted turns, so the
+  // context window is nominal and nothing is inferred from it.
+  "test/test": {
+    provider: "test",
+    model: "test",
+    tier: "local",
+    maxContextTokens: 32_768,
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "llama",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+
   // ── Anthropic ────────────────────────────────────────────────────────────
   // Context windows and output caps per Anthropic model docs (2026-06):
   // Opus/Sonnet 4.x = 1M context; Opus output 128K, Sonnet/Haiku output 64K;

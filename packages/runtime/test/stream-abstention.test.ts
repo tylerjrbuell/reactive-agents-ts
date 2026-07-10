@@ -93,22 +93,27 @@ describe("WIRING: the STREAMING path surfaces abstention, like run() does", () =
   });
 });
 
-// ─── LIMITATION (stated, not hidden) ─────────────────────────────────────────
+// ─── VERIFIED END-TO-END (2026-07-09, after the fix) ─────────────────────────
 //
-// There is no end-to-end pin here, and that is a real gap, not an oversight.
+// The fix was confirmed by running the bench cell that this bug made unscoreable.
+// `ab-trap-4` declares a required tool the agent is never given, so the harness
+// abstains at iteration 0 (requiredToolUnavailable, iterationsRemaining 0):
 //
-// `makeExecuteStream` is not the async-iterable boundary (it returns an Effect;
-// `agent.runStream` is the wrapper), and producing a genuinely ABSTAINED run is
-// hard: `decideForcedAbstention` correctly returns null whenever the run has a
-// deliverable, and a model that fabricates an answer produces one. Probed
-// 2026-07-09 with cogito:8b AND the deterministic test provider, with a required
-// tool that does not exist:
+//   BEFORE the fix:  accuracy 0.0, 0 tokens, output "Task complete."
+//   AFTER  the fix:  accuracy 1.0, 0 tokens, output "Task complete."   (both arms)
 //
-//     run()        → terminatedBy "end_turn", success true, abstention null
-//     runStream()  → no abstention field
+// Same harness behaviour, same zero tokens. The ONLY thing that changed is that
+// the stream now carries the abstention, so `scoreAbstention` can see it. The
+// framework was declining honestly the whole time and its own benchmark scored
+// that as a failure.
 //
-// So the abstention rail did not fire in either configuration. The projection and
-// its two call sites are pinned above; the event's construction under a real
-// abstained run is NOT yet pinned. Closing that needs a fixture that reaches
-// forced abstention (no deliverable + required tool unavailable + iterations
-// exhausted), which is the follow-up.
+// RETRACTION. An earlier note here (and the commit message of b6c0d390) claimed
+// "the abstention rail did not fire in either configuration". That was wrong.
+// It was inferred from a probe that never called `.withReasoning()`, so no kernel
+// loop ran at all. The rail fires; the stream dropped it. Evidence beats
+// inference, and a probe that skips the feature under test proves nothing.
+//
+// STILL UNPINNED: `ab-trap-4` abstains BEFORE the loop starts, so it exercises
+// the rail but not the mid-loop control seams (F3 / stall), which need abstention
+// to qualify *during* the loop (>= 2 ungrounded-synthesis rejections). A fixture
+// for that — a required tool that EXISTS but always fails — is the follow-up.
