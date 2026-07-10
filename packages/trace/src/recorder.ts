@@ -25,6 +25,14 @@ const DEFAULT_MAX_FILES = 500;
 const DEFAULT_MAX_AGE_DAYS = 14;
 const LLM_DIRECT_MAX_BYTES = 25 * 1024 * 1024;
 
+// Run files are ULID-named (01….jsonl). Anything else (llm-direct.jsonl,
+// structured-output.jsonl, classify-tool-relevance.jsonl, …) is an
+// uncorrelated catch-all: it is appended to forever, so its mtime always
+// looks fresh and the age/count rules never fire. Catch-alls get the size
+// cap instead (observed 2026-07-10: structured-output.jsonl at 3.5 MB and
+// growing after a single day).
+const ULID_RUN_FILE = /^[0-9A-HJKMNP-TV-Z]{26}\.jsonl$/;
+
 async function pruneTraceDir(dir: string): Promise<void> {
   const maxFiles = Number(process.env.RA_TRACE_MAX_FILES ?? DEFAULT_MAX_FILES);
   const maxAgeMs =
@@ -44,7 +52,7 @@ async function pruneTraceDir(dir: string): Promise<void> {
   }
 
   for (const f of files) {
-    if (f.name === "llm-direct.jsonl") {
+    if (!ULID_RUN_FILE.test(f.name)) {
       if (f.size > LLM_DIRECT_MAX_BYTES) await unlink(f.path).catch(() => {});
       continue;
     }
@@ -52,7 +60,7 @@ async function pruneTraceDir(dir: string): Promise<void> {
   }
 
   const survivors = files
-    .filter((f) => f.name !== "llm-direct.jsonl" && now - f.mtime <= maxAgeMs)
+    .filter((f) => ULID_RUN_FILE.test(f.name) && now - f.mtime <= maxAgeMs)
     .sort((a, b) => b.mtime - a.mtime);
   for (const f of survivors.slice(Math.max(0, maxFiles))) {
     await unlink(f.path).catch(() => {});

@@ -82,11 +82,18 @@ describe("analyzeWire — the questions the proxy had to answer by hand", () => 
 });
 
 describe("trace retention — the store stays listable", () => {
-  it("prunes files beyond RA_TRACE_MAX_FILES at layer init, newest kept", async () => {
+  // Valid ULID chars only (no I, L, O, U) — run files are ULID-named and the
+  // pruner keys the run-file rules on that shape.
+  const ulid = (i: number) => `01ARZ3NDEKTSV4RRFFQ69G5FA${String.fromCharCode(65 + i)}.jsonl`;
+
+  it("prunes ULID run files beyond RA_TRACE_MAX_FILES at layer init, newest kept", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ra-trace-ret-"));
     // 6 run files with distinct mtimes, oldest first.
+    const names: string[] = [];
     for (let i = 0; i < 6; i++) {
-      const p = join(dir, `run-${i}.jsonl`);
+      const name = ulid(i);
+      names.push(name);
+      const p = join(dir, name);
       writeFileSync(p, "{}\n");
       const t = new Date(Date.now() - (6 - i) * 60_000);
       utimesSync(p, t, t);
@@ -105,7 +112,23 @@ describe("trace retention — the store stays listable", () => {
     }
     const left = readdirSync(dir).sort();
     expect(left.length).toBe(3);
-    expect(left).toEqual(["run-3.jsonl", "run-4.jsonl", "run-5.jsonl"]);
+    expect(left).toEqual([names[3]!, names[4]!, names[5]!].sort());
+  });
+
+  it("caps EVERY catch-all by size, not just llm-direct — appended-forever files never age out", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ra-trace-catchall-"));
+    // structured-output.jsonl hit 3.5 MB in one day (2026-07-10); its mtime is
+    // always fresh, so age/count pruning never fires — only the size cap can.
+    writeFileSync(join(dir, "structured-output.jsonl"), "x".repeat(26 * 1024 * 1024));
+    writeFileSync(join(dir, "classify-tool-relevance.jsonl"), "{}\n");
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TraceRecorderService;
+      }).pipe(Effect.provide(TraceRecorderServiceLive({ dir }))),
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    const left = readdirSync(dir).sort();
+    expect(left).toEqual(["classify-tool-relevance.jsonl"]);
   });
 
   it("an oversized llm-direct.jsonl is dropped; a small one survives", async () => {
