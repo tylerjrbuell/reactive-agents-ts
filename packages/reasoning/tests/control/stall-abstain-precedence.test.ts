@@ -18,14 +18,19 @@
 // production callers: every reference to it lived in `emitters.test.ts`. The
 // emitter was unit-tested into looking done.
 //
-// MEASURED on the real runKernel -> iteratePass path (a run that only thinks,
-// never calls a tool, with a required tool declared):
+// MEASURED on the real runKernel -> iteratePass path, with a REACHABLE
+// precondition (one grounding redirect + one synthesis retry):
 //
-//   before: default iteration 4, 2 nudges | long-horizon iteration 4, 2 nudges
-//   after:  default iteration 4, 2 nudges | long-horizon iteration 2, 0 nudges
+//   default profile : iteration 5, terminatedBy (none),   2 nudges
+//   long-horizon    : iteration 3, terminatedBy abstained, 0 nudges
 //
-// Two iterations and two nudges saved, and the decline is honest at the first
-// stall that qualifies. The default profile is byte-identical.
+// The default profile never declines here at all. So the seam is not merely
+// declining earlier — under this profile it is the only path to an honest
+// decline, and it saves two iterations of nudging a model that could never
+// ground its answer.
+//
+// An earlier version set `synthesisRetryCount: 2`, which production caps at 1.
+// That baseline was an artifact of an input the seam can never receive.
 
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
@@ -54,7 +59,13 @@ const stallingKernel: ThoughtKernel = (state) =>
       status: "thinking",
       iteration: state.iteration + 1,
       steps: [...state.steps, makeStep("thought", "thinking about it")],
-      meta: { ...state.meta, synthesisRetryCount: FORCE_UNGROUNDED_THRESHOLD },
+      meta: {
+        // REACHABLE precondition — see note in error-recovery-precedence.test.ts.
+        // `synthesisRetryCount: 2` is impossible in production (capped at 1).
+        ...state.meta,
+        groundingRedirectCount: 1,
+        synthesisRetryCount: 1,
+      },
     } as never),
   );
 
@@ -83,7 +94,7 @@ describe("stall seam — abstain must outrank the stall guard's steer", () => {
   it("LONG-HORIZON: the run declines at the FIRST stall that qualifies", async () => {
     const state = await run("long");
     expect(state.meta.terminatedBy).toBe("abstained");
-    expect(state.iteration).toBe(2); // was 4
+    expect(state.iteration).toBe(3); // default reaches 5 and never abstains
   });
 
   it("LONG-HORIZON: the steer that LOST is not also injected", async () => {
@@ -103,8 +114,8 @@ describe("stall seam — abstain must outrank the stall guard's steer", () => {
 describe("DEFAULT profile is unchanged (lift-gate discipline)", () => {
   it("OFF the profile the stall guard still nudges and the budget is still spent", async () => {
     const state = await run();
-    expect(state.iteration).toBe(4);
+    expect(state.iteration).toBe(5);
     expect(nudges(state)).toHaveLength(2);
-    expect(state.meta.terminatedBy).toBe("abstained");
+    expect(state.meta.terminatedBy).not.toBe("abstained");
   });
 });

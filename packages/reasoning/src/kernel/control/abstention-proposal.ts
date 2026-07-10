@@ -23,6 +23,7 @@ import {
   type ForcedAbstention,
 } from "../loop/runner-helpers/force-abstention.js";
 import { countArtifacts, countDeliverableCandidates } from "../loop/runner-helpers/deliverable.js";
+import { hasSuccessfulSubstantiveToolCall } from "../loop/runner-helpers/grounded-terminal.js";
 import { proposeFromForcedAbstention } from "./emitters.js";
 import type { ControlProposal } from "./control-plane.js";
 
@@ -46,8 +47,29 @@ export function deriveInLoopForcedAbstention(
       ? 0
       : Math.max(0, maxIterations - state.iteration);
 
+  // The mid-loop reachability fix.
+  //
+  // `synthesisRetryCount` is capped at 1 (arbitrator: SYNTHESIS_RETRY_MAX), and
+  // `groundingBlockRetry` only increments in the runner's POST-loop terminal
+  // verify block. So this sum could never reach FORCE_UNGROUNDED_THRESHOLD (2)
+  // while the loop was still running, and the in-loop abstain proposal was
+  // ALWAYS null at every seam that consults it — the strategy-switch seam (P5),
+  // the F3 seam, and the stall seam alike. Each seam's resolver therefore only
+  // ever saw the seam's own proposal.
+  //
+  // `groundingRedirectCount` is the one counter that DOES move mid-loop: the
+  // grounded-terminal gate bumps it (arbitrator.ts:1417) when it rejects an
+  // ungrounded terminal answer and redirects. Counting it mirrors what the
+  // POST-loop derivation already does (runner.ts:795-803, `secondUngroundedTerminal`).
+  //
+  // Gated on the run still being UNGROUNDED: once any substantive tool call has
+  // succeeded, past redirects are stale history, not evidence of an ungrounded
+  // terminal. A run holding a deliverable is separately protected below.
+  const groundingRedirects = state.meta.groundingRedirectCount ?? 0;
+  const ungroundedRedirects =
+    groundingRedirects > 0 && !hasSuccessfulSubstantiveToolCall(state.steps) ? groundingRedirects : 0;
   const ungroundedSynthesisRejections =
-    (state.meta.synthesisRetryCount ?? 0) + (state.meta.groundingBlockRetry ?? 0);
+    (state.meta.synthesisRetryCount ?? 0) + (state.meta.groundingBlockRetry ?? 0) + ungroundedRedirects;
 
   const hasDeliverable = countArtifacts(state) > 0 || countDeliverableCandidates(state) > 0;
 

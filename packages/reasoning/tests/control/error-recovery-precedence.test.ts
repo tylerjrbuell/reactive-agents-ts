@@ -66,7 +66,14 @@ const failingKernel: ThoughtKernel = (state) =>
       steps: [...state.steps, failedObs(), failedObs()],
       meta: {
         ...state.meta,
-        synthesisRetryCount: FORCE_UNGROUNDED_THRESHOLD,
+        // REACHABLE precondition. This used to set
+        // `synthesisRetryCount: FORCE_UNGROUNDED_THRESHOLD` (2) — a value
+        // production CAPS AT 1 (arbitrator: SYNTHESIS_RETRY_MAX). The seam was
+        // being unit-tested with an input it could never receive, which hid the
+        // fact that the in-loop abstain proposal was always null. The reachable
+        // pair is one grounded-terminal redirect + one synthesis retry.
+        groundingRedirectCount: 1,
+        synthesisRetryCount: 1,
       },
     } as never),
   );
@@ -93,13 +100,20 @@ const run = (horizonProfile?: "long") =>
 const harnessSignals = (state: { steps: readonly { type: string; content: string }[] }) =>
   state.steps.filter((s) => s.type === "harness_signal").map((s) => s.content);
 
-// MEASURED BASELINE (both profiles, before the fix):
-//   iteration 4 (of maxIterations 4), terminatedBy "abstained", 2 F3 redirects.
+// MEASURED (reachable precondition: one grounding redirect + one synthesis retry):
 //
-// The run DOES abstain — but only post-loop (§7.5), after spending the whole
-// iteration budget re-steering a model that could never ground its answer. So
-// `terminatedBy` is NOT the discriminating observable; the WASTE is. The fix
-// moves the honest decline to the first iteration where it qualifies.
+//   default profile : iteration 4/4, terminatedBy (none),   2 F3 redirects
+//   long-horizon    : iteration 2,   terminatedBy abstained, 0 F3 redirects
+//
+// The default profile never declines at all here — the post-loop §7.5 abstention
+// requires a TERMINAL_ANSWER_REASON, and this run exhausts its iterations instead.
+// So the seam does not merely decline EARLIER; under this profile it is the only
+// path to an honest decline, and it saves two iterations of re-steering a model
+// that could never ground its answer.
+//
+// An earlier version of this file set `synthesisRetryCount: 2` and recorded a
+// different baseline. That input is impossible in production (capped at 1), so
+// both the baseline and the "abstains post-loop" claim were artifacts.
 
 const recoveryRedirects = (state: { steps: readonly { type: string; content: string }[] }) =>
   harnessSignals(state).filter((c) => c.includes("Recovery required"));
@@ -110,7 +124,7 @@ describe("F3 seam — abstain must outrank the error-recovery redirect", () => {
     // redirect(4), so the decline lands as soon as both proposals coexist.
     const state = await run("long");
     expect(state.meta.terminatedBy).toBe("abstained");
-    expect(state.iteration).toBe(1);
+    expect(state.iteration).toBe(2); // was 4, and the default profile never abstains
   });
 
   it("LONG-HORIZON: the redirect that LOST is not also injected", async () => {
@@ -131,10 +145,10 @@ describe("DEFAULT profile is unchanged (lift-gate discipline)", () => {
   it("OFF the profile the F3 redirect still fires and the budget is still spent", async () => {
     // The control-plane seam is opt-in behind the horizon profile, exactly as the
     // strategy-switch seam is. Off the profile, behavior is byte-identical to the
-    // measured baseline: 4 iterations, 2 redirects, post-loop abstention.
+    // measured baseline: 4 iterations, 2 redirects, and NO honest decline.
     const state = await run();
     expect(state.iteration).toBe(4);
     expect(recoveryRedirects(state)).toHaveLength(2);
-    expect(state.meta.terminatedBy).toBe("abstained");
+    expect(state.meta.terminatedBy).not.toBe("abstained");
   });
 });
