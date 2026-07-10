@@ -5,6 +5,7 @@ import type { MultiModelReport } from "./types.js"
 import { runBenchmarks } from "./runner.js"
 import { runSession } from "./runner.js"
 import { gateReceiptFor, powerWarningFor } from "./gate/on-path.js"
+import { statusCell } from "./report-format.js"
 import { DEFAULT_LIFT_POLICY } from "./gate/types.js"
 import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { regressionGateSession } from "./sessions/regression-gate.js"
@@ -107,14 +108,17 @@ function printSessionSummary(report: SessionReport): void {
       const rows = taskReports.filter(r => r.modelVariantId === model)
       if (rows.length === 0) continue
       console.log(`\n  Model: ${model}  ·  Variant: ${[...new Set(rows.map(r => r.variantId))].join(", ")}`)
-      console.log(`  ${"Task".padEnd(30)} ${"Acc".padEnd(8)} ${"Tokens".padEnd(8)} ${"Dur".padEnd(6)} Status`)
-      console.log("  " + "─".repeat(72))
+      // `Ran` is liveness (did it crash?); `Solved` is correctness. These used to
+      // be the same column, so a completed-but-wrong run rendered as a tick.
+      console.log(`  ${"Task".padEnd(30)} ${"Acc".padEnd(8)} ${"Ran".padEnd(6)} ${"Tokens".padEnd(8)} ${"Dur".padEnd(6)} Solved`)
+      console.log("  " + "─".repeat(80))
       for (const r of rows) {
         const acc = r.meanScores.find(s => s.dimension === "accuracy")?.score ?? 0
-        const status = r.passRate === 1 ? "✓" : r.passRate === 0 ? "✗" : `${(r.passRate * 100).toFixed(0)}%`
+        const ran = `${(r.passRate * 100).toFixed(0)}%`
+        const status = statusCell(r)
         const tokStr = r.meanTokens.toString()
         const durStr = `${(r.meanDurationMs / 1000).toFixed(1)}s`
-        console.log(`  ${r.taskId.slice(0, 29).padEnd(30)} ${(acc * 100).toFixed(0).padStart(5)}%  ${tokStr.padEnd(8)} ${durStr.padEnd(6)} ${status}`)
+        console.log(`  ${r.taskId.slice(0, 29).padEnd(30)} ${(acc * 100).toFixed(0).padStart(5)}%  ${ran.padEnd(6)} ${tokStr.padEnd(8)} ${durStr.padEnd(6)} ${status}`)
       }
     }
   }

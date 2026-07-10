@@ -27,6 +27,7 @@ import { CONTEXT_STRESS_TASKS } from "./tasks/context-stress.js"
 import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { resolveTasks, mergeConfigs, assertNonEmptySelection } from "./session.js"
+import { completionRateOf, solveRateOf } from "./report-format.js"
 import { checkCapabilitySourcePreflight } from "./preflight.js"
 
 /**
@@ -927,7 +928,7 @@ export function aggregateRuns(
 ): TaskVariantReport {
   if (runs.length === 0) {
     return { taskId, modelVariantId, variantId: variant.id, variantLabel: variant.label,
-      runs: [], meanScores: [], variance: 0, meanTokens: 0, meanDurationMs: 0, passRate: 0 }
+      runs: [], meanScores: [], variance: 0, meanTokens: 0, meanDurationMs: 0, passRate: 0, solveRate: 0 }
   }
 
   const dims = [...new Set(runs.flatMap(r => r.dimensions.map(d => d.dimension)))] as QualityDimension[]
@@ -954,7 +955,8 @@ export function aggregateRuns(
     variance: Math.sqrt(variance),
     meanTokens: Math.round(runs.reduce((a, r) => a + r.tokensUsed, 0) / runs.length),
     meanDurationMs: Math.round(runs.reduce((a, r) => a + r.durationMs, 0) / runs.length),
-    passRate: runs.filter(r => r.status === "pass").length / runs.length,
+    passRate: completionRateOf(runs),
+    solveRate: solveRateOf(runs),
   }
 }
 
@@ -1201,6 +1203,7 @@ export async function runSession(
             meanTokens: 0,
             meanDurationMs: 0,
             passRate: 0,
+            solveRate: 0,
             inconclusive: modelViolation,
           })
           if (logLevel !== "silent") process.stdout.write("?")

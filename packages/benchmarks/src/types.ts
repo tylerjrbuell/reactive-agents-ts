@@ -173,7 +173,19 @@ export interface TaskVariantReport {
   readonly variance: number;
   readonly meanTokens: number;
   readonly meanDurationMs: number;
+  /**
+   * Fraction of runs that COMPLETED (no crash, no timeout). This is a liveness
+   * signal, NOT a correctness one: `RunScore.status` is set to "pass" whenever
+   * the agent run returned. A run that answered nothing still counts here.
+   * Read {@link solveRate} for "did it work".
+   */
   readonly passRate: number;
+  /**
+   * Fraction of runs that fully solved the task (completed AND accuracy >= 1).
+   * Partial credit is not a solve. Added 2026-07-09 after the summary table
+   * rendered `Acc 0%  ✓` — three completed-but-wrong runs shown as successes.
+   */
+  readonly solveRate: number;
   /**
    * Set when the cell was NOT measured because a preflight contract was
    * violated (today: capability source=fallback). An inconclusive cell carries
