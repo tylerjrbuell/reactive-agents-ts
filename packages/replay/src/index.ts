@@ -11,7 +11,7 @@ export type {
 } from "./types.js"
 export { loadRecordedRun } from "./load.js"
 export { buildToolTable, computeArgsHash } from "./tool-table.js"
-export { buildLLMTable, exchangeKey } from "./llm-table.js"
+export { buildLLMTable, buildSequentialLLMTable, exchangeKey } from "./llm-table.js"
 export type { LLMTable, RecordedExchange, RecordedExchangeResponse } from "./llm-table.js"
 export { makeReplayController } from "./replay-controller.js"
 export type { ReplayHit, ReplayResultProvider } from "./replay-controller.js"

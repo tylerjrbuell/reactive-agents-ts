@@ -203,6 +203,7 @@
         "@reactive-agents/judge-server": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",
         "@reactive-agents/reasoning": "workspace:*",
+        "@reactive-agents/replay": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
         "@reactive-agents/runtime-shim": "workspace:*",
         "@reactive-agents/tools": "workspace:*",

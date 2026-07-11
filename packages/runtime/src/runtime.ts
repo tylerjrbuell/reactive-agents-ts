@@ -520,18 +520,28 @@ export const createRuntime = (options: RuntimeOptions) => {
   // off and retry. Wrapping ALL three matters — the reactive kernel runs through
   // stream(), so a complete()-only wrap left withRetryPolicy dead for the main
   // path (see applyRetryToLlmService).
+  // Replay keystone: when an override layer is supplied, it BECOMES the base
+  // LLMService for the whole stack (reasoning/engine/memory all build on
+  // `observableLlmLayer` below, which wraps this). Swapped here — upstream of
+  // every `Layer.provide(observableLlmLayer)` consumer — because those capture
+  // LLMService at construction, so the terminal `extraLayers` merge can never
+  // reach it. Retry/rate-limit still wrap it (no-ops for a replay layer);
+  // the observable wrap is desired (the replayed run emits its own trace).
+  const baseLlmLayer: Layer.Layer<LLMService> =
+    options.llmOverrideLayer ?? effectiveLlmLayer;
+
   const finalLlmLayer: Layer.Layer<LLMService> =
     options.retryPolicy
       ? Layer.effect(
           LLMService,
           Effect.gen(function* () {
             const svc = yield* LLMService.pipe(
-              Effect.provide(effectiveLlmLayer as Layer.Layer<LLMService, never, never>),
+              Effect.provide(baseLlmLayer as Layer.Layer<LLMService, never, never>),
             );
             return applyRetryToLlmService(svc, options.retryPolicy!);
           }),
         )
-      : effectiveLlmLayer;
+      : baseLlmLayer;
 
   // Apply rate limiting: wrap LLM calls with a sliding-window rate limiter
   // so requests are throttled BEFORE hitting the API (prevents 429 errors).

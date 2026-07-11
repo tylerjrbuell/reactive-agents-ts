@@ -121,6 +121,7 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withHealthCheck: { featureClass: "plumbing" },
   withIdentity: { featureClass: "plumbing" },
   withLayers: { featureClass: "plumbing" },
+  withReplayLLM: { featureClass: "plumbing" },
   withLazyValidation: { featureClass: "plumbing" },
   withLlmTimeout: { featureClass: "plumbing" },
   withLogging: { featureClass: "plumbing" },

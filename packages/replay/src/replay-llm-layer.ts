@@ -125,6 +125,17 @@ export function makeReplayLLMLayer(table: LLMTable): Layer.Layer<LLMService> {
         getModelConfig: () => Effect.die(new Error("replay: getModelConfig not supported during replay")),
         getStructuredOutputCapabilities: () =>
             Effect.die(new Error("replay: getStructuredOutputCapabilities not supported during replay")),
-        capabilities: () => Effect.die(new Error("replay: capabilities not supported during replay")),
+        // Recorded responses carry structured tool calls (native-FC shape), so
+        // the replayed run must take the native-FC path — same capabilities the
+        // test provider reports. Returned (not `die`d): the kernel reads this on
+        // the hot path (runner.ts native-FC detection), and a defect there is
+        // NOT caught by its `catchAll` (which only handles failures).
+        capabilities: () =>
+            Effect.succeed({
+                supportsToolCalling: true,
+                supportsStreaming: true,
+                supportsStructuredOutput: false,
+                supportsLogprobs: false,
+            }),
     })
 }

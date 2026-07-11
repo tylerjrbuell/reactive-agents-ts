@@ -312,6 +312,22 @@ export interface RuntimeOptions {
    */
   extraLayers?: Layer.Layer<any, any, any>;
 
+  /**
+   * Replace the base LLMService the ENTIRE runtime is built on — reasoning,
+   * engine, memory bridge, everything. Unlike `extraLayers` (which merges at
+   * the terminal composition and so can only override late-bound tags like
+   * ToolService), this is swapped in at `effectiveLlmLayer`, upstream of every
+   * consumer that captures LLMService via `Layer.provide`.
+   *
+   * The keystone for deterministic replay: pass a replay LLM layer here and the
+   * whole harness runs against recorded model responses with no live provider.
+   * `.withLayers()` cannot do this — LLMService is baked into the reasoning deps
+   * at construction, so a terminal merge never reaches it.
+   *
+   * Default: undefined (use the configured provider).
+   */
+  llmOverrideLayer?: Layer.Layer<import("@reactive-agents/llm-provider").LLMService>;
+
   // ─── Optional Features ───
 
   /**

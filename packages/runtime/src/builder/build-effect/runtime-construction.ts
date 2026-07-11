@@ -28,7 +28,7 @@ import type {
   KernelMetaToolsConfig,
 } from "@reactive-agents/reasoning";
 import type { ReasoningOptions, CalibrationMode } from "../../types.js";
-import type { TestTurn } from "@reactive-agents/llm-provider";
+import type { TestTurn, LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { builtinTools, shellExecuteTool } from "@reactive-agents/tools";
 import { foldApprovalRequiredTools } from "./approval-autofeed.js";
@@ -87,6 +87,7 @@ export interface BuilderRuntimeStateView {
   readonly _enableSelfImprovement: boolean;
   readonly _testScenario?: TestTurn[];
   readonly _extraLayers?: Layer.Layer<any, any, any>;
+  readonly _llmOverrideLayer?: Layer.Layer<any, any, any>;
   readonly _environmentContext?: Record<string, string>;
   readonly _mcpServers: MCPServerConfig[];
   readonly _reasoningOptions?: ReasoningOptions;
@@ -343,6 +344,7 @@ export const buildBaseRuntimeAndEngine = (
     }
 
     const composedExtraLayers = state._extraLayers;
+    const llmOverrideLayer = state._llmOverrideLayer;
     /** Merged after `ExecutionEngine` is resolved so init does not run under transient `provide` scope (see CortexReporterLive). */
     let cortexReporterLayer: Layer.Layer<unknown> | null = null;
     if (state._cortexUrl !== null) {
@@ -396,6 +398,9 @@ export const buildBaseRuntimeAndEngine = (
       enableSelfImprovement: state._enableSelfImprovement,
       testScenario: state._testScenario,
       extraLayers: composedExtraLayers,
+      // Erasure cast: the builder field is Layer<any,any,any> (public seam);
+      // the option contract is a fully-resolved LLMService layer.
+      llmOverrideLayer: llmOverrideLayer as Layer.Layer<LLMService> | undefined,
       systemPrompt: composedSystemPrompt,
       environmentContext: state._environmentContext,
       mcpServers:

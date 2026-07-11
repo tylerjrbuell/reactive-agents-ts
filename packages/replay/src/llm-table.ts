@@ -66,6 +66,32 @@ export interface LLMTable {
     readonly size: number
 }
 
+/**
+ * SEQUENCE-ORDERED table. Dispenses recorded exchanges in recorded order,
+ * IGNORING the request key — the Nth `complete()`/`stream()` call gets the Nth
+ * recorded response. This is immune to benign prompt nondeterminism (the
+ * environment block's live date/time, tool-schema text ordering, etc.) that
+ * makes the key-based {@link buildLLMTable} miss, while still diverging — and
+ * so catching a regression — the moment the harness makes a DIFFERENT number
+ * or order of model calls. The robust default for golden-replay regression.
+ */
+export function buildSequentialLLMTable(events: readonly TraceEvent[]): LLMTable {
+    const seq: RecordedExchange[] = [];
+    for (const ev of events) {
+        if (ev.kind !== "llm-exchange") continue;
+        seq.push({ key: exchangeKey(ev.systemPrompt, ev.messages), response: ev.response });
+    }
+    let cursor = 0;
+    return {
+        size: seq.length,
+        // The key argument is deliberately ignored — dispensing is global FIFO.
+        next(_key) {
+            if (cursor >= seq.length) return undefined;
+            return seq[cursor++];
+        },
+    };
+}
+
 export function buildLLMTable(events: readonly TraceEvent[]): LLMTable {
     const buckets = new Map<string, RecordedExchange[]>()
     for (const ev of events) {

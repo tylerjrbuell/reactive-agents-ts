@@ -355,6 +355,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enableOrchestration: boolean = false
     private _testScenario?: TestTurn[]
     private _extraLayers?: Layer.Layer<any, any, any>
+    private _llmOverrideLayer?: Layer.Layer<any, any, any>
     // Tracing is on by default (Sprint 3.6) so `rax diagnose <runId>` always
     // has data to inspect — a productized DX win. Disable explicitly with
     // .withoutTracing() or by setting REACTIVE_AGENTS_TRACE=off in the env.
@@ -2214,6 +2215,23 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      */
     withLayers(layers: Layer.Layer<any, any>): this {
         this._extraLayers = layers
+        return this
+    }
+
+    /**
+     * Replace the base LLMService the whole runtime builds on (reasoning,
+     * engine, memory) with a custom layer — the deterministic-replay keystone.
+     *
+     * Unlike `withLayers()`, which merges at the terminal composition and so
+     * can only override late-bound tags (ToolService), this swaps in upstream
+     * of every consumer that captures LLMService at construction. Pass a replay
+     * LLM layer to run the entire harness against recorded model responses with
+     * no live provider.
+     *
+     * @param layer - an Effect Layer providing LLMService
+     */
+    withReplayLLM(layer: Layer.Layer<any, any>): this {
+        this._llmOverrideLayer = layer
         return this
     }
 
